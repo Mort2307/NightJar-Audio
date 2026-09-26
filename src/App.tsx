@@ -451,7 +451,7 @@ function App() {
       if (data?.verified) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
-        setAgeStage('preview');
+        setAgeStage('assurance');
         notify('Sandbox age verification marked complete for this administrator test account.');
       }
     } catch {
@@ -476,7 +476,7 @@ function App() {
       if (data?.verified === true) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
-        setAgeStage('preview');
+        setAgeStage('assurance');
         notify('Age verification already completed.');
       } else if (data?.launchUrl) {
         setAgeStatus('PENDING');
@@ -922,10 +922,7 @@ function App() {
           {!ageConfigured && user && role === 'admin' && <button className="secondary-button wide-button" disabled={ageLoading} onClick={() => void runAdminSandboxTest()}>
             Run administrator sandbox test <ShieldCheck size={16} />
           </button>}
-          <button className="secondary-button wide-button" onClick={() => setAgeStage('preview')}>
-            Enter product preview <ArrowRight size={16} />
-          </button>
-          <p className="access-fine">Product preview remains clearly labelled as preview access. Production adult access should only be granted after a real provider result is complete.</p>
+          <p className="access-fine">Adult catalogue access is granted only after a verified age-assurance result.</p>
         </div>
       </main>
     );
