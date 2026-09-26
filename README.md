@@ -7,7 +7,7 @@ Premium immersive audio for adults.
 GitHub is the canonical source repository for Nightjar.
 
 - Repository: https://github.com/Mort2307/NightJar-Audio
-- Current development branch: `feature/identity-security-taste-engine`
+- Current source-of-truth branch: `main`
 - Imported AppDeploy baseline: `import/appdeploy-current`
 
 ## Hosting
@@ -33,7 +33,7 @@ Protected manuscripts use backend authorization, short-lived reader sessions, ac
 
 A browser application cannot guarantee prevention of screenshots, screen recording, OCR, or determined extraction. Security signals are evidence for review, not proof of wrongdoing.
 
-Qualifying suspicious protected-content activity creates a retained security alert addressed to **both configured Nightjar owners**. Administrator review can suspend the account and revoke active protected-reader sessions without deleting the evidence trail.
+Qualifying suspicious protected-content activity creates a retained security alert addressed to **all three configured Nightjar owners**. Administrator review can suspend the account and revoke active protected-reader sessions without deleting the evidence trail.
 
 ## Identity and Taste
 
@@ -52,3 +52,8 @@ All roles share the same profile model:
 The Taste Engine separates identity from taste. Explicit preferences seed recommendations more strongly than inferred behaviour; behavioural signals refine the taste graph over time.
 
 > Learn what someone likes. Don't infer who someone is.
+
+
+### Runtime URL configuration
+
+The backend uses `NIGHTJAR_APP_URL` for age-assurance callback/cancel URLs when configured. The AppDeploy URL remains the fallback for development; the Firebase/custom-domain deployment should set the runtime value to `https://nightjar.audio/`.
