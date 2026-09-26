@@ -47,97 +47,40 @@ type AuthenticatedUser = {
 };
 
 type Track = {
+  id: string;
   title: string;
   creator: string;
   duration: string;
   category: string;
-  listeners: string;
+  listeners?: string;
   descriptor: string;
   featured?: boolean;
+  audioUrl?: string | null;
+  artworkUrl?: string | null;
+  creatorUserId?: string;
 };
 
-const tracks: Track[] = [
-  {
-    title: 'After Midnight',
-    creator: 'Mara Vale',
-    duration: '18 min',
-    category: 'Atmospheric',
-    listeners: '12.4k',
-    descriptor: 'A slow, cinematic night drive with a voice that stays close.',
-    featured: true,
-  },
-  {
-    title: 'Velvet Static',
-    creator: 'Rae Hollow',
-    duration: '24 min',
-    category: 'Story',
-    listeners: '9.8k',
-    descriptor: 'Late-night radio, magnetic conversation, and a little tension.',
-  },
-  {
-    title: 'Slow Burn',
-    creator: 'Noor',
-    duration: '16 min',
-    category: 'Whisper',
-    listeners: '7.1k',
-    descriptor: 'An intimate, low-lit performance built entirely for headphones.',
-  },
-  {
-    title: 'The Last Train Home',
-    creator: 'Mara Vale',
-    duration: '31 min',
-    category: 'Story',
-    listeners: '6.6k',
-    descriptor: 'A longer-form audio story with movement, ambience, and silence.',
-  },
-  {
-    title: 'Room Tone',
-    creator: 'Rae Hollow',
-    duration: '12 min',
-    category: 'Atmospheric',
-    listeners: '4.9k',
-    descriptor: 'Close-mic voice, rain at the window, and a room that feels occupied.',
-  },
-  {
-    title: 'Northbound',
-    creator: 'Noor',
-    duration: '28 min',
-    category: 'Story',
-    listeners: '4.2k',
-    descriptor: 'A nocturnal journey told in first person, with a full sound bed.',
-  },
-];
+type CreatorSummary = {
+  userId: string;
+  name: string;
+  handle?: string | null;
+  followers?: number;
+  releases?: number;
+  initials?: string;
+  note?: string;
+};
 
-const creators = [
-  { name: 'Mara Vale', handle: '@maravale', followers: '84.2k', releases: 27, share: '18.6%', initials: 'MV', note: 'Cinematic storytelling and close-mic performance.' },
-  { name: 'Rae Hollow', handle: '@raehollow', followers: '61.7k', releases: 19, share: '14.2%', initials: 'RH', note: 'Character work, radio drama, and atmospheric audio.' },
-  { name: 'Noor', handle: '@noor', followers: '39.4k', releases: 14, share: '9.7%', initials: 'N', note: 'Minimalist voice work with meticulous sound design.' },
-  { name: 'June Mercer', handle: '@junemercer', followers: '31.8k', releases: 11, share: '7.9%', initials: 'JM', note: 'Immersive monologues and late-night fiction.' },
-  { name: 'Sable North', handle: '@sablenorth', followers: '24.6k', releases: 8, share: '6.1%', initials: 'SN', note: 'Slow-burn fiction, character intimacy and nocturnal atmosphere.' },
-];
-
-const creatorSpotlights = [
-  { creator: 'Mara Vale', handle: '@maravale', title: 'After Midnight', edition: 'New edition', detail: 'A cinematic night drive with close-mic performance and a full atmospheric bed.', initials: 'MV' },
-  { creator: 'Rae Hollow', handle: '@raehollow', title: 'Velvet Static', edition: 'New edition', detail: 'Late-night radio, magnetic conversation and a little tension.', initials: 'RH' },
-  { creator: 'Noor', handle: '@noor', title: 'Slow Burn', edition: 'New edition', detail: 'Minimalist voice work built entirely around headphone intimacy.', initials: 'N' },
-  { creator: 'June Mercer', handle: '@junemercer', title: 'The Quiet Hour', edition: 'New edition', detail: 'An immersive monologue where the pauses matter as much as the words.', initials: 'JM' },
-  { creator: 'Sable North', handle: '@sablenorth', title: 'Northbound', edition: 'New edition', detail: 'A nocturnal journey carried by voice, movement and restrained sound design.', initials: 'SN' },
-];
-
-const writerSpotlights = [
-  { writer: 'Rowan Vale', handle: '@rowanvale', title: 'Night Train', edition: 'New script', detail: 'A rain-soaked final train journey written for intimate performance.', initials: 'RV' },
-  { writer: 'Ellis Grey', handle: '@ellisgrey', title: 'Room 17', edition: 'New script', detail: 'A contained character piece built around silence, proximity and suspense.', initials: 'EG' },
-  { writer: 'June Mercer', handle: '@junemercer', title: 'After the Rain', edition: 'New script', detail: 'A reflective late-night story with a deliberately close perspective.', initials: 'JM' },
-  { writer: 'Mara Keene', handle: '@marakeene', title: 'Low Light', edition: 'New script', detail: 'A slow-burn encounter written for voice, ambience and careful pacing.', initials: 'MK' },
-  { writer: 'Theo Vale', handle: '@theovale', title: 'The Last Room', edition: 'New script', detail: 'An atmospheric story about what remains after everyone else has left.', initials: 'TV' },
-];
-
-const studioMetrics = [
-  ['Listeners', '1,842'],
-  ['Eligible listening', '73,421 min'],
-  ['Creator pool', '£6,742'],
-  ['Estimated share', '£1,247'],
-];
+type Spotlight = {
+  kind: 'creator' | 'writer';
+  name: string;
+  handle?: string | null;
+  title?: string;
+  edition?: string;
+  detail?: string;
+  initials?: string;
+  targetId?: string;
+  releaseId?: string | null;
+};
 
 const roleMeta: Record<AccountRole, { label: string; description: string }> = {
   admin: {
@@ -200,6 +143,16 @@ function App() {
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
+  const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
+  const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
+  const [creatorDashboard, setCreatorDashboard] = useState<{ metrics: any; releases: any[] }>({ metrics: {}, releases: [] });
+  const [creatorDashboardLoading, setCreatorDashboardLoading] = useState(false);
+  const [liveRecommendations, setLiveRecommendations] = useState<any[]>([]);
+  const [liveTrending, setLiveTrending] = useState<any[]>([]);
+  const [currentIntent, setCurrentIntent] = useState('');
+
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerScripts, setWriterScripts] = useState([
     { id: 'demo-1', title: 'Night Train', status: 'Approved', version: 'v3', access: 'Read-only collaboration' },
@@ -207,10 +160,10 @@ function App() {
     { id: 'demo-3', title: 'After the Rain', status: 'Draft', version: 'v1', access: 'Private' },
   ]);
 
-  const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0], []);
-  const spotlightIndex = Math.floor(Date.now() / 86400000) % creatorSpotlights.length;
-  const creatorSpotlight = creatorSpotlights[spotlightIndex];
-  const writerSpotlight = writerSpotlights[spotlightIndex];
+  const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
+  const spotlightIndex = Math.floor(Date.now() / 86400000) % Math.max(creatorSpotlightList.length, 1);
+  const creatorSpotlight = creatorSpotlightList[spotlightIndex] ?? null;
+  const writerSpotlight = writerSpotlightList[spotlightIndex] ?? null;
 
   useEffect(() => {
     void (async () => {
