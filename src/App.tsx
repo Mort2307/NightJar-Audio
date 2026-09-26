@@ -116,6 +116,8 @@ function App() {
   const [ageLoading, setAgeLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [favouriteReleaseIds, setFavouriteReleaseIds] = useState<string[]>([]);
+  const [followingCreatorIds, setFollowingCreatorIds] = useState<string[]>([]);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [role, setRole] = useState<AccountRole | null>(null);
   const [accountStatus, setAccountStatus] = useState<'active' | 'pending_review'>('active');
@@ -272,12 +274,16 @@ function App() {
         releaseId: item.releaseId,
       })));
       if (user) {
-        const [recommendationsResponse, trendingResponse] = await Promise.all([
+        const [recommendationsResponse, trendingResponse, favouritesResponse, followsResponse] = await Promise.all([
           api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
           api.get('/api/trending'),
+          api.get('/api/favourites'),
+          api.get('/api/follows'),
         ]);
         setLiveRecommendations(recommendationsResponse.data?.recommendations ?? []);
         setLiveTrending(trendingResponse.data?.trending ?? []);
+        setFavouriteReleaseIds((favouritesResponse.data?.favourites ?? []).map((item: any) => String(item.releaseId)));
+        setFollowingCreatorIds((followsResponse.data?.follows ?? []).map((item: any) => String(item.creatorUserId)));
       }
     } catch {
       setTracks([]);
