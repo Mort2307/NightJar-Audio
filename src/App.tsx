@@ -154,16 +154,21 @@ function App() {
   const [currentIntent, setCurrentIntent] = useState('');
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
-  const [writerScripts, setWriterScripts] = useState([
-    { id: 'demo-1', title: 'Night Train', status: 'Approved', version: 'v3', access: 'Read-only collaboration' },
-    { id: 'demo-2', title: 'Room 17', status: 'In editing', version: 'v2', access: 'Private' },
-    { id: 'demo-3', title: 'After the Rain', status: 'Draft', version: 'v1', access: 'Private' },
-  ]);
+  const [writerScripts, setWriterScripts] = useState<any[]>([]);
 
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
   const spotlightIndex = Math.floor(Date.now() / 86400000) % Math.max(creatorSpotlightList.length, 1);
   const creatorSpotlight = creatorSpotlightList[spotlightIndex] ?? null;
   const writerSpotlight = writerSpotlightList[spotlightIndex] ?? null;
+  const creators = creatorDirectory;
+  const creatorSpotlights = creatorSpotlightList;
+  const writerSpotlights = writerSpotlightList;
+  const studioMetrics = [
+    ['Published releases', String(creatorDashboard.metrics?.released ?? 0)],
+    ['Draft releases', String(creatorDashboard.metrics?.drafts ?? 0)],
+    ['Verified listening', String(creatorDashboard.metrics?.verifiedListeningMinutes ?? 0) + ' min'],
+    ['Unique listeners', String(creatorDashboard.metrics?.uniqueListeners ?? 0)],
+  ];
 
   useEffect(() => {
     void (async () => {
