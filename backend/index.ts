@@ -9,7 +9,7 @@ const catalogue = [
 ];
 
 const accountTable = (userId: string) => `nightjar_account_${userId}`;
-const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com'];
+const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com', 'nightjar.audio.app@gmail.com'];
 const accountIndexTable = 'nightjar_account_index';
 const subscriptionTable = 'nightjar_subscriptions';
 const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? '';
