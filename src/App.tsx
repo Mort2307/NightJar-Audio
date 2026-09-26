@@ -34,7 +34,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 
-type View = 'discover' | 'creators' | 'creator' | 'admin' | 'protection' | 'profile';
+type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'preview';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor';
@@ -106,7 +106,7 @@ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
 };
 
 function App() {
-  const [view, setView] = useState<View>('discover');
+  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
   const [playing, setPlaying] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
@@ -171,11 +171,16 @@ function App() {
   ];
 
   useEffect(() => {
+    const onPop = () => {
+      const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      setView((['discover','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View);
+    };
+    window.addEventListener('popstate', onPop);
     void (async () => {
       try {
         const { data } = await api.get('/api/branding');
         if (data?.logoUrl) setLogoUrl(data.logoUrl);
-      } catch { /* default wordmark remains available */ }
+      } catch { /* branded wordmark remains available */ }
     })();
     let cancelled = false;
     const restore = async () => {
@@ -187,7 +192,7 @@ function App() {
       await refreshAgeStatus();
     };
     void restore();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.removeEventListener('popstate', onPop); };
   }, []);
 
   const notify = (message: string) => {
@@ -196,6 +201,8 @@ function App() {
   };
 
   const navigate = (nextView: View) => {
+    const path = nextView === 'discover' ? '/discover' : '/' + nextView;
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
     setView(nextView);
     setMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -222,7 +229,7 @@ function App() {
       if (data?.role === 'admin' || data?.role === 'creator' || data?.role === 'listener' || data?.role === 'writer' || data?.role === 'editor') {
         setRole(data.role);
         setAccountStatus(data.status === 'pending_review' ? 'pending_review' : 'active');
-        navigate(data.role === 'admin' ? 'admin' : data.role === 'creator' ? 'creator' : 'discover');
+        navigate(data.role === 'admin' ? 'admin' : data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : 'discover');
       } else {
         setRole(null);
         setRolePicker(true);
@@ -341,7 +348,7 @@ function App() {
         setRole(data.role);
         setAccountStatus(data.status === 'pending_review' ? 'pending_review' : 'active');
         setRolePicker(false);
-        navigate(data.role === 'creator' ? 'creator' : 'discover');
+        navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : 'discover');
         notify(data.role === 'creator'
           ? 'Creator account created. Creator approval and publishing controls can be completed in the production onboarding flow.'
           : 'Listener account created. Welcome to Nightjar.');
@@ -545,7 +552,8 @@ function App() {
     setRolePicker(false);
     if (next === 'creator') navigate('creator');
     else if (next === 'listener') navigate('discover');
-    else navigate('admin');
+    else if (next === 'writer') navigate('writer');
+    else navigate('editor');
     notify(`Admin preview: ${roleMeta[next].label} experience. Your Administrator role remains active.`);
   };
 
