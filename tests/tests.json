@@ -153,7 +153,7 @@
       "audit trail",
       "account suspension"
     ],
-    "description": "Verifies qualifying protected-content activity becomes a retained security alert addressed to both Nightjar owners.",
+    "description": "Verifies qualifying protected-content activity becomes a retained security alert addressed to all three Nightjar owners.",
     "steps": [
       "Open a protected script with an approved account",
       "Generate qualifying high-volume protected-content events in a test environment",
@@ -182,7 +182,7 @@
       "Open Editor People",
       "Open Administrator People"
     ],
-    "expected": "All five roles have dedicated directory surfaces, counts come from real account data except the two configured owner administrators, and no fake account records are created."
+    "expected": "All five roles have dedicated directory surfaces, counts come from real account data except the three configured owner administrators, and no fake account records are created."
   },
   {
     "name": "Administrator allowlist includes all Nightjar owners",
