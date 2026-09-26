@@ -202,7 +202,8 @@ function App() {
       if (cancelled || !current) return;
       setUser(current);
       await loadAccount();
-      await refreshAgeStatus();
+      const verified = await refreshAgeStatus();
+      if (!verified) setAgeStage('assurance');
     };
     void restore();
     return () => { cancelled = true; window.removeEventListener('popstate', onPop); };
@@ -509,7 +510,8 @@ function App() {
       const result = await auth.signIn({ scope: 'openid email profile offline_access' });
       setUser(result.user);
       await loadAccount();
-      await refreshAgeStatus();
+      const verified = await refreshAgeStatus();
+      if (!verified) setAgeStage('assurance');
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
       if (code.includes('popup_blocked')) notify('Please allow the Nightjar sign-in window.');
