@@ -183,5 +183,24 @@
       "Open Administrator People"
     ],
     "expected": "All five roles have dedicated directory surfaces, counts come from real account data except the two configured owner administrators, and no fake account records are created."
+  },
+  {
+    "name": "Administrator allowlist includes all Nightjar owners",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "administrator authentication",
+      "three owner accounts",
+      "People directory",
+      "security ownership"
+    ],
+    "description": "Verifies every configured Nightjar owner is represented as an administrator and that owner-only security controls use the same allowlist.",
+    "steps": [
+      "Sign in with each approved Nightjar owner email in a test environment",
+      "Open Admin",
+      "Open Administrator People",
+      "Inspect the owner security area"
+    ],
+    "expected": "All three approved owner accounts are represented as active Administrators, and security alerts are addressed to the same three configured owners."
   }
 ]
