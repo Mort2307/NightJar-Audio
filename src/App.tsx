@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
-type AgeStage = 'gate' | 'assurance' | 'preview';
+type AgeStage = 'gate' | 'assurance';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor';
 
@@ -437,7 +437,7 @@ function App() {
       setAgeVerified(data?.verified === true);
       setAgeConfigured(data?.configured === true);
       setAgeStatus(data?.status === 'COMPLETE' ? 'COMPLETE' : data?.status === 'PENDING' ? 'PENDING' : data?.status === 'FAIL' ? 'FAIL' : 'NOT_STARTED');
-      if (data?.verified === true) setAgeStage('preview');
+      if (data?.verified === true) setAgeStage('assurance');
       return data?.verified === true;
     } catch {
       return false;
@@ -549,7 +549,7 @@ function App() {
     }
   };
 
-  const recordProtectionEvent = async (eventType: string, relatedId = 'protected-script-demo') => {
+  const recordProtectionEvent = async (eventType: string, relatedId = 'protected-script') => {
     if (!user) return;
     try {
       await api.post('/api/protection/event', { eventType, relatedType: 'script', relatedId, summary: eventType === 'copy_blocked' ? 'Protected copy interaction blocked; no clipboard contents were captured.' : 'Protected interaction recorded by Nightjar.' });
@@ -1014,7 +1014,9 @@ function App() {
         <nav className={menuOpen ? 'nav open' : 'nav'}>
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'discover' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('discover')}>Discover</button>}
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Creators</button>}
-          {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creator')}>Creator Studio</button>}
+          {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
+          {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
+          {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); }}>Editorial</button>}
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
@@ -1143,11 +1145,42 @@ function App() {
 
         {view === 'creator' && (
           <section className="page-wrap studio-page">
-            <div className="page-heading studio-page-heading"><div><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h1>Your audience. Your catalogue. Your listening revenue.</h1><p>{accountStatus === 'pending_review' ? 'Creator account created and awaiting production approval.' : 'Transparent attribution built around verified listening, with your catalogue at the centre.'}</p></div><button className="primary-button with-icon" onClick={() => notify('Release upload is available in the production creator account flow.')}><Upload size={16} /> New release</button></div>
-            {accountStatus === 'pending_review' && <div className="demo-warning"><Sparkles size={17} /><div><strong>CREATOR ACCOUNT / PENDING REVIEW</strong><span>Your creator role is established separately from listener accounts. Publishing permissions can be switched on after production approval.</span></div></div>}
-            <div className="demo-warning"><Sparkles size={17} /><div><strong>ILLUSTRATIVE PREVIEW</strong><span>Every figure on this screen is fictional demo data. Nightjar currently has no live listeners, creators or platform revenue connected.</span></div></div>
-            <div className="protected-script-card"><div><p className="eyebrow"><FileText size={14} /> SCRIPT ROOM</p><h2>Read the complete manuscript. Keep copying separate.</h2><p>Creators need to read a script properly before deciding whether to collaborate. Full reading is available in a protected viewer; copy and export remain separate permissions controlled by the writer.</p></div><div className="protected-script-meta"><span>PROTECTED COLLABORATION VIEW</span><strong>Night Train · performance draft v3</strong><small>Full manuscript · Read-only · Copy off · Export off · Access recorded</small></div><button className="primary-button" onClick={openProtectedReader}><Eye size={15} /> Open full script</button></div>
-            <div className="studio-dashboard"><div className="studio-dashboard-head"><span>PREVIEW PERIOD</span><strong>Creator overview</strong><button className="text-button" onClick={() => notify('Detailed period controls will appear with live creator data.')}>Change period</button></div><div className="dashboard-metric-grid">{studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{value}</strong><em>Illustrative</em></div>)}</div><div className="dashboard-main-grid"><div className="panel-card"><div className="panel-title"><div><span className="mini-label">LISTENING</span><h2>Verified minutes</h2></div><Volume2 size={18} /></div><div className="large-value">73,421 <small>min</small></div><div className="bar-chart">{Array.from({ length: 24 }).map((_, index) => <span key={index} style={{ height: `${20 + ((index * 29) % 70)}%` }} />)}</div><div className="chart-footer"><span>Earlier</span><span>Current preview</span></div></div><div className="panel-card"><div className="panel-title"><div><span className="mini-label">MONEY</span><h2>How the pool works</h2></div><ShieldCheck size={18} /></div><div className="formula-stack"><div><span>01</span><strong>Net subscription revenue</strong></div><ChevronRight size={15} /><div><span>02</span><strong>Creator pool</strong></div><ChevronRight size={15} /><div><span>03</span><strong>Allocated by verified listening</strong></div></div><p className="panel-note">The precise commercial percentages and payout rules will be published before creator launch.</p></div></div></div>
+            <div className="page-heading studio-page-heading">
+              <div>
+                <p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p>
+                <h1>Your audience. Your catalogue. Your listening revenue.</h1>
+                <p>{accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Live catalogue and verified-listening records only.'}</p>
+              </div>
+              <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-new-release')?.scrollIntoView({ behavior: 'smooth' })}>
+                <Upload size={16} /> New release
+              </button>
+            </div>
+            {accountStatus === 'pending_review' && creatorOnly && <div className="admin-note"><Sparkles size={17} /><div><strong>CREATOR ACCOUNT / PENDING REVIEW</strong><span>Your account is created, but publishing stays locked until an administrator approves the application.</span></div></div>}
+            <div className="dashboard-metric-grid">
+              {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
+            </div>
+            {creatorOnly && <article className="creator-create-card" id="creator-new-release">
+              <div><span className="mini-label">NEW RELEASE</span><h2>Create a release draft</h2><p>A release stays private until you attach real audio and publish it.</p></div>
+              <div className="writer-create-form">
+                <input value={creatorDraft.title} onChange={(e)=>setCreatorDraft({...creatorDraft,title:e.target.value})} placeholder="Release title" />
+                <input value={creatorDraft.category} onChange={(e)=>setCreatorDraft({...creatorDraft,category:e.target.value})} placeholder="Category" />
+                <input value={creatorDraft.genre} onChange={(e)=>setCreatorDraft({...creatorDraft,genre:e.target.value})} placeholder="Genre" />
+                <input value={creatorDraft.mood} onChange={(e)=>setCreatorDraft({...creatorDraft,mood:e.target.value})} placeholder="Mood" />
+                <input value={creatorDraft.durationMinutes} onChange={(e)=>setCreatorDraft({...creatorDraft,durationMinutes:e.target.value})} placeholder="Duration in minutes" inputMode="numeric" />
+                <input value={creatorDraft.audioUrl} onChange={(e)=>setCreatorDraft({...creatorDraft,audioUrl:e.target.value})} placeholder="Audio URL" />
+                <input value={creatorDraft.artworkUrl} onChange={(e)=>setCreatorDraft({...creatorDraft,artworkUrl:e.target.value})} placeholder="Artwork URL (optional)" />
+                <textarea value={creatorDraft.description} onChange={(e)=>setCreatorDraft({...creatorDraft,description:e.target.value})} placeholder="Description" />
+                <input value={creatorDraft.tags} onChange={(e)=>setCreatorDraft({...creatorDraft,tags:e.target.value})} placeholder="Tags, comma separated" />
+                <input value={creatorDraft.tropes} onChange={(e)=>setCreatorDraft({...creatorDraft,tropes:e.target.value})} placeholder="Tropes, comma separated" />
+                <button className="primary-button" onClick={()=>void createCreatorRelease()}>Save draft <ArrowRight size={15}/></button>
+              </div>
+            </article>}
+            <section className="section-wrap compact"><div className="section-head"><div><p className="eyebrow">CATALOGUE</p><h2>Release records</h2></div></div>
+              <div className="data-list">{creatorDashboard.releases.map((release:any)=><article className="data-row" key={release.id}><div><strong>{release.title}</strong><span>{release.status ?? 'draft'} · v{release.version ?? 1} · {release.durationMinutes ? release.durationMinutes+' min' : 'duration not set'}</span><em>{release.audioUrl ? 'Audio attached' : 'Audio not attached'}</em></div><div className="data-actions">{creatorOnly&&release.status!=='released'&&<button className="secondary-button" disabled={!release.audioUrl} onClick={()=>void publishCreatorRelease(release.id)}>Publish</button>}{creatorOnly&&release.status!=='released'&&<button className="ghost-button" onClick={()=>void deleteCreatorRelease(release.id)}><Trash2 size={14}/></button>}</div></article>)}
+              {!creatorDashboard.releases.length&&<div className="people-empty"><Headphones size={18}/><strong>No release records yet.</strong><span>Live creator releases will appear here.</span></div>}
+              </div>
+            </section>
+            <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS</span><h2>Verified listening allocation</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Net subscription revenue</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Creator pool</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Eligible verified listening</strong></div></div><p className="panel-note">Commercial outputs remain empty until real billing records and payout rules are connected.</p></article>
           </section>
         )}
 
@@ -1174,7 +1207,7 @@ function App() {
                 <label>Favourite tropes <input value={(profile.favouriteTropes??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteTropes',e.target.value)} placeholder="Slow burn, suspense, character-led"/></label>
                 <label>Favourite categories <input value={(profile.favouriteCategories??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteCategories',e.target.value)} placeholder="Story, Atmospheric, Performance"/></label>
                 <label>Role focus <input value={(profile.roleFocus??[]).join(', ')} onChange={(e)=>setProfile((p:any)=>({...p,roleFocus:e.target.value.split(',').map((x:string)=>x.trim()).filter(Boolean).slice(0,16)}))} placeholder="Performance, writing, editing"/></label>
-                <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile preview</label>
+                <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile</label>
                 <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my profile'} <Check size={15}/></button>
               </article>
             </div>
@@ -1199,22 +1232,20 @@ function App() {
           </section>
         )}
 
-        {view === 'admin' && effectiveRole === 'writer' && (
+        {view === 'writer' && effectiveRole === 'writer' && (
           <section className="page-wrap role-studio-page">
-            <div className="page-heading"><div><p className="eyebrow"><FileText size={14} /> WRITER STUDIO</p><h1>Write it. Protect it. Choose who gets to read it.</h1><p>Writers control script access, collaboration permissions and version history. Full manuscripts are private until the writer grants read access.</p></div><span className="preview-chip">ADMIN PREVIEW · WRITER</span></div>
-            <div className="admin-preview-control"><div><span className="mini-label">ROLE PREVIEW</span><strong>You are inspecting the Writer product surface.</strong><p>Your real account remains Administrator. Nothing on this screen changes your backend permissions.</p></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Editor</button><button onClick={clearAdminPreview}>Return to Admin</button></div></div>
-            <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a protected manuscript</h2><p>The working draft is private by default. A creator can request full reading access later.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event) => setWriterDraftTitle(event.target.value)} placeholder="Working title" aria-label="Working title" /><button className="primary-button" onClick={createWriterDraft}>Create draft <FileText size={15} /></button></div></div>
-            <div className="writer-script-grid">{writerScripts.map((script) => <article className="writer-script-card" key={script.id}><div className="script-card-top"><span className="admin-icon"><FileText size={18} /></span><span className="status-pill">{script.status}</span></div><span className="mini-label">{script.version}</span><h2>{script.title}</h2><p>Protected manuscript · {script.access}</p><div className="script-card-actions"><button className="secondary-button" onClick={() => notify(`${script.title}: opening full manuscript preview.`)}><Eye size={14} /> Read</button><button className="secondary-button" onClick={() => notify(`${script.title}: collaboration access controls opened.`)}><ShieldCheck size={14} /> Permissions</button></div></article>)}</div>
-            <div className="protection-banner"><ShieldCheck size={19} /><div><strong>WRITER CONTROL</strong><span>Read access, copy permission and export permission are separate controls. The protected reader is designed to make unauthorised copying harder and to preserve an audit trail.</span></div></div>
+            <div className="page-heading"><div><p className="eyebrow"><FileText size={14}/> WRITER STUDIO</p><h1>Write it. Protect it.</h1><p>Live manuscripts, version history and editorial handoff.</p></div></div>
+            <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a manuscript</h2><p>Every new script begins private.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title"/><button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button></div></div>
+            <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>setWriterSelected(script)}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div><textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder="Begin writing…"/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button></div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
           </section>
         )}
 
-        {view === 'admin' && effectiveRole === 'editor' && (
+        {view === 'editor' && effectiveRole === 'editor' && (
           <section className="page-wrap role-studio-page">
-            <div className="page-heading"><div><p className="eyebrow"><FileCheck2 size={14} /> EDITORIAL QUEUE</p><h1>Shape the script before it reaches production.</h1><p>Editors review assigned manuscripts, request revisions, compare versions and approve work for production.</p></div><span className="preview-chip">ADMIN PREVIEW · EDITOR</span></div>
-            <div className="admin-preview-control"><div><span className="mini-label">ROLE PREVIEW</span><strong>You are inspecting the Editor product surface.</strong><p>Your real account remains Administrator. Editorial actions shown here do not alter administrator permissions.</p></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Editor</button><button onClick={clearAdminPreview}>Return to Admin</button></div></div>
-            <div className="editor-queue-grid"><article className="editor-queue-card"><span className="mini-label">AWAITING REVIEW</span><h2>Night Train</h2><p>Writer: Rowan Vale · v3 · 28 min target</p><div className="editor-status-line"><span>Editorial review</span><strong>3 comments</strong></div><div className="script-card-actions"><button className="secondary-button" onClick={() => notify('Night Train opened in Editor review mode.')}><Eye size={14} /> Review</button><button className="secondary-button" onClick={() => notify('Revision request prepared for Night Train.')}><ArrowRight size={14} /> Request changes</button></div></article><article className="editor-queue-card"><span className="mini-label">READY FOR APPROVAL</span><h2>Room 17</h2><p>Writer: Ellis Grey · v5 · 19 min target</p><div className="editor-status-line"><span>Final editorial pass</span><strong>0 open comments</strong></div><div className="script-card-actions"><button className="primary-button" onClick={() => notify('Room 17 marked editorially approved in preview.')}><Check size={14} /> Approve</button><button className="secondary-button" onClick={() => notify('Version comparison opened for Room 17.')}><FileCheck2 size={14} /> Compare</button></div></article><article className="editor-queue-card"><span className="mini-label">REVISION REQUESTED</span><h2>After the Rain</h2><p>Writer: June Mercer · v2 · 14 min target</p><div className="editor-status-line"><span>Waiting on writer</span><strong>2 requested changes</strong></div><button className="secondary-button" onClick={() => notify('Revision history opened for After the Rain.')}><FileText size={14} /> View history</button></article></div>
-            <div className="protection-banner"><FileCheck2 size={19} /><div><strong>EDITOR BOUNDARY</strong><span>Editors can change editorial state and comments, but they do not receive administrator controls or access to commercial settings.</span></div></div>
+            <div className="page-heading"><div><p className="eyebrow"><FileCheck2 size={14}/> EDITORIAL QUEUE</p><h1>Review work professionally.</h1><p>Only assigned live manuscripts appear in your queue.</p></div></div>
+            <div className="editor-queue-grid">{editorQueue.map((script:any)=><button key={script.id} className={editorSelected?.id===script.id?'editor-queue-card active':'editor-queue-card'} onClick={()=>setEditorSelected(script)}><div className="editor-status-line"><span>{script.status}</span><strong>v{script.version}</strong></div><h2>{script.title}</h2><p>{script.lastEditorialComment||'No editorial note recorded yet.'}</p></button>)}</div>
+            {!editorQueue.length&&<div className="people-empty"><FileCheck2 size={18}/><strong>No editorial assignments.</strong><span>An administrator must assign a manuscript before review work can begin.</span></div>}
+            {editorSelected&&<article className="panel-card editorial-review-panel"><div className="panel-title"><div><span className="mini-label">CURRENT REVIEW</span><h2>{editorSelected.title}</h2></div><span className="status-pill">{editorSelected.status}</span></div><p className="panel-note">{editorSelected.lastEditorialComment||'No prior note.'}</p><div className="script-card-actions"><button className="secondary-button" onClick={()=>void reviewEditorScript('Under review')}>Mark under review</button><button className="secondary-button" onClick={()=>void reviewEditorScript('Revision requested')}>Request revision</button><button className="primary-button" onClick={()=>void reviewEditorScript('Approved')}>Approve</button><button className="ghost-button" onClick={()=>void reviewEditorScript('Rejected')}>Reject</button></div></article>}
           </section>
         )}
 
