@@ -46,7 +46,7 @@ type AgeRecord = {
   testMode?: boolean;
 };
 
-const appUrl = 'https://nightjar-42eeag.v2.appdeploy.ai/';
+const appUrl = process.env.NIGHTJAR_APP_URL || 'https://nightjar-42eeag.v2.appdeploy.ai/';
 const yotiConfigured = () => Boolean(process.env.YOTI_SDK_ID && process.env.YOTI_ACCESS_TOKEN);
 
 async function getAgeRecord(userId: string) {
@@ -442,7 +442,7 @@ export const handler = router({
       if(handle){ const {items}=await db.list(accountIndexTable,{limit:1000}); if(items.some((item)=>item.userId!==ctx.user!.userId&&cleanHandle(item.handle)===handle)) return error('That @handle is already in use.',409); }
       const current=await getProfile(ctx.user!.userId); const profile:NightjarProfile={displayName:String(body.displayName??ctx.user!.name??'Nightjar account').trim().slice(0,80),handle:handle||null,headline:String(body.headline??'').trim().slice(0,120),bio:String(body.bio??'').trim().slice(0,500),pronouns:String(body.pronouns??'').trim().slice(0,60),avatarInitials:String(body.avatarInitials??'').trim().slice(0,4).toUpperCase(),avatarTone:String(body.avatarTone??'plum').trim().slice(0,24),favouriteTags:cleanList(body.favouriteTags),favouriteTropes:cleanList(body.favouriteTropes),favouriteCategories:cleanList(body.favouriteCategories),roleFocus:cleanList(body.roleFocus),publicProfile:body.publicProfile!==false,createdAt:current?.createdAt??new Date().toISOString(),updatedAt:new Date().toISOString()};
       if(current){const {items}=await db.list(profileTable(ctx.user!.userId),{limit:1}); if(items[0]) await db.update(profileTable(ctx.user!.userId),[{id:items[0].id,record:profile}]);} else await db.add(profileTable(ctx.user!.userId),[profile]);
-      const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===ctx.user!.userId); if(indexed) await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,name:profile.displayName,handle:profile.handle}}]);
+      const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===ctx.user!.userId); if(indexed) await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,name:profile.displayName,handle:profile.handle}}]); else if(isAdmin(ctx.user!.email)) await db.add(accountIndexTable,[{userId:ctx.user!.userId,email:normalizeEmail(ctx.user!.email),name:profile.displayName,handle:profile.handle,role:'admin',status:'active',createdAt:profile.createdAt}]);
       await db.add(tasteTable(ctx.user!.userId),[{type:'declared_preferences',tags:profile.favouriteTags,tropes:profile.favouriteTropes,categories:profile.favouriteCategories,updatedAt:profile.updatedAt}]);
       return json({profile});
     },
@@ -479,7 +479,7 @@ export const handler = router({
           counts,
           total: counts.listener + counts.creator + counts.writer + counts.editor + counts.admin,
           accounts: accounts.filter((account) => ['listener','creator','writer','editor'].includes(account.role)).slice(0, 100),
-          administrators: ADMIN_EMAILS.map((email) => ({ email, role: 'admin', status: 'active', designation: 'Owner / Administrator' })),
+          administrators: await Promise.all(ADMIN_EMAILS.map(async (email) => { const indexed=accounts.find((account)=>normalizeEmail(account.email)===normalizeEmail(email)&&account.role==='admin'); const profile=indexed?.userId ? await getProfile(indexed.userId) : null; return { email, userId:indexed?.userId??null, name:profile?.displayName??indexed?.name??null, handle:profile?.handle??indexed?.handle??null, role:'admin', status:'active', designation:'Owner / Administrator' }; })),
         },
         subscriptions: { ...subscriptionCounts, totalTracked: subscriptions.length, billingConnected: subscriptions.length > 0 },
       });
