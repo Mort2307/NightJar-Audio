@@ -2,4 +2,58 @@
 
 Premium immersive audio for adults.
 
-GitHub main is the source of truth.
+## Source of truth
+
+GitHub is the canonical source repository for Nightjar.
+
+- Repository: https://github.com/Mort2307/NightJar-Audio
+- Current source-of-truth branch: `main`
+- Imported AppDeploy baseline: `import/appdeploy-current`
+
+## Hosting
+
+The intended public/tester frontend is Firebase Hosting. AppDeploy remains the development/QA environment until the deployment workflow is connected.
+
+Target public domain:
+
+**https://nightjar.audio**
+
+The custom domain is configured in Firebase Hosting rather than `firebase.json`. The domain must be owned/controlled by the Nightjar team and its DNS records pointed at the Firebase Hosting site.
+
+Build:
+
+```powershell
+npm install
+npm run build:firebase
+```
+
+## Security model
+
+Protected manuscripts use backend authorization, short-lived reader sessions, access expiry/revocation, identity-bound evidence, visible session watermarks, browser interaction restrictions, and suspicious-activity signals.
+
+A browser application cannot guarantee prevention of screenshots, screen recording, OCR, or determined extraction. Security signals are evidence for review, not proof of wrongdoing.
+
+Qualifying suspicious protected-content activity creates a retained security alert addressed to **all three configured Nightjar owners**. Administrator review can suspend the account and revoke active protected-reader sessions without deleting the evidence trail.
+
+## Identity and Taste
+
+All roles share the same profile model:
+
+- chosen display name
+- unique @handle
+- headline and bio
+- optional pronouns
+- favourite tags
+- favourite tropes
+- favourite categories
+- public-profile visibility
+- role-specific focus
+
+The Taste Engine separates identity from taste. Explicit preferences seed recommendations more strongly than inferred behaviour; behavioural signals refine the taste graph over time.
+
+> Learn what someone likes. Don't infer who someone is.
+
+
+### Runtime URL configuration
+
+The backend uses `NIGHTJAR_APP_URL` for age-assurance callback/cancel URLs when configured. The AppDeploy URL remains the fallback for development; the Firebase/custom-domain deployment should set the runtime value to `https://nightjar.audio/`.
