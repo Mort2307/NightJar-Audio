@@ -5,6 +5,11 @@ const accountTable = (userId: string) => `nightjar_account_${userId}`;
 const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com', 'nightjar.audio.app@gmail.com'];
 const accountIndexTable = 'nightjar_account_index';
 const subscriptionTable = 'nightjar_subscriptions';
+const releaseTable = 'nightjar_releases';
+const followTable = (userId: string) => `nightjar_follows_${userId}`;
+const favouriteTable = (userId: string) => `nightjar_favourites_${userId}`;
+const listeningTable = (userId: string) => `nightjar_listening_${userId}`;
+const editorAssignmentTable = 'nightjar_editor_assignments';
 const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? '';
 const isAdmin = (email?: string) => Boolean(normalizeEmail(email) && ADMIN_EMAILS.includes(normalizeEmail(email)));
 const profileTable = (userId: string) => `nightjar_profile_${userId}`;
@@ -124,7 +129,22 @@ const releaseScore = (release: Record<string, any>, taste: Record<string, number
 
 export const handler = router({
   'GET /api/_healthcheck': [async () => json({ message: 'Success' })],
-  'GET /api/catalogue': [async () => json({ catalogue })],
+  'GET /api/catalogue': [
+    async (ctx) => {
+      const query = String(ctx.query.q ?? '').trim().toLowerCase();
+      const category = String(ctx.query.category ?? '').trim().toLowerCase();
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      const catalogue = await Promise.all(items.filter((release) => releaseVisible(release)).filter((release) => {
+        if (category && String(release.category ?? '').toLowerCase() !== category) return false;
+        if (!query) return true;
+        return [release.title, release.description, release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].join(' ').toLowerCase().includes(query);
+      }).map(async (release) => {
+        const profile = release.creatorUserId ? await getProfile(String(release.creatorUserId)) : null;
+        return { ...release, creatorName: profile?.displayName ?? release.creatorName ?? 'Nightjar creator', creatorHandle: profile?.handle ?? release.creatorHandle ?? null };
+      }));
+      return json({ catalogue });
+    },
+  ],
   'GET /api/account/identity': [
     requireAuth(),
     withScopes('email'),
