@@ -1,0 +1,616 @@
+diff --git a/README.md b/README.md
+index 2982819..f108288 100644
+--- a/README.md
++++ b/README.md
+@@ -12,7 +12,7 @@ GitHub is the canonical source repository for Nightjar.
+ 
+ ## Hosting
+ 
+-The intended public/tester frontend is Firebase Hosting. AppDeploy remains the development/QA environment until the deployment workflow is connected.
++GitHub `main` is the canonical build source. Firebase Hosting is the intended public/tester frontend target. The backend code remains isolated under `backend/` and is not required to build the Vite frontend.
+ 
+ Target public domain:
+ 
+@@ -56,5 +56,5 @@ The Taste Engine separates identity from taste. Explicit preferences seed recomm
+ 
+ ### Runtime URL configuration
+ 
+-The backend uses `NIGHTJAR_APP_URL` for age-assurance callback/cancel URLs when configured. The AppDeploy URL remains the fallback for development; the Firebase/custom-domain deployment should set the runtime value to `https://nightjar.audio/`.
++The backend uses `NIGHTJAR_APP_URL` for age-assurance callback/cancel URLs when configured. Set it to the actual deployed frontend origin for any hosted verification environment.
+ 
+diff --git a/backend/index.ts b/backend/index.ts
+index 4aeae37..5d4cc69 100644
+--- a/backend/index.ts
++++ b/backend/index.ts
+@@ -266,15 +266,36 @@ export const handler = router({
+       if (!id) {
+         return error('Unable to create the Nightjar account profile.', 500);
+       }
++      const createdAt = new Date().toISOString();
++
+       await db.add(accountIndexTable, [{
+         userId: ctx.user!.userId,
+         email: normalizeEmail(ctx.user!.email),
+         name: ctx.user!.name ?? null,
+         role: body.role,
+         status,
+-        createdAt: new Date().toISOString(),
++        createdAt,
+       }]);
+ 
++      if (body.role === 'creator') {
++        const [applicationId] = await db.add('nightjar_creator_applications', [{
++          userId: ctx.user!.userId,
++          email: normalizeEmail(ctx.user!.email),
++          creatorName: ctx.user!.name ?? null,
++          displayName: ctx.user!.name ?? null,
++          status: 'pending',
++          submittedAt: createdAt,
++        }]);
++
++        if (!applicationId) {
++          await db.delete(table, [id]);
++          const index = await db.list(accountIndexTable, { limit: 500 });
++          const matching = index.items.find((item) => item.userId === ctx.user!.userId);
++          if (matching) await db.delete(accountIndexTable, [matching.id]);
++          return error('Creator application could not be created.', 500);
++        }
++      }
++
+       return json({ role: body.role, status });
+     },
+   ],
+@@ -452,8 +473,8 @@ export const handler = router({
+   'GET /api/taste/profile': [requireAuth(), async (ctx) => { const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])])weights[value]=(weights[value]??0)+3; for(const item of items)for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])])weights[value]=(weights[value]??0)+(item.type==='skip'||item.type==='hide'?-0.5:item.completed?2:1); return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
+   'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
+   'GET /api/security/notifications': [requireAuth(), withScopes('email'), async (ctx) => { if(!isAdmin(ctx.user!.email))return json({notifications:[]}); const {items}=await db.list(ownerNotificationTable(ctx.user!.email),{limit:100}); return json({notifications:items}); }],
+-  'GET /api/admin/security-alerts': [requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(securityAlertTable,{limit:100}); return json({alerts:items}); }],
+-  'POST /api/admin/security-alerts/:alertId/suspend': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const {items}=await db.list(securityAlertTable,{limit:100}); const alert=items.find((item)=>item.id===ctx.params.alertId); if(!alert)return error('Security alert not found.',404); const userId=String(alert.userId); const {items:accounts}=await db.list(accountTable(userId),{limit:1}); if(accounts[0])await db.update(accountTable(userId),[{id:accounts[0].id,record:{...accounts[0],status:'suspended',suspendedAt:new Date().toISOString(),suspendedBy:ctx.user!.email??null}}]); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===userId); if(indexed)await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,status:'suspended'}}]); await revokeReaderSessions(userId,'Account suspended after security review.'); await db.update(securityAlertTable,[{id:alert.id,record:{...alert,status:'actioned',action:'suspended',actionedAt:new Date().toISOString(),actionedBy:ctx.user!.email??null}}]); await db.add(securityEventTable,[{userId,eventType:'account_suspended',actorEmail:ctx.user!.email??null,relatedId:alert.id,createdAt:new Date().toISOString()}]); return json({suspended:true,userId}); }],
++  'GET /api/admin/security-alerts': [requireAuth(), requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(securityAlertTable,{limit:100}); return json({alerts:items}); }],
++  'POST /api/admin/security-alerts/:alertId/suspend': [requireAuth(), requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const {items}=await db.list(securityAlertTable,{limit:100}); const alert=items.find((item)=>item.id===ctx.params.alertId); if(!alert)return error('Security alert not found.',404); const userId=String(alert.userId); const {items:accounts}=await db.list(accountTable(userId),{limit:1}); if(accounts[0])await db.update(accountTable(userId),[{id:accounts[0].id,record:{...accounts[0],status:'suspended',suspendedAt:new Date().toISOString(),suspendedBy:ctx.user!.email??null}}]); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===userId); if(indexed)await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,status:'suspended'}}]); await revokeReaderSessions(userId,'Account suspended after security review.'); await db.update(securityAlertTable,[{id:alert.id,record:{...alert,status:'actioned',action:'suspended',actionedAt:new Date().toISOString(),actionedBy:ctx.user!.email??null}}]); await db.add(securityEventTable,[{userId,eventType:'account_suspended',actorEmail:ctx.user!.email??null,relatedId:alert.id,createdAt:new Date().toISOString()}]); return json({suspended:true,userId}); }],
+ 
+   'GET /api/admin/overview': [
+     requireAdminEmailAllowlist(ADMIN_EMAILS),
+diff --git a/index.html b/index.html
+index bf174ff..b53667f 100644
+--- a/index.html
++++ b/index.html
+@@ -3,14 +3,14 @@
+   <head>
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>Nightjar â€” Premium immersive audio for adults.</title>
++    <title>Nightjar — Premium immersive audio for adults.</title>
+     <meta name="description" content="Nightjar is premium immersive audio for adults: original stories, performances and soundscapes designed for headphones." />
+     <meta name="application-name" content="Nightjar" />
+     <meta name="theme-color" content="#0c0b0d" />
+     <meta name="apple-mobile-web-app-capable" content="yes" />
+     <meta name="apple-mobile-web-app-title" content="Nightjar" />
+     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+-    <meta property="og:title" content="Nightjar â€” Premium immersive audio for adults." />
++    <meta property="og:title" content="Nightjar — Premium immersive audio for adults." />
+     <meta property="og:description" content="Original stories, performances and immersive soundscapes, built for headphones." />
+     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+     <link rel="manifest" href="./manifest.webmanifest" />
+diff --git a/package.json b/package.json
+index 2617e6e..a3d6218 100644
+--- a/package.json
++++ b/package.json
+@@ -10,7 +10,6 @@
+     "build:firebase": "vite build"
+   },
+   "dependencies": {
+-    "@appdeploy/client": "^1.0.0",
+     "lucide-react": "^0.469.0",
+     "react": "^19.0.0",
+     "react-dom": "^19.0.0"
+diff --git a/src/App.tsx b/src/App.tsx
+index dfef4e1..bde07c5 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useMemo, useState } from 'react';
+-import { api, auth } from '@appdeploy/client';
++import { ApiError, api, auth } from './platform';
+ import {
+   ArrowRight,
+   BarChart3,
+@@ -135,8 +135,8 @@ const writerSpotlights = [
+ const studioMetrics = [
+   ['Listeners', '1,842'],
+   ['Eligible listening', '73,421 min'],
+-  ['Creator pool', 'Â£6,742'],
+-  ['Estimated share', 'Â£1,247'],
++  ['Creator pool', '£6,742'],
++  ['Estimated share', '£1,247'],
+ ];
+ 
+ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
+@@ -150,7 +150,7 @@ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
+   },
+   listener: {
+     label: 'Listener',
+-    description: 'Discover, follow and listen to Nightjarâ€™s adult catalogue.',
++    description: 'Discover, follow and listen to Nightjar’s adult catalogue.',
+   },
+   writer: {
+     label: 'Writer',
+@@ -201,6 +201,7 @@ function App() {
+   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
+   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
+   const [writerDraftTitle, setWriterDraftTitle] = useState('');
++  const [catalogueExpanded, setCatalogueExpanded] = useState(false);
+   const [writerScripts, setWriterScripts] = useState([
+     { id: 'demo-1', title: 'Night Train', status: 'Approved', version: 'v3', access: 'Read-only collaboration' },
+     { id: 'demo-2', title: 'Room 17', status: 'In editing', version: 'v2', access: 'Private' },
+@@ -335,7 +336,8 @@ function App() {
+       }
+     } catch (error) {
+       const code = error instanceof Error ? error.message : '';
+-      if (!code.includes('popup_closed')) notify('Nightjar could not start age verification. Please try again.');
++      if (code.includes('auth_not_configured')) notify('Secure sign-in is not configured for this build yet.');
++      else if (!code.includes('popup_closed')) notify('Nightjar could not start age verification. Please try again.');
+     } finally {
+       setAgeLoading(false);
+     }
+@@ -347,6 +349,27 @@ function App() {
+     return () => window.clearInterval(timer);
+   }, [ageStatus, user]);
+ 
++  useEffect(() => {
++    const dialogOpen = protectedReaderOpen || Boolean(adminPeopleRole) || Boolean(adminPanel);
++    if (!dialogOpen) return;
++
++    const previousOverflow = document.body.style.overflow;
++    document.body.style.overflow = 'hidden';
++
++    const handleKeyDown = (event: KeyboardEvent) => {
++      if (event.key !== 'Escape') return;
++      if (protectedReaderOpen) setProtectedReaderOpen(false);
++      else if (adminPeopleRole) setAdminPeopleRole(null);
++      else if (adminPanel) setAdminPanel(null);
++    };
++
++    window.addEventListener('keydown', handleKeyDown);
++    return () => {
++      document.body.style.overflow = previousOverflow;
++      window.removeEventListener('keydown', handleKeyDown);
++    };
++  }, [protectedReaderOpen, adminPeopleRole, adminPanel]);
++
+   const signIn = async () => {
+     setAccountLoading(true);
+     try {
+@@ -356,7 +379,8 @@ function App() {
+       await refreshAgeStatus();
+     } catch (error) {
+       const code = error instanceof Error ? error.message : '';
+-      if (code.includes('popup_blocked')) notify('Please allow the Nightjar sign-in window.');
++      if (code.includes('auth_not_configured')) notify('Sign-in is not configured for this build yet.');
++      else if (code.includes('popup_blocked')) notify('Please allow the Nightjar sign-in window.');
+       else if (!code.includes('popup_closed')) notify('Nightjar sign-in could not be completed.');
+     } finally {
+       setAccountLoading(false);
+@@ -440,8 +464,7 @@ function App() {
+       await loadProfile();
+       notify('Your Nightjar profile has been saved.');
+     } catch (error) {
+-      const message = error instanceof Error ? error.message : '';
+-      notify(message.includes('409') ? 'That @handle is already in use.' : 'Profile could not be saved.');
++      notify(error instanceof ApiError && error.status === 409 ? 'That @handle is already in use.' : 'Profile could not be saved.');
+     } finally { setProfileLoading(false); }
+   };
+ 
+@@ -651,7 +674,7 @@ function App() {
+             <div><Check size={16} /><span>Raw identity documents do not belong in the Nightjar content database.</span></div>
+           </div>
+           <button className="primary-button wide-button" disabled={ageLoading} onClick={() => void openAgeCheck()}>
+-            {ageLoading ? 'Opening secure checkâ€¦' : ageVerified ? 'Age verified â€” continue' : 'Open secure age check'} <LockKeyhole size={16} />
++            {ageLoading ? 'Opening secure check…' : ageVerified ? 'Age verified — continue' : 'Open secure age check'} <LockKeyhole size={16} />
+           </button>
+           {!ageConfigured && user && role === 'admin' && <button className="secondary-button wide-button" disabled={ageLoading} onClick={() => void runAdminSandboxTest()}>
+             Run administrator sandbox test <ShieldCheck size={16} />
+@@ -677,7 +700,7 @@ function App() {
+           <h1>Choose your Nightjar identity.</h1>
+           <p className="account-lede">
+             Nightjar uses separate account roles. Your role determines what you can see,
+-            edit and publish; there is no shared â€œaccount modeâ€ switch.
++            edit and publish; there is no shared “account mode” switch.
+           </p>
+           {identityEmail && <div className="demo-warning"><ShieldCheck size={17} /><div><strong>SIGNED IN AS</strong><span>{identityEmail}</span><small>{identityAdmin ? 'Administrator identity detected by Nightjar.' : 'Administrator identity not detected for this signed-in account.'}</small></div></div>}
+ 
+@@ -699,6 +722,16 @@ function App() {
+                   <div><span className="role-kicker">YOUR REAL ROLE</span><h2>Administrator</h2><p>Your administrator permissions remain active while previewing either public account experience.</p></div>
+                   <div className="locked-note"><ShieldCheck size={14} /> Protected owner account</div>
+                 </article>
++                <article className="role-card">
++                  <span className="role-icon"><FileText size={20} /></span>
++                  <div><span className="role-kicker">PREVIEW AS</span><h2>Writer</h2><p>Inspect the protected manuscript and collaboration-control surface without changing your administrator role.</p></div>
++                  <button className="secondary-button" onClick={() => selectPreviewRole('writer')}>Preview writer <ArrowRight size={15} /></button>
++                </article>
++                <article className="role-card">
++                  <span className="role-icon"><FileCheck2 size={20} /></span>
++                  <div><span className="role-kicker">PREVIEW AS</span><h2>Editor</h2><p>Inspect the editorial queue and approval workflow without changing your administrator role.</p></div>
++                  <button className="secondary-button" onClick={() => selectPreviewRole('editor')}>Preview editor <ArrowRight size={15} /></button>
++                </article>
+               </>
+             ) : (
+               <>
+@@ -752,7 +785,7 @@ function App() {
+           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
+           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
+           {canAdmin && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
+-          {canAdmin && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ADMIN PREVIEW Â· REAL ROLE: ADMINISTRATOR</span><button className={previewRole === 'listener' ? 'active' : ''} onClick={() => selectPreviewRole('listener')}>Listener</button><button className={previewRole === 'creator' ? 'active' : ''} onClick={() => selectPreviewRole('creator')}>Creator</button><button className={previewRole === 'writer' ? 'active' : ''} onClick={() => selectPreviewRole('writer')}>Writer</button><button className={previewRole === 'editor' ? 'active' : ''} onClick={() => selectPreviewRole('editor')}>Editor</button><button className={!previewRole ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
++          {canAdmin && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ADMIN PREVIEW · REAL ROLE: ADMINISTRATOR</span><button className={previewRole === 'listener' ? 'active' : ''} onClick={() => selectPreviewRole('listener')}>Listener</button><button className={previewRole === 'creator' ? 'active' : ''} onClick={() => selectPreviewRole('creator')}>Creator</button><button className={previewRole === 'writer' ? 'active' : ''} onClick={() => selectPreviewRole('writer')}>Writer</button><button className={previewRole === 'editor' ? 'active' : ''} onClick={() => selectPreviewRole('editor')}>Editor</button><button className={!previewRole ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
+         </nav>
+ 
+         <div className="top-actions">
+@@ -762,7 +795,7 @@ function App() {
+             <>
+               <button className="account-chip" onClick={() => setRolePicker(true)}>
+                 <span className="account-chip-avatar">{(user.name ?? user.email ?? 'N').slice(0, 1).toUpperCase()}</span>
+-                <span><strong>{user.name ?? 'Nightjar account'}</strong><em>{canAdmin && previewRole ? `Administrator Â· previewing ${roleMeta[previewRole].label}` : accountLabel}</em></span>
++                <span><strong>{user.name ?? 'Nightjar account'}</strong><em>{canAdmin && previewRole ? `Administrator · previewing ${roleMeta[previewRole].label}` : accountLabel}</em></span>
+               </button>
+               <button className="ghost-button desktop-only" onClick={() => void signOut()}><LogOut size={15} /></button>
+             </>
+@@ -782,7 +815,7 @@ function App() {
+                   <span className="kicker-note">Illustrative product preview</span>
+                 </div>
+                 <h1>Premium immersive<span> audio for adults.</span></h1>
+-                <p className="hero-lede">Stories, performances and soundscapes designed to pull you out of the room you are in â€” and into another one.</p>
++                <p className="hero-lede">Stories, performances and soundscapes designed to pull you out of the room you are in — and into another one.</p>
+                 <div className="hero-actions">
+                   <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the catalogue <ArrowRight size={16} /></button>
+                   <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Sign in as a creator to open Creator Studio.')}>For creators <ChevronRight size={16} /></button>
+@@ -797,7 +830,7 @@ function App() {
+               <div className="hero-art" aria-label="Nightjar featured audio preview">
+                 <div className="orbit orbit-a" /><div className="orbit orbit-b" />
+                 <div className="featured-card">
+-                  <div className="featured-top"><span className="mini-label">NIGHTJAR / 001</span><span className="status-dot"><span /> LIVE PREVIEW</span></div>
++                  <div className="featured-top"><span className="mini-label">NIGHTJAR / 001</span><span className="status-dot"><span /> INTERFACE PREVIEW</span></div>
+                   <div className="cover-art">
+                     <div className="cover-crescent"><Moon size={54} /></div>
+                     <span>AFTER<br /><em>MIDNIGHT</em></span>
+@@ -816,24 +849,24 @@ function App() {
+             <section className="editorial-strip"><span>VOICE</span><span>STORY</span><span>ATMOSPHERE</span><span>CHARACTER</span><span>SOUND DESIGN</span><span>AFTER DARK</span></section>
+ 
+             <section className="spotlight-section section-wrap" aria-labelledby="daily-spotlights-title">
+-              <div className="section-head spotlight-heading"><div><p className="eyebrow"><Sparkles size={14} /> DAILY ROTATION</p><h2 id="daily-spotlights-title">Today in the spotlight.</h2></div><span className="spotlight-cycle">01 DAY Â· 05 PLACES Â· FIXED ROTATION</span></div>
++              <div className="section-head spotlight-heading"><div><p className="eyebrow"><Sparkles size={14} /> DAILY ROTATION</p><h2 id="daily-spotlights-title">Today in the spotlight.</h2></div><span className="spotlight-cycle">01 DAY · 05 PLACES · FIXED ROTATION</span></div>
+               <div className="spotlight-grid">
+                 <article className="spotlight-tile creator-spotlight-tile">
+                   <div className="spotlight-art"><span className="spotlight-initials">{creatorSpotlight.initials}</span><span className="spotlight-art-mark"><Mic2 size={20} /></span></div>
+-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY Â· 24 HOURS</span></div><h3>{creatorSpotlight.creator}</h3><p className="spotlight-handle">{creatorSpotlight.handle}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition}</span><strong>{creatorSpotlight.title}</strong><p>{creatorSpotlight.detail}</p></div><button className="secondary-button" onClick={() => navigate('creators')}>Meet {creatorSpotlight.creator} <ArrowRight size={14} /></button></div>
++                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{creatorSpotlight.creator}</h3><p className="spotlight-handle">{creatorSpotlight.handle}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition}</span><strong>{creatorSpotlight.title}</strong><p>{creatorSpotlight.detail}</p></div><button className="secondary-button" onClick={() => navigate('creators')}>Meet {creatorSpotlight.creator} <ArrowRight size={14} /></button></div>
+                 </article>
+                 <article className="spotlight-tile writer-spotlight-tile">
+                   <div className="spotlight-art"><span className="spotlight-initials">{writerSpotlight.initials}</span><span className="spotlight-art-mark"><FileText size={20} /></span></div>
+-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY Â· 24 HOURS</span></div><h3>{writerSpotlight.writer}</h3><p className="spotlight-handle">{writerSpotlight.handle}</p><div className="spotlight-edition"><span>{writerSpotlight.edition}</span><strong>{writerSpotlight.title}</strong><p>{writerSpotlight.detail}</p></div><button className="secondary-button" onClick={() => notify(`Opening ${writerSpotlight.title} for protected script discovery.`)}>Explore {writerSpotlight.title} <ArrowRight size={14} /></button></div>
++                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.writer}</h3><p className="spotlight-handle">{writerSpotlight.handle}</p><div className="spotlight-edition"><span>{writerSpotlight.edition}</span><strong>{writerSpotlight.title}</strong><p>{writerSpotlight.detail}</p></div><button className="secondary-button" onClick={() => notify(`Opening ${writerSpotlight.title} for protected script discovery.`)}>Explore {writerSpotlight.title} <ArrowRight size={14} /></button></div>
+                 </article>
+               </div>
+               <p className="spotlight-note">Every place receives one complete day before the same fixed order begins again. No random reshuffling, paid priority or hidden rotation boost.</p>
+             </section>
+ 
+             <section id="catalogue" className="section-wrap">
+-              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Fresh after dark.</h2></div><button className="text-button with-icon" onClick={() => notify('Full catalogue filtering will live here.')}>Browse all <ChevronRight size={15} /></button></div>
++              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Fresh after dark.</h2></div><button className="text-button with-icon" onClick={() => setCatalogueExpanded((expanded) => !expanded)}>{catalogueExpanded ? 'Show featured' : 'Browse all'} <ChevronRight size={15} /></button></div>
+               <div className="track-grid">
+-                {tracks.slice(0, 4).map((track, index) => (
++                {tracks.slice(0, catalogueExpanded ? tracks.length : 4).map((track, index) => (
+                   <article className={index === 0 ? 'track-card featured-track' : 'track-card'} key={track.title}>
+                     <div className="track-cover">
+                       <span className="track-index">0{index + 1}</span><div className="track-cover-mark"><Moon size={22} /></div>
+@@ -846,7 +879,7 @@ function App() {
+             </section>
+ 
+             <section className="manifesto section-wrap">
+-              <div className="manifesto-quote"><span className="quote-mark">â€œ</span><h2>Good audio does not sit in the background. It changes the room.</h2></div>
++              <div className="manifesto-quote"><span className="quote-mark">“</span><h2>Good audio does not sit in the background. It changes the room.</h2></div>
+               <div className="manifesto-copy"><p className="eyebrow">WHY NIGHTJAR</p><p>Nightjar is built around the things that make spoken audio powerful: the intimacy of a human voice, the space between words, and the feeling that a story is happening very close to you.</p><div className="manifesto-stats"><div><strong>18+</strong><span>Adult audience</span></div><div><strong>Audio</strong><span>Core medium</span></div><div><strong>Creators</strong><span>At the centre</span></div></div></div>
+             </section>
+ 
+@@ -874,7 +907,7 @@ function App() {
+             <div className="page-heading studio-page-heading"><div><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h1>Your audience. Your catalogue. Your listening revenue.</h1><p>{accountStatus === 'pending_review' ? 'Creator account created and awaiting production approval.' : 'Transparent attribution built around verified listening, with your catalogue at the centre.'}</p></div><button className="primary-button with-icon" onClick={() => notify('Release upload is available in the production creator account flow.')}><Upload size={16} /> New release</button></div>
+             {accountStatus === 'pending_review' && <div className="demo-warning"><Sparkles size={17} /><div><strong>CREATOR ACCOUNT / PENDING REVIEW</strong><span>Your creator role is established separately from listener accounts. Publishing permissions can be switched on after production approval.</span></div></div>}
+             <div className="demo-warning"><Sparkles size={17} /><div><strong>ILLUSTRATIVE PREVIEW</strong><span>Every figure on this screen is fictional demo data. Nightjar currently has no live listeners, creators or platform revenue connected.</span></div></div>
+-            <div className="protected-script-card"><div><p className="eyebrow"><FileText size={14} /> SCRIPT ROOM</p><h2>Read the complete manuscript. Keep copying separate.</h2><p>Creators need to read a script properly before deciding whether to collaborate. Full reading is available in a protected viewer; copy and export remain separate permissions controlled by the writer.</p></div><div className="protected-script-meta"><span>PROTECTED COLLABORATION VIEW</span><strong>Night Train Â· performance draft v3</strong><small>Full manuscript Â· Read-only Â· Copy off Â· Export off Â· Access recorded</small></div><button className="primary-button" onClick={openProtectedReader}><Eye size={15} /> Open full script</button></div>
++            <div className="protected-script-card"><div><p className="eyebrow"><FileText size={14} /> SCRIPT ROOM</p><h2>Read the complete manuscript. Keep copying separate.</h2><p>Creators need to read a script properly before deciding whether to collaborate. Full reading is available in a protected viewer; copy and export remain separate permissions controlled by the writer.</p></div><div className="protected-script-meta"><span>PROTECTED COLLABORATION VIEW</span><strong>Night Train · performance draft v3</strong><small>Full manuscript · Read-only · Copy off · Export off · Access recorded</small></div><button className="primary-button" onClick={openProtectedReader}><Eye size={15} /> Open full script</button></div>
+             <div className="studio-dashboard"><div className="studio-dashboard-head"><span>PREVIEW PERIOD</span><strong>Creator overview</strong><button className="text-button" onClick={() => notify('Detailed period controls will appear with live creator data.')}>Change period</button></div><div className="dashboard-metric-grid">{studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{value}</strong><em>Illustrative</em></div>)}</div><div className="dashboard-main-grid"><div className="panel-card"><div className="panel-title"><div><span className="mini-label">LISTENING</span><h2>Verified minutes</h2></div><Volume2 size={18} /></div><div className="large-value">73,421 <small>min</small></div><div className="bar-chart">{Array.from({ length: 24 }).map((_, index) => <span key={index} style={{ height: `${20 + ((index * 29) % 70)}%` }} />)}</div><div className="chart-footer"><span>Earlier</span><span>Current preview</span></div></div><div className="panel-card"><div className="panel-title"><div><span className="mini-label">MONEY</span><h2>How the pool works</h2></div><ShieldCheck size={18} /></div><div className="formula-stack"><div><span>01</span><strong>Net subscription revenue</strong></div><ChevronRight size={15} /><div><span>02</span><strong>Creator pool</strong></div><ChevronRight size={15} /><div><span>03</span><strong>Allocated by verified listening</strong></div></div><p className="panel-note">The precise commercial percentages and payout rules will be published before creator launch.</p></div></div></div>
+           </section>
+         )}
+@@ -903,7 +936,7 @@ function App() {
+                 <label>Favourite categories <input value={(profile.favouriteCategories??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteCategories',e.target.value)} placeholder="Story, Atmospheric, Performance"/></label>
+                 <label>Role focus <input value={(profile.roleFocus??[]).join(', ')} onChange={(e)=>setProfile((p:any)=>({...p,roleFocus:e.target.value.split(',').map((x:string)=>x.trim()).filter(Boolean).slice(0,16)}))} placeholder="Performance, writing, editing"/></label>
+                 <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile preview</label>
+-                <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Savingâ€¦' : 'Save my profile'} <Check size={15}/></button>
++                <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my profile'} <Check size={15}/></button>
+               </article>
+             </div>
+             <div className="profile-public-preview panel"><div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p><div className="profile-preview-chips">{[...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,6).map((item:string)=><span key={item}>{item}</span>)}</div></div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
+@@ -920,7 +953,7 @@ function App() {
+             <div className="admin-grid">
+               <div className="admin-panel"><span className="admin-icon"><ShieldAlert size={19} /></span><span className="mini-label">REPORT SOMETHING</span><h2>Tell Nightjar what happened</h2><select value={reportCategory} onChange={(event) => setReportCategory(event.target.value)}><option>Harassment or abuse</option><option>Fraud or scam</option><option>Impersonation</option><option>Copyright / script theft</option><option>Unauthorised sharing</option><option>Threats or coercion</option><option>Suspected illegal activity</option><option>Account security</option><option>Something else</option></select><textarea value={reportSummary} onChange={(event) => setReportSummary(event.target.value)} placeholder="Describe what happened. Include dates, account names, content references or other useful detail." /><button className="primary-button" onClick={() => void submitProtectionReport()}>Submit protected report <ArrowRight size={15} /></button></div>
+               <div className="admin-panel"><span className="admin-icon"><ClipboardX size={19} /></span><span className="mini-label">EVIDENCE LOG</span><h2>Quiet security record</h2><p>Blocked copy, cut, print, selection and other protected interactions can be recorded against your account. This helps establish a timeline if a concern is later reported.</p><strong>{protectionEvidence.length} recorded signal{protectionEvidence.length === 1 ? '' : 's'}</strong><button className="secondary-button" onClick={() => void loadProtection()}>Refresh evidence</button></div>
+-              <div className="admin-panel"><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">MY CASES</span><h2>Reports and support</h2><p>{protectionReports.length ? `${protectionReports.length} case${protectionReports.length === 1 ? '' : 's'} recorded on this account.` : 'No protection reports have been submitted from this account yet.'}</p><div className="evidence-list">{protectionReports.slice(0, 6).map((report) => <div key={report.caseId}><strong>{report.caseId}</strong><span>{report.category} Â· {report.status}</span></div>)}</div></div>
++              <div className="admin-panel"><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">MY CASES</span><h2>Reports and support</h2><p>{protectionReports.length ? `${protectionReports.length} case${protectionReports.length === 1 ? '' : 's'} recorded on this account.` : 'No protection reports have been submitted from this account yet.'}</p><div className="evidence-list">{protectionReports.slice(0, 6).map((report) => <div key={report.caseId}><strong>{report.caseId}</strong><span>{report.category} · {report.status}</span></div>)}</div></div>
+               <div className="admin-panel"><span className="admin-icon"><Ban size={19} /></span><span className="mini-label">ACCOUNT CONTROL</span><h2>Block and disengage</h2><p>If a user is causing a problem, blocking is available from supported account surfaces. For serious incidents, block and report rather than relying on either action alone.</p><button className="secondary-button" onClick={() => notify('Open the relevant user profile to block that account.')}>How blocking works</button></div>
+             </div>
+             <div className="protection-footnote"><strong>Immediate danger?</strong><span>Nightjar is not emergency services. In the UK, call 999 for immediate danger. For platform incidents, use this report path so relevant Nightjar records can be reviewed.</span></div>
+@@ -929,19 +962,19 @@ function App() {
+ 
+         {view === 'admin' && effectiveRole === 'writer' && (
+           <section className="page-wrap role-studio-page">
+-            <div className="page-heading"><div><p className="eyebrow"><FileText size={14} /> WRITER STUDIO</p><h1>Write it. Protect it. Choose who gets to read it.</h1><p>Writers control script access, collaboration permissions and version history. Full manuscripts are private until the writer grants read access.</p></div><span className="preview-chip">ADMIN PREVIEW Â· WRITER</span></div>
++            <div className="page-heading"><div><p className="eyebrow"><FileText size={14} /> WRITER STUDIO</p><h1>Write it. Protect it. Choose who gets to read it.</h1><p>Writers control script access, collaboration permissions and version history. Full manuscripts are private until the writer grants read access.</p></div><span className="preview-chip">ADMIN PREVIEW · WRITER</span></div>
+             <div className="admin-preview-control"><div><span className="mini-label">ROLE PREVIEW</span><strong>You are inspecting the Writer product surface.</strong><p>Your real account remains Administrator. Nothing on this screen changes your backend permissions.</p></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Editor</button><button onClick={clearAdminPreview}>Return to Admin</button></div></div>
+             <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a protected manuscript</h2><p>The working draft is private by default. A creator can request full reading access later.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event) => setWriterDraftTitle(event.target.value)} placeholder="Working title" aria-label="Working title" /><button className="primary-button" onClick={createWriterDraft}>Create draft <FileText size={15} /></button></div></div>
+-            <div className="writer-script-grid">{writerScripts.map((script) => <article className="writer-script-card" key={script.id}><div className="script-card-top"><span className="admin-icon"><FileText size={18} /></span><span className="status-pill">{script.status}</span></div><span className="mini-label">{script.version}</span><h2>{script.title}</h2><p>Protected manuscript Â· {script.access}</p><div className="script-card-actions"><button className="secondary-button" onClick={() => notify(`${script.title}: opening full manuscript preview.`)}><Eye size={14} /> Read</button><button className="secondary-button" onClick={() => notify(`${script.title}: collaboration access controls opened.`)}><ShieldCheck size={14} /> Permissions</button></div></article>)}</div>
++            <div className="writer-script-grid">{writerScripts.map((script) => <article className="writer-script-card" key={script.id}><div className="script-card-top"><span className="admin-icon"><FileText size={18} /></span><span className="status-pill">{script.status}</span></div><span className="mini-label">{script.version}</span><h2>{script.title}</h2><p>Protected manuscript · {script.access}</p><div className="script-card-actions"><button className="secondary-button" onClick={() => openProtectedReader()}><Eye size={14} /> Read</button><button className="secondary-button" onClick={() => notify(`${script.title}: collaboration access controls opened.`)}><ShieldCheck size={14} /> Permissions</button></div></article>)}</div>
+             <div className="protection-banner"><ShieldCheck size={19} /><div><strong>WRITER CONTROL</strong><span>Read access, copy permission and export permission are separate controls. The protected reader is designed to make unauthorised copying harder and to preserve an audit trail.</span></div></div>
+           </section>
+         )}
+ 
+         {view === 'admin' && effectiveRole === 'editor' && (
+           <section className="page-wrap role-studio-page">
+-            <div className="page-heading"><div><p className="eyebrow"><FileCheck2 size={14} /> EDITORIAL QUEUE</p><h1>Shape the script before it reaches production.</h1><p>Editors review assigned manuscripts, request revisions, compare versions and approve work for production.</p></div><span className="preview-chip">ADMIN PREVIEW Â· EDITOR</span></div>
++            <div className="page-heading"><div><p className="eyebrow"><FileCheck2 size={14} /> EDITORIAL QUEUE</p><h1>Shape the script before it reaches production.</h1><p>Editors review assigned manuscripts, request revisions, compare versions and approve work for production.</p></div><span className="preview-chip">ADMIN PREVIEW · EDITOR</span></div>
+             <div className="admin-preview-control"><div><span className="mini-label">ROLE PREVIEW</span><strong>You are inspecting the Editor product surface.</strong><p>Your real account remains Administrator. Editorial actions shown here do not alter administrator permissions.</p></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Editor</button><button onClick={clearAdminPreview}>Return to Admin</button></div></div>
+-            <div className="editor-queue-grid"><article className="editor-queue-card"><span className="mini-label">AWAITING REVIEW</span><h2>Night Train</h2><p>Writer: Rowan Vale Â· v3 Â· 28 min target</p><div className="editor-status-line"><span>Editorial review</span><strong>3 comments</strong></div><div className="script-card-actions"><button className="secondary-button" onClick={() => notify('Night Train opened in Editor review mode.')}><Eye size={14} /> Review</button><button className="secondary-button" onClick={() => notify('Revision request prepared for Night Train.')}><ArrowRight size={14} /> Request changes</button></div></article><article className="editor-queue-card"><span className="mini-label">READY FOR APPROVAL</span><h2>Room 17</h2><p>Writer: Ellis Grey Â· v5 Â· 19 min target</p><div className="editor-status-line"><span>Final editorial pass</span><strong>0 open comments</strong></div><div className="script-card-actions"><button className="primary-button" onClick={() => notify('Room 17 marked editorially approved in preview.')}><Check size={14} /> Approve</button><button className="secondary-button" onClick={() => notify('Version comparison opened for Room 17.')}><FileCheck2 size={14} /> Compare</button></div></article><article className="editor-queue-card"><span className="mini-label">REVISION REQUESTED</span><h2>After the Rain</h2><p>Writer: June Mercer Â· v2 Â· 14 min target</p><div className="editor-status-line"><span>Waiting on writer</span><strong>2 requested changes</strong></div><button className="secondary-button" onClick={() => notify('Revision history opened for After the Rain.')}><FileText size={14} /> View history</button></article></div>
++            <div className="editor-queue-grid"><article className="editor-queue-card"><span className="mini-label">AWAITING REVIEW</span><h2>Night Train</h2><p>Writer: Rowan Vale · v3 · 28 min target</p><div className="editor-status-line"><span>Editorial review</span><strong>3 comments</strong></div><div className="script-card-actions"><button className="secondary-button" onClick={() => notify('Night Train opened in Editor review mode.')}><Eye size={14} /> Review</button><button className="secondary-button" onClick={() => notify('Revision request prepared for Night Train.')}><ArrowRight size={14} /> Request changes</button></div></article><article className="editor-queue-card"><span className="mini-label">READY FOR APPROVAL</span><h2>Room 17</h2><p>Writer: Ellis Grey · v5 · 19 min target</p><div className="editor-status-line"><span>Final editorial pass</span><strong>0 open comments</strong></div><div className="script-card-actions"><button className="primary-button" onClick={() => notify('Room 17 marked editorially approved in preview.')}><Check size={14} /> Approve</button><button className="secondary-button" onClick={() => notify('Version comparison opened for Room 17.')}><FileCheck2 size={14} /> Compare</button></div></article><article className="editor-queue-card"><span className="mini-label">REVISION REQUESTED</span><h2>After the Rain</h2><p>Writer: June Mercer · v2 · 14 min target</p><div className="editor-status-line"><span>Waiting on writer</span><strong>2 requested changes</strong></div><button className="secondary-button" onClick={() => notify('Revision history opened for After the Rain.')}><FileText size={14} /> View history</button></article></div>
+             <div className="protection-banner"><FileCheck2 size={19} /><div><strong>EDITOR BOUNDARY</strong><span>Editors can change editorial state and comments, but they do not receive administrator controls or access to commercial settings.</span></div></div>
+           </section>
+         )}
+@@ -951,31 +984,31 @@ function App() {
+             <div className="page-heading"><div><p className="eyebrow"><Settings2 size={14} /> ADMINISTRATION</p><h1>Nightjar, from the inside.</h1><p>Administrator accounts are isolated from listener, creator and controlled production roles.</p></div></div>
+             <div className="admin-preview-control"><div><span className="mini-label">SAFE ROLE PREVIEW</span><strong>Inspect every product surface without changing your account.</strong><p>Preview state is local UI only. Your authenticated role remains Administrator and backend admin permissions are unchanged.</p></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Editor</button><button onClick={clearAdminPreview}>Return to Admin</button></div></div>
+             <div className="admin-grid">
+-              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('listener')}><span className="admin-icon"><Headphones size={19} /></span><span className="mini-label">PEOPLE Â· LISTENERS</span><h2>{adminOverviewLoading ? 'â€¦' : adminOverview?.people?.counts?.listener ?? 0}</h2><p>Listener accounts with access to the catalogue and listening surfaces.</p><strong>Open listener profiles <ArrowRight size={13} /></strong></button>
+-              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('creator')}><span className="admin-icon"><Mic2 size={19} /></span><span className="mini-label">PEOPLE Â· CREATORS</span><h2>{adminOverviewLoading ? 'â€¦' : adminOverview?.people?.counts?.creator ?? 0}</h2><p>Creator accounts and their current onboarding status.</p><strong>Open creator profiles <ArrowRight size={13} /></strong></button>
+-              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('admin')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">PEOPLE Â· ADMINISTRATORS</span><h2>{adminOverviewLoading ? 'â€¦' : adminOverview?.people?.counts?.admin ?? 2}</h2><p>Owner accounts with administrator permissions enforced by the backend allowlist.</p><strong>Open administrator profiles <ArrowRight size={13} /></strong></button>
+-              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('writer')}><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">PEOPLE Â· WRITERS</span><h2>{adminOverviewLoading ? 'â€¦' : adminOverview?.people?.counts?.writer ?? 0}</h2><p>Writers with protected manuscript and script-marketplace access.</p><strong>Open writer profiles <ArrowRight size={13} /></strong></button>
+-              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('editor')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">PEOPLE Â· EDITORS</span><h2>{adminOverviewLoading ? 'â€¦' : adminOverview?.people?.counts?.editor ?? 0}</h2><p>Editors assigned to controlled editorial workflows.</p><strong>Open editor profiles <ArrowRight size={13} /></strong></button>
++              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('listener')}><span className="admin-icon"><Headphones size={19} /></span><span className="mini-label">PEOPLE · LISTENERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.listener ?? 0}</h2><p>Listener accounts with access to the catalogue and listening surfaces.</p><strong>Open listener profiles <ArrowRight size={13} /></strong></button>
++              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('creator')}><span className="admin-icon"><Mic2 size={19} /></span><span className="mini-label">PEOPLE · CREATORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.creator ?? 0}</h2><p>Creator accounts and their current onboarding status.</p><strong>Open creator profiles <ArrowRight size={13} /></strong></button>
++              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('admin')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">PEOPLE · ADMINISTRATORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.admin ?? 3}</h2><p>Owner accounts with administrator permissions enforced by the backend allowlist.</p><strong>Open administrator profiles <ArrowRight size={13} /></strong></button>
++              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('writer')}><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">PEOPLE · WRITERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.writer ?? 0}</h2><p>Writers with protected manuscript and script-marketplace access.</p><strong>Open writer profiles <ArrowRight size={13} /></strong></button>
++              <button className="admin-panel admin-tile" onClick={() => openAdminPeople('editor')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">PEOPLE · EDITORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.editor ?? 0}</h2><p>Editors assigned to controlled editorial workflows.</p><strong>Open editor profiles <ArrowRight size={13} /></strong></button>
+               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('approvals')}><span className="admin-icon"><Sparkles size={19} /></span><span className="mini-label">CREATOR APPROVALS</span><h2>{adminApplications.filter((application) => application.status === 'pending' || application.status === 'submitted').length || 'Review'}</h2><p>Open the live creator application queue and make an explicit approve, waitlist or reject decision.</p><strong>Open approval workflow <ArrowRight size={13} /></strong></button>
+               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('revenue')}><span className="admin-icon"><BarChart3 size={19} /></span><span className="mini-label">REVENUE</span><h2>Commercial controls</h2><p>Open the operating view for subscription revenue, creator-pool assumptions and payout readiness.</p><strong>Open commercial controls <ArrowRight size={13} /></strong></button>
+               <button className="admin-panel admin-tile" onClick={() => navigate('protection')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">SAFETY</span><h2>Access & moderation</h2><p>Review reports, protection signals and age-assurance boundaries.</p><strong>Open Protection Centre <ArrowRight size={13} /></strong></button>
+-              <button className="admin-panel admin-tile subscription-tile" onClick={() => openAdminPanel('subscriptions')}><span className="admin-icon"><WalletCards size={19} /></span><span className="mini-label">SUBSCRIPTIONS</span><h2>{adminOverviewLoading ? 'â€¦' : adminOverview?.subscriptions?.active ?? 0}</h2><p>Active paid subscriptions tracked by the Nightjar billing ledger.</p><strong>{adminOverview?.subscriptions?.trialing ?? 0} trial Â· {adminOverview?.subscriptions?.pastDue ?? 0} past due <ArrowRight size={13} /></strong></button>
+-              <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">LISTENING ECONOMICS</span><h2>Â£5 / month</h2><p>Launch-price planning reference and the transparent verified-listening allocation model.</p><strong>Open economics assumptions <ArrowRight size={13} /></strong></button>
+-              <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>Upload or replace the logo used across the Nightjar shell. Only administrators can change it.</p><div className="logo-editor"><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt="Current Nightjar logo" /> : <span><Moon size={28} /> No logo uploaded</span>}</div><label className="secondary-button upload-label"><Upload size={15} /> {logoUploading ? 'Uploadingâ€¦' : 'Choose logo'}<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label></div><strong>Admin editable Â· max 3 MB</strong></div>
++              <button className="admin-panel admin-tile subscription-tile" onClick={() => openAdminPanel('subscriptions')}><span className="admin-icon"><WalletCards size={19} /></span><span className="mini-label">SUBSCRIPTIONS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.subscriptions?.active ?? 0}</h2><p>Active paid subscriptions tracked by the Nightjar billing ledger.</p><strong>{adminOverview?.subscriptions?.trialing ?? 0} trial · {adminOverview?.subscriptions?.pastDue ?? 0} past due <ArrowRight size={13} /></strong></button>
++              <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">LISTENING ECONOMICS</span><h2>£5 / month</h2><p>Launch-price planning reference and the transparent verified-listening allocation model.</p><strong>Open economics assumptions <ArrowRight size={13} /></strong></button>
++              <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>Upload or replace the logo used across the Nightjar shell. Only administrators can change it.</p><div className="logo-editor"><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt="Current Nightjar logo" /> : <span><Moon size={28} /> No logo uploaded</span>}</div><label className="secondary-button upload-label"><Upload size={15} /> {logoUploading ? 'Uploading…' : 'Choose logo'}<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label></div><strong>Admin editable · max 3 MB</strong></div>
+             </div>
+             <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>
+-            {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">SECURITY / OWNER ALERTS</span><h2>Suspicious activity</h2><p>Every qualifying alert is addressed to all three Nightjar owners and retained in the audit trail.</p></div><button className="secondary-button" onClick={() => void loadSecurityAlerts()}>{securityAlertsLoading ? 'Refreshingâ€¦' : 'Refresh alerts'}</button><div className="security-alert-list">{securityAlerts.length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No open security alerts</strong><span>Signals remain evidence, not accusations. Alerts are retained for review.</span></div> : securityAlerts.map((alert:any) => <article className="security-alert-row" key={alert.id}><div><strong>{alert.severity?.toUpperCase() ?? 'HIGH'} Â· {alert.reason ?? 'Suspicious protected-content activity'}</strong><span>User: {alert.userId} Â· Script: {alert.relatedId ?? 'â€”'} Â· {new Date(alert.createdAt).toLocaleString('en-GB')}</span><em>Delivered to both owners</em></div><button className="secondary-button" disabled={alert.status === 'actioned'} onClick={() => void suspendFromSecurityAlert(alert)}>{alert.status === 'actioned' ? 'Account suspended' : 'Suspend account'}</button></article>)}</div></section>}
++            {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">SECURITY / OWNER ALERTS</span><h2>Suspicious activity</h2><p>Every qualifying alert is addressed to all three Nightjar owners and retained in the audit trail.</p></div><button className="secondary-button" onClick={() => void loadSecurityAlerts()}>{securityAlertsLoading ? 'Refreshing…' : 'Refresh alerts'}</button><div className="security-alert-list">{securityAlerts.length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No open security alerts</strong><span>Signals remain evidence, not accusations. Alerts are retained for review.</span></div> : securityAlerts.map((alert:any) => <article className="security-alert-row" key={alert.id}><div><strong>{alert.severity?.toUpperCase() ?? 'HIGH'} · {alert.reason ?? 'Suspicious protected-content activity'}</strong><span>User: {alert.userId} · Script: {alert.relatedId ?? '—'} · {new Date(alert.createdAt).toLocaleString('en-GB')}</span><em>Delivered to all three owners</em></div><button className="secondary-button" disabled={alert.status === 'actioned'} onClick={() => void suspendFromSecurityAlert(alert)}>{alert.status === 'actioned' ? 'Account suspended' : 'Suspend account'}</button></article>)}</div></section>}
+             {adminPeopleRole && <div className="people-drawer" role="dialog" aria-modal="true" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="icon-button" onClick={() => setAdminPeopleRole(null)} aria-label="Close account directory"><X size={18} /></button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => account.role === adminPeopleRole)).map((account: any) => <article className="people-row" key={account.userId ?? account.email}><span className="account-chip-avatar">{(account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}</span></div><em>{account.status === 'pending_review' ? 'Pending review' : 'Active'}</em></article>)}{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => account.role === adminPeopleRole)).length === 0 && <div className="people-empty"><Users size={18} /><strong>No accounts in this role yet</strong><span>The live directory will populate as accounts are created or approved.</span></div>}</div></div>}
+-            {adminPanel && <div className="admin-panel-modal" role="dialog" aria-modal="true"><section><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Creator approval queue' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : 'Listening economics'}</h2><p>{adminPanel === 'approvals' ? 'Review creator applications and record an explicit decision.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : 'Planning assumptions for the verified-listening creator model.'}</p></div><button className="icon-button" onClick={() => setAdminPanel(null)} aria-label="Close administrator panel"><X size={18} /></button></div>{adminPanel === 'approvals' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading approval queueâ€¦</div> : adminApplications.length === 0 ? <div className="people-empty"><Sparkles size={18} /><strong>No creator applications</strong><span>The queue is empty. New creator applications will appear here.</span></div> : adminApplications.map((application) => <article className="admin-data-row" key={application.id}><div><strong>{application.creatorName ?? application.displayName ?? application.email ?? 'Creator applicant'}</strong><span>{application.email ?? 'No email supplied'} Â· {application.status ?? 'pending'}</span></div><div className="admin-data-actions"><button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Waitlist</button><button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'rejected')}>Reject</button><button className="primary-button" onClick={() => void decideCreatorApplication(application, 'approved')}>Approve</button></div></article>)}</div>}{adminPanel === 'subscriptions' && <div>{adminPanelLoading ? <div className="people-empty">Loading subscription ledgerâ€¦</div> : <><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Active</span><strong>{adminOverview?.subscriptions?.active ?? 0}</strong></div><div className="admin-modal-stat"><span>Trial</span><strong>{adminOverview?.subscriptions?.trialing ?? 0}</strong></div><div className="admin-modal-stat"><span>Past due</span><strong>{adminOverview?.subscriptions?.pastDue ?? 0}</strong></div></div><div className="admin-data-list">{adminSubscriptions.length === 0 ? <div className="people-empty"><WalletCards size={18} /><strong>No live subscription records</strong><span>Billing is not connected yet; no subscription data is being fabricated.</span></div> : adminSubscriptions.map((subscription) => <article className="admin-data-row" key={subscription.id}><div><strong>{subscription.email ?? subscription.userId ?? 'Subscriber'}</strong><span>{subscription.plan ?? 'Nightjar Â· Â£5 monthly'} Â· {subscription.status ?? 'unknown'}</span></div><span>{subscription.currentPeriodEnd ?? 'â€”'}</span></article>)}</div></>}</div>}{adminPanel === 'revenue' && <div><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Planning price</span><strong>Â£5</strong></div><div className="admin-modal-stat"><span>Live subscriptions</span><strong>{adminOverview?.subscriptions?.active ?? 0}</strong></div><div className="admin-modal-stat"><span>Confirmed gross MRR</span><strong>{adminOverview?.subscriptions?.active ? `Â£${(adminOverview.subscriptions.active * 5).toLocaleString('en-GB')}` : 'Â£0'}</strong></div></div><div className="admin-formula"><div><b>01</b><strong>Subscription revenue after applicable deductions becomes the commercial base.</strong></div><div><b>02</b><strong>A defined creator pool is allocated from the eligible net revenue.</strong></div><div><b>03</b><strong>Creator shares are attributed using verified listening rather than fixed per-drop promises.</strong></div></div><div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>CONFIRMED VS PLANNING</strong><span>Â£5 is a planning reference. The dashboard does not present illustrative creator earnings as confirmed payouts.</span></div></div></div>}{adminPanel === 'economics' && <div><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Launch reference</span><strong>Â£5</strong></div><div className="admin-modal-stat"><span>Creator pool</span><strong>Defined before launch</strong></div><div className="admin-modal-stat"><span>Allocation</span><strong>Verified listening</strong></div></div><div className="admin-formula"><div><b>01</b><strong>Net subscription revenue</strong></div><div><b>02</b><strong>Creator pool</strong></div><div><b>03</b><strong>Eligible verified listening determines each creator share</strong></div></div><p className="panel-note">The final pool percentage, eligible-listening definition, exclusions, payout timing and any reserve policy should be published before creators enter the commercial program.</p></div>}</section></div>}
++            {adminPanel && <div className="admin-panel-modal" role="dialog" aria-modal="true"><section><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Creator approval queue' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : 'Listening economics'}</h2><p>{adminPanel === 'approvals' ? 'Review creator applications and record an explicit decision.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : 'Planning assumptions for the verified-listening creator model.'}</p></div><button className="icon-button" onClick={() => setAdminPanel(null)} aria-label="Close administrator panel"><X size={18} /></button></div>{adminPanel === 'approvals' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading approval queue…</div> : adminApplications.length === 0 ? <div className="people-empty"><Sparkles size={18} /><strong>No creator applications</strong><span>The queue is empty. New creator applications will appear here.</span></div> : adminApplications.map((application) => <article className="admin-data-row" key={application.id}><div><strong>{application.creatorName ?? application.displayName ?? application.email ?? 'Creator applicant'}</strong><span>{application.email ?? 'No email supplied'} · {application.status ?? 'pending'}</span></div><div className="admin-data-actions"><button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Waitlist</button><button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'rejected')}>Reject</button><button className="primary-button" onClick={() => void decideCreatorApplication(application, 'approved')}>Approve</button></div></article>)}</div>}{adminPanel === 'subscriptions' && <div>{adminPanelLoading ? <div className="people-empty">Loading subscription ledger…</div> : <><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Active</span><strong>{adminOverview?.subscriptions?.active ?? 0}</strong></div><div className="admin-modal-stat"><span>Trial</span><strong>{adminOverview?.subscriptions?.trialing ?? 0}</strong></div><div className="admin-modal-stat"><span>Past due</span><strong>{adminOverview?.subscriptions?.pastDue ?? 0}</strong></div></div><div className="admin-data-list">{adminSubscriptions.length === 0 ? <div className="people-empty"><WalletCards size={18} /><strong>No live subscription records</strong><span>Billing is not connected yet; no subscription data is being fabricated.</span></div> : adminSubscriptions.map((subscription) => <article className="admin-data-row" key={subscription.id}><div><strong>{subscription.email ?? subscription.userId ?? 'Subscriber'}</strong><span>{subscription.plan ?? 'Nightjar · £5 monthly'} · {subscription.status ?? 'unknown'}</span></div><span>{subscription.currentPeriodEnd ?? '—'}</span></article>)}</div></>}</div>}{adminPanel === 'revenue' && <div><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Planning price</span><strong>£5</strong></div><div className="admin-modal-stat"><span>Tracked active subscriptions</span><strong>{adminOverview?.subscriptions?.active ?? 0}</strong></div><div className="admin-modal-stat"><span>Confirmed MRR</span><strong>Not connected</strong></div></div><div className="admin-formula"><div><b>01</b><strong>Subscription revenue after applicable deductions becomes the commercial base.</strong></div><div><b>02</b><strong>A defined creator pool is allocated from the eligible net revenue.</strong></div><div><b>03</b><strong>Creator shares are attributed using verified listening rather than fixed per-drop promises.</strong></div></div><div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>CONFIRMED VS PLANNING</strong><span>£5 is a planning reference. The dashboard does not present illustrative creator earnings as confirmed payouts.</span></div></div></div>}{adminPanel === 'economics' && <div><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Launch reference</span><strong>£5</strong></div><div className="admin-modal-stat"><span>Creator pool</span><strong>Defined before launch</strong></div><div className="admin-modal-stat"><span>Allocation</span><strong>Verified listening</strong></div></div><div className="admin-formula"><div><b>01</b><strong>Net subscription revenue</strong></div><div><b>02</b><strong>Creator pool</strong></div><div><b>03</b><strong>Eligible verified listening determines each creator share</strong></div></div><p className="panel-note">The final pool percentage, eligible-listening definition, exclusions, payout timing and any reserve policy should be published before creators enter the commercial program.</p></div>}</section></div>}
+           </section>
+         )}
+       </main>
+ 
+-      <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <span className="nightjar-mark"><Moon size={15} /></span>}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? `${accountLabel} account` : 'Preview access'} Â· Illustrative demo build</span></footer>
++      <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <span className="nightjar-mark"><Moon size={15} /></span>}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? `${accountLabel} account` : 'Preview access'} · Illustrative demo build</span></footer>
+ 
+-      {protectedReaderOpen && <div className="protected-reader-backdrop" role="dialog" aria-modal="true" aria-label="Protected full script"><section className="protected-reader"><header><div><span className="mini-label">NIGHTJAR / PROTECTED SCRIPT</span><h2>Night Train</h2><p>Performance draft v3 Â· Read-only collaboration view</p></div><button className="icon-button" onClick={() => setProtectedReaderOpen(false)} aria-label="Close protected script"><X size={18} /></button></header><div className="reader-notice"><ShieldCheck size={15} /><span>This manuscript is being shown to you so you can decide whether you want to collaborate. Copy, cut, print and export are disabled unless the writer explicitly grants them.</span></div><article className="reader-body" onCopy={(event) => { event.preventDefault(); void recordProtectionEvent('copy_blocked'); notify('Copy is disabled for this protected script.'); }} onCut={(event) => { event.preventDefault(); void recordProtectionEvent('cut_blocked'); }} onPaste={(event) => { event.preventDefault(); void recordProtectionEvent('paste_blocked'); }} onContextMenu={(event) => { event.preventDefault(); void recordProtectionEvent('contextmenu_blocked'); }} onDragStart={(event) => { event.preventDefault(); void recordProtectionEvent('drag_blocked'); }} onSelect={() => { void recordProtectionEvent('selection_blocked'); }}><p className="reader-watermark">NIGHTJAR Â· READ-ONLY COLLABORATION COPY Â· ACCESS RECORDED</p><h3>Scene One â€” The Last Train</h3><p>The station had emptied by the time the final carriage arrived. She stood beneath the old clock, listening to the rain tick against the glass canopy.</p><p>There was no announcement. No footsteps. Only the low mechanical hum of the doors preparing to open, followed by the soft pressure change of the carriage beyond them.</p><p>She stepped inside and looked down the length of the train. Warm light travelled across the seats in narrow bands, leaving the spaces between them deliberately dark.</p><p>â€œYou made it.â€</p><p>The voice came from the far end of the carriage. Familiar enough to stop her in place.</p><p>She smiled, but did not answer immediately. The doors closed behind her, and the train began to move.</p><p>From here the story continues through the agreed performance draft. The complete manuscript remains readable in this protected viewer while permissions stay with the writer.</p></article><footer><span><LockKeyhole size={14} /> Copy off</span><span><Download size={14} /> Export off</span><span>Access is logged</span></footer></section></div>}
+-      {playing && <div className="player-dock"><div className="dock-art"><Moon size={16} /></div><div className="dock-copy"><span>NOW PREVIEWING</span><strong>{playing}</strong></div><div className="dock-wave">{Array.from({ length: 18 }).map((_, index) => <span key={index} style={{ height: `${28 + ((index * 19) % 60)}%` }} />)}</div><button className="dock-play" onClick={() => setPlaying(null)} aria-label="Pause preview"><Pause size={17} /></button><span className="dock-time">00:00 / preview</span></div>}
+-      {toast && <div className="toast">{toast}</div>}
++      {protectedReaderOpen && <div className="protected-reader-backdrop" role="dialog" aria-modal="true" aria-label="Protected full script"><section className="protected-reader"><header><div><span className="mini-label">NIGHTJAR / PROTECTED SCRIPT</span><h2>Night Train</h2><p>Performance draft v3 · Read-only collaboration view</p></div><button className="icon-button" onClick={() => setProtectedReaderOpen(false)} aria-label="Close protected script"><X size={18} /></button></header><div className="reader-notice"><ShieldCheck size={15} /><span>This manuscript is being shown to you so you can decide whether you want to collaborate. Copy, cut, print and export are disabled unless the writer explicitly grants them.</span></div><article className="reader-body" onCopy={(event) => { event.preventDefault(); void recordProtectionEvent('copy_blocked'); notify('Copy is disabled for this protected script.'); }} onCut={(event) => { event.preventDefault(); void recordProtectionEvent('cut_blocked'); }} onPaste={(event) => { event.preventDefault(); void recordProtectionEvent('paste_blocked'); }} onContextMenu={(event) => { event.preventDefault(); void recordProtectionEvent('contextmenu_blocked'); }} onDragStart={(event) => { event.preventDefault(); void recordProtectionEvent('drag_blocked'); }} onSelect={() => { void recordProtectionEvent('selection_blocked'); }}><p className="reader-watermark">NIGHTJAR · READ-ONLY COLLABORATION COPY · ACCESS RECORDED</p><h3>Scene One — The Last Train</h3><p>The station had emptied by the time the final carriage arrived. She stood beneath the old clock, listening to the rain tick against the glass canopy.</p><p>There was no announcement. No footsteps. Only the low mechanical hum of the doors preparing to open, followed by the soft pressure change of the carriage beyond them.</p><p>She stepped inside and looked down the length of the train. Warm light travelled across the seats in narrow bands, leaving the spaces between them deliberately dark.</p><p>“You made it.”</p><p>The voice came from the far end of the carriage. Familiar enough to stop her in place.</p><p>She smiled, but did not answer immediately. The doors closed behind her, and the train began to move.</p><p>From here the story continues through the agreed performance draft. The complete manuscript remains readable in this protected viewer while permissions stay with the writer.</p></article><footer><span><LockKeyhole size={14} /> Copy off</span><span><Download size={14} /> Export off</span><span>Access is logged</span></footer></section></div>}
++      {playing && <div className="player-dock"><div className="dock-art"><Moon size={16} /></div><div className="dock-copy"><span>PREVIEW CUE</span><strong>{playing}</strong></div><div className="dock-wave">{Array.from({ length: 18 }).map((_, index) => <span key={index} style={{ height: `${28 + ((index * 19) % 60)}%` }} />)}</div><button className="dock-play" onClick={() => setPlaying(null)} aria-label="Stop preview"><Pause size={17} /></button><span className="dock-time">00:00 / preview</span></div>}
++      {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
+ 
+       {user && !rolePicker && (
+         <button className="floating-account" onClick={() => setRolePicker(true)} aria-label="Open account information">
+diff --git a/src/platform.ts b/src/platform.ts
+new file mode 100644
+index 0000000..aa47f86
+--- /dev/null
++++ b/src/platform.ts
+@@ -0,0 +1,125 @@
++export type ApiResponse<T = unknown> = { data: T };
++
++export class ApiError extends Error {
++  status: number;
++  data: unknown;
++
++  constructor(message: string, status: number, data: unknown) {
++    super(message);
++    this.name = 'ApiError';
++    this.status = status;
++    this.data = data;
++  }
++}
++
++export interface NightjarAuthUser {
++  userId: string;
++  email?: string;
++  name?: string;
++  picture?: string;
++}
++
++export interface NightjarAuthProvider {
++  signIn(options?: { scope?: string }): Promise<{
++    user: NightjarAuthUser;
++    accessToken?: string;
++    expiresIn?: number;
++  }>;
++  getUser(): Promise<NightjarAuthUser | null>;
++  getAccessToken?(): Promise<string | null>;
++  signOut(): Promise<void>;
++  isSignedIn(): boolean;
++}
++
++export interface NightjarPlatform {
++  auth?: NightjarAuthProvider;
++  api?: Api;
++}
++
++export interface Api {
++  get<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>>;
++  post<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>>;
++  put<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>>;
++  delete<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>>;
++}
++
++declare global {
++  interface Window {
++    __NIGHTJAR_PLATFORM__?: NightjarPlatform;
++  }
++}
++
++const getPlatform = (): NightjarPlatform | undefined =>
++  typeof window === 'undefined' ? undefined : window.__NIGHTJAR_PLATFORM__;
++
++const getApiBaseUrl = (): string => {
++  const configured = import.meta.env.VITE_API_BASE_URL?.trim() ?? '';
++  return configured.replace(/\/$/, '');
++};
++
++const request = async <T>(
++  method: string,
++  url: string,
++  body?: unknown,
++): Promise<ApiResponse<T>> => {
++  const platform = getPlatform();
++  const accessToken = await platform?.auth?.getAccessToken?.();
++  const headers = new Headers();
++
++  if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
++    headers.set('Content-Type', 'application/json');
++  }
++
++  if (accessToken) {
++    headers.set('Authorization', `Bearer ${accessToken}`);
++  }
++
++  const hasBody = body !== undefined && method !== 'GET' && method !== 'HEAD';
++  const response = await fetch(`${getApiBaseUrl()}${url}`, {
++    method,
++    headers,
++    credentials: 'same-origin',
++    body: hasBody ? JSON.stringify(body) : undefined,
++  });
++
++  const contentType = response.headers.get('content-type') ?? '';
++  const data = response.status === 204
++    ? null
++    : contentType.includes('application/json')
++      ? await response.json()
++      : await response.text();
++
++  if (!response.ok) {
++    const message = typeof data === 'object' && data !== null && 'message' in data
++      ? String((data as { message?: unknown }).message)
++      : typeof data === 'object' && data !== null && 'error' in data
++        ? String((data as { error?: unknown }).error)
++        : `Request failed with status ${response.status}.`;
++
++    throw new ApiError(message, response.status, data);
++  }
++
++  return { data: data as T };
++};
++
++const fetchApi: Api = {
++  get: (url, data) => request('GET', url, data),
++  post: (url, data) => request('POST', url, data),
++  put: (url, data) => request('PUT', url, data),
++  delete: (url, data) => request('DELETE', url, data),
++};
++
++const unconfiguredAuth: NightjarAuthProvider = {
++  isSignedIn: () => false,
++  getUser: async () => null,
++  getAccessToken: async () => null,
++  signIn: async () => {
++    throw new Error('auth_not_configured');
++  },
++  signOut: async () => undefined,
++};
++
++const platform = getPlatform();
++
++export const api: Api = platform?.api ?? fetchApi;
++export const auth: NightjarAuthProvider = platform?.auth ?? unconfiguredAuth;
+diff --git a/src/vite-env.d.ts b/src/vite-env.d.ts
+new file mode 100644
+index 0000000..11f02fe
+--- /dev/null
++++ b/src/vite-env.d.ts
+@@ -0,0 +1 @@
++/// <reference types="vite/client" />
+diff --git a/tests/tests.json b/tests/tests.json
+index 46628a4..307f04e 100644
+--- a/tests/tests.json
++++ b/tests/tests.json
+@@ -144,12 +144,12 @@
+     "expected": "The personalised profile persists and remains separate from the account's permission role."
+   },
+   {
+-    "name": "Protected script activity creates a dual-owner security alert",
++    "name": "Protected script activity creates an all-owner security alert",
+     "viewport": "desktop",
+     "covers": [
+       "protected reader",
+       "security signals",
+-      "dual-owner notification",
++      "all-owner notification",
+       "audit trail",
+       "account suspension"
+     ],
+@@ -160,7 +160,7 @@
+       "Open Administrator",
+       "Open Security / Owner Alerts"
+     ],
+-    "expected": "A retained security alert identifies the account/session/script signals and records both owner recipients; an administrator can suspend the account, which revokes active reader sessions."
++    "expected": "A retained security alert identifies the account/session/script signals and records all three owner recipients; an administrator can suspend the account, which revokes active reader sessions."
+   },
+   {
+     "name": "People directory represents every Nightjar account role",
+@@ -201,6 +201,38 @@
+       "Inspect the owner security area"
+     ],
+     "expected": "All three approved owner accounts are represented as active Administrators, and security alerts are addressed to the same three configured owners."
++  },
++  {
++    "name": "Creator role selection creates a real approval application",
++    "viewport": "desktop",
++    "covers": [
++      "creator onboarding",
++      "creator approval queue",
++      "real creator application",
++      "role status"
++    ],
++    "description": "Verifies choosing Creator creates both the account role and the live application record used by administrator review.",
++    "steps": [
++      "Sign in as a new Nightjar account",
++      "Choose Creator",
++      "Open Administrator Creator Approvals with an approved owner account"
++    ],
++    "expected": "The new creator account is marked pending review and a matching pending creator application appears in the live approval queue."
++  },
++  {
++    "name": "Administrator security endpoints require authentication",
++    "viewport": "desktop",
++    "covers": [
++      "authentication boundary",
++      "administrator authorization",
++      "security alerts API",
++      "account suspension API"
++    ],
++    "description": "Verifies the administrator security routes enforce authentication before the administrator allowlist.",
++    "steps": [
++      "Send an unauthenticated request to the security alerts endpoint",
++      "Send an unauthenticated request to the security suspension endpoint"
++    ],
++    "expected": "Both requests are rejected before any security-alert data or suspension action is returned."
+   }
+ ]
+-
