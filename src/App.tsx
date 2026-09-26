@@ -195,6 +195,13 @@ function App() {
     return () => { cancelled = true; window.removeEventListener('popstate', onPop); };
   }, []);
 
+  useEffect(() => {
+    if (!user || !ageVerified) return;
+    void loadLiveProductData();
+    if (role === 'creator' || canAdmin) void loadCreatorDashboard();
+    if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
+  }, [user, ageVerified, role, currentIntent, previewRole]);
+
   const notify = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(null), 2800);
@@ -206,6 +213,98 @@ function App() {
     setView(nextView);
     setMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const loadLiveProductData = async () => {
+    try {
+      const [catalogueResponse, creatorsResponse, spotlightResponse] = await Promise.all([
+        api.get('/api/catalogue'),
+        api.get('/api/creators'),
+        api.get('/api/spotlights'),
+      ]);
+      const liveTracks = (catalogueResponse.data?.catalogue ?? []).map((release: any, index: number) => ({
+        id: String(release.id),
+        title: release.title,
+        creator: release.creatorName ?? 'Nightjar creator',
+        duration: release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',
+        category: release.category ?? 'Audio',
+        descriptor: release.description ?? 'No description supplied.',
+        featured: release.featured === true || index === 0,
+        audioUrl: release.audioUrl ?? null,
+        artworkUrl: release.artworkUrl ?? null,
+        creatorUserId: release.creatorUserId,
+      })) as Track[];
+      setTracks(liveTracks);
+      setCreatorDirectory((creatorsResponse.data?.creators ?? []).map((creator: any) => ({
+        userId: String(creator.userId),
+        name: creator.displayName ?? 'Nightjar creator',
+        handle: creator.handle ?? null,
+        initials: creator.avatarInitials ?? undefined,
+        note: creator.headline ?? creator.bio ?? undefined,
+        releases: creator.releaseCount ?? 0,
+      })));
+      const spotlights = spotlightResponse.data?.spotlights ?? [];
+      setCreatorSpotlightList(spotlights.filter((item: any) => item.kind === 'creator' && item.name).map((item: any) => ({
+        kind: 'creator',
+        name: item.name,
+        handle: item.handle,
+        title: item.title,
+        edition: item.edition,
+        detail: item.detail,
+        initials: item.initials,
+        targetId: item.targetId,
+        releaseId: item.releaseId,
+      })));
+      setWriterSpotlightList(spotlights.filter((item: any) => item.kind === 'writer' && item.name).map((item: any) => ({
+        kind: 'writer',
+        name: item.name,
+        handle: item.handle,
+        title: item.title,
+        edition: item.edition,
+        detail: item.detail,
+        initials: item.initials,
+        targetId: item.targetId,
+        releaseId: item.releaseId,
+      })));
+      if (user) {
+        const [recommendationsResponse, trendingResponse] = await Promise.all([
+          api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
+          api.get('/api/trending'),
+        ]);
+        setLiveRecommendations(recommendationsResponse.data?.recommendations ?? []);
+        setLiveTrending(trendingResponse.data?.trending ?? []);
+      }
+    } catch {
+      setTracks([]);
+      setCreatorDirectory([]);
+      setCreatorSpotlightList([]);
+      setWriterSpotlightList([]);
+      setLiveRecommendations([]);
+      setLiveTrending([]);
+    }
+  };
+
+  const loadCreatorDashboard = async () => {
+    if (!user || (role !== 'creator' && !canAdmin)) return;
+    setCreatorDashboardLoading(true);
+    try {
+      const { data } = await api.get('/api/creator/dashboard');
+      setCreatorDashboard({ metrics: data?.metrics ?? {}, releases: data?.releases ?? [] });
+    } catch {
+      setCreatorDashboard({ metrics: {}, releases: [] });
+    } finally {
+      setCreatorDashboardLoading(false);
+    }
+  };
+
+  const loadWriterScripts = async () => {
+    if (!user) return;
+    try {
+      const { data } = await api.get('/api/writer/scripts');
+      setWriterScripts(data?.scripts ?? []);
+    } catch {
+      setWriterScripts([]);
+    }
   };
 
   const loadAccount = async () => {
