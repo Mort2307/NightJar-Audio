@@ -1,17 +1,14 @@
 import { router, json, error, requireAuth, requireAdminEmailAllowlist, withScopes } from '@appdeploy/sdk';
 import { db, storage } from '@appdeploy/sdk';
 
-const catalogue = [
-  { title: 'After Midnight', creator: 'Mara Vale', category: 'Atmospheric', durationMinutes: 18, listeners: 12400 },
-  { title: 'Velvet Static', creator: 'Rae Hollow', category: 'Story', durationMinutes: 24, listeners: 9800 },
-  { title: 'Slow Burn', creator: 'Noor', category: 'Whisper', durationMinutes: 16, listeners: 7100 },
-  { title: 'The Last Train Home', creator: 'Mara Vale', category: 'Story', durationMinutes: 31, listeners: 6600 },
-];
-
 const accountTable = (userId: string) => `nightjar_account_${userId}`;
 const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com', 'nightjar.audio.app@gmail.com'];
 const accountIndexTable = 'nightjar_account_index';
 const subscriptionTable = 'nightjar_subscriptions';
+const releaseTable = 'nightjar_releases';
+const followTable = (userId: string) => `nightjar_follows_${userId}`;
+const favouriteTable = (userId: string) => `nightjar_favourites_${userId}`;
+const listeningTable = 'nightjar_listening';
 const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? '';
 const isAdmin = (email?: string) => Boolean(normalizeEmail(email) && ADMIN_EMAILS.includes(normalizeEmail(email)));
 const profileTable = (userId: string) => `nightjar_profile_${userId}`;
@@ -108,16 +105,89 @@ type AccountRecord = {
 
 export const handler = router({
   'GET /api/_healthcheck': [async () => json({ message: 'Success' })],
-  'GET /api/catalogue': [async () => json({ catalogue })],
-  'GET /api/creator-demo': [
-    async () => {
-      const { items } = await db.list('creator_demo_metrics', { limit: 1 });
-      return json({
-        metrics: items[0] ?? { listeners: 1842, eligibleMinutes: 73421, creatorPool: 6742, estimatedShare: 1247 },
-        formula: 'Net subscription revenue → creator pool → allocated by verified listening',
-      });
+  'GET /api/catalogue': [
+    async (ctx) => {
+      const query = String(ctx.query.q ?? '').trim().toLowerCase();
+      const category = String(ctx.query.category ?? '').trim().toLowerCase();
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      const catalogue = await Promise.all(items.filter((release) => release.status === 'released').filter((release) => {
+        if (category && String(release.category ?? '').toLowerCase() !== category) return false;
+        if (!query) return true;
+        return [release.title, release.description, release.category, release.genre, release.mood, ...(Array.isArray(release.tags) ? release.tags : []), ...(Array.isArray(release.tropes) ? release.tropes : [])].join(' ').toLowerCase().includes(query);
+      }).map(async (release) => {
+        const profile = release.creatorUserId ? await getProfile(String(release.creatorUserId)) : null;
+        return { ...release, creatorName: profile?.displayName ?? release.creatorName ?? 'Nightjar creator', creatorHandle: profile?.handle ?? release.creatorHandle ?? null };
+      }));
+      return json({ catalogue });
     },
   ],
+  'GET /api/creators': [
+    async () => {
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const creators = await Promise.all(accounts.filter((account) => account.role === 'creator' && account.status !== 'suspended').map(async (account) => {
+        const profile = await getProfile(account.userId);
+        return { userId: account.userId, displayName: profile?.displayName ?? account.name ?? 'Nightjar creator', handle: profile?.handle ?? account.handle ?? null, headline: profile?.headline ?? null, bio: profile?.bio ?? null, avatarInitials: profile?.avatarInitials ?? null, avatarTone: profile?.avatarTone ?? 'plum', releaseCount: releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').length };
+      }));
+      return json({ creators });
+    },
+  ],
+  'GET /api/spotlights': [
+    async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const { items } = await db.list('nightjar_spotlights', { limit: 100 });
+      return json({ date: today, spotlights: items.filter((item) => item.date === today).sort((a,b) => Number(a.slot ?? 0) - Number(b.slot ?? 0)).slice(0,5) });
+    },
+  ],
+  'GET /api/recommendations': [
+    requireAuth(),
+    async (ctx) => {
+      const profile = await getProfile(ctx.user!.userId);
+      const { items: events } = await db.list(tasteTable(ctx.user!.userId), { limit: 500 });
+      const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
+      const followed = new Set(follows.map((item) => String(item.creatorUserId)));
+      const weights: Record<string, number> = {};
+      for (const value of [...(profile?.favouriteTags ?? []), ...(profile?.favouriteTropes ?? []), ...(profile?.favouriteCategories ?? [])]) {
+        const key = String(value).toLowerCase();
+        weights[key] = (weights[key] ?? 0) + 5;
+      }
+      for (const event of events) {
+        const factor = event.type === 'skip' || event.type === 'hide' ? -1 : 1;
+        for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : [])]) {
+          const key = String(value).toLowerCase();
+          weights[key] = (weights[key] ?? 0) + factor;
+        }
+      }
+      const intent = String(ctx.query.intent ?? '').trim().toLowerCase();
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const recommendations = releases.filter((release) => release.status === 'released').map((release) => {
+        const values = [release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].filter(Boolean).map(String);
+        let score = 0;
+        values.forEach((value) => { score += weights[value.toLowerCase()] ?? 0; });
+        if (followed.has(String(release.creatorUserId))) score += 8;
+        if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
+        const matched = values.filter((value) => (weights[value.toLowerCase()] ?? 0) > 0).slice(0, 3);
+        return { ...release, score, reason: matched.length ? 'Because you have expressed interest in ' + matched.join(', ') + '.' : followed.has(String(release.creatorUserId)) ? 'From a creator you follow.' : 'A new release matching your current discovery context.' };
+      }).sort((a,b) => b.score-a.score).slice(0,24);
+      return json({ recommendations });
+    },
+  ],
+  'GET /api/trending': [
+    async () => {
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const { items: events } = await db.list(listeningTable, { limit: 5000 });
+      const counts: Record<string, number> = {};
+      for (const event of events) counts[String(event.releaseId)] = (counts[String(event.releaseId)] ?? 0) + 1;
+      return json({ trending: releases.filter((release) => release.status === 'released').map((release) => ({ ...release, listeningEvents: counts[String(release.id)] ?? 0 })).sort((a,b) => b.listeningEvents-a.listeningEvents).slice(0,24) });
+    },
+  ],
+  'GET /api/favourites': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); return json({ favourites: items }); }],
+  'POST /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.releaseId === ctx.params.releaseId)) await db.add(favouriteTable(ctx.user!.userId), [{ releaseId: ctx.params.releaseId, createdAt: new Date().toISOString() }]); return json({ favourite: true }); }],
+  'DELETE /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.releaseId === ctx.params.releaseId).map((item) => item.id); if (ids.length) await db.delete(favouriteTable(ctx.user!.userId), ids); return json({ favourite: false }); }],
+  'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); return json({ follows: items }); }],
+  'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.creatorUserId === ctx.params.creatorUserId)) await db.add(followTable(ctx.user!.userId), [{ creatorUserId: ctx.params.creatorUserId, createdAt: new Date().toISOString() }]); return json({ following: true }); }],
+  'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.creatorUserId === ctx.params.creatorUserId).map((item) => item.id); if (ids.length) await db.delete(followTable(ctx.user!.userId), ids); return json({ following: false }); }],
+  'POST /api/listening/event': [requireAuth(), async (ctx) => { const body = (ctx.body ?? {}) as Record<string, unknown>; const record = { ...body, userId: ctx.user!.userId, createdAt: new Date().toISOString() }; await db.add(listeningTable, [record]); await db.add(tasteTable(ctx.user!.userId), [{ type: body.eventType, category: body.category ?? null, tags: Array.isArray(body.tags) ? body.tags : [], completed: body.completed === true, createdAt: record.createdAt }]); return json({ recorded: true }); }],
   'GET /api/account/identity': [
     requireAuth(),
     withScopes('email'),
