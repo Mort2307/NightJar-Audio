@@ -1,13 +1,6 @@
 import { router, json, error, requireAuth, requireAdminEmailAllowlist, withScopes } from '@appdeploy/sdk';
 import { db, storage } from '@appdeploy/sdk';
 
-const catalogue = [
-  { title: 'After Midnight', creator: 'Mara Vale', category: 'Atmospheric', durationMinutes: 18, listeners: 12400 },
-  { title: 'Velvet Static', creator: 'Rae Hollow', category: 'Story', durationMinutes: 24, listeners: 9800 },
-  { title: 'Slow Burn', creator: 'Noor', category: 'Whisper', durationMinutes: 16, listeners: 7100 },
-  { title: 'The Last Train Home', creator: 'Mara Vale', category: 'Story', durationMinutes: 31, listeners: 6600 },
-];
-
 const accountTable = (userId: string) => `nightjar_account_${userId}`;
 const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com', 'nightjar.audio.app@gmail.com'];
 const accountIndexTable = 'nightjar_account_index';
