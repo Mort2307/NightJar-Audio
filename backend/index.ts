@@ -726,6 +726,36 @@ export const handler = router({
       });
     },
   ],
+  'GET /api/admin/scripts': [
+    requireAuth(),
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async () => {
+      const { items } = await db.list('nightjar_scripts', { limit: 500 });
+      return json({ scripts: items.map((script) => ({ id: script.id, title: script.title, status: script.status, version: script.version, writerUserId: script.writerUserId, editorUserId: script.editorUserId ?? null, updatedAt: script.updatedAt ?? null })) });
+    },
+  ],
+  'POST /api/admin/scripts/:scriptId/assign-editor': [
+    requireAuth(),
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async (ctx) => {
+      const body = (ctx.body ?? {}) as { editorUserId?: string };
+      const editorUserId = String(body.editorUserId ?? '').trim();
+      if (!editorUserId) return error('Editor account is required.', 400);
+      const { items: editors } = await db.list(accountIndexTable, { limit: 1000 });
+      if (!editors.some((account) => account.userId === editorUserId && account.role === 'editor' && account.status !== 'suspended')) return error('The selected account is not an active Editor.', 400);
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = scripts.find((item) => item.id === ctx.params.scriptId);
+      if (!script) return error('Script not found.', 404);
+      const next = { ...script, editorUserId, updatedAt: new Date().toISOString() };
+      await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
+      const { items: existing } = await db.list('nightjar_editor_assignments', { limit: 500 });
+      const current = existing.find((item) => item.scriptId === script.id && item.editorUserId === editorUserId && item.status !== 'closed');
+      if (!current) {
+        await db.add('nightjar_editor_assignments', [{ scriptId: script.id, editorUserId, assignedBy: ctx.user!.userId, status: 'open', assignedAt: new Date().toISOString() }]);
+      }
+      return json({ script: next });
+    },
+  ],
   'GET /api/admin/creator-applications': [
     requireAuth(),
     requireAdminEmailAllowlist(ADMIN_EMAILS),
