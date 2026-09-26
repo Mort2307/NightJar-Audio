@@ -515,6 +515,42 @@ function App() {
     }
   };
 
+  const toggleFavouriteRelease = async (releaseId: string) => {
+    try {
+      if (favouriteReleaseIds.includes(releaseId)) {
+        await api.delete('/api/favourites/' + releaseId);
+        setFavouriteReleaseIds((items) => items.filter((id) => id !== releaseId));
+      } else {
+        await api.post('/api/favourites/' + releaseId);
+        setFavouriteReleaseIds((items) => [...items, releaseId]);
+      }
+    } catch {
+      notify('Favourite could not be updated.');
+    }
+  };
+
+  const toggleCreatorFollow = async (creatorUserId: string) => {
+    try {
+      if (followingCreatorIds.includes(creatorUserId)) {
+        await api.delete('/api/follows/creators/' + creatorUserId);
+        setFollowingCreatorIds((items) => items.filter((id) => id !== creatorUserId));
+      } else {
+        await api.post('/api/follows/creators/' + creatorUserId);
+        setFollowingCreatorIds((items) => [...items, creatorUserId]);
+      }
+    } catch {
+      notify('Follow could not be updated.');
+    }
+  };
+
+  const togglePlayback = (track: Track) => {
+    if (!track.audioUrl) {
+      notify('This release has no playable audio attached yet.');
+      return;
+    }
+    setPlaying(playing === track.id ? null : track.id);
+  };
+
   const loadAdminOverview = async () => {
     if (!canAdmin) return;
     setAdminOverviewLoading(true);
