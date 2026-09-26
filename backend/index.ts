@@ -103,6 +103,16 @@ type AccountRecord = {
   createdAt: string;
 };
 
+const getAccountRecord = async (userId: string) => {
+  const { items } = await db.list<AccountRecord>(accountTable(userId), { limit: 1 });
+  return items[0] ?? null;
+};
+
+const requireRole = async (userId: string, roles: Role[]) => {
+  const account = await getAccountRecord(userId);
+  return account ? roles.includes(account.role) : false;
+};
+
 export const handler = router({
   'GET /api/_healthcheck': [async () => json({ message: 'Success' })],
   'GET /api/catalogue': [
