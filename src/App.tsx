@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
-type AgeStage = 'gate' | 'assurance' | 'preview';
+type AgeStage = 'gate' | 'assurance';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor';
 
@@ -922,10 +922,7 @@ function App() {
           {!ageConfigured && user && role === 'admin' && <button className="secondary-button wide-button" disabled={ageLoading} onClick={() => void runAdminSandboxTest()}>
             Run administrator sandbox test <ShieldCheck size={16} />
           </button>}
-          <button className="secondary-button wide-button" onClick={() => setAgeStage('assurance')}>
-            Enter product preview <ArrowRight size={16} />
-          </button>
-          <p className="access-fine">Product preview remains clearly labelled as preview access. Production adult access should only be granted after a real provider result is complete.</p>
+          <p className="access-fine">Adult catalogue access is granted only after a verified age-assurance result. No preview bypass is provided.</p>
         </div>
       </main>
     );
@@ -1113,7 +1110,7 @@ function App() {
                 <label>Favourite tropes <input value={(profile.favouriteTropes??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteTropes',e.target.value)} placeholder="Slow burn, suspense, character-led"/></label>
                 <label>Favourite categories <input value={(profile.favouriteCategories??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteCategories',e.target.value)} placeholder="Story, Atmospheric, Performance"/></label>
                 <label>Role focus <input value={(profile.roleFocus??[]).join(', ')} onChange={(e)=>setProfile((p:any)=>({...p,roleFocus:e.target.value.split(',').map((x:string)=>x.trim()).filter(Boolean).slice(0,16)}))} placeholder="Performance, writing, editing"/></label>
-                <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile preview</label>
+                <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile</label>
                 <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my profile'} <Check size={15}/></button>
               </article>
             </div>
