@@ -144,7 +144,7 @@
     "expected": "The personalised profile persists and remains separate from the account's permission role."
   },
   {
-    "name": "Protected script activity creates a dual-owner security alert",
+    "name": "Protected script activity creates an all-owner security alert",
     "viewport": "desktop",
     "covers": [
       "protected reader",
