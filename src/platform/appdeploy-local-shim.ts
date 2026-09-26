@@ -527,6 +527,30 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ session });
   }
 
+  if (path === '/api/admin/scripts' && method === 'GET') {
+    requireAdmin(state);
+    return send({ scripts: state.scripts.map((script) => ({ id: script.id, title: script.title, status: script.status, version: script.version, writerUserId: script.writerUserId, editorUserId: script.editorUserId ?? null, updatedAt: script.updatedAt ?? null })) });
+  }
+
+  if (path === '/api/editor/accounts' && method === 'GET') {
+    requireAdmin(state);
+    return send({ editors: state.users.filter((account) => account.role === 'editor' && account.status === 'active').map((account) => ({ userId: account.userId, email: account.email, name: account.name })) });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'scripts' && parts.length === 4 && parts[3] && method === 'POST' && parts[2] === 'scripts') {
+    requireAdmin(state);
+    const scriptId = parts[3];
+    const editorUserId = String(input.editorUserId ?? '').trim();
+    if (!editorUserId) throw new Error('Editor account is required.');
+    const editor = state.users.find((account) => account.userId === editorUserId && account.role === 'editor' && account.status === 'active');
+    if (!editor) throw new Error('The selected account is not an active Editor.');
+    const script = state.scripts.find((item) => item.id === scriptId);
+    if (!script) throw new Error('Script not found.');
+    script.editorUserId = editorUserId;
+    script.updatedAt = now();
+    return send({ script });
+  }
+
   if (path === '/api/admin/overview' && method === 'GET') {
     requireAdmin(state);
     const counts = { listener: state.users.filter((item) => item.role === 'listener').length, creator: state.users.filter((item) => item.role === 'creator').length, writer: state.users.filter((item) => item.role === 'writer').length, editor: state.users.filter((item) => item.role === 'editor').length, admin: ADMIN_EMAILS.length };
