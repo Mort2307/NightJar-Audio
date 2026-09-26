@@ -155,6 +155,8 @@ function App() {
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
+  const [editorQueue, setEditorQueue] = useState<any[]>([]);
+  const [editorSelected, setEditorSelected] = useState<any | null>(null);
   const [protectedScripts, setProtectedScripts] = useState<any[]>([]);
   const [protectedReaderScript, setProtectedReaderScript] = useState<any | null>(null);
 
@@ -202,6 +204,7 @@ function App() {
     void loadLiveProductData();
     if (role === 'creator' || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
     if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
+    if (role === 'editor' || (canAdmin && previewRole === 'editor')) void loadEditorQueue();
   }, [user, ageVerified, role, currentIntent, previewRole]);
 
   const notify = (message: string) => {
@@ -306,6 +309,19 @@ function App() {
       setWriterScripts(data?.scripts ?? []);
     } catch {
       setWriterScripts([]);
+    }
+  };
+
+  const loadEditorQueue = async () => {
+    if (!user) return;
+    try {
+      const { data } = await api.get('/api/editor/queue');
+      const items = data?.queue ?? [];
+      setEditorQueue(items);
+      setEditorSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
+    } catch {
+      setEditorQueue([]);
+      setEditorSelected(null);
     }
   };
 
@@ -517,6 +533,29 @@ function App() {
     finally { setProfileLoading(false); }
   };
 
+  const requestScriptAccess = async (script: any) => {
+    if (!user || !script?.id) return;
+    try {
+      await api.post('/api/scripts/' + script.id + '/request-access', { writerUserId: script.writerUserId ?? null });
+      notify('Access request recorded. The writer can review it from their workflow.');
+    } catch {
+      notify('The access request could not be recorded.');
+    }
+  };
+
+  const reviewEditorScript = async (status: string) => {
+    if (!editorSelected) return;
+    const comment = window.prompt('Editorial note (optional)') ?? '';
+    try {
+      const { data } = await api.post('/api/editor/scripts/' + editorSelected.id + '/review', { status, comment });
+      setEditorSelected(data?.script ?? editorSelected);
+      await loadEditorQueue();
+      notify('Editorial decision recorded.');
+    } catch {
+      notify('Editorial decision could not be recorded.');
+    }
+  };
+
   const saveProfile = async () => {
     if (!user) return;
     setProfileLoading(true);
@@ -659,12 +698,18 @@ function App() {
     }
   };
 
-  const createWriterDraft = () => {
+  const createWriterDraft = async () => {
     const title = writerDraftTitle.trim();
     if (!title) return notify('Give the script a working title first.');
-    setWriterScripts((current) => [{ id: `local-${Date.now()}`, title, status: 'Draft', version: 'v1', access: 'Private' }, ...current]);
-    setWriterDraftTitle('');
-    notify('Draft created in Writer Studio preview.');
+    try {
+      const { data } = await api.post('/api/writer/scripts', { title, content: '' });
+      setWriterDraftTitle('');
+      await loadWriterScripts();
+      setWriterSelected(data?.script ?? null);
+      notify('Draft created.');
+    } catch {
+      notify('The script could not be created.');
+    }
   };
 
   const selectPreviewRole = (next: PreviewRole) => {
