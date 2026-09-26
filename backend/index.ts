@@ -267,6 +267,98 @@ export const handler = router({
       return json({ release: next });
     },
   ],
+  'GET /api/writer/scripts': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['writer', 'admin']))) return error('Writer access required.', 403);
+      const { items } = await db.list('nightjar_scripts', { limit: 500 });
+      return json({ scripts: items.filter((script) => script.writerUserId === ctx.user!.userId) });
+    },
+  ],
+  'POST /api/writer/scripts': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const title = String(body.title ?? '').trim();
+      if (!title) return error('Script title is required.', 400);
+      const script = { id: 'script-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), title, content: String(body.content ?? ''), status: 'Draft', access: 'Private', version: 1, writerUserId: ctx.user!.userId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      await db.add('nightjar_scripts', [script]);
+      return json({ script }, 201);
+    },
+  ],
+  'PUT /api/writer/scripts/:scriptId': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
+      const { items } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
+      if (!script) return error('Script not found.', 404);
+      const next = { ...script, ...(ctx.body ?? {}), id: script.id, writerUserId: script.writerUserId, updatedAt: new Date().toISOString() };
+      await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
+      return json({ script: next });
+    },
+  ],
+  'POST /api/writer/scripts/:scriptId/versions': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
+      const { items } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
+      if (!script) return error('Script not found.', 404);
+      const version = Number(script.version ?? 1) + 1;
+      await db.add('nightjar_script_versions_' + script.id, [{ scriptId: script.id, version, content: script.content ?? '', createdAt: new Date().toISOString() }]);
+      const next = { ...script, version, updatedAt: new Date().toISOString() };
+      await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
+      return json({ script: next, version });
+    },
+  ],
+  'POST /api/writer/scripts/:scriptId/submit': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
+      const { items } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
+      if (!script) return error('Script not found.', 404);
+      const next = { ...script, status: 'Submitted', submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
+      return json({ script: next });
+    },
+  ],
+  'GET /api/editor/queue': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['editor', 'admin']))) return error('Editor access required.', 403);
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const { items: assignments } = await db.list('nightjar_editor_assignments', { limit: 500 });
+      const ids = assignments.filter((item) => item.editorUserId === ctx.user!.userId && item.status !== 'closed').map((item) => item.scriptId);
+      return json({ queue: scripts.filter((script) => ids.includes(script.id)) });
+    },
+  ],
+  'GET /api/editor/accounts': [
+    requireAuth(),
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async () => {
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
+      return json({ editors: accounts.filter((account) => account.role === 'editor' && account.status !== 'suspended') });
+    },
+  ],
+  'POST /api/editor/scripts/:scriptId/review': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['editor']))) return error('Active Editor access required.', 403);
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = scripts.find((item) => item.id === ctx.params.scriptId);
+      if (!script) return error('Script not found.', 404);
+      const { items: assignments } = await db.list('nightjar_editor_assignments', { limit: 500 });
+      if (!assignments.some((item) => item.editorUserId === ctx.user!.userId && item.scriptId === script.id && item.status !== 'closed')) return error('This manuscript is not assigned to you.', 403);
+      const body = (ctx.body ?? {}) as { status?: string; comment?: string };
+      if (!['Under review', 'Revision requested', 'Approved', 'Rejected'].includes(body.status ?? '')) return error('Invalid editorial state.', 400);
+      const next = { ...script, status: body.status, lastEditorialComment: String(body.comment ?? '').slice(0, 1200), updatedAt: new Date().toISOString() };
+      await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
+      return json({ script: next });
+    },
+  ],
   'GET /api/account/identity': [
     requireAuth(),
     withScopes('email'),
