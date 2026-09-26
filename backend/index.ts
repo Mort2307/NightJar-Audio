@@ -198,6 +198,75 @@ export const handler = router({
   'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.creatorUserId === ctx.params.creatorUserId)) await db.add(followTable(ctx.user!.userId), [{ creatorUserId: ctx.params.creatorUserId, createdAt: new Date().toISOString() }]); return json({ following: true }); }],
   'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.creatorUserId === ctx.params.creatorUserId).map((item) => item.id); if (ids.length) await db.delete(followTable(ctx.user!.userId), ids); return json({ following: false }); }],
   'POST /api/listening/event': [requireAuth(), async (ctx) => { const body = (ctx.body ?? {}) as Record<string, unknown>; const record = { ...body, userId: ctx.user!.userId, createdAt: new Date().toISOString() }; await db.add(listeningTable, [record]); await db.add(tasteTable(ctx.user!.userId), [{ type: body.eventType, category: body.category ?? null, tags: Array.isArray(body.tags) ? body.tags : [], completed: body.completed === true, createdAt: record.createdAt }]); return json({ recorded: true }); }],
+  'GET /api/creator/dashboard': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['creator', 'admin']))) return error('Creator access required.', 403);
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const mine = releases.filter((release) => release.creatorUserId === ctx.user!.userId);
+      const { items: events } = await db.list(listeningTable, { limit: 5000 });
+      const listening = events.filter((event) => mine.some((release) => release.id === event.releaseId));
+      const seconds = listening.reduce((sum, event) => sum + Math.min(Number(event.positionSeconds ?? 0), Number(event.durationSeconds ?? 0)), 0);
+      return json({ releases: mine, metrics: { released: mine.filter((release) => release.status === 'released').length, drafts: mine.filter((release) => release.status !== 'released').length, verifiedListeningMinutes: Number((seconds / 60).toFixed(1)), uniqueListeners: new Set(listening.map((event) => event.userId)).size } });
+    },
+  ],
+  'GET /api/creator/releases': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['creator', 'admin']))) return error('Creator access required.', 403);
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      return json({ releases: items.filter((release) => release.creatorUserId === ctx.user!.userId) });
+    },
+  ],
+  'POST /api/creator/releases': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['creator']))) return error('Active Creator access required.', 403);
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const title = String(body.title ?? '').trim();
+      if (!title) return error('Release title is required.', 400);
+      const profile = await getProfile(ctx.user!.userId);
+      const release = { id: 'release-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), title, description: String(body.description ?? '').trim().slice(0, 1200), category: String(body.category ?? '').trim(), genre: String(body.genre ?? '').trim(), mood: String(body.mood ?? '').trim(), tags: cleanList(body.tags), tropes: cleanList(body.tropes), durationMinutes: Math.max(0, Number(body.durationMinutes ?? 0)), audioUrl: String(body.audioUrl ?? '').trim() || null, artworkUrl: String(body.artworkUrl ?? '').trim() || null, creatorUserId: ctx.user!.userId, creatorName: profile?.displayName ?? ctx.user!.name ?? 'Nightjar creator', creatorHandle: profile?.handle ?? null, status: 'draft', version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      await db.add(releaseTable, [release]);
+      return json({ release }, 201);
+    },
+  ],
+  'PUT /api/creator/releases/:releaseId': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['creator']))) return error('Active Creator access required.', 403);
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      const release = items.find((item) => item.id === ctx.params.releaseId && item.creatorUserId === ctx.user!.userId);
+      if (!release) return error('Release not found.', 404);
+      const next = { ...release, ...(ctx.body ?? {}), id: release.id, creatorUserId: release.creatorUserId, version: Number(release.version ?? 1) + 1, updatedAt: new Date().toISOString() };
+      await db.update(releaseTable, [{ id: release.id, record: next }]);
+      return json({ release: next });
+    },
+  ],
+  'DELETE /api/creator/releases/:releaseId': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['creator']))) return error('Active Creator access required.', 403);
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      const release = items.find((item) => item.id === ctx.params.releaseId && item.creatorUserId === ctx.user!.userId);
+      if (!release) return error('Release not found.', 404);
+      await db.delete(releaseTable, [release.id]);
+      return json({ deleted: true });
+    },
+  ],
+  'POST /api/creator/releases/:releaseId/publish': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['creator']))) return error('Active Creator access required.', 403);
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      const release = items.find((item) => item.id === ctx.params.releaseId && item.creatorUserId === ctx.user!.userId);
+      if (!release) return error('Release not found.', 404);
+      if (!release.audioUrl) return error('An audio URL is required before publishing.', 400);
+      const next = { ...release, status: 'released', releaseDate: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      await db.update(releaseTable, [{ id: release.id, record: next }]);
+      return json({ release: next });
+    },
+  ],
   'GET /api/account/identity': [
     requireAuth(),
     withScopes('email'),
