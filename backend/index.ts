@@ -1,15 +1,17 @@
 import { router, json, error, requireAuth, requireAdminEmailAllowlist, withScopes } from '@appdeploy/sdk';
 import { db, storage } from '@appdeploy/sdk';
 
+const catalogue = [
+  { title: 'After Midnight', creator: 'Mara Vale', category: 'Atmospheric', durationMinutes: 18, listeners: 12400 },
+  { title: 'Velvet Static', creator: 'Rae Hollow', category: 'Story', durationMinutes: 24, listeners: 9800 },
+  { title: 'Slow Burn', creator: 'Noor', category: 'Whisper', durationMinutes: 16, listeners: 7100 },
+  { title: 'The Last Train Home', creator: 'Mara Vale', category: 'Story', durationMinutes: 31, listeners: 6600 },
+];
+
 const accountTable = (userId: string) => `nightjar_account_${userId}`;
 const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com', 'nightjar.audio.app@gmail.com'];
 const accountIndexTable = 'nightjar_account_index';
 const subscriptionTable = 'nightjar_subscriptions';
-const releaseTable = 'nightjar_releases';
-const followTable = (userId: string) => `nightjar_follows_${userId}`;
-const favouriteTable = (userId: string) => `nightjar_favourites_${userId}`;
-const listeningTable = (userId: string) => `nightjar_listening_${userId}`;
-const editorAssignmentTable = 'nightjar_editor_assignments';
 const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? '';
 const isAdmin = (email?: string) => Boolean(normalizeEmail(email) && ADMIN_EMAILS.includes(normalizeEmail(email)));
 const profileTable = (userId: string) => `nightjar_profile_${userId}`;
@@ -104,45 +106,16 @@ type AccountRecord = {
   createdAt: string;
 };
 
-
-const getRole = async (userId: string): Promise<Role | null> => {
-  const { items } = await db.list<AccountRecord>(accountTable(userId), { limit: 1 });
-  return items[0]?.role ?? null;
-};
-
-const requireUserRole = async (userId: string, roles: Role[]) => roles.includes((await getRole(userId)) as Role);
-
-const releaseVisible = (release: Record<string, any>) => release.status === 'released' && (!release.releaseDate || new Date(release.releaseDate).getTime() <= Date.now());
-
-const releaseScore = (release: Record<string, any>, taste: Record<string, number>, followedCreatorIds: Set<string>, intent?: string) => {
-  const values = [release.category, release.genre, release.mood, ...(Array.isArray(release.tags) ? release.tags : []), ...(Array.isArray(release.tropes) ? release.tropes : [])].filter(Boolean).map(String);
-  let score = 0;
-  for (const value of values) score += taste[value.toLowerCase()] ?? 0;
-  if (release.creatorUserId && followedCreatorIds.has(String(release.creatorUserId))) score += 8;
-  if (intent && String(release.mood ?? '').toLowerCase().includes(intent.toLowerCase())) score += 4;
-  if (release.releaseDate) {
-    const ageDays = Math.max(0, (Date.now() - new Date(release.releaseDate).getTime()) / 86400000);
-    score += Math.max(0, 3 - ageDays / 7);
-  }
-  return score;
-};
-
 export const handler = router({
   'GET /api/_healthcheck': [async () => json({ message: 'Success' })],
-  'GET /api/catalogue': [
-    async (ctx) => {
-      const query = String(ctx.query.q ?? '').trim().toLowerCase();
-      const category = String(ctx.query.category ?? '').trim().toLowerCase();
-      const { items } = await db.list(releaseTable, { limit: 500 });
-      const catalogue = await Promise.all(items.filter((release) => releaseVisible(release)).filter((release) => {
-        if (category && String(release.category ?? '').toLowerCase() !== category) return false;
-        if (!query) return true;
-        return [release.title, release.description, release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].join(' ').toLowerCase().includes(query);
-      }).map(async (release) => {
-        const profile = release.creatorUserId ? await getProfile(String(release.creatorUserId)) : null;
-        return { ...release, creatorName: profile?.displayName ?? release.creatorName ?? 'Nightjar creator', creatorHandle: profile?.handle ?? release.creatorHandle ?? null };
-      }));
-      return json({ catalogue });
+  'GET /api/catalogue': [async () => json({ catalogue })],
+  'GET /api/creator-demo': [
+    async () => {
+      const { items } = await db.list('creator_demo_metrics', { limit: 1 });
+      return json({
+        metrics: items[0] ?? { listeners: 1842, eligibleMinutes: 73421, creatorPool: 6742, estimatedShare: 1247 },
+        formula: 'Net subscription revenue → creator pool → allocated by verified listening',
+      });
     },
   ],
   'GET /api/account/identity': [
@@ -582,121 +555,4 @@ export const handler = router({
       return json({ logoUrl: url ?? null });
     },
   ],
-  'GET /api/recommendations': [
-    requireAuth(),
-    async (ctx) => {
-      const query = String(ctx.query.q ?? '').trim();
-      const intent = String(ctx.query.intent ?? '').trim();
-      const profile = await getProfile(ctx.user!.userId);
-      const { items: tasteEvents } = await db.list(tasteTable(ctx.user!.userId), { limit: 500 });
-      const weights: Record<string, number> = {};
-      for (const value of [...(profile?.favouriteTags ?? []), ...(profile?.favouriteTropes ?? []), ...(profile?.favouriteCategories ?? [])]) {
-        const key = String(value).toLowerCase();
-        weights[key] = (weights[key] ?? 0) + 5;
-      }
-      for (const event of tasteEvents) {
-        const factor = event.type === 'skip' || event.type === 'hide' ? -0.75 : event.completed ? 2 : 1;
-        for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : [])]) {
-          const key = String(value).toLowerCase();
-          weights[key] = (weights[key] ?? 0) + factor;
-        }
-      }
-      const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
-      const followed = new Set(follows.map((item) => String(item.creatorUserId)));
-      const { items: releases } = await db.list(releaseTable, { limit: 500 });
-      const candidates = releases.filter(releaseVisible).filter((release) => !query || [release.title, release.description, release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].join(' ').toLowerCase().includes(query.toLowerCase()));
-      const ranked = await Promise.all(candidates.map(async (release) => {
-        const score = releaseScore(release, weights, followed, intent);
-        const creatorProfile = release.creatorUserId ? await getProfile(String(release.creatorUserId)) : null;
-        const values = [release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])];
-        const matched = values.filter((value) => weights[String(value).toLowerCase()] && weights[String(value).toLowerCase()] > 0).slice(0, 3);
-        const reason = matched.length ? 'Because you have expressed interest in ' + matched.join(', ') + '.' : followed.has(String(release.creatorUserId)) ? 'From a creator you follow.' : 'A new release that matches your current discovery context.';
-        return { ...release, creatorName: creatorProfile?.displayName ?? release.creatorName ?? 'Nightjar creator', creatorHandle: creatorProfile?.handle ?? release.creatorHandle ?? null, score: Number(score.toFixed(2)), reason };
-      }));
-      ranked.sort((a, b) => b.score - a.score);
-      return json({ recommendations: ranked.slice(0, 24), model: { declaredWeight: 5, observedWeight: 1, socialWeight: 8, recencyWeight: 3, intentWeight: 4 } });
-    },
-  ],
-  'GET /api/trending': [
-    async () => {
-      const { items: releases } = await db.list(releaseTable, { limit: 500 });
-      const { items: events } = await db.list('nightjar_listening_index', { limit: 5000 });
-      const counts: Record<string, number> = {};
-      for (const event of events) counts[String(event.releaseId)] = (counts[String(event.releaseId)] ?? 0) + 1;
-      const items = await Promise.all(releases.filter(releaseVisible).map(async (release) => {
-        const creatorProfile = release.creatorUserId ? await getProfile(String(release.creatorUserId)) : null;
-        return { ...release, creatorName: creatorProfile?.displayName ?? release.creatorName ?? 'Nightjar creator', creatorHandle: creatorProfile?.handle ?? release.creatorHandle ?? null, listeningEvents: counts[String(release.id)] ?? 0 };
-      }));
-      items.sort((a, b) => b.listeningEvents - a.listeningEvents);
-      return json({ trending: items.slice(0, 24) });
-    },
-  ],
-  'GET /api/creators': [
-    async () => {
-      const { items } = await db.list(accountIndexTable, { limit: 1000 });
-      const creatorAccounts = items.filter((item) => item.role === 'creator' && item.status !== 'suspended');
-      const { items: releases } = await db.list(releaseTable, { limit: 500 });
-      const creators = await Promise.all(creatorAccounts.map(async (account) => {
-        const profile = await getProfile(account.userId);
-        return { userId: account.userId, displayName: profile?.displayName ?? account.name ?? 'Nightjar creator', handle: profile?.handle ?? account.handle ?? null, headline: profile?.headline ?? null, bio: profile?.bio ?? null, avatarInitials: profile?.avatarInitials ?? null, avatarTone: profile?.avatarTone ?? 'plum', releaseCount: releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').length };
-      }));
-      return json({ creators });
-    },
-  ],
-  'GET /api/spotlights': [
-    async () => {
-      const { items } = await db.list('nightjar_spotlights', { limit: 100 });
-      const today = new Date().toISOString().slice(0, 10);
-      const active = items.filter((item) => item.date === today).sort((a, b) => Number(a.slot ?? 0) - Number(b.slot ?? 0)).slice(0, 5);
-      const spotlights = await Promise.all(active.map(async (item) => {
-        const target = String(item.targetId ?? '');
-        const profile = await getProfile(target);
-        let release: any = null;
-        if (item.releaseId) {
-          const { items: releases } = await db.list(releaseTable, { limit: 500 });
-          release = releases.find((candidate) => candidate.id === item.releaseId) ?? null;
-        }
-        return {
-          ...item,
-          kind: item.kind === 'writer' ? 'writer' : 'creator',
-          name: profile?.displayName ?? null,
-          handle: profile?.handle ?? null,
-          initials: profile?.avatarInitials ?? null,
-          title: release?.title ?? null,
-          edition: item.kind === 'writer' ? 'New script' : 'New edition',
-          detail: release?.description ?? profile?.headline ?? null,
-          releaseId: release?.id ?? item.releaseId ?? null,
-        };
-      }));
-      return json({ date: today, spotlights });
-    },
-  ],
-  'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); return json({ follows: items }); }],
-  'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.creatorUserId === ctx.params.creatorUserId)) await db.add(followTable(ctx.user!.userId), [{ creatorUserId: ctx.params.creatorUserId, createdAt: new Date().toISOString() }]); return json({ following: true }); }],
-  'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.creatorUserId === ctx.params.creatorUserId).map((item) => item.id); if (ids.length) await db.delete(followTable(ctx.user!.userId), ids); return json({ following: false }); }],
-  'GET /api/favourites': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); return json({ favourites: items }); }],
-  'POST /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.releaseId === ctx.params.releaseId)) await db.add(favouriteTable(ctx.user!.userId), [{ releaseId: ctx.params.releaseId, createdAt: new Date().toISOString() }]); return json({ favourite: true }); }],
-  'DELETE /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.releaseId === ctx.params.releaseId).map((item) => item.id); if (ids.length) await db.delete(favouriteTable(ctx.user!.userId), ids); return json({ favourite: false }); }],
-  'POST /api/listening/event': [requireAuth(), async (ctx) => { if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403); const body=(ctx.body??{}) as {releaseId?:string;eventType?:string;positionSeconds?:number;durationSeconds?:number;completed?:boolean;intent?:string}; if(!body.releaseId||!body.eventType)return error('Release and event type are required.',400); const record={releaseId:body.releaseId,eventType:body.eventType,positionSeconds:Math.max(0,Number(body.positionSeconds??0)),durationSeconds:Math.max(0,Number(body.durationSeconds??0)),completed:body.completed===true,intent:body.intent??null,createdAt:new Date().toISOString(),userId:ctx.user!.userId}; await db.add(listeningTable(ctx.user!.userId),[record]); await db.add('nightjar_listening_index',[{...record}]); await db.add(tasteTable(ctx.user!.userId),[{type:body.eventType,tags:[],category:null,contentId:body.releaseId,intent:body.intent??null,completed:body.completed===true,createdAt:record.createdAt}]); return json({ recorded:true }); }],
-  'GET /api/listening/history': [requireAuth(), async (ctx) => { const { items } = await db.list(listeningTable(ctx.user!.userId), { limit: 100 }); return json({ history: items.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))) }); }],
-  'GET /api/creator/dashboard': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['creator','admin']))) return error('Creator access is required.',403); const {items:releases}=await db.list(releaseTable,{limit:500}); const mine=releases.filter((release)=>release.creatorUserId===ctx.user!.userId); const {items:events}=await db.list('nightjar_listening_index',{limit:5000}); const mineEvents=events.filter((event)=>mine.some((release)=>release.id===event.releaseId)); const eligibleSeconds=mineEvents.reduce((sum,event)=>sum+Math.min(Number(event.positionSeconds??0),Number(event.durationSeconds??0)),0); const uniqueListeners=new Set(mineEvents.map((event)=>event.userId)).size; return json({ releases:mine, metrics:{released:mine.filter((release)=>release.status==='released').length,drafts:mine.filter((release)=>release.status!=='released').length,verifiedListeningMinutes:Number((eligibleSeconds/60).toFixed(1)),uniqueListeners} }); }],
-  'GET /api/creator/releases': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['creator','admin']))) return error('Creator access is required.',403); const {items}=await db.list(releaseTable,{limit:500}); return json({ releases:items.filter((release)=>release.creatorUserId===ctx.user!.userId) }); }],
-  'POST /api/creator/releases': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['creator']))) return error('Active Creator access is required.',403); const body=(ctx.body??{}) as Record<string,unknown>; const title=String(body.title??'').trim(); if(!title)return error('Release title is required.',400); const profile=await getProfile(ctx.user!.userId); const id='release-'+Math.random().toString(36).slice(2,12); const release={id,title,description:String(body.description??'').trim().slice(0,1200),category:String(body.category??'').trim(),genre:String(body.genre??'').trim(),mood:String(body.mood??'').trim(),tags:cleanList(body.tags,16),tropes:cleanList(body.tropes,16),durationMinutes:Math.max(0,Number(body.durationMinutes??0)),audioUrl:String(body.audioUrl??'').trim()||null,artworkUrl:String(body.artworkUrl??'').trim()||null,creatorUserId:ctx.user!.userId,creatorName:profile?.displayName??ctx.user!.name??'Nightjar creator',creatorHandle:profile?.handle??null,status:'draft',version:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}; const [recordId]=await db.add(releaseTable,[release]); return json({release:{...release,id:recordId??id}},201); }],
-  'PUT /api/creator/releases/:releaseId': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['creator']))) return error('Active Creator access is required.',403); const {items}=await db.list(releaseTable,{limit:500}); const current=items.find((release)=>release.id===ctx.params.releaseId&&release.creatorUserId===ctx.user!.userId); if(!current)return error('Release not found.',404); const body=(ctx.body??{}) as Record<string,unknown>; const release={...current,...body,title:String(body.title??current.title).trim(),tags:cleanList(body.tags??current.tags,16),tropes:cleanList(body.tropes??current.tropes,16),durationMinutes:Math.max(0,Number(body.durationMinutes??current.durationMinutes??0)),audioUrl:String(body.audioUrl??current.audioUrl??'').trim()||null,artworkUrl:String(body.artworkUrl??current.artworkUrl??'').trim()||null,updatedAt:new Date().toISOString()}; await db.update(releaseTable,[{id:current.id,record:release}]); return json({release}); }],
-  'POST /api/creator/releases/:releaseId/publish': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['creator']))) return error('Active Creator access is required.',403); const {items}=await db.list(releaseTable,{limit:500}); const current=items.find((release)=>release.id===ctx.params.releaseId&&release.creatorUserId===ctx.user!.userId); if(!current)return error('Release not found.',404); if(!current.audioUrl)return error('An audio URL is required before publishing.',400); const release={...current,status:'released',releaseDate:new Date().toISOString(),updatedAt:new Date().toISOString()}; await db.update(releaseTable,[{id:current.id,record:release}]); return json({release}); }],
-  'DELETE /api/creator/releases/:releaseId': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['creator']))) return error('Active Creator access is required.',403); const {items}=await db.list(releaseTable,{limit:500}); const current=items.find((release)=>release.id===ctx.params.releaseId&&release.creatorUserId===ctx.user!.userId); if(!current)return error('Release not found.',404); await db.delete(releaseTable,[current.id]); return json({deleted:true}); }],
-  'GET /api/writer/scripts': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['writer','admin']))) return error('Writer access is required.',403); const {items}=await db.list('nightjar_scripts',{limit:500}); return json({scripts:items.filter((script)=>script.writerUserId===ctx.user!.userId)}); }],
-  'POST /api/writer/scripts': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['writer']))) return error('Active Writer access is required.',403); const body=(ctx.body??{}) as Record<string,unknown>; const title=String(body.title??'').trim(); if(!title)return error('Script title is required.',400); const [id]=await db.add('nightjar_scripts',[{title,writerUserId:ctx.user!.userId,content:String(body.content??''),status:'Draft',version:1,access:'Private',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}]); return json({script:{id,title,writerUserId:ctx.user!.userId,content:String(body.content??''),status:'Draft',version:1,access:'Private'}},201); }],
-  'PUT /api/writer/scripts/:scriptId': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['writer']))) return error('Active Writer access is required.',403); const {items}=await db.list('nightjar_scripts',{limit:500}); const current=items.find((script)=>script.id===ctx.params.scriptId&&script.writerUserId===ctx.user!.userId); if(!current)return error('Script not found.',404); const body=(ctx.body??{}) as Record<string,unknown>; const next={...current,title:String(body.title??current.title).trim(),content:String(body.content??current.content??''),updatedAt:new Date().toISOString()}; await db.update('nightjar_scripts',[{id:current.id,record:next}]); return json({script:next}); }],
-  'POST /api/writer/scripts/:scriptId/versions': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['writer']))) return error('Active Writer access is required.',403); const {items}=await db.list('nightjar_scripts',{limit:500}); const current=items.find((script)=>script.id===ctx.params.scriptId&&script.writerUserId===ctx.user!.userId); if(!current)return error('Script not found.',404); const version=Number(current.version??1)+1; await db.add('nightjar_script_versions_'+current.id,[{scriptId:current.id,version,content:current.content??'',createdAt:new Date().toISOString()}]); const next={...current,version,updatedAt:new Date().toISOString()}; await db.update('nightjar_scripts',[{id:current.id,record:next}]); return json({script:next,version}); }],
-  'POST /api/writer/scripts/:scriptId/submit': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['writer']))) return error('Active Writer access is required.',403); const {items}=await db.list('nightjar_scripts',{limit:500}); const current=items.find((script)=>script.id===ctx.params.scriptId&&script.writerUserId===ctx.user!.userId); if(!current)return error('Script not found.',404); const next={...current,status:'Submitted',submittedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}; await db.update('nightjar_scripts',[{id:current.id,record:next}]); return json({script:next}); }],
-  'GET /api/editor/queue': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['editor','admin']))) return error('Editor access is required.',403); const {items:assignments}=await db.list('nightjar_editor_assignments',{limit:500}); const mine=assignments.filter((item)=>item.editorUserId===ctx.user!.userId&&item.status!=='closed'); const {items:scripts}=await db.list('nightjar_scripts',{limit:500}); const queue=scripts.filter((script)=>mine.some((item)=>item.scriptId===script.id)); return json({queue}); }],
-  'POST /api/editor/scripts/:scriptId/review': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['editor']))) return error('Active Editor access is required.',403); const {items:scripts}=await db.list('nightjar_scripts',{limit:500}); const current=scripts.find((script)=>script.id===ctx.params.scriptId); if(!current)return error('Script not found.',404); const {items:assignments}=await db.list('nightjar_editor_assignments',{limit:500}); if(!assignments.some((item)=>item.editorUserId===ctx.user!.userId&&item.scriptId===current.id&&item.status!=='closed'))return error('This script is not assigned to you.',403); const body=(ctx.body??{}) as {status?:string;comment?:string}; const allowed=['Under review','Revision requested','Approved','Rejected']; if(!allowed.includes(body.status??''))return error('Invalid editorial state.',400); const next={...current,status:body.status,updatedAt:new Date().toISOString(),lastEditorialComment:String(body.comment??'').trim().slice(0,1200)}; await db.update('nightjar_scripts',[{id:current.id,record:next}]); await db.add('nightjar_editor_reviews',[{scriptId:current.id,editorUserId:ctx.user!.userId,status:body.status,comment:next.lastEditorialComment,createdAt:new Date().toISOString()}]); return json({script:next}); }],
-  'GET /api/editor/scripts/:scriptId/reviews': [requireAuth(), async (ctx) => { if (!(await requireUserRole(ctx.user!.userId,['editor','writer','admin']))) return error('Editorial access is required.',403); const {items}=await db.list('nightjar_editor_reviews',{limit:500}); return json({reviews:items.filter((item)=>item.scriptId===ctx.params.scriptId)}); }],
-  'POST /api/admin/scripts/:scriptId/assign-editor': [requireAuth(), requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const body=(ctx.body??{}) as {editorUserId?:string}; if(!body.editorUserId)return error('Editor account is required.',400); if((await getRole(body.editorUserId))!=='editor')return error('The selected account is not an Editor.',400); const {items:scripts}=await db.list('nightjar_scripts',{limit:500}); const script=scripts.find((item)=>item.id===ctx.params.scriptId); if(!script)return error('Script not found.',404); const {items:existing}=await db.list('nightjar_editor_assignments',{limit:500}); const current=existing.find((item)=>item.scriptId===script.id&&item.editorUserId===body.editorUserId); if(current)return json({assignment:current}); const [id]=await db.add('nightjar_editor_assignments',[{scriptId:script.id,editorUserId:body.editorUserId,assignedBy:ctx.user!.userId,status:'open',assignedAt:new Date().toISOString()}]); return json({assignment:{id,scriptId:script.id,editorUserId:body.editorUserId,status:'open'}},201); }],
-  'GET /api/editor/accounts': [requireAuth(), requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(accountIndexTable,{limit:1000}); return json({editors:items.filter((item)=>item.role==='editor'&&item.status!=='suspended')}); }],
-  'GET /api/admin/scripts': [requireAuth(), requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list('nightjar_scripts',{limit:500}); return json({scripts:items.map((script)=>({id:script.id,title:script.title,status:script.status,version:script.version,writerUserId:script.writerUserId,updatedAt:script.updatedAt}))}); }],
-  'POST /api/admin/spotlights': [requireAuth(), requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const body=(ctx.body??{}) as {date?:string;slot?:number;kind?:string;targetId?:string;releaseId?:string}; const date=String(body.date??'').trim(); const kind=String(body.kind??'').trim(); const targetId=String(body.targetId??'').trim(); if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||![1,2,3,4,5].includes(Number(body.slot))||!['creator','writer'].includes(kind)||!targetId)return error('Date, slot, kind and target are required.',400); const {items}=await db.list('nightjar_spotlights',{limit:500}); const existing=items.find((item)=>item.date===date&&Number(item.slot)===Number(body.slot)); const record={date,slot:Number(body.slot),kind,targetId,releaseId:String(body.releaseId??'').trim()||null,updatedAt:new Date().toISOString(),updatedBy:ctx.user!.userId}; if(existing) await db.update('nightjar_spotlights',[{id:existing.id,record}]); else await db.add('nightjar_spotlights',[record]); return json({spotlight:record}); }],
-
-
 });
