@@ -186,7 +186,6 @@
   },
   {
     "name": "Administrator allowlist includes all Nightjar owners",
-    "sanity": true,
     "viewport": "desktop",
     "covers": [
       "administrator authentication",
