@@ -155,6 +155,8 @@ function App() {
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
+  const [protectedScripts, setProtectedScripts] = useState<any[]>([]);
+  const [protectedReaderScript, setProtectedReaderScript] = useState<any | null>(null);
 
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
   const spotlightIndex = Math.floor(Date.now() / 86400000) % Math.max(creatorSpotlightList.length, 1);
@@ -198,7 +200,7 @@ function App() {
   useEffect(() => {
     if (!user || !ageVerified) return;
     void loadLiveProductData();
-    if (role === 'creator' || canAdmin) void loadCreatorDashboard();
+    if (role === 'creator' || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
     if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
   }, [user, ageVerified, role, currentIntent, previewRole]);
 
@@ -304,6 +306,16 @@ function App() {
       setWriterScripts(data?.scripts ?? []);
     } catch {
       setWriterScripts([]);
+    }
+  };
+
+  const loadProtectedScripts = async () => {
+    if (!user) return;
+    try {
+      const { data } = await api.get('/api/scripts/catalogue');
+      setProtectedScripts(data?.scripts ?? []);
+    } catch {
+      setProtectedScripts([]);
     }
   };
 
@@ -466,9 +478,19 @@ function App() {
     } catch { }
   };
 
-  const openProtectedReader = () => {
-    setProtectedReaderOpen(true);
-    void recordProtectionEvent('script_view');
+  const openProtectedReader = async (scriptId: string) => {
+    try {
+      const { data } = await api.get('/api/scripts/' + scriptId);
+      if (data?.canReadFull === false) {
+        notify('This manuscript has not been granted for full reading by the writer.');
+        return;
+      }
+      setProtectedReaderScript(data);
+      setProtectedReaderOpen(true);
+      void recordProtectionEvent('script_view', scriptId);
+    } catch {
+      notify('Protected script access could not be opened.');
+    }
   };
 
   const loadAdminOverview = async () => {
