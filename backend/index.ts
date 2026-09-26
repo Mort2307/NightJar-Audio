@@ -9,11 +9,28 @@ const catalogue = [
 ];
 
 const accountTable = (userId: string) => `nightjar_account_${userId}`;
-const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com'];
+const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com', 'nightjar.audio.app@gmail.com'];
 const accountIndexTable = 'nightjar_account_index';
 const subscriptionTable = 'nightjar_subscriptions';
 const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? '';
 const isAdmin = (email?: string) => Boolean(normalizeEmail(email) && ADMIN_EMAILS.includes(normalizeEmail(email)));
+const profileTable = (userId: string) => `nightjar_profile_${userId}`;
+const tasteTable = (userId: string) => `nightjar_taste_${userId}`;
+const readerSessionTable = (userId: string) => `nightjar_reader_sessions_${userId}`;
+const securityAlertTable = 'nightjar_security_alerts';
+const securityEventTable = 'nightjar_security_events';
+const securityCaseTable = 'nightjar_security_cases';
+const ownerNotificationTable = (email: string) => `nightjar_owner_notifications_${normalizeEmail(email).replace(/[^a-z0-9]/g, '_')}`;
+type NightjarProfile = { displayName?: string|null; handle?: string|null; headline?: string|null; bio?: string|null; pronouns?: string|null; avatarInitials?: string|null; avatarTone?: string|null; favouriteTags?: string[]; favouriteTropes?: string[]; favouriteCategories?: string[]; roleFocus?: string[]; publicProfile?: boolean; createdAt?: string; updatedAt?: string; };
+const cleanList = (value: unknown, max = 16) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean).slice(0, max) : [];
+const cleanHandle = (value?: unknown) => String(value ?? '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_\.\-]/g, '').slice(0, 30);
+const getProfile = async (userId: string) => { const { items } = await db.list<NightjarProfile>(profileTable(userId), { limit: 1 }); return items[0] ?? null; };
+const isSuspended = async (userId: string) => { const { items } = await db.list(accountTable(userId), { limit: 1 }); return items[0]?.status === 'suspended'; };
+const revokeReaderSessions = async (userId: string, reason: string) => { const { items } = await db.list(readerSessionTable(userId), { limit: 500 }); const now = new Date().toISOString(); const updates = items.filter((item) => item.status === 'active').map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } })); if (updates.length) await db.update(readerSessionTable(userId), updates); };
+const createOwnerSecurityNotifications = async (alert: Record<string, unknown>) => { for (const email of ADMIN_EMAILS) await db.add(ownerNotificationTable(email), [{ type:'security_alert', alertId:alert.id??null, severity:alert.severity??'high', title:'Nightjar security alert', message:alert.reason??'Suspicious protected-content activity detected.', createdAt:new Date().toISOString(), read:false, recipientEmail:normalizeEmail(email) }]); };
+const createSecurityAlert = async (userId: string, details: Record<string, unknown>) => { const now=new Date().toISOString(); const recipients=ADMIN_EMAILS.map(normalizeEmail); const [id]=await db.add(securityAlertTable,[{userId,...details,recipients,createdAt:now,status:'open'}]); const alert={id:id??null,userId,...details,recipients,createdAt:now,status:'open'}; await createOwnerSecurityNotifications(alert); await db.add(securityCaseTable,[{alertId:id??null,userId,state:'detection',history:[{state:'detection',at:now,note:'Suspicious activity detected; alert sent to both Nightjar owners.'}],createdAt:now,updatedAt:now}]); return alert; };
+const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => { const now=Date.now(); const {items}=await db.list(securityEventTable,{limit:500}); const recent=items.filter((item)=>item.userId===userId && now-new Date(item.createdAt??0).getTime()<60000); const scriptId=String(signal.relatedId??''); const sameScriptRecent=recent.filter((item)=>String(item.relatedId??'')===scriptId); const score=(recent.length>=40?35:recent.length>=20?20:0)+(sameScriptRecent.length>=25?40:sameScriptRecent.length>=12?25:0)+(signal.eventType==='script_view'&&sameScriptRecent.length>=8?20:0)+(signal.eventType==='blocked_interaction'?8:0); if(score<50)return null; const existing=await db.list(securityAlertTable,{limit:100}); if(existing.items.some((item)=>item.userId===userId&&item.status==='open'&&now-new Date(item.createdAt??0).getTime()<600000))return null; return createSecurityAlert(userId,{severity:score>=75?'critical':'high',riskScore:score,reason:`Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,relatedId:scriptId||null,signal:{eventType:signal.eventType,recentEvents:recent.length,relatedEvents:sameScriptRecent.length}}); };
+
 const brandingTable = 'nightjar_branding';
 const ageTable = (userId: string) => `nightjar_age_${userId}`;
 const AGE_THRESHOLD = 18;
@@ -271,19 +288,15 @@ export const handler = router({
   'POST /api/protection/event': [
     requireAuth(),
     async (ctx) => {
-      const body = (ctx.body ?? {}) as { eventType?: string; relatedType?: string; relatedId?: string; severity?: string; summary?: string };
-      const allowed = new Set(['script_view', 'copy_blocked', 'cut_blocked', 'paste_blocked', 'contextmenu_blocked', 'selection_blocked', 'drag_blocked', 'print_blocked', 'export_requested', 'export_completed', 'permission_changed', 'script_access_requested', 'report_submitted']);
-      if (!body.eventType || !allowed.has(body.eventType)) return error('Unsupported protection event.', 400);
-      const [id] = await db.add('nightjar_evidence_' + ctx.user!.userId, [{
-        eventType: body.eventType,
-        severity: body.severity === 'high' || body.severity === 'medium' ? body.severity : 'low',
-        relatedType: body.relatedType ?? null,
-        relatedId: body.relatedId ?? null,
-        summary: (body.summary ?? 'Protected interaction recorded.').slice(0, 300),
-        actorUserId: ctx.user!.userId,
-        createdAt: new Date().toISOString(),
-      }]);
-      return json({ recorded: Boolean(id), eventId: id ?? null });
+      if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
+      const body = (ctx.body ?? {}) as { eventType?: string; relatedType?: string; relatedId?: string; severity?: string; summary?: string; sessionId?: string };
+      const allowed = new Set(['script_view','copy_blocked','cut_blocked','paste_blocked','contextmenu_blocked','selection_blocked','drag_blocked','print_blocked','export_requested','export_completed','permission_changed','script_access_requested','report_submitted','blocked_interaction','repeated_protected_interaction']);
+      if (!body.eventType || !allowed.has(body.eventType)) return error('Unsupported protection event.',400);
+      const record={eventType:body.eventType,severity:body.severity==='high'||body.severity==='medium'?body.severity:'low',relatedType:body.relatedType??null,relatedId:body.relatedId??null,sessionId:body.sessionId??null,summary:(body.summary??'Protected interaction recorded.').slice(0,300),actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()};
+      const [id]=await db.add('nightjar_evidence_'+ctx.user!.userId,[record]);
+      await db.add(securityEventTable,[{userId:ctx.user!.userId,...record}]);
+      const alert=await assessProtectedActivity(ctx.user!.userId,{eventType:body.eventType,relatedId:body.relatedId,sessionId:body.sessionId});
+      return json({recorded:Boolean(id),eventId:id??null,suspicious:Boolean(alert),alertId:alert?.id??null});
     },
   ],
   'POST /api/protection/report': [
@@ -345,25 +358,21 @@ export const handler = router({
   'GET /api/scripts/:scriptId': [
     requireAuth(),
     async (ctx) => {
-      const { items } = await db.list('nightjar_scripts', { limit: 50 });
-      const script = items.find((item) => item.id === ctx.params.scriptId);
-      if (!script) return error('Script not found.', 404);
-      const { items: accessItems } = await db.list('nightjar_script_access_' + ctx.user!.userId, { limit: 100 });
-      const access = accessItems.find((item) => item.scriptId === ctx.params.scriptId);
-      const owner = script.writerUserId === ctx.user!.userId;
-      if (!owner && !access) {
-        return json({ script: { id: script.id, title: script.title, synopsis: script.synopsis, excerpt: script.excerpt, genre: script.genre, runtimeTarget: script.runtimeTarget, characters: script.characters, ageClassification: script.ageClassification, writerUserId: script.writerUserId, writerName: script.writerName, version: script.version }, canReadFull: false, copyAllowed: false, exportAllowed: false });
-      }
-      await db.add('nightjar_evidence_' + ctx.user!.userId, [{
-        eventType: 'script_view',
-        severity: 'low',
-        relatedType: 'script',
-        relatedId: ctx.params.scriptId,
-        summary: 'Authorised full script view opened.',
-        actorUserId: ctx.user!.userId,
-        createdAt: new Date().toISOString(),
-      }]);
-      return json({ script, canReadFull: true, copyAllowed: owner || access.allowCopy === true, exportAllowed: owner || access.allowExport === true });
+      if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.',403);
+      const {items}=await db.list('nightjar_scripts',{limit:50});
+      const script=items.find((item)=>item.id===ctx.params.scriptId);
+      if(!script)return error('Script not found.',404);
+      const {items:accessItems}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100});
+      const access=accessItems.find((item)=>item.scriptId===ctx.params.scriptId && !item.revokedAt && (!item.expiresAt || new Date(item.expiresAt).getTime()>Date.now()));
+      const owner=script.writerUserId===ctx.user!.userId;
+      if(!owner&&!access)return json({script:{id:script.id,title:script.title,synopsis:script.synopsis,excerpt:script.excerpt,genre:script.genre,runtimeTarget:script.runtimeTarget,characters:script.characters,ageClassification:script.ageClassification,writerUserId:script.writerUserId,writerName:script.writerName,version:script.version},canReadFull:false,copyAllowed:false,exportAllowed:false});
+      const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase();
+      const expiresAt=new Date(Date.now()+15*60_000).toISOString();
+      const session={sessionId,scriptId:ctx.params.scriptId,accountId:ctx.user!.userId,accessGrantId:access?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:owner||access?.allowCopy===true,allowExport:owner||access?.allowExport===true};
+      await db.add(readerSessionTable(ctx.user!.userId),[session]);
+      await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'script_view',relatedId:ctx.params.scriptId,sessionId,createdAt:new Date().toISOString()}]);
+      await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'script_view',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,sessionId,summary:'Authorised full script view opened in a short-lived protected reader session.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
+      return json({script,canReadFull:true,copyAllowed:session.allowCopy,exportAllowed:session.allowExport,readerSession:{sessionId,expiresAt}});
     },
   ],
   'POST /api/scripts/:scriptId/request-access': [
@@ -388,19 +397,19 @@ export const handler = router({
   'POST /api/scripts/:scriptId/permissions': [
     requireAuth(),
     async (ctx) => {
-      const body = (ctx.body ?? {}) as { creatorUserId?: string; allowCopy?: boolean; allowExport?: boolean };
-      if (!body.creatorUserId) return error('Creator account is required.', 400);
-      const { items } = await db.list('nightjar_scripts', { limit: 50 });
-      const script = items.find((item) => item.id === ctx.params.scriptId);
-      if (!script || script.writerUserId !== ctx.user!.userId) return error('Writer ownership is required.', 403);
-      const table = 'nightjar_script_access_' + body.creatorUserId;
-      const existing = await db.list(table, { limit: 100 });
-      const record = { scriptId: ctx.params.scriptId, writerUserId: ctx.user!.userId, collaborationId: body.creatorUserId + ':' + ctx.params.scriptId, allowCopy: body.allowCopy === true, allowExport: body.allowExport === true, grantedAt: new Date().toISOString() };
-      const match = existing.items.find((item) => item.scriptId === ctx.params.scriptId);
-      if (match) await db.update(table, [{ id: match.id, record }]);
-      else await db.add(table, [record]);
-      await db.add('nightjar_evidence_' + ctx.user!.userId, [{ eventType: 'permission_changed', severity: 'low', relatedType: 'script', relatedId: ctx.params.scriptId, summary: 'Writer changed script copy/export permissions.', actorUserId: ctx.user!.userId, createdAt: new Date().toISOString() }]);
-      return json({ allowCopy: record.allowCopy, allowExport: record.allowExport });
+      const body=(ctx.body??{}) as {creatorUserId?:string;allowCopy?:boolean;allowExport?:boolean;expiresAt?:string|null;revoke?:boolean};
+      if(!body.creatorUserId)return error('Creator account is required.',400);
+      const {items}=await db.list('nightjar_scripts',{limit:50});
+      const script=items.find((item)=>item.id===ctx.params.scriptId);
+      if(!script||script.writerUserId!==ctx.user!.userId)return error('Writer ownership is required.',403);
+      const table='nightjar_script_access_'+body.creatorUserId;
+      const existing=await db.list(table,{limit:100});
+      const match=existing.items.find((item)=>item.scriptId===ctx.params.scriptId);
+      const record={scriptId:ctx.params.scriptId,writerUserId:ctx.user!.userId,collaborationId:body.creatorUserId+':'+ctx.params.scriptId,allowCopy:body.allowCopy===true,allowExport:body.allowExport===true,grantedAt:match?.grantedAt??new Date().toISOString(),expiresAt:body.expiresAt??null,revokedAt:body.revoke?new Date().toISOString():null};
+      if(match)await db.update(table,[{id:match.id,record}]); else await db.add(table,[record]);
+      await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'permission_changed',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,summary:body.revoke?'Writer revoked script access.':'Writer changed script read/copy/export permissions.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
+      if(body.revoke)await revokeReaderSessions(body.creatorUserId,'Writer revoked protected script access.');
+      return json({allowCopy:record.allowCopy,allowExport:record.allowExport,expiresAt:record.expiresAt,revoked:body.revoke===true});
     },
   ],
   'POST /api/admin/creator-applications/:applicationId/decision': [
@@ -425,17 +434,38 @@ export const handler = router({
       return json({ application: nextApplication });
     },
   ],
-  'GET /api/admin/overview':
+  'GET /api/profile/me': [requireAuth(), async (ctx) => json({ profile: await getProfile(ctx.user!.userId) })],
+  'PUT /api/profile/me': [
     requireAuth(),
+    async (ctx) => {
+      const body=(ctx.body??{}) as NightjarProfile; const handle=cleanHandle(body.handle);
+      if(handle){ const {items}=await db.list(accountIndexTable,{limit:1000}); if(items.some((item)=>item.userId!==ctx.user!.userId&&cleanHandle(item.handle)===handle)) return error('That @handle is already in use.',409); }
+      const current=await getProfile(ctx.user!.userId); const profile:NightjarProfile={displayName:String(body.displayName??ctx.user!.name??'Nightjar account').trim().slice(0,80),handle:handle||null,headline:String(body.headline??'').trim().slice(0,120),bio:String(body.bio??'').trim().slice(0,500),pronouns:String(body.pronouns??'').trim().slice(0,60),avatarInitials:String(body.avatarInitials??'').trim().slice(0,4).toUpperCase(),avatarTone:String(body.avatarTone??'plum').trim().slice(0,24),favouriteTags:cleanList(body.favouriteTags),favouriteTropes:cleanList(body.favouriteTropes),favouriteCategories:cleanList(body.favouriteCategories),roleFocus:cleanList(body.roleFocus),publicProfile:body.publicProfile!==false,createdAt:current?.createdAt??new Date().toISOString(),updatedAt:new Date().toISOString()};
+      if(current){const {items}=await db.list(profileTable(ctx.user!.userId),{limit:1}); if(items[0]) await db.update(profileTable(ctx.user!.userId),[{id:items[0].id,record:profile}]);} else await db.add(profileTable(ctx.user!.userId),[profile]);
+      const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===ctx.user!.userId); if(indexed) await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,name:profile.displayName,handle:profile.handle}}]);
+      await db.add(tasteTable(ctx.user!.userId),[{type:'declared_preferences',tags:profile.favouriteTags,tropes:profile.favouriteTropes,categories:profile.favouriteCategories,updatedAt:profile.updatedAt}]);
+      return json({profile});
+    },
+  ],
+  'GET /api/profile/:handle': [async (ctx) => { const handle=cleanHandle(ctx.params.handle); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const account=indexes.find((item)=>cleanHandle(item.handle)===handle); if(!account)return error('Profile not found.',404); const profile=await getProfile(account.userId); if(!profile?.publicProfile)return error('Profile not found.',404); return json({profile:{...profile,role:account.role}}); }],
+  'POST /api/taste/event': [requireAuth(), async (ctx) => { const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; if(!body.eventType)return error('Taste event type is required.',400); await db.add(tasteTable(ctx.user!.userId),[{type:body.eventType,contentId:body.contentId??null,category:body.category??null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Number(body.durationSeconds??0)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
+  'GET /api/taste/profile': [requireAuth(), async (ctx) => { const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])])weights[value]=(weights[value]??0)+3; for(const item of items)for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])])weights[value]=(weights[value]??0)+(item.type==='skip'||item.type==='hide'?-0.5:item.completed?2:1); return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
+  'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
+  'GET /api/security/notifications': [requireAuth(), withScopes('email'), async (ctx) => { if(!isAdmin(ctx.user!.email))return json({notifications:[]}); const {items}=await db.list(ownerNotificationTable(ctx.user!.email),{limit:100}); return json({notifications:items}); }],
+  'GET /api/admin/security-alerts': [requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(securityAlertTable,{limit:100}); return json({alerts:items}); }],
+  'POST /api/admin/security-alerts/:alertId/suspend': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const {items}=await db.list(securityAlertTable,{limit:100}); const alert=items.find((item)=>item.id===ctx.params.alertId); if(!alert)return error('Security alert not found.',404); const userId=String(alert.userId); const {items:accounts}=await db.list(accountTable(userId),{limit:1}); if(accounts[0])await db.update(accountTable(userId),[{id:accounts[0].id,record:{...accounts[0],status:'suspended',suspendedAt:new Date().toISOString(),suspendedBy:ctx.user!.email??null}}]); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===userId); if(indexed)await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,status:'suspended'}}]); await revokeReaderSessions(userId,'Account suspended after security review.'); await db.update(securityAlertTable,[{id:alert.id,record:{...alert,status:'actioned',action:'suspended',actionedAt:new Date().toISOString(),actionedBy:ctx.user!.email??null}}]); await db.add(securityEventTable,[{userId,eventType:'account_suspended',actorEmail:ctx.user!.email??null,relatedId:alert.id,createdAt:new Date().toISOString()}]); return json({suspended:true,userId}); }],
+
   'GET /api/admin/overview': [
     requireAdminEmailAllowlist(ADMIN_EMAILS),
     async () => {
       const { items: accounts } = await db.list(accountIndexTable, { limit: 500 });
       const { items: subscriptions } = await db.list(subscriptionTable, { limit: 500 });
-      const counts = { listener: 0, creator: 0, admin: ADMIN_EMAILS.length };
+      const counts = { listener: 0, creator: 0, writer: 0, editor: 0, admin: ADMIN_EMAILS.length };
       accounts.forEach((account) => {
         if (account.role === 'listener') counts.listener += 1;
         if (account.role === 'creator') counts.creator += 1;
+        if (account.role === 'writer') counts.writer += 1;
+        if (account.role === 'editor') counts.editor += 1;
       });
       const subscriptionCounts = { active: 0, trialing: 0, pastDue: 0, cancelled: 0 };
       subscriptions.forEach((subscription) => {
@@ -447,9 +477,9 @@ export const handler = router({
       return json({
         people: {
           counts,
-          total: counts.listener + counts.creator + counts.admin,
-          accounts: accounts.filter((account) => account.role === 'listener' || account.role === 'creator').slice(0, 100),
-          administrators: ADMIN_EMAILS.map((email) => ({ email, role: 'admin', status: 'active' })),
+          total: counts.listener + counts.creator + counts.writer + counts.editor + counts.admin,
+          accounts: accounts.filter((account) => ['listener','creator','writer','editor'].includes(account.role)).slice(0, 100),
+          administrators: ADMIN_EMAILS.map((email) => ({ email, role: 'admin', status: 'active', designation: 'Owner / Administrator' })),
         },
         subscriptions: { ...subscriptionCounts, totalTracked: subscriptions.length, billingConnected: subscriptions.length > 0 },
       });

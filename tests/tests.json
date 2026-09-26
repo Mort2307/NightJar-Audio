@@ -3,49 +3,185 @@
     "name": "Admin operates the live operations dashboard",
     "sanity": true,
     "viewport": "desktop",
-    "covers": ["administrator authentication", "People account counts", "creator approval queue", "subscription ledger", "revenue controls", "listening economics", "safety navigation", "daily spotlight rotation administration context"],
+    "covers": [
+      "administrator authentication",
+      "People account counts",
+      "creator approval queue",
+      "subscription ledger",
+      "revenue controls",
+      "listening economics",
+      "safety navigation",
+      "daily spotlight rotation administration context"
+    ],
     "description": "Verifies every primary administrator dashboard tile opens a usable operational surface instead of acting as decorative UI.",
-    "steps": ["Sign in with an approved Nightjar administrator email", "Open Admin", "Open Listener People, Creator People and Administrator People", "Open Creator Approvals and inspect the queue", "Open Revenue, Subscriptions and Listening Economics", "Open Safety / Protection Centre"],
+    "steps": [
+      "Sign in with an approved Nightjar administrator email",
+      "Open Admin",
+      "Open Listener People, Creator People and Administrator People",
+      "Open Creator Approvals and inspect the queue",
+      "Open Revenue, Subscriptions and Listening Economics",
+      "Open Safety / Protection Centre"
+    ],
     "expected": "Each administrator tile opens a functional view or protected operational destination, and no tile relies on a notification-only placeholder."
   },
   {
     "name": "Admin previews every account role without changing administrator access",
     "viewport": "desktop",
-    "covers": ["safe role preview", "listener preview", "creator preview", "writer preview", "editor preview", "role separation", "Nightjar branded app shell"],
+    "covers": [
+      "safe role preview",
+      "listener preview",
+      "creator preview",
+      "writer preview",
+      "editor preview",
+      "role separation",
+      "Nightjar branded app shell"
+    ],
     "description": "Verifies the administrator can inspect all role-facing product surfaces while the real backend role remains Administrator.",
-    "steps": ["Open Admin as an approved administrator", "Preview Listener", "Preview Creator", "Preview Writer and create a local draft in preview", "Preview Editor and inspect the editorial queue", "Return to Admin"],
+    "steps": [
+      "Open Admin as an approved administrator",
+      "Preview Listener",
+      "Preview Creator",
+      "Preview Writer and create a local draft in preview",
+      "Preview Editor and inspect the editorial queue",
+      "Return to Admin"
+    ],
     "expected": "Each role preview renders its own surface, the preview banner identifies the real Administrator role, and returning to Admin restores the operational dashboard."
   },
   {
     "name": "Daily spotlights rotate fairly in a fixed five-place order",
     "viewport": "mobile",
-    "covers": ["creator spotlight", "writer spotlight", "24-hour rotation", "fixed-order fairness", "new edition discovery"],
+    "covers": [
+      "creator spotlight",
+      "writer spotlight",
+      "24-hour rotation",
+      "fixed-order fairness",
+      "new edition discovery"
+    ],
     "description": "Verifies the discovery page presents separate creator and writer spotlight tiles using a deterministic one-day rotation rather than random reshuffling.",
-    "steps": ["Open the Nightjar discovery page", "Inspect the Creator Spotlight tile", "Inspect the Writer Spotlight tile", "Confirm both show a one-day spotlight window and a new edition or script", "Return on a later day and confirm the rotation advances to the next fixed position"],
-    "expected": "Exactly one creator and one writer occupy the daily spotlight, each remains featured for the full day, and the sequence advances in the same fixed order across the five-place cycle." 
+    "steps": [
+      "Open the Nightjar discovery page",
+      "Inspect the Creator Spotlight tile",
+      "Inspect the Writer Spotlight tile",
+      "Confirm both show a one-day spotlight window and a new edition or script",
+      "Return on a later day and confirm the rotation advances to the next fixed position"
+    ],
+    "expected": "Exactly one creator and one writer occupy the daily spotlight, each remains featured for the full day, and the sequence advances in the same fixed order across the five-place cycle."
   },
   {
     "name": "Creator sees transparent listening economics and protected script access",
     "viewport": "mobile",
-    "covers": ["creator onboarding", "creator listening analytics", "creator revenue attribution", "protected script reader"],
+    "covers": [
+      "creator onboarding",
+      "creator listening analytics",
+      "creator revenue attribution",
+      "protected script reader"
+    ],
     "description": "Verifies the Creator surface presents listening and revenue attribution while keeping manuscript copy and export permissions separate.",
-    "steps": ["Sign in and choose Creator", "Open Creator Studio", "Inspect listening and revenue metrics", "Open the protected script reader"],
+    "steps": [
+      "Sign in and choose Creator",
+      "Open Creator Studio",
+      "Inspect listening and revenue metrics",
+      "Open the protected script reader"
+    ],
     "expected": "Creator Studio shows listening and attribution information, and the protected script remains readable with copy and export off."
   },
   {
     "name": "Use the Protection Centre",
     "viewport": "mobile",
-    "covers": ["Protection Centre", "incident reporting", "case creation", "evidence log"],
+    "covers": [
+      "Protection Centre",
+      "incident reporting",
+      "case creation",
+      "evidence log"
+    ],
     "description": "Verifies a signed-in user can submit a protection report and inspect supporting evidence without exposing clipboard contents.",
-    "steps": ["Open Protection Centre", "Choose Copyright / script theft", "Describe what happened", "Submit the protected report", "Refresh the evidence view"],
+    "steps": [
+      "Open Protection Centre",
+      "Choose Copyright / script theft",
+      "Describe what happened",
+      "Submit the protected report",
+      "Refresh the evidence view"
+    ],
     "expected": "Nightjar creates a case ID, the case appears in My Cases, and evidence records are available as supporting signals."
   },
   {
     "name": "Normal account cannot access administrator overview",
     "viewport": "desktop",
-    "covers": ["authorization boundary", "admin separation", "protected admin API"],
+    "covers": [
+      "authorization boundary",
+      "admin separation",
+      "protected admin API"
+    ],
     "description": "Verifies administrator-only operational data is not available to a normal listener or creator account.",
-    "steps": ["Sign in with a normal Nightjar account", "Open the account as a Listener", "Attempt to open administrator controls"],
+    "steps": [
+      "Sign in with a normal Nightjar account",
+      "Open the account as a Listener",
+      "Attempt to open administrator controls"
+    ],
     "expected": "The normal account remains outside the administrator area and cannot access administrator-only People, approvals or subscription data."
+  },
+  {
+    "name": "Every account can build a personalised Nightjar profile",
+    "viewport": "mobile",
+    "covers": [
+      "chosen name",
+      "unique handle",
+      "bio",
+      "favourite tags",
+      "favourite tropes",
+      "favourite categories",
+      "public profile"
+    ],
+    "description": "Verifies the shared identity layer is available independently of account role.",
+    "steps": [
+      "Sign in",
+      "Open Profile",
+      "Set a chosen name and unique @handle",
+      "Add favourite tags, tropes and categories",
+      "Save the profile",
+      "Reload Profile"
+    ],
+    "expected": "The personalised profile persists and remains separate from the account's permission role."
+  },
+  {
+    "name": "Protected script activity creates a dual-owner security alert",
+    "viewport": "desktop",
+    "covers": [
+      "protected reader",
+      "security signals",
+      "dual-owner notification",
+      "audit trail",
+      "account suspension"
+    ],
+    "description": "Verifies qualifying protected-content activity becomes a retained security alert addressed to both Nightjar owners.",
+    "steps": [
+      "Open a protected script with an approved account",
+      "Generate qualifying high-volume protected-content events in a test environment",
+      "Open Administrator",
+      "Open Security / Owner Alerts"
+    ],
+    "expected": "A retained security alert identifies the account/session/script signals and records both owner recipients; an administrator can suspend the account, which revokes active reader sessions."
+  },
+  {
+    "name": "People directory represents every Nightjar account role",
+    "viewport": "desktop",
+    "covers": [
+      "administrators",
+      "creators",
+      "listeners",
+      "writers",
+      "editors",
+      "role counts"
+    ],
+    "description": "Verifies administrator People is a real five-role directory rather than an administrator-only/partial list.",
+    "steps": [
+      "Open Admin",
+      "Open Listener People",
+      "Open Creator People",
+      "Open Writer People",
+      "Open Editor People",
+      "Open Administrator People"
+    ],
+    "expected": "All five roles have dedicated directory surfaces, counts come from real account data except the two configured owner administrators, and no fake account records are created."
   }
 ]
