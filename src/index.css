@@ -1179,3 +1179,33 @@ button:focus-visible {
   .profile-editor-grid,.taste-panel { grid-template-columns:1fr; }
   .security-alert-row { grid-template-columns:1fr; }
 }
+
+
+.profile-avatar-preview {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  margin: 2px 0 2px;
+  border-radius: 19px;
+  border: 1px solid var(--line-soft);
+  background: linear-gradient(145deg, rgba(112,68,103,.48), rgba(28,22,29,.92));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+.profile-avatar-preview[data-tone="wine"] { background: linear-gradient(145deg, rgba(103,43,67,.54), rgba(29,20,27,.95)); }
+.profile-avatar-preview[data-tone="mauve"] { background: linear-gradient(145deg, rgba(121,94,120,.48), rgba(28,24,31,.95)); }
+.profile-avatar-preview[data-tone="ivory"] { background: linear-gradient(145deg, rgba(179,164,172,.40), rgba(38,31,38,.95)); }
+.profile-avatar-preview strong { font-family: Georgia, serif; font-size: 21px; font-weight: 400; color: var(--ivory); letter-spacing: .08em; }
+.profile-inline-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.profile-inline-fields select { width: 100%; box-sizing: border-box; border: 1px solid var(--line-soft); border-radius: 11px; padding: 11px 12px; background: rgba(0,0,0,.2); color: var(--ivory); font: inherit; font-size: 10px; }
+.profile-public-preview { display:flex; justify-content:space-between; align-items:flex-end; gap:20px; padding:22px; margin-top:14px; }
+.profile-public-preview h3 { margin: 5px 0 4px; font-family: Georgia, serif; font-size: 23px; font-weight: 400; }
+.profile-public-preview h3 span { color: var(--muted-2); font-family: inherit; font-size: 13px; margin-left: 7px; }
+.profile-public-preview p { margin:0; color:var(--muted-2); font-size:10px; line-height:1.5; }
+.profile-public-preview em { color:var(--muted-2); font-size:8px; font-style:normal; white-space:nowrap; }
+.profile-preview-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:11px; }
+.profile-preview-chips span { padding:6px 8px; border-radius:999px; border:1px solid var(--line-soft); color:#d6cad3; font-size:8px; }
+@media (max-width: 760px) {
+  .profile-inline-fields { grid-template-columns: 1fr; }
+  .profile-public-preview { align-items:flex-start; flex-direction:column; }
+}
