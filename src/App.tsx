@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, auth } from '@appdeploy/client';
 import {
   ArrowRight,
@@ -1239,10 +1239,32 @@ function App() {
 
         {view === 'editor' && effectiveRole === 'editor' && (
           <section className="page-wrap role-studio-page">
-            <div className="page-heading"><div><p className="eyebrow"><FileCheck2 size={14}/> EDITORIAL QUEUE</p><h1>Review work professionally.</h1><p>Only assigned live manuscripts appear in your queue.</p></div></div>
-            <div className="editor-queue-grid">{editorQueue.map((script:any)=><button key={script.id} className={editorSelected?.id===script.id?'editor-queue-card active':'editor-queue-card'} onClick={()=>setEditorSelected(script)}><div className="editor-status-line"><span>{script.status}</span><strong>v{script.version}</strong></div><h2>{script.title}</h2><p>{script.lastEditorialComment||'No editorial note recorded yet.'}</p></button>)}</div>
-            {!editorQueue.length&&<div className="people-empty"><FileCheck2 size={18}/><strong>No editorial assignments.</strong><span>An administrator must assign a manuscript before review work can begin.</span></div>}
-            {editorSelected&&<article className="panel-card editorial-review-panel"><div className="panel-title"><div><span className="mini-label">CURRENT REVIEW</span><h2>{editorSelected.title}</h2></div><span className="status-pill">{editorSelected.status}</span></div><p className="panel-note">{editorSelected.lastEditorialComment||'No prior note.'}</p><div className="script-card-actions"><button className="secondary-button" onClick={()=>void reviewEditorScript('Under review')}>Mark under review</button><button className="secondary-button" onClick={()=>void reviewEditorScript('Revision requested')}>Request revision</button><button className="primary-button" onClick={()=>void reviewEditorScript('Approved')}>Approve</button><button className="ghost-button" onClick={()=>void reviewEditorScript('Rejected')}>Reject</button></div></article>}
+            <div className="page-heading">
+              <div><p className="eyebrow"><FileCheck2 size={14} /> EDITORIAL QUEUE</p><h1>Review work professionally.</h1><p>Only manuscripts assigned to your editor account appear here.</p></div>
+            </div>
+            <div className="editor-queue-grid">
+              {editorQueue.map((script: any) => (
+                <button key={script.id} className={editorSelected?.id === script.id ? 'editor-queue-card active' : 'editor-queue-card'} onClick={() => setEditorSelected(script)}>
+                  <div className="editor-status-line"><span>{script.status ?? 'Submitted'}</span><strong>v{script.version ?? 1}</strong></div>
+                  <h2>{script.title}</h2>
+                  <p>{script.lastEditorialComment || 'No editorial note recorded yet.'}</p>
+                </button>
+              ))}
+            </div>
+            {!editorQueue.length && <div className="people-empty"><FileCheck2 size={18} /><strong>No editorial assignments.</strong><span>An administrator must assign a live manuscript to you before review work can begin.</span></div>}
+            {editorSelected && (
+              <article className="panel-card editorial-review-panel">
+                <div className="panel-title"><div><span className="mini-label">CURRENT REVIEW</span><h2>{editorSelected.title}</h2></div><span className="status-pill">{editorSelected.status}</span></div>
+                <p className="panel-note">{editorSelected.lastEditorialComment || 'No previous editorial note.'}</p>
+                <div className="script-card-actions">
+                  <button className="secondary-button" onClick={() => void reviewEditorScript('Under review')}>Mark under review</button>
+                  <button className="secondary-button" onClick={() => void reviewEditorScript('Revision requested')}>Request revision</button>
+                  <button className="primary-button" onClick={() => void reviewEditorScript('Approved')}>Approve</button>
+                  <button className="ghost-button" onClick={() => void reviewEditorScript('Rejected')}>Reject</button>
+                </div>
+              </article>
+            )}
+            <div className="protection-banner"><FileCheck2 size={19} /><div><strong>EDITOR BOUNDARY</strong><span>Editorial decisions are recorded against the assigned manuscript. Administrator authority remains separate.</span></div></div>
           </section>
         )}
 
@@ -1271,10 +1293,10 @@ function App() {
         )}
       </main>
 
-      <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <span className="nightjar-mark"><Moon size={15} /></span>}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? `${accountLabel} account` : 'Preview access'} · Illustrative demo build</span></footer>
+      <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <span className="nightjar-mark"><Moon size={15} /></span>}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
-      {protectedReaderOpen && <div className="protected-reader-backdrop" role="dialog" aria-modal="true" aria-label="Protected full script"><section className="protected-reader"><header><div><span className="mini-label">NIGHTJAR / PROTECTED SCRIPT</span><h2>Night Train</h2><p>Performance draft v3 · Read-only collaboration view</p></div><button className="icon-button" onClick={() => setProtectedReaderOpen(false)} aria-label="Close protected script"><X size={18} /></button></header><div className="reader-notice"><ShieldCheck size={15} /><span>This manuscript is being shown to you so you can decide whether you want to collaborate. Copy, cut, print and export are disabled unless the writer explicitly grants them.</span></div><article className="reader-body" onCopy={(event) => { event.preventDefault(); void recordProtectionEvent('copy_blocked'); notify('Copy is disabled for this protected script.'); }} onCut={(event) => { event.preventDefault(); void recordProtectionEvent('cut_blocked'); }} onPaste={(event) => { event.preventDefault(); void recordProtectionEvent('paste_blocked'); }} onContextMenu={(event) => { event.preventDefault(); void recordProtectionEvent('contextmenu_blocked'); }} onDragStart={(event) => { event.preventDefault(); void recordProtectionEvent('drag_blocked'); }} onSelect={() => { void recordProtectionEvent('selection_blocked'); }}><p className="reader-watermark">NIGHTJAR · READ-ONLY COLLABORATION COPY · ACCESS RECORDED</p><h3>Scene One — The Last Train</h3><p>The station had emptied by the time the final carriage arrived. She stood beneath the old clock, listening to the rain tick against the glass canopy.</p><p>There was no announcement. No footsteps. Only the low mechanical hum of the doors preparing to open, followed by the soft pressure change of the carriage beyond them.</p><p>She stepped inside and looked down the length of the train. Warm light travelled across the seats in narrow bands, leaving the spaces between them deliberately dark.</p><p>“You made it.”</p><p>The voice came from the far end of the carriage. Familiar enough to stop her in place.</p><p>She smiled, but did not answer immediately. The doors closed behind her, and the train began to move.</p><p>From here the story continues through the agreed performance draft. The complete manuscript remains readable in this protected viewer while permissions stay with the writer.</p></article><footer><span><LockKeyhole size={14} /> Copy off</span><span><Download size={14} /> Export off</span><span>Access is logged</span></footer></section></div>}
-      {playing && <div className="player-dock"><div className="dock-art"><Moon size={16} /></div><div className="dock-copy"><span>NOW PREVIEWING</span><strong>{playing}</strong></div><div className="dock-wave">{Array.from({ length: 18 }).map((_, index) => <span key={index} style={{ height: `${28 + ((index * 19) % 60)}%` }} />)}</div><button className="dock-play" onClick={() => setPlaying(null)} aria-label="Pause preview"><Pause size={17} /></button><span className="dock-time">00:00 / preview</span></div>}
+      {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id)} notify={notify} />}
+      {playing && <AudioDock track={tracks.find((track) => track.id === playing) ?? null} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} />}
       {toast && <div className="toast">{toast}</div>}
 
       {user && !rolePicker && (
@@ -1285,5 +1307,94 @@ function App() {
     </div>
   );
 }
+
+function releaseToTrack(release: any): Track {
+  return {
+    id: String(release.id),
+    title: String(release.title ?? 'Untitled release'),
+    creator: String(release.creatorName ?? 'Nightjar creator'),
+    duration: release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',
+    category: String(release.category ?? 'Audio'),
+    descriptor: String(release.description ?? 'No description supplied.'),
+    audioUrl: release.audioUrl ?? null,
+    artworkUrl: release.artworkUrl ?? null,
+    creatorUserId: release.creatorUserId,
+  };
+}
+
+function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason }: { track: Track; playing: boolean; favourite: boolean; onPlay: (track: Track) => void; onFavourite: () => void; reason?: string }) {
+  return <article className="track-card">
+    <div className="track-cover" style={track.artworkUrl ? { backgroundImage: 'url("' + track.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
+      <span className="track-index">{track.category}</span>
+      {!track.artworkUrl && <div className="track-cover-mark"><Moon size={22} /></div>}
+      <button className="cover-play" disabled={!track.audioUrl} onClick={() => onPlay(track)} aria-label={!track.audioUrl ? 'Audio not connected' : playing ? 'Pause ' + track.title : 'Play ' + track.title}>
+        {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+      </button>
+    </div>
+    <div className="track-body">
+      <div className="track-type"><span>{track.creator}</span><span>{track.duration}</span></div>
+      <h3>{track.title}</h3>
+      <p>{track.descriptor}</p>
+      <div className="track-footer"><span className="creator-link">{track.audioUrl ? 'Playable audio' : 'Audio not connected'}</span><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove favourite' : 'Add favourite'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div>
+      {reason && <p className="recommendation-reason"><Sparkles size={12} />{reason}</p>}
+    </div>
+  </article>;
+}
+
+function ProtectedReader({ data, close, record, notify }: { data: any; close: () => void; record: (eventType: string) => void; notify: (message: string) => void }) {
+  const script = data.script ?? {};
+  const content = String(script.content ?? '');
+  useEffect(() => {
+    const original = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = original; };
+  }, []);
+  return <div className="protected-reader-backdrop" role="dialog" aria-modal="true" aria-label="Protected manuscript reader">
+    <section className="protected-reader" onCopy={(event) => { event.preventDefault(); record('copy_blocked'); notify('Copy is disabled for this protected manuscript.'); }} onCut={(event) => { event.preventDefault(); record('cut_blocked'); }} onPaste={(event) => { event.preventDefault(); record('paste_blocked'); }} onContextMenu={(event) => { event.preventDefault(); record('contextmenu_blocked'); }} onDragStart={(event) => { event.preventDefault(); record('drag_blocked'); }}>
+      <header><div><span className="mini-label">NIGHTJAR / PROTECTED SCRIPT</span><h2>{script.title ?? 'Protected manuscript'}</h2><p>Reader session {data.readerSession?.sessionId ?? 'authorised'} · expires {data.readerSession?.expiresAt ? new Date(data.readerSession.expiresAt).toLocaleTimeString('en-GB') : 'soon'}</p></div><button className="icon-button" onClick={close} aria-label="Close protected manuscript"><X size={18} /></button></header>
+      <div className="reader-notice"><ShieldCheck size={15} /><span>Access is granted by the backend. Client-side restrictions are deterrents, not the security boundary.</span></div>
+      <article className="reader-body"><p className="reader-watermark">NIGHTJAR · AUTHORISED READER SESSION · {data.readerSession?.sessionId ?? ''}</p>{content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : <p>No manuscript content supplied.</p>}</article>
+      <footer><span><LockKeyhole size={14} /> Copy {data.copyAllowed ? 'allowed by writer' : 'off'}</span><span><Download size={14} /> Export {data.exportAllowed ? 'allowed by writer' : 'off'}</span><span>Access logged</span></footer>
+    </section>
+  </div>;
+}
+
+function AudioDock({ track, intent, onClose, notify }: { track: Track | null; intent: string; onClose: () => void; notify: (message: string) => void }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastEvent = useRef(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(1);
+  const [volume, setVolume] = useState(1);
+
+  useEffect(() => {
+    const node = audioRef.current;
+    if (!node || !track?.audioUrl) return;
+    lastEvent.current = 0;
+    setPosition(0);
+    setDuration(1);
+    void node.play().catch(() => notify('Press play to start this release.'));
+    void api.post('/api/listening/event', { releaseId: track.id, eventType: 'start', positionSeconds: 0, durationSeconds: 0, intent }).catch(() => {});
+    return () => { node.pause(); };
+  }, [track?.id, track?.audioUrl, intent]);
+
+  useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
+
+  if (!track?.audioUrl) return null;
+
+  const formatTime = (seconds: number) => !Number.isFinite(seconds) ? '0:00' : Math.floor(seconds / 60) + ':' + String(Math.floor(seconds % 60)).padStart(2, '0');
+
+  return <div className="player-dock">
+    <audio ref={audioRef} src={track.audioUrl} preload="metadata" onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 1)} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={(event) => { const node = event.currentTarget; setPosition(node.currentTime); if (node.currentTime - lastEvent.current >= 15) { lastEvent.current = node.currentTime; void api.post('/api/listening/event', { releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {}); } }} onEnded={() => { setIsPlaying(false); setPosition(duration); void api.post('/api/listening/event', { releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {}); }} />
+    <div className="dock-art">{track.artworkUrl ? <img src={track.artworkUrl} alt="" /> : <Moon size={16} />}</div>
+    <div className="dock-copy"><span>{track.category}</span><strong>{track.title}</strong><small>{track.creator}</small></div>
+    <div className="dock-time">{formatTime(position)} / {formatTime(duration)}</div>
+    <input className="dock-progress" type="range" min="0" max={duration} step="0.1" value={Math.min(position, duration)} onChange={(event) => { const value = Number(event.target.value); setPosition(value); if (audioRef.current) audioRef.current.currentTime = value; }} aria-label="Playback position" />
+    <button className="dock-play" onClick={() => { const node = audioRef.current; if (!node) return; if (node.paused) void node.play(); else node.pause(); }} aria-label={isPlaying ? 'Pause' : 'Play'}>{isPlaying ? <Pause size={17} /> : <Play size={17} fill="currentColor" />}</button>
+    <div className="dock-volume"><Volume2 size={15} /><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume" /></div>
+    <button className="dock-close" onClick={onClose} aria-label="Close player"><X size={15} /></button>
+  </div>;
+}
+
 
 export default App;
