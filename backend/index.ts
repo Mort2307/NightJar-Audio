@@ -634,8 +634,28 @@ export const handler = router({
     async () => {
       const { items } = await db.list('nightjar_spotlights', { limit: 100 });
       const today = new Date().toISOString().slice(0, 10);
-      const active = items.filter((item) => item.date === today).sort((a, b) => Number(a.slot ?? 0) - Number(b.slot ?? 0));
-      return json({ date: today, spotlights: active.slice(0, 5) });
+      const active = items.filter((item) => item.date === today).sort((a, b) => Number(a.slot ?? 0) - Number(b.slot ?? 0)).slice(0, 5);
+      const spotlights = await Promise.all(active.map(async (item) => {
+        const target = String(item.targetId ?? '');
+        const profile = await getProfile(target);
+        let release: any = null;
+        if (item.releaseId) {
+          const { items: releases } = await db.list(releaseTable, { limit: 500 });
+          release = releases.find((candidate) => candidate.id === item.releaseId) ?? null;
+        }
+        return {
+          ...item,
+          kind: item.kind === 'writer' ? 'writer' : 'creator',
+          name: profile?.displayName ?? null,
+          handle: profile?.handle ?? null,
+          initials: profile?.avatarInitials ?? null,
+          title: release?.title ?? null,
+          edition: item.kind === 'writer' ? 'New script' : 'New edition',
+          detail: release?.description ?? profile?.headline ?? null,
+          releaseId: release?.id ?? item.releaseId ?? null,
+        };
+      }));
+      return json({ date: today, spotlights });
     },
   ],
   'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); return json({ follows: items }); }],
