@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
-type AgeStage = 'gate' | 'assurance';
+type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor';
 
@@ -437,7 +437,7 @@ function App() {
       setAgeVerified(data?.verified === true);
       setAgeConfigured(data?.configured === true);
       setAgeStatus(data?.status === 'COMPLETE' ? 'COMPLETE' : data?.status === 'PENDING' ? 'PENDING' : data?.status === 'FAIL' ? 'FAIL' : 'NOT_STARTED');
-      if (data?.verified === true) setAgeStage('assurance');
+      if (data?.verified === true) setAgeStage('app');
       return data?.verified === true;
     } catch {
       return false;
@@ -451,7 +451,7 @@ function App() {
       if (data?.verified) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
-        setAgeStage('assurance');
+        setAgeStage('app');
         notify('Sandbox age verification marked complete for this administrator test account.');
       }
     } catch {
@@ -476,7 +476,7 @@ function App() {
       if (data?.verified === true) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
-        setAgeStage('assurance');
+        setAgeStage('app');
         notify('Age verification already completed.');
       } else if (data?.launchUrl) {
         setAgeStatus('PENDING');
@@ -886,8 +886,8 @@ function App() {
             <div><ShieldCheck size={18} /><div><strong>Adults only</strong><span>Age assurance protects access to the adult catalogue.</span></div></div>
             <div><Headphones size={18} /><div><strong>Audio first</strong><span>Built around voice, atmosphere and headphone immersion.</span></div></div>
           </div>
-          <button className="primary-button wide-button" onClick={() => setAgeStage('assurance')}>
-            Continue to age assurance <ArrowRight size={17} />
+          <button className="primary-button wide-button" disabled={accountLoading} onClick={() => void signIn()}>
+            {accountLoading ? 'Opening secure sign-in…' : 'Sign in to Nightjar'} <ArrowRight size={17} />
           </button>
           <p className="access-fine">Production access will require a completed age-assurance result before adult catalogue access is granted.</p>
         </section>
