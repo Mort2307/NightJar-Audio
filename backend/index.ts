@@ -358,25 +358,21 @@ export const handler = router({
   'GET /api/scripts/:scriptId': [
     requireAuth(),
     async (ctx) => {
-      const { items } = await db.list('nightjar_scripts', { limit: 50 });
-      const script = items.find((item) => item.id === ctx.params.scriptId);
-      if (!script) return error('Script not found.', 404);
-      const { items: accessItems } = await db.list('nightjar_script_access_' + ctx.user!.userId, { limit: 100 });
-      const access = accessItems.find((item) => item.scriptId === ctx.params.scriptId);
-      const owner = script.writerUserId === ctx.user!.userId;
-      if (!owner && !access) {
-        return json({ script: { id: script.id, title: script.title, synopsis: script.synopsis, excerpt: script.excerpt, genre: script.genre, runtimeTarget: script.runtimeTarget, characters: script.characters, ageClassification: script.ageClassification, writerUserId: script.writerUserId, writerName: script.writerName, version: script.version }, canReadFull: false, copyAllowed: false, exportAllowed: false });
-      }
-      await db.add('nightjar_evidence_' + ctx.user!.userId, [{
-        eventType: 'script_view',
-        severity: 'low',
-        relatedType: 'script',
-        relatedId: ctx.params.scriptId,
-        summary: 'Authorised full script view opened.',
-        actorUserId: ctx.user!.userId,
-        createdAt: new Date().toISOString(),
-      }]);
-      return json({ script, canReadFull: true, copyAllowed: owner || access.allowCopy === true, exportAllowed: owner || access.allowExport === true });
+      if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.',403);
+      const {items}=await db.list('nightjar_scripts',{limit:50});
+      const script=items.find((item)=>item.id===ctx.params.scriptId);
+      if(!script)return error('Script not found.',404);
+      const {items:accessItems}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100});
+      const access=accessItems.find((item)=>item.scriptId===ctx.params.scriptId && !item.revokedAt && (!item.expiresAt || new Date(item.expiresAt).getTime()>Date.now()));
+      const owner=script.writerUserId===ctx.user!.userId;
+      if(!owner&&!access)return json({script:{id:script.id,title:script.title,synopsis:script.synopsis,excerpt:script.excerpt,genre:script.genre,runtimeTarget:script.runtimeTarget,characters:script.characters,ageClassification:script.ageClassification,writerUserId:script.writerUserId,writerName:script.writerName,version:script.version},canReadFull:false,copyAllowed:false,exportAllowed:false});
+      const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase();
+      const expiresAt=new Date(Date.now()+15*60_000).toISOString();
+      const session={sessionId,scriptId:ctx.params.scriptId,accountId:ctx.user!.userId,accessGrantId:access?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:owner||access?.allowCopy===true,allowExport:owner||access?.allowExport===true};
+      await db.add(readerSessionTable(ctx.user!.userId),[session]);
+      await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'script_view',relatedId:ctx.params.scriptId,sessionId,createdAt:new Date().toISOString()}]);
+      await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'script_view',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,sessionId,summary:'Authorised full script view opened in a short-lived protected reader session.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
+      return json({script,canReadFull:true,copyAllowed:session.allowCopy,exportAllowed:session.allowExport,readerSession:{sessionId,expiresAt}});
     },
   ],
   'POST /api/scripts/:scriptId/request-access': [
@@ -401,19 +397,19 @@ export const handler = router({
   'POST /api/scripts/:scriptId/permissions': [
     requireAuth(),
     async (ctx) => {
-      const body = (ctx.body ?? {}) as { creatorUserId?: string; allowCopy?: boolean; allowExport?: boolean };
-      if (!body.creatorUserId) return error('Creator account is required.', 400);
-      const { items } = await db.list('nightjar_scripts', { limit: 50 });
-      const script = items.find((item) => item.id === ctx.params.scriptId);
-      if (!script || script.writerUserId !== ctx.user!.userId) return error('Writer ownership is required.', 403);
-      const table = 'nightjar_script_access_' + body.creatorUserId;
-      const existing = await db.list(table, { limit: 100 });
-      const record = { scriptId: ctx.params.scriptId, writerUserId: ctx.user!.userId, collaborationId: body.creatorUserId + ':' + ctx.params.scriptId, allowCopy: body.allowCopy === true, allowExport: body.allowExport === true, grantedAt: new Date().toISOString() };
-      const match = existing.items.find((item) => item.scriptId === ctx.params.scriptId);
-      if (match) await db.update(table, [{ id: match.id, record }]);
-      else await db.add(table, [record]);
-      await db.add('nightjar_evidence_' + ctx.user!.userId, [{ eventType: 'permission_changed', severity: 'low', relatedType: 'script', relatedId: ctx.params.scriptId, summary: 'Writer changed script copy/export permissions.', actorUserId: ctx.user!.userId, createdAt: new Date().toISOString() }]);
-      return json({ allowCopy: record.allowCopy, allowExport: record.allowExport });
+      const body=(ctx.body??{}) as {creatorUserId?:string;allowCopy?:boolean;allowExport?:boolean;expiresAt?:string|null;revoke?:boolean};
+      if(!body.creatorUserId)return error('Creator account is required.',400);
+      const {items}=await db.list('nightjar_scripts',{limit:50});
+      const script=items.find((item)=>item.id===ctx.params.scriptId);
+      if(!script||script.writerUserId!==ctx.user!.userId)return error('Writer ownership is required.',403);
+      const table='nightjar_script_access_'+body.creatorUserId;
+      const existing=await db.list(table,{limit:100});
+      const match=existing.items.find((item)=>item.scriptId===ctx.params.scriptId);
+      const record={scriptId:ctx.params.scriptId,writerUserId:ctx.user!.userId,collaborationId:body.creatorUserId+':'+ctx.params.scriptId,allowCopy:body.allowCopy===true,allowExport:body.allowExport===true,grantedAt:match?.grantedAt??new Date().toISOString(),expiresAt:body.expiresAt??null,revokedAt:body.revoke?new Date().toISOString():null};
+      if(match)await db.update(table,[{id:match.id,record}]); else await db.add(table,[record]);
+      await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'permission_changed',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,summary:body.revoke?'Writer revoked script access.':'Writer changed script read/copy/export permissions.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
+      if(body.revoke)await revokeReaderSessions(body.creatorUserId,'Writer revoked protected script access.');
+      return json({allowCopy:record.allowCopy,allowExport:record.allowExport,expiresAt:record.expiresAt,revoked:body.revoke===true});
     },
   ],
   'POST /api/admin/creator-applications/:applicationId/decision': [
