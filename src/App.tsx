@@ -151,12 +151,17 @@ function App() {
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
   const [creatorDashboard, setCreatorDashboard] = useState<{ metrics: any; releases: any[] }>({ metrics: {}, releases: [] });
   const [creatorDashboardLoading, setCreatorDashboardLoading] = useState(false);
+  const [creatorDraft, setCreatorDraft] = useState({
+    title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '',
+    durationMinutes: '', audioUrl: '', artworkUrl: '',
+  });
   const [liveRecommendations, setLiveRecommendations] = useState<any[]>([]);
   const [liveTrending, setLiveTrending] = useState<any[]>([]);
   const [currentIntent, setCurrentIntent] = useState('');
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
+  const [writerSelected, setWriterSelected] = useState<any | null>(null);
   const [editorQueue, setEditorQueue] = useState<any[]>([]);
   const [editorSelected, setEditorSelected] = useState<any | null>(null);
   const [protectedScripts, setProtectedScripts] = useState<any[]>([]);
@@ -295,6 +300,55 @@ function App() {
     }
   };
 
+  const createCreatorRelease = async () => {
+    if (!creatorDraft.title.trim()) return notify('Release title is required.');
+    try {
+      const { data } = await api.post('/api/creator/releases', {
+        ...creatorDraft,
+        tags: creatorDraft.tags.split(',').map((item) => item.trim()).filter(Boolean),
+        tropes: creatorDraft.tropes.split(',').map((item) => item.trim()).filter(Boolean),
+        durationMinutes: Number(creatorDraft.durationMinutes || 0),
+      });
+      if (data?.release) setCreatorDraft({ title:'', description:'', category:'', genre:'', mood:'', tags:'', tropes:'', durationMinutes:'', audioUrl:'', artworkUrl:'' });
+      await loadCreatorDashboard();
+      notify('Release draft created.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Release could not be created.');
+    }
+  };
+
+  const updateCreatorRelease = async (release: any) => {
+    try {
+      await api.put('/api/creator/releases/' + release.id, release);
+      await loadCreatorDashboard();
+      notify('Release updated.');
+    } catch {
+      notify('Release could not be updated.');
+    }
+  };
+
+  const publishCreatorRelease = async (releaseId: string) => {
+    try {
+      await api.post('/api/creator/releases/' + releaseId + '/publish');
+      await loadCreatorDashboard();
+      await loadLiveProductData();
+      notify('Release published.');
+    } catch {
+      notify('Release could not be published. Attach a real audio URL first.');
+    }
+  };
+
+  const deleteCreatorRelease = async (releaseId: string) => {
+    if (!window.confirm('Delete this release draft?')) return;
+    try {
+      await api.delete('/api/creator/releases/' + releaseId);
+      await loadCreatorDashboard();
+      notify('Release draft deleted.');
+    } catch {
+      notify('Release could not be deleted.');
+    }
+  };
+
   const loadCreatorDashboard = async () => {
     if (!user || (role !== 'creator' && !canAdmin)) return;
     setCreatorDashboardLoading(true);
@@ -312,7 +366,9 @@ function App() {
     if (!user) return;
     try {
       const { data } = await api.get('/api/writer/scripts');
-      setWriterScripts(data?.scripts ?? []);
+      const items = data?.scripts ?? [];
+      setWriterScripts(items);
+      setWriterSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
     } catch {
       setWriterScripts([]);
     }
@@ -751,6 +807,42 @@ function App() {
       notify('Draft created.');
     } catch {
       notify('The script could not be created.');
+    }
+  };
+
+  const saveWriterScript = async () => {
+    if (!writerSelected) return;
+    try {
+      const { data } = await api.put('/api/writer/scripts/' + writerSelected.id, writerSelected);
+      setWriterSelected(data?.script ?? writerSelected);
+      await loadWriterScripts();
+      notify('Script saved.');
+    } catch {
+      notify('Script could not be saved.');
+    }
+  };
+
+  const createWriterVersion = async () => {
+    if (!writerSelected) return;
+    try {
+      const { data } = await api.post('/api/writer/scripts/' + writerSelected.id + '/versions');
+      setWriterSelected(data?.script ?? writerSelected);
+      await loadWriterScripts();
+      notify('Version recorded.');
+    } catch {
+      notify('Version could not be recorded.');
+    }
+  };
+
+  const submitWriterScript = async () => {
+    if (!writerSelected) return;
+    try {
+      const { data } = await api.post('/api/writer/scripts/' + writerSelected.id + '/submit');
+      setWriterSelected(data?.script ?? writerSelected);
+      await loadWriterScripts();
+      notify('Script submitted to editorial.');
+    } catch {
+      notify('Script could not be submitted.');
     }
   };
 
