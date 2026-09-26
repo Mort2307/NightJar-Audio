@@ -34,7 +34,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 
-type View = 'discover' | 'creators' | 'creator' | 'admin' | 'protection' | 'profile';
+type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'preview';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor';
@@ -47,97 +47,40 @@ type AuthenticatedUser = {
 };
 
 type Track = {
+  id: string;
   title: string;
   creator: string;
   duration: string;
   category: string;
-  listeners: string;
+  listeners?: string;
   descriptor: string;
   featured?: boolean;
+  audioUrl?: string | null;
+  artworkUrl?: string | null;
+  creatorUserId?: string;
 };
 
-const tracks: Track[] = [
-  {
-    title: 'After Midnight',
-    creator: 'Mara Vale',
-    duration: '18 min',
-    category: 'Atmospheric',
-    listeners: '12.4k',
-    descriptor: 'A slow, cinematic night drive with a voice that stays close.',
-    featured: true,
-  },
-  {
-    title: 'Velvet Static',
-    creator: 'Rae Hollow',
-    duration: '24 min',
-    category: 'Story',
-    listeners: '9.8k',
-    descriptor: 'Late-night radio, magnetic conversation, and a little tension.',
-  },
-  {
-    title: 'Slow Burn',
-    creator: 'Noor',
-    duration: '16 min',
-    category: 'Whisper',
-    listeners: '7.1k',
-    descriptor: 'An intimate, low-lit performance built entirely for headphones.',
-  },
-  {
-    title: 'The Last Train Home',
-    creator: 'Mara Vale',
-    duration: '31 min',
-    category: 'Story',
-    listeners: '6.6k',
-    descriptor: 'A longer-form audio story with movement, ambience, and silence.',
-  },
-  {
-    title: 'Room Tone',
-    creator: 'Rae Hollow',
-    duration: '12 min',
-    category: 'Atmospheric',
-    listeners: '4.9k',
-    descriptor: 'Close-mic voice, rain at the window, and a room that feels occupied.',
-  },
-  {
-    title: 'Northbound',
-    creator: 'Noor',
-    duration: '28 min',
-    category: 'Story',
-    listeners: '4.2k',
-    descriptor: 'A nocturnal journey told in first person, with a full sound bed.',
-  },
-];
+type CreatorSummary = {
+  userId: string;
+  name: string;
+  handle?: string | null;
+  followers?: number;
+  releases?: number;
+  initials?: string;
+  note?: string;
+};
 
-const creators = [
-  { name: 'Mara Vale', handle: '@maravale', followers: '84.2k', releases: 27, share: '18.6%', initials: 'MV', note: 'Cinematic storytelling and close-mic performance.' },
-  { name: 'Rae Hollow', handle: '@raehollow', followers: '61.7k', releases: 19, share: '14.2%', initials: 'RH', note: 'Character work, radio drama, and atmospheric audio.' },
-  { name: 'Noor', handle: '@noor', followers: '39.4k', releases: 14, share: '9.7%', initials: 'N', note: 'Minimalist voice work with meticulous sound design.' },
-  { name: 'June Mercer', handle: '@junemercer', followers: '31.8k', releases: 11, share: '7.9%', initials: 'JM', note: 'Immersive monologues and late-night fiction.' },
-  { name: 'Sable North', handle: '@sablenorth', followers: '24.6k', releases: 8, share: '6.1%', initials: 'SN', note: 'Slow-burn fiction, character intimacy and nocturnal atmosphere.' },
-];
-
-const creatorSpotlights = [
-  { creator: 'Mara Vale', handle: '@maravale', title: 'After Midnight', edition: 'New edition', detail: 'A cinematic night drive with close-mic performance and a full atmospheric bed.', initials: 'MV' },
-  { creator: 'Rae Hollow', handle: '@raehollow', title: 'Velvet Static', edition: 'New edition', detail: 'Late-night radio, magnetic conversation and a little tension.', initials: 'RH' },
-  { creator: 'Noor', handle: '@noor', title: 'Slow Burn', edition: 'New edition', detail: 'Minimalist voice work built entirely around headphone intimacy.', initials: 'N' },
-  { creator: 'June Mercer', handle: '@junemercer', title: 'The Quiet Hour', edition: 'New edition', detail: 'An immersive monologue where the pauses matter as much as the words.', initials: 'JM' },
-  { creator: 'Sable North', handle: '@sablenorth', title: 'Northbound', edition: 'New edition', detail: 'A nocturnal journey carried by voice, movement and restrained sound design.', initials: 'SN' },
-];
-
-const writerSpotlights = [
-  { writer: 'Rowan Vale', handle: '@rowanvale', title: 'Night Train', edition: 'New script', detail: 'A rain-soaked final train journey written for intimate performance.', initials: 'RV' },
-  { writer: 'Ellis Grey', handle: '@ellisgrey', title: 'Room 17', edition: 'New script', detail: 'A contained character piece built around silence, proximity and suspense.', initials: 'EG' },
-  { writer: 'June Mercer', handle: '@junemercer', title: 'After the Rain', edition: 'New script', detail: 'A reflective late-night story with a deliberately close perspective.', initials: 'JM' },
-  { writer: 'Mara Keene', handle: '@marakeene', title: 'Low Light', edition: 'New script', detail: 'A slow-burn encounter written for voice, ambience and careful pacing.', initials: 'MK' },
-  { writer: 'Theo Vale', handle: '@theovale', title: 'The Last Room', edition: 'New script', detail: 'An atmospheric story about what remains after everyone else has left.', initials: 'TV' },
-];
-
-const studioMetrics = [
-  ['Listeners', '1,842'],
-  ['Eligible listening', '73,421 min'],
-  ['Creator pool', '£6,742'],
-  ['Estimated share', '£1,247'],
-];
+type Spotlight = {
+  kind: 'creator' | 'writer';
+  name: string;
+  handle?: string | null;
+  title?: string;
+  edition?: string;
+  detail?: string;
+  initials?: string;
+  targetId?: string;
+  releaseId?: string | null;
+};
 
 const roleMeta: Record<AccountRole, { label: string; description: string }> = {
   admin: {
@@ -163,7 +106,7 @@ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
 };
 
 function App() {
-  const [view, setView] = useState<View>('discover');
+  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
   const [playing, setPlaying] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
@@ -173,6 +116,8 @@ function App() {
   const [ageLoading, setAgeLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [favouriteReleaseIds, setFavouriteReleaseIds] = useState<string[]>([]);
+  const [followingCreatorIds, setFollowingCreatorIds] = useState<string[]>([]);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [role, setRole] = useState<AccountRole | null>(null);
   const [accountStatus, setAccountStatus] = useState<'active' | 'pending_review'>('active');
@@ -200,24 +145,53 @@ function App() {
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
-  const [writerDraftTitle, setWriterDraftTitle] = useState('');
-  const [writerScripts, setWriterScripts] = useState([
-    { id: 'demo-1', title: 'Night Train', status: 'Approved', version: 'v3', access: 'Read-only collaboration' },
-    { id: 'demo-2', title: 'Room 17', status: 'In editing', version: 'v2', access: 'Private' },
-    { id: 'demo-3', title: 'After the Rain', status: 'Draft', version: 'v1', access: 'Private' },
-  ]);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
+  const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
+  const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
+  const [creatorDashboard, setCreatorDashboard] = useState<{ metrics: any; releases: any[] }>({ metrics: {}, releases: [] });
+  const [creatorDashboardLoading, setCreatorDashboardLoading] = useState(false);
+  const [creatorDraft, setCreatorDraft] = useState({
+    title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '',
+    durationMinutes: '', audioUrl: '', artworkUrl: '',
+  });
+  const [liveRecommendations, setLiveRecommendations] = useState<any[]>([]);
+  const [liveTrending, setLiveTrending] = useState<any[]>([]);
+  const [currentIntent, setCurrentIntent] = useState('');
 
-  const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0], []);
-  const spotlightIndex = Math.floor(Date.now() / 86400000) % creatorSpotlights.length;
-  const creatorSpotlight = creatorSpotlights[spotlightIndex];
-  const writerSpotlight = writerSpotlights[spotlightIndex];
+  const [writerDraftTitle, setWriterDraftTitle] = useState('');
+  const [writerScripts, setWriterScripts] = useState<any[]>([]);
+  const [writerSelected, setWriterSelected] = useState<any | null>(null);
+  const [editorQueue, setEditorQueue] = useState<any[]>([]);
+  const [editorSelected, setEditorSelected] = useState<any | null>(null);
+  const [protectedScripts, setProtectedScripts] = useState<any[]>([]);
+  const [protectedReaderScript, setProtectedReaderScript] = useState<any | null>(null);
+
+  const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
+  const spotlightIndex = Math.floor(Date.now() / 86400000) % Math.max(creatorSpotlightList.length, 1);
+  const creatorSpotlight = creatorSpotlightList[spotlightIndex] ?? null;
+  const writerSpotlight = writerSpotlightList[spotlightIndex] ?? null;
+  const creators = creatorDirectory;
+  const creatorSpotlights = creatorSpotlightList;
+  const writerSpotlights = writerSpotlightList;
+  const studioMetrics = [
+    ['Published releases', String(creatorDashboard.metrics?.released ?? 0)],
+    ['Draft releases', String(creatorDashboard.metrics?.drafts ?? 0)],
+    ['Verified listening', String(creatorDashboard.metrics?.verifiedListeningMinutes ?? 0) + ' min'],
+    ['Unique listeners', String(creatorDashboard.metrics?.uniqueListeners ?? 0)],
+  ];
 
   useEffect(() => {
+    const onPop = () => {
+      const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      setView((['discover','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View);
+    };
+    window.addEventListener('popstate', onPop);
     void (async () => {
       try {
         const { data } = await api.get('/api/branding');
         if (data?.logoUrl) setLogoUrl(data.logoUrl);
-      } catch { /* default wordmark remains available */ }
+      } catch { /* branded wordmark remains available */ }
     })();
     let cancelled = false;
     const restore = async () => {
@@ -229,8 +203,16 @@ function App() {
       await refreshAgeStatus();
     };
     void restore();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.removeEventListener('popstate', onPop); };
   }, []);
+
+  useEffect(() => {
+    if (!user || !ageVerified) return;
+    void loadLiveProductData();
+    if (role === 'creator' || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
+    if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
+    if (role === 'editor' || (canAdmin && previewRole === 'editor')) void loadEditorQueue();
+  }, [user, ageVerified, role, currentIntent, previewRole]);
 
   const notify = (message: string) => {
     setToast(message);
@@ -238,9 +220,181 @@ function App() {
   };
 
   const navigate = (nextView: View) => {
+    const path = nextView === 'discover' ? '/discover' : '/' + nextView;
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
     setView(nextView);
     setMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const loadLiveProductData = async () => {
+    try {
+      const [catalogueResponse, creatorsResponse, spotlightResponse] = await Promise.all([
+        api.get('/api/catalogue'),
+        api.get('/api/creators'),
+        api.get('/api/spotlights'),
+      ]);
+      const liveTracks = (catalogueResponse.data?.catalogue ?? []).map((release: any, index: number) => ({
+        id: String(release.id),
+        title: release.title,
+        creator: release.creatorName ?? 'Nightjar creator',
+        duration: release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',
+        category: release.category ?? 'Audio',
+        descriptor: release.description ?? 'No description supplied.',
+        featured: release.featured === true || index === 0,
+        audioUrl: release.audioUrl ?? null,
+        artworkUrl: release.artworkUrl ?? null,
+        creatorUserId: release.creatorUserId,
+      })) as Track[];
+      setTracks(liveTracks);
+      setCreatorDirectory((creatorsResponse.data?.creators ?? []).map((creator: any) => ({
+        userId: String(creator.userId),
+        name: creator.displayName ?? 'Nightjar creator',
+        handle: creator.handle ?? null,
+        initials: creator.avatarInitials ?? undefined,
+        note: creator.headline ?? creator.bio ?? undefined,
+        releases: creator.releaseCount ?? 0,
+      })));
+      const spotlights = spotlightResponse.data?.spotlights ?? [];
+      setCreatorSpotlightList(spotlights.filter((item: any) => item.kind === 'creator' && item.name).map((item: any) => ({
+        kind: 'creator',
+        name: item.name,
+        handle: item.handle,
+        title: item.title,
+        edition: item.edition,
+        detail: item.detail,
+        initials: item.initials,
+        targetId: item.targetId,
+        releaseId: item.releaseId,
+      })));
+      setWriterSpotlightList(spotlights.filter((item: any) => item.kind === 'writer' && item.name).map((item: any) => ({
+        kind: 'writer',
+        name: item.name,
+        handle: item.handle,
+        title: item.title,
+        edition: item.edition,
+        detail: item.detail,
+        initials: item.initials,
+        targetId: item.targetId,
+        releaseId: item.releaseId,
+      })));
+      if (user) {
+        const [recommendationsResponse, trendingResponse, favouritesResponse, followsResponse] = await Promise.all([
+          api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
+          api.get('/api/trending'),
+          api.get('/api/favourites'),
+          api.get('/api/follows'),
+        ]);
+        setLiveRecommendations(recommendationsResponse.data?.recommendations ?? []);
+        setLiveTrending(trendingResponse.data?.trending ?? []);
+        setFavouriteReleaseIds((favouritesResponse.data?.favourites ?? []).map((item: any) => String(item.releaseId)));
+        setFollowingCreatorIds((followsResponse.data?.follows ?? []).map((item: any) => String(item.creatorUserId)));
+      }
+    } catch {
+      setTracks([]);
+      setCreatorDirectory([]);
+      setCreatorSpotlightList([]);
+      setWriterSpotlightList([]);
+      setLiveRecommendations([]);
+      setLiveTrending([]);
+    }
+  };
+
+  const createCreatorRelease = async () => {
+    if (!creatorDraft.title.trim()) return notify('Release title is required.');
+    try {
+      const { data } = await api.post('/api/creator/releases', {
+        ...creatorDraft,
+        tags: creatorDraft.tags.split(',').map((item) => item.trim()).filter(Boolean),
+        tropes: creatorDraft.tropes.split(',').map((item) => item.trim()).filter(Boolean),
+        durationMinutes: Number(creatorDraft.durationMinutes || 0),
+      });
+      if (data?.release) setCreatorDraft({ title:'', description:'', category:'', genre:'', mood:'', tags:'', tropes:'', durationMinutes:'', audioUrl:'', artworkUrl:'' });
+      await loadCreatorDashboard();
+      notify('Release draft created.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Release could not be created.');
+    }
+  };
+
+  const updateCreatorRelease = async (release: any) => {
+    try {
+      await api.put('/api/creator/releases/' + release.id, release);
+      await loadCreatorDashboard();
+      notify('Release updated.');
+    } catch {
+      notify('Release could not be updated.');
+    }
+  };
+
+  const publishCreatorRelease = async (releaseId: string) => {
+    try {
+      await api.post('/api/creator/releases/' + releaseId + '/publish');
+      await loadCreatorDashboard();
+      await loadLiveProductData();
+      notify('Release published.');
+    } catch {
+      notify('Release could not be published. Attach a real audio URL first.');
+    }
+  };
+
+  const deleteCreatorRelease = async (releaseId: string) => {
+    if (!window.confirm('Delete this release draft?')) return;
+    try {
+      await api.delete('/api/creator/releases/' + releaseId);
+      await loadCreatorDashboard();
+      notify('Release draft deleted.');
+    } catch {
+      notify('Release could not be deleted.');
+    }
+  };
+
+  const loadCreatorDashboard = async () => {
+    if (!user || (role !== 'creator' && !canAdmin)) return;
+    setCreatorDashboardLoading(true);
+    try {
+      const { data } = await api.get('/api/creator/dashboard');
+      setCreatorDashboard({ metrics: data?.metrics ?? {}, releases: data?.releases ?? [] });
+    } catch {
+      setCreatorDashboard({ metrics: {}, releases: [] });
+    } finally {
+      setCreatorDashboardLoading(false);
+    }
+  };
+
+  const loadWriterScripts = async () => {
+    if (!user) return;
+    try {
+      const { data } = await api.get('/api/writer/scripts');
+      const items = data?.scripts ?? [];
+      setWriterScripts(items);
+      setWriterSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
+    } catch {
+      setWriterScripts([]);
+    }
+  };
+
+  const loadEditorQueue = async () => {
+    if (!user) return;
+    try {
+      const { data } = await api.get('/api/editor/queue');
+      const items = data?.queue ?? [];
+      setEditorQueue(items);
+      setEditorSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
+    } catch {
+      setEditorQueue([]);
+      setEditorSelected(null);
+    }
+  };
+
+  const loadProtectedScripts = async () => {
+    if (!user) return;
+    try {
+      const { data } = await api.get('/api/scripts/catalogue');
+      setProtectedScripts(data?.scripts ?? []);
+    } catch {
+      setProtectedScripts([]);
+    }
   };
 
   const loadAccount = async () => {
@@ -264,7 +418,7 @@ function App() {
       if (data?.role === 'admin' || data?.role === 'creator' || data?.role === 'listener' || data?.role === 'writer' || data?.role === 'editor') {
         setRole(data.role);
         setAccountStatus(data.status === 'pending_review' ? 'pending_review' : 'active');
-        navigate(data.role === 'admin' ? 'admin' : data.role === 'creator' ? 'creator' : 'discover');
+        navigate(data.role === 'admin' ? 'admin' : data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : 'discover');
       } else {
         setRole(null);
         setRolePicker(true);
@@ -383,7 +537,7 @@ function App() {
         setRole(data.role);
         setAccountStatus(data.status === 'pending_review' ? 'pending_review' : 'active');
         setRolePicker(false);
-        navigate(data.role === 'creator' ? 'creator' : 'discover');
+        navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : 'discover');
         notify(data.role === 'creator'
           ? 'Creator account created. Creator approval and publishing controls can be completed in the production onboarding flow.'
           : 'Listener account created. Welcome to Nightjar.');
@@ -402,9 +556,55 @@ function App() {
     } catch { }
   };
 
-  const openProtectedReader = () => {
-    setProtectedReaderOpen(true);
-    void recordProtectionEvent('script_view');
+  const openProtectedReader = async (scriptId: string) => {
+    try {
+      const { data } = await api.get('/api/scripts/' + scriptId);
+      if (data?.canReadFull === false) {
+        notify('This manuscript has not been granted for full reading by the writer.');
+        return;
+      }
+      setProtectedReaderScript(data);
+      setProtectedReaderOpen(true);
+      void recordProtectionEvent('script_view', scriptId);
+    } catch {
+      notify('Protected script access could not be opened.');
+    }
+  };
+
+  const toggleFavouriteRelease = async (releaseId: string) => {
+    try {
+      if (favouriteReleaseIds.includes(releaseId)) {
+        await api.delete('/api/favourites/' + releaseId);
+        setFavouriteReleaseIds((items) => items.filter((id) => id !== releaseId));
+      } else {
+        await api.post('/api/favourites/' + releaseId);
+        setFavouriteReleaseIds((items) => [...items, releaseId]);
+      }
+    } catch {
+      notify('Favourite could not be updated.');
+    }
+  };
+
+  const toggleCreatorFollow = async (creatorUserId: string) => {
+    try {
+      if (followingCreatorIds.includes(creatorUserId)) {
+        await api.delete('/api/follows/creators/' + creatorUserId);
+        setFollowingCreatorIds((items) => items.filter((id) => id !== creatorUserId));
+      } else {
+        await api.post('/api/follows/creators/' + creatorUserId);
+        setFollowingCreatorIds((items) => [...items, creatorUserId]);
+      }
+    } catch {
+      notify('Follow could not be updated.');
+    }
+  };
+
+  const togglePlayback = (track: Track) => {
+    if (!track.audioUrl) {
+      notify('This release has no playable audio attached yet.');
+      return;
+    }
+    setPlaying(playing === track.id ? null : track.id);
   };
 
   const loadAdminOverview = async () => {
@@ -429,6 +629,29 @@ function App() {
       setTasteVector(tasteData?.vector ?? []);
     } catch { notify('Profile could not be loaded right now.'); }
     finally { setProfileLoading(false); }
+  };
+
+  const requestScriptAccess = async (script: any) => {
+    if (!user || !script?.id) return;
+    try {
+      await api.post('/api/scripts/' + script.id + '/request-access', { writerUserId: script.writerUserId ?? null });
+      notify('Access request recorded. The writer can review it from their workflow.');
+    } catch {
+      notify('The access request could not be recorded.');
+    }
+  };
+
+  const reviewEditorScript = async (status: string) => {
+    if (!editorSelected) return;
+    const comment = window.prompt('Editorial note (optional)') ?? '';
+    try {
+      const { data } = await api.post('/api/editor/scripts/' + editorSelected.id + '/review', { status, comment });
+      setEditorSelected(data?.script ?? editorSelected);
+      await loadEditorQueue();
+      notify('Editorial decision recorded.');
+    } catch {
+      notify('Editorial decision could not be recorded.');
+    }
   };
 
   const saveProfile = async () => {
@@ -573,12 +796,54 @@ function App() {
     }
   };
 
-  const createWriterDraft = () => {
+  const createWriterDraft = async () => {
     const title = writerDraftTitle.trim();
     if (!title) return notify('Give the script a working title first.');
-    setWriterScripts((current) => [{ id: `local-${Date.now()}`, title, status: 'Draft', version: 'v1', access: 'Private' }, ...current]);
-    setWriterDraftTitle('');
-    notify('Draft created in Writer Studio preview.');
+    try {
+      const { data } = await api.post('/api/writer/scripts', { title, content: '' });
+      setWriterDraftTitle('');
+      await loadWriterScripts();
+      setWriterSelected(data?.script ?? null);
+      notify('Draft created.');
+    } catch {
+      notify('The script could not be created.');
+    }
+  };
+
+  const saveWriterScript = async () => {
+    if (!writerSelected) return;
+    try {
+      const { data } = await api.put('/api/writer/scripts/' + writerSelected.id, writerSelected);
+      setWriterSelected(data?.script ?? writerSelected);
+      await loadWriterScripts();
+      notify('Script saved.');
+    } catch {
+      notify('Script could not be saved.');
+    }
+  };
+
+  const createWriterVersion = async () => {
+    if (!writerSelected) return;
+    try {
+      const { data } = await api.post('/api/writer/scripts/' + writerSelected.id + '/versions');
+      setWriterSelected(data?.script ?? writerSelected);
+      await loadWriterScripts();
+      notify('Version recorded.');
+    } catch {
+      notify('Version could not be recorded.');
+    }
+  };
+
+  const submitWriterScript = async () => {
+    if (!writerSelected) return;
+    try {
+      const { data } = await api.post('/api/writer/scripts/' + writerSelected.id + '/submit');
+      setWriterSelected(data?.script ?? writerSelected);
+      await loadWriterScripts();
+      notify('Script submitted to editorial.');
+    } catch {
+      notify('Script could not be submitted.');
+    }
   };
 
   const selectPreviewRole = (next: PreviewRole) => {
@@ -587,7 +852,8 @@ function App() {
     setRolePicker(false);
     if (next === 'creator') navigate('creator');
     else if (next === 'listener') navigate('discover');
-    else navigate('admin');
+    else if (next === 'writer') navigate('writer');
+    else navigate('editor');
     notify(`Admin preview: ${roleMeta[next].label} experience. Your Administrator role remains active.`);
   };
 
@@ -773,19 +1039,19 @@ function App() {
 
       <main>
         {view === 'discover' && (
-          <>
+          <section className="page-wrap nj-animate">
             <section className="hero-section">
               <div className="hero-copy">
                 <div className="hero-kicker">
                   <span className="eyebrow"><Sparkles size={14} /> 18+ / AUDIO FIRST</span>
                   <span className="kicker-line" />
-                  <span className="kicker-note">Illustrative product preview</span>
+                  <span className="kicker-note">Personalised from your explicit taste and current session intent</span>
                 </div>
                 <h1>Premium immersive<span> audio for adults.</span></h1>
-                <p className="hero-lede">Stories, performances and soundscapes designed to pull you out of the room you are in — and into another one.</p>
+                <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
                 <div className="hero-actions">
-                  <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the catalogue <ArrowRight size={16} /></button>
-                  <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Sign in as a creator to open Creator Studio.')}>For creators <ChevronRight size={16} /></button>
+                  <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
+                  <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
                 </div>
                 <div className="hero-signals">
                   <span><Headphones size={15} /> Headphone-first</span>
@@ -793,22 +1059,22 @@ function App() {
                   <span><ShieldCheck size={15} /> 18+ access</span>
                 </div>
               </div>
-
-              <div className="hero-art" aria-label="Nightjar featured audio preview">
+              <div className="hero-art" aria-label="Nightjar featured release">
                 <div className="orbit orbit-a" /><div className="orbit orbit-b" />
                 <div className="featured-card">
-                  <div className="featured-top"><span className="mini-label">NIGHTJAR / 001</span><span className="status-dot"><span /> LIVE PREVIEW</span></div>
-                  <div className="cover-art">
-                    <div className="cover-crescent"><Moon size={54} /></div>
-                    <span>AFTER<br /><em>MIDNIGHT</em></span>
-                    <small>{featured.creator}</small>
-                  </div>
-                  <div className="feature-meta">
-                    <div><span className="mini-label">{featured.category}</span><strong>{featured.title}</strong></div>
-                    <button className="round-play" onClick={() => setPlaying(playing === featured.title ? null : featured.title)} aria-label={playing === featured.title ? 'Pause preview' : 'Play preview'}>{playing === featured.title ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
-                  </div>
-                  <div className="waveform compact-wave">{Array.from({ length: 28 }).map((_, index) => <span key={index} style={{ height: `${18 + ((index * 17) % 39)}%` }} />)}</div>
-                  <div className="player-meta"><span>00:00</span><span>{featured.duration}</span></div>
+                  {featured ? <>
+                    <div className="featured-top"><span className="mini-label">NIGHTJAR / FEATURED</span><span className="status-dot"><span /> LIVE RELEASE</span></div>
+                    <div className="cover-art" style={featured.artworkUrl ? { backgroundImage: 'url("' + featured.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
+                      {!featured.artworkUrl && <div className="cover-crescent"><Moon size={54} /></div>}
+                      <span>{featured.title.toUpperCase()}</span>
+                      <small>{featured.creator}</small>
+                    </div>
+                    <div className="feature-meta">
+                      <div><span className="mini-label">{featured.category}</span><strong>{featured.title}</strong></div>
+                      <button className="round-play" disabled={!featured.audioUrl} onClick={() => togglePlayback(featured)} aria-label={playing === featured.id ? 'Pause release' : 'Play release'}>{playing === featured.id ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
+                    </div>
+                    <div className="player-meta"><span>{featured.duration}</span><span>{featured.audioUrl ? 'Audio connected' : 'Audio not connected'}</span></div>
+                  </> : <div className="empty-feature"><Moon size={40}/><strong>No featured release yet.</strong><span>Published catalogue records will appear here as creators release audio.</span></div>}
                 </div>
               </div>
             </section>
@@ -818,48 +1084,54 @@ function App() {
             <section className="spotlight-section section-wrap" aria-labelledby="daily-spotlights-title">
               <div className="section-head spotlight-heading"><div><p className="eyebrow"><Sparkles size={14} /> DAILY ROTATION</p><h2 id="daily-spotlights-title">Today in the spotlight.</h2></div><span className="spotlight-cycle">01 DAY · 05 PLACES · FIXED ROTATION</span></div>
               <div className="spotlight-grid">
-                <article className="spotlight-tile creator-spotlight-tile">
-                  <div className="spotlight-art"><span className="spotlight-initials">{creatorSpotlight.initials}</span><span className="spotlight-art-mark"><Mic2 size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{creatorSpotlight.creator}</h3><p className="spotlight-handle">{creatorSpotlight.handle}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition}</span><strong>{creatorSpotlight.title}</strong><p>{creatorSpotlight.detail}</p></div><button className="secondary-button" onClick={() => navigate('creators')}>Meet {creatorSpotlight.creator} <ArrowRight size={14} /></button></div>
-                </article>
-                <article className="spotlight-tile writer-spotlight-tile">
-                  <div className="spotlight-art"><span className="spotlight-initials">{writerSpotlight.initials}</span><span className="spotlight-art-mark"><FileText size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.writer}</h3><p className="spotlight-handle">{writerSpotlight.handle}</p><div className="spotlight-edition"><span>{writerSpotlight.edition}</span><strong>{writerSpotlight.title}</strong><p>{writerSpotlight.detail}</p></div><button className="secondary-button" onClick={() => notify(`Opening ${writerSpotlight.title} for protected script discovery.`)}>Explore {writerSpotlight.title} <ArrowRight size={14} /></button></div>
-                </article>
+                {creatorSpotlight ? <article className="spotlight-tile creator-spotlight-tile">
+                  <div className="spotlight-art"><span className="spotlight-initials">{creatorSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><Mic2 size={20} /></span></div>
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{creatorSpotlight.name}</h3><p className="spotlight-handle">{creatorSpotlight.handle ? '@' + creatorSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition || 'Spotlight'}</span><strong>{creatorSpotlight.title || 'Creator profile'}</strong><p>{creatorSpotlight.detail || 'A live creator spotlight record.'}</p></div><button className="secondary-button" onClick={() => navigate('creators')}>Meet {creatorSpotlight.name} <ArrowRight size={14} /></button></div>
+                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">CREATOR SPOTLIGHT</span><h3>No live slot</h3><p className="spotlight-handle">No scheduled creator spotlight is published for today.</p></div></div>}
+                {writerSpotlight ? <article className="spotlight-tile writer-spotlight-tile">
+                  <div className="spotlight-art"><span className="spotlight-initials">{writerSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><FileText size={20} /></span></div>
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.name}</h3><p className="spotlight-handle">{writerSpotlight.handle ? '@' + writerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{writerSpotlight.edition || 'Spotlight'}</span><strong>{writerSpotlight.title || 'Writer profile'}</strong><p>{writerSpotlight.detail || 'A live writer spotlight record.'}</p></div><button className="secondary-button" onClick={() => writerSpotlight.releaseId ? navigate('protection') : notify('This spotlight has no public release attached yet.')}>Explore work <ArrowRight size={14} /></button></div>
+                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">WRITER SPOTLIGHT</span><h3>No live slot</h3><p className="spotlight-handle">No scheduled writer spotlight is published for today.</p></div></div>}
               </div>
               <p className="spotlight-note">Every place receives one complete day before the same fixed order begins again. No random reshuffling, paid priority or hidden rotation boost.</p>
             </section>
 
             <section id="catalogue" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Fresh after dark.</h2></div><button className="text-button with-icon" onClick={() => notify('Full catalogue filtering will live here.')}>Browse all <ChevronRight size={15} /></button></div>
+              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
               <div className="track-grid">
-                {tracks.slice(0, 4).map((track, index) => (
-                  <article className={index === 0 ? 'track-card featured-track' : 'track-card'} key={track.title}>
-                    <div className="track-cover">
-                      <span className="track-index">0{index + 1}</span><div className="track-cover-mark"><Moon size={22} /></div>
-                      <button className="cover-play" onClick={() => setPlaying(playing === track.title ? null : track.title)} aria-label={playing === track.title ? `Pause ${track.title}` : `Play ${track.title}`}>{playing === track.title ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}</button>
-                    </div>
-                    <div className="track-body"><div className="track-type"><span>{track.category}</span><span>{track.duration}</span></div><h3>{track.title}</h3><p>{track.descriptor}</p><div className="track-footer"><button className="creator-link" onClick={() => navigate('creators')}>{track.creator}</button><span className="listener-count"><Users size={13} /> {track.listeners}</span></div></div>
-                  </article>
-                ))}
+                {tracks.slice(0, 6).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} />)}
+                {!tracks.length && <div className="people-empty"><Headphones size={18}/><strong>No published releases yet.</strong><span>The listening room will populate from real creator releases once audio is published.</span></div>}
               </div>
             </section>
 
-            <section className="manifesto section-wrap">
-              <div className="manifesto-quote"><span className="quote-mark">“</span><h2>Good audio does not sit in the background. It changes the room.</h2></div>
-              <div className="manifesto-copy"><p className="eyebrow">WHY NIGHTJAR</p><p>Nightjar is built around the things that make spoken audio powerful: the intimacy of a human voice, the space between words, and the feeling that a story is happening very close to you.</p><div className="manifesto-stats"><div><strong>18+</strong><span>Adult audience</span></div><div><strong>Audio</strong><span>Core medium</span></div><div><strong>Creators</strong><span>At the centre</span></div></div></div>
+            <section id="for-you" className="section-wrap">
+              <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><select className="mood-select" value={currentIntent} onChange={(event) => setCurrentIntent(event.target.value)} aria-label="Current listening intent"><option value="">Open to anything</option><option value="wind">Wind down</option><option value="story">A story</option><option value="quiet">Something quiet</option><option value="focus">Focus</option><option value="discover">Discover something new</option></select></div>
+              <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
+              <div className="track-grid">
+                {liveRecommendations.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
+                {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
+              </div>
+            </section>
+
+            <section className="section-wrap">
+              <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
+              <div className="track-grid">
+                {liveTrending.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
+                {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
+              </div>
             </section>
 
             <section className="creator-band section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
-              <div className="creator-grid">{creators.slice(0, 3).map((creator) => <button className="creator-card" key={creator.name} onClick={() => navigate('creators')}><span className="avatar-large">{creator.initials}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle}</span><em>{creator.note}</em></span><ChevronRight size={17} /></button>)}</div>
+              <div className="creator-grid">{creators.slice(0, 5).map((creator) => <button className="creator-card" key={creator.userId} onClick={() => navigate('creators')}><span className="avatar-large">{creator.initials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.note || 'Nightjar creator profile.'}</em><small>{creator.releases ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
+              {!creators.length && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
             </section>
 
             <section className="studio-feature section-wrap">
-              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>The catalogue earns with you.</h2><p>Nightjar is designed around recurring listening rather than one-off commissioned drops. Your catalogue, audience and verified listening become part of the same transparent system.</p><button className="primary-button" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Sign in as a creator to open Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
-              <div className="studio-preview-card"><div className="demo-ribbon">ILLUSTRATIVE DEMO DATA</div><div className="studio-card-head"><div><span className="mini-label">CREATOR STUDIO</span><strong>Mara Vale</strong></div><span className="studio-period">PREVIEW PERIOD</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="mini-chart">{Array.from({ length: 30 }).map((_, index) => <span key={index} style={{ height: `${24 + ((index * 13) % 62)}%` }} />)}</div><div className="formula-line"><span>NET SUBSCRIPTION REVENUE</span><ChevronRight size={12} /><span>CREATOR POOL</span><ChevronRight size={12} /><span>VERIFIED LISTENING</span></div></div>
+              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>The catalogue earns with real listening.</h2><p>Creator economics are based on verified listening and live commercial records. Nightjar does not fabricate listeners, earnings or payouts.</p><button className="primary-button" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
+              <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>NET SUBSCRIPTION REVENUE</span><ChevronRight size={12}/><span>CREATOR POOL</span><ChevronRight size={12}/><span>VERIFIED LISTENING</span></div></div>
             </section>
-          </>
+          </section>
         )}
 
         {view === 'creators' && (
