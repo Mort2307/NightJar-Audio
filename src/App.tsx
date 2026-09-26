@@ -947,19 +947,19 @@ function App() {
 
       <main>
         {view === 'discover' && (
-          <>
+          <section className="page-wrap nj-animate">
             <section className="hero-section">
               <div className="hero-copy">
                 <div className="hero-kicker">
                   <span className="eyebrow"><Sparkles size={14} /> 18+ / AUDIO FIRST</span>
                   <span className="kicker-line" />
-                  <span className="kicker-note">Illustrative product preview</span>
+                  <span className="kicker-note">Personalised from your explicit taste and current session intent</span>
                 </div>
                 <h1>Premium immersive<span> audio for adults.</span></h1>
-                <p className="hero-lede">Stories, performances and soundscapes designed to pull you out of the room you are in — and into another one.</p>
+                <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
                 <div className="hero-actions">
-                  <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the catalogue <ArrowRight size={16} /></button>
-                  <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Sign in as a creator to open Creator Studio.')}>For creators <ChevronRight size={16} /></button>
+                  <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
+                  <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
                 </div>
                 <div className="hero-signals">
                   <span><Headphones size={15} /> Headphone-first</span>
@@ -967,22 +967,22 @@ function App() {
                   <span><ShieldCheck size={15} /> 18+ access</span>
                 </div>
               </div>
-
-              <div className="hero-art" aria-label="Nightjar featured audio preview">
+              <div className="hero-art" aria-label="Nightjar featured release">
                 <div className="orbit orbit-a" /><div className="orbit orbit-b" />
                 <div className="featured-card">
-                  <div className="featured-top"><span className="mini-label">NIGHTJAR / 001</span><span className="status-dot"><span /> LIVE PREVIEW</span></div>
-                  <div className="cover-art">
-                    <div className="cover-crescent"><Moon size={54} /></div>
-                    <span>AFTER<br /><em>MIDNIGHT</em></span>
-                    <small>{featured.creator}</small>
-                  </div>
-                  <div className="feature-meta">
-                    <div><span className="mini-label">{featured.category}</span><strong>{featured.title}</strong></div>
-                    <button className="round-play" onClick={() => setPlaying(playing === featured.title ? null : featured.title)} aria-label={playing === featured.title ? 'Pause preview' : 'Play preview'}>{playing === featured.title ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
-                  </div>
-                  <div className="waveform compact-wave">{Array.from({ length: 28 }).map((_, index) => <span key={index} style={{ height: `${18 + ((index * 17) % 39)}%` }} />)}</div>
-                  <div className="player-meta"><span>00:00</span><span>{featured.duration}</span></div>
+                  {featured ? <>
+                    <div className="featured-top"><span className="mini-label">NIGHTJAR / FEATURED</span><span className="status-dot"><span /> LIVE RELEASE</span></div>
+                    <div className="cover-art" style={featured.artworkUrl ? { backgroundImage: 'url("' + featured.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
+                      {!featured.artworkUrl && <div className="cover-crescent"><Moon size={54} /></div>}
+                      <span>{featured.title.toUpperCase()}</span>
+                      <small>{featured.creator}</small>
+                    </div>
+                    <div className="feature-meta">
+                      <div><span className="mini-label">{featured.category}</span><strong>{featured.title}</strong></div>
+                      <button className="round-play" disabled={!featured.audioUrl} onClick={() => togglePlayback(featured)} aria-label={playing === featured.id ? 'Pause release' : 'Play release'}>{playing === featured.id ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
+                    </div>
+                    <div className="player-meta"><span>{featured.duration}</span><span>{featured.audioUrl ? 'Audio connected' : 'Audio not connected'}</span></div>
+                  </> : <div className="empty-feature"><Moon size={40}/><strong>No featured release yet.</strong><span>Published catalogue records will appear here as creators release audio.</span></div>}
                 </div>
               </div>
             </section>
@@ -992,48 +992,54 @@ function App() {
             <section className="spotlight-section section-wrap" aria-labelledby="daily-spotlights-title">
               <div className="section-head spotlight-heading"><div><p className="eyebrow"><Sparkles size={14} /> DAILY ROTATION</p><h2 id="daily-spotlights-title">Today in the spotlight.</h2></div><span className="spotlight-cycle">01 DAY · 05 PLACES · FIXED ROTATION</span></div>
               <div className="spotlight-grid">
-                <article className="spotlight-tile creator-spotlight-tile">
-                  <div className="spotlight-art"><span className="spotlight-initials">{creatorSpotlight.initials}</span><span className="spotlight-art-mark"><Mic2 size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{creatorSpotlight.creator}</h3><p className="spotlight-handle">{creatorSpotlight.handle}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition}</span><strong>{creatorSpotlight.title}</strong><p>{creatorSpotlight.detail}</p></div><button className="secondary-button" onClick={() => navigate('creators')}>Meet {creatorSpotlight.creator} <ArrowRight size={14} /></button></div>
-                </article>
-                <article className="spotlight-tile writer-spotlight-tile">
-                  <div className="spotlight-art"><span className="spotlight-initials">{writerSpotlight.initials}</span><span className="spotlight-art-mark"><FileText size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.writer}</h3><p className="spotlight-handle">{writerSpotlight.handle}</p><div className="spotlight-edition"><span>{writerSpotlight.edition}</span><strong>{writerSpotlight.title}</strong><p>{writerSpotlight.detail}</p></div><button className="secondary-button" onClick={() => notify(`Opening ${writerSpotlight.title} for protected script discovery.`)}>Explore {writerSpotlight.title} <ArrowRight size={14} /></button></div>
-                </article>
+                {creatorSpotlight ? <article className="spotlight-tile creator-spotlight-tile">
+                  <div className="spotlight-art"><span className="spotlight-initials">{creatorSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><Mic2 size={20} /></span></div>
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{creatorSpotlight.name}</h3><p className="spotlight-handle">{creatorSpotlight.handle ? '@' + creatorSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition || 'Spotlight'}</span><strong>{creatorSpotlight.title || 'Creator profile'}</strong><p>{creatorSpotlight.detail || 'A live creator spotlight record.'}</p></div><button className="secondary-button" onClick={() => navigate('creators')}>Meet {creatorSpotlight.name} <ArrowRight size={14} /></button></div>
+                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">CREATOR SPOTLIGHT</span><h3>No live slot</h3><p className="spotlight-handle">No scheduled creator spotlight is published for today.</p></div></div>}
+                {writerSpotlight ? <article className="spotlight-tile writer-spotlight-tile">
+                  <div className="spotlight-art"><span className="spotlight-initials">{writerSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><FileText size={20} /></span></div>
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.name}</h3><p className="spotlight-handle">{writerSpotlight.handle ? '@' + writerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{writerSpotlight.edition || 'Spotlight'}</span><strong>{writerSpotlight.title || 'Writer profile'}</strong><p>{writerSpotlight.detail || 'A live writer spotlight record.'}</p></div><button className="secondary-button" onClick={() => writerSpotlight.releaseId ? navigate('protection') : notify('This spotlight has no public release attached yet.')}>Explore work <ArrowRight size={14} /></button></div>
+                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">WRITER SPOTLIGHT</span><h3>No live slot</h3><p className="spotlight-handle">No scheduled writer spotlight is published for today.</p></div></div>}
               </div>
               <p className="spotlight-note">Every place receives one complete day before the same fixed order begins again. No random reshuffling, paid priority or hidden rotation boost.</p>
             </section>
 
             <section id="catalogue" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Fresh after dark.</h2></div><button className="text-button with-icon" onClick={() => notify('Full catalogue filtering will live here.')}>Browse all <ChevronRight size={15} /></button></div>
+              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
               <div className="track-grid">
-                {tracks.slice(0, 4).map((track, index) => (
-                  <article className={index === 0 ? 'track-card featured-track' : 'track-card'} key={track.title}>
-                    <div className="track-cover">
-                      <span className="track-index">0{index + 1}</span><div className="track-cover-mark"><Moon size={22} /></div>
-                      <button className="cover-play" onClick={() => setPlaying(playing === track.title ? null : track.title)} aria-label={playing === track.title ? `Pause ${track.title}` : `Play ${track.title}`}>{playing === track.title ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}</button>
-                    </div>
-                    <div className="track-body"><div className="track-type"><span>{track.category}</span><span>{track.duration}</span></div><h3>{track.title}</h3><p>{track.descriptor}</p><div className="track-footer"><button className="creator-link" onClick={() => navigate('creators')}>{track.creator}</button><span className="listener-count"><Users size={13} /> {track.listeners}</span></div></div>
-                  </article>
-                ))}
+                {tracks.slice(0, 6).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} />)}
+                {!tracks.length && <div className="people-empty"><Headphones size={18}/><strong>No published releases yet.</strong><span>The listening room will populate from real creator releases once audio is published.</span></div>}
               </div>
             </section>
 
-            <section className="manifesto section-wrap">
-              <div className="manifesto-quote"><span className="quote-mark">“</span><h2>Good audio does not sit in the background. It changes the room.</h2></div>
-              <div className="manifesto-copy"><p className="eyebrow">WHY NIGHTJAR</p><p>Nightjar is built around the things that make spoken audio powerful: the intimacy of a human voice, the space between words, and the feeling that a story is happening very close to you.</p><div className="manifesto-stats"><div><strong>18+</strong><span>Adult audience</span></div><div><strong>Audio</strong><span>Core medium</span></div><div><strong>Creators</strong><span>At the centre</span></div></div></div>
+            <section id="for-you" className="section-wrap">
+              <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><select className="mood-select" value={currentIntent} onChange={(event) => setCurrentIntent(event.target.value)} aria-label="Current listening intent"><option value="">Open to anything</option><option value="wind">Wind down</option><option value="story">A story</option><option value="quiet">Something quiet</option><option value="focus">Focus</option><option value="discover">Discover something new</option></select></div>
+              <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
+              <div className="track-grid">
+                {liveRecommendations.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
+                {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
+              </div>
+            </section>
+
+            <section className="section-wrap">
+              <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
+              <div className="track-grid">
+                {liveTrending.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
+                {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
+              </div>
             </section>
 
             <section className="creator-band section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
-              <div className="creator-grid">{creators.slice(0, 3).map((creator) => <button className="creator-card" key={creator.name} onClick={() => navigate('creators')}><span className="avatar-large">{creator.initials}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle}</span><em>{creator.note}</em></span><ChevronRight size={17} /></button>)}</div>
+              <div className="creator-grid">{creators.slice(0, 5).map((creator) => <button className="creator-card" key={creator.userId} onClick={() => navigate('creators')}><span className="avatar-large">{creator.initials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.note || 'Nightjar creator profile.'}</em><small>{creator.releases ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
+              {!creators.length && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
             </section>
 
             <section className="studio-feature section-wrap">
-              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>The catalogue earns with you.</h2><p>Nightjar is designed around recurring listening rather than one-off commissioned drops. Your catalogue, audience and verified listening become part of the same transparent system.</p><button className="primary-button" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Sign in as a creator to open Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
-              <div className="studio-preview-card"><div className="demo-ribbon">ILLUSTRATIVE DEMO DATA</div><div className="studio-card-head"><div><span className="mini-label">CREATOR STUDIO</span><strong>Mara Vale</strong></div><span className="studio-period">PREVIEW PERIOD</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="mini-chart">{Array.from({ length: 30 }).map((_, index) => <span key={index} style={{ height: `${24 + ((index * 13) % 62)}%` }} />)}</div><div className="formula-line"><span>NET SUBSCRIPTION REVENUE</span><ChevronRight size={12} /><span>CREATOR POOL</span><ChevronRight size={12} /><span>VERIFIED LISTENING</span></div></div>
+              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>The catalogue earns with real listening.</h2><p>Creator economics are based on verified listening and live commercial records. Nightjar does not fabricate listeners, earnings or payouts.</p><button className="primary-button" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
+              <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>NET SUBSCRIPTION REVENUE</span><ChevronRight size={12}/><span>CREATOR POOL</span><ChevronRight size={12}/><span>VERIFIED LISTENING</span></div></div>
             </section>
-          </>
+          </section>
         )}
 
         {view === 'creators' && (
