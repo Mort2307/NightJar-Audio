@@ -1243,6 +1243,54 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ recorded: true });
   }
 
+  if (path === '/api/security/device/register' && method === 'POST') {
+    const account = requireUser(state);
+    const deviceHash = await localDeviceHash(input.deviceId);
+    if (!deviceHash) return send({ registered: false, protectedAccessPaused: false, linkedRestrictedAccountCount: 0, securityReviewRequired: false, alertId: null });
+
+    let current = state.securityDevices.find((item) => item.deviceHash === deviceHash && item.userId === account.userId);
+    if (current) Object.assign(current, { lastSeenAt: now() });
+    else {
+      current = { id: id('device'), deviceHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked: false };
+      state.securityDevices.push(current);
+    }
+
+    const sameDevice = state.securityDevices.filter((item) => item.deviceHash === deviceHash);
+    const blocked = sameDevice.some((item) => item.blocked === true);
+    const linkedRestrictedUserIds = Array.from(new Set(sameDevice.map((item) => item.userId).filter((userId) => userId !== account.userId))).filter((userId) => {
+      const linked = state.users.find((candidate) => candidate.userId === userId);
+      return linked?.status === 'suspended' || linked?.removed === true;
+    });
+    const suspicious = blocked || linkedRestrictedUserIds.length > 0;
+    let alertId: string | null = null;
+
+    if (suspicious) {
+      const recent = state.securityAlerts.find((item) =>
+        item.userId === account.userId &&
+        item.deviceHash === deviceHash &&
+        item.status === 'open' &&
+        Date.now() - new Date(String(item.createdAt ?? 0)).getTime() < 24 * 60 * 60_000
+      );
+      if (recent?.id) alertId = String(recent.id);
+      else {
+        const alert = addLocalSecurityAlert(state, {
+          userId: account.userId,
+          severity: blocked ? 'critical' : 'high',
+          riskScore: blocked ? 95 : 78,
+          reason: blocked
+            ? 'A Nightjar session was opened from a device token previously blocked by an administrator.'
+            : 'A Nightjar session was opened from a device token previously linked to a suspended or removed account.',
+          deviceHash,
+          linkedSuspendedUserIds: linkedRestrictedUserIds,
+          signal: { eventType: 'device_linked_to_restricted_account', accountSessionOnly: true },
+        });
+        alertId = String(alert.id);
+      }
+    }
+
+    return send({ registered: true, protectedAccessPaused: blocked, linkedRestrictedAccountCount: linkedRestrictedUserIds.length, securityReviewRequired: suspicious, alertId });
+  }
+
   if (path === '/api/security/reader-session' && method === 'POST') {
     const account = requireUser(state);
     requireVerifiedAdult(state, account);
