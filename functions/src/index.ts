@@ -1682,3 +1682,707 @@ export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (reque
   return { releaseId, url, expiresInSeconds: 600 };
 });
 
+const toIso = (value: any) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value.toDate === 'function') return value.toDate().toISOString();
+  if (typeof value.toMillis === 'function') return new Date(value.toMillis()).toISOString();
+  return null;
+};
+
+const scriptRef = (scriptId: string) => db.collection('scripts').doc(scriptId);
+
+const scriptPayload = (data: Record<string, any>, id: string, includeContent = true) => ({
+  id,
+  title: data.title ?? 'Untitled manuscript',
+  ...(includeContent ? { content: data.content ?? '' } : {}),
+  status: data.status ?? 'Draft',
+  access: data.access ?? 'Private',
+  version: Number(data.version ?? 1),
+  writerUserId: data.writerUserId ?? null,
+  editorUserId: data.editorUserId ?? null,
+  lastEditorialComment: data.lastEditorialComment ?? null,
+  createdAt: toIso(data.createdAt),
+  updatedAt: toIso(data.updatedAt),
+  submittedAt: toIso(data.submittedAt),
+});
+
+export const listWriterScripts = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer', 'admin']);
+  if (identity.role === 'admin') return { scripts: [] };
+  const snapshot = await db.collection('scripts').where('writerUserId', '==', identity.uid).limit(500).get();
+  const scripts = snapshot.docs
+    .map((doc) => scriptPayload(doc.data(), doc.id, true))
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  return { scripts };
+});
+
+export const createWriterScript = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const title = cleanText(input.title, 180) || 'Untitled manuscript';
+  const ref = db.collection('scripts').doc();
+  await ref.set({
+    title,
+    content: cleanText(input.content, 200000),
+    status: 'Draft',
+    access: 'Private',
+    version: 1,
+    writerUserId: identity.uid,
+    editorUserId: null,
+    lastEditorialComment: null,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  const saved = await ref.get();
+  return { script: scriptPayload(saved.data() ?? {}, ref.id, true) };
+});
+
+export const updateWriterScript = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const ref = scriptRef(scriptId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+  if (!['Draft','Revision requested','Rejected'].includes(String(data.status ?? 'Draft'))) {
+    throw new HttpsError('failed-precondition', 'This manuscript is currently locked for editorial review.');
+  }
+  await ref.set({
+    title: cleanText(input.title ?? data.title, 180) || 'Untitled manuscript',
+    content: cleanText(input.content ?? data.content, 200000),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  const saved = await ref.get();
+  return { script: scriptPayload(saved.data() ?? {}, scriptId, true) };
+});
+
+export const deleteWriterScript = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
+  const ref = scriptRef(scriptId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+  if (!['Draft','Rejected'].includes(String(data.status ?? 'Draft'))) {
+    throw new HttpsError('failed-precondition', 'Submitted manuscripts cannot be deleted while editorial workflow is active.');
+  }
+
+  const [versions, permissions] = await Promise.all([
+    ref.collection('versions').limit(500).get(),
+    ref.collection('permissions').limit(500).get(),
+  ]);
+  const batch = db.batch();
+  for (const doc of versions.docs) batch.delete(doc.ref);
+  for (const doc of permissions.docs) batch.delete(doc.ref);
+  batch.delete(ref);
+  await batch.commit();
+  return { deleted: true };
+});
+
+export const createWriterScriptVersion = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
+  const ref = scriptRef(scriptId);
+
+  const nextVersion = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.data();
+    if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+    const version = Number(data.version ?? 1) + 1;
+    const versionRef = ref.collection('versions').doc(String(version));
+    transaction.set(versionRef, {
+      scriptId,
+      version,
+      title: data.title ?? 'Untitled manuscript',
+      content: data.content ?? '',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(ref, { version, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return version;
+  });
+
+  const saved = await ref.get();
+  return { script: scriptPayload(saved.data() ?? {}, scriptId, true), version: nextVersion };
+});
+
+export const submitWriterScript = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
+  const ref = scriptRef(scriptId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+  if (!cleanText(data.content, 200000)) throw new HttpsError('failed-precondition', 'Add manuscript content before submitting.');
+  if (!['Draft','Revision requested','Rejected'].includes(String(data.status ?? 'Draft'))) {
+    throw new HttpsError('failed-precondition', 'This manuscript is already in editorial workflow.');
+  }
+
+  await ref.set({
+    status: 'Submitted',
+    submittedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const saved = await ref.get();
+  return { script: scriptPayload(saved.data() ?? {}, scriptId, true) };
+});
+
+export const listEditorQueue = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['editor', 'admin']);
+  const snapshot = await db.collection('scripts').limit(1000).get();
+  const activeStatuses = new Set(['Submitted','Under review','Revision requested']);
+  const queue = snapshot.docs
+    .filter((doc) => activeStatuses.has(String(doc.data().status)))
+    .filter((doc) => identity.role === 'admin' || doc.data().editorUserId === identity.uid)
+    .map((doc) => scriptPayload(doc.data(), doc.id, false))
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  return { queue };
+});
+
+export const reviewEditorScript = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['editor']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const status = cleanText(input.status, 40);
+  if (!['Under review','Revision requested','Approved','Rejected'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Invalid editorial state.');
+  }
+
+  const ref = scriptRef(scriptId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || data.editorUserId !== identity.uid) {
+    throw new HttpsError('permission-denied', 'This manuscript is not assigned to this Audio Editor.');
+  }
+
+  const comment = cleanText(input.comment, 4000);
+  await ref.set({
+    status,
+    lastEditorialComment: comment || null,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  if (data.writerUserId) {
+    await createNotification(String(data.writerUserId), {
+      type: 'editorial',
+      subtype: 'script_review',
+      title: status === 'Approved' ? 'Your manuscript was approved' : status === 'Revision requested' ? 'Revision requested' : status === 'Rejected' ? 'Editorial review completed' : 'Your manuscript is under review',
+      message: comment || ('Editorial status changed to ' + status + '.'),
+      scriptId,
+    });
+  }
+
+  const saved = await ref.get();
+  return { script: scriptPayload(saved.data() ?? {}, scriptId, false) };
+});
+
+export const listEditorAccounts = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('accounts').where('role', '==', 'editor').limit(500).get();
+  const editors = await Promise.all(snapshot.docs
+    .filter((doc) => doc.data().status === 'active')
+    .map(async (doc) => {
+      const profile = await profileRef(doc.id).get();
+      return {
+        userId: doc.id,
+        email: doc.data().email ?? null,
+        name: profile.data()?.displayName ?? doc.data().email?.split('@')?.[0] ?? 'Audio Editor',
+      };
+    }));
+  return { editors };
+});
+
+export const adminListScripts = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('scripts').limit(1000).get();
+  return {
+    scripts: snapshot.docs.map((doc) => scriptPayload(doc.data(), doc.id, false))
+      .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))),
+  };
+});
+
+export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const editorUserId = cleanText(input.editorUserId, 160);
+  if (!scriptId || !editorUserId) throw new HttpsError('invalid-argument', 'Script and Audio Editor are required.');
+
+  const [script, editor] = await Promise.all([
+    scriptRef(scriptId).get(),
+    accountRef(editorUserId).get(),
+  ]);
+  if (!script.exists) throw new HttpsError('not-found', 'Script not found.');
+  if (!editor.exists || editor.data()?.role !== 'editor' || editor.data()?.status !== 'active') {
+    throw new HttpsError('failed-precondition', 'The selected account is not an active Audio Editor.');
+  }
+
+  await script.ref.set({
+    editorUserId,
+    status: script.data()?.status === 'Submitted' ? 'Under review' : script.data()?.status,
+    assignedBy: admin.uid,
+    assignedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  await createNotification(editorUserId, {
+    type: 'editorial',
+    subtype: 'assignment',
+    title: 'New manuscript assigned',
+    message: 'A Nightjar manuscript has been assigned to your Audio Editor queue.',
+    scriptId,
+  });
+
+  const saved = await script.ref.get();
+  return { script: scriptPayload(saved.data() ?? {}, scriptId, false) };
+});
+
+const activePermissionFor = async (scriptId: string, userId: string) => {
+  const snapshot = await scriptRef(scriptId).collection('permissions').doc(userId).get();
+  if (!snapshot.exists) return null;
+  const data = snapshot.data() ?? {};
+  if (data.revokedAt) return null;
+  const expiresAt = data.expiresAt ? new Date(String(data.expiresAt)).getTime() : null;
+  if (expiresAt && Number.isFinite(expiresAt) && expiresAt <= Date.now()) return null;
+  return data;
+};
+
+export const listProtectedScripts = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator','writer','editor','admin']);
+  const snapshot = await db.collection('scripts').limit(1000).get();
+
+  const visible: any[] = [];
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    let allowed = false;
+    if (identity.role === 'admin') {
+      allowed = true;
+    } else if (data.writerUserId === identity.uid || data.editorUserId === identity.uid) {
+      allowed = true;
+    } else {
+      allowed = Boolean(await activePermissionFor(doc.id, identity.uid));
+    }
+    if (allowed) visible.push(scriptPayload(data, doc.id, false));
+  }
+
+  return { scripts: visible };
+});
+
+const revokeReaderSessions = async (userId: string, scriptId?: string, reason = 'revoked') => {
+  const snapshot = await accountRef(userId).collection('readerSessions').limit(500).get();
+  const batch = db.batch();
+  let count = 0;
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (data.status !== 'active') continue;
+    if (scriptId && data.scriptId !== scriptId) continue;
+    batch.set(doc.ref, {
+      status: 'revoked',
+      revokedAt: FieldValue.serverTimestamp(),
+      revokedReason: reason,
+    }, { merge: true });
+    count += 1;
+  }
+  if (count) await batch.commit();
+  return count;
+};
+
+const protectedEventMillis = (data: Record<string, any>) => data.createdAt?.toMillis?.() ?? 0;
+
+const createSecurityAlertFirebase = async (userId: string, details: Record<string, unknown>) => {
+  const ref = db.collection('securityAlerts').doc();
+  const record = {
+    userId,
+    ...details,
+    recipients: Array.from(ADMIN_EMAILS),
+    status: 'open',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+
+  await db.collection('securityCases').doc(ref.id).set({
+    alertId: ref.id,
+    userId,
+    state: 'detection',
+    history: [{
+      state: 'detection',
+      at: new Date().toISOString(),
+      note: 'Suspicious activity detected; retained for review by all Nightjar owners.',
+    }],
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  for (const email of ADMIN_EMAILS) {
+    const ownerKey = Buffer.from(email).toString('base64url');
+    await db.collection('ownerNotifications').doc(ownerKey).collection('items').add({
+      type: 'security_alert',
+      alertId: ref.id,
+      severity: details.severity ?? 'medium',
+      title: 'Nightjar security alert',
+      message: details.reason ?? 'Suspicious protected-content activity requires review.',
+      recipientEmail: email,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  return ref.id;
+};
+
+const assessProtectedActivityFirebase = async (userId: string, signal: Record<string, unknown>) => {
+  const now = Date.now();
+  const snapshot = await db.collection('protectionEvents').where('userId', '==', userId).limit(1000).get();
+  const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as any[];
+  const recent = items.filter((item) => now - protectedEventMillis(item) < 60_000);
+  const tenMinute = items.filter((item) => now - protectedEventMillis(item) < 600_000);
+  const scriptId = cleanText(signal.relatedId, 160);
+  const sameScriptRecent = recent.filter((item) => cleanText(item.relatedId, 160) === scriptId);
+  const sameDeviceTenMinute = signal.deviceId ? tenMinute.filter((item) => item.deviceId === signal.deviceId) : [];
+  const blocked = recent.filter((item) => ['blocked_interaction','copy_blocked','cut_blocked','selection_blocked','print_blocked','repeated_protected_interaction'].includes(String(item.eventType)));
+  const rapidViews = sameScriptRecent.filter((item) => item.eventType === 'script_view' || item.eventType === 'reader_chunk_view');
+  const distinctScripts = new Set(tenMinute.map((item) => cleanText(item.relatedId, 160)).filter(Boolean)).size;
+
+  let score = 0;
+  const reasons: string[] = [];
+  if (recent.length >= 45) { score += 25; reasons.push('very high protected-content request velocity'); }
+  else if (recent.length >= 25) { score += 12; reasons.push('elevated protected-content request velocity'); }
+  if (sameScriptRecent.length >= 30) { score += 30; reasons.push('dense activity against one manuscript'); }
+  else if (sameScriptRecent.length >= 15) { score += 15; reasons.push('repeated activity against one manuscript'); }
+  if (rapidViews.length >= 20) { score += 25; reasons.push('rapid manuscript traversal'); }
+  if (blocked.length >= 8) { score += 20; reasons.push('repeated blocked extraction interactions'); }
+  else if (blocked.length >= 3) { score += 8; reasons.push('multiple blocked interactions'); }
+  if (distinctScripts >= 6) { score += 15; reasons.push('unusually broad manuscript access'); }
+  if (sameDeviceTenMinute.length >= 80) { score += 10; reasons.push('high-volume activity from the same device token'); }
+  if (signal.eventType === 'automation_pattern') { score += 35; reasons.push('automation-like access pattern'); }
+  if (signal.eventType === 'reader_session_replay') { score += 40; reasons.push('reader-session replay detected'); }
+
+  if (score < 40) return null;
+
+  const alerts = await db.collection('securityAlerts').where('userId', '==', userId).limit(200).get();
+  const duplicate = alerts.docs.some((doc) => {
+    const data = doc.data();
+    return data.status === 'open' && now - (data.createdAt?.toMillis?.() ?? 0) < 600_000;
+  });
+  if (duplicate) return null;
+
+  const severity = score >= 85 ? 'critical' : score >= 60 ? 'high' : 'medium';
+  const alertId = await createSecurityAlertFirebase(userId, {
+    severity,
+    riskScore: Math.min(score, 100),
+    reason: reasons.join('; ') || 'Unusual protected-content activity requires review.',
+    relatedId: scriptId || null,
+    signal: {
+      eventType: signal.eventType ?? null,
+      recentEvents: recent.length,
+      relatedEvents: sameScriptRecent.length,
+      blockedEvents: blocked.length,
+      rapidViews: rapidViews.length,
+      distinctScripts,
+      deviceId: signal.deviceId ?? null,
+    },
+    automaticAction: 'none',
+    reviewRequired: true,
+  });
+
+  return { alertId, severity, riskScore: Math.min(score, 100) };
+};
+
+export const recordProtectionEvent = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const eventType = cleanText(input.eventType, 80);
+  if (!eventType) throw new HttpsError('invalid-argument', 'Protection event type is required.');
+
+  const record = {
+    userId: identity.uid,
+    eventType,
+    relatedType: cleanText(input.relatedType, 80) || 'script',
+    relatedId: cleanText(input.relatedId, 160) || null,
+    deviceId: cleanText(input.deviceId, 180) || null,
+    summary: cleanText(input.summary, 800) || null,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  const ref = await db.collection('protectionEvents').add(record);
+
+  const alert = await assessProtectedActivityFirebase(identity.uid, { ...record, createdAt: new Date().toISOString() });
+  return { recorded: true, evidenceId: ref.id, alert };
+});
+
+export const openProtectedScript = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator','writer','editor','admin']);
+  const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
+  const ref = scriptRef(scriptId);
+  const snapshot = await ref.get();
+  const script = snapshot.data();
+  if (!script) throw new HttpsError('not-found', 'Script not found.');
+
+  let allowCopy = false;
+  let allowExport = false;
+  let permitted = false;
+
+  if (script.writerUserId === identity.uid) {
+    permitted = true;
+    allowCopy = true;
+    allowExport = true;
+  } else if (script.editorUserId === identity.uid && identity.role === 'editor') {
+    permitted = true;
+  } else if (identity.role !== 'admin') {
+    const permission = await activePermissionFor(scriptId, identity.uid);
+    if (permission) {
+      permitted = true;
+      allowCopy = permission.allowCopy === true;
+      allowExport = permission.allowExport === true;
+    }
+  }
+
+  if (!permitted) {
+    throw new HttpsError('permission-denied', 'You do not have an active full-manuscript access grant.');
+  }
+
+  const sessionRef = accountRef(identity.uid).collection('readerSessions').doc();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  await sessionRef.set({
+    sessionId: sessionRef.id,
+    accountId: identity.uid,
+    scriptId,
+    status: 'active',
+    expiresAt,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  await db.collection('protectionEvents').add({
+    userId: identity.uid,
+    eventType: 'script_view',
+    relatedType: 'script',
+    relatedId: scriptId,
+    deviceId: null,
+    summary: 'Protected manuscript opened through an authorised reader session.',
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  void assessProtectedActivityFirebase(identity.uid, { eventType: 'script_view', relatedId: scriptId });
+
+  return {
+    script: scriptPayload(script, scriptId, true),
+    readerSession: {
+      sessionId: sessionRef.id,
+      accountId: identity.uid,
+      expiresAt,
+      status: 'active',
+    },
+    copyAllowed: allowCopy,
+    exportAllowed: allowExport,
+    canReadFull: true,
+  };
+});
+
+export const listScriptPermissions = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
+  const script = await scriptRef(scriptId).get();
+  if (!script.exists || script.data()?.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+  const snapshot = await script.ref.collection('permissions').limit(500).get();
+  return {
+    permissions: snapshot.docs.map((doc) => ({
+      recipientUserId: doc.id,
+      allowCopy: doc.data().allowCopy === true,
+      allowExport: doc.data().allowExport === true,
+      expiresAt: doc.data().expiresAt ?? null,
+      revokedAt: doc.data().revokedAt ?? null,
+      updatedAt: toIso(doc.data().updatedAt),
+    })),
+  };
+});
+
+export const setScriptPermission = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const recipientUserId = cleanText(input.recipientUserId ?? input.creatorUserId, 160);
+  if (!scriptId || !recipientUserId) throw new HttpsError('invalid-argument', 'Recipient account is required.');
+  if (recipientUserId === identity.uid) throw new HttpsError('invalid-argument', 'The writer already has full manuscript access.');
+
+  const [script, recipient] = await Promise.all([
+    scriptRef(scriptId).get(),
+    accountRef(recipientUserId).get(),
+  ]);
+  if (!script.exists || script.data()?.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+  if (!recipient.exists || recipient.data()?.status === 'suspended') throw new HttpsError('not-found', 'Recipient Nightjar account not found.');
+
+  const permissionRef = script.ref.collection('permissions').doc(recipientUserId);
+  const revoke = input.revoke === true;
+  const expiresRaw = cleanText(input.expiresAt, 80);
+  if (expiresRaw && !Number.isFinite(Date.parse(expiresRaw))) throw new HttpsError('invalid-argument', 'Expiry date is invalid.');
+
+  await permissionRef.set({
+    recipientUserId,
+    allowCopy: revoke ? false : input.allowCopy === true,
+    allowExport: revoke ? false : input.allowExport === true,
+    expiresAt: revoke ? null : (expiresRaw || null),
+    revokedAt: revoke ? new Date().toISOString() : null,
+    grantedBy: identity.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(revoke ? {} : { grantedAt: FieldValue.serverTimestamp() }),
+  }, { merge: true });
+
+  if (revoke) await revokeReaderSessions(recipientUserId, scriptId, 'writer_revoked_access');
+
+  await createNotification(recipientUserId, {
+    type: 'script_access',
+    subtype: revoke ? 'revoked' : 'granted',
+    title: revoke ? 'Manuscript access revoked' : 'Manuscript access granted',
+    message: revoke
+      ? 'A writer has revoked your access to a protected Nightjar manuscript.'
+      : 'A writer has granted you controlled access to a protected Nightjar manuscript.',
+    scriptId,
+  });
+
+  return {
+    recipientUserId,
+    allowCopy: !revoke && input.allowCopy === true,
+    allowExport: !revoke && input.allowExport === true,
+    expiresAt: revoke ? null : (expiresRaw || null),
+    revoked: revoke,
+  };
+});
+
+export const listProtectionEvidence = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await db.collection('protectionEvents').where('userId', '==', identity.uid).limit(500).get();
+  const evidence = snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
+    .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return { evidence };
+});
+
+export const listProtectionReports = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await db.collection('protectionReports').where('userId', '==', identity.uid).limit(500).get();
+  const reports = snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
+    .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return { reports };
+});
+
+export const submitProtectionReport = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const category = cleanText(input.category, 120) || 'Something else';
+  const summary = cleanText(input.summary, 6000);
+  if (!summary) throw new HttpsError('invalid-argument', 'Describe what happened before submitting.');
+
+  const year = new Date().getFullYear();
+  const counterRef = db.collection('counters').doc('protectionReports');
+  const sequence = await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(counterRef);
+    const data = current.data() ?? {};
+    const next = Number(data.year) === year ? Number(data.value ?? 0) + 1 : 1;
+    transaction.set(counterRef, { year, value: next, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return next;
+  });
+
+  const caseId = `NJ-${year}-${String(sequence).padStart(6, '0')}`;
+  const ref = db.collection('protectionReports').doc();
+  await ref.set({
+    caseId,
+    userId: identity.uid,
+    category,
+    summary,
+    status: 'New',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    report: {
+      id: ref.id,
+      caseId,
+      userId: identity.uid,
+      category,
+      summary,
+      status: 'New',
+      createdAt: new Date().toISOString(),
+    },
+  };
+});
+
+export const listSecurityAlerts = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('securityAlerts').limit(500).get();
+  const alerts = snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
+    .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return { alerts };
+});
+
+export const suspendFromSecurityAlert = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const alertId = cleanText((request.data as { alertId?: unknown } | undefined)?.alertId, 160);
+  const alertRef = db.collection('securityAlerts').doc(alertId);
+  const alert = await alertRef.get();
+  const data = alert.data();
+  if (!data) throw new HttpsError('not-found', 'Security alert not found.');
+
+  await accountRef(String(data.userId)).set({
+    status: 'suspended',
+    suspendedBy: admin.uid,
+    suspendedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  const revokedCount = await revokeReaderSessions(String(data.userId), undefined, 'admin_security_action');
+
+  await alertRef.set({
+    status: 'actioned',
+    action: 'suspended',
+    actionedBy: admin.uid,
+    actionedAt: FieldValue.serverTimestamp(),
+    revokedReaderSessions: revokedCount,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { suspended: true, revokedReaderSessions: revokedCount };
+});
+
+export const revokeSessionsFromSecurityAlert = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const alertId = cleanText((request.data as { alertId?: unknown } | undefined)?.alertId, 160);
+  const alertRef = db.collection('securityAlerts').doc(alertId);
+  const alert = await alertRef.get();
+  const data = alert.data();
+  if (!data) throw new HttpsError('not-found', 'Security alert not found.');
+  const revokedCount = await revokeReaderSessions(String(data.userId), undefined, 'admin_security_review');
+  await alertRef.set({
+    lastAction: 'reader_sessions_revoked',
+    lastActionBy: admin.uid,
+    lastActionAt: FieldValue.serverTimestamp(),
+    revokedReaderSessions: revokedCount,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { revoked: true, userId: data.userId, revokedReaderSessions: revokedCount };
+});
+
+export const closeSecurityAlertBenign = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const alertId = cleanText(input.alertId, 160);
+  const note = cleanText(input.note, 2000);
+  const ref = db.collection('securityAlerts').doc(alertId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Security alert not found.');
+
+  await ref.set({
+    status: 'closed',
+    action: 'benign',
+    reviewNote: note || null,
+    actionedBy: admin.uid,
+    actionedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { closed: true };
+});
+
