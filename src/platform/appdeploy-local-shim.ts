@@ -1278,7 +1278,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!script) throw new Error('Script not found.');
     script.editorUserId = editorUserId;
     script.updatedAt = now();
-    return send({ script });
+    return send({ script: { ...localScriptMetadata(script), editorUserId: script.editorUserId ?? null } });
   }
 
   if (path === '/api/admin/overview' && method === 'GET') {
