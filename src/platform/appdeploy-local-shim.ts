@@ -24,6 +24,7 @@ type LocalState = {
   subscriptions: any[];
   securityAlerts: any[];
   securityNotifications: Record<string, any[]>;
+  notifications: Record<string, any[]>;
   readerSessions: Record<string, any[]>;
   brandingUrl: string | null;
   spotlights: any[];
@@ -62,6 +63,7 @@ const emptyState = (): LocalState => ({
   subscriptions: [],
   securityAlerts: [],
   securityNotifications: {},
+  notifications: {},
   readerSessions: {},
   brandingUrl: null,
   spotlights: [],
@@ -121,6 +123,16 @@ function ensureProfile(state: LocalState, user: LocalUser) {
     };
   }
   return state.profiles[user.userId];
+}
+
+function addLocalNotification(state: LocalState, userId: string, notification: Record<string, any>) {
+  state.notifications[userId] = [...(state.notifications[userId] ?? []), { id: id('notification'), userId, read: false, createdAt: notification.createdAt ?? now(), ...notification }];
+}
+
+function addLocalNotificationOnce(state: LocalState, userId: string, notification: Record<string, any>) {
+  const existing = state.notifications[userId] ?? [];
+  if (notification.dedupeKey && existing.some((item) => item.dedupeKey === notification.dedupeKey)) return;
+  addLocalNotification(state, userId, notification);
 }
 
 function bodyObject(body: unknown) {
@@ -206,6 +218,48 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ catalogue });
   }
 
+  if (parts[0] === 'api' && parts[1] === 'creators' && parts.length === 3 && method === 'GET') {
+    const account = requireUser(state);
+    const creator = state.users.find((item) => item.userId === parts[2] && item.role === 'creator' && item.status !== 'pending_review');
+    if (!creator) throw new Error('Creator profile not found.');
+    const profile = ensureProfile(state, creator);
+    if (profile.publicProfile === false) throw new Error('Creator profile not found.');
+    const releases = state.releases
+      .filter((release) => release.creatorUserId === creator.userId && release.status === 'released')
+      .map((release) => ({ id: release.id, title: release.title, description: release.description, category: release.category, genre: release.genre, mood: release.mood, tags: release.tags ?? [], tropes: release.tropes ?? [], durationMinutes: release.durationMinutes ?? 0, audioUrl: release.audioUrl ?? null, artworkUrl: release.artworkUrl ?? null, releaseDate: release.releaseDate ?? release.createdAt ?? null }));
+    return send({ creator: { userId: creator.userId, name: profile.displayName ?? creator.name, handle: profile.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, pronouns: profile.pronouns ?? null, initials: profile.avatarInitials ?? null, favouriteTags: profile.favouriteTags ?? [], releases } });
+  }
+
+  if (path === '/api/writers' && method === 'GET') {
+    requireUser(state);
+    const writers = state.users.filter((account) => account.role === 'writer' && account.status !== 'pending_review').map((account) => {
+      const profile = ensureProfile(state, account);
+      if (profile.publicProfile === false) return null;
+      return {
+        userId: account.userId,
+        name: profile.displayName ?? account.name,
+        handle: profile.handle ?? null,
+        headline: profile.headline ?? null,
+        bio: profile.bio ?? null,
+        initials: profile.avatarInitials ?? null,
+        pronouns: profile.pronouns ?? null,
+        roleFocus: profile.roleFocus ?? [],
+        publishedWorkCount: state.scripts.filter((script) => script.writerUserId === account.userId && ['Approved', 'Published'].includes(String(script.status))).length,
+      };
+    }).filter(Boolean);
+    return send({ writers });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'listening' && parts[2] === 'resume' && parts.length === 4 && method === 'GET') {
+    const account = requireUser(state);
+    const releaseId = parts[3];
+    const events = state.listening.filter((event) => event.userId === account.userId && event.releaseId === releaseId).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+    const latest = events[0];
+    const duration = events.find((event) => typeof event.durationSeconds !== 'undefined')?.durationSeconds ?? 0;
+    const position = latest?.eventType === 'complete' ? 0 : events.find((event) => typeof event.positionSeconds !== 'undefined')?.positionSeconds ?? 0;
+    return send({ releaseId, positionSeconds: Math.max(0, Number(position)), durationSeconds: Math.max(0, Number(duration)) });
+  }
+
   if (path === '/api/creators' && method === 'GET') {
     const creators = state.users.filter((account) => account.role === 'creator' && account.status !== 'pending_review').map((account) => {
       const profile = ensureProfile(state, account);
@@ -288,9 +342,45 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ recorded: true });
   }
 
+  if (path === '/api/notifications' && method === 'GET') {
+    const account = requireUser(state);
+    const list = (state.notifications[account.userId] ?? []).slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+    return send({ notifications: list.slice(0, 30), unreadCount: list.filter((item) => item.read !== true).length });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'notifications' && parts.length === 4 && parts[3] === 'read' && method === 'POST') {
+    const account = requireUser(state);
+    const list = state.notifications[account.userId] ?? [];
+    const item = list.find((candidate) => candidate.id === parts[2]);
+    if (!item) throw new Error('Notification not found.');
+    item.read = true;
+    item.readAt = now();
+    return send({ read: true });
+  }
+
   if (path === '/api/listening/history' && method === 'GET') {
     const account = requireUser(state);
     return send({ history: state.listening.filter((event) => event.userId === account.userId).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 100) });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'creator' && parts[2] === 'assets' && method === 'POST') {
+    const account = requireUser(state);
+    if (account.role !== 'creator') throw new Error('Active Creator access required.');
+    const releaseId = String(input.releaseId ?? '');
+    const kind = String(input.kind ?? '');
+    const release = state.releases.find((item) => item.id === releaseId && item.creatorUserId === account.userId);
+    if (!release) throw new Error('Release not found.');
+    if (!['audio', 'artwork'].includes(kind)) throw new Error('Unsupported asset kind.');
+    const dataUrl = typeof input.dataUrl === 'string' ? input.dataUrl : '';
+    if (!dataUrl.startsWith('data:') || !dataUrl.includes(',')) throw new Error('Invalid uploaded file.');
+    const field = kind === 'audio' ? 'audioUrl' : 'artworkUrl';
+    release[field] = dataUrl;
+    release.updatedAt = now();
+    if (kind === 'audio') {
+      const minutes = Number(input.durationMinutes ?? 0);
+      if (minutes > 0) release.durationMinutes = minutes;
+    }
+    return send({ url: dataUrl, path: 'local/' + account.userId + '/' + kind + '/' + releaseId, release });
   }
 
   if (path === '/api/creator/dashboard' && method === 'GET') {
@@ -338,9 +428,12 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (account.role !== 'creator') throw new Error('Active Creator access required.');
     const release = state.releases.find((item) => item.id === parts[3] && item.creatorUserId === account.userId);
     if (!release) throw new Error('Release not found.');
-    if (!release.audioUrl) throw new Error('An audio URL is required before publishing.');
-    release.status = 'released';
-    release.releaseDate = now();
+    if (!release.audioUrl) throw new Error('An audio URL is required before submitting.');
+    if (!release.title || !release.description || !release.category) throw new Error('Complete the release title, description and category before submitting.');
+    if (release.status === 'pending_review' || release.status === 'released') return send({ release });
+    release.status = 'pending_review';
+    release.submittedAt = now();
+    release.moderationNote = null;
     release.updatedAt = now();
     return send({ release });
   }
@@ -525,6 +618,35 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const session = { sessionId: id('reader'), scriptId: input.scriptId ?? null, status: 'active', expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), createdAt: now() };
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
     return send({ session });
+  }
+
+  if (path === '/api/admin/release-queue' && method === 'GET') {
+    requireAdmin(state);
+    return send({ releases: state.releases.filter((release) => release.status === 'pending_review').slice(0, 100) });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'releases' && parts.length === 5 && parts[4] === 'moderate' && method === 'POST') {
+    const admin = requireAdmin(state);
+    const release = state.releases.find((item) => item.id === parts[3]);
+    if (!release) throw new Error('Release not found.');
+    const decision = String(input.decision ?? '');
+    if (!['approved', 'changes', 'rejected'].includes(decision)) throw new Error('Invalid moderation decision.');
+    const note = String(input.note ?? '').trim();
+    release.status = decision === 'approved' ? 'released' : decision === 'changes' ? 'draft' : 'rejected';
+    release.moderationNote = note || null;
+    release.moderatedAt = now();
+    release.moderatedBy = admin.userId;
+    release.releaseDate = decision === 'approved' ? now() : release.releaseDate ?? null;
+    release.updatedAt = now();
+    if (release.creatorUserId) addLocalNotification(state, release.creatorUserId, {
+      type: 'content',
+      subtype: 'release',
+      title: decision === 'approved' ? 'Your release is live on Nightjar' : decision === 'changes' ? 'Changes requested for your release' : 'Your release was not approved',
+      message: decision === 'approved' ? 'Your release has passed Nightjar moderation and is now available to age-verified listeners.' : decision === 'changes' ? 'Nightjar moderation has requested changes before this release can be published.' : 'Your release was not approved for publication. Open Creator Studio to review the moderation note.',
+      releaseId: release.id,
+      moderationNote: release.moderationNote,
+    });
+    return send({ release });
   }
 
   if (path === '/api/admin/scripts' && method === 'GET') {

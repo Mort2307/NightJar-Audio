@@ -396,5 +396,139 @@
       "Open Notifications for each spotlight target"
     ],
     "expected": "Each target has exactly one notification for that spotlight date and kind; retries only report already-materialized work."
+  },
+  {
+    "name": "Creator audio upload detects duration and persists media assets",
+    "viewport": "mobile",
+    "covers": [
+      "audio upload",
+      "artwork upload",
+      "audio duration",
+      "storage",
+      "release draft"
+    ],
+    "description": "Verifies Creator Studio can turn a real media file into a stored release asset and record readable duration metadata.",
+    "steps": [
+      "Create a release draft",
+      "Attach a supported audio file",
+      "Confirm duration is detected when media metadata is readable",
+      "Attach artwork",
+      "Reload the release"
+    ],
+    "expected": "The release retains stored audio/artwork URLs, readable audio duration is recorded, and the release remains private until submitted."
+  },
+  {
+    "name": "Creator submissions cannot bypass content moderation",
+    "viewport": "desktop",
+    "covers": [
+      "moderation boundary",
+      "pending review",
+      "approve",
+      "request changes",
+      "reject"
+    ],
+    "description": "Verifies complete creator releases enter the moderator queue instead of becoming public immediately.",
+    "steps": [
+      "Complete title, description, category and audio",
+      "Submit the release",
+      "Open Administrator Content Moderation",
+      "Preview the audio",
+      "Choose Approve, Request changes or Reject"
+    ],
+    "expected": "Submission becomes pending_review; only an administrator decision can publish it, return it to draft with feedback, or reject it; the creator receives a notification."
+  },
+  {
+    "name": "Nightjar player resumes and queues real listening",
+    "viewport": "mobile",
+    "covers": [
+      "player",
+      "resume",
+      "progress telemetry",
+      "completion",
+      "queue"
+    ],
+    "description": "Verifies the shared player behaves like a real listening surface and feeds the listening model.",
+    "steps": [
+      "Play a published release",
+      "Let progress events record",
+      "Close and reopen the release",
+      "Navigate next and previous where multiple releases exist",
+      "Finish a release"
+    ],
+    "expected": "A valid incomplete listening position resumes, completed releases reopen from the beginning, progress/completion events are recorded, and queue navigation changes the active release."
+  },
+  {
+    "name": "Creator public profile contains only public released work",
+    "viewport": "mobile",
+    "covers": [
+      "creator profile",
+      "public privacy",
+      "follow",
+      "share",
+      "released catalogue"
+    ],
+    "description": "Verifies public Creator discovery is a real destination without leaking private drafts.",
+    "steps": [
+      "Open a public Creator from the directory or spotlight",
+      "Inspect profile details",
+      "Follow the Creator",
+      "Open a public release",
+      "Share the profile"
+    ],
+    "expected": "Only public profile fields and released catalogue records are shown; drafts remain hidden, follow state persists, and sharing uses a supported destination."
+  },
+  {
+    "name": "Writer discovery separates public identity from protected writing",
+    "viewport": "desktop",
+    "covers": [
+      "writer discovery",
+      "privacy",
+      "protected manuscripts",
+      "creative focus"
+    ],
+    "description": "Verifies Writers can be promoted without exposing manuscript text or production permissions.",
+    "steps": [
+      "Set a Writer profile to public",
+      "Add role focus",
+      "Create private manuscripts",
+      "Open Writer discovery as a listener"
+    ],
+    "expected": "Public identity, profile copy and creative focus may appear; protected manuscript content and collaboration permissions do not."
+  },
+  {
+    "name": "Onboarding stores explicit preferences without inferring identity",
+    "viewport": "mobile",
+    "covers": [
+      "onboarding",
+      "explicit taste",
+      "privacy",
+      "editable profile",
+      "identity"
+    ],
+    "description": "Verifies the new modular question surface treats identity and taste as explicit user choices.",
+    "steps": [
+      "Sign in with incomplete onboarding",
+      "Complete or skip groups",
+      "Save explicit preferences",
+      "Reload",
+      "Edit preferences from Profile"
+    ],
+    "expected": "Saved answers persist to the account, public visibility remains controlled by the user, and skipped onboarding is not falsely marked complete."
+  },
+  {
+    "name": "Completed listening does not resume at the end of the release",
+    "viewport": "mobile",
+    "covers": [
+      "resume",
+      "completion state",
+      "player restart"
+    ],
+    "description": "Guards against reopening a completed release at its terminal position.",
+    "steps": [
+      "Complete a published release",
+      "Close the player",
+      "Open the same release again"
+    ],
+    "expected": "The resume endpoint returns zero position for the completed release so the next listen starts from the beginning."
   }
 ]
