@@ -6,6 +6,10 @@ import { nightjarCommunity } from './platform/firebase-community';
 import { nightjarMedia } from './platform/firebase-media';
 import { nightjarCommercial, type CommercialOverview, type CommercialSettings } from './platform/firebase-commercial';
 import { nightjarAdministration } from './platform/firebase-administration';
+import { nightjarCatalogue } from './platform/firebase-catalogue';
+import { nightjarListening } from './platform/firebase-listening';
+import { nightjarNotifications } from './platform/firebase-notifications';
+import { nightjarAge } from './platform/firebase-age';
 import {
   ArrowRight,
   BarChart3,
@@ -68,6 +72,7 @@ type Track = {
   listeners?: string;
   descriptor: string;
   featured?: boolean;
+  audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
   creatorUserId?: string;
@@ -323,12 +328,12 @@ function App() {
   const loadLiveProductData = async () => {
     try {
       const [catalogueResponse, localSpotlightResponse, creatorsResponse, firebaseSpotlightResponse] = await Promise.all([
-        api.get('/api/catalogue'),
+        nightjarCatalogue.list(),
         api.get('/api/spotlights'),
         nightjarCommunity.listCreators(),
         nightjarCommunity.spotlightState(),
       ]);
-      const liveTracks = (catalogueResponse.data?.catalogue ?? []).map((release: any, index: number) => ({
+      const liveTracks = (catalogueResponse.catalogue ?? []).map((release: any, index: number) => ({
         id: String(release.id),
         title: release.title,
         creator: release.creatorName ?? 'Nightjar creator',
@@ -336,7 +341,8 @@ function App() {
         category: release.category ?? 'Audio',
         descriptor: release.description ?? 'No description supplied.',
         featured: release.featured === true || index === 0,
-        audioUrl: release.audioUrl ?? null,
+        audioAvailable: release.audioAvailable === true,
+        audioUrl: null,
         artworkUrl: release.artworkUrl ?? null,
         creatorUserId: release.creatorUserId,
       })) as Track[];
@@ -381,12 +387,12 @@ function App() {
       await loadNotifications();
       if (user) {
         const [recommendationsResponse, trendingResponse, communityState] = await Promise.all([
-          api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
-          api.get('/api/trending'),
+          nightjarCatalogue.recommendations(currentIntent),
+          nightjarCatalogue.trending(),
           nightjarCommunity.state(),
         ]);
-        setLiveRecommendations(recommendationsResponse.data?.recommendations ?? []);
-        setLiveTrending(trendingResponse.data?.trending ?? []);
+        setLiveRecommendations(recommendationsResponse.recommendations ?? []);
+        setLiveTrending(trendingResponse.trending ?? []);
         setFavouriteReleaseIds((communityState.favourites ?? []).map((item: any) => String(item.releaseId)));
         setFollowingCreatorIds((communityState.follows ?? []).map((item: any) => String(item.creatorUserId)));
       }
@@ -409,10 +415,10 @@ function App() {
   const loadNotifications = async () => {
     if (!auth.isSignedIn()) return;
     try {
-      const { data } = await api.get('/api/notifications');
-      const nextNotifications = data?.notifications ?? [];
+      const data = await nightjarNotifications.list();
+      const nextNotifications = data.notifications ?? [];
       setNotifications(nextNotifications);
-      setNotificationUnreadCount(Number(data?.unreadCount ?? 0));
+      setNotificationUnreadCount(Number(data.unreadCount ?? 0));
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const personalSpotlight = nextNotifications.find((item: any) => item.type === 'spotlight' && item.spotlightDate === today && item.read !== true);
       if (personalSpotlight && window.sessionStorage.getItem('nightjar_spotlight_notice:' + today) !== 'shown') {
@@ -425,7 +431,7 @@ function App() {
   const markNotificationRead = async (notification: any) => {
     if (notification?.read === true) return;
     try {
-      await api.post('/api/notifications/' + encodeURIComponent(String(notification.id)) + '/read');
+      await nightjarNotifications.markRead(String(notification.id));
       setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, read: true } : item));
       setNotificationUnreadCount((count) => Math.max(0, count - 1));
     } catch { /* notification read state is non-critical */ }
@@ -452,8 +458,8 @@ function App() {
     if (!user || (role !== 'creator' && !canAdmin)) return;
     setCreatorDashboardLoading(true);
     try {
-      const { data } = await api.get('/api/creator/dashboard');
-      setCreatorDashboard({ metrics: data?.metrics ?? {}, releases: data?.releases ?? [] });
+      const data = await nightjarCatalogue.dashboard();
+      setCreatorDashboard({ metrics: data.metrics ?? {}, releases: data.releases ?? [] });
     } catch {
       setCreatorDashboard({ metrics: {}, releases: [] });
     } finally {
@@ -544,16 +550,16 @@ function App() {
   const refreshAgeStatus = async () => {
     if (!auth.isSignedIn()) return false;
     try {
-      const { data } = await api.get('/api/age/status');
-      const verified = data?.verified === true;
+      const data = await nightjarAge.status();
+      const verified = data.verified === true;
       setAgeVerified(verified);
-      setAgeConfigured(data?.configured === true);
-      setAgeProvider(String(data?.provider ?? 'yoti-sandbox'));
-      setAgeEnvironment(data?.environment === 'production' ? 'production' : 'sandbox');
-      setAgeVerifiedAt(data?.verifiedAt ?? null);
-      setAgeReverifyRequired(data?.reverifyRequired === true);
-      setAgeSessionActive(data?.sessionActive === true);
-      setAgeStatus(data?.status === 'COMPLETE' ? 'COMPLETE' : data?.status === 'PENDING' || data?.status === 'PROCESSING' || data?.status === 'IN_PROGRESS' ? 'PENDING' : data?.status === 'FAIL' || data?.status === 'ERROR' || data?.status === 'CANCELLED' ? 'FAIL' : 'NOT_STARTED');
+      setAgeConfigured(data.configured === true);
+      setAgeProvider(String(data.provider ?? 'not-configured'));
+      setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+      setAgeVerifiedAt(data.verifiedAt ?? null);
+      setAgeReverifyRequired(data.reverifyRequired === true);
+      setAgeSessionActive(false);
+      setAgeStatus(data.status === 'COMPLETE' ? 'COMPLETE' : data.status === 'PENDING' || data.status === 'PROCESSING' || data.status === 'IN_PROGRESS' ? 'PENDING' : data.status === 'FAIL' || data.status === 'ERROR' || data.status === 'CANCELLED' ? 'FAIL' : 'NOT_STARTED');
       if (verified) setAgeStage('app');
       return verified;
     } catch {
@@ -564,8 +570,8 @@ function App() {
   const runAdminSandboxTest = async () => {
     setAgeLoading(true);
     try {
-      const { data } = await api.post('/api/age/test-pass');
-      if (data?.verified) {
+      const data = await nightjarAge.adminTestPass();
+      if (data.verified) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
         setAgeProvider('nightjar-sandbox-test');
@@ -595,27 +601,23 @@ function App() {
         notify('Your Nightjar account is already age verified. No new check is needed.');
         return;
       }
-      const { data } = await api.post('/api/age/session');
-      setAgeConfigured(data?.configured === true);
-      setAgeProvider(String(data?.provider ?? 'yoti-sandbox'));
-      setAgeEnvironment(data?.environment === 'production' ? 'production' : 'sandbox');
-      setAgeSessionActive(Boolean(data?.sessionId && !data?.verified));
-      if (data?.verified === true) {
+      const data = await nightjarAge.start();
+      setAgeConfigured(Boolean(data.configured));
+      setAgeProvider(String(data.provider ?? 'not-configured'));
+      setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+      setAgeSessionActive(Boolean(data.sessionId && !data.verified));
+      if (data.verified === true) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
-        setAgeVerifiedAt(data?.verifiedAt ?? new Date().toISOString());
+        setAgeVerifiedAt(data.verifiedAt ?? new Date().toISOString());
         setAgeReverifyRequired(false);
         setAgeSessionActive(false);
         setAgeStage('app');
         notify('Your Nightjar account is already age verified. No new check was required.');
-      } else if (data?.launchUrl) {
+      } else if (data.launchUrl) {
         setAgeStatus('PENDING');
-        window.open(data.launchUrl, '_blank', 'noopener,noreferrer');
-        notify(data?.environment === 'production' ? 'Secure age verification opened. Complete it, then return to Nightjar.' : 'Secure Yoti sandbox opened. Complete the test, then return to Nightjar.');
-      } else if (data?.testAvailable) {
-        notify('Yoti sandbox is not configured yet. The administrator sandbox test is available below.');
-      } else {
-        notify('Secure age verification is not configured yet. Please try again once the provider is connected.');
+        window.open(String(data.launchUrl), '_blank', 'noopener,noreferrer');
+        notify('Secure age verification opened. Complete it, then return to Nightjar.');
       }
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
@@ -732,7 +734,7 @@ function App() {
   };
 
   const togglePlayback = (track: Track) => {
-    if (!track.audioUrl) {
+    if (!track.audioAvailable && !track.audioUrl) {
       notify('This release has no playable audio attached yet.');
       return;
     }
@@ -764,12 +766,12 @@ function App() {
     if (!user) return;
     setProfileLoading(true);
     try {
-      const [profileData, { data: tasteData }] = await Promise.all([
+      const [profileData, tasteData] = await Promise.all([
         nightjarCommunity.getMyProfile(),
-        api.get('/api/taste/profile'),
+        nightjarListening.taste(),
       ]);
       if (profileData?.profile) setProfile((current: any) => ({ ...current, ...profileData.profile }));
-      setTasteVector(tasteData?.vector ?? []);
+      setTasteVector(tasteData.vector ?? []);
     } catch { notify('Profile could not be loaded right now.'); }
     finally { setProfileLoading(false); }
   };
@@ -1465,7 +1467,7 @@ function App() {
               <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><select className="mood-select" value={currentIntent} onChange={(event) => setCurrentIntent(event.target.value)} aria-label="Current listening intent"><option value="">Open to anything</option><option value="wind">Wind down</option><option value="story">A story</option><option value="quiet">Something quiet</option><option value="focus">Focus</option><option value="discover">Discover something new</option></select></div>
               <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
               <div className="track-grid">
-                {liveRecommendations.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
+                {liveRecommendations.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioAvailable:release.audioAvailable===true,audioUrl:null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
                 {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
               </div>
             </section>
