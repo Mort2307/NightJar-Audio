@@ -336,7 +336,7 @@ test('blocked or previously suspended device reuse pauses protected access rathe
   assert.match(backend, /registerProtectedDevice/);
   assert.match(backend, /linkedSuspendedUserIds/);
   assert.match(backend, /Protected-script access is paused for security review/);
-  assert.match(backend, /blocked_device_reader_attempt/);
+  assert.match(backend, /blocked_device_or_environment_reader_attempt/);
   assert.match(securityReview, /Block device/);
   assert.match(shim, /Protected-script access is paused for security review/);
 });
@@ -391,7 +391,7 @@ test('account session registration flags restricted-device reuse without auto-fr
   const routeEnd = backend.indexOf("'POST /api/security/reader-session':", routeStart);
   assert.ok(routeStart >= 0 && routeEnd > routeStart);
   const route = backend.slice(routeStart, routeEnd);
-  assert.match(route, /device_linked_to_restricted_account/);
+  assert.match(route, /device_or_environment_linked_to_restricted_account/);
   assert.match(route, /securityReviewRequired/);
   assert.doesNotMatch(route, /status:\s*'suspended'/);
   assert.match(app, /\/api\/security\/device\/register/);
@@ -428,7 +428,7 @@ test('nightjar does not pretend client supplied IP data is trustworthy security 
 });
 
 test('protected pages repeat the forensic watermark densely enough to survive ordinary cropping', () => {
-  assert.match(app, /Array\.from\(\{ length: 18 \}\)/);
+  assert.match(app, /Array\.from\(\{ length: 30 \}\)/);
   assert.match(css, /reader-watermark-layer/);
   assert.match(app, /FORENSIC FP/);
 });
@@ -453,6 +453,35 @@ test('crawler policy opts out major model-training crawlers while leaving public
   assert.match(robots, /Allow: \//);
 });
 
+
+test('browser environment correlation is hashed, supporting evidence and not raw trait storage', () => {
+  assert.match(app, /getNightjarEnvironmentId/);
+  assert.match(app, /crypto\.subtle\.digest\('SHA-256'/);
+  assert.match(backend, /securityTokenHash\('nightjar-environment'/);
+  assert.match(backend, /environmentHash/);
+  assert.match(shim, /localEnvironmentHash/);
+  assert.doesNotMatch(backend, /navigator\.userAgent|screen\.width|hardwareConcurrency/);
+});
+
+test('environment-only overlap alerts admins without automatically restricting the whole account', () => {
+  const routeStart = backend.indexOf("'POST /api/security/device/register':");
+  const routeEnd = backend.indexOf("'POST /api/security/reader-session':", routeStart);
+  const route = backend.slice(routeStart, routeEnd);
+  assert.match(route, /linkedSuspendedEnvironmentUserIds/);
+  assert.match(route, /riskScore: device\.blocked \|\| device\.environmentBlocked \? 95 : exactRisk \? 78 : 62/);
+  assert.match(route, /protectedAccessPaused: device\.blocked \|\| device\.environmentBlocked/);
+  assert.doesNotMatch(route, /status:\s*'suspended'/);
+});
+
+test('same-script restricted environment reuse can pause reader access but writer ownership is exempt', () => {
+  const routeStart = backend.indexOf("'GET /api/scripts/:scriptId':");
+  const routeEnd = backend.indexOf("'GET /api/scripts/:scriptId/content':", routeStart);
+  const route = backend.slice(routeStart, routeEnd);
+  assert.match(route, /sameScriptEnvironmentLinks = owner \? \[\] :/);
+  assert.match(route, /restrictedEnvironmentUsersForScript/);
+  assert.match(route, /sameScriptEnvironmentLinks\.length/);
+  assert.match(route, /Protected-script access is paused for security review/);
+});
 
 test('administrators can block exact devices or broader browser environments after review', () => {
   const securityReview = read('src/components/SecurityReviewPanel.tsx');
