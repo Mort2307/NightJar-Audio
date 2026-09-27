@@ -1462,3 +1462,57 @@ button:focus-visible {
 .writer-lock-note svg { flex:0 0 auto; color:var(--plum-soft); margin-top:1px; }
 .pipeline-form-grid input:disabled,.pipeline-form-grid textarea:disabled,.script-editor:disabled,.editor-toolbar input:disabled { opacity:.72; cursor:not-allowed; }
 .asset-drop:has(input:disabled) { opacity:.6; cursor:not-allowed; }
+
+
+/* Writer-controlled script access */
+.writer-editor-stack { display:grid; gap:14px; min-width:0; }
+.script-fingerprint { display:flex; align-items:center; gap:7px; margin-top:10px; padding:9px 10px; border:1px solid var(--line-soft); border-radius:10px; color:var(--muted-2); font-size:8px; }
+.script-fingerprint code { margin-left:auto; color:var(--plum-soft); font-size:8px; }
+.script-access-manager { padding:18px; }
+.script-access-manager .section-head { margin-bottom:10px; }
+.script-access-manager .section-head h3 { margin:0; font-family:Georgia,serif; font-size:24px; font-weight:400; }
+.script-access-form { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:10px; margin-top:15px; }
+.script-access-form label { display:grid; gap:6px; color:var(--muted-2); font-size:8px; text-transform:uppercase; letter-spacing:.08em; }
+.script-access-form select,.script-access-form input { width:100%; border:1px solid var(--line-soft); border-radius:10px; padding:10px 11px; background:rgba(12,11,14,.92); color:var(--ivory); font:inherit; font-size:9px; text-transform:none; letter-spacing:normal; }
+.script-access-purpose { grid-column:1 / span 2; }
+.script-access-form > button { align-self:end; }
+.writer-handoff-warning { display:flex; gap:10px; align-items:flex-start; margin-top:12px; padding:12px; border:1px solid rgba(203,181,204,.16); border-radius:12px; background:rgba(178,144,170,.055); }
+.writer-handoff-warning svg { flex:0 0 auto; color:var(--plum-soft); margin-top:2px; }
+.writer-handoff-warning strong { display:block; font-size:9px; }
+.writer-handoff-warning span { display:block; margin-top:4px; color:var(--muted); font-size:8px; line-height:1.55; }
+.script-access-requests,.script-access-grants { display:grid; gap:8px; margin-top:16px; }
+.script-access-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 0; border-top:1px solid var(--line-soft); }
+.script-access-row > div:first-child { display:grid; gap:3px; min-width:0; }
+.script-access-row strong { font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.script-access-row small { color:var(--muted-2); font-size:7px; }
+.script-access-row-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.script-access-row-actions button { border:1px solid var(--line-soft); border-radius:9px; padding:7px 9px; background:rgba(255,255,255,.018); color:var(--muted); font:inherit; font-size:7px; cursor:pointer; }
+.script-access-row-actions button:hover:not(:disabled) { color:var(--ivory); border-color:rgba(203,181,204,.25); }
+.script-access-empty { padding:12px; border:1px dashed var(--line-soft); border-radius:10px; color:var(--muted-2); font-size:8px; }
+
+/* Protected manuscript paging and watermarking */
+.reader-body { position:relative; overflow:hidden; }
+.reader-body.copy-enabled { user-select:text; -webkit-user-select:text; }
+.reader-watermark-layer { position:absolute; inset:0; z-index:0; display:grid; grid-template-columns:1fr 1fr; align-content:space-around; gap:30px 70px; padding:22px; pointer-events:none; transform:rotate(-13deg) scale(1.08); transform-origin:center; opacity:.11; }
+.reader-watermark-layer span { display:block; color:#d6c1d7; font-size:8px; font-weight:800; letter-spacing:.08em; text-align:center; white-space:nowrap; }
+.reader-body > *:not(.reader-watermark-layer) { position:relative; z-index:1; }
+.reader-pagination { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:12px 20px; border-top:1px solid var(--line-soft); }
+.reader-pagination > span { text-align:center; color:var(--muted-2); font-size:8px; }
+.reader-fingerprint { margin-top:30px !important; color:var(--muted-2) !important; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:8px !important; text-align:center; }
+.reader-export-button { margin-left:auto; }
+
+@media (max-width:760px) {
+  .script-access-form { grid-template-columns:1fr; }
+  .script-access-purpose { grid-column:auto; }
+  .script-access-row { grid-template-columns:1fr; }
+  .script-access-row-actions { justify-content:flex-start; }
+  .reader-pagination { grid-template-columns:1fr 1fr; }
+  .reader-pagination > span { grid-column:1 / -1; grid-row:1; }
+  .reader-watermark-layer { grid-template-columns:1fr; gap:24px; }
+  .reader-export-button { margin-left:0; width:100%; }
+}
+
+@media print {
+  .protected-reader-backdrop,.protected-reader { display:none !important; }
+  body::after { content:'Protected Nightjar manuscripts cannot be printed from the in-app reader.'; display:block; padding:40px; color:#000; background:#fff; font:16px/1.5 sans-serif; }
+}
