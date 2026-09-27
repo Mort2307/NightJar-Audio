@@ -14,7 +14,6 @@ import {
   Moon,
   Pause,
   Play,
-  Search,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -40,6 +39,7 @@ import NightjarOnboarding from './components/NightjarOnboarding';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import LiveReleaseCard from './components/LiveReleaseCard';
+import CreatorDirectory from './components/CreatorDirectory';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -1261,12 +1261,7 @@ function App() {
           </section>
         )}
 
-        {view === 'creators' && (
-          <section className="page-wrap">
-            <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators building original catalogues for the Nightjar audience.</p></div><button className="secondary-button with-icon" onClick={() => notify('Creator search is part of the next catalogue pass.')}><Search size={16} /> Search creators</button></div>
-            <div className="creator-directory">{creators.map((creator, index) => <article className="creator-profile" key={creator.name}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => setSaved(saved === creator.name ? null : creator.name)} aria-label={saved === creator.name ? 'Unsave creator' : 'Save creator'}><Heart size={17} fill={saved === creator.name ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span><strong>{creator.share}</strong> listening share</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
-          </section>
-        )}
+        {view === 'creators' && <CreatorDirectory creators={creators} onOpen={setCreatorProfileUserId} />}
 
         {view === 'creator' && (
           <section className="page-wrap studio-page">
