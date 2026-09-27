@@ -54,8 +54,13 @@ export const nightjarAuth = {
 
   async register(email: string, password: string) {
     const credential = await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
-    await sendEmailVerification(credential.user);
-    return mapUser(credential.user);
+    let verificationSent = true;
+    try {
+      await sendEmailVerification(credential.user);
+    } catch {
+      verificationSent = false;
+    }
+    return { identity: mapUser(credential.user), verificationSent };
   },
 
   async signIn(email: string, password: string) {
