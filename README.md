@@ -109,7 +109,7 @@ The Taste Engine remains explicit-first: user-declared preferences are separate 
 
 Nightjar now contains a Firebase Authentication account client for email/password registration, persistent sign-in, email verification/resend, password reset and reauthenticated password changes.
 
-The Firebase identity layer is now the production account foundation. Callable Firebase Functions receive Firebase Authentication context, and protected backend operations must use the verified Firebase `uid` rather than client-supplied user IDs. Production remains fail-closed for any route that has not yet been migrated to the Firebase backend.
+Firebase is now the active Nightjar runtime foundation. Callable Firebase Functions receive Firebase Authentication context, protected operations use the verified Firebase `uid`, and the active frontend no longer depends on the previous local/AppDeploy compatibility client. Production age assurance remains intentionally fail-closed until a highly effective provider is configured.
 
 Required production flow:
 
@@ -131,7 +131,7 @@ subscription / explicit content permission
 protected content
 ```
 
-The browser-local QA client remains temporary development scaffolding only and must not be treated as production authentication or production persistence. Archived AppDeploy files live under `legacy/appdeploy/` solely as migration reference and are not part of the active runtime.
+Archived AppDeploy/local-runtime files live under `legacy/appdeploy/` solely as migration reference. They are not imported by the active application and are not part of the production runtime.
 
 ## Persistent user settings and moderated imagery
 
@@ -149,7 +149,7 @@ All user-uploaded images follow one moderation pipeline:
 
 This applies to profile pictures, Nightjar branding/logo uploads and release artwork. SVG uploads are intentionally not supported.
 
-Approved profile/logo imagery remains live while a replacement is pending. A rejected replacement does not remove the previously approved image.
+Approved profile, logo and release artwork remains live while a replacement is pending. A rejected replacement does not remove the previously approved image.
 
 ## Commercial controls
 
@@ -160,4 +160,24 @@ Confirmed subscription counts and confirmed gross MRR are read from Firebase bil
 ## Audio Editor role
 
 The internal role key remains `editor` for permission compatibility, while the user-facing role is **Audio Editor**. Administrators can assign this role from the Firebase-backed account directory. Active Audio Editors with public profiles participate in the deterministic daily Audio Editor Spotlight without exposing protected editorial assignments or manuscript content.
+
+## Private audio and catalogue
+
+Creator release drafts, metadata and catalogue state are stored in Firestore. Release audio is stored privately in Firebase Storage under the verified Creator UID. Storage rules deny all direct reads. A Creator may upload or replace only their own supported audio objects, with a 25 MB limit, and the trusted backend validates the final Storage path, MIME type and object size.
+
+Listeners never receive a permanent public audio URL. Playback requires an active Firebase account plus recorded age assurance, then Nightjar issues a short-lived signed playback URL. Administrator moderation uses a separate short-lived preview URL.
+
+Draft audio, approved/pending release artwork and other owned media are deleted when the associated removable draft is deleted so Nightjar does not intentionally leave orphaned user media behind.
+
+## Manuscripts and protection
+
+Writer manuscripts, saved versions, Audio Editor assignment/review state, explicit full-script permissions, reader sessions, protection evidence, reports and security alerts are stored in Firestore.
+
+Full-script access remains writer-controlled. Copy/export permissions and optional expiry are explicit and revocable; revocation closes active protected-reader sessions. Browser screenshot detection is not treated as reliable. Protected views use visible session/account/script provenance plus retained platform evidence instead.
+
+Protected-content signals remain evidence rather than guilt. Nightjar's graduated score creates an administrator-review alert at 40+, with High at 60+ and Critical at 85+. The backend records `automaticAction: none` and `reviewRequired: true`; accounts are not automatically frozen from these signals. Administrators can close an alert as benign, revoke reader sessions, or explicitly suspend the account.
+
+## Age assurance
+
+Age-assurance state is stored in Firebase and protected catalogue/playback endpoints verify it server-side. The production provider is not configured by this repository yet, so normal age-assurance initiation fails closed rather than simulating a production pass. Allowlisted administrators retain a controlled test-pass path for development only.
 
