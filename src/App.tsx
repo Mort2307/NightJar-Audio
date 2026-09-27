@@ -42,6 +42,7 @@ import ProfileDiscovery from './components/ProfileDiscovery';
 import RecommendationFeedback from './components/RecommendationFeedback';
 import FollowingList from './components/FollowingList';
 import CatalogueSearch from './components/CatalogueSearch';
+import WriterStudio from './components/WriterStudio';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -1353,11 +1354,18 @@ function App() {
         )}
 
         {view === 'writer' && effectiveRole === 'writer' && (
-          <section className="page-wrap role-studio-page">
-            <div className="page-heading"><div><p className="eyebrow"><FileText size={14}/> WRITER STUDIO</p><h1>Write it. Protect it.</h1><p>Live manuscripts, version history and editorial handoff.</p></div></div>
-            <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a manuscript</h2><p>Every new script begins private.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title"/><button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button></div></div>
-            <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>setWriterSelected(script)}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div><textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder="Begin writing…"/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button></div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
-          </section>
+          <WriterStudio
+            draftTitle={writerDraftTitle}
+            scripts={writerScripts}
+            selected={writerSelected}
+            onDraftTitleChange={setWriterDraftTitle}
+            onSelect={setWriterSelected}
+            onCreate={createWriterDraft}
+            onSave={saveWriterScript}
+            onVersion={createWriterVersion}
+            onSubmit={submitWriterScript}
+            onOpenProtected={openProtectedReader}
+          />
         )}
 
         {view === 'editor' && effectiveRole === 'editor' && (
