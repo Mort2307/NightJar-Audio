@@ -279,7 +279,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     for (const tag of [...(profile.favouriteTags ?? []), ...(profile.favouriteTropes ?? []), ...(profile.favouriteCategories ?? [])]) add(tag, 5);
     for (const event of state.taste[account.userId] ?? []) {
       if (event.type === 'declared_preferences') continue;
-      const factor = event.type === 'recommendation_more' ? 4 : event.type === 'complete' ? 3 : event.type === 'replay' ? 2 : event.type === 'start' ? 0.5 : event.type === 'skip' || event.type === 'hide' || event.type === 'recommendation_less' ? -2 : 0;
+      const factor = event.type === 'recommendation_more' ? 4 : event.type === 'favourite' ? 3.5 : event.type === 'complete' ? 3 : event.type === 'replay' ? 2 : event.type === 'start' ? 0.5 : event.type === 'skip' || event.type === 'hide' || event.type === 'recommendation_less' ? -2 : 0;
       if (event.type === 'recommendation_not_for_me' && event.contentId) suppressed.add(String(event.contentId));
       if (!factor) continue;
       for (const tag of [...(event.tags ?? []), ...(event.category ? [event.category] : []), ...(event.genre ? [event.genre] : []), ...(event.mood ? [event.mood] : [])]) add(tag, factor);
