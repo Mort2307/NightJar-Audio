@@ -303,10 +303,12 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   }
 
   if (path === '/api/creators' && method === 'GET') {
+    requireUser(state);
     const creators = state.users.filter((account) => account.role === 'creator' && account.status !== 'pending_review').map((account) => {
       const profile = ensureProfile(state, account);
-      return { userId: account.userId, displayName: profile.displayName ?? account.name, handle: profile.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, avatarInitials: profile.avatarInitials ?? null, avatarTone: profile.avatarTone ?? 'plum', releaseCount: state.releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').length };
-    });
+      if (profile.publicProfile === false) return null;
+      return { userId: account.userId, displayName: profile.displayName ?? account.name, handle: profile.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, avatarInitials: profile.avatarInitials ?? null, avatarTone: profile.avatarTone ?? 'plum', followerCount: Object.values(state.follows).filter((items) => items.includes(account.userId)).length, releaseCount: state.releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').length };
+    }).filter(Boolean);
     return send({ creators });
   }
 
