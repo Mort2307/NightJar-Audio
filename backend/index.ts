@@ -8,6 +8,7 @@ const accountIndexTable = 'nightjar_account_index';
 const subscriptionTable = 'nightjar_subscriptions';
 const releaseTable = 'nightjar_releases';
 const followTable = (userId: string) => `nightjar_follows_${userId}`;
+const followIndexTable = 'nightjar_follow_index';
 const favouriteTable = (userId: string) => `nightjar_favourites_${userId}`;
 const listeningTable = 'nightjar_listening';
 const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? '';
@@ -508,9 +509,15 @@ export const handler = router({
     async () => {
       const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
       const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const { items: followIndex } = await db.list(followIndexTable, { limit: 5000 });
+      const followerCounts = followIndex.reduce<Record<string, number>>((counts, follow) => {
+        const key = String(follow.profileUserId ?? '');
+        if (key) counts[key] = (counts[key] ?? 0) + 1;
+        return counts;
+      }, {});
       const creators = await Promise.all(accounts.filter((account) => account.role === 'creator' && account.status !== 'suspended').map(async (account) => {
         const profile = await getProfile(account.userId);
-        return { userId: account.userId, displayName: profile?.displayName ?? account.name ?? 'Nightjar creator', handle: profile?.handle ?? account.handle ?? null, headline: profile?.headline ?? null, bio: profile?.bio ?? null, avatarInitials: profile?.avatarInitials ?? null, avatarTone: profile?.avatarTone ?? 'plum', releaseCount: releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').length };
+        return { userId: account.userId, displayName: profile?.displayName ?? account.name ?? 'Nightjar creator', handle: profile?.handle ?? account.handle ?? null, headline: profile?.headline ?? null, bio: profile?.bio ?? null, avatarInitials: profile?.avatarInitials ?? null, avatarTone: profile?.avatarTone ?? 'plum', followerCount: followerCounts[String(account.userId)] ?? 0, releaseCount: releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').length };
       }));
       return json({ creators });
     },
@@ -560,7 +567,9 @@ export const handler = router({
           releaseDate: release.releaseDate ?? release.createdAt ?? null,
         }));
       const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
-      return json({ creator: { userId: creatorUserId, name: profile.displayName ?? account.name ?? 'Nightjar creator', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, pronouns: profile.pronouns ?? null, initials: profile.avatarInitials ?? null, favouriteTags: profile.favouriteTags ?? [], followers: (await Promise.all(accounts.map(async (account) => { const { items } = await db.list(followTable(String(account.userId)), { limit: 2000 }); return items.some((follow) => String(follow.profileUserId ?? follow.creatorUserId) === creatorUserId); }))).filter(Boolean).length, following: follows.some((follow) => String(follow.profileUserId ?? follow.creatorUserId) === creatorUserId), releases: publicReleases } });
+      const { items: followIndex } = await db.list(followIndexTable, { limit: 5000 });
+      const followers = followIndex.filter((follow) => String(follow.profileUserId ?? '') === creatorUserId).length;
+      return json({ creator: { userId: creatorUserId, name: profile.displayName ?? account.name ?? 'Nightjar creator', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, pronouns: profile.pronouns ?? null, initials: profile.avatarInitials ?? null, favouriteTags: profile.favouriteTags ?? [], followers, following: follows.some((follow) => String(follow.profileUserId ?? follow.creatorUserId) === creatorUserId), releases: publicReleases } });
     },
   ],
   'GET /api/recommendations': [
@@ -627,7 +636,13 @@ export const handler = router({
     if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before discovering profiles.', 403);
     const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
     const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    const { items: followIndex } = await db.list(followIndexTable, { limit: 5000 });
     const followed = new Set(follows.map((item) => String(item.profileUserId ?? item.creatorUserId)).filter(Boolean));
+    const followerCounts = followIndex.reduce<Record<string, number>>((counts, follow) => {
+      const key = String(follow.profileUserId ?? '');
+      if (key) counts[key] = (counts[key] ?? 0) + 1;
+      return counts;
+    }, {});
     const profiles = (await Promise.all(accounts
       .filter((account) => String(account.userId) !== ctx.user!.userId && account.status !== 'suspended')
       .map(async (account) => {
@@ -643,6 +658,7 @@ export const handler = router({
           pronouns: profile.pronouns ?? null,
           initials: profile.avatarInitials ?? null,
           roleFocus: profile.roleFocus ?? [],
+          followers: followerCounts[String(account.userId)] ?? 0,
           following: followed.has(String(account.userId)),
         };
       }))).filter(Boolean);
@@ -661,8 +677,13 @@ export const handler = router({
     const profile = await getProfile(profileUserId);
     if (!profile?.publicProfile) return error('Profile not found.', 404);
     const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    const createdAt = new Date().toISOString();
     if (!items.some((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId)) {
-      await db.add(followTable(ctx.user!.userId), [{ profileUserId, profileRole: target.role, createdAt: new Date().toISOString() }]);
+      await db.add(followTable(ctx.user!.userId), [{ profileUserId, profileRole: target.role, createdAt }]);
+    }
+    const { items: indexed } = await db.list(followIndexTable, { limit: 5000 });
+    if (!indexed.some((item) => String(item.followerUserId) === ctx.user!.userId && String(item.profileUserId) === profileUserId)) {
+      await db.add(followIndexTable, [{ followerUserId: ctx.user!.userId, profileUserId, profileRole: target.role, createdAt }]);
     }
     return json({ following: true, profileUserId });
   }],
@@ -671,12 +692,18 @@ export const handler = router({
     const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
     const ids = items.filter((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId).map((item) => item.id);
     if (ids.length) await db.delete(followTable(ctx.user!.userId), ids);
+    const { items: indexed } = await db.list(followIndexTable, { limit: 5000 });
+    const indexedIds = indexed.filter((item) => String(item.followerUserId) === ctx.user!.userId && String(item.profileUserId) === profileUserId).map((item) => item.id);
+    if (indexedIds.length) await db.delete(followIndexTable, indexedIds);
     return json({ following: false, profileUserId });
   }],
   'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => {
     const profileUserId = String(ctx.params.creatorUserId ?? '');
     const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
-    if (!items.some((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId)) await db.add(followTable(ctx.user!.userId), [{ profileUserId, creatorUserId: profileUserId, profileRole: 'creator', createdAt: new Date().toISOString() }]);
+    const createdAt = new Date().toISOString();
+    if (!items.some((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId)) await db.add(followTable(ctx.user!.userId), [{ profileUserId, creatorUserId: profileUserId, profileRole: 'creator', createdAt }]);
+    const { items: indexed } = await db.list(followIndexTable, { limit: 5000 });
+    if (!indexed.some((item) => String(item.followerUserId) === ctx.user!.userId && String(item.profileUserId) === profileUserId)) await db.add(followIndexTable, [{ followerUserId: ctx.user!.userId, profileUserId, profileRole: 'creator', createdAt }]);
     return json({ following: true, profileUserId });
   }],
   'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => {
@@ -684,6 +711,9 @@ export const handler = router({
     const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
     const ids = items.filter((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId).map((item) => item.id);
     if (ids.length) await db.delete(followTable(ctx.user!.userId), ids);
+    const { items: indexed } = await db.list(followIndexTable, { limit: 5000 });
+    const indexedIds = indexed.filter((item) => String(item.followerUserId) === ctx.user!.userId && String(item.profileUserId) === profileUserId).map((item) => item.id);
+    if (indexedIds.length) await db.delete(followIndexTable, indexedIds);
     return json({ following: false, profileUserId });
   }],
   'POST /api/listening/event': [requireAuth(), async (ctx) => {
