@@ -430,6 +430,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/following' && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const profiles = (state.follows[account.userId] ?? []).map((userId) => {
       const target = state.users.find((candidate) => candidate.userId === userId);
       if (!target) return { userId, role: null, name: 'Unavailable Nightjar profile', handle: null, headline: null, publicProfile: false };
@@ -771,6 +772,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   }
 
   if (parts[0] === 'api' && parts[1] === 'profile' && parts.length === 3 && method === 'GET') {
+    const viewer = requireUser(state);
+    requireVerifiedAdult(state, viewer);
     const handle = parts[2].replace(/^@/, '').toLowerCase();
     const found = Object.entries(state.profiles).find(([, profile]) => String((profile as any).handle ?? '').toLowerCase() === handle);
     if (!found) throw new Error('Profile not found.');
@@ -780,6 +783,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/taste/profile' && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const profile = ensureProfile(state, account);
     const events = state.taste[account.userId] ?? [];
     const weights: Record<string, number> = {};
@@ -803,6 +807,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/taste/event' && method === 'POST') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const eventType = String(input.eventType ?? '');
     const allowed = ['more_like_this', 'less_like_this', 'not_for_me', 'hide', 'skip', 'save', 'follow', 'complete', 'replay'];
     if (!allowed.includes(eventType)) throw new Error('Unsupported taste signal.');
@@ -903,6 +908,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const admin = requireAdmin(state);
     const release = state.releases.find((item) => item.id === parts[3]);
     if (!release) throw new Error('Release not found.');
+    if (release.status !== 'pending_review') throw new Error('Only pending releases can receive a pre-publication moderation decision.');
     const decision = String(input.decision ?? '');
     if (!['approved', 'changes', 'rejected'].includes(decision)) throw new Error('Invalid moderation decision.');
     const note = String(input.note ?? '').trim();
