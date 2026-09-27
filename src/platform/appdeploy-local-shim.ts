@@ -686,12 +686,14 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/writer/scripts' && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     if (account.role !== 'writer' && account.role !== 'admin') throw new Error('Writer access required.');
     return send({ scripts: state.scripts.filter((script) => script.writerUserId === account.userId) });
   }
 
   if (path === '/api/writer/scripts' && method === 'POST') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     if (account.role !== 'writer') throw new Error('Active Writer access required.');
     const content = String(input.content ?? '');
     const createdAt = now();
@@ -702,6 +704,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'writer' && parts[2] === 'scripts' && parts.length === 4) {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     if (account.role !== 'writer') throw new Error('Active Writer access required.');
     const script = state.scripts.find((item) => item.id === parts[3] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
@@ -724,6 +727,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'writer' && parts[2] === 'scripts' && parts.length === 5 && parts[4] === 'versions' && method === 'POST') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const script = state.scripts.find((item) => item.id === parts[3] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
     if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) throw new Error('Submitted or approved manuscripts are locked from version changes.');
@@ -736,6 +740,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'writer' && parts[2] === 'scripts' && parts.length === 5 && parts[4] === 'submit' && method === 'POST') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const script = state.scripts.find((item) => item.id === parts[3] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
     if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) throw new Error('This manuscript is already in editorial workflow or approved.');
@@ -748,6 +753,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/editor/queue' && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     if (account.role !== 'editor' && account.role !== 'admin') throw new Error('Editor access required.');
     const assignments = state.scripts.filter((script) => ['Submitted', 'Under review', 'Revision requested'].includes(script.status));
     const visible = account.role === 'admin' ? assignments : assignments.filter((script) => script.editorUserId === account.userId);
@@ -761,6 +767,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'editor' && parts[2] === 'scripts' && parts.length === 5 && parts[4] === 'review' && method === 'POST') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     if (account.role !== 'editor') throw new Error('Active Editor access required.');
     const script = state.scripts.find((item) => item.id === parts[3] && item.editorUserId === account.userId);
     if (!script) throw new Error('This manuscript is not assigned to you.');
@@ -919,6 +926,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'access' && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     if (account.role !== 'writer') throw new Error('Writer access required.');
     const script = state.scripts.find((item) => item.id === parts[2] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
@@ -975,6 +983,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'permissions' && method === 'POST') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     if (account.role !== 'writer') throw new Error('Writer access required.');
     const script = state.scripts.find((item) => item.id === parts[2] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
