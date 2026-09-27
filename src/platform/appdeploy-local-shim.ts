@@ -845,6 +845,17 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       session.revokedReason = 'Underlying script permission expired or was revoked.';
       throw new Error('Script access is no longer authorised.');
     }
+    const cutoff = Date.now() - 60_000;
+    const recentPages = state.evidence.filter((item) => item.userId === account.userId && item.eventType === 'script_page_view' && new Date(String(item.createdAt ?? 0)).getTime() >= cutoff);
+    const sameScriptPages = recentPages.filter((item) => item.relatedId === script.id);
+    const sameSessionPages = sameScriptPages.filter((item) => item.sessionId === sessionId);
+    if (sameSessionPages.length >= 18 || sameScriptPages.length >= 24) {
+      session.status = 'revoked';
+      session.revokedAt = now();
+      session.revokedReason = 'Protected reader rate limit exceeded.';
+      state.securityAlerts.push({ id: id('security-alert'), userId: account.userId, severity: 'high', riskScore: 85, reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.', relatedId: script.id, createdAt: now(), status: 'open' });
+      throw new Error('Protected reader rate limit reached.');
+    }
     const pages = localChunkProtectedContent(script.content ?? '');
     if (page >= pages.length) throw new Error('Protected page not found.');
     state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_page_view', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId, page, createdAt: now() });
