@@ -846,6 +846,7 @@ export const handler = router({
       const { items } = await db.list(releaseTable, { limit: 500 });
       const release = items.find((item) => String(item.id) === String(body.releaseId) && item.creatorUserId === ctx.user!.userId);
       if (!release) return error('Release not found.', 404);
+      if (!['draft', 'rejected'].includes(String(release.status ?? 'draft'))) return error('Submitted or live releases cannot have assets replaced. Wait for moderation or create an editable revision.', 409);
       const path = 'creators/' + ctx.user!.userId + '/' + body.kind + '/' + randomUUID() + '.' + extensionForContentType(contentType, body.kind);
       const [ok] = await storage.write([{ path, content: decoded.base64, contentType }]);
       if (!ok) return error('Asset upload failed.', 500);
@@ -863,7 +864,7 @@ export const handler = router({
       const title = String(body.title ?? '').trim();
       if (!title) return error('Release title is required.', 400);
       const profile = await getProfile(ctx.user!.userId);
-      const release = { id: 'release-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), title, description: String(body.description ?? '').trim().slice(0, 1200), category: String(body.category ?? '').trim(), genre: String(body.genre ?? '').trim(), mood: String(body.mood ?? '').trim(), tags: cleanList(body.tags), tropes: cleanList(body.tropes), durationMinutes: Math.max(0, Number(body.durationMinutes ?? 0)), audioUrl: String(body.audioUrl ?? '').trim() || null, artworkUrl: String(body.artworkUrl ?? '').trim() || null, creatorUserId: ctx.user!.userId, creatorName: profile?.displayName ?? ctx.user!.name ?? 'Nightjar creator', creatorHandle: profile?.handle ?? null, status: 'draft', version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const release = { id: 'release-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), title, description: String(body.description ?? '').trim().slice(0, 1200), category: String(body.category ?? '').trim().slice(0, 80), genre: String(body.genre ?? '').trim().slice(0, 80), mood: String(body.mood ?? '').trim().slice(0, 80), tags: cleanList(body.tags), tropes: cleanList(body.tropes), durationMinutes: 0, audioUrl: null, artworkUrl: null, creatorUserId: ctx.user!.userId, creatorName: profile?.displayName ?? ctx.user!.name ?? 'Nightjar creator', creatorHandle: profile?.handle ?? null, status: 'draft', version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       await db.add(releaseTable, [release]);
       return json({ release }, 201);
     },
@@ -875,7 +876,24 @@ export const handler = router({
       const { items } = await db.list(releaseTable, { limit: 500 });
       const release = items.find((item) => item.id === ctx.params.releaseId && item.creatorUserId === ctx.user!.userId);
       if (!release) return error('Release not found.', 404);
-      const next = { ...release, ...(ctx.body ?? {}), id: release.id, creatorUserId: release.creatorUserId, version: Number(release.version ?? 1) + 1, updatedAt: new Date().toISOString() };
+      if (!['draft', 'rejected'].includes(String(release.status ?? 'draft'))) return error('Submitted or live releases cannot be edited directly. Wait for moderation or use the release lifecycle workflow.', 409);
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const next = {
+        ...release,
+        title: String(body.title ?? release.title ?? '').trim().slice(0, 160),
+        description: String(body.description ?? release.description ?? '').trim().slice(0, 1200),
+        category: String(body.category ?? release.category ?? '').trim().slice(0, 80),
+        genre: String(body.genre ?? release.genre ?? '').trim().slice(0, 80),
+        mood: String(body.mood ?? release.mood ?? '').trim().slice(0, 80),
+        tags: body.tags === undefined ? (release.tags ?? []) : cleanList(body.tags),
+        tropes: body.tropes === undefined ? (release.tropes ?? []) : cleanList(body.tropes),
+        id: release.id,
+        creatorUserId: release.creatorUserId,
+        status: release.status,
+        version: Number(release.version ?? 1) + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      if (!next.title) return error('Release title is required.', 400);
       await db.update(releaseTable, [{ id: release.id, record: next }]);
       return json({ release: next });
     },
@@ -887,6 +905,7 @@ export const handler = router({
       const { items } = await db.list(releaseTable, { limit: 500 });
       const release = items.find((item) => item.id === ctx.params.releaseId && item.creatorUserId === ctx.user!.userId);
       if (!release) return error('Release not found.', 404);
+      if (!['draft', 'rejected'].includes(String(release.status ?? 'draft'))) return error('Submitted or live releases cannot be deleted directly.', 409);
       await db.delete(releaseTable, [release.id]);
       return json({ deleted: true });
     },
