@@ -19,6 +19,8 @@ const securityAlertTable = 'nightjar_security_alerts';
 const securityEventTable = 'nightjar_security_events';
 const securityCaseTable = 'nightjar_security_cases';
 const ownerNotificationTable = (email: string) => `nightjar_owner_notifications_${normalizeEmail(email).replace(/[^a-z0-9]/g, '_')}`;
+const userNotificationTable = (userId: string) => `nightjar_notifications_${userId}`;
+
 type NightjarProfile = { displayName?: string|null; handle?: string|null; headline?: string|null; bio?: string|null; pronouns?: string|null; avatarInitials?: string|null; avatarTone?: string|null; favouriteTags?: string[]; favouriteTropes?: string[]; favouriteCategories?: string[]; roleFocus?: string[]; publicProfile?: boolean; createdAt?: string; updatedAt?: string; };
 const cleanList = (value: unknown, max = 16) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean).slice(0, max) : [];
 const cleanHandle = (value?: unknown) => String(value ?? '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_\.\-]/g, '').slice(0, 30);
@@ -28,6 +30,14 @@ const revokeReaderSessions = async (userId: string, reason: string) => { const {
 const createOwnerSecurityNotifications = async (alert: Record<string, unknown>) => { for (const email of ADMIN_EMAILS) await db.add(ownerNotificationTable(email), [{ type:'security_alert', alertId:alert.id??null, severity:alert.severity??'high', title:'Nightjar security alert', message:alert.reason??'Suspicious protected-content activity detected.', createdAt:new Date().toISOString(), read:false, recipientEmail:normalizeEmail(email) }]); };
 const createSecurityAlert = async (userId: string, details: Record<string, unknown>) => { const now=new Date().toISOString(); const recipients=ADMIN_EMAILS.map(normalizeEmail); const [id]=await db.add(securityAlertTable,[{userId,...details,recipients,createdAt:now,status:'open'}]); const alert={id:id??null,userId,...details,recipients,createdAt:now,status:'open'}; await createOwnerSecurityNotifications(alert); await db.add(securityCaseTable,[{alertId:id??null,userId,state:'detection',history:[{state:'detection',at:now,note:'Suspicious activity detected; alert sent to all three Nightjar owners.'}],createdAt:now,updatedAt:now}]); return alert; };
 const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => { const now=Date.now(); const {items}=await db.list(securityEventTable,{limit:500}); const recent=items.filter((item)=>item.userId===userId && now-new Date(item.createdAt??0).getTime()<60000); const scriptId=String(signal.relatedId??''); const sameScriptRecent=recent.filter((item)=>String(item.relatedId??'')===scriptId); const score=(recent.length>=40?35:recent.length>=20?20:0)+(sameScriptRecent.length>=25?40:sameScriptRecent.length>=12?25:0)+(signal.eventType==='script_view'&&sameScriptRecent.length>=8?20:0)+(signal.eventType==='blocked_interaction'?8:0); if(score<50)return null; const existing=await db.list(securityAlertTable,{limit:100}); if(existing.items.some((item)=>item.userId===userId&&item.status==='open'&&now-new Date(item.createdAt??0).getTime()<600000))return null; return createSecurityAlert(userId,{severity:score>=75?'critical':'high',riskScore:score,reason:`Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,relatedId:scriptId||null,signal:{eventType:signal.eventType,recentEvents:recent.length,relatedEvents:sameScriptRecent.length}}); };
+
+const createUserNotificationOnce = async (userId: string, notification: Record<string, unknown>) => {
+  const table = userNotificationTable(userId);
+  const { items } = await db.list(table, { limit: 100 });
+  const key = String(notification.dedupeKey ?? '');
+  if (key && items.some((item) => String(item.dedupeKey ?? '') === key)) return;
+  await db.add(table, [{ ...notification, userId, read: false, createdAt: notification.createdAt ?? new Date().toISOString() }]);
+};
 
 const brandingTable = 'nightjar_branding';
 const ageTable = (userId: string) => `nightjar_age_${userId}`;
@@ -184,6 +194,7 @@ export const handler = router({
       const local = getLondonParts(now);
       const weekdayIndex = ({ Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 } as Record<string, number>)[local.weekday] ?? 0;
       const localDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
+      const daysSinceEpoch = Math.floor(localDate.getTime() / 86400000);
 
       // Creator + Writer: every active member gets a deterministic full-day slot.
       const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
@@ -228,8 +239,9 @@ export const handler = router({
         };
       };
 
-      const creator = creators.length ? await toProfileSpotlight(creators[weekdayIndex % creators.length], 'creator') : null;
-      const writer = writers.length ? await toProfileSpotlight(writers[weekdayIndex % writers.length], 'writer') : null;
+      const creator = creators.length ? await toProfileSpotlight(creators[((daysSinceEpoch % creators.length) + creators.length) % creators.length], 'creator') : null;
+      const writerOffset = writers.length ? Math.floor(daysSinceEpoch / Math.max(creators.length, 1)) : 0;
+      const writer = writers.length ? await toProfileSpotlight(writers[((daysSinceEpoch + writerOffset) % writers.length + writers.length) % writers.length], 'writer') : null;
 
       // Listener Spotlight: freeze the top seven from the previous completed Monday-Sunday period.
       // This makes the seven stable for the entire current week, then a new seven is selected next week.
@@ -304,16 +316,46 @@ export const handler = router({
         }
       }
 
+      const dailySpotlights = [creator, writer, listener].filter(Boolean) as any[];
+      const spotlightDate = local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0');
+
+      // The first authenticated spotlight read of the day creates an idempotent in-app notification
+      // for each person whose spotlight is live. This means no notification spam from repeated page loads.
+      for (const item of dailySpotlights) {
+        const targetId = String(item.targetId ?? '');
+        if (!targetId) continue;
+        const kind = String(item.kind);
+        const dedupeKey = 'spotlight:' + spotlightDate + ':' + kind + ':' + targetId;
+        const base = {
+          type: 'spotlight',
+          subtype: kind,
+          dedupeKey,
+          spotlightDate,
+          targetUserId: targetId,
+          title: kind === 'creator' ? 'You are today’s Creator Spotlight' : kind === 'writer' ? 'You are today’s Writer Spotlight' : 'Thank you — you’re today’s Listener Spotlight',
+          message: kind === 'creator'
+            ? 'Your Nightjar creator profile is featured for the full day. Your latest release is highlighted so listeners can discover your work naturally.'
+            : kind === 'writer'
+              ? 'Your Nightjar writer profile is featured for the full day. Your work is highlighted so the community can discover what you create.'
+              : 'Thank you for being part of the Nightjar listening community. You are being recognised today from the previous week’s Top 7 listeners.',
+          read: false,
+          createdAt: new Date().toISOString(),
+          promotionEnabled: kind === 'creator' || kind === 'writer',
+          listenerRank: kind === 'listener' ? item.listenerRank ?? null : null,
+        };
+        await createUserNotificationOnce(targetId, base);
+      }
+
       return json({
-        date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
+        date: spotlightDate,
         weekdayIndex,
         listenerWeek: previousWeekStart.toISOString().slice(0, 10),
-        spotlights: [creator, writer, listener].filter(Boolean),
+        spotlights: dailySpotlights,
         listenerTopSevenCount: topSeven.length,
         listenerSpotlightDay: listener ? listenerRankIndex + 1 : null,
         rotation: {
-          creator: 'all active Creators, one full day each, deterministic rotation',
-          writer: 'all active Writers, one full day each, deterministic rotation',
+          creator: 'all active public Creators, one full day each, deterministic full-roster rotation',
+          writer: 'all active public Writers, one full day each, deterministic full-roster rotation',
           listener: 'previous completed week top seven Listeners, one full day each, then refreshed next week',
         },
       });
@@ -895,6 +937,27 @@ export const handler = router({
   'POST /api/taste/event': [requireAuth(), async (ctx) => { const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; if(!body.eventType)return error('Taste event type is required.',400); await db.add(tasteTable(ctx.user!.userId),[{type:body.eventType,contentId:body.contentId??null,category:body.category??null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Number(body.durationSeconds??0)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
   'GET /api/taste/profile': [requireAuth(), async (ctx) => { const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])])weights[value]=(weights[value]??0)+3; for(const item of items)for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])])weights[value]=(weights[value]??0)+(item.type==='skip'||item.type==='hide'?-0.5:item.completed?2:1); return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
   'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before opening protected content.',403); if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
+  'GET /api/notifications': [
+    requireAuth(),
+    async (ctx) => {
+      const { items } = await db.list(userNotificationTable(ctx.user!.userId), { limit: 50 });
+      const sorted = items.slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+      return json({
+        notifications: sorted.slice(0, 30),
+        unreadCount: sorted.filter((item) => item.read !== true).length,
+      });
+    },
+  ],
+  'POST /api/notifications/:notificationId/read': [
+    requireAuth(),
+    async (ctx) => {
+      const { items } = await db.list(userNotificationTable(ctx.user!.userId), { limit: 100 });
+      const notification = items.find((item) => item.id === ctx.params.notificationId);
+      if (!notification) return error('Notification not found.', 404);
+      await db.update(userNotificationTable(ctx.user!.userId), [{ id: notification.id, record: { ...notification, read: true, readAt: new Date().toISOString() } }]);
+      return json({ read: true });
+    },
+  ],
   'GET /api/security/notifications': [requireAuth(), withScopes('email'), async (ctx) => { if(!isAdmin(ctx.user!.email))return json({notifications:[]}); const {items}=await db.list(ownerNotificationTable(ctx.user!.email),{limit:100}); return json({notifications:items}); }],
   'GET /api/admin/security-alerts': [requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(securityAlertTable,{limit:100}); return json({alerts:items}); }],
   'POST /api/admin/security-alerts/:alertId/suspend': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const {items}=await db.list(securityAlertTable,{limit:100}); const alert=items.find((item)=>item.id===ctx.params.alertId); if(!alert)return error('Security alert not found.',404); const userId=String(alert.userId); const {items:accounts}=await db.list(accountTable(userId),{limit:1}); if(accounts[0])await db.update(accountTable(userId),[{id:accounts[0].id,record:{...accounts[0],status:'suspended',suspendedAt:new Date().toISOString(),suspendedBy:ctx.user!.email??null}}]); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===userId); if(indexed)await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,status:'suspended'}}]); await revokeReaderSessions(userId,'Account suspended after security review.'); await db.update(securityAlertTable,[{id:alert.id,record:{...alert,status:'actioned',action:'suspended',actionedAt:new Date().toISOString(),actionedBy:ctx.user!.email??null}}]); await db.add(securityEventTable,[{userId,eventType:'account_suspended',actorEmail:ctx.user!.email??null,relatedId:alert.id,createdAt:new Date().toISOString()}]); return json({suspended:true,userId}); }],
