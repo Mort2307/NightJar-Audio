@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Eye, EyeOff, KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 
@@ -41,7 +41,6 @@ export default function AccountAccess({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
-  const passwordReady = useMemo(() => validPassword(password) && password === confirm, [password, confirm]);
 
   const run = async (operation: () => Promise<void>) => {
     setBusy(true);
