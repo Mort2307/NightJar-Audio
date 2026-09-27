@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../platform/legacy-local-client';
+import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarMedia } from '../platform/firebase-media';
 import { Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
 
@@ -13,6 +13,7 @@ type Release = {
   tags?: string[];
   tropes?: string[];
   durationMinutes?: number;
+  audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
   artworkAssetId?: string | null;
@@ -68,7 +69,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         ? current.moderationNote
         : 'A complete release can be submitted for moderation.';
 
-  const complete = useMemo(() => Boolean(current?.title && current.description && current.audioUrl && current.category), [current]);
+  const complete = useMemo(() => Boolean(current?.title && current.description && current.audioAvailable && current.category), [current]);
 
   const setRelease = (patch: Partial<Release>) => setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
 
@@ -79,14 +80,14 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       if (cancelled) return;
       const nextUrl = status.status === 'approved' ? status.publicUrl : null;
       if (status.status !== current.artworkStatus || nextUrl !== (current.artworkUrl ?? null)) {
-        const { data } = await api.put('/api/creator/releases/' + current.id, {
+        const data = await nightjarCatalogue.update(current.id, {
           ...current,
           artworkAssetId: current.artworkAssetId,
           artworkStatus: status.status,
           artworkUrl: nextUrl,
           moderationNote: status.status === 'rejected' ? status.moderationNote : current.moderationNote,
         });
-        if (!cancelled) setSelectedRelease(data?.release ?? current);
+        if (!cancelled) setSelectedRelease(data.release ?? current);
         await onRefresh();
       }
     }).catch(() => { /* moderation sync is non-blocking */ });
@@ -96,7 +97,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const createDraft = async () => {
     if (!draft.title.trim()) return notify('Give the release a title first.');
     try {
-      const { data } = await api.post('/api/creator/releases', {
+      const data = await nightjarCatalogue.create({
         title: draft.title,
         description: draft.description,
         category: draft.category,
@@ -105,7 +106,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         tags: draft.tags.split(',').map((item) => item.trim()).filter(Boolean),
         tropes: draft.tropes.split(',').map((item) => item.trim()).filter(Boolean),
       });
-      const next = data?.release as Release | undefined;
+      const next = data.release as Release | undefined;
       setDraft({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
       if (next) setSelectedRelease(next);
       await onRefresh();
@@ -124,9 +125,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     if (kind === 'audio') setAudioBusy(true); else setArtBusy(true);
     try {
-      const dataUrl = await readDataUrl(file);
-
       if (kind === 'artwork') {
+        const dataUrl = await readDataUrl(file);
         if (current.artworkAssetId) {
           try { await nightjarMedia.removeOwnedImage(current.artworkAssetId); } catch { /* replacement can still proceed */ }
         }
@@ -137,26 +137,23 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           contentType: file.type,
           fileName: file.name,
         });
-        const { data } = await api.put('/api/creator/releases/' + current.id, {
+        const data = await nightjarCatalogue.update(current.id, {
           ...current,
           artworkAssetId: image.assetId,
           artworkStatus: 'pending',
           artworkUrl: null,
         });
-        setSelectedRelease(data?.release ?? { ...current, artworkAssetId: image.assetId, artworkStatus: 'pending', artworkUrl: null });
+        setSelectedRelease(data.release ?? { ...current, artworkAssetId: image.assetId, artworkStatus: 'pending', artworkUrl: null });
         await onRefresh();
         notify('Artwork submitted for administrator approval. It cannot appear publicly until approved.');
         return;
       }
 
       const durationMinutes = await readAudioDurationMinutes(file);
-      const { data } = await api.post('/api/creator/assets', { releaseId: current.id, kind, dataUrl, contentType: file.type, fileName: file.name, ...(durationMinutes ? { durationMinutes } : {}) });
-      setRelease({
-        audioUrl: data?.url ?? null,
-        ...(durationMinutes ? { durationMinutes } : {}),
-      });
+      const data = await nightjarCatalogue.uploadAudio(current.id, file, durationMinutes);
+      setSelectedRelease(data.release ?? { ...current, audioAvailable: true, ...(durationMinutes ? { durationMinutes } : {}) });
       await onRefresh();
-      notify('Audio attached to the release.');
+      notify('Audio attached privately to the release.');
     } catch { notify(kind === 'audio' ? 'Audio upload failed.' : 'Artwork upload failed.'); }
     finally { if (kind === 'audio') setAudioBusy(false); else setArtBusy(false); }
   };
@@ -166,28 +163,51 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     setArtBusy(true);
     try {
       if (current.artworkAssetId) await nightjarMedia.removeOwnedImage(current.artworkAssetId);
-      const { data } = await api.put('/api/creator/releases/' + current.id, {
+      const data = await nightjarCatalogue.update(current.id, {
         ...current,
         artworkAssetId: null,
         artworkStatus: null,
         artworkUrl: null,
       });
-      setSelectedRelease(data?.release ?? { ...current, artworkAssetId: null, artworkStatus: null, artworkUrl: null });
+      setSelectedRelease(data.release ?? { ...current, artworkAssetId: null, artworkStatus: null, artworkUrl: null });
       await onRefresh();
       notify('Release artwork removed.');
     } catch { notify('Release artwork could not be removed.'); }
     finally { setArtBusy(false); }
   };
 
+  const removeAudio = async () => {
+    if (!current?.id) return;
+    setAudioBusy(true);
+    try {
+      await nightjarCatalogue.removeAudio(current.id);
+      setSelectedRelease({ ...current, audioAvailable: false, audioUrl: null, durationMinutes: 0 });
+      await onRefresh();
+      notify('Release audio removed.');
+    } catch { notify('Release audio could not be removed.'); }
+    finally { setAudioBusy(false); }
+  };
+
+  const deleteDraft = async () => {
+    if (!current?.id || current.status === 'released') return;
+    if (!window.confirm('Delete this release draft and its private audio?')) return;
+    try {
+      await nightjarCatalogue.remove(current.id);
+      setSelectedRelease(null);
+      await onRefresh();
+      notify('Release draft removed.');
+    } catch { notify('Release draft could not be removed.'); }
+  };
+
   const saveMetadata = async () => {
     if (!current?.id) return;
     try {
-      const { data } = await api.put('/api/creator/releases/' + current.id, {
+      const data = await nightjarCatalogue.update(current.id, {
         ...current,
         tags: current.tags ?? [],
         tropes: current.tropes ?? [],
       });
-      setSelectedRelease(data?.release ?? current);
+      setSelectedRelease(data.release ?? current);
       await onRefresh();
       notify('Release metadata saved.');
     } catch { notify('Release metadata could not be saved.'); }
@@ -198,7 +218,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!complete) return notify('Add a title, description, category and audio before submitting.');
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator publishing stays locked until your account is approved.');
     try {
-      await api.post('/api/creator/releases/' + current.id + '/publish');
+      await nightjarCatalogue.submit(current.id);
       await onRefresh();
       const refreshed = releases.find((item) => item.id === current.id);
       setSelectedRelease(refreshed ?? { ...current, status: 'pending_review' });
@@ -240,11 +260,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </div>
 
           <div className="pipeline-assets">
-            <label className="asset-drop"><Music2 size={18} /><strong>{audioBusy ? 'Uploading audio…' : current.audioUrl ? 'Replace audio' : 'Attach audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB</span><input type="file" accept="audio/*" disabled={audioBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
+            <div className="asset-drop asset-drop-moderated"><Music2 size={18} /><strong>{audioBusy ? 'Working…' : current.audioAvailable ? 'Replace private audio' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · direct public reads blocked</span><label className="secondary-button upload-label">{current.audioAvailable ? 'Replace audio' : 'Choose audio'}<input type="file" accept="audio/*" hidden disabled={audioBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>{current.audioAvailable && <button className="ghost-button" disabled={audioBusy} onClick={()=>void removeAudio()}>Remove audio</button>}</div>
             <div className="asset-drop asset-drop-moderated"><ImagePlus size={18} /><strong>{artBusy ? 'Working…' : current.artworkStatus === 'pending' ? 'Artwork awaiting approval' : current.artworkUrl ? 'Replace approved artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB · administrator approval required</span><label className="secondary-button upload-label">{current.artworkUrl || current.artworkAssetId ? 'Replace' : 'Choose image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'artwork'); event.currentTarget.value = ''; }} /></label>{(current.artworkUrl || current.artworkAssetId) && <button className="ghost-button" disabled={artBusy} onClick={()=>void removeArtwork()}>Remove artwork</button>}</div>
           </div>
 
-          <div className="pipeline-footer"><span>{current.audioUrl ? 'Audio connected' : 'Audio missing'} · {current.artworkStatus === 'pending' ? 'Artwork pending admin approval' : current.artworkStatus === 'rejected' ? 'Artwork rejected' : current.artworkUrl ? 'Approved artwork connected' : 'Artwork optional'}</span><div><button className="secondary-button" onClick={() => void saveMetadata()}>Save draft</button><button className="primary-button" onClick={() => void submit()} disabled={!complete || current.status === 'pending_review' || current.status === 'released'}><Send size={14} /> Submit to moderation</button></div></div>
+          <div className="pipeline-footer"><span>{current.audioAvailable ? 'Private audio connected' : 'Audio missing'} · {current.artworkStatus === 'pending' ? 'Artwork pending admin approval' : current.artworkStatus === 'rejected' ? 'Artwork rejected' : current.artworkUrl ? 'Approved artwork connected' : 'Artwork optional'}</span><div>{current.status !== 'released' && <button className="ghost-button" onClick={() => void deleteDraft()}>Delete draft</button>}<button className="secondary-button" onClick={() => void saveMetadata()}>Save draft</button><button className="primary-button" onClick={() => void submit()} disabled={!complete || current.status === 'pending_review' || current.status === 'released'}><Send size={14} /> Submit to moderation</button></div></div>
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Select a release draft.</strong><span>The pipeline keeps upload, metadata and moderation state together.</span></div>}
       </div>
     </div>
