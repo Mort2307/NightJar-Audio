@@ -863,22 +863,41 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (account.status === 'suspended' || account.removed === true) throw new Error('This account is suspended.');
 
     const deviceHash = await localDeviceHash(q.get('deviceId'));
-    if (deviceHash) {
-      const sameDevice = state.securityDevices.filter((item) => item.deviceHash === deviceHash);
-      const linkedSuspended = sameDevice.some((item) => item.userId !== account.userId && state.users.some((user) => user.userId === item.userId && (user.status === 'suspended' || user.removed === true)));
+    const environmentHash = await localEnvironmentHash(q.get('environmentId'));
+    if (deviceHash || environmentHash) {
+      const sameDevice = deviceHash ? state.securityDevices.filter((item) => item.deviceHash === deviceHash) : [];
+      const sameEnvironment = environmentHash ? state.securityDevices.filter((item) => item.environmentHash === environmentHash) : [];
+      const restricted = (userId: string) => state.users.some((user) => user.userId === userId && (user.status === 'suspended' || user.removed === true));
+      const linkedSuspendedUserIds = Array.from(new Set(sameDevice.map((item) => item.userId).filter((userId) => userId !== account.userId))).filter(restricted);
+      const linkedSuspendedEnvironmentUserIds = Array.from(new Set(sameEnvironment.map((item) => item.userId).filter((userId) => userId !== account.userId))).filter(restricted);
+      const sameScriptEnvironmentUserIds = script.writerUserId === account.userId ? [] : linkedSuspendedEnvironmentUserIds.filter((userId) =>
+        sameEnvironment.some((item) => item.userId === userId && item.relatedId === script.id) ||
+        state.evidence.some((item) => item.userId === userId && item.relatedId === script.id && item.environmentHash === environmentHash)
+      );
       const blocked = sameDevice.some((item) => item.blocked === true);
-      const existing = sameDevice.find((item) => item.userId === account.userId);
-      if (existing) Object.assign(existing, { lastSeenAt: now(), relatedId: script.id });
-      else state.securityDevices.push({ id: id('device'), deviceHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked: false, relatedId: script.id });
-      if (blocked || linkedSuspended) {
+      const environmentBlocked = sameEnvironment.some((item) => item.environmentBlocked === true);
+      const existing = state.securityDevices.find((item) => item.userId === account.userId && ((deviceHash && item.deviceHash === deviceHash) || (!deviceHash && environmentHash && item.environmentHash === environmentHash)));
+      if (existing) Object.assign(existing, { deviceHash, environmentHash, lastSeenAt: now(), relatedId: script.id, blocked: existing.blocked === true || blocked, environmentBlocked: existing.environmentBlocked === true || environmentBlocked });
+      else state.securityDevices.push({ id: id('device'), deviceHash, environmentHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked, environmentBlocked, relatedId: script.id });
+      if (blocked || environmentBlocked || linkedSuspendedUserIds.length || sameScriptEnvironmentUserIds.length) {
         addLocalSecurityAlert(state, {
           userId: account.userId,
           severity: 'critical',
           riskScore: 95,
-          reason: blocked ? 'Protected-script access attempted from a device token blocked by an administrator.' : 'Protected-script access attempted from a device token previously linked to a suspended account.',
+          reason: blocked
+            ? 'Protected-script access attempted from a device token blocked by an administrator.'
+            : environmentBlocked
+              ? 'Protected-script access attempted from a browser/device environment blocked by an administrator.'
+              : linkedSuspendedUserIds.length
+                ? 'Protected-script access attempted from a device token previously linked to a suspended account.'
+                : 'Protected-script access attempted from a browser/device environment previously used by a restricted account on this same manuscript.',
           relatedId: script.id,
           deviceHash,
-          signal: { eventType: 'blocked_device_reader_attempt' },
+          environmentHash,
+          linkedSuspendedUserIds,
+          linkedSuspendedEnvironmentUserIds,
+          sameScriptEnvironmentUserIds,
+          signal: { eventType: 'blocked_device_or_environment_reader_attempt' },
         });
         throw new Error('Protected-script access is paused for security review.');
       }
@@ -897,10 +916,11 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       allowExport: grant.allowExport === true,
       watermark: 'NIGHTJAR · ' + account.name + ' · ' + issuedAt.slice(0, 16).replace('T', ' '),
       deviceHash,
+      environmentHash,
     };
     state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((item) => item.scriptId === script.id && item.status === 'active' ? { ...item, status: 'revoked', revokedAt: issuedAt, revokedReason: 'Superseded by a new protected reader session.' } : item);
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
-    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'reader_session_issued', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId: session.sessionId, deviceHash, createdAt: issuedAt });
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'reader_session_issued', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId: session.sessionId, deviceHash, environmentHash, createdAt: issuedAt });
     return send({
       script: localScriptMetadata(script),
       readerSession: { sessionId: session.sessionId, expiresAt: session.expiresAt, watermark: session.watermark },
@@ -1227,10 +1247,11 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const allowed = new Set(['script_view','copy_blocked','cut_blocked','paste_blocked','contextmenu_blocked','selection_blocked','drag_blocked','print_blocked','export_requested','export_completed','permission_changed','script_access_requested','report_submitted','blocked_interaction','repeated_protected_interaction']);
     if (!allowed.has(eventType)) throw new Error('Unsupported protection event.');
     const deviceHash = await localDeviceHash(input.deviceId);
-    if (deviceHash) {
-      const existing = state.securityDevices.find((item) => item.deviceHash === deviceHash && item.userId === account.userId);
-      if (existing) Object.assign(existing, { lastSeenAt: now(), relatedId: String(input.relatedId ?? '') || null });
-      else state.securityDevices.push({ id: id('device'), deviceHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked: false, relatedId: String(input.relatedId ?? '') || null });
+    const environmentHash = await localEnvironmentHash(input.environmentId);
+    if (deviceHash || environmentHash) {
+      const existing = state.securityDevices.find((item) => item.userId === account.userId && ((deviceHash && item.deviceHash === deviceHash) || (!deviceHash && environmentHash && item.environmentHash === environmentHash)));
+      if (existing) Object.assign(existing, { deviceHash, environmentHash, lastSeenAt: now(), relatedId: String(input.relatedId ?? '') || null });
+      else state.securityDevices.push({ id: id('device'), deviceHash, environmentHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked: false, environmentBlocked: false, relatedId: String(input.relatedId ?? '') || null });
     }
     state.evidence.push({
       id: id('evidence'),
@@ -1242,6 +1263,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       relatedId: String(input.relatedId ?? '').slice(0, 120) || null,
       sessionId: String(input.sessionId ?? '').slice(0, 120) || null,
       deviceHash,
+      environmentHash,
       summary: String(input.summary ?? 'Protected interaction recorded.').slice(0, 300),
       createdAt: now(),
     });
