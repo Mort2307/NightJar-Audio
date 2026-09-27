@@ -626,9 +626,41 @@ export const handler = router({
   'GET /api/favourites': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); return json({ favourites: items }); }],
   'POST /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.releaseId === ctx.params.releaseId)) await db.add(favouriteTable(ctx.user!.userId), [{ releaseId: ctx.params.releaseId, createdAt: new Date().toISOString() }]); return json({ favourite: true }); }],
   'DELETE /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.releaseId === ctx.params.releaseId).map((item) => item.id); if (ids.length) await db.delete(favouriteTable(ctx.user!.userId), ids); return json({ favourite: false }); }],
-  'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); return json({ follows: items }); }],
-  'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.creatorUserId === ctx.params.creatorUserId)) await db.add(followTable(ctx.user!.userId), [{ creatorUserId: ctx.params.creatorUserId, createdAt: new Date().toISOString() }]); return json({ following: true }); }],
-  'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.creatorUserId === ctx.params.creatorUserId).map((item) => item.id); if (ids.length) await db.delete(followTable(ctx.user!.userId), ids); return json({ following: false }); }],
+  'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 }); return json({ follows: items }); }],
+  'POST /api/follows/:profileUserId': [requireAuth(), async (ctx) => {
+    const profileUserId = String(ctx.params.profileUserId ?? '');
+    if (!profileUserId || profileUserId === ctx.user!.userId) return error('Choose another Nightjar profile to follow.', 400);
+    const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
+    const target = accounts.find((item) => String(item.userId) === profileUserId);
+    if (!target || target.status === 'suspended') return error('Profile not found.', 404);
+    const profile = await getProfile(profileUserId);
+    if (!profile?.publicProfile) return error('Profile not found.', 404);
+    const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    if (!items.some((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId)) {
+      await db.add(followTable(ctx.user!.userId), [{ profileUserId, profileRole: target.role, createdAt: new Date().toISOString() }]);
+    }
+    return json({ following: true, profileUserId });
+  }],
+  'DELETE /api/follows/:profileUserId': [requireAuth(), async (ctx) => {
+    const profileUserId = String(ctx.params.profileUserId ?? '');
+    const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    const ids = items.filter((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId).map((item) => item.id);
+    if (ids.length) await db.delete(followTable(ctx.user!.userId), ids);
+    return json({ following: false, profileUserId });
+  }],
+  'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => {
+    const profileUserId = String(ctx.params.creatorUserId ?? '');
+    const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    if (!items.some((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId)) await db.add(followTable(ctx.user!.userId), [{ profileUserId, creatorUserId: profileUserId, profileRole: 'creator', createdAt: new Date().toISOString() }]);
+    return json({ following: true, profileUserId });
+  }],
+  'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => {
+    const profileUserId = String(ctx.params.creatorUserId ?? '');
+    const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    const ids = items.filter((item) => String(item.profileUserId ?? item.creatorUserId) === profileUserId).map((item) => item.id);
+    if (ids.length) await db.delete(followTable(ctx.user!.userId), ids);
+    return json({ following: false, profileUserId });
+  }],
   'POST /api/listening/event': [requireAuth(), async (ctx) => {
     if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before recording listening activity.', 403);
     const body = (ctx.body ?? {}) as Record<string, unknown>;
