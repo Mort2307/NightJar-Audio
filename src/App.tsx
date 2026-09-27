@@ -72,6 +72,7 @@ type CreatorSummary = {
   handle?: string | null;
   followers?: number;
   releases?: number;
+  share?: string | number;
   initials?: string;
   note?: string;
 };
