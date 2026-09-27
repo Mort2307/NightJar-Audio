@@ -109,6 +109,18 @@ function requireVerifiedAdult(state: LocalState, account: LocalUser) {
   if (state.age[account.userId]?.verified !== true) throw new Error('Age verification required.');
 }
 
+function localScriptGrant(script: Record<string, any>, userId: string) {
+  if (script.writerUserId === userId) return { owner: true, allowCopy: true, allowExport: true };
+  const grant = script.accessGrants?.[userId];
+  if (grant) {
+    if (grant.revokedAt) return null;
+    if (grant.expiresAt && new Date(String(grant.expiresAt)).getTime() <= Date.now()) return null;
+    return grant;
+  }
+  if (script.accessUsers?.includes(userId)) return { legacy: true, allowCopy: script.copyAllowed === true, allowExport: script.exportAllowed === true };
+  return null;
+}
+
 function ensureProfile(state: LocalState, user: LocalUser) {
   if (!state.profiles[user.userId]) {
     state.profiles[user.userId] = {
@@ -703,7 +715,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     requireVerifiedAdult(state, account);
     if (!['creator', 'writer', 'editor', 'admin'].includes(account.role ?? '')) throw new Error('Protected script access required.');
     const scripts = state.scripts
-      .filter((script) => script.writerUserId === account.userId || script.accessUsers?.includes(account.userId))
+      .filter((script) => Boolean(localScriptGrant(script, account.userId)))
       .map((script) => ({
         id: script.id,
         title: script.title,
@@ -727,20 +739,25 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const account = requireUser(state);
     const script = state.scripts.find((item) => item.id === parts[2]);
     if (!script) throw new Error('Script not found.');
-    const permitted = script.writerUserId === account.userId || script.accessUsers?.includes(account.userId);
-    if (!permitted) throw new Error('You do not have an active access grant for this manuscript.');
+    requireVerifiedAdult(state, account);
+    const grant = localScriptGrant(script, account.userId);
+    if (!grant) throw new Error('You do not have an active access grant for this manuscript.');
     const session = { sessionId: id('reader'), expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), status: 'active' };
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), { ...session, scriptId: script.id }];
-    return send({ script, readerSession: session, copyAllowed: false, exportAllowed: false, canReadFull: true });
+    return send({ script, readerSession: session, copyAllowed: grant.allowCopy === true, exportAllowed: grant.allowExport === true, canReadFull: true });
   }
 
   if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'request-access' && method === 'POST') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
+    if (account.role !== 'creator' || account.status === 'suspended') throw new Error('Active Creator access required.');
     const script = state.scripts.find((item) => item.id === parts[2]);
     if (!script) throw new Error('Script not found.');
+    if (localScriptGrant(script, account.userId)) return send({ requested: false, alreadyGranted: true });
     script.accessRequests = Array.isArray(script.accessRequests) ? script.accessRequests : [];
-    script.accessRequests.push({ userId: account.userId, createdAt: now() });
-    return send({ requested: true });
+    const pending = script.accessRequests.find((item: any) => item.userId === account.userId && item.status === 'pending');
+    if (!pending) script.accessRequests.push({ userId: account.userId, status: 'pending', createdAt: now() });
+    return send({ requested: !pending, pending: true });
   }
 
   if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'permissions' && method === 'POST') {
@@ -748,11 +765,24 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (account.role !== 'writer') throw new Error('Writer access required.');
     const script = state.scripts.find((item) => item.id === parts[2] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
-    const users = Array.isArray(input.userIds) ? input.userIds.map(String) : [];
-    script.accessUsers = users;
-    script.copyAllowed = Boolean(input.copyAllowed);
-    script.exportAllowed = Boolean(input.exportAllowed);
-    return send({ script });
+    const creatorUserId = String(input.creatorUserId ?? '');
+    if (!creatorUserId) throw new Error('Creator account is required.');
+    script.accessGrants = script.accessGrants && typeof script.accessGrants === 'object' ? script.accessGrants : {};
+    const existingGrant = script.accessGrants[creatorUserId];
+    if (input.revoke === true) {
+      if (!existingGrant && !script.accessUsers?.includes(creatorUserId)) throw new Error('No existing script access grant was found to revoke.');
+      script.accessGrants[creatorUserId] = { ...(existingGrant ?? {}), allowCopy: false, allowExport: false, revokedAt: now() };
+      script.accessUsers = (script.accessUsers ?? []).filter((userId: string) => userId !== creatorUserId);
+      return send({ allowCopy: false, allowExport: false, expiresAt: existingGrant?.expiresAt ?? null, revoked: true });
+    }
+    const target = state.users.find((candidate) => candidate.userId === creatorUserId && candidate.role === 'creator' && candidate.status !== 'suspended');
+    if (!target) throw new Error('The selected account is not an active Creator.');
+    const expiry = input.expiresAt ? new Date(String(input.expiresAt)) : null;
+    if (expiry && (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now())) throw new Error('Access expiry must be a future date.');
+    script.accessGrants[creatorUserId] = { allowCopy: input.allowCopy === true, allowExport: input.allowExport === true, grantedAt: existingGrant?.grantedAt ?? now(), expiresAt: expiry ? expiry.toISOString() : null, revokedAt: null };
+    script.accessUsers = Array.from(new Set([...(script.accessUsers ?? []), creatorUserId]));
+    script.accessRequests = (script.accessRequests ?? []).map((item: any) => item.userId === creatorUserId && item.status === 'pending' ? { ...item, status: 'granted', resolvedAt: now() } : item);
+    return send({ allowCopy: input.allowCopy === true, allowExport: input.allowExport === true, expiresAt: expiry ? expiry.toISOString() : null, revoked: false });
   }
 
   if (path === '/api/profile/me' && method === 'GET') {
@@ -854,9 +884,9 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!scriptId) throw new Error('Script ID is required.');
     const script = state.scripts.find((item) => item.id === scriptId);
     if (!script) throw new Error('Script not found.');
-    const permitted = script.writerUserId === account.userId || script.accessUsers?.includes(account.userId);
-    if (!permitted) throw new Error('Protected script access has not been granted.');
-    const session = { sessionId: id('reader'), scriptId, status: 'active', expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), createdAt: now(), canReadFull: true, allowCopy: script.writerUserId === account.userId || script.copyAllowed === true, allowExport: script.writerUserId === account.userId || script.exportAllowed === true };
+    const grant = localScriptGrant(script, account.userId);
+    if (!grant) throw new Error('Protected script access has not been granted.');
+    const session = { sessionId: id('reader'), scriptId, status: 'active', expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), createdAt: now(), canReadFull: true, allowCopy: grant.allowCopy === true, allowExport: grant.allowExport === true };
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
     return send({ session });
   }
