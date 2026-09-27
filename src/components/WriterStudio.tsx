@@ -7,6 +7,7 @@ type Props = {
   selected: any | null;
   onDraftTitleChange: (value: string) => void;
   onSelect: (script: any) => void;
+  onChange: (script: any) => void;
   onCreate: () => void | Promise<void>;
   onSave: () => void | Promise<void>;
   onVersion: () => void | Promise<void>;
@@ -15,7 +16,7 @@ type Props = {
   notify: (message: string) => void;
 };
 
-export default function WriterStudio({ draftTitle, scripts, selected, onDraftTitleChange, onSelect, onCreate, onSave, onVersion, onSubmit, onOpenProtected, notify }: Props) {
+export default function WriterStudio({ draftTitle, scripts, selected, onDraftTitleChange, onSelect, onChange, onCreate, onSave, onVersion, onSubmit, onOpenProtected, notify }: Props) {
   const editable = Boolean(selected && ['Draft', 'Revision requested', 'Rejected'].includes(String(selected.status ?? 'Draft')));
 
   return <section className="page-wrap role-studio-page">
@@ -27,9 +28,9 @@ export default function WriterStudio({ draftTitle, scripts, selected, onDraftTit
         {!scripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}
       </aside>
       {selected ? <div className="writer-editor-stack"><article className="writer-editor-card">
-        <div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input disabled={!editable} value={selected.title??''} onChange={event=>onSelect({...selected,title:event.target.value})}/></div><span className="status-pill">{selected.status} · v{selected.version}</span></div>
+        <div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input disabled={!editable} value={selected.title??''} onChange={event=>onChange({...selected,title:event.target.value})}/></div><span className="status-pill">{selected.status} · v{selected.version}</span></div>
         {!editable && <div className="writer-lock-note"><ShieldCheck size={15}/><span>This manuscript is read-only while it is submitted, under review or approved. Editorial workflow controls its status.</span></div>}
-        <textarea disabled={!editable} className="script-editor" value={selected.content??''} onChange={event=>onSelect({...selected,content:event.target.value})} placeholder="Begin writing…"/>
+        <textarea disabled={!editable} className="script-editor" value={selected.content??''} onChange={event=>onChange({...selected,content:event.target.value})} placeholder="Begin writing…"/>
         <div className="editor-actions"><button className="secondary-button" disabled={!editable} onClick={()=>void onSave()}>Save</button><button className="secondary-button" disabled={!editable} onClick={()=>void onVersion()}>Record version</button><button className="primary-button" disabled={!editable || !String(selected.content ?? '').trim()} onClick={()=>void onSubmit()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void onOpenProtected(selected.id)}><LockKeyhole size={14}/> Protected reader</button></div>
         {selected.contentHash && <div className="script-fingerprint"><ShieldCheck size={13}/><span>Manuscript fingerprint</span><code>{String(selected.contentHash).slice(0,16)}…</code></div>}
       </article>
