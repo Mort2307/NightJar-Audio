@@ -63,9 +63,11 @@ export default function ProfileDiscovery({ followingIds, onToggleFollow, onOpenC
 
   const toggle = async (profileUserId: string) => {
     if (busyId) return;
+    const wasFollowing = followingIds.includes(profileUserId);
     setBusyId(profileUserId);
     try {
       await onToggleFollow(profileUserId);
+      setProfiles((items) => items.map((profile) => profile.userId === profileUserId ? { ...profile, followers: Math.max(0, Number(profile.followers ?? 0) + (wasFollowing ? -1 : 1)) } : profile));
     } finally {
       setBusyId(null);
     }
