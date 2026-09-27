@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, auth } from './platform/legacy-local-client';
+import { api, auth, syncLocalAccount } from './platform/legacy-local-client';
+import { nightjarAuth } from './platform/firebase-auth';
+import { nightjarAccount } from './platform/firebase-account';
 import {
   ArrowRight,
   BarChart3,
@@ -223,17 +225,37 @@ function App() {
       } catch { /* branded wordmark remains available */ }
     })();
     let cancelled = false;
-    const restore = async () => {
-      if (!auth.isSignedIn()) return;
-      const current = await auth.getUser();
-      if (cancelled || !current) return;
-      setUser(current);
-      await loadAccount();
-      const verified = await refreshAgeStatus();
-      if (!verified) setAgeStage('assurance');
+    const unsubscribe = nightjarAuth.observe((identity) => {
+      if (cancelled) return;
+      if (!identity) {
+        setUser(null);
+        setRole(null);
+        return;
+      }
+
+      setUser({
+        userId: identity.userId,
+        email: identity.email ?? undefined,
+        name: identity.name ?? undefined,
+      });
+
+      if (!identity.emailVerified) {
+        setAgeStage('gate');
+        return;
+      }
+
+      void (async () => {
+        await loadAccount();
+        const verified = await refreshAgeStatus();
+        if (!verified) setAgeStage('assurance');
+      })();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      window.removeEventListener('popstate', onPop);
     };
-    void restore();
-    return () => { cancelled = true; window.removeEventListener('popstate', onPop); };
   }, []);
 
   useEffect(() => {
@@ -447,10 +469,14 @@ function App() {
   const loadAccount = async () => {
     setAccountLoading(true);
     try {
-      const identity = await api.get('/api/account/identity');
-      setIdentityEmail(identity.data?.email ?? null);
-      setIdentityAdmin(identity.data?.admin === true);
-      if (identity.data?.admin === true) {
+      const data = await nightjarAccount.identity();
+      setIdentityEmail(data.email ?? null);
+      setIdentityAdmin(data.admin === true);
+
+      const nextStatus = data.status === 'pending_review' ? 'pending_review' : 'active';
+      syncLocalAccount(data.userId, data.role, nextStatus);
+
+      if (data.admin === true || data.role === 'admin') {
         setRole('admin');
         setAccountStatus('active');
         setRolePicker(false);
@@ -459,13 +485,12 @@ function App() {
         void loadSecurityAlerts();
         return;
       }
-    } catch { /* account endpoint remains authoritative */ }
-    try {
-      const { data } = await api.get('/api/account');
-      if (data?.role === 'admin' || data?.role === 'creator' || data?.role === 'listener' || data?.role === 'writer' || data?.role === 'editor') {
+
+      if (data.role === 'creator' || data.role === 'listener' || data.role === 'writer' || data.role === 'editor') {
         setRole(data.role);
-        setAccountStatus(data.status === 'pending_review' ? 'pending_review' : 'active');
-        navigate(data.role === 'admin' ? 'admin' : data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : 'discover');
+        setAccountStatus(nextStatus);
+        setRolePicker(false);
+        navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : 'discover');
       } else {
         setRole(null);
         setRolePicker(true);
@@ -523,9 +548,8 @@ function App() {
     setAgeLoading(true);
     try {
       if (!auth.isSignedIn()) {
-        const result = await auth.signIn({ scope: 'openid email profile offline_access' });
-        setUser(result.user);
-        await loadAccount();
+        window.location.assign('/account');
+        return;
       }
       const alreadyVerified = await refreshAgeStatus();
       if (alreadyVerified) {
@@ -569,20 +593,7 @@ function App() {
   }, [ageStatus, user]);
 
   const signIn = async () => {
-    setAccountLoading(true);
-    try {
-      const result = await auth.signIn({ scope: 'openid email profile offline_access' });
-      setUser(result.user);
-      await loadAccount();
-      const verified = await refreshAgeStatus();
-      if (!verified) setAgeStage('assurance');
-    } catch (error) {
-      const code = error instanceof Error ? error.message : '';
-      if (code.includes('popup_blocked')) notify('Please allow the Nightjar sign-in window.');
-      else if (!code.includes('popup_closed')) notify('Nightjar sign-in could not be completed.');
-    } finally {
-      setAccountLoading(false);
-    }
+    window.location.assign('/account');
   };
 
   const signOut = async () => {
@@ -605,15 +616,19 @@ function App() {
   const chooseRole = async (nextRole: Exclude<AccountRole, 'admin' | 'editor'>) => {
     setAccountLoading(true);
     try {
-      const { data } = await api.post('/api/account/role', { role: nextRole });
-      if (data?.role === 'creator' || data?.role === 'listener' || data?.role === 'writer') {
+      const data = await nightjarAccount.chooseRole(nextRole);
+      if (data.role === 'creator' || data.role === 'listener' || data.role === 'writer') {
+        const nextStatus = data.status === 'pending_review' ? 'pending_review' : 'active';
+        syncLocalAccount(data.userId, data.role, nextStatus);
         setRole(data.role);
-        setAccountStatus(data.status === 'pending_review' ? 'pending_review' : 'active');
+        setAccountStatus(nextStatus);
         setRolePicker(false);
         navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : 'discover');
         notify(data.role === 'creator'
           ? 'Creator account created. Creator approval and publishing controls can be completed in the production onboarding flow.'
-          : 'Listener account created. Welcome to Nightjar.');
+          : data.role === 'writer'
+            ? 'Writer account created. Welcome to Nightjar.'
+            : 'Listener account created. Welcome to Nightjar.');
       }
     } catch {
       notify('We could not create this account type. Please try again.');
