@@ -1353,3 +1353,8 @@ button:focus-visible {
   .moderation-preview { padding:13px; }
   .onboarding-card { max-height:95vh; border-radius:17px; }
 }
+
+.dock-nav { display:flex; align-items:center; gap:5px; }
+.dock-nav-button { width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--line-soft); border-radius:50%; background:rgba(255,255,255,.018); color:var(--muted); }
+.dock-nav-button:hover:not(:disabled) { color:var(--ivory); border-color:rgba(239,231,223,.18); }
+.dock-nav-button:disabled { opacity:.3; cursor:not-allowed; }
