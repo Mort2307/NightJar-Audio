@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent, type DragEvent as ReactDragEvent } from 'react';
 import { api, auth } from '@appdeploy/client';
 import {
   ArrowRight,
@@ -1541,7 +1541,7 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
 
   const content = String(pageData?.content ?? '');
   const copyAllowed = data.copyAllowed === true;
-  const blockUnlessAllowed = (event: React.ClipboardEvent | React.MouseEvent | React.DragEvent, type: string) => {
+  const blockUnlessAllowed = (event: ReactClipboardEvent | ReactMouseEvent | ReactDragEvent, type: string) => {
     if (copyAllowed) return;
     event.preventDefault();
     record(type);
@@ -1560,7 +1560,7 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
         <button className="icon-button" onClick={close} aria-label="Close protected manuscript"><X size={18} /></button>
       </header>
       <div className="reader-notice"><ShieldCheck size={15} /><span>The browser only receives the page you are reading. Access, page views and permitted exports are recorded against this short-lived session.</span></div>
-      <article className={copyAllowed ? 'reader-body copy-enabled' : 'reader-body'}>
+      <article className={copyAllowed ? 'reader-body copy-enabled' : 'reader-body'} data-nosnippet>
         <div className="reader-watermark-layer" aria-hidden="true">{Array.from({ length: 8 }).map((_, index) => <span key={index}>{pageData?.watermark ?? data.readerSession?.watermark ?? 'NIGHTJAR · AUTHORISED READER SESSION'}</span>)}</div>
         <p className="reader-watermark">{pageData?.watermark ?? data.readerSession?.watermark ?? 'NIGHTJAR · AUTHORISED READER SESSION'}</p>
         {pageLoading && !pageData ? <p>Loading protected page…</p> : content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : <p>No manuscript text is available on this page.</p>}
