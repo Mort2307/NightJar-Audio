@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '@appdeploy/client';
+import { api } from '../platform/legacy-local-client';
 import { ArrowRight, Heart, Mic2, Share2 } from 'lucide-react';
 
 type CreatorProfileData = {
