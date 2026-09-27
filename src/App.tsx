@@ -182,7 +182,7 @@ function App() {
   const [adminOverview, setAdminOverview] = useState<any | null>(null);
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'admin' | null>(null);
-  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], publicProfile: true });
+  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], publicProfile: true });
   const [profileLoading, setProfileLoading] = useState(false);
   const [tasteVector, setTasteVector] = useState<any[]>([]);
   const [securityAlerts, setSecurityAlerts] = useState<any[]>([]);
@@ -929,7 +929,7 @@ function App() {
     try {
       const dataUrl = await readFileDataUrl(file);
       const result = await nightjarMedia.submitImage({ kind: 'profile_avatar', dataUrl, contentType: file.type, fileName: file.name });
-      setProfile((current: any) => ({ ...current, avatarStatus: result.status, pendingAvatarAssetId: result.assetId }));
+      setProfile((current: any) => ({ ...current, pendingAvatarStatus: result.status, pendingAvatarAssetId: result.assetId }));
       notify('Profile image submitted for administrator approval. Your current approved image stays live until the replacement is approved.');
     } catch { notify('Profile image could not be uploaded.'); }
     finally { setProfileImageBusy(false); }
@@ -939,7 +939,7 @@ function App() {
     setProfileImageBusy(true);
     try {
       await nightjarMedia.removeProfileAvatar();
-      setProfile((current: any) => ({ ...current, avatarUrl: null, avatarAssetId: null, avatarStatus: null, pendingAvatarAssetId: null }));
+      setProfile((current: any) => ({ ...current, avatarUrl: null, avatarAssetId: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null }));
       notify('Profile image removed.');
     } catch { notify('Profile image could not be removed.'); }
     finally { setProfileImageBusy(false); }
@@ -1490,8 +1490,8 @@ function App() {
                 <span className="mini-label">IDENTITY</span>
                 <div className="profile-avatar-preview" data-tone={profile.avatarTone || 'plum'}>{profile.avatarUrl ? <img className="profile-approved-image" src={profile.avatarUrl} alt="Approved profile" /> : <strong>{profile.avatarInitials || (profile.displayName || user?.name || 'N').slice(0,2).toUpperCase()}</strong>}</div>
                 <div className="profile-image-controls"><label className="secondary-button upload-label"><ImagePlus size={15}/> {profileImageBusy ? 'Working…' : profile.avatarUrl ? 'Replace picture' : 'Add profile picture'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file) void uploadProfileAvatar(file); event.currentTarget.value='';}} /></label>{(profile.avatarUrl || profile.pendingAvatarAssetId) && <button className="ghost-button" disabled={profileImageBusy} onClick={()=>void removeProfileImage()}>Remove picture</button>}</div>
-                {profile.avatarStatus === 'pending' && <p className="image-moderation-status">Picture pending administrator approval. It is not public yet.</p>}
-                {profile.avatarStatus === 'rejected' && <p className="image-moderation-status">The submitted picture was not approved. You can upload another.</p>}
+                {profile.pendingAvatarStatus === 'pending' && <p className="image-moderation-status">Picture pending administrator approval. It is not public yet.</p>}
+                {profile.pendingAvatarStatus === 'rejected' && <p className="image-moderation-status">The submitted picture was not approved. You can upload another.</p>}
                 <h2>{profile.displayName || user?.name || 'Choose your name'}</h2>
                 <label>Chosen name<input value={profile.displayName} onChange={(e)=>setProfile((p:any)=>({...p,displayName:e.target.value}))} placeholder="How Nightjar should call you"/></label>
                 <label>@handle<input value={profile.handle} onChange={(e)=>setProfile((p:any)=>({...p,handle:e.target.value}))} placeholder="youruniquehandle"/></label>
