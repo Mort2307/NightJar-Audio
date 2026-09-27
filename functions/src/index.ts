@@ -8,6 +8,7 @@ initializeApp();
 
 const db = getFirestore();
 const REGION = 'europe-west2';
+const AGE_ASSURANCE_CONFIGURED = false;
 
 const ADMIN_EMAILS = new Set([
   'mike.owen230792@gmail.com',
@@ -1446,6 +1447,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       handle: profileData.handle ?? null,
       publicProfile: profileData.publicProfile !== false,
       avatarUrl: profileData.avatarStatus === 'approved' ? profileData.avatarUrl ?? null : null,
+      testAccess: account.testAccess === true,
     };
   }));
 
@@ -1468,6 +1470,32 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       })),
     },
   };
+});
+
+export const adminSetTestAccess = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const enabled = input.enabled === true;
+  if (!userId) throw new HttpsError('invalid-argument', 'Choose a Nightjar account.');
+
+  const ref = accountRef(userId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
+
+  const email = cleanEmail(snapshot.data()?.email);
+  if (ADMIN_EMAILS.has(email)) {
+    throw new HttpsError('failed-precondition', 'Administrator accounts already have temporary test access.');
+  }
+
+  await ref.set({
+    testAccess: enabled,
+    testAccessUpdatedBy: admin.uid,
+    testAccessUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { userId, testAccess: enabled };
 });
 
 export const adminSetAccountRole = onCall({ region: REGION }, async (request) => {
@@ -1861,11 +1889,34 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
   };
 });
 
+const temporaryAgeBypassFor = async (uid: string) => {
+  if (AGE_ASSURANCE_CONFIGURED) return { allowed: false, reason: null as string | null };
+  const snapshot = await accountRef(uid).get();
+  const data = snapshot.data() ?? {};
+  const email = cleanEmail(data.email);
+  if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' };
+  if (data.testAccess === true) return { allowed: true, reason: 'tester' };
+  return { allowed: false, reason: null as string | null };
+};
+
 const requireAgeVerified = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
-  if (!data?.verified) throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
-  return data;
+  if (data?.verified) return data;
+
+  const bypass = await temporaryAgeBypassFor(uid);
+  if (bypass.allowed) {
+    return {
+      verified: true,
+      status: 'COMPLETE',
+      provider: 'temporary-test-access',
+      environment: 'development',
+      temporaryBypass: true,
+      temporaryBypassReason: bypass.reason,
+    };
+  }
+
+  throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
 };
 
 export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) => {
@@ -2128,21 +2179,37 @@ export const ageStatus = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
   const data = snapshot.data() ?? {};
+  const bypass = data.verified === true ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
+  const verified = data.verified === true || bypass.allowed;
   return {
-    verified: data.verified === true,
-    status: data.verified === true ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
+    verified,
+    status: verified ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
     ageThreshold: 18,
-    configured: false,
-    provider: data.provider ?? 'not-configured',
-    environment: data.environment ?? 'production',
+    configured: AGE_ASSURANCE_CONFIGURED,
+    provider: data.provider ?? (bypass.allowed ? 'temporary-test-access' : 'not-configured'),
+    environment: data.environment ?? (bypass.allowed ? 'development' : 'production'),
     verifiedAt: data.verifiedAt ?? null,
     reverifyRequired: data.reverifyRequired === true,
     testAvailable: identity.admin,
+    temporaryBypass: bypass.allowed,
+    temporaryBypassReason: bypass.reason,
   };
 });
 
 export const startAgeAssurance = onCall({ region: REGION }, async (request) => {
-  await requireActiveIdentity(request);
+  const identity = await requireActiveIdentity(request);
+  const bypass = await temporaryAgeBypassFor(identity.uid);
+  if (bypass.allowed) {
+    return {
+      verified: true,
+      status: 'COMPLETE',
+      configured: AGE_ASSURANCE_CONFIGURED,
+      provider: 'temporary-test-access',
+      environment: 'development',
+      temporaryBypass: true,
+      temporaryBypassReason: bypass.reason,
+    };
+  }
   throw new HttpsError('failed-precondition', 'Production age-assurance provider credentials are not configured yet.');
 });
 
