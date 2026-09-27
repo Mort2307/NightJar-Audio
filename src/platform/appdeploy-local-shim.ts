@@ -1276,6 +1276,10 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!editor) throw new Error('The selected account is not an active Editor.');
     const script = state.scripts.find((item) => item.id === scriptId);
     if (!script) throw new Error('Script not found.');
+    const previousEditorUserId = String(script.editorUserId ?? '');
+    if (previousEditorUserId && previousEditorUserId !== editorUserId) {
+      state.readerSessions[previousEditorUserId] = (state.readerSessions[previousEditorUserId] ?? []).map((session) => session.scriptId === script.id && session.status === 'active' ? { ...session, status: 'revoked', revokedAt: now(), revokedReason: 'Editorial assignment was reassigned.' } : session);
+    }
     script.editorUserId = editorUserId;
     script.updatedAt = now();
     return send({ script: { ...localScriptMetadata(script), editorUserId: script.editorUserId ?? null } });
