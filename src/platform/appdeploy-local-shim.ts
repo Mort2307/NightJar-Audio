@@ -1593,6 +1593,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
           relatedId: item.relatedId ?? null,
           sessionId: item.sessionId ?? null,
           deviceHash: item.deviceHash ?? null,
+          environmentHash: item.environmentHash ?? null,
           forensicToken: item.forensicToken ?? null,
           page: item.page ?? null,
           totalPages: item.totalPages ?? null,
@@ -1632,7 +1633,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
         deviceBlocked: linkedDevices.some((item) => item.blocked === true),
         environmentBlocked: linkedEnvironments.some((item) => item.environmentBlocked === true),
         networkCorrelationAvailable: false,
-        networkCorrelationNote: 'The local development shim does not expose or trust a client-network address. Nightjar uses device and forensic correlation instead.',
+        networkCorrelationNote: 'The local development shim does not expose or trust a client-network address. Nightjar uses pseudonymous device, browser-environment and forensic correlation instead.',
       };
     }).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
     return send({ alerts });
@@ -1707,12 +1708,19 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
         if (device.deviceHash === deviceHash) Object.assign(device, { blocked: true, blockedAt: at, blockReason: note ?? 'Blocked from a Nightjar security alert.' });
       });
     }
+    if (action === 'block_environment') {
+      const environmentHash = String(alert.environmentHash ?? '');
+      if (!environmentHash) throw new Error('This alert does not contain a browser/device environment correlation token.');
+      state.securityDevices.forEach((device) => {
+        if (device.environmentHash === environmentHash) Object.assign(device, { environmentBlocked: true, environmentBlockedAt: at, environmentBlockReason: note ?? 'Environment blocked from a Nightjar security alert.' });
+      });
+    }
 
     alert.status = action === 'benign' ? 'benign' : 'actioned';
     alert.action = action;
     alert.actionedAt = at;
     alert.actionNote = note;
-    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: currentUser(state)?.userId ?? null, eventType: 'admin_security_action', action, relatedType: 'security_alert', relatedId: alert.id, deviceHash: alert.deviceHash ?? null, summary: note ?? 'Administrator security action recorded.', createdAt: at });
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: currentUser(state)?.userId ?? null, eventType: 'admin_security_action', action, relatedType: 'security_alert', relatedId: alert.id, deviceHash: alert.deviceHash ?? null, environmentHash: alert.environmentHash ?? null, summary: note ?? 'Administrator security action recorded.', createdAt: at });
     return send({ ok: true, action, userId: account.userId, status: alert.status });
   }
 
