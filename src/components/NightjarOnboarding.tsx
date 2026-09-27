@@ -74,13 +74,13 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   const update = (key: string, value: string) => setProfile((current: any) => ({ ...current, [key]: normalize(key, value) }));
   const displayValue = (key: string) => Array.isArray(profile[key]) ? profile[key].join(', ') : profile[key] || '';
 
-  const finish = async (skipped = false) => {
+  const finish = async () => {
     setSaving(true);
     try {
       const payload = { ...profile, onboardingComplete: true, onboardingVersion: 1 };
       const { data } = await api.put('/api/profile/me', payload);
       onComplete(data?.profile ?? payload);
-      notify(skipped ? 'Onboarding saved with the essentials. You can refine your profile later.' : 'Nightjar profile and taste preferences saved.');
+      notify('Nightjar profile and taste preferences saved.');
     } catch {
       notify('Nightjar could not save your onboarding yet.');
     } finally {
@@ -93,7 +93,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
       <header><div><span className="mini-label">NIGHTJAR / PERSONALISATION</span><p className="eyebrow"><Sparkles size={13}/> EXPLICIT TASTE · YOUR CONTROL</p><h2 id="nightjar-onboarding-title">Make Nightjar yours.</h2><p>Nightjar learns from what you tell it you like. It does not need to guess who you are.</p></div><button className="icon-button" onClick={onSkip} aria-label="Close onboarding"><X size={18}/></button></header>
       <div className="onboarding-progress"><span style={{ width: ((groupIndex + 1) / QUESTION_GROUPS.length * 100) + '%' }} /><small>Step {groupIndex + 1} of {QUESTION_GROUPS.length}</small></div>
       <article className="onboarding-group"><span className="mini-label">{group.label}</span><h3>{group.title}</h3><p>{group.description}</p><div className="onboarding-fields">{group.fields.map((field:any) => <label key={field.key}>{field.label}<input value={displayValue(field.key)} onChange={(event) => update(field.key, event.target.value)} placeholder={field.placeholder} /></label>)}</div></article>
-      <div className="onboarding-footer"><span>{role ? 'Account role: ' + role : 'Nightjar account'}</span><div>{groupIndex > 0 && <button className="secondary-button" onClick={() => setGroupIndex((index) => index - 1)}>Back</button>}{groupIndex < QUESTION_GROUPS.length - 1 ? <button className="primary-button" onClick={() => setGroupIndex((index) => index + 1)}>Continue <ArrowRight size={14}/></button> : <button className="primary-button" disabled={saving} onClick={() => void finish()}><Check size={14}/> {saving ? 'Saving…' : 'Finish setup'}</button>}<button className="ghost-button" disabled={saving} onClick={() => void finish(true)}>Skip for now</button></div></div>
+      <div className="onboarding-footer"><span>{role ? 'Account role: ' + role : 'Nightjar account'}</span><div>{groupIndex > 0 && <button className="secondary-button" onClick={() => setGroupIndex((index) => index - 1)}>Back</button>}{groupIndex < QUESTION_GROUPS.length - 1 ? <button className="primary-button" onClick={() => setGroupIndex((index) => index + 1)}>Continue <ArrowRight size={14}/></button> : <button className="primary-button" disabled={saving} onClick={() => void finish()}><Check size={14}/> {saving ? 'Saving…' : 'Finish setup'}</button>}<button className="ghost-button" disabled={saving} onClick={onSkip}>Skip for now</button></div></div>
     </section>
   </div>;
 }
