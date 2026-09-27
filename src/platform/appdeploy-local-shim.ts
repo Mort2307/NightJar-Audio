@@ -3,7 +3,9 @@ type LocalUser = {
   email: string;
   name: string;
   role: 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | null;
-  status: 'active' | 'pending_review';
+  status: 'active' | 'pending_review' | 'suspended';
+  removed?: boolean;
+  securityPreviousStatus?: 'active' | 'pending_review';
   createdAt: string;
 };
 
@@ -23,6 +25,7 @@ type LocalState = {
   applications: any[];
   subscriptions: any[];
   securityAlerts: any[];
+  securityDevices: any[];
   securityNotifications: Record<string, any[]>;
   notifications: Record<string, any[]>;
   readerSessions: Record<string, any[]>;
@@ -63,6 +66,7 @@ const emptyState = (): LocalState => ({
   applications: [],
   subscriptions: [],
   securityAlerts: [],
+  securityDevices: [],
   securityNotifications: {},
   notifications: {},
   readerSessions: {},
@@ -177,6 +181,15 @@ async function localScriptHash(content: unknown) {
   return 'local-' + (fallback >>> 0).toString(16).padStart(8, '0');
 }
 
+async function localDeviceHash(deviceToken: unknown) {
+  const token = String(deviceToken ?? '').trim().slice(0, 160);
+  return token ? (await localScriptHash('nightjar-device:' + token)).replace(/^local-/, '') : null;
+}
+
+async function localForensicToken(userId: string, scriptId: string, sessionId: string, page: number, issuedAt: unknown) {
+  return (await localScriptHash(['nightjar-forensic', userId, scriptId, sessionId, String(page), String(issuedAt ?? '')].join('|'))).replace(/^local-/, '').slice(0, 16).toUpperCase();
+}
+
 function ensureProfile(state: LocalState, user: LocalUser) {
   if (!state.profiles[user.userId]) {
     state.profiles[user.userId] = {
@@ -207,6 +220,25 @@ function addLocalNotificationOnce(state: LocalState, userId: string, notificatio
   const existing = state.notifications[userId] ?? [];
   if (notification.dedupeKey && existing.some((item) => item.dedupeKey === notification.dedupeKey)) return;
   addLocalNotification(state, userId, notification);
+}
+
+function addLocalSecurityAlert(state: LocalState, alert: Record<string, any>) {
+  const record = { id: id('security-alert'), status: 'open', automaticAccountFreeze: false, createdAt: now(), ...alert };
+  state.securityAlerts.push(record);
+  for (const email of ADMIN_EMAILS) {
+    state.securityNotifications[email] = [...(state.securityNotifications[email] ?? []), {
+      id: id('security-notice'),
+      type: 'security_alert',
+      alertId: record.id,
+      severity: record.severity ?? 'high',
+      title: 'Nightjar security alert',
+      message: record.reason ?? 'Suspicious protected-content activity detected.',
+      createdAt: record.createdAt,
+      read: false,
+      recipientEmail: email,
+    }];
+  }
+  return record;
 }
 
 function bodyObject(body: unknown) {
@@ -812,6 +844,29 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!script) throw new Error('Script not found.');
     const grant = localScriptGrant(script, account.userId);
     if (!grant) throw new Error('Script not found.');
+    if (account.status === 'suspended' || account.removed === true) throw new Error('This account is suspended.');
+
+    const deviceHash = await localDeviceHash(q.get('deviceId'));
+    if (deviceHash) {
+      const sameDevice = state.securityDevices.filter((item) => item.deviceHash === deviceHash);
+      const linkedSuspended = sameDevice.some((item) => item.userId !== account.userId && state.users.some((user) => user.userId === item.userId && (user.status === 'suspended' || user.removed === true)));
+      const blocked = sameDevice.some((item) => item.blocked === true);
+      const existing = sameDevice.find((item) => item.userId === account.userId);
+      if (existing) Object.assign(existing, { lastSeenAt: now(), relatedId: script.id });
+      else state.securityDevices.push({ id: id('device'), deviceHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked: false, relatedId: script.id });
+      if (blocked || linkedSuspended) {
+        addLocalSecurityAlert(state, {
+          userId: account.userId,
+          severity: 'critical',
+          riskScore: 95,
+          reason: blocked ? 'Protected-script access attempted from a device token blocked by an administrator.' : 'Protected-script access attempted from a device token previously linked to a suspended account.',
+          relatedId: script.id,
+          deviceHash,
+          signal: { eventType: 'blocked_device_reader_attempt' },
+        });
+        throw new Error('Protected-script access is paused for security review.');
+      }
+    }
 
     const issuedAt = now();
     const session = {
@@ -825,10 +880,11 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       allowCopy: grant.allowCopy === true,
       allowExport: grant.allowExport === true,
       watermark: 'NIGHTJAR · ' + account.name + ' · ' + issuedAt.slice(0, 16).replace('T', ' '),
+      deviceHash,
     };
     state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((item) => item.scriptId === script.id && item.status === 'active' ? { ...item, status: 'revoked', revokedAt: issuedAt, revokedReason: 'Superseded by a new protected reader session.' } : item);
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
-    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'reader_session_issued', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId: session.sessionId, createdAt: issuedAt });
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'reader_session_issued', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId: session.sessionId, deviceHash, createdAt: issuedAt });
     return send({
       script: localScriptMetadata(script),
       readerSession: { sessionId: session.sessionId, expiresAt: session.expiresAt, watermark: session.watermark },
@@ -861,12 +917,13 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       session.status = 'revoked';
       session.revokedAt = now();
       session.revokedReason = 'Protected reader rate limit exceeded.';
-      state.securityAlerts.push({ id: id('security-alert'), userId: account.userId, severity: 'high', riskScore: 85, reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.', relatedId: script.id, createdAt: now(), status: 'open' });
+      addLocalSecurityAlert(state, { userId: account.userId, severity: 'high', riskScore: 85, reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.', relatedId: script.id, deviceHash: session.deviceHash ?? null });
       throw new Error('Protected reader rate limit reached.');
     }
     const pages = localChunkProtectedContent(script.content ?? '');
     if (page >= pages.length) throw new Error('Protected page not found.');
-    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_page_view', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId, page, createdAt: now() });
+    const forensicToken = await localForensicToken(account.userId, script.id, sessionId, page, session.issuedAt);
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_page_view', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, forensicToken, page, totalPages: pages.length, createdAt: now() });
     return send({
       scriptId: script.id,
       content: pages[page],
@@ -874,7 +931,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       totalPages: pages.length,
       hasPrevious: page > 0,
       hasNext: page + 1 < pages.length,
-      watermark: session.watermark ?? ('NIGHTJAR · ' + sessionId),
+      watermark: (session.watermark ?? ('NIGHTJAR · ' + sessionId)) + ' · FP ' + forensicToken + ' · P' + String(page + 1),
+      forensicToken,
       contentHash: script.contentHash ?? await localScriptHash(script.content ?? ''),
       sessionExpiresAt: session.expiresAt,
     });
@@ -1152,6 +1210,12 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const eventType = String(input.eventType ?? '');
     const allowed = new Set(['script_view','copy_blocked','cut_blocked','paste_blocked','contextmenu_blocked','selection_blocked','drag_blocked','print_blocked','export_requested','export_completed','permission_changed','script_access_requested','report_submitted','blocked_interaction','repeated_protected_interaction']);
     if (!allowed.has(eventType)) throw new Error('Unsupported protection event.');
+    const deviceHash = await localDeviceHash(input.deviceId);
+    if (deviceHash) {
+      const existing = state.securityDevices.find((item) => item.deviceHash === deviceHash && item.userId === account.userId);
+      if (existing) Object.assign(existing, { lastSeenAt: now(), relatedId: String(input.relatedId ?? '') || null });
+      else state.securityDevices.push({ id: id('device'), deviceHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked: false, relatedId: String(input.relatedId ?? '') || null });
+    }
     state.evidence.push({
       id: id('evidence'),
       userId: account.userId,
@@ -1161,6 +1225,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       relatedType: String(input.relatedType ?? '').slice(0, 80) || null,
       relatedId: String(input.relatedId ?? '').slice(0, 120) || null,
       sessionId: String(input.sessionId ?? '').slice(0, 120) || null,
+      deviceHash,
       summary: String(input.summary ?? 'Protected interaction recorded.').slice(0, 300),
       createdAt: now(),
     });
