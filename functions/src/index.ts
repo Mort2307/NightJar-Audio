@@ -1095,3 +1095,577 @@ export const listBillingSubscriptions = onCall({ region: REGION }, async (reques
   return { subscriptions };
 });
 
+type ReleaseStatus = 'draft' | 'pending_review' | 'released' | 'rejected';
+
+const releaseRef = (releaseId: string) => db.collection('releases').doc(releaseId);
+
+const requireAccountRole = async (
+  request: { auth?: { uid: string; token: Record<string, unknown> } | null },
+  roles: AccountRole[],
+) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin && roles.includes('admin')) return { ...identity, role: 'admin' as AccountRole, status: 'active' };
+  const snapshot = await accountRef(identity.uid).get();
+  const data = snapshot.data() ?? {};
+  const role = data.role as AccountRole | null;
+  const status = String(data.status ?? 'active');
+  if (!role || !roles.includes(role)) throw new HttpsError('permission-denied', 'This Nightjar role does not have access.');
+  if (status !== 'active') throw new HttpsError('failed-precondition', 'This Nightjar account is not active.');
+  return { ...identity, role, status };
+};
+
+const releasePayload = (data: Record<string, unknown>, id: string) => ({
+  id,
+  creatorUserId: data.creatorUserId ?? null,
+  creatorName: data.creatorName ?? 'Nightjar creator',
+  creatorHandle: data.creatorHandle ?? null,
+  title: data.title ?? '',
+  description: data.description ?? '',
+  category: data.category ?? '',
+  genre: data.genre ?? '',
+  mood: data.mood ?? '',
+  tags: Array.isArray(data.tags) ? data.tags : [],
+  tropes: Array.isArray(data.tropes) ? data.tropes : [],
+  durationMinutes: typeof data.durationMinutes === 'number' ? data.durationMinutes : 0,
+  artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
+  artworkAssetId: data.artworkAssetId ?? null,
+  artworkStatus: data.artworkStatus ?? null,
+  audioAvailable: Boolean(data.audioStoragePath),
+  status: data.status ?? 'draft',
+  moderationNote: data.moderationNote ?? null,
+  releaseDate: data.releaseDate ?? null,
+  createdAt: data.createdAt ?? null,
+  updatedAt: data.updatedAt ?? null,
+});
+
+const releaseSearchText = (data: Record<string, unknown>) => [
+  data.title,
+  data.description,
+  data.category,
+  data.genre,
+  data.mood,
+  ...(Array.isArray(data.tags) ? data.tags : []),
+  ...(Array.isArray(data.tropes) ? data.tropes : []),
+].filter(Boolean).join(' ').toLowerCase();
+
+export const listCatalogue = onCall({ region: REGION }, async (request) => {
+  await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as { q?: unknown; category?: unknown };
+  const query = cleanText(input.q, 120).toLowerCase();
+  const category = cleanText(input.category, 80).toLowerCase();
+
+  const snapshot = await db.collection('releases').where('status', '==', 'released').limit(500).get();
+  const catalogue = snapshot.docs
+    .filter((doc) => !category || cleanText(doc.data().category, 80).toLowerCase() === category)
+    .filter((doc) => !query || releaseSearchText(doc.data()).includes(query))
+    .map((doc) => releasePayload(doc.data(), doc.id));
+
+  return { catalogue };
+});
+
+export const createRelease = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const profile = await profileRef(identity.uid).get();
+  const profileData = profile.data() ?? {};
+  const title = cleanText(input.title, 160);
+  if (!title) throw new HttpsError('invalid-argument', 'Give the release a title first.');
+
+  const ref = db.collection('releases').doc();
+  const record = {
+    creatorUserId: identity.uid,
+    creatorName: profileData.displayName ?? identity.email.split('@')[0],
+    creatorHandle: profileData.handle ?? null,
+    title,
+    description: cleanText(input.description, 3000),
+    category: cleanText(input.category, 80),
+    genre: cleanText(input.genre, 80),
+    mood: cleanText(input.mood, 80),
+    tags: cleanStringList(input.tags, 24),
+    tropes: cleanStringList(input.tropes, 24),
+    durationMinutes: 0,
+    audioStoragePath: null,
+    artworkAssetId: null,
+    artworkUrl: null,
+    artworkStatus: null,
+    status: 'draft' as ReleaseStatus,
+    moderationNote: null,
+    version: 1,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+  const saved = await ref.get();
+  return { release: releasePayload(saved.data() ?? record, ref.id) };
+});
+
+export const updateRelease = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+
+  const ref = releaseRef(releaseId);
+  const snapshot = await ref.get();
+  const current = snapshot.data();
+  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
+  if (current.status === 'released') throw new HttpsError('failed-precondition', 'Live releases cannot be edited directly.');
+
+  const update = {
+    title: cleanText(input.title ?? current.title, 160),
+    description: cleanText(input.description ?? current.description, 3000),
+    category: cleanText(input.category ?? current.category, 80),
+    genre: cleanText(input.genre ?? current.genre, 80),
+    mood: cleanText(input.mood ?? current.mood, 80),
+    tags: Array.isArray(input.tags) ? cleanStringList(input.tags, 24) : (current.tags ?? []),
+    tropes: Array.isArray(input.tropes) ? cleanStringList(input.tropes, 24) : (current.tropes ?? []),
+    durationMinutes: typeof input.durationMinutes === 'number' && Number.isFinite(input.durationMinutes)
+      ? Math.max(0, Math.min(1440, input.durationMinutes))
+      : current.durationMinutes ?? 0,
+    artworkAssetId: Object.prototype.hasOwnProperty.call(input, 'artworkAssetId') ? input.artworkAssetId ?? null : current.artworkAssetId ?? null,
+    artworkUrl: Object.prototype.hasOwnProperty.call(input, 'artworkUrl') ? input.artworkUrl ?? null : current.artworkUrl ?? null,
+    artworkStatus: Object.prototype.hasOwnProperty.call(input, 'artworkStatus') ? input.artworkStatus ?? null : current.artworkStatus ?? null,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(update, { merge: true });
+  const saved = await ref.get();
+  return { release: releasePayload(saved.data() ?? {}, releaseId) };
+});
+
+export const deleteRelease = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  const ref = releaseRef(releaseId);
+  const snapshot = await ref.get();
+  const current = snapshot.data();
+  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
+  if (current.status === 'released') throw new HttpsError('failed-precondition', 'Live releases must be unpublished by Nightjar administration.');
+
+  const audioPath = cleanText(current.audioStoragePath, 500);
+  if (audioPath) {
+    try { await getStorage().bucket().file(audioPath).delete({ ignoreNotFound: true }); } catch { /* release deletion continues */ }
+  }
+  await ref.delete();
+  return { deleted: true };
+});
+
+export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const storagePath = cleanText(input.storagePath, 500);
+  if (!releaseId || !storagePath) throw new HttpsError('invalid-argument', 'Release audio is incomplete.');
+
+  const expectedPrefix = `release-audio/${identity.uid}/${releaseId}/`;
+  if (!storagePath.startsWith(expectedPrefix)) throw new HttpsError('permission-denied', 'Audio upload path is invalid.');
+
+  const ref = releaseRef(releaseId);
+  const snapshot = await ref.get();
+  const current = snapshot.data();
+  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
+  if (current.status === 'released') throw new HttpsError('failed-precondition', 'Live release audio cannot be replaced directly.');
+
+  const file = getStorage().bucket().file(storagePath);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError('not-found', 'Uploaded audio was not found.');
+  const [metadata] = await file.getMetadata();
+  const size = Number(metadata.size ?? 0);
+  const contentType = String(metadata.contentType ?? '');
+  const allowed = ['audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/x-m4a','audio/ogg','audio/webm'];
+  if (!allowed.includes(contentType) || !size || size > 25 * 1024 * 1024) {
+    try { await file.delete({ ignoreNotFound: true }); } catch { /* validation failure remains authoritative */ }
+    throw new HttpsError('invalid-argument', 'Uploaded audio is not a supported Nightjar audio file.');
+  }
+
+  const oldPath = cleanText(current.audioStoragePath, 500);
+  await ref.set({
+    audioStoragePath: storagePath,
+    audioContentType: contentType,
+    audioByteSize: size,
+    durationMinutes: typeof input.durationMinutes === 'number' ? Math.max(0, Math.min(1440, input.durationMinutes)) : current.durationMinutes ?? 0,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  if (oldPath && oldPath !== storagePath) {
+    try { await getStorage().bucket().file(oldPath).delete({ ignoreNotFound: true }); } catch { /* replacement is already valid */ }
+  }
+
+  const saved = await ref.get();
+  return { release: releasePayload(saved.data() ?? {}, releaseId) };
+});
+
+export const removeReleaseAudio = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  const ref = releaseRef(releaseId);
+  const snapshot = await ref.get();
+  const current = snapshot.data();
+  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
+  if (current.status === 'released') throw new HttpsError('failed-precondition', 'Live release audio cannot be removed directly.');
+
+  const path = cleanText(current.audioStoragePath, 500);
+  if (path) {
+    try { await getStorage().bucket().file(path).delete({ ignoreNotFound: true }); } catch { /* record is still cleared */ }
+  }
+  await ref.set({
+    audioStoragePath: null,
+    audioContentType: null,
+    audioByteSize: null,
+    durationMinutes: 0,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { removed: true };
+});
+
+export const submitReleaseForModeration = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  const ref = releaseRef(releaseId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || data.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
+  if (!data.title || !data.description || !data.category || !data.audioStoragePath) {
+    throw new HttpsError('failed-precondition', 'Complete title, description, category and audio before submitting.');
+  }
+  if (data.artworkAssetId && data.artworkStatus === 'pending') {
+    throw new HttpsError('failed-precondition', 'Artwork moderation must finish before release submission.');
+  }
+  await ref.set({
+    status: 'pending_review',
+    moderationNote: null,
+    submittedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  const saved = await ref.get();
+  return { release: releasePayload(saved.data() ?? {}, releaseId) };
+});
+
+export const creatorDashboard = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator','admin']);
+  const targetCreatorId = identity.role === 'creator'
+    ? identity.uid
+    : cleanText((request.data as { creatorUserId?: unknown } | undefined)?.creatorUserId, 160) || identity.uid;
+
+  const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', targetCreatorId).limit(500).get();
+  const releases = releasesSnapshot.docs.map((doc) => releasePayload(doc.data(), doc.id));
+  const listeningSnapshot = await db.collection('listeningEvents').where('creatorUserId', '==', targetCreatorId).limit(5000).get();
+
+  let listeningSeconds = 0;
+  const listeners = new Set<string>();
+  for (const doc of listeningSnapshot.docs) {
+    const event = doc.data();
+    const duration = Math.max(0, Number(event.durationSeconds ?? 0));
+    const position = Math.max(0, Number(event.positionSeconds ?? 0));
+    listeningSeconds += Math.min(position, duration || position);
+    if (event.userId) listeners.add(String(event.userId));
+  }
+
+  return {
+    releases,
+    metrics: {
+      released: releases.filter((release) => release.status === 'released').length,
+      drafts: releases.filter((release) => release.status !== 'released').length,
+      verifiedListeningMinutes: Math.round((listeningSeconds / 60) * 10) / 10,
+      uniqueListeners: listeners.size,
+    },
+  };
+});
+
+const requireAgeVerified = async (uid: string) => {
+  const snapshot = await db.collection('ageAssurance').doc(uid).get();
+  const data = snapshot.data();
+  if (!data?.verified) throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
+  return data;
+};
+
+export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  const snapshot = await releaseRef(releaseId).get();
+  const data = snapshot.data();
+  if (!data || data.status !== 'released' || !data.audioStoragePath) throw new HttpsError('not-found', 'Playable release not found.');
+
+  const [url] = await getStorage().bucket().file(String(data.audioStoragePath)).getSignedUrl({
+    action: 'read',
+    expires: Date.now() + 15 * 60 * 1000,
+  });
+  return { releaseId, url, expiresInSeconds: 900 };
+});
+
+export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('releases').where('status', '==', 'pending_review').limit(100).get();
+  return { releases: snapshot.docs.map((doc) => releasePayload(doc.data(), doc.id)) };
+});
+
+const createNotification = async (userId: string, payload: Record<string, unknown>) => {
+  const ref = accountRef(userId).collection('notifications').doc();
+  await ref.set({
+    ...payload,
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+};
+
+export const moderateRelease = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const decision = cleanText(input.decision, 30);
+  const note = cleanText(input.note, 1200);
+  if (!['approved','changes','rejected'].includes(decision)) throw new HttpsError('invalid-argument', 'Invalid release moderation decision.');
+
+  const ref = releaseRef(releaseId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data) throw new HttpsError('not-found', 'Release not found.');
+  if (data.status !== 'pending_review') throw new HttpsError('failed-precondition', 'Release is not awaiting moderation.');
+
+  const status: ReleaseStatus = decision === 'approved' ? 'released' : decision === 'changes' ? 'draft' : 'rejected';
+  await ref.set({
+    status,
+    moderationNote: note || null,
+    moderatedBy: admin.uid,
+    moderatedAt: FieldValue.serverTimestamp(),
+    releaseDate: decision === 'approved' ? FieldValue.serverTimestamp() : data.releaseDate ?? null,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  if (data.creatorUserId) {
+    await createNotification(String(data.creatorUserId), {
+      type: 'content',
+      subtype: 'release',
+      title: decision === 'approved'
+        ? 'Your release is live on Nightjar'
+        : decision === 'changes'
+          ? 'Changes requested for your release'
+          : 'Your release was not approved',
+      message: decision === 'approved'
+        ? 'Your release has passed Nightjar moderation and is available to age-verified listeners.'
+        : decision === 'changes'
+          ? 'Nightjar moderation requested changes before this release can be published.'
+          : 'Your release was not approved for publication. Open Creator Studio to review the moderation note.',
+      releaseId,
+      moderationNote: note || null,
+    });
+  }
+
+  const saved = await ref.get();
+  return { release: releasePayload(saved.data() ?? {}, releaseId) };
+});
+
+export const recordListeningEvent = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const release = await releaseRef(releaseId).get();
+  const releaseData = release.data();
+  if (!releaseData || releaseData.status !== 'released') throw new HttpsError('not-found', 'Release not found.');
+
+  const eventType = cleanText(input.eventType, 30);
+  if (!['start','progress','complete','skip','hide','favourite','unfavourite'].includes(eventType)) {
+    throw new HttpsError('invalid-argument', 'Unsupported listening event.');
+  }
+
+  const event = {
+    userId: identity.uid,
+    creatorUserId: releaseData.creatorUserId ?? null,
+    releaseId,
+    eventType,
+    positionSeconds: Math.max(0, Number(input.positionSeconds ?? 0)),
+    durationSeconds: Math.max(0, Number(input.durationSeconds ?? 0)),
+    completed: input.completed === true,
+    intent: cleanText(input.intent, 120),
+    category: releaseData.category ?? null,
+    tags: Array.isArray(releaseData.tags) ? releaseData.tags : [],
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  await db.collection('listeningEvents').add(event);
+
+  await accountRef(identity.uid).collection('tasteEvents').add({
+    type: eventType,
+    category: event.category,
+    tags: event.tags,
+    completed: event.completed,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { recorded: true };
+});
+
+export const listeningResume = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  const snapshot = await db.collection('listeningEvents').where('userId', '==', identity.uid).limit(1000).get();
+  const events = snapshot.docs
+    .map((doc) => doc.data())
+    .filter((event) => event.releaseId === releaseId)
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() ?? 0;
+      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      return bTime - aTime;
+    });
+
+  const latest = events[0];
+  const duration = Number(events.find((event) => Number(event.durationSeconds ?? 0) > 0)?.durationSeconds ?? 0);
+  const position = latest?.eventType === 'complete'
+    ? 0
+    : Number(events.find((event) => typeof event.positionSeconds !== 'undefined')?.positionSeconds ?? 0);
+
+  return { releaseId, positionSeconds: Math.max(0, position), durationSeconds: Math.max(0, duration) };
+});
+
+export const tasteProfile = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await accountRef(identity.uid).collection('tasteEvents').limit(1000).get();
+  const weights = new Map<string, number>();
+  for (const doc of snapshot.docs) {
+    const event = doc.data();
+    const factor = event.type === 'skip' || event.type === 'hide' ? -1 : 1;
+    for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : [])]) {
+      const key = cleanText(value, 80);
+      if (key) weights.set(key, (weights.get(key) ?? 0) + factor);
+    }
+  }
+  const vector = Array.from(weights, ([label, weight]) => ({ label, weight }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 16);
+  return { vector };
+});
+
+export const recommendations = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as { intent?: unknown };
+  const intent = cleanText(input.intent, 120).toLowerCase();
+
+  const [profile, tasteSnapshot, followsSnapshot, releasesSnapshot] = await Promise.all([
+    profileRef(identity.uid).get(),
+    accountRef(identity.uid).collection('tasteEvents').limit(1000).get(),
+    accountRef(identity.uid).collection('follows').limit(500).get(),
+    db.collection('releases').where('status', '==', 'released').limit(500).get(),
+  ]);
+
+  const liked = new Map<string, number>();
+  const profileData = profile.data() ?? {};
+  for (const value of [
+    ...(Array.isArray(profileData.favouriteTags) ? profileData.favouriteTags : []),
+    ...(Array.isArray(profileData.favouriteTropes) ? profileData.favouriteTropes : []),
+    ...(Array.isArray(profileData.favouriteCategories) ? profileData.favouriteCategories : []),
+  ]) {
+    const key = cleanText(value, 80).toLowerCase();
+    if (key) liked.set(key, (liked.get(key) ?? 0) + 5);
+  }
+
+  for (const doc of tasteSnapshot.docs) {
+    const event = doc.data();
+    const factor = event.type === 'skip' || event.type === 'hide' ? -1 : 1;
+    for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : [])]) {
+      const key = cleanText(value, 80).toLowerCase();
+      if (key) liked.set(key, (liked.get(key) ?? 0) + factor);
+    }
+  }
+
+  const following = new Set(followsSnapshot.docs.map((doc) => doc.id));
+  const items = releasesSnapshot.docs.map((doc) => {
+    const data = doc.data();
+    const values = [
+      data.category, data.genre, data.mood,
+      ...(Array.isArray(data.tags) ? data.tags : []),
+      ...(Array.isArray(data.tropes) ? data.tropes : []),
+    ].filter(Boolean).map((value) => String(value));
+    let score = 0;
+    for (const value of values) score += liked.get(value.toLowerCase()) ?? 0;
+    if (data.creatorUserId && following.has(String(data.creatorUserId))) score += 8;
+    if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
+    const matches = values.filter((value) => (liked.get(value.toLowerCase()) ?? 0) > 0).slice(0, 3);
+    return {
+      ...releasePayload(data, doc.id),
+      score,
+      reason: matches.length
+        ? 'Because you chose ' + matches.join(', ') + '.'
+        : data.creatorUserId && following.has(String(data.creatorUserId))
+          ? 'From a creator you follow.'
+          : 'A new release for your current discovery context.',
+    };
+  }).sort((a, b) => b.score - a.score).slice(0, 24);
+
+  return { recommendations: items, model: { declaredWeight: 5, observedWeight: 1, socialWeight: 8, intentWeight: 4 } };
+});
+
+export const trendingReleases = onCall({ region: REGION }, async (request) => {
+  await requireActiveIdentity(request);
+  const [releasesSnapshot, listeningSnapshot] = await Promise.all([
+    db.collection('releases').where('status', '==', 'released').limit(500).get(),
+    db.collection('listeningEvents').limit(5000).get(),
+  ]);
+  const counts = new Map<string, number>();
+  for (const doc of listeningSnapshot.docs) {
+    const releaseId = cleanText(doc.data().releaseId, 160);
+    if (releaseId) counts.set(releaseId, (counts.get(releaseId) ?? 0) + 1);
+  }
+  const trending = releasesSnapshot.docs
+    .map((doc) => ({ ...releasePayload(doc.data(), doc.id), listeningEvents: counts.get(doc.id) ?? 0 }))
+    .sort((a, b) => b.listeningEvents - a.listeningEvents)
+    .slice(0, 24);
+  return { trending };
+});
+
+export const listNotifications = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await accountRef(identity.uid).collection('notifications').limit(100).get();
+  const notifications = snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .sort((a: any, b: any) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+    .slice(0, 30);
+  return { notifications, unreadCount: notifications.filter((item: any) => item.read !== true).length };
+});
+
+export const markNotificationRead = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const notificationId = cleanText((request.data as { notificationId?: unknown } | undefined)?.notificationId, 160);
+  const ref = accountRef(identity.uid).collection('notifications').doc(notificationId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Notification not found.');
+  await ref.set({ read: true, readAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { read: true };
+});
+
+export const ageStatus = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
+  const data = snapshot.data() ?? {};
+  return {
+    verified: data.verified === true,
+    status: data.verified === true ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
+    ageThreshold: 18,
+    configured: false,
+    provider: data.provider ?? 'not-configured',
+    environment: data.environment ?? 'production',
+    verifiedAt: data.verifiedAt ?? null,
+    reverifyRequired: data.reverifyRequired === true,
+    testAvailable: identity.admin,
+  };
+});
+
+export const startAgeAssurance = onCall({ region: REGION }, async (request) => {
+  await requireActiveIdentity(request);
+  throw new HttpsError('failed-precondition', 'Production age-assurance provider credentials are not configured yet.');
+});
+
+export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
+  const identity = requireAdminIdentity(request);
+  await db.collection('ageAssurance').doc(identity.uid).set({
+    verified: true,
+    status: 'COMPLETE',
+    ageThreshold: 18,
+    provider: 'admin-test',
+    environment: 'development',
+    testMode: true,
+    verifiedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { verified: true, status: 'COMPLETE', provider: 'admin-test' };
+});
+
