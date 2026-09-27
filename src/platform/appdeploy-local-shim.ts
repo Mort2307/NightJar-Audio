@@ -1598,21 +1598,6 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ ok: true, action, userId: account.userId, status: alert.status });
   }
 
-  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'security-alerts' && parts.length === 5 && parts[4] === 'suspend' && method === 'POST') {
-    requireAdmin(state);
-    const alert = state.securityAlerts.find((item) => item.id === parts[3]);
-    if (!alert) throw new Error('Alert not found.');
-    const account = state.users.find((item) => item.userId === alert.userId);
-    if (account) {
-      account.securityPreviousStatus = account.status === 'suspended' ? (account.securityPreviousStatus ?? 'active') : account.status;
-      account.status = 'suspended';
-      state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((session) => session.status === 'active' ? { ...session, status: 'revoked', revokedAt: now(), revokedReason: 'Account suspended after security review.' } : session);
-    }
-    alert.status = 'actioned';
-    alert.action = 'freeze_account';
-    return send({ suspended: true });
-  }
-
   if (path === '/api/admin/branding/logo' && method === 'POST') {
     requireAdmin(state);
     state.brandingUrl = typeof input.dataUrl === 'string' ? input.dataUrl : null;
