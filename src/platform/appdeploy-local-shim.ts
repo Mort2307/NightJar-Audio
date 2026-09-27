@@ -139,6 +139,19 @@ function bodyObject(body: unknown) {
   return (body && typeof body === 'object') ? body as Record<string, any> : {};
 }
 
+function tasteSignalWeight(type: unknown, completed = false) {
+  const signal = String(type ?? '');
+  if (signal === 'not_for_me') return -12;
+  if (signal === 'hide') return -10;
+  if (signal === 'less_like_this') return -5;
+  if (signal === 'more_like_this') return 4;
+  if (signal === 'complete' || completed) return 2;
+  if (signal === 'skip') return -1;
+  if (signal === 'save' || signal === 'follow' || signal === 'replay') return 1;
+  return 0.5;
+}
+
+
 async function request(path: string, method: string, body?: unknown): Promise<Response<any>> {
   const state = loadState();
   const send = (data: unknown) => {
@@ -279,7 +292,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       liked.set(key, (liked.get(key) ?? 0) + 5);
     }
     for (const event of state.taste[account.userId] ?? []) {
-      const factor = event.type === 'not_for_me' ? -12 : event.type === 'hide' ? -10 : event.type === 'less_like_this' ? -5 : event.type === 'more_like_this' ? 4 : event.type === 'complete' ? 2 : event.type === 'skip' ? -1 : 0.5;
+      const factor = tasteSignalWeight(event.type, event.completed === true);
       for (const tag of [...(event.tags ?? []), ...(event.category ? [event.category] : [])]) {
         const key = String(tag).toLowerCase();
         liked.set(key, (liked.get(key) ?? 0) + factor);
@@ -324,10 +337,23 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
           pronouns: profile.pronouns ?? null,
           initials: profile.avatarInitials ?? null,
           roleFocus: profile.roleFocus ?? [],
+          followers: Object.values(state.follows).filter((items) => items.includes(candidate.userId)).length,
           following: following.has(candidate.userId),
         };
       })
       .filter(Boolean);
+    return send({ profiles });
+  }
+
+  if (path === '/api/following' && method === 'GET') {
+    const account = requireUser(state);
+    const profiles = (state.follows[account.userId] ?? []).map((userId) => {
+      const target = state.users.find((candidate) => candidate.userId === userId);
+      if (!target) return { userId, role: null, name: 'Unavailable Nightjar profile', handle: null, headline: null, publicProfile: false };
+      const targetProfile = ensureProfile(state, target);
+      if (targetProfile.publicProfile === false) return { userId, role: target.role, name: 'Private Nightjar profile', handle: null, headline: null, publicProfile: false };
+      return { userId, role: target.role, name: targetProfile.displayName ?? target.name, handle: targetProfile.handle ?? null, headline: targetProfile.headline ?? null, publicProfile: true };
+    });
     return send({ profiles });
   }
 
@@ -365,11 +391,18 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/listening/event' && method === 'POST') {
     const account = requireUser(state);
-    const record = { ...input, id: id('listen'), userId: account.userId, createdAt: now() };
+    const eventType = String(input.eventType ?? '');
+    if (!['start', 'progress', 'seek', 'complete', 'pause'].includes(eventType)) throw new Error('Unsupported listening event.');
+    const releaseId = String(input.releaseId ?? '');
+    const release = state.releases.find((item) => item.id === releaseId && item.status === 'released');
+    if (!release) throw new Error('Release not found.');
+    const durationSeconds = Math.max(0, Math.min(Number(input.durationSeconds ?? 0), 24 * 60 * 60));
+    const positionSeconds = Math.max(0, Math.min(Number(input.positionSeconds ?? 0), durationSeconds || 24 * 60 * 60));
+    const record = { releaseId, eventType, sessionId: String(input.sessionId ?? '').slice(0, 100) || null, positionSeconds, durationSeconds, fromSeconds: input.fromSeconds == null ? null : Math.max(0, Math.min(Number(input.fromSeconds), durationSeconds || 24 * 60 * 60)), intent: String(input.intent ?? '').slice(0, 80), completed: eventType === 'complete' || input.completed === true, id: id('listen'), userId: account.userId, createdAt: now() };
     state.listening.push(record);
-    const type = String(input.eventType ?? '');
-    const category = input.category ? String(input.category) : null;
-    state.taste[account.userId] = [...(state.taste[account.userId] ?? []), { type, category, tags: Array.isArray(input.tags) ? input.tags : [], completed: input.completed === true, createdAt: record.createdAt }];
+    if (eventType !== 'seek' && eventType !== 'pause') {
+      state.taste[account.userId] = [...(state.taste[account.userId] ?? []), { type: eventType, contentId: releaseId, category: release.category ?? null, tags: [...(release.tags ?? []), ...(release.tropes ?? [])].slice(0, 16), completed: record.completed, createdAt: record.createdAt }];
+    }
     return send({ recorded: true });
   }
 
@@ -603,21 +636,38 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/taste/profile' && method === 'GET') {
     const account = requireUser(state);
+    const profile = ensureProfile(state, account);
     const events = state.taste[account.userId] ?? [];
     const weights: Record<string, number> = {};
+    for (const value of [...(profile.favouriteTags as any[] ?? []), ...(profile.favouriteTropes as any[] ?? []), ...(profile.favouriteCategories as any[] ?? [])]) {
+      const key = String(value).toLowerCase();
+      weights[key] = (weights[key] ?? 0) + 5;
+    }
     events.forEach((event) => {
+      const factor = tasteSignalWeight(event.type ?? event.eventType, event.completed === true);
       [...(event.tags ?? []), ...(event.category ? [event.category] : [])].forEach((value) => {
-        const key = String(value);
-        weights[key] = (weights[key] ?? 0) + (event.type === 'skip' ? -1 : 1);
+        const key = String(value).toLowerCase();
+        weights[key] = (weights[key] ?? 0) + factor;
       });
     });
-    const vector = Object.entries(weights).map(([label, weight]) => ({ label, weight })).sort((a, b) => Number(b.weight) - Number(a.weight)).slice(0, 16);
-    return send({ vector });
+    const vector = Object.entries(weights).map(([label, weight]) => ({ label, weight: Number(weight.toFixed(2)) })).sort((a, b) => Number(b.weight) - Number(a.weight)).slice(0, 24);
+    return send({ declared: { tags: profile.favouriteTags ?? [], tropes: profile.favouriteTropes ?? [], categories: profile.favouriteCategories ?? [] }, vector });
   }
 
   if (path === '/api/taste/event' && method === 'POST') {
     const account = requireUser(state);
-    state.taste[account.userId] = [...(state.taste[account.userId] ?? []), { ...input, createdAt: now() }];
+    const eventType = String(input.eventType ?? '');
+    const allowed = ['more_like_this', 'less_like_this', 'not_for_me', 'hide', 'skip', 'save', 'follow', 'complete', 'replay'];
+    if (!allowed.includes(eventType)) throw new Error('Unsupported taste signal.');
+    state.taste[account.userId] = [...(state.taste[account.userId] ?? []), {
+      type: eventType,
+      contentId: String(input.contentId ?? '').slice(0, 100) || null,
+      category: String(input.category ?? '').slice(0, 80) || null,
+      tags: Array.isArray(input.tags) ? input.tags.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 12) : [],
+      durationSeconds: Math.max(0, Math.min(Number(input.durationSeconds ?? 0), 86400)),
+      completed: input.completed === true,
+      createdAt: now(),
+    }];
     return send({ recorded: true });
   }
 
