@@ -1402,3 +1402,22 @@ button:focus-visible {
   .following-row .secondary-button { grid-column:1 / -1; justify-content:center; }
   .recommendation-feedback button { flex:1 1 auto; justify-content:center; min-height:36px; }
 }
+
+
+/* Moderation audit trail */
+.moderation-reason { display:grid; gap:6px; margin:4px 0 12px; color:var(--muted-2); font-size:8px; text-transform:uppercase; letter-spacing:.08em; }
+.moderation-reason select { width:100%; border:1px solid var(--line-soft); border-radius:11px; padding:10px 11px; background:rgba(17,15,19,.96); color:var(--ivory); font:inherit; font-size:9px; text-transform:none; letter-spacing:normal; }
+.moderation-history { display:grid; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line-soft); }
+.moderation-history-head { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.moderation-history-head > span { display:inline-flex; align-items:center; gap:7px; font-size:9px; font-weight:700; }
+.moderation-history-head small { color:var(--muted-2); font-size:7px; }
+.moderation-history-row { display:grid; grid-template-columns:minmax(120px,.6fr) 1.4fr auto; gap:10px; align-items:start; padding:10px 0; border-top:1px solid var(--line-soft); }
+.moderation-history-row > div { display:grid; gap:3px; }
+.moderation-history-row strong { font-size:8px; text-transform:uppercase; letter-spacing:.06em; }
+.moderation-history-row span,.moderation-history-row small { color:var(--muted-2); font-size:7px; }
+.moderation-history-row p { margin:0; color:var(--muted); font-size:8px; line-height:1.5; }
+.moderation-history-empty { padding:12px; border:1px dashed var(--line-soft); border-radius:10px; color:var(--muted-2); font-size:8px; }
+
+@media (max-width:760px) {
+  .moderation-history-row { grid-template-columns:1fr; }
+}
