@@ -1546,7 +1546,7 @@ export const handler = router({
           linkedSuspendedUserIds: device.linkedSuspendedUserIds,
           signal: { eventType: 'blocked_device_reader_attempt' },
         });
-        return error('Protected-script access is paused for security review.', 403, { alertId: alert.id ?? null });
+        return error('Protected-script access is paused for security review. Security alert ' + String(alert.id ?? '') + ' was created.', 403);
       }
       const watermark = 'NIGHTJAR · ' + viewerLabel + ' · ' + sessionId.slice(-8) + ' · ' + issuedAt.slice(0, 16).replace('T', ' ');
       const session = {
@@ -2026,7 +2026,7 @@ export const handler = router({
           linkedSuspendedUserIds: device.linkedSuspendedUserIds,
           signal: { eventType: 'blocked_device_reader_attempt' },
         });
-        return error('Protected-script access is paused for security review.', 403, { alertId: alert.id ?? null });
+        return error('Protected-script access is paused for security review. Security alert ' + String(alert.id ?? '') + ' was created.', 403);
       }
       const session = {
         sessionId,
