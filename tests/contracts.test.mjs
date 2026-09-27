@@ -153,6 +153,22 @@ test('writer workflow fields cannot be mass assigned', () => {
   assert.match(writerStudio, /read-only while it is submitted/);
 });
 
+test('writer manuscript library is metadata-only and full body loads one owner script at a time', () => {
+  const listStart = backend.indexOf("'GET /api/writer/scripts':");
+  const detailStart = backend.indexOf("'GET /api/writer/scripts/:scriptId':", listStart);
+  const createStart = backend.indexOf("'POST /api/writer/scripts':", detailStart);
+  assert.ok(listStart >= 0 && detailStart > listStart && createStart > detailStart);
+  const listRoute = backend.slice(listStart, detailStart);
+  const detailRoute = backend.slice(detailStart, createStart);
+  assert.match(listRoute, /publicScriptMetadata/);
+  assert.doesNotMatch(listRoute, /content:/);
+  assert.match(detailRoute, /item\.writerUserId === ctx\.user!\.userId/);
+  assert.match(detailRoute, /requireRole\(ctx\.user!\.userId, \['writer'\]\)/);
+  assert.match(app, /openWriterScript/);
+  assert.match(app, /\/api\/writer\/scripts\/['"]? \+ encodeURIComponent\(scriptId\)/);
+  assert.match(shim, /if \(method === 'GET'\) return send\(\{ script \}\)/);
+});
+
 test('protected manuscript catalogue never returns raw manuscript content', () => {
   const route = backend.slice(backend.indexOf("'GET /api/scripts/catalogue':"), backend.indexOf("'GET /api/scripts/:scriptId':"));
   assert.match(route, /activeAccess/);
