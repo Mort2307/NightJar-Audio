@@ -1644,7 +1644,7 @@ export const handler = router({
         return error('Script access is no longer authorised.', 403);
       }
 
-      if (!(await enforceProtectedPageRate(ctx.user!.userId, ctx.params.scriptId, sessionId))) return error('Protected reader rate limit reached. Reopen the manuscript after review.', 429);
+      if (String(script.writerUserId) !== ctx.user!.userId && !(await enforceProtectedPageRate(ctx.user!.userId, ctx.params.scriptId, sessionId))) return error('Protected reader rate limit reached. Reopen the manuscript after review.', 429);
       const pages = chunkProtectedContent(script.content ?? '');
       if (page >= pages.length) return error('Protected page not found.', 404);
       const createdAt = new Date().toISOString();
