@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 
 initializeApp();
@@ -213,7 +213,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   return { profile: saved.data() ?? null };
 });
 
-const publicProfileForAccount = async (account: FirebaseFirestore.QueryDocumentSnapshot) => {
+const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
   const profile = await profileRef(account.id).get();
   const data = profile.data();
   if (!data || data.publicProfile === false) return null;
