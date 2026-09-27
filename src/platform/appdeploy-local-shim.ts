@@ -1421,7 +1421,11 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/admin/security-alerts' && method === 'GET') {
     requireAdmin(state);
-    return send({ alerts: state.securityAlerts.slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))) });
+    const alerts = state.securityAlerts.map((alert) => {
+      const account = state.users.find((candidate) => candidate.userId === alert.userId);
+      return { ...alert, subjectAccountStatus: account?.status ?? null, subjectRemoved: account?.removed === true };
+    }).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+    return send({ alerts });
   }
 
   if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'security' && parts[3] === 'trace' && parts.length === 5 && method === 'GET') {
