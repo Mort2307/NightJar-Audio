@@ -1634,33 +1634,168 @@ export const handler = router({
       return json({ requested: !pending, pending: true });
     },
   ],
+  'GET /api/scripts/:scriptId/access': [
+    requireAuth(),
+    async (ctx) => {
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = scripts.find((item) => item.id === ctx.params.scriptId);
+      if (!script || script.writerUserId !== ctx.user!.userId) return error('Writer ownership is required.', 403);
+
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
+      const eligibleRecipients = await Promise.all(accounts
+        .filter((account) => String(account.userId) !== ctx.user!.userId && account.status !== 'suspended')
+        .map(async (account) => {
+          const profile = await getProfile(String(account.userId));
+          return {
+            userId: String(account.userId),
+            role: account.role,
+            name: profile?.displayName ?? account.name ?? 'Nightjar account',
+            handle: profile?.handle ?? account.handle ?? null,
+          };
+        }));
+
+      const grantRows: any[] = [];
+      for (const recipient of eligibleRecipients) {
+        const { items } = await db.list('nightjar_script_access_' + recipient.userId, { limit: 100 });
+        const grant = items.find((item) => item.scriptId === ctx.params.scriptId);
+        if (grant) grantRows.push({
+          id: grant.id,
+          recipientUserId: recipient.userId,
+          recipientName: recipient.name,
+          recipientHandle: recipient.handle,
+          recipientRole: recipient.role,
+          allowCopy: grant.allowCopy === true,
+          allowExport: grant.allowExport === true,
+          grantedAt: grant.grantedAt ?? null,
+          expiresAt: grant.expiresAt ?? null,
+          revokedAt: grant.revokedAt ?? null,
+        });
+      }
+
+      const { items: requests } = await db.list('nightjar_script_access_requests_' + ctx.user!.userId, { limit: 200 });
+      const pendingRequests = requests
+        .filter((item) => item.scriptId === ctx.params.scriptId && item.status === 'pending')
+        .map((item) => {
+          const account = accounts.find((candidate) => String(candidate.userId) === String(item.requesterUserId));
+          return {
+            id: item.id,
+            requesterUserId: String(item.requesterUserId),
+            requesterName: account?.name ?? 'Nightjar account',
+            requesterRole: account?.role ?? null,
+            createdAt: item.createdAt ?? null,
+          };
+        });
+
+      return json({ grants: grantRows, pendingRequests, eligibleRecipients });
+    },
+  ],
+
   'POST /api/scripts/:scriptId/permissions': [
     requireAuth(),
     async (ctx) => {
-      const body=(ctx.body??{}) as {creatorUserId?:string;allowCopy?:boolean;allowExport?:boolean;expiresAt?:string|null;revoke?:boolean};
-      if(!body.creatorUserId)return error('Creator account is required.',400);
-      const {items}=await db.list('nightjar_scripts',{limit:500});
-      const script=items.find((item)=>item.id===ctx.params.scriptId);
-      if(!script||script.writerUserId!==ctx.user!.userId)return error('Writer ownership is required.',403);
-      const table='nightjar_script_access_'+body.creatorUserId;
-      const existing=await db.list(table,{limit:100});
-      const match=existing.items.find((item)=>item.scriptId===ctx.params.scriptId);
+      const body = (ctx.body ?? {}) as {
+        recipientUserId?: string;
+        creatorUserId?: string;
+        allowCopy?: boolean;
+        allowExport?: boolean;
+        expiresAt?: string | null;
+        revoke?: boolean;
+        purpose?: string;
+      };
+      const recipientUserId = String(body.recipientUserId ?? body.creatorUserId ?? '').trim();
+      if (!recipientUserId) return error('Recipient account is required.', 400);
+      if (recipientUserId === ctx.user!.userId) return error('Writers already control their own manuscript.', 400);
+
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = scripts.find((item) => item.id === ctx.params.scriptId);
+      if (!script || script.writerUserId !== ctx.user!.userId) return error('Writer ownership is required.', 403);
+
+      const table = 'nightjar_script_access_' + recipientUserId;
+      const existing = await db.list(table, { limit: 100 });
+      const match = existing.items.find((item) => item.scriptId === ctx.params.scriptId);
+
+      let target: any = null;
       if (!body.revoke) {
-        const {items:accounts}=await db.list(accountIndexTable,{limit:1000});
-        const target=accounts.find((item)=>String(item.userId)===String(body.creatorUserId)&&item.role==='creator'&&item.status!=='suspended');
-        if(!target)return error('The selected account is not an active Creator.',400);
+        const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
+        target = accounts.find((item) => String(item.userId) === recipientUserId && item.status !== 'suspended');
+        if (!target) return error('The selected recipient is not an active Nightjar account.', 400);
       } else if (!match) {
-        return error('No existing script access grant was found to revoke.',404);
+        return error('No existing script access grant was found to revoke.', 404);
       }
-      const expiry=body.expiresAt?new Date(body.expiresAt):null;
-      if(!body.revoke&&expiry&&(!Number.isFinite(expiry.getTime())||expiry.getTime()<=Date.now()))return error('Access expiry must be a future date.',400);
-      const record={scriptId:ctx.params.scriptId,writerUserId:ctx.user!.userId,collaborationId:body.creatorUserId+':'+ctx.params.scriptId,allowCopy:body.revoke?false:body.allowCopy===true,allowExport:body.revoke?false:body.allowExport===true,grantedAt:match?.grantedAt??new Date().toISOString(),expiresAt:body.revoke?(match?.expiresAt??null):(expiry?expiry.toISOString():null),revokedAt:body.revoke?new Date().toISOString():null};
-      if(match)await db.update(table,[{id:match.id,record}]); else await db.add(table,[record]);
-      await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'permission_changed',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,summary:body.revoke?'Writer revoked script access.':'Writer changed script read/copy/export permissions.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
-      if(body.revoke)await revokeReaderSessions(body.creatorUserId,'Writer revoked protected script access.');
-      return json({allowCopy:record.allowCopy,allowExport:record.allowExport,expiresAt:record.expiresAt,revoked:body.revoke===true});
+
+      const expiry = body.expiresAt ? new Date(body.expiresAt) : null;
+      if (!body.revoke && expiry && (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now())) return error('Access expiry must be a future date.', 400);
+
+      const now = new Date().toISOString();
+      const record = {
+        scriptId: ctx.params.scriptId,
+        writerUserId: ctx.user!.userId,
+        collaborationId: recipientUserId + ':' + ctx.params.scriptId,
+        recipientRole: target?.role ?? match?.recipientRole ?? null,
+        purpose: String(body.purpose ?? match?.purpose ?? '').trim().slice(0, 160) || null,
+        allowCopy: body.revoke ? false : body.allowCopy === true,
+        allowExport: body.revoke ? false : body.allowExport === true,
+        grantedAt: match?.grantedAt ?? now,
+        expiresAt: body.revoke ? (match?.expiresAt ?? null) : (expiry ? expiry.toISOString() : null),
+        revokedAt: body.revoke ? now : null,
+        updatedAt: now,
+      };
+      if (match) await db.update(table, [{ id: match.id, record }]);
+      else await db.add(table, [record]);
+
+      const { items: requests } = await db.list('nightjar_script_access_requests_' + ctx.user!.userId, { limit: 200 });
+      const relatedRequests = requests.filter((item) => item.scriptId === ctx.params.scriptId && String(item.requesterUserId) === recipientUserId && item.status === 'pending');
+      if (relatedRequests.length) {
+        await db.update('nightjar_script_access_requests_' + ctx.user!.userId, relatedRequests.map((item) => ({
+          id: item.id,
+          record: { ...item, status: body.revoke ? 'revoked' : 'granted', resolvedAt: now },
+        })));
+      }
+
+      await revokeReaderSessionsForScript(recipientUserId, ctx.params.scriptId, body.revoke ? 'Writer revoked protected script access.' : 'Writer changed protected script permissions.');
+      await db.add('nightjar_evidence_' + ctx.user!.userId, [{
+        eventType: body.revoke ? 'script_access_revoked' : 'script_access_granted',
+        severity: body.allowExport ? 'medium' : 'low',
+        relatedType: 'script',
+        relatedId: ctx.params.scriptId,
+        summary: body.revoke
+          ? 'Writer revoked recipient access to a protected manuscript.'
+          : body.allowExport
+            ? 'Writer explicitly granted full-script export permission to a recipient.'
+            : body.allowCopy
+              ? 'Writer granted protected reading with copy permission.'
+              : 'Writer granted protected read-only manuscript access.',
+        actorUserId: ctx.user!.userId,
+        recipientUserId,
+        createdAt: now,
+      }]);
+      await createUserNotificationOnce(recipientUserId, {
+        type: 'script_access',
+        dedupeKey: 'script-access:' + ctx.params.scriptId + ':' + recipientUserId + ':' + now,
+        title: body.revoke ? 'Script access revoked' : body.allowExport ? 'Full script handoff granted' : 'Protected script access granted',
+        message: body.revoke
+          ? 'The writer has revoked your access to this manuscript.'
+          : body.allowExport
+            ? 'The writer has explicitly allowed you to read and export the full manuscript.'
+            : body.allowCopy
+              ? 'The writer has allowed protected reading and copying for this manuscript.'
+              : 'The writer has granted protected read-only access to this manuscript.',
+        scriptId: ctx.params.scriptId,
+        allowCopy: record.allowCopy,
+        allowExport: record.allowExport,
+        expiresAt: record.expiresAt,
+      });
+
+      return json({
+        recipientUserId,
+        allowCopy: record.allowCopy,
+        allowExport: record.allowExport,
+        expiresAt: record.expiresAt,
+        revoked: body.revoke === true,
+      });
     },
   ],
+
   'POST /api/admin/creator-applications/:applicationId/decision': [
     requireAuth(),
     requireAdminEmailAllowlist(ADMIN_EMAILS),
