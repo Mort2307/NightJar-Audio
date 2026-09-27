@@ -133,6 +133,21 @@ const revokeReaderSessionsForScript = async (userId: string, scriptId: string, r
     .map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } }));
   if (updates.length) await db.update(readerSessionTable(userId), updates);
 };
+const readerSessionStillAuthorized = async (userId: string, script: any, session: any) => {
+  if (String(script.writerUserId) === userId && String(session.accessGrantId) === 'owner') return true;
+  const accessGrantId = String(session.accessGrantId ?? '');
+  if (accessGrantId.startsWith('editor:')) {
+    const { items: assignments } = await db.list('nightjar_editor_assignments', { limit: 500 });
+    return assignments.some((item) => item.scriptId === script.id && item.editorUserId === userId && item.status !== 'closed');
+  }
+  const { items: accessItems } = await db.list('nightjar_script_access_' + userId, { limit: 100 });
+  return accessItems.some((item) =>
+    String(item.id) === accessGrantId &&
+    item.scriptId === script.id &&
+    !item.revokedAt &&
+    (!item.expiresAt || new Date(String(item.expiresAt)).getTime() > Date.now())
+  );
+};
 const createOwnerSecurityNotifications = async (alert: Record<string, unknown>) => { for (const email of ADMIN_EMAILS) await db.add(ownerNotificationTable(email), [{ type:'security_alert', alertId:alert.id??null, severity:alert.severity??'high', title:'Nightjar security alert', message:alert.reason??'Suspicious protected-content activity detected.', createdAt:new Date().toISOString(), read:false, recipientEmail:normalizeEmail(email) }]); };
 const createSecurityAlert = async (userId: string, details: Record<string, unknown>) => { const now=new Date().toISOString(); const recipients=ADMIN_EMAILS.map(normalizeEmail); const [id]=await db.add(securityAlertTable,[{userId,...details,recipients,createdAt:now,status:'open'}]); const alert={id:id??null,userId,...details,recipients,createdAt:now,status:'open'}; await createOwnerSecurityNotifications(alert); await db.add(securityCaseTable,[{alertId:id??null,userId,state:'detection',history:[{state:'detection',at:now,note:'Suspicious activity detected; alert sent to all three Nightjar owners.'}],createdAt:now,updatedAt:now}]); return alert; };
 const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => { const now=Date.now(); const {items}=await db.list(securityEventTable,{limit:500}); const recent=items.filter((item)=>item.userId===userId && now-new Date(item.createdAt??0).getTime()<60000); const scriptId=String(signal.relatedId??''); const sameScriptRecent=recent.filter((item)=>String(item.relatedId??'')===scriptId); const score=(recent.length>=40?35:recent.length>=20?20:0)+(sameScriptRecent.length>=25?40:sameScriptRecent.length>=12?25:0)+(signal.eventType==='script_view'&&sameScriptRecent.length>=8?20:0)+(signal.eventType==='blocked_interaction'?8:0); if(score<50)return null; const existing=await db.list(securityAlertTable,{limit:100}); if(existing.items.some((item)=>item.userId===userId&&item.status==='open'&&now-new Date(item.createdAt??0).getTime()<600000))return null; return createSecurityAlert(userId,{severity:score>=75?'critical':'high',riskScore:score,reason:`Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,relatedId:scriptId||null,signal:{eventType:signal.eventType,recentEvents:recent.length,relatedEvents:sameScriptRecent.length}}); };
@@ -1541,6 +1556,10 @@ export const handler = router({
       const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
       const script = scripts.find((item) => item.id === ctx.params.scriptId);
       if (!script) return error('Script not found.', 404);
+      if (!(await readerSessionStillAuthorized(ctx.user!.userId, script, session))) {
+        await revokeReaderSessionsForScript(ctx.user!.userId, ctx.params.scriptId, 'Underlying script permission expired or was revoked.');
+        return error('Script access is no longer authorised.', 403);
+      }
 
       if (!(await enforceProtectedPageRate(ctx.user!.userId, ctx.params.scriptId, sessionId))) return error('Protected reader rate limit reached. Reopen the manuscript after review.', 429);
       const pages = chunkProtectedContent(script.content ?? '');
@@ -1591,6 +1610,10 @@ export const handler = router({
       const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
       const script = scripts.find((item) => item.id === ctx.params.scriptId);
       if (!script) return error('Script not found.', 404);
+      if (!(await readerSessionStillAuthorized(ctx.user!.userId, script, session))) {
+        await revokeReaderSessionsForScript(ctx.user!.userId, ctx.params.scriptId, 'Underlying script permission expired or was revoked.');
+        return error('Script access is no longer authorised.', 403);
+      }
       const profile = await getProfile(ctx.user!.userId);
       const recipient = String(profile?.displayName ?? ctx.user!.name ?? 'Nightjar recipient').slice(0, 80);
       const hash = script.contentHash ?? scriptContentHash(script.content ?? '');
@@ -1622,6 +1645,27 @@ export const handler = router({
         actorUserId: ctx.user!.userId,
         createdAt,
       }]);
+      if (script.writerUserId && String(script.writerUserId) !== ctx.user!.userId) {
+        await db.add('nightjar_evidence_' + script.writerUserId, [{
+          eventType: 'script_export_by_recipient',
+          severity: 'medium',
+          relatedType: 'script',
+          relatedId: ctx.params.scriptId,
+          sessionId,
+          summary: recipient + ' exported the full manuscript under the writer’s explicit handoff permission.',
+          actorUserId: ctx.user!.userId,
+          createdAt,
+        }]);
+        await createUserNotificationOnce(String(script.writerUserId), {
+          type: 'script_access',
+          dedupeKey: 'script-export:' + ctx.params.scriptId + ':' + sessionId,
+          title: 'Your script was exported',
+          message: recipient + ' exported the full manuscript using the Full handoff permission you granted.',
+          scriptId: ctx.params.scriptId,
+          recipientUserId: ctx.user!.userId,
+          createdAt,
+        });
+      }
       return json({
         fileName: String(script.title ?? 'nightjar-script').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) + '.txt',
         content: exportText,
@@ -1711,7 +1755,26 @@ export const handler = router({
           };
         });
 
-      return json({ grants: grantRows, pendingRequests, eligibleRecipients });
+      const { items: securityEvents } = await db.list(securityEventTable, { limit: 1000 });
+      const recentActivity = securityEvents
+        .filter((item) => String(item.relatedId ?? '') === ctx.params.scriptId && ['reader_session_issued', 'script_page_view', 'script_export'].includes(String(item.eventType ?? '')))
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+        .slice(0, 50)
+        .map((item) => {
+          const account = accounts.find((candidate) => String(candidate.userId) === String(item.userId));
+          return {
+            id: item.id,
+            eventType: item.eventType,
+            actorUserId: item.userId,
+            actorName: account?.name ?? (String(item.userId) === ctx.user!.userId ? 'You' : 'Nightjar account'),
+            sessionId: item.sessionId ?? null,
+            page: item.page ?? null,
+            totalPages: item.totalPages ?? null,
+            createdAt: item.createdAt ?? null,
+          };
+        });
+
+      return json({ grants: grantRows, pendingRequests, eligibleRecipients, recentActivity });
     },
   ],
 
