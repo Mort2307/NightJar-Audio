@@ -10,6 +10,8 @@ const moderation = read('src/components/ContentModeration.tsx');
 const discovery = read('src/components/ProfileDiscovery.tsx');
 const feedback = read('src/components/RecommendationFeedback.tsx');
 const catalogueSearch = read('src/components/CatalogueSearch.tsx');
+const creatorProfile = read('src/components/CreatorProfile.tsx');
+const css = read('src/index.css');
 
 test('universal following is many-to-many and privacy guarded', () => {
   assert.match(backend, /GET \/api\/profiles/);
@@ -78,4 +80,15 @@ test('local shim mirrors critical social, taste and moderation contracts', () =>
   assert.match(shim, /Unsupported taste signal/);
   assert.match(shim, /parts\.length === 5 && parts\[4\] === 'assign-editor'/);
   assert.equal((shim.match(/path === '\/api\/editor\/accounts'/g) ?? []).length, 1);
+});
+
+
+test('keyboard and motion accessibility foundations are present', () => {
+  assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /focus-visible/);
+  assert.match(app, /preferredScrollBehavior/);
+  assert.match(moderation, /aria-labelledby="release-moderation-title"/);
+  assert.match(moderation, /event\.key === 'Escape'/);
+  assert.match(creatorProfile, /aria-labelledby="creator-profile-title"/);
+  assert.match(creatorProfile, /Close creator profile/);
 });
