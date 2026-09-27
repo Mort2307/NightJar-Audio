@@ -23,6 +23,7 @@ export type CommercialOverview = {
 
 const overviewCall = httpsCallable<void, CommercialOverview>(functions, 'commercialOverview');
 const saveCall = httpsCallable<CommercialSettings, { settings: CommercialSettings }>(functions, 'saveCommercialSettings');
+const subscriptionsCall = httpsCallable<void, { subscriptions: any[] }>(functions, 'listBillingSubscriptions');
 
 export const nightjarCommercial = {
   async overview() {
@@ -31,5 +32,9 @@ export const nightjarCommercial = {
 
   async save(settings: CommercialSettings) {
     return (await saveCall(settings)).data;
+  },
+
+  async subscriptions() {
+    return (await subscriptionsCall()).data;
   },
 };
