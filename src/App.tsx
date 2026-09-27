@@ -1459,6 +1459,7 @@ function App() {
             selected={writerSelected}
             onDraftTitleChange={setWriterDraftTitle}
             onSelect={(script: any) => void openWriterScript(String(script.id))}
+            onChange={setWriterSelected}
             onCreate={createWriterDraft}
             onSave={saveWriterScript}
             onVersion={createWriterVersion}
