@@ -7,7 +7,7 @@ type Props = {
   onAccountStateChange?: () => void | Promise<void>;
 };
 
-type SecurityAction = 'benign' | 'revoke_sessions' | 'freeze_account' | 'restore_account' | 'remove_account' | 'block_device';
+type SecurityAction = 'benign' | 'revoke_sessions' | 'freeze_account' | 'restore_account' | 'remove_account' | 'block_device' | 'block_environment';
 
 export default function SecurityReviewPanel({ notify, onAccountStateChange }: Props) {
   const [alerts, setAlerts] = useState<any[]>([]);
@@ -43,12 +43,14 @@ export default function SecurityReviewPanel({ notify, onAccountStateChange }: Pr
 
   const act = async (alert: any, action: SecurityAction) => {
     if (!alert?.id || busyId) return;
-    const destructive = action === 'freeze_account' || action === 'remove_account' || action === 'block_device';
+    const destructive = action === 'freeze_account' || action === 'remove_account' || action === 'block_device' || action === 'block_environment';
     if (destructive && !window.confirm(action === 'remove_account'
       ? 'Remove this account from Nightjar, revoke protected-reader access and hide its public profile? Security evidence will be retained.'
       : action === 'freeze_account'
         ? 'Freeze this account and revoke all active protected-reader sessions?'
-        : 'Block this pseudonymous device token from opening protected scripts?')) return;
+        : action === 'block_environment'
+          ? 'Block this broader pseudonymous browser/device environment from opening protected scripts? Shared devices are possible, so use this only when the evidence justifies it.'
+          : 'Block this pseudonymous device token from opening protected scripts?')) return;
 
     const note = action === 'benign'
       ? (window.prompt('Optional review note explaining why this alert is benign') ?? '')
@@ -75,7 +77,9 @@ export default function SecurityReviewPanel({ notify, onAccountStateChange }: Pr
               ? 'Account restored after administrator review.'
               : action === 'block_device'
                 ? 'Device token blocked from protected-script access.'
-                : 'Account removed from Nightjar while security evidence was retained.');
+                : action === 'block_environment'
+                  ? 'Browser/device environment blocked from protected-script access.'
+                  : 'Account removed from Nightjar while security evidence was retained.');
     } catch {
       notify('The security action could not be completed.');
     } finally {
@@ -147,6 +151,7 @@ export default function SecurityReviewPanel({ notify, onAccountStateChange }: Pr
             <div><span>Account</span><strong>{selected.subjectAccountStatus || 'unknown'}{selected.subjectRemoved ? ' · removed' : ''}</strong></div>
             <div><span>Device token</span><strong>{selected.deviceHash ? String(selected.deviceHash).slice(0, 16) + '…' : 'Not recorded'}</strong></div>
             <div><span>Device blocked</span><strong>{selected.deviceBlocked ? 'Yes' : 'No'}</strong></div>
+            <div><span>Environment blocked</span><strong>{selected.environmentBlocked ? 'Yes' : 'No'}</strong></div>
             <div><span>Other accounts on token</span><strong>{linkedOthers.length}</strong></div>
           </div>
 
@@ -170,6 +175,7 @@ export default function SecurityReviewPanel({ notify, onAccountStateChange }: Pr
             <button disabled={busyId === String(selected.id)} onClick={() => void act(selected, 'revoke_sessions')}><LockKeyhole size={13}/> Revoke reader</button>
             {selected.subjectAccountStatus === 'suspended' ? <button disabled={busyId === String(selected.id)} onClick={() => void act(selected, 'restore_account')}><RotateCcw size={13}/> Restore</button> : <button disabled={busyId === String(selected.id)} onClick={() => void act(selected, 'freeze_account')}><ShieldAlert size={13}/> Freeze</button>}
             {selected.deviceHash && <button disabled={busyId === String(selected.id)} onClick={() => void act(selected, 'block_device')}><Ban size={13}/> Block device</button>}
+            {selected.environmentHash && <button disabled={busyId === String(selected.id)} onClick={() => void act(selected, 'block_environment')}><Fingerprint size={13}/> Block environment</button>}
             <button className="security-remove-action" disabled={busyId === String(selected.id) || selected.subjectRemoved === true} onClick={() => void act(selected, 'remove_account')}><UserX size={13}/> Remove account</button>
           </div>
         </> : <div className="people-empty"><ShieldAlert size={18}/><strong>Select an alert</strong><span>Review the supporting evidence before taking account-level action.</span></div>}
