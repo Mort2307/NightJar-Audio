@@ -187,7 +187,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const handle = cleanHandle(input.handle);
-  validateHandle(handle);
+  if (handle) validateHandle(handle);
 
   const nextProfile = {
     displayName: cleanText(input.displayName, 80) || identity.email.split('@')[0],
@@ -209,25 +209,27 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   };
 
   const targetProfileRef = profileRef(identity.uid);
-  const targetHandleRef = db.collection('handles').doc(handle);
 
   await db.runTransaction(async (transaction) => {
     const currentProfile = await transaction.get(targetProfileRef);
     const currentHandle = cleanHandle(currentProfile.data()?.handle);
-    const targetHandle = await transaction.get(targetHandleRef);
+    const targetHandleRef = handle ? db.collection('handles').doc(handle) : null;
+    const targetHandle = targetHandleRef ? await transaction.get(targetHandleRef) : null;
     const oldHandleRef = currentHandle && currentHandle !== handle
       ? db.collection('handles').doc(currentHandle)
       : null;
     const oldHandle = oldHandleRef ? await transaction.get(oldHandleRef) : null;
 
-    if (targetHandle.exists && targetHandle.data()?.userId !== identity.uid) {
+    if (targetHandle?.exists && targetHandle.data()?.userId !== identity.uid) {
       throw new HttpsError('already-exists', 'That @handle is already in use.');
     }
 
-    transaction.set(targetHandleRef, {
-      userId: identity.uid,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    if (targetHandleRef) {
+      transaction.set(targetHandleRef, {
+        userId: identity.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
 
     if (oldHandleRef && oldHandle?.data()?.userId === identity.uid) {
       transaction.delete(oldHandleRef);
