@@ -2164,16 +2164,70 @@ export const handler = router({
   'GET /api/admin/security-alerts': [
     requireAdminEmailAllowlist(ADMIN_EMAILS),
     async () => {
-      const { items } = await db.list(securityAlertTable, { limit: 250 });
-      const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
-      const alerts = items.map((alert) => {
-        const account = accounts.find((candidate) => String(candidate.userId) === String(alert.userId));
+      const [{ items: items }, { items: accounts }, { items: events }, { items: cases }, { items: devices }] = await Promise.all([
+        db.list(securityAlertTable, { limit: 250 }),
+        db.list(accountIndexTable, { limit: 2000 }),
+        db.list(securityEventTable, { limit: 5000 }),
+        db.list(securityCaseTable, { limit: 1000 }),
+        db.list(securityDeviceTable, { limit: 5000 }),
+      ]);
+      const alerts = await Promise.all(items.map(async (alert) => {
+        const userId = String(alert.userId ?? '');
+        const account = accounts.find((candidate) => String(candidate.userId) === userId);
+        const profile = userId ? await getProfile(userId) : null;
+        const createdMs = new Date(String(alert.createdAt ?? 0)).getTime();
+        const recentEvents = events
+          .filter((item) => String(item.userId ?? '') === userId && Math.abs(new Date(String(item.createdAt ?? 0)).getTime() - createdMs) <= 15 * 60_000)
+          .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+          .slice(0, 30)
+          .map((item) => ({
+            id: item.id,
+            eventType: item.eventType,
+            relatedId: item.relatedId ?? null,
+            sessionId: item.sessionId ?? null,
+            deviceHash: item.deviceHash ?? null,
+            forensicToken: item.forensicToken ?? null,
+            page: item.page ?? null,
+            totalPages: item.totalPages ?? null,
+            action: item.action ?? null,
+            createdAt: item.createdAt ?? null,
+          }));
+        const evidenceSummary = {
+          pageViews: recentEvents.filter((item) => item.eventType === 'script_page_view').length,
+          blockedInteractions: recentEvents.filter((item) => String(item.eventType ?? '').includes('blocked')).length,
+          exports: recentEvents.filter((item) => item.eventType === 'script_export').length,
+          distinctScripts: new Set(recentEvents.map((item) => String(item.relatedId ?? '')).filter(Boolean)).size,
+          forensicTokens: recentEvents.map((item) => String(item.forensicToken ?? '')).filter(Boolean).slice(0, 12),
+        };
+        const deviceHash = String(alert.deviceHash ?? '');
+        const linkedDevices = deviceHash ? devices.filter((item) => String(item.deviceHash ?? '') === deviceHash) : [];
+        const linkedAccountIds = Array.from(new Set(linkedDevices.map((item) => String(item.userId ?? '')).filter(Boolean)));
+        const linkedAccounts = linkedAccountIds.map((linkedUserId) => {
+          const linked = accounts.find((candidate) => String(candidate.userId) === linkedUserId);
+          return {
+            userId: linkedUserId,
+            status: linked?.status ?? null,
+            removed: linked?.removed === true,
+            sameAsSubject: linkedUserId === userId,
+          };
+        });
+        const securityCase = cases.find((item) => String(item.alertId ?? '') === String(alert.id ?? ''));
         return {
           ...alert,
+          subjectDisplayName: profile?.displayName ?? account?.name ?? null,
+          subjectEmail: account?.email ?? null,
           subjectAccountStatus: account?.status ?? null,
           subjectRemoved: account?.removed === true,
+          recentEvents,
+          evidenceSummary,
+          linkedAccounts,
+          caseHistory: Array.isArray(securityCase?.history) ? securityCase.history : [],
+          deviceBlocked: linkedDevices.some((item) => item.blocked === true),
+          networkCorrelationAvailable: false,
+          networkCorrelationNote: 'The current AppDeploy request context does not expose a trusted client-network address. Nightjar therefore uses device and forensic correlation rather than storing or trusting a client-supplied IP address.',
         };
-      }).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+      }));
+      alerts.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
       return json({ alerts });
     },
   ],
@@ -2220,6 +2274,9 @@ export const handler = router({
       const at = new Date().toISOString();
       const actor = ctx.user!.email ?? null;
       const note = String(body.note ?? '').trim().slice(0, 1000) || null;
+      if (['freeze_account', 'remove_account', 'block_device'].includes(action) && !note) {
+        return error('Add a review note before taking a destructive security action.', 400);
+      }
 
       const { items: accounts } = await db.list(accountTable(userId), { limit: 1 });
       const account = accounts[0] ?? null;
