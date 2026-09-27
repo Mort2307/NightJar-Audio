@@ -1045,7 +1045,8 @@ export const handler = router({
       if (!(await requireRole(ctx.user!.userId, ['editor', 'admin']))) return error('Editor access required.', 403);
       const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
       const { items: assignments } = await db.list('nightjar_editor_assignments', { limit: 500 });
-      const ids = assignments.filter((item) => item.editorUserId === ctx.user!.userId && item.status !== 'closed').map((item) => item.scriptId);
+      const openAssignments = assignments.filter((item) => item.status !== 'closed');
+      const ids = (isAdmin(ctx.user!.email) ? openAssignments : openAssignments.filter((item) => item.editorUserId === ctx.user!.userId)).map((item) => item.scriptId);
       return json({ queue: scripts.filter((script) => ids.includes(script.id)) });
     },
   ],
@@ -1068,8 +1069,13 @@ export const handler = router({
       if (!assignments.some((item) => item.editorUserId === ctx.user!.userId && item.scriptId === script.id && item.status !== 'closed')) return error('This manuscript is not assigned to you.', 403);
       const body = (ctx.body ?? {}) as { status?: string; comment?: string };
       if (!['Under review', 'Revision requested', 'Approved', 'Rejected'].includes(body.status ?? '')) return error('Invalid editorial state.', 400);
-      const next = { ...script, status: body.status, lastEditorialComment: String(body.comment ?? '').slice(0, 1200), updatedAt: new Date().toISOString() };
+      const now = new Date().toISOString();
+      const next = { ...script, status: body.status, lastEditorialComment: String(body.comment ?? '').slice(0, 1200), updatedAt: now };
       await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
+      if (body.status === 'Approved' || body.status === 'Rejected') {
+        const mine = assignments.filter((item) => item.editorUserId === ctx.user!.userId && item.scriptId === script.id && item.status !== 'closed');
+        if (mine.length) await db.update('nightjar_editor_assignments', mine.map((item) => ({ id: item.id, record: { ...item, status: 'closed', closedAt: now, closedReason: body.status } })));
+      }
       return json({ script: next });
     },
   ],
@@ -1460,7 +1466,7 @@ export const handler = router({
   'GET /api/profile/:handle': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before viewing public profiles.',403); const handle=cleanHandle(ctx.params.handle); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const account=indexes.find((item)=>cleanHandle(item.handle)===handle&&item.status!=='suspended'); if(!account)return error('Profile not found.',404); const profile=await getProfile(account.userId); if(!profile?.publicProfile)return error('Profile not found.',404); return json({profile:{...profile,role:account.role}}); }],
   'POST /api/taste/event': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before recording adult taste signals.',403); const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; const eventType=String(body.eventType??''); if(!['more_like_this','less_like_this','not_for_me','hide','skip','save','follow','complete','replay'].includes(eventType))return error('Unsupported taste signal.',400); await db.add(tasteTable(ctx.user!.userId),[{type:eventType,contentId:String(body.contentId??'').slice(0,100)||null,category:String(body.category??'').slice(0,80)||null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Math.min(Number(body.durationSeconds??0),86400)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
   'GET /api/taste/profile': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before viewing the adult taste profile.',403); const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])]){const key=String(value).toLowerCase();weights[key]=(weights[key]??0)+5;} for(const item of items){const factor=tasteSignalWeight(item.type,item.completed===true);for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])]){const key=String(value).toLowerCase();weights[key]=(weights[key]??0)+factor;}} return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
-  'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before opening protected content.',403); if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
+  'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before opening protected content.',403); if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId&&!item.revokedAt&&(!item.expiresAt||new Date(String(item.expiresAt)).getTime()>Date.now())); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
   'GET /api/writers': [
     requireAuth(),
     async (ctx) => {
@@ -1703,9 +1709,12 @@ export const handler = router({
       const next = { ...script, editorUserId, updatedAt: new Date().toISOString() };
       await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
       const { items: existing } = await db.list('nightjar_editor_assignments', { limit: 500 });
+      const now = new Date().toISOString();
+      const stale = existing.filter((item) => item.scriptId === script.id && item.editorUserId !== editorUserId && item.status !== 'closed');
+      if (stale.length) await db.update('nightjar_editor_assignments', stale.map((item) => ({ id: item.id, record: { ...item, status: 'closed', closedAt: now, closedReason: 'reassigned' } })));
       const current = existing.find((item) => item.scriptId === script.id && item.editorUserId === editorUserId && item.status !== 'closed');
       if (!current) {
-        await db.add('nightjar_editor_assignments', [{ scriptId: script.id, editorUserId, assignedBy: ctx.user!.userId, status: 'open', assignedAt: new Date().toISOString() }]);
+        await db.add('nightjar_editor_assignments', [{ scriptId: script.id, editorUserId, assignedBy: ctx.user!.userId, status: 'open', assignedAt: now }]);
       }
       return json({ script: next });
     },
