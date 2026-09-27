@@ -1738,3 +1738,40 @@ button:focus-visible {
     grid-column: auto;
   }
 }
+
+
+.people-row-managed {
+  grid-template-columns: 38px minmax(0,1fr) auto minmax(220px,auto);
+}
+
+.people-row-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.people-row-controls select {
+  min-width: 108px;
+  padding: 8px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: rgba(0,0,0,.22);
+  color: var(--ivory);
+  font-size: 8px;
+}
+
+@media (max-width: 760px) {
+  .people-row-managed {
+    grid-template-columns: 38px 1fr;
+  }
+
+  .people-row-managed > em,
+  .people-row-controls {
+    grid-column: 2;
+  }
+
+  .people-row-controls {
+    justify-content: flex-start;
+  }
+}
