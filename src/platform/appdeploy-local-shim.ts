@@ -1394,7 +1394,83 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/admin/security-alerts' && method === 'GET') {
     requireAdmin(state);
-    return send({ alerts: state.securityAlerts });
+    return send({ alerts: state.securityAlerts.slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))) });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'security' && parts[3] === 'trace' && parts.length === 5 && method === 'GET') {
+    requireAdmin(state);
+    const token = String(parts[4] ?? '').trim().toUpperCase().replace(/[^A-F0-9]/g, '');
+    if (token.length < 8) throw new Error('Enter at least eight characters from the forensic token.');
+    const traces = state.evidence
+      .filter((item) => String(item.forensicToken ?? '').toUpperCase().startsWith(token))
+      .map((item) => {
+        const account = state.users.find((candidate) => candidate.userId === item.userId);
+        const profile = account ? ensureProfile(state, account) : null;
+        return {
+          forensicToken: item.forensicToken,
+          userId: item.userId,
+          accountStatus: account?.status ?? null,
+          accountEmail: account?.email ?? null,
+          displayName: profile?.displayName ?? account?.name ?? null,
+          scriptId: item.relatedId ?? null,
+          sessionId: item.sessionId ?? null,
+          deviceHash: item.deviceHash ?? null,
+          page: item.page ?? null,
+          totalPages: item.totalPages ?? null,
+          createdAt: item.createdAt ?? null,
+        };
+      });
+    return send({ traces });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'security-alerts' && parts.length === 5 && parts[4] === 'action' && method === 'POST') {
+    requireAdmin(state);
+    const alert = state.securityAlerts.find((item) => item.id === parts[3]);
+    if (!alert) throw new Error('Alert not found.');
+    const action = String(input.action ?? '');
+    const allowed = new Set(['benign', 'revoke_sessions', 'freeze_account', 'restore_account', 'remove_account', 'block_device']);
+    if (!allowed.has(action)) throw new Error('Choose a valid security action.');
+    const account = state.users.find((item) => item.userId === alert.userId);
+    if (!account) throw new Error('Alert account not found.');
+    const at = now();
+    const note = String(input.note ?? '').trim().slice(0, 1000) || null;
+
+    if (action === 'revoke_sessions' || action === 'freeze_account' || action === 'remove_account' || action === 'block_device') {
+      state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((session) => session.status === 'active'
+        ? { ...session, status: 'revoked', revokedAt: at, revokedReason: 'Administrator security action: ' + action }
+        : session);
+    }
+
+    if (action === 'freeze_account' || action === 'remove_account') {
+      account.securityPreviousStatus = account.status === 'suspended' ? (account.securityPreviousStatus ?? 'active') : account.status;
+      account.status = 'suspended';
+      account.removed = action === 'remove_account';
+      if (action === 'remove_account') {
+        const profile = ensureProfile(state, account);
+        profile.publicProfile = false;
+        profile.removedAt = at;
+      }
+    }
+
+    if (action === 'restore_account') {
+      account.status = account.securityPreviousStatus ?? 'active';
+      account.removed = false;
+    }
+
+    if (action === 'block_device') {
+      const deviceHash = String(alert.deviceHash ?? '');
+      if (!deviceHash) throw new Error('This alert does not contain a device correlation token.');
+      state.securityDevices.forEach((device) => {
+        if (device.deviceHash === deviceHash) Object.assign(device, { blocked: true, blockedAt: at, blockReason: note ?? 'Blocked from a Nightjar security alert.' });
+      });
+    }
+
+    alert.status = action === 'benign' ? 'benign' : 'actioned';
+    alert.action = action;
+    alert.actionedAt = at;
+    alert.actionNote = note;
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: currentUser(state)?.userId ?? null, eventType: 'admin_security_action', action, relatedType: 'security_alert', relatedId: alert.id, deviceHash: alert.deviceHash ?? null, summary: note ?? 'Administrator security action recorded.', createdAt: at });
+    return send({ ok: true, action, userId: account.userId, status: alert.status });
   }
 
   if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'security-alerts' && parts.length === 5 && parts[4] === 'suspend' && method === 'POST') {
@@ -1402,7 +1478,13 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const alert = state.securityAlerts.find((item) => item.id === parts[3]);
     if (!alert) throw new Error('Alert not found.');
     const account = state.users.find((item) => item.userId === alert.userId);
-    if (account) account.status = 'suspended';
+    if (account) {
+      account.securityPreviousStatus = account.status === 'suspended' ? (account.securityPreviousStatus ?? 'active') : account.status;
+      account.status = 'suspended';
+      state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((session) => session.status === 'active' ? { ...session, status: 'revoked', revokedAt: now(), revokedReason: 'Account suspended after security review.' } : session);
+    }
+    alert.status = 'actioned';
+    alert.action = 'freeze_account';
     return send({ suspended: true });
   }
 
