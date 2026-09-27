@@ -11,6 +11,10 @@ export type NightjarPlayerTrack = {
   descriptor?: string;
   audioUrl?: string | null;
   artworkUrl?: string | null;
+  genre?: string;
+  mood?: string;
+  tags?: string[];
+  tropes?: string[];
 };
 
 type Props = {
@@ -59,7 +63,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     setDuration(1);
     setIsPlaying(false);
     void node.play().catch(() => notify('Press play to start this release.'));
-    void api.post('/api/listening/event', { releaseId: track.id, eventType: 'start', positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent }).catch(() => {});
+    void api.post('/api/listening/event', { releaseId: track.id, eventType: 'start', positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent, category: track.category, genre: track.genre, mood: track.mood, tags: track.tags ?? [], tropes: track.tropes ?? [] }).catch(() => {});
     return () => { node.pause(); };
   }, [track?.id, track?.audioUrl]);
 
@@ -99,13 +103,13 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         setPosition(node.currentTime);
         if (node.currentTime - lastProgressEvent.current >= 15) {
           lastProgressEvent.current = node.currentTime;
-          void api.post('/api/listening/event', { releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {});
+          void api.post('/api/listening/event', { releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent, category: track.category, genre: track.genre, mood: track.mood, tags: track.tags ?? [], tropes: track.tropes ?? [] }).catch(() => {});
         }
       }}
       onEnded={() => {
         setIsPlaying(false);
         setPosition(duration);
-        void api.post('/api/listening/event', { releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
+        void api.post('/api/listening/event', { releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent, category: track.category, genre: track.genre, mood: track.mood, tags: track.tags ?? [], tropes: track.tropes ?? [] }).catch(() => {});
         if (nextTrack && onSelectTrack) window.setTimeout(() => onSelectTrack(nextTrack), 350);
       }}
       onError={() => notify('Nightjar could not play this audio file.')}
