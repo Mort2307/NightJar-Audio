@@ -239,9 +239,12 @@ export const handler = router({
         };
       };
 
-      const creator = creators.length ? await toProfileSpotlight(creators[((daysSinceEpoch % creators.length) + creators.length) % creators.length], 'creator') : null;
-      const writerOffset = writers.length ? Math.floor(daysSinceEpoch / Math.max(creators.length, 1)) : 0;
-      const writer = writers.length ? await toProfileSpotlight(writers[((daysSinceEpoch + writerOffset) % writers.length + writers.length) % writers.length], 'writer') : null;
+      // Each roster advances by one person per calendar day. The weekday is not the rotation key.
+      // This means an 8-person roster gets 8 consecutive days before cycling back to #1.
+      const creatorIndex = creators.length ? ((daysSinceEpoch % creators.length) + creators.length) % creators.length : -1;
+      const writerIndex = writers.length ? ((daysSinceEpoch % writers.length) + writers.length) % writers.length : -1;
+      const creator = creatorIndex >= 0 ? await toProfileSpotlight(creators[creatorIndex], 'creator') : null;
+      const writer = writerIndex >= 0 ? await toProfileSpotlight(writers[writerIndex], 'writer') : null;
 
       // Listener Spotlight: freeze the top seven from the previous completed Monday-Sunday period.
       // This makes the seven stable for the entire current week, then a new seven is selected next week.
