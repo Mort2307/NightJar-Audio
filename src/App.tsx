@@ -39,6 +39,7 @@ import ContentModeration from './components/ContentModeration';
 import NightjarOnboarding from './components/NightjarOnboarding';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
+import LiveReleaseCard from './components/LiveReleaseCard';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -648,6 +649,13 @@ function App() {
     }
   };
 
+  const handleRecommendationFeedback = (releaseId: string, kind: string) => {
+    if (kind === 'not_for_me') {
+      setLiveRecommendations((items) => items.filter((item) => String(item.id) !== String(releaseId)));
+      setLiveTrending((items) => items.filter((item) => String(item.id) !== String(releaseId)));
+    }
+  };
+
   const toggleCreatorFollow = async (creatorUserId: string) => {
     try {
       if (followingCreatorIds.includes(creatorUserId)) {
@@ -1227,7 +1235,7 @@ function App() {
               <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><select className="mood-select" value={currentIntent} onChange={(event) => setCurrentIntent(event.target.value)} aria-label="Current listening intent"><option value="">Open to anything</option><option value="wind">Wind down</option><option value="story">A story</option><option value="quiet">Something quiet</option><option value="focus">Focus</option><option value="discover">Discover something new</option></select></div>
               <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
               <div className="track-grid">
-                {liveRecommendations.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
+                {liveRecommendations.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} notify={notify} onFeedback={(kind) => handleRecommendationFeedback(String(release.id), kind)} />)}
                 {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
               </div>
             </section>
@@ -1235,7 +1243,7 @@ function App() {
             <section className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
               <div className="track-grid">
-                {liveTrending.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
+                {liveTrending.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} notify={notify} onFeedback={(kind) => handleRecommendationFeedback(String(release.id), kind)} />)}
                 {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
               </div>
             </section>
