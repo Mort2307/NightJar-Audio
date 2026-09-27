@@ -136,6 +136,27 @@ const revokeReaderSessionsForScript = async (userId: string, scriptId: string, r
 const createOwnerSecurityNotifications = async (alert: Record<string, unknown>) => { for (const email of ADMIN_EMAILS) await db.add(ownerNotificationTable(email), [{ type:'security_alert', alertId:alert.id??null, severity:alert.severity??'high', title:'Nightjar security alert', message:alert.reason??'Suspicious protected-content activity detected.', createdAt:new Date().toISOString(), read:false, recipientEmail:normalizeEmail(email) }]); };
 const createSecurityAlert = async (userId: string, details: Record<string, unknown>) => { const now=new Date().toISOString(); const recipients=ADMIN_EMAILS.map(normalizeEmail); const [id]=await db.add(securityAlertTable,[{userId,...details,recipients,createdAt:now,status:'open'}]); const alert={id:id??null,userId,...details,recipients,createdAt:now,status:'open'}; await createOwnerSecurityNotifications(alert); await db.add(securityCaseTable,[{alertId:id??null,userId,state:'detection',history:[{state:'detection',at:now,note:'Suspicious activity detected; alert sent to all three Nightjar owners.'}],createdAt:now,updatedAt:now}]); return alert; };
 const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => { const now=Date.now(); const {items}=await db.list(securityEventTable,{limit:500}); const recent=items.filter((item)=>item.userId===userId && now-new Date(item.createdAt??0).getTime()<60000); const scriptId=String(signal.relatedId??''); const sameScriptRecent=recent.filter((item)=>String(item.relatedId??'')===scriptId); const score=(recent.length>=40?35:recent.length>=20?20:0)+(sameScriptRecent.length>=25?40:sameScriptRecent.length>=12?25:0)+(signal.eventType==='script_view'&&sameScriptRecent.length>=8?20:0)+(signal.eventType==='blocked_interaction'?8:0); if(score<50)return null; const existing=await db.list(securityAlertTable,{limit:100}); if(existing.items.some((item)=>item.userId===userId&&item.status==='open'&&now-new Date(item.createdAt??0).getTime()<600000))return null; return createSecurityAlert(userId,{severity:score>=75?'critical':'high',riskScore:score,reason:`Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,relatedId:scriptId||null,signal:{eventType:signal.eventType,recentEvents:recent.length,relatedEvents:sameScriptRecent.length}}); };
+const enforceProtectedPageRate = async (userId: string, scriptId: string, sessionId: string) => {
+  const now = Date.now();
+  const { items } = await db.list(securityEventTable, { limit: 1000 });
+  const recentPages = items.filter((item) =>
+    item.userId === userId &&
+    item.eventType === 'script_page_view' &&
+    now - new Date(String(item.createdAt ?? 0)).getTime() < 60_000
+  );
+  const sameScript = recentPages.filter((item) => String(item.relatedId ?? '') === scriptId);
+  const sameSession = sameScript.filter((item) => String(item.sessionId ?? '') === sessionId);
+  if (sameSession.length < 18 && sameScript.length < 24) return true;
+  await revokeReaderSessionsForScript(userId, scriptId, 'Protected reader rate limit exceeded.');
+  await createSecurityAlert(userId, {
+    severity: 'high',
+    riskScore: 85,
+    reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.',
+    relatedId: scriptId,
+    signal: { eventType: 'script_page_rate_limit', recentPages: recentPages.length, scriptPages: sameScript.length, sessionPages: sameSession.length },
+  });
+  return false;
+};
 
 const createUserNotificationOnce = async (userId: string, notification: Record<string, unknown>) => {
   const table = userNotificationTable(userId);
@@ -1521,6 +1542,7 @@ export const handler = router({
       const script = scripts.find((item) => item.id === ctx.params.scriptId);
       if (!script) return error('Script not found.', 404);
 
+      if (!(await enforceProtectedPageRate(ctx.user!.userId, ctx.params.scriptId, sessionId))) return error('Protected reader rate limit reached. Reopen the manuscript after review.', 429);
       const pages = chunkProtectedContent(script.content ?? '');
       if (page >= pages.length) return error('Protected page not found.', 404);
       const createdAt = new Date().toISOString();
