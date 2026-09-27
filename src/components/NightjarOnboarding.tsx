@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../platform/legacy-local-client';
+import { nightjarCommunity } from '../platform/firebase-community';
 import { ArrowRight, Check, Sparkles, X } from 'lucide-react';
 
 type Props = {
@@ -78,7 +78,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     setSaving(true);
     try {
       const payload = { ...profile, onboardingComplete: true, onboardingVersion: 1 };
-      const { data } = await api.put('/api/profile/me', payload);
+      const data = await nightjarCommunity.saveMyProfile(payload);
       onComplete(data?.profile ?? payload);
       notify('Nightjar profile and taste preferences saved.');
     } catch {
