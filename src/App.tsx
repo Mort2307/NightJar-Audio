@@ -488,15 +488,36 @@ function App() {
     }
   };
 
+  const openWriterScript = async (scriptId: string) => {
+    if (!user || !scriptId) return;
+    try {
+      const { data } = await api.get('/api/writer/scripts/' + encodeURIComponent(scriptId));
+      setWriterSelected(data?.script ?? null);
+    } catch {
+      notify('That manuscript could not be opened.');
+    }
+  };
+
   const loadWriterScripts = async () => {
     if (!user) return;
     try {
       const { data } = await api.get('/api/writer/scripts');
       const items = data?.scripts ?? [];
       setWriterScripts(items);
-      setWriterSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
+      const currentId = writerSelected?.id && items.some((item: any) => item.id === writerSelected.id) ? String(writerSelected.id) : String(items[0]?.id ?? '');
+      if (!currentId) {
+        setWriterSelected(null);
+        return;
+      }
+      if (writerSelected?.id === currentId && typeof writerSelected?.content === 'string') {
+        const metadata = items.find((item: any) => String(item.id) === currentId);
+        if (metadata) setWriterSelected((current: any) => current?.id === currentId ? { ...current, ...metadata } : current);
+        return;
+      }
+      await openWriterScript(currentId);
     } catch {
       setWriterScripts([]);
+      setWriterSelected(null);
     }
   };
 
@@ -1436,7 +1457,7 @@ function App() {
             scripts={writerScripts}
             selected={writerSelected}
             onDraftTitleChange={setWriterDraftTitle}
-            onSelect={setWriterSelected}
+            onSelect={(script: any) => void openWriterScript(String(script.id))}
             onCreate={createWriterDraft}
             onSave={saveWriterScript}
             onVersion={createWriterVersion}
