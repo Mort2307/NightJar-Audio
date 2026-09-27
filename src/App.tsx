@@ -39,6 +39,7 @@ import ContentModeration from './components/ContentModeration';
 import NightjarOnboarding from './components/NightjarOnboarding';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
+import RecommendationFeedback from './components/RecommendationFeedback';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -64,6 +65,10 @@ type Track = {
   audioUrl?: string | null;
   artworkUrl?: string | null;
   creatorUserId?: string;
+  genre?: string;
+  mood?: string;
+  tags?: string[];
+  tropes?: string[];
 };
 
 type CreatorSummary = {
@@ -281,6 +286,10 @@ function App() {
         audioUrl: release.audioUrl ?? null,
         artworkUrl: release.artworkUrl ?? null,
         creatorUserId: release.creatorUserId,
+        genre: release.genre ?? '',
+        mood: release.mood ?? '',
+        tags: Array.isArray(release.tags) ? release.tags : [],
+        tropes: Array.isArray(release.tropes) ? release.tropes : [],
       })) as Track[];
       setTracks(liveTracks);
       setCreatorDirectory((creatorsResponse.data?.creators ?? []).map((creator: any) => ({
@@ -1218,7 +1227,7 @@ function App() {
             <section id="catalogue" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
               <div className="track-grid">
-                {tracks.slice(0, 6).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} />)}
+                {tracks.slice(0, 6).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} notify={notify} />)}
                 {!tracks.length && <div className="people-empty"><Headphones size={18}/><strong>No published releases yet.</strong><span>The listening room will populate from real creator releases once audio is published.</span></div>}
               </div>
             </section>
@@ -1427,10 +1436,14 @@ function releaseToTrack(release: any): Track {
     audioUrl: release.audioUrl ?? null,
     artworkUrl: release.artworkUrl ?? null,
     creatorUserId: release.creatorUserId,
+    genre: release.genre,
+    mood: release.mood,
+    tags: Array.isArray(release.tags) ? release.tags : [],
+    tropes: Array.isArray(release.tropes) ? release.tropes : [],
   };
 }
 
-function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason }: { track: Track; playing: boolean; favourite: boolean; onPlay: (track: Track) => void; onFavourite: () => void; reason?: string }) {
+function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason, notify }: { track: Track; playing: boolean; favourite: boolean; onPlay: (track: Track) => void; onFavourite: () => void; reason?: string; notify: (message: string) => void }) {
   return <article className="track-card">
     <div className="track-cover" style={track.artworkUrl ? { backgroundImage: 'url("' + track.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       <span className="track-index">{track.category}</span>
@@ -1444,6 +1457,7 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason 
       <h3>{track.title}</h3>
       <p>{track.descriptor}</p>
       <div className="track-footer"><span className="creator-link">{track.audioUrl ? 'Playable audio' : 'Audio not connected'}</span><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove favourite' : 'Add favourite'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div>
+      <RecommendationFeedback releaseId={track.id} compact notify={notify} />
       {reason && <p className="recommendation-reason"><Sparkles size={12} />{reason}</p>}
     </div>
   </article>;
