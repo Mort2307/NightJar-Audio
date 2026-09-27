@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createPublicKey, randomUUID, verify as verifySignature } from 'node:crypto';
 import { router, json, error, requireAuth, requireAdminEmailAllowlist, withScopes } from '@appdeploy/sdk';
 import { db, storage } from '@appdeploy/sdk';
 
@@ -143,6 +143,292 @@ const requireRole = async (userId: string, roles: Role[]) => {
   return account ? roles.includes(account.role) : false;
 };
 
+
+const getLondonDateContext = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  const local = {
+    weekday: value('weekday'),
+    year: Number(value('year')),
+    month: Number(value('month')),
+    day: Number(value('day')),
+  };
+  const weekdayIndex = ({ Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 } as Record<string, number>)[local.weekday] ?? 0;
+  const localDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
+  const daysSinceEpoch = Math.floor(localDate.getTime() / 86400000);
+  return {
+    ...local,
+    weekdayIndex,
+    localDate,
+    daysSinceEpoch,
+    spotlightDate: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
+  };
+};
+
+async function buildDailySpotlightState(now = new Date()) {
+  const local = getLondonDateContext(now);
+
+  const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
+  const eligibleAccounts = accounts.filter((account) => account.status !== 'suspended' && ['creator', 'writer', 'listener'].includes(account.role));
+  const sortAccounts = (items: any[]) => items.slice().sort((a, b) => {
+    const created = String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? ''));
+    return created || String(a.userId ?? '').localeCompare(String(b.userId ?? ''));
+  });
+  const creators = sortAccounts(eligibleAccounts.filter((account) => account.role === 'creator'));
+  const writers = sortAccounts(eligibleAccounts.filter((account) => account.role === 'writer'));
+
+  const { items: releases } = await db.list(releaseTable, { limit: 500 });
+  const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+
+  const toProfileSpotlight = async (account: any, kind: 'creator' | 'writer') => {
+    if (!account) return null;
+    const profile = await getProfile(String(account.userId));
+    const isPublic = profile?.publicProfile !== false;
+    const publicName = profile?.displayName ?? account.name ?? (kind === 'creator' ? 'Nightjar creator' : 'Nightjar writer');
+    const name = isPublic ? publicName : (kind === 'creator' ? 'A Nightjar creator' : 'A Nightjar writer');
+    const initials = isPublic ? (profile?.avatarInitials ?? String(publicName).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase()) : 'NJ';
+    let title = kind === 'creator' ? 'Creator profile' : 'Writer profile';
+    let edition = kind === 'creator' ? 'Creator Spotlight' : 'Writer Spotlight';
+    let detail = profile?.headline ?? profile?.bio ?? (kind === 'creator' ? 'A Nightjar creator in today’s full-day spotlight.' : 'A Nightjar writer in today’s full-day spotlight.');
+    let releaseId: string | null = null;
+    if (isPublic && kind === 'creator') {
+      const latest = releases
+        .filter((release) => release.creatorUserId === account.userId && release.status === 'released')
+        .sort((a, b) => String(b.publishedAt ?? b.createdAt ?? '').localeCompare(String(a.publishedAt ?? a.createdAt ?? '')))[0];
+      if (latest) {
+        title = String(latest.title ?? title);
+        edition = 'Latest release';
+        detail = String(latest.description ?? detail);
+        releaseId = String(latest.id);
+      }
+    } else if (isPublic && kind === 'writer') {
+      const latest = scripts
+        .filter((script) => script.writerUserId === account.userId)
+        .sort((a, b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')))[0];
+      if (latest) {
+        title = String(latest.title ?? title);
+        edition = 'Latest manuscript';
+        detail = String(latest.synopsis ?? latest.excerpt ?? detail);
+      }
+    }
+    return {
+      kind,
+      name: String(name),
+      handle: isPublic ? (profile?.handle ?? account.handle ?? null) : null,
+      title,
+      edition,
+      detail: String(detail).slice(0, 320),
+      initials,
+      targetId: String(account.userId),
+      releaseId,
+      publicProfile: isPublic,
+      date: local.spotlightDate,
+    };
+  };
+
+  // Creator + Writer: every active member gets a deterministic full-day slot.
+  // The absolute calendar day is the clock; weekdays never cap the roster at seven.
+  const creatorIndex = creators.length ? ((local.daysSinceEpoch % creators.length) + creators.length) % creators.length : -1;
+  const writerIndex = writers.length ? ((local.daysSinceEpoch % writers.length) + writers.length) % writers.length : -1;
+  const creator = creatorIndex >= 0 ? await toProfileSpotlight(creators[creatorIndex], 'creator') : null;
+  const writer = writerIndex >= 0 ? await toProfileSpotlight(writers[writerIndex], 'writer') : null;
+
+  // Listener Spotlight: freeze the top seven from the previous completed Monday-Sunday period.
+  const weekStart = new Date(local.localDate);
+  weekStart.setUTCDate(weekStart.getUTCDate() - local.weekdayIndex);
+  const previousWeekStart = new Date(weekStart);
+  previousWeekStart.setUTCDate(previousWeekStart.getUTCDate() - 7);
+  const previousWeekEnd = new Date(weekStart);
+
+  const { items: listeningEvents } = await db.list(listeningTable, { limit: 10000 });
+  const weeklyEvents = listeningEvents.filter((event) => {
+    const at = new Date(String(event.createdAt ?? '')).getTime();
+    return Number.isFinite(at) && at >= previousWeekStart.getTime() && at < previousWeekEnd.getTime();
+  });
+
+  const listenerAccounts = new Map(
+    eligibleAccounts.filter((account) => account.role === 'listener').map((account) => [String(account.userId), account])
+  );
+  const scores = new Map<string, number>();
+  const lastPosition = new Map<string, { position: number; at: number }>();
+
+  for (const event of weeklyEvents.sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))) {
+    const userId = String(event.userId ?? '');
+    if (!listenerAccounts.has(userId)) continue;
+    const releaseId = String(event.releaseId ?? '');
+    if (!releaseId) continue;
+    const position = Math.max(0, Number(event.positionSeconds ?? 0));
+    if (!Number.isFinite(position)) continue;
+    const key = userId + ':' + releaseId;
+    const at = new Date(String(event.createdAt ?? '')).getTime();
+    const previous = lastPosition.get(key);
+    let delta = 0;
+    if (!previous || event.eventType === 'start' || at - previous.at > 30 * 60_000) {
+      delta = 0;
+    } else {
+      delta = Math.max(0, Math.min(position - previous.position, 120));
+    }
+    if (event.eventType === 'complete' && Number(event.durationSeconds) > position) {
+      delta = Math.min(Math.max(delta, Number(event.durationSeconds) - position), 300);
+    }
+    scores.set(userId, (scores.get(userId) ?? 0) + delta);
+    lastPosition.set(key, { position, at });
+  }
+
+  const rankedListeners = [...scores.entries()]
+    .map(([userId, seconds]) => ({ account: listenerAccounts.get(userId)!, seconds }))
+    .filter((item) => item.account)
+    .sort((a, b) => b.seconds - a.seconds || String(a.account.userId).localeCompare(String(b.account.userId)));
+
+  const topSeven = rankedListeners.slice(0, 7);
+  const listenerRankIndex = topSeven.length ? local.weekdayIndex % topSeven.length : -1;
+  let listener: any = null;
+  if (listenerRankIndex >= 0) {
+    const selected = topSeven[listenerRankIndex];
+    const profile = await getProfile(String(selected.account.userId));
+    const isPublic = profile?.publicProfile !== false;
+    const displayName = profile?.displayName ?? selected.account.name ?? 'Nightjar listener';
+    const name = isPublic ? String(displayName) : 'A Nightjar listener';
+    const initials = isPublic
+      ? (profile?.avatarInitials ?? String(displayName).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase())
+      : 'NJ';
+    listener = {
+      kind: 'listener',
+      name,
+      handle: isPublic ? (profile?.handle ?? selected.account.handle ?? null) : null,
+      title: 'Community listener',
+      edition: 'WEEKLY TOP 7 · #' + String(listenerRankIndex + 1),
+      detail: 'Recognised for the most tracked listening activity in the previous completed week.',
+      initials,
+      targetId: String(selected.account.userId),
+      releaseId: null,
+      publicProfile: isPublic,
+      date: local.spotlightDate,
+      listenerRank: listenerRankIndex + 1,
+      weeklyTrackedMinutes: Math.round(selected.seconds / 60),
+      weeklyTopSevenCount: topSeven.length,
+    };
+  }
+
+  return {
+    date: local.spotlightDate,
+    weekdayIndex: local.weekdayIndex,
+    listenerWeek: previousWeekStart.toISOString().slice(0, 10),
+    spotlights: [creator, writer, listener].filter(Boolean),
+    listenerTopSevenCount: topSeven.length,
+    listenerSpotlightDay: listener ? listenerRankIndex + 1 : null,
+    rotation: {
+      creator: 'all active public Creators, one full day each, deterministic full-roster rotation',
+      writer: 'all active public Writers, one full day each, deterministic full-roster rotation',
+      listener: 'previous completed week top seven Listeners, one full day each, then refreshed next week',
+    },
+  };
+}
+
+const buildSpotlightNotification = (item: any, spotlightDate: string, createdAt: string) => {
+  const targetId = String(item.targetId ?? '');
+  const kind = String(item.kind);
+  const dedupeKey = 'spotlight:' + spotlightDate + ':' + kind + ':' + targetId;
+  return {
+    type: 'spotlight',
+    subtype: kind,
+    dedupeKey,
+    spotlightDate,
+    targetUserId: targetId,
+    title: kind === 'creator' ? 'You are today’s Creator Spotlight' : kind === 'writer' ? 'You are today’s Writer Spotlight' : 'Thank you — you’re today’s Listener Spotlight',
+    message: kind === 'creator'
+      ? 'Your Nightjar creator profile is featured for the full day. Your latest release is highlighted so listeners can discover your work naturally.'
+      : kind === 'writer'
+        ? 'Your Nightjar writer profile is featured for the full day. Your work is highlighted so the community can discover what you create.'
+        : 'Thank you for being part of the Nightjar listening community. You are being recognised today from the previous week’s Top 7 listeners.',
+    read: false,
+    createdAt,
+    promotionEnabled: kind === 'creator' || kind === 'writer',
+    listenerRank: kind === 'listener' ? item.listenerRank ?? null : null,
+  };
+};
+
+const materializeSpotlightNotifications = async (state: any, createdAt = new Date().toISOString()) => {
+  let created = 0;
+  for (const item of state.spotlights ?? []) {
+    const targetId = String(item.targetId ?? '');
+    if (!targetId) continue;
+    const before = await db.list(userNotificationTable(targetId), { limit: 100 });
+    const key = String(buildSpotlightNotification(item, state.date, createdAt).dedupeKey);
+    if (!before.items.some((notification) => String(notification.dedupeKey ?? '') === key)) created += 1;
+    await createUserNotificationOnce(targetId, buildSpotlightNotification(item, state.date, createdAt));
+  }
+  return { created, attempted: Number(state.spotlights?.length ?? 0) };
+};
+
+const githubOidcKeysUrl = 'https://token.actions.githubusercontent.com/.well-known/jwks';
+const githubOidcIssuer = 'https://token.actions.githubusercontent.com';
+const githubOidcAudience = 'nightjar';
+const githubOidcRepository = 'Mort2307/NightJar-Audio';
+let githubOidcKeysCache: { fetchedAt: number; keys: Record<string, any> } | null = null;
+
+const base64UrlDecode = (value: string) => Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (value.length % 4)) % 4), 'base64');
+const readGithubOidcToken = (body: unknown) => {
+  if (!body || typeof body !== 'object') return '';
+  const token = (body as Record<string, unknown>).token;
+  return typeof token === 'string' ? token : '';
+};
+
+const verifyGithubActionsOidc = async (token: string) => {
+  const [headerPart, payloadPart, signaturePart] = token.split('.');
+  if (!headerPart || !payloadPart || !signaturePart) return false;
+
+  let header: any;
+  let payload: any;
+  try {
+    header = JSON.parse(base64UrlDecode(headerPart).toString('utf8'));
+    payload = JSON.parse(base64UrlDecode(payloadPart).toString('utf8'));
+  } catch {
+    return false;
+  }
+
+  if (header.alg !== 'RS256' || !header.kid) return false;
+  if (payload.iss !== githubOidcIssuer || payload.aud !== githubOidcAudience) return false;
+  if (payload.repository !== githubOidcRepository || payload.ref !== 'refs/heads/main') return false;
+  if (!['schedule', 'workflow_dispatch'].includes(String(payload.event_name))) return false;
+  const exp = Number(payload.exp ?? 0);
+  const nbf = Number(payload.nbf ?? 0);
+  const now = Math.floor(Date.now() / 1000);
+  if (!exp || exp <= now || (nbf && nbf > now + 60)) return false;
+
+  if (!githubOidcKeysCache || Date.now() - githubOidcKeysCache.fetchedAt > 60 * 60_000) {
+    const response = await fetch(githubOidcKeysUrl);
+    if (!response.ok) return false;
+    const body = await response.json() as { keys?: Array<Record<string, unknown>> };
+    const keys: Record<string, any> = {};
+    for (const key of body.keys ?? []) {
+      if (typeof key.kid === 'string') keys[key.kid] = key;
+    }
+    githubOidcKeysCache = { fetchedAt: Date.now(), keys };
+  }
+
+  const jwk = githubOidcKeysCache.keys[String(header.kid)];
+  if (!jwk) return false;
+
+  try {
+    const publicKey = createPublicKey({ key: jwk, format: 'jwk' });
+    return verifySignature(
+      'RSA-SHA256',
+      Buffer.from(headerPart + '.' + payloadPart),
+      publicKey,
+      base64UrlDecode(signaturePart),
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const handler = router({
   'GET /api/_healthcheck': [async () => json({ message: 'Success' })],
   'GET /api/catalogue': [
@@ -178,193 +464,18 @@ export const handler = router({
     requireAuth(),
     async (ctx) => {
       if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before viewing community spotlights.', 403);
-
-      const now = new Date();
-      const getLondonParts = (date: Date) => {
-        const parts = new Intl.DateTimeFormat('en-GB', {
-          timeZone: 'Europe/London',
-          weekday: 'short',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        }).formatToParts(date);
-        const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-        return { weekday: value('weekday'), year: Number(value('year')), month: Number(value('month')), day: Number(value('day')) };
-      };
-      const local = getLondonParts(now);
-      const weekdayIndex = ({ Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 } as Record<string, number>)[local.weekday] ?? 0;
-      const localDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
-      const daysSinceEpoch = Math.floor(localDate.getTime() / 86400000);
-
-      // Creator + Writer: every active member gets a deterministic full-day slot.
-      const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
-      const eligibleAccounts = accounts.filter((account) => account.status !== 'suspended' && ['creator', 'writer', 'listener'].includes(account.role));
-      const sortAccounts = (items: any[]) => items.slice().sort((a, b) => {
-        const created = String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? ''));
-        return created || String(a.userId ?? '').localeCompare(String(b.userId ?? ''));
-      });
-      const creators = sortAccounts(eligibleAccounts.filter((account) => account.role === 'creator'));
-      const writers = sortAccounts(eligibleAccounts.filter((account) => account.role === 'writer'));
-
-      const toProfileSpotlight = async (account: any, kind: 'creator' | 'writer') => {
-        if (!account) return null;
-        const profile = await getProfile(String(account.userId));
-        const isPublic = profile?.publicProfile !== false;
-        const publicName = profile?.displayName ?? account.name ?? (kind === 'creator' ? 'Nightjar creator' : 'Nightjar writer');
-        const name = isPublic ? publicName : (kind === 'creator' ? 'A Nightjar creator' : 'A Nightjar writer');
-        const initials = isPublic ? (profile?.avatarInitials ?? String(publicName).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase()) : 'NJ';
-        let title = kind === 'creator' ? 'Creator profile' : 'Writer profile';
-        let edition = kind === 'creator' ? 'Creator Spotlight' : 'Writer Spotlight';
-        let detail = profile?.headline ?? profile?.bio ?? (kind === 'creator' ? 'A Nightjar creator in today’s full-day spotlight.' : 'A Nightjar writer in today’s full-day spotlight.');
-        let releaseId: string | null = null;
-        if (isPublic && kind === 'creator') {
-          const { items: releases } = await db.list(releaseTable, { limit: 500 });
-          const latest = releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').sort((a,b) => String(b.publishedAt ?? b.createdAt ?? '').localeCompare(String(a.publishedAt ?? a.createdAt ?? '')))[0];
-          if (latest) { title = String(latest.title ?? title); edition = 'Latest release'; detail = String(latest.description ?? detail); releaseId = String(latest.id); }
-        } else if (isPublic && kind === 'writer') {
-          const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
-          const latest = scripts.filter((script) => script.writerUserId === account.userId).sort((a,b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')))[0];
-          if (latest) { title = String(latest.title ?? title); edition = 'Latest manuscript'; detail = String(latest.synopsis ?? latest.excerpt ?? detail); }
-        }
-        return {
-          kind,
-          name: String(name),
-          handle: isPublic ? (profile?.handle ?? account.handle ?? null) : null,
-          title,
-          edition,
-          detail: String(detail).slice(0, 320),
-          initials,
-          targetId: String(account.userId),
-          releaseId,
-          publicProfile: isPublic,
-          date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
-        };
-      };
-
-      // Each roster advances by one person per calendar day. The weekday is not the rotation key.
-      // This means an 8-person roster gets 8 consecutive days before cycling back to #1.
-      const creatorIndex = creators.length ? ((daysSinceEpoch % creators.length) + creators.length) % creators.length : -1;
-      const writerIndex = writers.length ? ((daysSinceEpoch % writers.length) + writers.length) % writers.length : -1;
-      const creator = creatorIndex >= 0 ? await toProfileSpotlight(creators[creatorIndex], 'creator') : null;
-      const writer = writerIndex >= 0 ? await toProfileSpotlight(writers[writerIndex], 'writer') : null;
-
-      // Listener Spotlight: freeze the top seven from the previous completed Monday-Sunday period.
-      // This makes the seven stable for the entire current week, then a new seven is selected next week.
-      const weekStart = new Date(localDate);
-      weekStart.setUTCDate(weekStart.getUTCDate() - weekdayIndex);
-      const previousWeekStart = new Date(weekStart);
-      previousWeekStart.setUTCDate(previousWeekStart.getUTCDate() - 7);
-      const previousWeekEnd = new Date(weekStart);
-
-      const { items: listeningEvents } = await db.list(listeningTable, { limit: 10000 });
-      const weeklyEvents = listeningEvents.filter((event) => {
-        const at = new Date(String(event.createdAt ?? '')).getTime();
-        return Number.isFinite(at) && at >= previousWeekStart.getTime() && at < previousWeekEnd.getTime();
-      });
-
-      const listenerAccounts = new Map(eligibleAccounts.filter((account) => account.role === 'listener').map((account) => [String(account.userId), account]));
-      const scores = new Map<string, number>();
-      const lastPosition = new Map<string, { position: number; at: number }>();
-
-      for (const event of weeklyEvents.sort((a,b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))) {
-        const userId = String(event.userId ?? '');
-        if (!listenerAccounts.has(userId)) continue;
-        const releaseId = String(event.releaseId ?? '');
-        if (!releaseId) continue;
-        const position = Math.max(0, Number(event.positionSeconds ?? 0));
-        if (!Number.isFinite(position)) continue;
-        const key = userId + ':' + releaseId;
-        const at = new Date(String(event.createdAt ?? '')).getTime();
-        const previous = lastPosition.get(key);
-        let delta = 0;
-        if (!previous || event.eventType === 'start' || at - previous.at > 30 * 60_000) {
-          delta = 0;
-        } else {
-          delta = Math.max(0, Math.min(position - previous.position, 120));
-        }
-        if (event.eventType === 'complete' && Number(event.durationSeconds) > position) {
-          delta = Math.min(Math.max(delta, Number(event.durationSeconds) - position), 300);
-        }
-        scores.set(userId, (scores.get(userId) ?? 0) + delta);
-        lastPosition.set(key, { position, at });
-      }
-
-      const rankedListeners = [...scores.entries()]
-        .map(([userId, seconds]) => ({ account: listenerAccounts.get(userId)!, seconds }))
-        .filter((item) => item.account)
-        .sort((a, b) => b.seconds - a.seconds || String(a.account.userId).localeCompare(String(b.account.userId)));
-
-      const topSeven = rankedListeners.slice(0, 7);
-      const listenerRankIndex = topSeven.length ? weekdayIndex % topSeven.length : -1;
-      let listener: any = null;
-      if (listenerRankIndex >= 0) {
-        const selected = topSeven[listenerRankIndex];
-        const profile = await getProfile(String(selected.account.userId));
-        const isPublic = profile?.publicProfile !== false;
-        const displayName = profile?.displayName ?? selected.account.name ?? 'Nightjar listener';
-        const name = isPublic ? String(displayName) : 'A Nightjar listener';
-        const initials = isPublic ? (profile?.avatarInitials ?? String(displayName).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase()) : 'NJ';
-        listener = {
-          kind: 'listener',
-          name,
-          handle: isPublic ? (profile?.handle ?? selected.account.handle ?? null) : null,
-          title: 'Community listener',
-          edition: 'WEEKLY TOP 7 · #' + String(listenerRankIndex + 1),
-          detail: 'Recognised for the most tracked listening activity in the previous completed week.',
-          initials,
-          targetId: String(selected.account.userId),
-          releaseId: null,
-          publicProfile: isPublic,
-          date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
-          listenerRank: listenerRankIndex + 1,
-          weeklyTrackedMinutes: Math.round(selected.seconds / 60),
-          weeklyTopSevenCount: topSeven.length,
-        };
-      }
-
-      const dailySpotlights = [creator, writer, listener].filter(Boolean) as any[];
-      const spotlightDate = local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0');
-
-      // The first authenticated spotlight read of the day creates an idempotent in-app notification
-      // for each person whose spotlight is live. This means no notification spam from repeated page loads.
-      for (const item of dailySpotlights) {
-        const targetId = String(item.targetId ?? '');
-        if (!targetId) continue;
-        const kind = String(item.kind);
-        const dedupeKey = 'spotlight:' + spotlightDate + ':' + kind + ':' + targetId;
-        const base = {
-          type: 'spotlight',
-          subtype: kind,
-          dedupeKey,
-          spotlightDate,
-          targetUserId: targetId,
-          title: kind === 'creator' ? 'You are today’s Creator Spotlight' : kind === 'writer' ? 'You are today’s Writer Spotlight' : 'Thank you — you’re today’s Listener Spotlight',
-          message: kind === 'creator'
-            ? 'Your Nightjar creator profile is featured for the full day. Your latest release is highlighted so listeners can discover your work naturally.'
-            : kind === 'writer'
-              ? 'Your Nightjar writer profile is featured for the full day. Your work is highlighted so the community can discover what you create.'
-              : 'Thank you for being part of the Nightjar listening community. You are being recognised today from the previous week’s Top 7 listeners.',
-          read: false,
-          createdAt: new Date().toISOString(),
-          promotionEnabled: kind === 'creator' || kind === 'writer',
-          listenerRank: kind === 'listener' ? item.listenerRank ?? null : null,
-        };
-        await createUserNotificationOnce(targetId, base);
-      }
-
-      return json({
-        date: spotlightDate,
-        weekdayIndex,
-        listenerWeek: previousWeekStart.toISOString().slice(0, 10),
-        spotlights: dailySpotlights,
-        listenerTopSevenCount: topSeven.length,
-        listenerSpotlightDay: listener ? listenerRankIndex + 1 : null,
-        rotation: {
-          creator: 'all active public Creators, one full day each, deterministic full-roster rotation',
-          writer: 'all active public Writers, one full day each, deterministic full-roster rotation',
-          listener: 'previous completed week top seven Listeners, one full day each, then refreshed next week',
-        },
-      });
+      const state = await buildDailySpotlightState();
+      await materializeSpotlightNotifications(state);
+      return json(state);
+    },
+  ],
+  'POST /api/internal/cron/spotlights': [
+    async (ctx) => {
+      const token = readGithubOidcToken(ctx.body);
+      if (!token || !(await verifyGithubActionsOidc(token))) return error('Unauthorized scheduled spotlight job.', 401);
+      const state = await buildDailySpotlightState();
+      const result = await materializeSpotlightNotifications(state);
+      return json({ ok: true, date: state.date, attempted: result.attempted, created: result.created });
     },
   ],
   'GET /api/recommendations': [

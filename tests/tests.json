@@ -346,5 +346,55 @@
       "Open Listener Spotlight across the seven days of the current week"
     ],
     "expected": "The three listeners are rotated across the available days using the same cohort repeatedly; no empty placeholder listener is introduced simply because the cohort contains fewer than seven people."
+  },
+  {
+    "name": "Background scheduler materializes spotlight notifications without a page load",
+    "viewport": "desktop",
+    "covers": [
+      "scheduled spotlight job",
+      "background notification creation",
+      "creator notification",
+      "writer notification",
+      "listener thank-you"
+    ],
+    "description": "Verifies the daily scheduled job can create the same day’s spotlight notifications even when nobody has opened the discovery page first.",
+    "steps": [
+      "Run the scheduled spotlight job for a test day with eligible Creator, Writer and Listener targets",
+      "Do not open the discovery page before the job runs",
+      "Sign in as each spotlight target and open Notifications"
+    ],
+    "expected": "Each spotlight target already has the correct daily notification before any discovery-page request occurs."
+  },
+  {
+    "name": "Scheduled spotlight materialization is protected by GitHub OIDC",
+    "viewport": "desktop",
+    "covers": [
+      "scheduled-job authentication",
+      "OIDC",
+      "internal API protection",
+      "repository-bound authorization"
+    ],
+    "description": "Verifies the background endpoint only accepts a short-lived GitHub Actions OIDC token issued for the Nightjar main branch workflow.",
+    "steps": [
+      "Call the internal spotlight scheduler endpoint without a token",
+      "Call it with an invalid token",
+      "Run the main-branch scheduled workflow with the GitHub id-token permission"
+    ],
+    "expected": "Unauthenticated and invalid requests are rejected; a valid token bound to the Nightjar repository, main branch and approved audience is accepted."
+  },
+  {
+    "name": "Repeated scheduled spotlight runs remain idempotent",
+    "viewport": "desktop",
+    "covers": [
+      "cron retry safety",
+      "notification deduplication",
+      "daily spotlight stability"
+    ],
+    "description": "Guards against duplicate notifications when the two midnight safety runs or a retried scheduled job hit the same London calendar day.",
+    "steps": [
+      "Run the spotlight scheduler twice for the same London day",
+      "Open Notifications for each spotlight target"
+    ],
+    "expected": "Each target has exactly one notification for that spotlight date and kind; retries only report already-materialized work."
   }
 ]
