@@ -1516,3 +1516,15 @@ button:focus-visible {
   .protected-reader-backdrop,.protected-reader { display:none !important; }
   body::after { content:'Protected Nightjar manuscripts cannot be printed from the in-app reader.'; display:block; padding:40px; color:#000; background:#fff; font:16px/1.5 sans-serif; }
 }
+
+
+.script-access-activity { display:grid; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line-soft); }
+.script-activity-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:8px 0; border-top:1px solid var(--line-soft); }
+.script-activity-row > div { display:grid; gap:3px; min-width:0; }
+.script-activity-row strong { font-size:8px; }
+.script-activity-row small,.script-activity-row time { color:var(--muted-2); font-size:7px; }
+.script-activity-row time { white-space:nowrap; }
+
+@media (max-width:760px) {
+  .script-activity-row { grid-template-columns:1fr; }
+}
