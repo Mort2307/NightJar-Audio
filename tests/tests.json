@@ -129,7 +129,7 @@
     "covers": [
       "protected reader",
       "security signals",
-      "dual-owner notification",
+      "all-owner notification",
       "audit trail",
       "account suspension"
     ],
@@ -140,7 +140,7 @@
       "Open Administrator",
       "Open Security / Owner Alerts"
     ],
-    "expected": "A retained security alert identifies the account/session/script signals and records both owner recipients; an administrator can suspend the account, which revokes active reader sessions."
+    "expected": "A retained security alert identifies the account/session/script signals and is addressed to all three owners. A single benign interaction does not auto-freeze the account; administrators can close it as benign, revoke reader sessions, or explicitly suspend the account."
   },
   {
     "name": "People directory represents every Nightjar account role",
@@ -530,5 +530,70 @@
       "Open the same release again"
     ],
     "expected": "The resume endpoint returns zero position for the completed release so the next listen starts from the beginning."
+  },
+  {
+    "name": "Writer can explicitly send a full script to a VA without fighting protection controls",
+    "viewport": "desktop",
+    "covers": [
+      "writer-controlled sharing",
+      "full manuscript access",
+      "copy permission",
+      "export permission",
+      "expiry",
+      "revocation"
+    ],
+    "description": "Verifies script protection serves the writer rather than preventing the writer from deliberately sharing their own work.",
+    "steps": [
+      "Open Writer Studio",
+      "Select a manuscript",
+      "Grant a VA/collaborator account full-script access",
+      "Enable copy and export",
+      "Open the manuscript as that recipient",
+      "Export the manuscript",
+      "Revoke the grant"
+    ],
+    "expected": "The authorised recipient can read, copy and export exactly as the writer allowed; the actions are logged as writer-authorised rather than suspicious extraction, and revocation invalidates active reader sessions."
+  },
+  {
+    "name": "Protected reader carries traceable session provenance without claiming screenshot detection",
+    "viewport": "mobile",
+    "covers": [
+      "session watermark",
+      "account provenance",
+      "script provenance",
+      "screenshot attribution",
+      "privacy-aware telemetry"
+    ],
+    "description": "Verifies protected manuscript views expose recoverable session provenance while avoiding unreliable browser screenshot-detection claims.",
+    "steps": [
+      "Open a protected manuscript as an authorised recipient",
+      "Inspect the repeated reader watermark",
+      "Capture a test screenshot",
+      "Compare the visible provenance with the reader session"
+    ],
+    "expected": "The screenshot contains Nightjar, reader-session and script/account provenance sufficient for investigation; Nightjar does not claim the browser detected the screenshot."
+  },
+  {
+    "name": "Security response is graduated and requires administrator judgement",
+    "viewport": "desktop",
+    "covers": [
+      "risk scoring",
+      "benign review",
+      "session revocation",
+      "account suspension",
+      "no first-signal auto-freeze",
+      "three-owner alerting"
+    ],
+    "description": "Verifies suspicious activity produces evidence and owner review controls instead of treating every blocked interaction as theft.",
+    "steps": [
+      "Generate one blocked copy interaction",
+      "Confirm no account freeze occurs",
+      "Generate a test pattern that crosses the review threshold",
+      "Open Admin Security alerts",
+      "Close one test alert as benign",
+      "Generate another qualifying alert and revoke reader sessions",
+      "Explicitly suspend the test account"
+    ],
+    "expected": "Single low-confidence signals remain evidence only. Qualifying patterns alert all three owners. Administrators can close benign activity, revoke sensitive sessions without freezing the account, or explicitly suspend after review."
   }
 ]
