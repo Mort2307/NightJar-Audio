@@ -25,8 +25,8 @@ const firebaseConfig = {
   measurementId: 'G-K9G3Y77J7F',
 };
 
-const app = getApps()[0] ?? initializeApp(firebaseConfig);
-export const firebaseAuth = getAuth(app);
+export const firebaseApp = getApps()[0] ?? initializeApp(firebaseConfig);
+export const firebaseAuth = getAuth(firebaseApp);
 void setPersistence(firebaseAuth, browserLocalPersistence);
 
 export type NightjarIdentity = {
