@@ -201,5 +201,42 @@
       "Inspect the owner security area"
     ],
     "expected": "All three approved owner accounts are represented as active Administrators, and security alerts are addressed to the same three configured owners."
+  },
+  {
+    "name": "Age verification persists on the Nightjar account",
+    "viewport": "desktop",
+    "covers": [
+      "one-time age assurance",
+      "account-level persistence",
+      "normal subsequent login",
+      "cross-device access"
+    ],
+    "description": "Verifies a completed 18+ age check is stored against the Nightjar account and is reused on later authentication without creating a new verification session.",
+    "steps": [
+      "Sign in to a fresh test account",
+      "Complete the Yoti sandbox age check",
+      "Confirm Nightjar marks the account VERIFIED",
+      "Sign out",
+      "Sign in again with the same account",
+      "Open Nightjar on another browser/device using the same account"
+    ],
+    "expected": "The account remains age verified after sign-out, subsequent sign-in and device change; Nightjar does not open a new age-verification session unless reverifyRequired is explicitly set."
+  },
+  {
+    "name": "Unverified account cannot retrieve adult catalogue content",
+    "viewport": "desktop",
+    "covers": [
+      "server-side age gate",
+      "adult catalogue protection",
+      "authorization boundary"
+    ],
+    "description": "Verifies the backend does not rely solely on the client-side age gate and blocks adult catalogue retrieval for an authenticated but unverified account.",
+    "steps": [
+      "Sign in with an authenticated test account that has not completed age verification",
+      "Call the adult catalogue endpoint",
+      "Complete age verification",
+      "Call the adult catalogue endpoint again"
+    ],
+    "expected": "The first catalogue request returns an age-verification-required response and no adult release payload; after verified state is stored, the same account can retrieve the catalogue without another verification."
   }
 ]
