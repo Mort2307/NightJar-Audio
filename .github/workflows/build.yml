@@ -27,6 +27,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
+      - name: Contract tests
+        run: npm test
       - name: Build frontend
         run: npm run build
       - name: Firebase build
