@@ -246,11 +246,10 @@ function App() {
 
   const loadLiveProductData = async () => {
     try {
-      const [catalogueResponse, creatorsResponse, spotlightResponse, notificationResponse] = await Promise.all([
+      const [catalogueResponse, creatorsResponse, spotlightResponse] = await Promise.all([
         api.get('/api/catalogue'),
         api.get('/api/creators'),
         api.get('/api/spotlights'),
-        api.get('/api/notifications'),
       ]);
       const liveTracks = (catalogueResponse.data?.catalogue ?? []).map((release: any, index: number) => ({
         id: String(release.id),
@@ -273,8 +272,6 @@ function App() {
         note: creator.headline ?? creator.bio ?? undefined,
         releases: creator.releaseCount ?? 0,
       })));
-      setNotifications(notificationResponse.data?.notifications ?? []);
-      setNotificationUnreadCount(Number(notificationResponse.data?.unreadCount ?? 0));
       const spotlights = spotlightResponse.data?.spotlights ?? [];
       const mapSpotlight = (item: any): Spotlight => ({
         kind: item.kind,
@@ -299,6 +296,7 @@ function App() {
         listenerSpotlightDay: spotlightResponse.data?.listenerSpotlightDay == null ? null : Number(spotlightResponse.data.listenerSpotlightDay),
         listenerWeek: spotlightResponse.data?.listenerWeek ?? null,
       });
+      await loadNotifications();
       if (user) {
         const [recommendationsResponse, trendingResponse, favouritesResponse, followsResponse] = await Promise.all([
           api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
@@ -324,6 +322,15 @@ function App() {
       setLiveRecommendations([]);
       setLiveTrending([]);
     }
+  };
+
+  const loadNotifications = async () => {
+    if (!auth.isSignedIn()) return;
+    try {
+      const { data } = await api.get('/api/notifications');
+      setNotifications(data?.notifications ?? []);
+      setNotificationUnreadCount(Number(data?.unreadCount ?? 0));
+    } catch { /* notifications remain non-blocking */ }
   };
 
   const markNotificationRead = async (notification: any) => {
