@@ -33,6 +33,22 @@ const readDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+const readAudioDurationMinutes = (file: File) => new Promise<number | null>((resolve) => {
+  const objectUrl = URL.createObjectURL(file);
+  const audio = document.createElement('audio');
+  audio.preload = 'metadata';
+  audio.onloadedmetadata = () => {
+    const seconds = Number(audio.duration);
+    URL.revokeObjectURL(objectUrl);
+    resolve(Number.isFinite(seconds) && seconds > 0 ? Number((seconds / 60).toFixed(1)) : null);
+  };
+  audio.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve(null);
+  };
+  audio.src = objectUrl;
+});
+
 export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify }: Props) {
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
@@ -85,8 +101,13 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (kind === 'audio') setAudioBusy(true); else setArtBusy(true);
     try {
       const dataUrl = await readDataUrl(file);
+      const durationMinutes = kind === 'audio' ? await readAudioDurationMinutes(file) : null;
       const { data } = await api.post('/api/creator/assets', { releaseId: current.id, kind, dataUrl, contentType: file.type, fileName: file.name });
-      setRelease({ audioUrl: kind === 'audio' ? data?.url ?? null : current.audioUrl, artworkUrl: kind === 'artwork' ? data?.url ?? null : current.artworkUrl });
+      setRelease({
+        audioUrl: kind === 'audio' ? data?.url ?? null : current.audioUrl,
+        artworkUrl: kind === 'artwork' ? data?.url ?? null : current.artworkUrl,
+        ...(durationMinutes ? { durationMinutes } : {}),
+      });
       await onRefresh();
       notify(kind === 'audio' ? 'Audio attached to the release.' : 'Artwork attached to the release.');
     } catch { notify(kind === 'audio' ? 'Audio upload failed.' : 'Artwork upload failed.'); }
