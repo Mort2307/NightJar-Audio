@@ -1043,13 +1043,14 @@ export const handler = router({
     requireAuth(),
     async (ctx) => {
       if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
-      const body = (ctx.body ?? {}) as { eventType?: string; relatedType?: string; relatedId?: string; severity?: string; summary?: string; sessionId?: string };
-      const allowed = new Set(['script_view','copy_blocked','cut_blocked','paste_blocked','contextmenu_blocked','selection_blocked','drag_blocked','print_blocked','export_requested','export_completed','permission_changed','script_access_requested','report_submitted','blocked_interaction','repeated_protected_interaction']);
+      const body = (ctx.body ?? {}) as { eventType?: string; relatedType?: string; relatedId?: string; severity?: string; summary?: string; sessionId?: string; deviceId?: string };
+      const allowed = new Set(['script_view','reader_chunk_view','copy_blocked','cut_blocked','paste_blocked','contextmenu_blocked','selection_blocked','drag_blocked','print_blocked','export_blocked','writer_authorised_copy','writer_authorised_export','export_requested','export_completed','permission_changed','script_access_requested','report_submitted','blocked_interaction','repeated_protected_interaction','automation_pattern','reader_session_replay']);
       if (!body.eventType || !allowed.has(body.eventType)) return error('Unsupported protection event.',400);
-      const record={eventType:body.eventType,severity:body.severity==='high'||body.severity==='medium'?body.severity:'low',relatedType:body.relatedType??null,relatedId:body.relatedId??null,sessionId:body.sessionId??null,summary:(body.summary??'Protected interaction recorded.').slice(0,300),actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()};
+      const deviceId=String(body.deviceId??'').trim().slice(0,100) || null;
+      const record={eventType:body.eventType,severity:body.severity==='high'||body.severity==='medium'?body.severity:'low',relatedType:body.relatedType??null,relatedId:body.relatedId??null,sessionId:body.sessionId??null,deviceId,summary:(body.summary??'Protected interaction recorded.').slice(0,300),actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()};
       const [id]=await db.add('nightjar_evidence_'+ctx.user!.userId,[record]);
       await db.add(securityEventTable,[{userId:ctx.user!.userId,...record}]);
-      const alert=await assessProtectedActivity(ctx.user!.userId,{eventType:body.eventType,relatedId:body.relatedId,sessionId:body.sessionId});
+      const alert=await assessProtectedActivity(ctx.user!.userId,{eventType:body.eventType,relatedId:body.relatedId,sessionId:body.sessionId,deviceId});
       return json({recorded:Boolean(id),eventId:id??null,suspicious:Boolean(alert),alertId:alert?.id??null});
     },
   ],
@@ -1128,7 +1129,7 @@ export const handler = router({
       await db.add(readerSessionTable(ctx.user!.userId),[session]);
       await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'script_view',relatedId:ctx.params.scriptId,sessionId,createdAt:new Date().toISOString()}]);
       await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'script_view',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,sessionId,summary:'Authorised full script view opened in a short-lived protected reader session.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
-      return json({script,canReadFull:true,copyAllowed:session.allowCopy,exportAllowed:session.allowExport,readerSession:{sessionId,expiresAt}});
+      return json({script,canReadFull:true,copyAllowed:session.allowCopy,exportAllowed:session.allowExport,readerSession:{sessionId,expiresAt,accountId:ctx.user!.userId}});
     },
   ],
   'POST /api/scripts/:scriptId/request-access': [
