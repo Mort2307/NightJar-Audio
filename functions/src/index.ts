@@ -281,7 +281,8 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
 };
 
 export const listCreators = onCall({ region: REGION }, async (request) => {
-  await requireActiveIdentity(request);
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
   const accounts = await db.collection('accounts').where('role', '==', 'creator').limit(200).get();
   const creators = (await Promise.all(
     accounts.docs
@@ -298,7 +299,8 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
 });
 
 export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
-  await requireActiveIdentity(request);
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
   const creatorUserId = cleanText((request.data as { userId?: unknown } | undefined)?.userId, 128);
   if (!creatorUserId) throw new HttpsError('invalid-argument', 'Creator account is required.');
 
@@ -336,7 +338,8 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
 });
 
 export const listWriters = onCall({ region: REGION }, async (request) => {
-  await requireActiveIdentity(request);
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
   const accounts = await db.collection('accounts').where('role', '==', 'writer').limit(200).get();
   const writers = (await Promise.all(
     accounts.docs
@@ -645,6 +648,9 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
   if (!assetId || !['approved', 'rejected'].includes(decision)) {
     throw new HttpsError('invalid-argument', 'Choose an image and a moderation decision.');
   }
+  if (decision === 'approved' && input.safetyConfirmed !== true) {
+    throw new HttpsError('failed-precondition', 'Administrator image-safety review must be explicitly confirmed before approval.');
+  }
 
   const ref = db.collection('imageAssets').doc(assetId);
   const snapshot = await ref.get();
@@ -697,6 +703,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
     moderationNote: note || null,
     reviewedBy: admin.uid,
     moderationPolicy: 'no-explicit-imagery-v1',
+    safetyConfirmed: true,
     reviewedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
@@ -1166,7 +1173,8 @@ const materializeSpotlightNotification = async (item: any, date: string) => {
 };
 
 export const spotlightState = onCall({ region: REGION }, async (request) => {
-  await requireActiveIdentity(request);
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
   const date = londonDateKey();
   const [creator, writer, editor, listenerState] = await Promise.all([
     spotlightForRole('creator', date),
@@ -1386,7 +1394,8 @@ const releaseSearchText = (data: Record<string, unknown>) => [
 ].filter(Boolean).join(' ').toLowerCase();
 
 export const listCatalogue = onCall({ region: REGION }, async (request) => {
-  await requireActiveIdentity(request);
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
   const input = (request.data ?? {}) as { q?: unknown; category?: unknown };
   const query = cleanText(input.q, 120).toLowerCase();
   const category = cleanText(input.category, 80).toLowerCase();
@@ -1788,6 +1797,7 @@ export const tasteProfile = onCall({ region: REGION }, async (request) => {
 
 export const recommendations = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
   const input = (request.data ?? {}) as { intent?: unknown };
   const intent = cleanText(input.intent, 120).toLowerCase();
 
@@ -1846,7 +1856,8 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
 });
 
 export const trendingReleases = onCall({ region: REGION }, async (request) => {
-  await requireActiveIdentity(request);
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
   const [releasesSnapshot, listeningSnapshot] = await Promise.all([
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
     db.collection('listeningEvents').limit(5000).get(),
