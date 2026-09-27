@@ -1102,7 +1102,7 @@ export const handler = router({
       const { items: assignments } = await db.list('nightjar_editor_assignments', { limit: 500 });
       const openAssignments = assignments.filter((item) => item.status !== 'closed');
       const ids = (isAdmin(ctx.user!.email) ? openAssignments : openAssignments.filter((item) => item.editorUserId === ctx.user!.userId)).map((item) => item.scriptId);
-      return json({ queue: scripts.filter((script) => ids.includes(script.id)) });
+      return json({ queue: scripts.filter((script) => ids.includes(script.id)).map((script) => ({ ...publicScriptMetadata(script), lastEditorialComment: script.lastEditorialComment ?? null, editorUserId: script.editorUserId ?? null })) });
     },
   ],
   'GET /api/editor/accounts': [
@@ -1131,7 +1131,10 @@ export const handler = router({
         const mine = assignments.filter((item) => item.editorUserId === ctx.user!.userId && item.scriptId === script.id && item.status !== 'closed');
         if (mine.length) await db.update('nightjar_editor_assignments', mine.map((item) => ({ id: item.id, record: { ...item, status: 'closed', closedAt: now, closedReason: body.status } })));
       }
-      return json({ script: next });
+      if (body.status === 'Approved' || body.status === 'Rejected') {
+        await revokeReaderSessionsForScript(ctx.user!.userId, script.id, 'Editorial assignment closed.');
+      }
+      return json({ script: { ...publicScriptMetadata(next), lastEditorialComment: next.lastEditorialComment ?? null, editorUserId: next.editorUserId ?? null } });
     },
   ],
   'GET /api/account/identity': [
