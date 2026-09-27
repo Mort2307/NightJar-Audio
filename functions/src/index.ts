@@ -464,15 +464,34 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   await db.collection('imageAssets').doc(assetId).set(record);
 
   if (kind === 'profile_avatar') {
+    const existingProfile = await profileRef(identity.uid).get();
+    const previousPendingId = cleanText(existingProfile.data()?.pendingAvatarAssetId, 160);
+    if (previousPendingId && previousPendingId !== assetId) {
+      const previousPending = await db.collection('imageAssets').doc(previousPendingId).get();
+      if (previousPending.exists && previousPending.data()?.status === 'pending') {
+        await clearAssetFile(previousPending.data() ?? {});
+        await previousPending.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+    }
     await profileRef(identity.uid).set({
       pendingAvatarAssetId: assetId,
-      avatarStatus: 'pending',
+      pendingAvatarStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
   } else if (kind === 'brand_logo') {
-    await db.collection('settings').doc('branding').set({
+    const brandingRef = db.collection('settings').doc('branding');
+    const existingBranding = await brandingRef.get();
+    const previousPendingId = cleanText(existingBranding.data()?.pendingLogoAssetId, 160);
+    if (previousPendingId && previousPendingId !== assetId) {
+      const previousPending = await db.collection('imageAssets').doc(previousPendingId).get();
+      if (previousPending.exists && previousPending.data()?.status === 'pending') {
+        await clearAssetFile(previousPending.data() ?? {});
+        await previousPending.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+    }
+    await brandingRef.set({
       pendingLogoAssetId: assetId,
-      logoStatus: 'pending',
+      pendingLogoStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
   }
@@ -577,13 +596,13 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
     if (asset.kind === 'profile_avatar') {
       await profileRef(String(asset.ownerUserId)).set({
         pendingAvatarAssetId: null,
-        avatarStatus: 'rejected',
+        pendingAvatarStatus: 'rejected',
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     } else if (asset.kind === 'brand_logo') {
       await db.collection('settings').doc('branding').set({
         pendingLogoAssetId: null,
-        logoStatus: 'rejected',
+        pendingLogoStatus: 'rejected',
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }
@@ -609,6 +628,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       avatarUrl: url,
       avatarStatus: 'approved',
       pendingAvatarAssetId: null,
+      pendingAvatarStatus: null,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     if (previousAssetId && previousAssetId !== assetId) {
@@ -627,6 +647,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       logoUrl: url,
       logoStatus: 'approved',
       pendingLogoAssetId: null,
+      pendingLogoStatus: null,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     if (previousAssetId && previousAssetId !== assetId) {
@@ -723,6 +744,7 @@ export const removeProfileAvatar = onCall({ region: REGION }, async (request) =>
     avatarUrl: null,
     avatarStatus: null,
     pendingAvatarAssetId: null,
+    pendingAvatarStatus: null,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   return { removed: true };
@@ -757,6 +779,7 @@ export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
     logoUrl: null,
     logoStatus: null,
     pendingLogoAssetId: null,
+    pendingLogoStatus: null,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   return { removed: true };
