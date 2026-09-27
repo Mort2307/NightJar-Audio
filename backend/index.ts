@@ -580,10 +580,17 @@ export const handler = router({
       for (const release of candidates) {
         const creatorId = String(release.creatorUserId ?? 'unknown');
         const count = creatorCounts.get(creatorId) ?? 0;
-        if (count >= 2 && candidates.some((item) => String(item.creatorUserId ?? 'unknown') !== creatorId && !recommendations.includes(item))) continue;
+        if (count >= 2) continue;
         recommendations.push(release);
         creatorCounts.set(creatorId, count + 1);
         if (recommendations.length >= 24) break;
+      }
+      if (recommendations.length < 24) {
+        for (const release of candidates) {
+          if (recommendations.some((item) => item.id === release.id)) continue;
+          recommendations.push(release);
+          if (recommendations.length >= 24) break;
+        }
       }
       return json({ recommendations });
     },
