@@ -128,6 +128,8 @@ const isSuspended = async (userId: string) => { const { items } = await db.list(
 const securityTokenHash = (prefix: string, value: unknown) => createHash('sha256').update(prefix + ':' + String(value ?? ''), 'utf8').digest('hex');
 const pageForensicToken = (userId: string, scriptId: string, sessionId: string, page: number, issuedAt: unknown) =>
   securityTokenHash('nightjar-forensic', [userId, scriptId, sessionId, page, String(issuedAt ?? '')].join('|')).slice(0, 16).toUpperCase();
+const exportForensicToken = (userId: string, scriptId: string, sessionId: string, exportedAt: unknown) =>
+  securityTokenHash('nightjar-export-forensic', [userId, scriptId, sessionId, String(exportedAt ?? '')].join('|')).slice(0, 16).toUpperCase();
 const normalizeDeviceToken = (value: unknown) => String(value ?? '').trim().slice(0, 160);
 const normalizeEnvironmentToken = (value: unknown) => String(value ?? '').trim().toLowerCase().replace(/[^a-f0-9]/g, '').slice(0, 128);
 
@@ -1781,23 +1783,26 @@ export const handler = router({
       const profile = await getProfile(ctx.user!.userId);
       const recipient = String(profile?.displayName ?? ctx.user!.name ?? 'Nightjar recipient').slice(0, 80);
       const hash = script.contentHash ?? scriptContentHash(script.content ?? '');
+      const createdAt = new Date().toISOString();
+      const forensicToken = exportForensicToken(ctx.user!.userId, ctx.params.scriptId, sessionId, createdAt);
       const exportText = [
         String(script.title ?? 'Untitled manuscript'),
         'Nightjar protected export',
         'Recipient: ' + recipient,
         'Session: ' + sessionId,
+        'Forensic FP: ' + forensicToken,
         'Version: ' + String(script.version ?? 1),
         'SHA-256: ' + hash,
         '',
         String(script.content ?? ''),
         '',
         '---',
+        'Nightjar handoff FP: ' + forensicToken,
         'This copy was explicitly exported under writer-controlled permission. Nightjar access and export events are logged.',
         'No AI training, dataset ingestion, automated extraction or redistribution is authorised by this export unless the writer separately grants that permission in writing.',
       ].join('\n');
 
-      const createdAt = new Date().toISOString();
-      const signal = { userId: ctx.user!.userId, eventType: 'script_export', relatedId: ctx.params.scriptId, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, createdAt };
+      const signal = { userId: ctx.user!.userId, eventType: 'script_export', relatedId: ctx.params.scriptId, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, forensicToken, createdAt };
       await db.add(securityEventTable, [signal]);
       await assessProtectedActivity(ctx.user!.userId, signal);
       await db.add('nightjar_evidence_' + ctx.user!.userId, [{
@@ -1806,6 +1811,9 @@ export const handler = router({
         relatedType: 'script',
         relatedId: ctx.params.scriptId,
         sessionId,
+        deviceHash: session.deviceHash ?? null,
+        environmentHash: session.environmentHash ?? null,
+        forensicToken,
         summary: 'Full manuscript exported under explicit writer-granted export permission.',
         actorUserId: ctx.user!.userId,
         createdAt,
@@ -1817,6 +1825,9 @@ export const handler = router({
           relatedType: 'script',
           relatedId: ctx.params.scriptId,
           sessionId,
+          deviceHash: session.deviceHash ?? null,
+          environmentHash: session.environmentHash ?? null,
+          forensicToken,
           summary: recipient + ' exported the full manuscript under the writer’s explicit handoff permission.',
           actorUserId: ctx.user!.userId,
           createdAt,
@@ -1836,6 +1847,7 @@ export const handler = router({
         content: exportText,
         contentHash: hash,
         watermark: session.watermark ?? null,
+        forensicToken,
       });
     },
   ],
