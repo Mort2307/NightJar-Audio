@@ -679,6 +679,19 @@ export const handler = router({
   'POST /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.releaseId === ctx.params.releaseId)) await db.add(favouriteTable(ctx.user!.userId), [{ releaseId: ctx.params.releaseId, createdAt: new Date().toISOString() }]); return json({ favourite: true }); }],
   'DELETE /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.releaseId === ctx.params.releaseId).map((item) => item.id); if (ids.length) await db.delete(favouriteTable(ctx.user!.userId), ids); return json({ favourite: false }); }],
   'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 }); return json({ follows: items }); }],
+  'GET /api/following': [requireAuth(), async (ctx) => {
+    const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    const targetIds = Array.from(new Set(follows.map((item) => String(item.profileUserId ?? item.creatorUserId ?? '')).filter(Boolean)));
+    const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
+    const profiles = await Promise.all(targetIds.map(async (userId) => {
+      const account = accounts.find((item) => String(item.userId) === userId);
+      if (!account || account.status === 'suspended') return { userId, role: account?.role ?? null, name: 'Unavailable Nightjar profile', handle: null, headline: null, publicProfile: false };
+      const profile = await getProfile(userId);
+      if (!profile || profile.publicProfile === false) return { userId, role: account.role, name: 'Private Nightjar profile', handle: null, headline: null, publicProfile: false };
+      return { userId, role: account.role, name: profile.displayName ?? account.name ?? 'Nightjar member', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, publicProfile: true };
+    }));
+    return json({ profiles });
+  }],
   'POST /api/follows/:profileUserId': [requireAuth(), async (ctx) => {
     const profileUserId = String(ctx.params.profileUserId ?? '');
     if (!profileUserId || profileUserId === ctx.user!.userId) return error('Choose another Nightjar profile to follow.', 400);
