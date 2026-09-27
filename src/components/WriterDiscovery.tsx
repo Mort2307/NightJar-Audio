@@ -34,7 +34,7 @@ export default function WriterDiscovery({ notify }: Props) {
   }, []);
 
   const share = async (writer: Writer) => {
-    const url = window.location.origin + '/writers/' + encodeURIComponent(writer.handle || writer.userId);
+    const url = window.location.origin + '/discover#writer-discovery-title';
     const text = 'Meet ' + writer.name + ' on Nightjar — a writer creating work for immersive audio.';
     try {
       if (navigator.share) await navigator.share({ title: 'Nightjar · ' + writer.name, text, url });
