@@ -785,5 +785,43 @@
       "Use administrator actions to close benign, revoke sessions or explicitly suspend"
     ],
     "expected": "Scores below 40 do not alert. Qualifying alerts use Medium/High/Critical thresholds, retain automaticAction none and reviewRequired true, and no account is automatically frozen."
+  },
+  {
+    "name": "Public profiles can be followed independently across roles",
+    "viewport": "mobile",
+    "covers": [
+      "Creator follow",
+      "Writer follow",
+      "Audio Editor follow",
+      "Listener follow",
+      "Firestore relationships"
+    ],
+    "description": "Ensures following one profile never replaces another and support is not limited to Creators.",
+    "steps": [
+      "Follow two Creators, a Writer, an Audio Editor and an identifiable public Listener",
+      "Reload the app",
+      "Unfollow one profile",
+      "Reload again"
+    ],
+    "expected": "All follows persist independently under the verified account, only the chosen profile is removed on unfollow, self/private/admin profiles cannot be followed, and target follower counts change exactly once per relationship transition."
+  },
+  {
+    "name": "Verified listening is consistent across creator metrics and spotlight ranking",
+    "viewport": "desktop",
+    "covers": [
+      "listening progress",
+      "Creator Studio",
+      "listening share",
+      "Listener Spotlight",
+      "anti-inflation"
+    ],
+    "description": "Prevents cumulative player positions, seek jumps or rapid event spam from inflating listening attribution.",
+    "steps": [
+      "Record normal start and progress events over elapsed time",
+      "Record a large seek jump",
+      "Record several rapid progress events",
+      "Inspect Creator Studio verified listening, creator listening share and weekly Listener Spotlight totals"
+    ],
+    "expected": "Only bounded forward progress earns credit, credit is limited by elapsed time plus tolerance and per-event ceiling, and all three product surfaces use the same server calculation."
   }
 ]
