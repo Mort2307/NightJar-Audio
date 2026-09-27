@@ -15,6 +15,7 @@ export default function ScriptAccessManager({ scriptId, notify }: Props) {
   const [grants, setGrants] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [recipients, setRecipients] = useState<any[]>([]);
+  const [activity, setActivity] = useState<any[]>([]);
   const [recipientUserId, setRecipientUserId] = useState('');
   const [mode, setMode] = useState<AccessMode>('read');
   const [expiresAt, setExpiresAt] = useState('');
@@ -29,6 +30,7 @@ export default function ScriptAccessManager({ scriptId, notify }: Props) {
       setGrants(data?.grants ?? []);
       setRequests(data?.pendingRequests ?? []);
       setRecipients(data?.eligibleRecipients ?? []);
+      setActivity(data?.recentActivity ?? []);
     } catch {
       notify('Script access controls could not be loaded.');
     }
@@ -94,5 +96,13 @@ export default function ScriptAccessManager({ scriptId, notify }: Props) {
     {!!requests.length && <div className="script-access-requests"><span className="mini-label">PENDING REQUESTS</span>{requests.map((request) => <div className="script-access-row" key={request.id}><div><strong>{request.requesterName}</strong><small>{request.requesterRole || 'Nightjar account'} requested access</small></div><div className="script-access-row-actions"><button disabled={busy} onClick={() => void grant(request.requesterUserId, 'read')}>Read only</button><button disabled={busy} onClick={() => void grant(request.requesterUserId, 'copy')}>Allow copy</button><button disabled={busy} onClick={() => void grant(request.requesterUserId, 'export')}>Full handoff</button></div></div>)}</div>}
 
     <div className="script-access-grants"><span className="mini-label">CURRENT ACCESS</span>{activeGrants.length ? activeGrants.map((grant) => <div className="script-access-row" key={grant.id ?? grant.recipientUserId}><div><strong>{grant.recipientName}</strong><small>{modeLabel(grant)}{grant.expiresAt ? ' · expires ' + new Date(grant.expiresAt).toLocaleString('en-GB') : ' · no expiry'}</small></div><button className="ghost-button with-icon" disabled={busy} onClick={() => void revoke(grant.recipientUserId)}><Trash2 size={13}/> Revoke</button></div>) : <div className="script-access-empty">Nobody else currently has access to this manuscript.</div>}</div>
+
+    <div className="script-access-activity">
+      <span className="mini-label">RECENT ACCESS ACTIVITY</span>
+      {activity.length ? activity.slice(0, 16).map((item) => <div className="script-activity-row" key={item.id ?? String(item.sessionId) + String(item.createdAt)}>
+        <div><strong>{item.actorName || 'Nightjar account'}</strong><small>{item.eventType === 'script_export' ? 'Exported the full script' : item.eventType === 'script_page_view' ? 'Viewed protected page' + (item.page != null ? ' ' + (Number(item.page) + 1) : '') : 'Opened a protected reader session'}</small></div>
+        <time>{item.createdAt ? new Date(item.createdAt).toLocaleString('en-GB') : 'Recorded'}</time>
+      </div>) : <div className="script-access-empty">No protected-reader activity has been recorded yet.</div>}
+    </div>
   </section>;
 }
