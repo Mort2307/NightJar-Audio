@@ -20,6 +20,7 @@ const readerSessionTable = (userId: string) => `nightjar_reader_sessions_${userI
 const securityAlertTable = 'nightjar_security_alerts';
 const securityEventTable = 'nightjar_security_events';
 const securityCaseTable = 'nightjar_security_cases';
+const securityDeviceTable = 'nightjar_security_devices';
 const ownerNotificationTable = (email: string) => `nightjar_owner_notifications_${normalizeEmail(email).replace(/[^a-z0-9]/g, '_')}`;
 const userNotificationTable = (userId: string) => `nightjar_notifications_${userId}`;
 
@@ -123,7 +124,12 @@ const ensureFollowIndexForUser = async (userId: string) => {
   if (missing.length) await db.add(followIndexTable, missing);
   return follows;
 };
-const isSuspended = async (userId: string) => { const { items } = await db.list(accountTable(userId), { limit: 1 }); return items[0]?.status === 'suspended'; };
+const isSuspended = async (userId: string) => { const { items } = await db.list(accountTable(userId), { limit: 1 }); return items[0]?.status === 'suspended' || items[0]?.removed === true; };
+const securityTokenHash = (prefix: string, value: unknown) => createHash('sha256').update(prefix + ':' + String(value ?? ''), 'utf8').digest('hex');
+const pageForensicToken = (userId: string, scriptId: string, sessionId: string, page: number, issuedAt: unknown) =>
+  securityTokenHash('nightjar-forensic', [userId, scriptId, sessionId, page, String(issuedAt ?? '')].join('|')).slice(0, 16).toUpperCase();
+const normalizeDeviceToken = (value: unknown) => String(value ?? '').trim().slice(0, 160);
+
 const revokeReaderSessions = async (userId: string, reason: string) => { const { items } = await db.list(readerSessionTable(userId), { limit: 500 }); const now = new Date().toISOString(); const updates = items.filter((item) => item.status === 'active').map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } })); if (updates.length) await db.update(readerSessionTable(userId), updates); };
 const revokeReaderSessionsForScript = async (userId: string, scriptId: string, reason: string) => {
   const { items } = await db.list(readerSessionTable(userId), { limit: 500 });
@@ -149,7 +155,41 @@ const readerSessionStillAuthorized = async (userId: string, script: any, session
   );
 };
 const createOwnerSecurityNotifications = async (alert: Record<string, unknown>) => { for (const email of ADMIN_EMAILS) await db.add(ownerNotificationTable(email), [{ type:'security_alert', alertId:alert.id??null, severity:alert.severity??'high', title:'Nightjar security alert', message:alert.reason??'Suspicious protected-content activity detected.', createdAt:new Date().toISOString(), read:false, recipientEmail:normalizeEmail(email) }]); };
-const createSecurityAlert = async (userId: string, details: Record<string, unknown>) => { const now=new Date().toISOString(); const recipients=ADMIN_EMAILS.map(normalizeEmail); const [id]=await db.add(securityAlertTable,[{userId,...details,recipients,createdAt:now,status:'open'}]); const alert={id:id??null,userId,...details,recipients,createdAt:now,status:'open'}; await createOwnerSecurityNotifications(alert); await db.add(securityCaseTable,[{alertId:id??null,userId,state:'detection',history:[{state:'detection',at:now,note:'Suspicious activity detected; alert sent to all three Nightjar owners.'}],createdAt:now,updatedAt:now}]); return alert; };
+const createSecurityAlert = async (userId: string, details: Record<string, unknown>) => {
+  const now = new Date().toISOString();
+  const recipients = ADMIN_EMAILS.map(normalizeEmail);
+  const record = { userId, ...details, recipients, createdAt: now, status: 'open', automaticAccountFreeze: false };
+  const [id] = await db.add(securityAlertTable, [record]);
+  const alert = { id: id ?? null, ...record };
+  await createOwnerSecurityNotifications(alert);
+  await db.add(securityCaseTable, [{
+    alertId: id ?? null,
+    userId,
+    state: 'detection',
+    history: [{ state: 'detection', at: now, note: 'Suspicious activity detected; alert sent to all approved Nightjar administrators. No automatic account freeze was applied.' }],
+    createdAt: now,
+    updatedAt: now,
+  }]);
+  return alert;
+};
+const registerProtectedDevice = async (userId: string, deviceToken: unknown, relatedId?: string | null) => {
+  const token = normalizeDeviceToken(deviceToken);
+  if (!token) return { deviceHash: null as string | null, blocked: false, linkedSuspendedUserIds: [] as string[] };
+  const deviceHash = securityTokenHash('nightjar-device', token);
+  const now = new Date().toISOString();
+  const { items: devices } = await db.list(securityDeviceTable, { limit: 5000 });
+  const sameDevice = devices.filter((item) => String(item.deviceHash ?? '') === deviceHash);
+  const blocked = sameDevice.some((item) => item.blocked === true);
+  const linkedUserIds = Array.from(new Set(sameDevice.map((item) => String(item.userId ?? '')).filter(Boolean)));
+  const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
+  const linkedSuspendedUserIds = linkedUserIds.filter((id) => accounts.some((account) => String(account.userId) === id && (account.status === 'suspended' || account.removed === true)));
+  const current = sameDevice.find((item) => String(item.userId) === userId);
+  const record = { deviceHash, userId, firstSeenAt: current?.firstSeenAt ?? now, lastSeenAt: now, blocked: current?.blocked === true, relatedId: relatedId ?? current?.relatedId ?? null };
+  if (current?.id) await db.update(securityDeviceTable, [{ id: current.id, record: { ...current, ...record } }]);
+  else await db.add(securityDeviceTable, [record]);
+  return { deviceHash, blocked, linkedSuspendedUserIds };
+};
+
 const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => { const now=Date.now(); const {items}=await db.list(securityEventTable,{limit:500}); const recent=items.filter((item)=>item.userId===userId && now-new Date(item.createdAt??0).getTime()<60000); const scriptId=String(signal.relatedId??''); const sameScriptRecent=recent.filter((item)=>String(item.relatedId??'')===scriptId); const score=(recent.length>=40?35:recent.length>=20?20:0)+(sameScriptRecent.length>=25?40:sameScriptRecent.length>=12?25:0)+(signal.eventType==='script_view'&&sameScriptRecent.length>=8?20:0)+(signal.eventType==='blocked_interaction'?8:0); if(score<50)return null; const existing=await db.list(securityAlertTable,{limit:100}); if(existing.items.some((item)=>item.userId===userId&&item.status==='open'&&now-new Date(item.createdAt??0).getTime()<600000))return null; return createSecurityAlert(userId,{severity:score>=75?'critical':'high',riskScore:score,reason:`Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,relatedId:scriptId||null,signal:{eventType:signal.eventType,recentEvents:recent.length,relatedEvents:sameScriptRecent.length}}); };
 const enforceProtectedPageRate = async (userId: string, scriptId: string, sessionId: string) => {
   const now = Date.now();
