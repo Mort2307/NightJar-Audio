@@ -177,6 +177,22 @@ const validateHandle = (value: string) => {
 
 const profileRef = (uid: string) => db.collection('profiles').doc(uid);
 
+const accountPresentation = async (uid: string) => {
+  const [profileSnapshot, accountSnapshot] = await Promise.all([
+    profileRef(uid).get(),
+    accountRef(uid).get(),
+  ]);
+  const profile = profileSnapshot.data() ?? {};
+  const account = accountSnapshot.data() ?? {};
+  const email = cleanEmail(account.email);
+  const displayName = cleanText(profile.displayName, 80)
+    || cleanText(account.displayName, 80)
+    || (email ? email.split('@')[0] : '')
+    || 'Nightjar account';
+  const handle = cleanHandle(profile.handle) || null;
+  return { displayName, handle, email: email || null };
+};
+
 export const getMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const snapshot = await profileRef(identity.uid).get();
@@ -2739,9 +2755,45 @@ export const listProtectionEvidence = onCall({ region: REGION }, async (request)
 
 export const listProtectionReports = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  const snapshot = await db.collection('protectionReports').where('userId', '==', identity.uid).limit(500).get();
+  const [snapshot, presenter] = await Promise.all([
+    db.collection('protectionReports').where('userId', '==', identity.uid).limit(500).get(),
+    accountPresentation(identity.uid),
+  ]);
   const reports = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
+    .map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+      reporterName: doc.data().reporterName ?? presenter.displayName,
+      reporterHandle: doc.data().reporterHandle ?? presenter.handle,
+      createdAt: toIso(doc.data().createdAt),
+    }))
+    .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return { reports };
+});
+
+export const listAdminProtectionReports = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('protectionReports').limit(1000).get();
+  const userIds = Array.from(new Set(snapshot.docs.map((doc) => cleanText(doc.data().userId, 160)).filter(Boolean)));
+  const presentations = new Map<string, Awaited<ReturnType<typeof accountPresentation>>>();
+  await Promise.all(userIds.map(async (userId) => {
+    presentations.set(userId, await accountPresentation(userId));
+  }));
+  const reports = snapshot.docs
+    .map((doc) => {
+      const data = doc.data();
+      const userId = cleanText(data.userId, 160);
+      const presenter = presentations.get(userId);
+      return {
+        id: doc.id,
+        ...data,
+        reporterName: data.reporterName ?? presenter?.displayName ?? 'Nightjar account',
+        reporterHandle: data.reporterHandle ?? presenter?.handle ?? null,
+        reporterEmail: data.reporterEmail ?? presenter?.email ?? null,
+        createdAt: toIso(data.createdAt),
+        updatedAt: toIso(data.updatedAt),
+      };
+    })
     .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
   return { reports };
 });
@@ -2764,10 +2816,14 @@ export const submitProtectionReport = onCall({ region: REGION }, async (request)
   });
 
   const caseId = `NJ-${year}-${String(sequence).padStart(6, '0')}`;
+  const presenter = await accountPresentation(identity.uid);
   const ref = db.collection('protectionReports').doc();
   await ref.set({
     caseId,
     userId: identity.uid,
+    reporterName: presenter.displayName,
+    reporterHandle: presenter.handle,
+    reporterEmail: presenter.email,
     category,
     summary,
     status: 'New',
@@ -2780,6 +2836,8 @@ export const submitProtectionReport = onCall({ region: REGION }, async (request)
       id: ref.id,
       caseId,
       userId: identity.uid,
+      reporterName: presenter.displayName,
+      reporterHandle: presenter.handle,
       category,
       summary,
       status: 'New',
@@ -2791,8 +2849,25 @@ export const submitProtectionReport = onCall({ region: REGION }, async (request)
 export const listSecurityAlerts = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('securityAlerts').limit(500).get();
+  const userIds = Array.from(new Set(snapshot.docs.map((doc) => cleanText(doc.data().userId, 160)).filter(Boolean)));
+  const presentations = new Map<string, Awaited<ReturnType<typeof accountPresentation>>>();
+  await Promise.all(userIds.map(async (userId) => {
+    presentations.set(userId, await accountPresentation(userId));
+  }));
   const alerts = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
+    .map((doc) => {
+      const data = doc.data();
+      const userId = cleanText(data.userId, 160);
+      const presenter = presentations.get(userId);
+      return {
+        id: doc.id,
+        ...data,
+        userName: presenter?.displayName ?? 'Nightjar account',
+        userHandle: presenter?.handle ?? null,
+        userEmail: presenter?.email ?? null,
+        createdAt: toIso(data.createdAt),
+      };
+    })
     .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
   return { alerts };
 });
