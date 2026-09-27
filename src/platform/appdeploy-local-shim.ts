@@ -274,29 +274,50 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const account = requireUser(state);
     const profile = ensureProfile(state, account);
     const liked = new Map<string, number>();
-    for (const tag of [...(profile.favouriteTags ?? []), ...(profile.favouriteTropes ?? []), ...(profile.favouriteCategories ?? [])]) {
-      const key = String(tag).toLowerCase();
-      liked.set(key, (liked.get(key) ?? 0) + 5);
-    }
+    const suppressed = new Set<string>();
+    const add = (value: unknown, amount: number) => { const key = String(value ?? '').trim().toLowerCase(); if (key) liked.set(key, (liked.get(key) ?? 0) + amount); };
+    for (const tag of [...(profile.favouriteTags ?? []), ...(profile.favouriteTropes ?? []), ...(profile.favouriteCategories ?? [])]) add(tag, 5);
     for (const event of state.taste[account.userId] ?? []) {
-      const factor = event.type === 'skip' || event.type === 'hide' ? -1 : 1;
-      for (const tag of [...(event.tags ?? []), ...(event.category ? [event.category] : [])]) {
-        const key = String(tag).toLowerCase();
-        liked.set(key, (liked.get(key) ?? 0) + factor);
-      }
+      if (event.type === 'declared_preferences') continue;
+      const factor = event.type === 'recommendation_more' ? 4 : event.type === 'complete' ? 3 : event.type === 'replay' ? 2 : event.type === 'start' ? 0.5 : event.type === 'skip' || event.type === 'hide' || event.type === 'recommendation_less' ? -2 : 0;
+      if (event.type === 'recommendation_not_for_me' && event.contentId) suppressed.add(String(event.contentId));
+      if (!factor) continue;
+      for (const tag of [...(event.tags ?? []), ...(event.category ? [event.category] : []), ...(event.genre ? [event.genre] : []), ...(event.mood ? [event.mood] : [])]) add(tag, factor);
     }
     const intent = q.get('intent') ?? '';
     const following = new Set(state.follows[account.userId] ?? []);
-    const recommendations = state.releases.filter((release) => release.status === 'released').map((release) => {
+    const candidates = state.releases.filter((release) => release.status === 'released' && !suppressed.has(String(release.id))).map((release) => {
       const values = [release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].filter(Boolean).map(String);
       let score = 0;
       values.forEach((value) => { score += liked.get(value.toLowerCase()) ?? 0; });
       if (release.creatorUserId && following.has(release.creatorUserId)) score += 8;
       if (intent && values.some((value) => value.toLowerCase().includes(intent.toLowerCase()))) score += 4;
       const matches = values.filter((value) => (liked.get(value.toLowerCase()) ?? 0) > 0).slice(0, 3);
-      return { ...release, score, reason: matches.length ? 'Because you chose ' + matches.join(', ') + '.' : following.has(release.creatorUserId) ? 'From a creator you follow.' : 'A new release for your current discovery context.' };
-    }).sort((a, b) => b.score - a.score).slice(0, 24);
-    return send({ recommendations, model: { declaredWeight: 5, observedWeight: 1, socialWeight: 8, intentWeight: 4 } });
+      return { ...release, score, reason: matches.length ? 'Because you explicitly expressed interest in ' + matches.join(', ') + '.' : following.has(release.creatorUserId) ? 'From a creator you follow.' : 'A release matching your current discovery context.' };
+    }).sort((a, b) => b.score - a.score);
+    const recommendations: any[] = [];
+    const creatorCounts = new Map<string, number>();
+    for (const release of candidates) {
+      const creatorId = String(release.creatorUserId ?? 'unknown');
+      const count = creatorCounts.get(creatorId) ?? 0;
+      if (count >= 2) continue;
+      recommendations.push(release);
+      creatorCounts.set(creatorId, count + 1);
+      if (recommendations.length >= 24) break;
+    }
+    return send({ recommendations, model: { declaredWeight: 5, observedWeight: 3, socialWeight: 8, intentWeight: 4, creatorDiversityCap: 2 } });
+  }
+
+  if (path === '/api/taste/feedback' && method === 'POST') {
+    const account = requireUser(state);
+    const feedback = String(input.feedback ?? '');
+    const releaseId = String(input.releaseId ?? '');
+    if (!['more_like_this', 'less_like_this', 'not_for_me'].includes(feedback) || !releaseId) throw new Error('Valid recommendation feedback and release are required.');
+    const release = state.releases.find((item) => String(item.id) === releaseId && item.status === 'released');
+    if (!release) throw new Error('Release not found.');
+    const type = feedback === 'more_like_this' ? 'recommendation_more' : feedback === 'less_like_this' ? 'recommendation_less' : 'recommendation_not_for_me';
+    state.taste[account.userId] = [...(state.taste[account.userId] ?? []), { type, contentId: releaseId, category: release.category ?? null, genre: release.genre ?? null, mood: release.mood ?? null, tags: release.tags ?? [], tropes: release.tropes ?? [], createdAt: now() }];
+    return send({ recorded: true, feedback });
   }
 
   if (path === '/api/trending' && method === 'GET') {
@@ -334,11 +355,14 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/listening/event' && method === 'POST') {
     const account = requireUser(state);
-    const record = { ...input, id: id('listen'), userId: account.userId, createdAt: now() };
-    state.listening.push(record);
+    const releaseId = String(input.releaseId ?? '');
+    const release = state.releases.find((item) => String(item.id) === releaseId && item.status === 'released');
+    if (!releaseId || !release) throw new Error('Release not found.');
     const type = String(input.eventType ?? '');
-    const category = input.category ? String(input.category) : null;
-    state.taste[account.userId] = [...(state.taste[account.userId] ?? []), { type, category, tags: Array.isArray(input.tags) ? input.tags : [], completed: input.completed === true, createdAt: record.createdAt }];
+    if (!['start','pause','seek','progress','complete','replay','skip'].includes(type)) throw new Error('Unsupported listening event.');
+    const record = { ...input, id: id('listen'), releaseId, eventType: type, userId: account.userId, createdAt: now() };
+    state.listening.push(record);
+    if (['start','complete','replay','skip'].includes(type)) state.taste[account.userId] = [...(state.taste[account.userId] ?? []), { type, contentId: releaseId, category: release.category ?? null, genre: release.genre ?? null, mood: release.mood ?? null, tags: release.tags ?? [], tropes: release.tropes ?? [], completed: type === 'complete', createdAt: record.createdAt }];
     return send({ recorded: true });
   }
 
@@ -572,15 +596,18 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/taste/profile' && method === 'GET') {
     const account = requireUser(state);
+    const profile = ensureProfile(state, account);
     const events = state.taste[account.userId] ?? [];
     const weights: Record<string, number> = {};
+    const add = (value: unknown, amount: number) => { const key = String(value ?? '').trim().toLowerCase(); if (key) weights[key] = (weights[key] ?? 0) + amount; };
+    for (const value of [...(profile.favouriteTags ?? []), ...(profile.favouriteTropes ?? []), ...(profile.favouriteCategories ?? [])]) add(value, 5);
     events.forEach((event) => {
-      [...(event.tags ?? []), ...(event.category ? [event.category] : [])].forEach((value) => {
-        const key = String(value);
-        weights[key] = (weights[key] ?? 0) + (event.type === 'skip' ? -1 : 1);
-      });
+      if (event.type === 'declared_preferences') return;
+      const factor = event.type === 'recommendation_more' ? 4 : event.type === 'complete' ? 3 : event.type === 'replay' ? 2 : event.type === 'start' ? 0.5 : event.type === 'skip' || event.type === 'hide' || event.type === 'recommendation_less' ? -2 : 0;
+      if (!factor) return;
+      [...(event.tags ?? []), ...(event.category ? [event.category] : []), ...(event.genre ? [event.genre] : []), ...(event.mood ? [event.mood] : [])].forEach((value) => add(value, factor));
     });
-    const vector = Object.entries(weights).map(([label, weight]) => ({ label, weight })).sort((a, b) => Number(b.weight) - Number(a.weight)).slice(0, 16);
+    const vector = Object.entries(weights).map(([label, weight]) => ({ label, weight: Number(weight.toFixed(2)) })).sort((a, b) => Number(b.weight) - Number(a.weight)).slice(0, 24);
     return send({ vector });
   }
 
