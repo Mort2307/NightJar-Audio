@@ -127,6 +127,16 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge: true });
 
+  if (requestedRole === 'creator') {
+    await db.collection('creatorApplications').doc(identity.uid).set({
+      userId: identity.uid,
+      email: identity.email,
+      status: 'pending',
+      submittedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
   return { userId: identity.uid, role: requestedRole, status };
 });
 
@@ -923,5 +933,131 @@ export const spotlightState = onCall({ region: REGION }, async (request) => {
     date,
     spotlights: [creator, writer, editor].filter(Boolean),
   };
+});
+
+export const adminAccountOverview = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const accountsSnapshot = await db.collection('accounts').limit(5000).get();
+  const accounts = await Promise.all(accountsSnapshot.docs.map(async (doc) => {
+    const account = doc.data();
+    const profile = await profileRef(doc.id).get();
+    const profileData = profile.data() ?? {};
+    return {
+      userId: doc.id,
+      email: account.email ?? null,
+      role: account.role ?? null,
+      status: account.status ?? 'active',
+      name: profileData.displayName ?? account.email?.split('@')?.[0] ?? 'Nightjar account',
+      handle: profileData.handle ?? null,
+      publicProfile: profileData.publicProfile !== false,
+      avatarUrl: profileData.avatarStatus === 'approved' ? profileData.avatarUrl ?? null : null,
+    };
+  }));
+
+  const counts = {
+    listener: accounts.filter((account) => account.role === 'listener').length,
+    creator: accounts.filter((account) => account.role === 'creator').length,
+    writer: accounts.filter((account) => account.role === 'writer').length,
+    editor: accounts.filter((account) => account.role === 'editor').length,
+    admin: accounts.filter((account) => account.role === 'admin').length,
+  };
+
+  return {
+    people: {
+      counts,
+      accounts,
+      administrators: Array.from(ADMIN_EMAILS).map((email) => ({
+        email,
+        role: 'admin',
+        status: 'active',
+      })),
+    },
+  };
+});
+
+export const adminSetAccountRole = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const role = cleanText(input.role, 30) as AccountRole;
+  const status = cleanText(input.status, 30);
+
+  if (!userId || !['listener', 'creator', 'writer', 'editor'].includes(role)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid Nightjar account role.');
+  }
+  if (!['active', 'pending_review', 'suspended'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid account status.');
+  }
+
+  const ref = accountRef(userId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
+  const email = cleanEmail(snapshot.data()?.email);
+  if (ADMIN_EMAILS.has(email)) {
+    throw new HttpsError('failed-precondition', 'Owner administrator accounts cannot be reassigned here.');
+  }
+
+  await ref.set({
+    role,
+    status,
+    roleUpdatedBy: admin.uid,
+    roleUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { userId, role, status };
+});
+
+export const listCreatorApplications = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('creatorApplications').limit(500).get();
+  const applications = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data();
+    const profile = await profileRef(String(data.userId ?? doc.id)).get();
+    return {
+      id: doc.id,
+      userId: data.userId ?? doc.id,
+      email: data.email ?? null,
+      creatorName: profile.data()?.displayName ?? null,
+      displayName: profile.data()?.displayName ?? null,
+      status: data.status ?? 'pending',
+    };
+  }));
+  applications.sort((a, b) => String(a.status).localeCompare(String(b.status)));
+  return { applications };
+});
+
+export const decideCreatorApplication = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const applicationId = cleanText(input.applicationId, 160);
+  const decision = cleanText(input.decision, 30);
+  if (!applicationId || !['approved', 'waitlist', 'rejected'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid creator decision.');
+  }
+
+  const applicationRef = db.collection('creatorApplications').doc(applicationId);
+  const application = await applicationRef.get();
+  if (!application.exists) throw new HttpsError('not-found', 'Creator application not found.');
+
+  const userId = String(application.data()?.userId ?? applicationId);
+  const account = await accountRef(userId).get();
+  if (!account.exists || account.data()?.role !== 'creator') {
+    throw new HttpsError('failed-precondition', 'Creator account is no longer eligible for this application.');
+  }
+
+  await applicationRef.set({
+    status: decision,
+    decidedBy: admin.uid,
+    decidedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  await accountRef(userId).set({
+    status: decision === 'approved' ? 'active' : 'pending_review',
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { applicationId, userId, decision, accountStatus: decision === 'approved' ? 'active' : 'pending_review' };
 });
 
