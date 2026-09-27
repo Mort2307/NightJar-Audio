@@ -2133,7 +2133,7 @@ export const handler = router({
     async (ctx) => {
       if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before opening protected content.', 403);
       if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
-      const body = (ctx.body ?? {}) as { scriptId?: string; deviceId?: string };
+      const body = (ctx.body ?? {}) as { scriptId?: string; deviceId?: string; environmentId?: string };
       const scriptId = String(body.scriptId ?? '');
       if (!scriptId) return error('Script ID is required.', 400);
 
@@ -2162,18 +2162,28 @@ export const handler = router({
       const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
       const profile = await getProfile(ctx.user!.userId);
       const viewerLabel = String(profile?.displayName ?? ctx.user!.name ?? 'Nightjar account').slice(0, 80);
-      const device = await registerProtectedDevice(ctx.user!.userId, body.deviceId, scriptId);
-      if (device.blocked || device.linkedSuspendedUserIds.length) {
+      const device = await registerProtectedDevice(ctx.user!.userId, body.deviceId, scriptId, body.environmentId);
+      const exactRestrictedLinks = device.linkedSuspendedUserIds.filter((userId) => userId !== ctx.user!.userId);
+      const environmentRestrictedLinks = device.linkedSuspendedEnvironmentUserIds.filter((userId) => userId !== ctx.user!.userId);
+      const sameScriptEnvironmentLinks = owner ? [] : await restrictedEnvironmentUsersForScript(environmentRestrictedLinks, scriptId);
+      if (device.blocked || device.environmentBlocked || exactRestrictedLinks.length || sameScriptEnvironmentLinks.length) {
         const alert = await createSecurityAlert(ctx.user!.userId, {
           severity: 'critical',
           riskScore: 95,
           reason: device.blocked
             ? 'Protected-script access attempted from a device token blocked by an administrator.'
-            : 'Protected-script access attempted from a device token previously linked to a suspended account.',
+            : device.environmentBlocked
+              ? 'Protected-script access attempted from a browser/device environment blocked by an administrator.'
+              : exactRestrictedLinks.length
+                ? 'Protected-script access attempted from a device token previously linked to a suspended account.'
+                : 'Protected-script access attempted from a browser/device environment previously used by a restricted account on this same manuscript.',
           relatedId: scriptId,
           deviceHash: device.deviceHash,
-          linkedSuspendedUserIds: device.linkedSuspendedUserIds,
-          signal: { eventType: 'blocked_device_reader_attempt' },
+          environmentHash: device.environmentHash,
+          linkedSuspendedUserIds: exactRestrictedLinks,
+          linkedSuspendedEnvironmentUserIds: environmentRestrictedLinks,
+          sameScriptEnvironmentUserIds: sameScriptEnvironmentLinks,
+          signal: { eventType: 'blocked_device_or_environment_reader_attempt' },
         });
         return error('Protected-script access is paused for security review. Security alert ' + String(alert.id ?? '') + ' was created.', 403);
       }
@@ -2190,9 +2200,10 @@ export const handler = router({
         allowExport: owner || grant?.allowExport === true,
         watermark: 'NIGHTJAR · ' + viewerLabel + ' · ' + sessionId.slice(-8) + ' · ' + issuedAt.slice(0, 16).replace('T', ' '),
         deviceHash: device.deviceHash,
+        environmentHash: device.environmentHash,
       };
       await db.add(readerSessionTable(ctx.user!.userId), [session]);
-      const signal = { userId: ctx.user!.userId, eventType: 'reader_session_issued', relatedId: scriptId, sessionId, deviceHash: device.deviceHash, createdAt: issuedAt };
+      const signal = { userId: ctx.user!.userId, eventType: 'reader_session_issued', relatedId: scriptId, sessionId, deviceHash: device.deviceHash, environmentHash: device.environmentHash, createdAt: issuedAt };
       await db.add(securityEventTable, [signal]);
       await assessProtectedActivity(ctx.user!.userId, signal);
       return json({ session });
