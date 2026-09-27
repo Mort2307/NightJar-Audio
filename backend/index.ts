@@ -579,8 +579,10 @@ export const handler = router({
       const relevant = items
         .filter((event) => String(event.userId) === ctx.user!.userId && String(event.releaseId) === releaseId)
         .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
-      const position = relevant.find((event) => typeof event.positionSeconds !== 'undefined')?.positionSeconds;
-      return json({ releaseId, positionSeconds: Math.max(0, Number(position ?? 0)), durationSeconds: Math.max(0, Number(relevant.find((event) => typeof event.durationSeconds !== 'undefined')?.durationSeconds ?? 0)) });
+      const latest = relevant[0];
+      const duration = relevant.find((event) => typeof event.durationSeconds !== 'undefined')?.durationSeconds;
+      const position = latest?.eventType === 'complete' ? 0 : relevant.find((event) => typeof event.positionSeconds !== 'undefined')?.positionSeconds;
+      return json({ releaseId, positionSeconds: Math.max(0, Number(position ?? 0)), durationSeconds: Math.max(0, Number(duration ?? 0)) });
     },
   ],
   'GET /api/trending': [
