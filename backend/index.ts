@@ -1487,9 +1487,7 @@ export const handler = router({
         item.status !== 'closed'
       );
 
-      if (!owner && !access && !editorAssignment) {
-        return json({ script: publicScriptMetadata(script), canReadFull: false, copyAllowed: false, exportAllowed: false });
-      }
+      if (!owner && !access && !editorAssignment) return error('Protected script access has not been granted.', 403);
 
       const sessionId = 'NJ-RD-' + randomUUID().replace(/-/g, '').slice(0, 18).toUpperCase();
       const issuedAt = new Date().toISOString();
