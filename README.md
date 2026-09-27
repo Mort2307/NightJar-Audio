@@ -73,3 +73,14 @@ The backend is provider-ready for Yoti sandbox and production:
 Nightjar stores verification state and an opaque provider reference. Raw identity documents are not stored in the Nightjar content database.
 
 The adult catalogue, recommendations, trending releases and protected manuscript access are also checked server-side against the stored verified state, so the client cannot bypass the age gate.
+
+
+## Inclusive spotlights
+
+Nightjar's discovery page has three separate recognition lanes:
+
+- **Creator Spotlight:** every active public Creator receives a deterministic full-day slot in roster order.
+- **Writer Spotlight:** every active public Writer receives a deterministic full-day slot in roster order.
+- **Listener Spotlight:** the previous completed Monday-Sunday week's top seven Listener accounts form a fixed weekly cohort; one is highlighted per day, then a new top seven is selected for the next week.
+
+Listener ranking uses tracked listening activity from the completed week and is deliberately frozen during the spotlight week so the highlighted cohort cannot reshuffle mid-week. Public-profile settings are respected when displaying individual community members.
