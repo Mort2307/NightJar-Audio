@@ -99,3 +99,18 @@ Nightjar keeps each major product surface in its own editable component so futur
 - NightjarOnboarding.tsx owns the explicit identity/taste question set, allowing the final compiled questions to evolve in one focused module.
 
 The Taste Engine remains explicit-first: user-declared preferences are separate from identity and behavioural signals are used to refine discovery rather than infer personal identity.
+
+
+## Recommendation and listening intelligence
+
+Nightjar's personalisation loop is explicit-first and now supports direct recommendation feedback:
+
+- **More like this** strengthens the release's tags, tropes and catalogue attributes.
+- **Less like this** reduces their influence in future recommendations.
+- **Not for me** suppresses that specific release from the recommendation shelf.
+- Meaningful listening signals such as start, completion, replay, favourite and skip refine the graph; frequent progress ticks are retained for listening analytics but do not repeatedly inflate taste.
+- Older behavioural signals decay over time rather than becoming permanent assumptions.
+- Personalised shelves apply a creator-diversity pass so one prolific creator does not crowd out the wider catalogue.
+- The local AppDeploy shim mirrors the production recommendation model so QA does not exercise a materially different taste system.
+
+Identity remains separate from taste throughout this process. Recommendation feedback changes discovery signals, not a user's declared identity.
