@@ -26,6 +26,49 @@ const userNotificationTable = (userId: string) => `nightjar_notifications_${user
 type NightjarProfile = { displayName?: string|null; handle?: string|null; headline?: string|null; bio?: string|null; pronouns?: string|null; avatarInitials?: string|null; avatarTone?: string|null; favouriteTags?: string[]; favouriteTropes?: string[]; favouriteCategories?: string[]; roleFocus?: string[]; publicProfile?: boolean; onboardingComplete?: boolean; onboardingVersion?: number; createdAt?: string; updatedAt?: string; };
 const cleanList = (value: unknown, max = 16) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean).slice(0, max) : [];
 const cleanHandle = (value?: unknown) => String(value ?? '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_\.\-]/g, '').slice(0, 30);
+const scriptContentHash = (content: unknown) => createHash('sha256').update(String(content ?? ''), 'utf8').digest('hex');
+const publicScriptMetadata = (script: any) => ({
+  id: script.id,
+  title: script.title,
+  synopsis: script.synopsis ?? null,
+  excerpt: script.excerpt ?? null,
+  genre: script.genre ?? null,
+  runtimeTarget: script.runtimeTarget ?? null,
+  characters: script.characters ?? [],
+  ageClassification: script.ageClassification ?? null,
+  writerUserId: script.writerUserId,
+  writerName: script.writerName ?? null,
+  version: script.version ?? 1,
+  status: script.status ?? null,
+  contentHash: script.contentHash ?? null,
+  updatedAt: script.updatedAt ?? null,
+});
+const chunkProtectedContent = (content: unknown, maxChars = 3600) => {
+  const paragraphs = String(content ?? '').split(/\n{2,}/).map((value) => value.trim()).filter(Boolean);
+  const pages: string[] = [];
+  let page = '';
+  for (const paragraph of paragraphs) {
+    if (!page) {
+      if (paragraph.length <= maxChars) page = paragraph;
+      else {
+        for (let offset = 0; offset < paragraph.length; offset += maxChars) pages.push(paragraph.slice(offset, offset + maxChars));
+      }
+      continue;
+    }
+    const candidate = page + '\n\n' + paragraph;
+    if (candidate.length <= maxChars) page = candidate;
+    else {
+      pages.push(page);
+      if (paragraph.length <= maxChars) page = paragraph;
+      else {
+        for (let offset = 0; offset < paragraph.length; offset += maxChars) pages.push(paragraph.slice(offset, offset + maxChars));
+        page = '';
+      }
+    }
+  }
+  if (page) pages.push(page);
+  return pages.length ? pages : [''];
+};
 const tasteSignalWeight = (type: unknown, completed = false) => {
   const signal = String(type ?? '');
   if (signal === 'not_for_me') return -12;
@@ -82,6 +125,14 @@ const ensureFollowIndexForUser = async (userId: string) => {
 };
 const isSuspended = async (userId: string) => { const { items } = await db.list(accountTable(userId), { limit: 1 }); return items[0]?.status === 'suspended'; };
 const revokeReaderSessions = async (userId: string, reason: string) => { const { items } = await db.list(readerSessionTable(userId), { limit: 500 }); const now = new Date().toISOString(); const updates = items.filter((item) => item.status === 'active').map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } })); if (updates.length) await db.update(readerSessionTable(userId), updates); };
+const revokeReaderSessionsForScript = async (userId: string, scriptId: string, reason: string) => {
+  const { items } = await db.list(readerSessionTable(userId), { limit: 500 });
+  const now = new Date().toISOString();
+  const updates = items
+    .filter((item) => item.status === 'active' && String(item.scriptId) === scriptId)
+    .map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } }));
+  if (updates.length) await db.update(readerSessionTable(userId), updates);
+};
 const createOwnerSecurityNotifications = async (alert: Record<string, unknown>) => { for (const email of ADMIN_EMAILS) await db.add(ownerNotificationTable(email), [{ type:'security_alert', alertId:alert.id??null, severity:alert.severity??'high', title:'Nightjar security alert', message:alert.reason??'Suspicious protected-content activity detected.', createdAt:new Date().toISOString(), read:false, recipientEmail:normalizeEmail(email) }]); };
 const createSecurityAlert = async (userId: string, details: Record<string, unknown>) => { const now=new Date().toISOString(); const recipients=ADMIN_EMAILS.map(normalizeEmail); const [id]=await db.add(securityAlertTable,[{userId,...details,recipients,createdAt:now,status:'open'}]); const alert={id:id??null,userId,...details,recipients,createdAt:now,status:'open'}; await createOwnerSecurityNotifications(alert); await db.add(securityCaseTable,[{alertId:id??null,userId,state:'detection',history:[{state:'detection',at:now,note:'Suspicious activity detected; alert sent to all three Nightjar owners.'}],createdAt:now,updatedAt:now}]); return alert; };
 const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => { const now=Date.now(); const {items}=await db.list(securityEventTable,{limit:500}); const recent=items.filter((item)=>item.userId===userId && now-new Date(item.createdAt??0).getTime()<60000); const scriptId=String(signal.relatedId??''); const sameScriptRecent=recent.filter((item)=>String(item.relatedId??'')===scriptId); const score=(recent.length>=40?35:recent.length>=20?20:0)+(sameScriptRecent.length>=25?40:sameScriptRecent.length>=12?25:0)+(signal.eventType==='script_view'&&sameScriptRecent.length>=8?20:0)+(signal.eventType==='blocked_interaction'?8:0); if(score<50)return null; const existing=await db.list(securityAlertTable,{limit:100}); if(existing.items.some((item)=>item.userId===userId&&item.status==='open'&&now-new Date(item.createdAt??0).getTime()<600000))return null; return createSecurityAlert(userId,{severity:score>=75?'critical':'high',riskScore:score,reason:`Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,relatedId:scriptId||null,signal:{eventType:signal.eventType,recentEvents:recent.length,relatedEvents:sameScriptRecent.length}}); };
