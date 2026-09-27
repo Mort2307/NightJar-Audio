@@ -181,3 +181,9 @@ Protected-content signals remain evidence rather than guilt. Nightjar's graduate
 
 Age-assurance state is stored in Firebase and protected catalogue/playback endpoints verify it server-side. The production provider is not configured by this repository yet, so normal age-assurance initiation fails closed rather than simulating a production pass. Allowlisted administrators retain a controlled test-pass path for development only.
 
+## Social follows and verified listening
+
+Follows are account-to-account relationships stored under the verified Firebase UID. A user can follow multiple active public Nightjar profiles across Creator, Writer, Audio Editor and Listener roles. Following one profile never replaces another. Self-follow, administrator profiles and private profiles are rejected by the backend. Target profiles maintain a transactional follower count so repeated follow requests do not double-count.
+
+Nightjar uses one bounded verified-listening calculation for Creator Studio metrics, creator listening-share displays and weekly Listener Spotlight ranking. It credits only forward playback progress and bounds credit by elapsed wall time plus a small tolerance and a per-event ceiling. Cumulative player positions, large seek jumps and rapid event spam are not counted as if they were continuous listening.
+
