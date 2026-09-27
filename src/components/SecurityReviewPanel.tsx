@@ -106,11 +106,11 @@ export default function SecurityReviewPanel({ notify, onAccountStateChange }: Pr
     <div className="security-alert-list">
       {!alerts.length ? <div className="people-empty"><ShieldCheck size={18}/><strong>No security alerts</strong><span>Protected-reader signals remain evidence, not accusations.</span></div> : alerts.map((alert) => {
         const busy = busyId === String(alert.id);
-        const restricted = alert.action === 'freeze_account' || alert.action === 'remove_account';
+        const restricted = alert.subjectAccountStatus === 'suspended' || alert.subjectRemoved === true;
         return <article className="security-alert-review" key={alert.id}>
           <div className="security-alert-main">
             <span className={'security-severity ' + String(alert.severity ?? 'high')}>{String(alert.severity ?? 'high').toUpperCase()}</span>
-            <div><strong>{alert.reason ?? 'Suspicious protected-content activity'}</strong><span>Account {alert.userId} · script {alert.relatedId ?? '—'} · {alert.createdAt ? new Date(alert.createdAt).toLocaleString('en-GB') : 'time unavailable'}</span><small>{alert.deviceHash ? 'Pseudonymous device correlation available' : 'No device correlation supplied'} · status {alert.status ?? 'open'}</small></div>
+            <div><strong>{alert.reason ?? 'Suspicious protected-content activity'}</strong><span>Account {alert.userId} · {alert.subjectRemoved ? 'removed' : alert.subjectAccountStatus ?? 'status unknown'} · script {alert.relatedId ?? '—'} · {alert.createdAt ? new Date(alert.createdAt).toLocaleString('en-GB') : 'time unavailable'}</span><small>{alert.deviceHash ? 'Pseudonymous device correlation available' : 'No device correlation supplied'} · status {alert.status ?? 'open'}</small></div>
           </div>
           <div className="security-alert-actions">
             <button disabled={busy} onClick={() => void act(alert, 'benign')}><Check size={13}/> Benign</button>
