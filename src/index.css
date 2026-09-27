@@ -1358,3 +1358,20 @@ button:focus-visible {
 .dock-nav-button { width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--line-soft); border-radius:50%; background:rgba(255,255,255,.018); color:var(--muted); }
 .dock-nav-button:hover:not(:disabled) { color:var(--ivory); border-color:rgba(239,231,223,.18); }
 .dock-nav-button:disabled { opacity:.3; cursor:not-allowed; }
+
+
+.recommendation-feedback { margin-top:10px; display:grid; gap:7px; font-size:8px; color:var(--muted-2); }
+.recommendation-feedback > span { display:flex; align-items:center; gap:5px; text-transform:uppercase; letter-spacing:.12em; }
+.recommendation-feedback > div { display:flex; gap:6px; flex-wrap:wrap; }
+.recommendation-feedback button { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line-soft); border-radius:9px; padding:7px 9px; background:rgba(255,255,255,.018); color:var(--muted); font:inherit; cursor:pointer; }
+.recommendation-feedback button:hover,.recommendation-feedback button.active { color:var(--ivory); border-color:rgba(239,231,223,.2); background:rgba(255,255,255,.045); }
+.recommendation-feedback button:disabled { opacity:.45; cursor:wait; }
+.recommendation-feedback.compact { position:relative; display:block; margin-top:8px; }
+.recommendation-feedback.compact > .ghost-button { font-size:8px; padding:6px 8px; }
+.recommendation-feedback-menu { position:absolute; z-index:8; left:0; bottom:calc(100% + 6px); min-width:175px; display:grid; gap:2px; padding:5px; border:1px solid var(--line-soft); border-radius:10px; background:var(--panel, #171318); box-shadow:0 14px 35px rgba(0,0,0,.35); }
+.recommendation-feedback-menu button { width:100%; justify-content:flex-start; border:0; background:transparent; }
+.recommendation-feedback-menu button:hover { background:rgba(255,255,255,.05); }
+
+@media (max-width:760px) {
+  .recommendation-feedback-menu { position:fixed; left:17px; right:17px; bottom:76px; min-width:0; }
+}
