@@ -1125,6 +1125,8 @@ button:focus-visible {
 .writer-spotlight-tile .spotlight-art { background: radial-gradient(circle at 65% 28%, rgba(211,190,209,.14), transparent 22%), radial-gradient(circle at 30% 75%, rgba(81,61,94,.25), transparent 38%), linear-gradient(150deg, #181722, #0d0c10 76%); }
 .listener-spotlight-tile .spotlight-art { background: radial-gradient(circle at 45% 28%, rgba(203,194,224,.15), transparent 22%), radial-gradient(circle at 70% 76%, rgba(71,67,101,.25), transparent 38%), linear-gradient(150deg, #171823, #0d0c10 76%); }
 .spotlight-listener-meta { width: 100%; display: flex; justify-content: space-between; gap: 10px; margin: 0 0 15px; color: var(--plum-soft); font-size: 7px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.spotlight-thanks { width:100%; display:flex; align-items:flex-start; gap:8px; margin:0 0 16px; padding:10px 11px; border:1px solid var(--line-soft); border-radius:11px; background:rgba(255,255,255,.018); color:var(--muted); font-size:8px; line-height:1.5; }
+.spotlight-thanks svg { flex:0 0 auto; color:var(--plum-soft); margin-top:1px; }
 .spotlight-art::before { content: ''; position: absolute; width: 170px; height: 170px; border: 1px solid rgba(226,201,216,.12); border-radius: 50%; transform: rotate(18deg) scaleX(.75); }
 .spotlight-art::after { content: ''; position: absolute; width: 105px; height: 105px; right: -35px; top: -25px; border: 1px solid rgba(226,201,216,.1); border-radius: 50%; }
 .spotlight-initials { position: relative; z-index: 2; font-family: Georgia, serif; font-size: 39px; color: rgba(239,231,223,.84); letter-spacing: -.04em; }
