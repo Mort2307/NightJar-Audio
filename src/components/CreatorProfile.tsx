@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../platform/legacy-local-client';
+import { nightjarCommunity } from '../platform/firebase-community';
 import { ArrowRight, Heart, Mic2, Share2 } from 'lucide-react';
 
 type CreatorProfileData = {
@@ -32,7 +32,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
     if (!creatorUserId) return;
     let cancelled = false;
     setLoading(true);
-    void api.get('/api/creators/' + encodeURIComponent(creatorUserId)).then(({ data }) => {
+    void nightjarCommunity.getCreatorProfile(creatorUserId).then((data) => {
       if (!cancelled) setProfile(data?.creator ?? null);
     }).catch(() => {
       if (!cancelled) notify('Creator profile could not be loaded.');
