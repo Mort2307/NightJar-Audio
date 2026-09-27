@@ -1575,12 +1575,33 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
   useEffect(() => {
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        close();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        record('print_blocked');
+        notify('Printing is disabled in the protected reader. Use writer-authorised Export full script when full handoff is permitted.');
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        record('blocked_interaction');
+        notify('Saving the protected reader page is disabled. Writer-authorised exports remain available when granted.');
+      }
+    };
+    const onBeforePrint = () => {
+      record('print_blocked');
+    };
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('beforeprint', onBeforePrint);
     void loadPage(0);
     return () => {
       document.body.style.overflow = original;
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('beforeprint', onBeforePrint);
     };
   }, [script.id, sessionId]);
 
