@@ -559,7 +559,7 @@ export const handler = router({
         if (event.type === 'declared_preferences') continue;
         const ageDays = Math.max(0, (now - new Date(event.createdAt ?? 0).getTime()) / 86400000);
         const decay = Math.max(0.2, Math.pow(0.5, ageDays / 30));
-        const factor = event.type === 'recommendation_more' ? 4 : event.type === 'complete' ? 3 : event.type === 'replay' ? 2 : event.type === 'start' ? 0.5 : event.type === 'skip' || event.type === 'hide' || event.type === 'recommendation_less' ? -2 : 0;
+        const factor = event.type === 'recommendation_more' ? 4 : event.type === 'favourite' ? 3.5 : event.type === 'complete' ? 3 : event.type === 'replay' ? 2 : event.type === 'start' ? 0.5 : event.type === 'skip' || event.type === 'hide' || event.type === 'recommendation_less' ? -2 : 0;
         if (!factor) continue;
         for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : []), ...(event.genre ? [event.genre] : []), ...(event.mood ? [event.mood] : [])]) addWeight(value, factor * decay);
         if (event.type === 'recommendation_not_for_me' && event.contentId) suppressed.add(String(event.contentId));
