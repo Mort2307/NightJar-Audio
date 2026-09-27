@@ -793,11 +793,25 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   if (path === '/api/profile/me' && method === 'PUT') {
     const account = requireUser(state);
     const profile = ensureProfile(state, account);
-    const nextHandle = String(input.handle ?? profile.handle ?? '').replace(/^@+/, '').trim().toLowerCase();
-    if (!/^[a-z0-9_-]{3,30}$/.test(nextHandle)) throw new Error('Handle must be 3–30 characters and use letters, numbers, underscores or hyphens.');
-    const taken = Object.entries(state.profiles).some(([userId, candidate]) => userId !== account.userId && String((candidate as any).handle ?? '').toLowerCase() === nextHandle);
+    const rawHandle = String(input.handle ?? profile.handle ?? '').replace(/^@+/, '').trim().toLowerCase();
+    if (rawHandle && !/^[a-z0-9_.-]{3,30}$/.test(rawHandle)) throw new Error('Handle must be 3–30 characters and use letters, numbers, dots, underscores or hyphens.');
+    const taken = rawHandle && Object.entries(state.profiles).some(([userId, candidate]) => userId !== account.userId && String((candidate as any).handle ?? '').toLowerCase() === rawHandle);
     if (taken) throw new Error('That @handle is already in use.');
-    Object.assign(profile, input, { handle: nextHandle, updatedAt: now() });
+    profile.displayName = String(input.displayName ?? profile.displayName ?? account.name).trim().slice(0, 80);
+    profile.handle = rawHandle || null;
+    profile.headline = String(input.headline ?? profile.headline ?? '').trim().slice(0, 120);
+    profile.bio = String(input.bio ?? profile.bio ?? '').trim().slice(0, 500);
+    profile.pronouns = String(input.pronouns ?? profile.pronouns ?? '').trim().slice(0, 60);
+    profile.avatarInitials = String(input.avatarInitials ?? profile.avatarInitials ?? '').trim().slice(0, 4).toUpperCase();
+    profile.avatarTone = String(input.avatarTone ?? profile.avatarTone ?? 'plum').trim().slice(0, 24);
+    profile.favouriteTags = Array.isArray(input.favouriteTags) ? input.favouriteTags.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 16) : (profile.favouriteTags ?? []);
+    profile.favouriteTropes = Array.isArray(input.favouriteTropes) ? input.favouriteTropes.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 16) : (profile.favouriteTropes ?? []);
+    profile.favouriteCategories = Array.isArray(input.favouriteCategories) ? input.favouriteCategories.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 16) : (profile.favouriteCategories ?? []);
+    profile.roleFocus = Array.isArray(input.roleFocus) ? input.roleFocus.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 16) : (profile.roleFocus ?? []);
+    profile.publicProfile = input.publicProfile === undefined ? profile.publicProfile !== false : input.publicProfile !== false;
+    profile.onboardingComplete = input.onboardingComplete === undefined ? profile.onboardingComplete === true : input.onboardingComplete === true;
+    profile.onboardingVersion = input.onboardingVersion === undefined ? profile.onboardingVersion : Math.max(0, Number(input.onboardingVersion ?? 0)) || undefined;
+    profile.updatedAt = now();
     return send({ profile });
   }
 
@@ -865,14 +879,44 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/protection/report' && method === 'POST') {
     const account = requireUser(state);
-    const report = { id: id('report'), caseId: 'NJ-' + String(new Date().getFullYear()) + '-' + String(state.reports.length + 1).padStart(6, '0'), userId: account.userId, ...input, status: 'New', createdAt: now() };
+    const category = String(input.category ?? '').trim().slice(0, 80);
+    const summary = String(input.summary ?? '').trim().slice(0, 1800);
+    if (!category || !summary) throw new Error('Choose a report type and describe what happened.');
+    const report = {
+      id: id('report'),
+      caseId: 'NJ-' + String(new Date().getFullYear()) + '-' + String(state.reports.length + 1).padStart(6, '0'),
+      userId: account.userId,
+      reporterUserId: account.userId,
+      subjectUserId: String(input.subjectUserId ?? '').slice(0, 120) || null,
+      category,
+      summary,
+      relatedType: String(input.relatedType ?? '').slice(0, 80) || null,
+      relatedId: String(input.relatedId ?? '').slice(0, 120) || null,
+      status: 'New',
+      createdAt: now(),
+    };
     state.reports.push(report);
     return send({ report });
   }
 
   if (path === '/api/protection/event' && method === 'POST') {
     const account = requireUser(state);
-    state.evidence.push({ id: id('evidence'), userId: account.userId, ...input, createdAt: now() });
+    if (account.status === 'suspended') throw new Error('This account is suspended.');
+    const eventType = String(input.eventType ?? '');
+    const allowed = new Set(['script_view','copy_blocked','cut_blocked','paste_blocked','contextmenu_blocked','selection_blocked','drag_blocked','print_blocked','export_requested','export_completed','permission_changed','script_access_requested','report_submitted','blocked_interaction','repeated_protected_interaction']);
+    if (!allowed.has(eventType)) throw new Error('Unsupported protection event.');
+    state.evidence.push({
+      id: id('evidence'),
+      userId: account.userId,
+      actorUserId: account.userId,
+      eventType,
+      severity: input.severity === 'high' || input.severity === 'medium' ? input.severity : 'low',
+      relatedType: String(input.relatedType ?? '').slice(0, 80) || null,
+      relatedId: String(input.relatedId ?? '').slice(0, 120) || null,
+      sessionId: String(input.sessionId ?? '').slice(0, 120) || null,
+      summary: String(input.summary ?? 'Protected interaction recorded.').slice(0, 300),
+      createdAt: now(),
+    });
     return send({ recorded: true });
   }
 
