@@ -785,12 +785,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ scripts: state.scripts.map((script) => ({ id: script.id, title: script.title, status: script.status, version: script.version, writerUserId: script.writerUserId, editorUserId: script.editorUserId ?? null, updatedAt: script.updatedAt ?? null })) });
   }
 
-  if (path === '/api/editor/accounts' && method === 'GET') {
-    requireAdmin(state);
-    return send({ editors: state.users.filter((account) => account.role === 'editor' && account.status === 'active').map((account) => ({ userId: account.userId, email: account.email, name: account.name })) });
-  }
-
-  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'scripts' && parts.length === 4 && parts[3] && method === 'POST' && parts[2] === 'scripts') {
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'scripts' && parts.length === 5 && parts[4] === 'assign-editor' && method === 'POST') {
     requireAdmin(state);
     const scriptId = parts[3];
     const editorUserId = String(input.editorUserId ?? '').trim();
