@@ -105,6 +105,10 @@ function requireAdmin(state: LocalState): LocalUser {
   return user;
 }
 
+function requireVerifiedAdult(state: LocalState, account: LocalUser) {
+  if (state.age[account.userId]?.verified !== true) throw new Error('Age verification required.');
+}
+
 function ensureProfile(state: LocalState, user: LocalUser) {
   if (!state.profiles[user.userId]) {
     state.profiles[user.userId] = {
@@ -278,6 +282,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   }
 
   if (parts[0] === 'api' && parts[1] === 'catalogue' && parts.length === 2 && method === 'GET') {
+    const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const query = String(q.get('q') ?? '').trim().toLowerCase();
     const category = String(q.get('category') ?? '').trim().toLowerCase();
     const released = state.releases.filter((release) => release.status === 'released');
@@ -295,6 +301,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'creators' && parts.length === 3 && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const creator = state.users.find((item) => item.userId === parts[2] && item.role === 'creator' && item.status !== 'pending_review');
     if (!creator) throw new Error('Creator profile not found.');
     const profile = ensureProfile(state, creator);
@@ -306,7 +313,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   }
 
   if (path === '/api/writers' && method === 'GET') {
-    requireUser(state);
+    const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const writers = state.users.filter((account) => account.role === 'writer' && account.status !== 'pending_review').map((account) => {
       const profile = ensureProfile(state, account);
       if (profile.publicProfile === false) return null;
@@ -336,7 +344,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   }
 
   if (path === '/api/creators' && method === 'GET') {
-    requireUser(state);
+    const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const creators = state.users.filter((account) => account.role === 'creator' && account.status !== 'pending_review').map((account) => {
       const profile = ensureProfile(state, account);
       if (profile.publicProfile === false) return null;
@@ -349,6 +358,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path.startsWith('/api/recommendations') && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const profile = ensureProfile(state, account);
     const liked = new Map<string, number>();
     for (const tag of [...(profile.favouriteTags ?? []), ...(profile.favouriteTropes ?? []), ...(profile.favouriteCategories ?? [])]) {
@@ -386,6 +396,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/profiles' && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const following = new Set(state.follows[account.userId] ?? []);
     const profiles = state.users
       .filter((candidate) => candidate.userId !== account.userId)
