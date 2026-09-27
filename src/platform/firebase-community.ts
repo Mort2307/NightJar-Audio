@@ -11,8 +11,9 @@ const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'li
 const getCreatorProfileCall = httpsCallable<{ userId: string }, { creator: any }>(functions, 'getCreatorProfile');
 const listWritersCall = httpsCallable<void, { writers: any[] }>(functions, 'listWriters');
 const spotlightStateCall = httpsCallable<void, { date: string; spotlights: any[]; listenerTopSevenCount: number; listenerSpotlightDay: number | null; listenerWeek: string | null }>(functions, 'spotlightState');
-const communityStateCall = httpsCallable<void, { follows: { creatorUserId: string }[]; favourites: { releaseId: string }[] }>(functions, 'communityState');
+const communityStateCall = httpsCallable<void, { follows: { targetUserId?: string; creatorUserId?: string; targetRole?: string | null }[]; favourites: { releaseId: string }[] }>(functions, 'communityState');
 const setCreatorFollowCall = httpsCallable<{ creatorUserId: string; following: boolean }, { creatorUserId: string; following: boolean }>(functions, 'setCreatorFollow');
+const setProfileFollowCall = httpsCallable<{ targetUserId: string; following: boolean }, { targetUserId: string; targetRole: string | null; following: boolean }>(functions, 'setProfileFollow');
 const setFavouriteReleaseCall = httpsCallable<{ releaseId: string; favourite: boolean }, { releaseId: string; favourite: boolean }>(functions, 'setFavouriteRelease');
 
 export const nightjarCommunity = {
@@ -46,6 +47,10 @@ export const nightjarCommunity = {
 
   async setCreatorFollow(creatorUserId: string, following: boolean) {
     return (await setCreatorFollowCall({ creatorUserId, following })).data;
+  },
+
+  async setProfileFollow(targetUserId: string, following: boolean) {
+    return (await setProfileFollowCall({ targetUserId, following })).data;
   },
 
   async setFavouriteRelease(releaseId: string, favourite: boolean) {
