@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, auth, syncLocalAccount } from './platform/legacy-local-client';
 import { nightjarAuth } from './platform/firebase-auth';
 import { nightjarAccount } from './platform/firebase-account';
 import { nightjarCommunity } from './platform/firebase-community';
@@ -415,7 +414,7 @@ function App() {
   };
 
   const loadNotifications = async () => {
-    if (!auth.isSignedIn()) return;
+    if (!nightjarAuth.current()) return;
     try {
       const data = await nightjarNotifications.list();
       const nextNotifications = data.notifications ?? [];
@@ -512,7 +511,6 @@ function App() {
       setIdentityAdmin(data.admin === true);
 
       if (data.status === 'suspended') {
-        syncLocalAccount(data.userId, data.role, 'suspended');
         setRole(null);
         setRolePicker(false);
         setAgeStage('gate');
@@ -521,7 +519,6 @@ function App() {
       }
 
       const nextStatus = data.status === 'pending_review' ? 'pending_review' : 'active';
-      syncLocalAccount(data.userId, data.role, nextStatus);
 
       if (data.admin === true || data.role === 'admin') {
         setRole('admin');
@@ -550,7 +547,7 @@ function App() {
   };
 
   const refreshAgeStatus = async () => {
-    if (!auth.isSignedIn()) return false;
+    if (!nightjarAuth.current()) return false;
     try {
       const data = await nightjarAge.status();
       const verified = data.verified === true;
@@ -594,7 +591,7 @@ function App() {
   const openAgeCheck = async () => {
     setAgeLoading(true);
     try {
-      if (!auth.isSignedIn()) {
+      if (!nightjarAuth.current()) {
         window.location.assign('/account');
         return;
       }
@@ -640,7 +637,7 @@ function App() {
   };
 
   const signOut = async () => {
-    await auth.signOut();
+    await nightjarAuth.signOut();
     setUser(null);
     setRole(null);
     setAgeVerified(false);
@@ -662,7 +659,6 @@ function App() {
       const data = await nightjarAccount.chooseRole(nextRole);
       if (data.role === 'creator' || data.role === 'listener' || data.role === 'writer') {
         const nextStatus = data.status === 'pending_review' ? 'pending_review' : 'active';
-        syncLocalAccount(data.userId, data.role, nextStatus);
         setRole(data.role);
         setAccountStatus(nextStatus);
         setRolePicker(false);
