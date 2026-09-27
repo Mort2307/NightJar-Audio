@@ -1064,9 +1064,9 @@ function App() {
     try {
       await api.post('/api/admin/scripts/' + scriptId + '/assign-editor', { editorUserId });
       await loadAdminEditorial();
-      notify('Editor assignment saved.');
+      notify('Audio Editor assignment saved.');
     } catch {
-      notify('Editor assignment could not be saved.');
+      notify('Audio Editor assignment could not be saved.');
     }
   };
 
@@ -1317,7 +1317,7 @@ function App() {
                 </article>
                 <article className="role-card locked-role">
                   <span className="role-icon"><ShieldCheck size={20} /></span>
-                  <div><span className="role-kicker">EDITOR / ADMINISTRATOR</span><h2>Controlled roles</h2><p>Editors are assigned to production work. Administrators are restricted to the owner allowlist.</p></div>
+                  <div><span className="role-kicker">AUDIO EDITOR / ADMINISTRATOR</span><h2>Controlled roles</h2><p>Audio Editors are assigned to controlled production work. Administrators are restricted to the owner allowlist.</p></div>
                   <div className="locked-note"><LockKeyhole size={14} /> Controlled access only</div>
                 </article>
               </>
@@ -1352,7 +1352,7 @@ function App() {
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
-          {canAdmin && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ADMIN PREVIEW · REAL ROLE: ADMINISTRATOR</span><button className={previewRole === 'listener' ? 'active' : ''} onClick={() => selectPreviewRole('listener')}>Listener</button><button className={previewRole === 'creator' ? 'active' : ''} onClick={() => selectPreviewRole('creator')}>Creator</button><button className={previewRole === 'writer' ? 'active' : ''} onClick={() => selectPreviewRole('writer')}>Writer</button><button className={previewRole === 'editor' ? 'active' : ''} onClick={() => selectPreviewRole('editor')}>Editor</button><button className={!previewRole ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
+          {canAdmin && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ADMIN PREVIEW · REAL ROLE: ADMINISTRATOR</span><button className={previewRole === 'listener' ? 'active' : ''} onClick={() => selectPreviewRole('listener')}>Listener</button><button className={previewRole === 'creator' ? 'active' : ''} onClick={() => selectPreviewRole('creator')}>Creator</button><button className={previewRole === 'writer' ? 'active' : ''} onClick={() => selectPreviewRole('writer')}>Writer</button><button className={previewRole === 'editor' ? 'active' : ''} onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button className={!previewRole ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
         </nav>
 
         <div className="top-actions">
@@ -1615,7 +1615,7 @@ function App() {
         {view === 'admin' && effectiveRole === 'admin' && (
           <section className="page-wrap admin-page">
             <div className="page-heading"><div><p className="eyebrow"><Settings2 size={14} /> ADMINISTRATION</p><h1>Nightjar, from the inside.</h1><p>Administrator accounts are isolated from listener, creator and controlled production roles.</p></div></div>
-            <div className="admin-preview-control"><div><span className="mini-label">SAFE ROLE PREVIEW</span><strong>Inspect every product surface without changing your account.</strong><p>Preview state is local UI only. Your authenticated role remains Administrator and backend admin permissions are unchanged.</p></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Editor</button><button onClick={clearAdminPreview}>Return to Admin</button></div></div>
+            <div className="admin-preview-control"><div><span className="mini-label">SAFE ROLE PREVIEW</span><strong>Inspect every product surface without changing your account.</strong><p>Preview state is local UI only. Your authenticated role remains Administrator and backend admin permissions are unchanged.</p></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button onClick={clearAdminPreview}>Return to Admin</button></div></div>
             <div className="admin-grid">
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('listener')}><span className="admin-icon"><Headphones size={19} /></span><span className="mini-label">PEOPLE · LISTENERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.listener ?? 0}</h2><p>Listener accounts with access to the catalogue and listening surfaces.</p><strong>Open listener profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('creator')}><span className="admin-icon"><Mic2 size={19} /></span><span className="mini-label">PEOPLE · CREATORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.creator ?? 0}</h2><p>Creator accounts and their current onboarding status.</p><strong>Open creator profiles <ArrowRight size={13} /></strong></button>
