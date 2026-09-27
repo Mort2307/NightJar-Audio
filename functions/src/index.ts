@@ -1370,9 +1370,9 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   audioAvailable: Boolean(data.audioStoragePath),
   status: data.status ?? 'draft',
   moderationNote: data.moderationNote ?? null,
-  releaseDate: data.releaseDate ?? null,
-  createdAt: data.createdAt ?? null,
-  updatedAt: data.updatedAt ?? null,
+  releaseDate: toIso(data.releaseDate),
+  createdAt: toIso(data.createdAt),
+  updatedAt: toIso(data.updatedAt),
 });
 
 const releaseSearchText = (data: Record<string, unknown>) => [
@@ -1481,6 +1481,21 @@ export const deleteRelease = onCall({ region: REGION }, async (request) => {
   if (audioPath) {
     try { await getStorage().bucket().file(audioPath).delete({ ignoreNotFound: true }); } catch { /* release deletion continues */ }
   }
+
+  for (const assetId of [current.artworkAssetId, current.pendingArtworkAssetId]) {
+    const cleanId = cleanText(assetId, 160);
+    if (!cleanId) continue;
+    const asset = await db.collection('imageAssets').doc(cleanId).get();
+    if (asset.exists && asset.data()?.ownerUserId === identity.uid) {
+      await clearAssetFile(asset.data() ?? {});
+      await asset.ref.set({
+        status: 'removed',
+        publicUrl: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  }
+
   await ref.delete();
   return { deleted: true };
 });
@@ -1852,8 +1867,8 @@ export const listNotifications = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const snapshot = await accountRef(identity.uid).collection('notifications').limit(100).get();
   const notifications = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }))
-    .sort((a: any, b: any) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+    .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
+    .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
     .slice(0, 30);
   return { notifications, unreadCount: notifications.filter((item: any) => item.read !== true).length };
 });
