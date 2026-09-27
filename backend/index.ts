@@ -129,6 +129,7 @@ const securityTokenHash = (prefix: string, value: unknown) => createHash('sha256
 const pageForensicToken = (userId: string, scriptId: string, sessionId: string, page: number, issuedAt: unknown) =>
   securityTokenHash('nightjar-forensic', [userId, scriptId, sessionId, page, String(issuedAt ?? '')].join('|')).slice(0, 16).toUpperCase();
 const normalizeDeviceToken = (value: unknown) => String(value ?? '').trim().slice(0, 160);
+const normalizeEnvironmentToken = (value: unknown) => String(value ?? '').trim().toLowerCase().replace(/[^a-f0-9]/g, '').slice(0, 128);
 
 const revokeReaderSessions = async (userId: string, reason: string) => { const { items } = await db.list(readerSessionTable(userId), { limit: 500 }); const now = new Date().toISOString(); const updates = items.filter((item) => item.status === 'active').map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } })); if (updates.length) await db.update(readerSessionTable(userId), updates); };
 const revokeReaderSessionsForScript = async (userId: string, scriptId: string, reason: string) => {
@@ -172,22 +173,48 @@ const createSecurityAlert = async (userId: string, details: Record<string, unkno
   }]);
   return alert;
 };
-const registerProtectedDevice = async (userId: string, deviceToken: unknown, relatedId?: string | null) => {
+const registerProtectedDevice = async (userId: string, deviceToken: unknown, relatedId?: string | null, environmentToken?: unknown) => {
   const token = normalizeDeviceToken(deviceToken);
-  if (!token) return { deviceHash: null as string | null, blocked: false, linkedSuspendedUserIds: [] as string[] };
-  const deviceHash = securityTokenHash('nightjar-device', token);
+  const environmentTokenValue = normalizeEnvironmentToken(environmentToken);
+  if (!token && !environmentTokenValue) return {
+    deviceHash: null as string | null,
+    environmentHash: null as string | null,
+    blocked: false,
+    environmentBlocked: false,
+    linkedSuspendedUserIds: [] as string[],
+    linkedSuspendedEnvironmentUserIds: [] as string[],
+  };
+  const deviceHash = token ? securityTokenHash('nightjar-device', token) : null;
+  const environmentHash = environmentTokenValue ? securityTokenHash('nightjar-environment', environmentTokenValue) : null;
   const now = new Date().toISOString();
   const { items: devices } = await db.list(securityDeviceTable, { limit: 5000 });
-  const sameDevice = devices.filter((item) => String(item.deviceHash ?? '') === deviceHash);
+  const sameDevice = deviceHash ? devices.filter((item) => String(item.deviceHash ?? '') === deviceHash) : [];
+  const sameEnvironment = environmentHash ? devices.filter((item) => String(item.environmentHash ?? '') === environmentHash) : [];
   const blocked = sameDevice.some((item) => item.blocked === true);
+  const environmentBlocked = sameEnvironment.some((item) => item.environmentBlocked === true);
   const linkedUserIds = Array.from(new Set(sameDevice.map((item) => String(item.userId ?? '')).filter(Boolean)));
+  const linkedEnvironmentUserIds = Array.from(new Set(sameEnvironment.map((item) => String(item.userId ?? '')).filter(Boolean)));
   const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
-  const linkedSuspendedUserIds = linkedUserIds.filter((id) => accounts.some((account) => String(account.userId) === id && (account.status === 'suspended' || account.removed === true)));
-  const current = sameDevice.find((item) => String(item.userId) === userId);
-  const record = { deviceHash, userId, firstSeenAt: current?.firstSeenAt ?? now, lastSeenAt: now, blocked: current?.blocked === true, relatedId: relatedId ?? current?.relatedId ?? null };
+  const isRestricted = (id: string) => accounts.some((account) => String(account.userId) === id && (account.status === 'suspended' || account.removed === true));
+  const linkedSuspendedUserIds = linkedUserIds.filter(isRestricted);
+  const linkedSuspendedEnvironmentUserIds = linkedEnvironmentUserIds.filter(isRestricted);
+  const current = devices.find((item) =>
+    String(item.userId) === userId &&
+    ((deviceHash && String(item.deviceHash ?? '') === deviceHash) || (!deviceHash && environmentHash && String(item.environmentHash ?? '') === environmentHash))
+  );
+  const record = {
+    deviceHash,
+    environmentHash,
+    userId,
+    firstSeenAt: current?.firstSeenAt ?? now,
+    lastSeenAt: now,
+    blocked: current?.blocked === true || blocked,
+    environmentBlocked: current?.environmentBlocked === true || environmentBlocked,
+    relatedId: relatedId ?? current?.relatedId ?? null,
+  };
   if (current?.id) await db.update(securityDeviceTable, [{ id: current.id, record: { ...current, ...record } }]);
   else await db.add(securityDeviceTable, [record]);
-  return { deviceHash, blocked, linkedSuspendedUserIds };
+  return { deviceHash, environmentHash, blocked, environmentBlocked, linkedSuspendedUserIds, linkedSuspendedEnvironmentUserIds };
 };
 
 const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => {
