@@ -2065,16 +2065,22 @@ export const handler = router({
   'POST /api/security/device/register': [
     requireAuth(),
     async (ctx) => {
-      const body = (ctx.body ?? {}) as { deviceId?: string };
-      const device = await registerProtectedDevice(ctx.user!.userId, body.deviceId, null);
+      const body = (ctx.body ?? {}) as { deviceId?: string; environmentId?: string };
+      const device = await registerProtectedDevice(ctx.user!.userId, body.deviceId, null, body.environmentId);
       const linkedRestrictedUserIds = device.linkedSuspendedUserIds.filter((userId) => userId !== ctx.user!.userId);
-      const suspicious = device.blocked || linkedRestrictedUserIds.length > 0;
+      const linkedRestrictedEnvironmentUserIds = device.linkedSuspendedEnvironmentUserIds.filter((userId) => userId !== ctx.user!.userId);
+      const exactRisk = device.blocked || linkedRestrictedUserIds.length > 0;
+      const environmentRisk = device.environmentBlocked || linkedRestrictedEnvironmentUserIds.length > 0;
+      const suspicious = exactRisk || environmentRisk;
       let alertId: string | null = null;
       if (suspicious) {
         const { items: existing } = await db.list(securityAlertTable, { limit: 250 });
         const recent = existing.find((item) =>
           String(item.userId ?? '') === ctx.user!.userId &&
-          String(item.deviceHash ?? '') === String(device.deviceHash ?? '') &&
+          (
+            (device.deviceHash && String(item.deviceHash ?? '') === String(device.deviceHash)) ||
+            (device.environmentHash && String(item.environmentHash ?? '') === String(device.environmentHash))
+          ) &&
           item.status === 'open' &&
           Date.now() - new Date(String(item.createdAt ?? 0)).getTime() < 24 * 60 * 60_000
         );
@@ -2082,23 +2088,30 @@ export const handler = router({
           alertId = String(recent.id);
         } else {
           const alert = await createSecurityAlert(ctx.user!.userId, {
-            severity: device.blocked ? 'critical' : 'high',
-            riskScore: device.blocked ? 95 : 78,
+            severity: device.blocked || device.environmentBlocked ? 'critical' : exactRisk ? 'high' : 'medium',
+            riskScore: device.blocked || device.environmentBlocked ? 95 : exactRisk ? 78 : 62,
             reason: device.blocked
               ? 'A Nightjar session was opened from a device token previously blocked by an administrator.'
-              : 'A Nightjar session was opened from a device token previously linked to a suspended or removed account.',
+              : device.environmentBlocked
+                ? 'A Nightjar session was opened from a browser/device environment explicitly blocked by an administrator.'
+                : linkedRestrictedUserIds.length
+                  ? 'A Nightjar session was opened from a device token previously linked to a suspended or removed account.'
+                  : 'A Nightjar session shares a pseudonymous browser/device environment with a previously suspended or removed account. Shared devices are possible; review is required before account action.',
             relatedId: null,
             deviceHash: device.deviceHash,
+            environmentHash: device.environmentHash,
             linkedSuspendedUserIds: linkedRestrictedUserIds,
-            signal: { eventType: 'device_linked_to_restricted_account', accountSessionOnly: true },
+            linkedSuspendedEnvironmentUserIds: linkedRestrictedEnvironmentUserIds,
+            signal: { eventType: 'device_or_environment_linked_to_restricted_account', accountSessionOnly: true },
           });
           alertId = alert.id ? String(alert.id) : null;
         }
       }
       return json({
-        registered: Boolean(device.deviceHash),
-        protectedAccessPaused: device.blocked,
+        registered: Boolean(device.deviceHash || device.environmentHash),
+        protectedAccessPaused: device.blocked || device.environmentBlocked,
         linkedRestrictedAccountCount: linkedRestrictedUserIds.length,
+        linkedRestrictedEnvironmentAccountCount: linkedRestrictedEnvironmentUserIds.length,
         securityReviewRequired: suspicious,
         alertId,
       });
