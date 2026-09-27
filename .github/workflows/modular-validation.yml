@@ -30,6 +30,10 @@ jobs:
         id: typecheck
         continue-on-error: true
         run: npm run typecheck 2>&1 | tee modular-typecheck.log
+      - name: Contract tests
+        id: tests
+        continue-on-error: true
+        run: npm test 2>&1 | tee modular-tests.log
       - name: Build frontend
         id: build
         continue-on-error: true
@@ -38,14 +42,14 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee modular-build.log
       - name: Report validation failure on the PR
-        if: github.event_name == 'pull_request' && (steps.typecheck.outcome == 'failure' || steps.build.outcome == 'failure')
+        if: github.event_name == 'pull_request' && (steps.typecheck.outcome == 'failure' || steps.tests.outcome == 'failure' || steps.build.outcome == 'failure')
         uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
             const readTail = (path) => fs.existsSync(path) ? fs.readFileSync(path, 'utf8').split(/\\r?\\n/).slice(-100).join('\\n') : 'No log was created.';
-            const body = ['## Nightjar modular validation failed','','### Typecheck','~~~text',readTail('modular-typecheck.log').slice(-6000),'~~~','','### Build','~~~text',readTail('modular-build.log').slice(-6000),'~~~'].join('\\n');
+            const body = ['## Nightjar modular validation failed','','### Typecheck','~~~text',readTail('modular-typecheck.log').slice(-5000),'~~~','','### Contract tests','~~~text',readTail('modular-tests.log').slice(-5000),'~~~','','### Build','~~~text',readTail('modular-build.log').slice(-5000),'~~~'].join('\\n');
             await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
       - name: Fail validation
-        if: steps.typecheck.outcome == 'failure' || steps.build.outcome == 'failure'
+        if: steps.typecheck.outcome == 'failure' || steps.tests.outcome == 'failure' || steps.build.outcome == 'failure'
         run: exit 1
