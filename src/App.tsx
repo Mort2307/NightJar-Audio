@@ -43,6 +43,7 @@ import RecommendationFeedback from './components/RecommendationFeedback';
 import FollowingList from './components/FollowingList';
 import CatalogueSearch from './components/CatalogueSearch';
 import WriterStudio from './components/WriterStudio';
+import SecurityReviewPanel from './components/SecurityReviewPanel';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -98,6 +99,16 @@ type Spotlight = {
 };
 
 const preferredScrollBehavior = (): ScrollBehavior => window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+const getNightjarDeviceId = () => {
+  const key = 'nightjar.protected-device.v1';
+  const current = window.localStorage.getItem(key);
+  if (current) return current;
+  const next = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : 'nj-device-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+  window.localStorage.setItem(key, next);
+  return next;
+};
 
 const roleMeta: Record<AccountRole, { label: string; description: string }> = {
   admin: {
@@ -160,8 +171,6 @@ function App() {
   const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], publicProfile: true });
   const [profileLoading, setProfileLoading] = useState(false);
   const [tasteVector, setTasteVector] = useState<any[]>([]);
-  const [securityAlerts, setSecurityAlerts] = useState<any[]>([]);
-  const [securityAlertsLoading, setSecurityAlertsLoading] = useState(false);
   const [adminPanel, setAdminPanel] = useState<'approvals' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | null>(null);
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
@@ -629,25 +638,35 @@ function App() {
     }
   };
 
-  const recordProtectionEvent = async (eventType: string, relatedId = 'protected-script') => {
+  const recordProtectionEvent = async (eventType: string, relatedId = 'protected-script', sessionId?: string) => {
     if (!user) return;
     try {
-      await api.post('/api/protection/event', { eventType, relatedType: 'script', relatedId, summary: eventType === 'copy_blocked' ? 'Protected copy interaction blocked; no clipboard contents were captured.' : 'Protected interaction recorded by Nightjar.' });
+      await api.post('/api/protection/event', {
+        eventType,
+        relatedType: 'script',
+        relatedId,
+        sessionId: sessionId ?? null,
+        deviceId: getNightjarDeviceId(),
+        summary: eventType === 'copy_blocked'
+          ? 'Protected copy interaction blocked; no clipboard contents were captured.'
+          : 'Protected interaction recorded by Nightjar.',
+      });
     } catch { }
   };
 
   const openProtectedReader = async (scriptId: string) => {
     try {
-      const { data } = await api.get('/api/scripts/' + scriptId);
+      const deviceId = getNightjarDeviceId();
+      const { data } = await api.get('/api/scripts/' + encodeURIComponent(scriptId) + '?deviceId=' + encodeURIComponent(deviceId));
       if (data?.canReadFull === false) {
         notify('This manuscript has not been granted for full reading by the writer.');
         return;
       }
       setProtectedReaderScript(data);
       setProtectedReaderOpen(true);
-      void recordProtectionEvent('script_view', scriptId);
+      void recordProtectionEvent('script_view', scriptId, data?.readerSession?.sessionId);
     } catch {
-      notify('Protected script access could not be opened.');
+      notify('Protected script access could not be opened. If Nightjar paused access for security review, an administrator has been notified.');
     }
   };
 
@@ -749,26 +768,6 @@ function App() {
 
   const updateProfileList = (key: 'favouriteTags'|'favouriteTropes'|'favouriteCategories', value: string) => {
     setProfile((current: any) => ({ ...current, [key]: value.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 16) }));
-  };
-
-  const loadSecurityAlerts = async () => {
-    if (!canAdmin) return;
-    setSecurityAlertsLoading(true);
-    try {
-      const { data } = await api.get('/api/admin/security-alerts');
-      setSecurityAlerts(data?.alerts ?? []);
-    } catch { notify('Security alerts could not be loaded.'); }
-    finally { setSecurityAlertsLoading(false); }
-  };
-
-  const suspendFromSecurityAlert = async (alert: any) => {
-    if (!canAdmin || !alert?.id) return;
-    try {
-      await api.post('/api/admin/security-alerts/' + alert.id + '/suspend', {});
-      await loadSecurityAlerts();
-      await loadAdminOverview();
-      notify('Account suspended and active protected-reader sessions revoked.');
-    } catch { notify('The security action could not be completed.'); }
   };
 
   const loadProtection = async () => {
@@ -1422,7 +1421,7 @@ function App() {
               <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>Upload or replace the logo used across the Nightjar shell. Only administrators can change it.</p><div className="logo-editor"><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt="Current Nightjar logo" /> : <span><Moon size={28} /> No logo uploaded</span>}</div><label className="secondary-button upload-label"><Upload size={15} /> {logoUploading ? 'Uploading…' : 'Choose logo'}<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label></div><strong>Admin editable · max 3 MB</strong></div>
             </div>
             <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>
-            {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">SECURITY / OWNER ALERTS</span><h2>Suspicious activity</h2><p>Every qualifying alert is addressed to all three Nightjar owners and retained in the audit trail.</p></div><button className="secondary-button" onClick={() => void loadSecurityAlerts()}>{securityAlertsLoading ? 'Refreshing…' : 'Refresh alerts'}</button><div className="security-alert-list">{securityAlerts.length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No open security alerts</strong><span>Signals remain evidence, not accusations. Alerts are retained for review.</span></div> : securityAlerts.map((alert:any) => <article className="security-alert-row" key={alert.id}><div><strong>{alert.severity?.toUpperCase() ?? 'HIGH'} · {alert.reason ?? 'Suspicious protected-content activity'}</strong><span>User: {alert.userId} · Script: {alert.relatedId ?? '—'} · {new Date(alert.createdAt).toLocaleString('en-GB')}</span><em>Delivered to both owners</em></div><button className="secondary-button" disabled={alert.status === 'actioned'} onClick={() => void suspendFromSecurityAlert(alert)}>{alert.status === 'actioned' ? 'Account suspended' : 'Suspend account'}</button></article>)}</div></section>}
+            {canAdmin && <SecurityReviewPanel notify={notify} onAccountStateChange={loadAdminOverview} />}
             {adminPeopleRole && <div className="people-drawer" role="dialog" aria-modal="true" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="icon-button" onClick={() => setAdminPeopleRole(null)} aria-label="Close account directory"><X size={18} /></button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => account.role === adminPeopleRole)).map((account: any) => <article className="people-row" key={account.userId ?? account.email}><span className="account-chip-avatar">{(account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}</span></div><em>{account.status === 'pending_review' ? 'Pending review' : 'Active'}</em></article>)}{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => account.role === adminPeopleRole)).length === 0 && <div className="people-empty"><Users size={18} /><strong>No accounts in this role yet</strong><span>The live directory will populate as accounts are created or approved.</span></div>}</div></div>}
             {adminPanel && <div className="admin-panel-modal" role="dialog" aria-modal="true"><section><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Creator approval queue' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : adminPanel === 'editorial' ? 'Editorial assignments' : 'Listening economics'}</h2><p>{adminPanel === 'approvals' ? 'Review creator applications and record an explicit decision.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : adminPanel === 'editorial' ? 'Assign live manuscripts to active Editor accounts.' : 'Planning assumptions for the verified-listening creator model.'}</p></div><button className="icon-button" onClick={() => setAdminPanel(null)} aria-label="Close administrator panel"><X size={18} /></button></div>{adminPanel === 'approvals' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading approval queue…</div> : adminApplications.length === 0 ? <div className="people-empty"><Sparkles size={18} /><strong>No creator applications</strong><span>The queue is empty. New creator applications will appear here.</span></div> : adminApplications.map((application) => <article className="admin-data-row" key={application.id}><div><strong>{application.creatorName ?? application.displayName ?? application.email ?? 'Creator applicant'}</strong><span>{application.email ?? 'No email supplied'} · {application.status ?? 'pending'}</span></div><div className="admin-data-actions"><button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Waitlist</button><button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'rejected')}>Reject</button><button className="primary-button" onClick={() => void decideCreatorApplication(application, 'approved')}>Approve</button></div></article>)}</div>}{adminPanel === 'editorial' && <div>{adminPanelLoading ? <div className="people-empty">Loading editorial controls…</div> : <div className="admin-data-list">{adminScripts.map((script) => <article className="admin-data-row" key={script.id}><div><strong>{script.title}</strong><span>{script.status ?? 'Draft'} · v{script.version ?? 1}</span></div><select className="admin-select" defaultValue={script.editorUserId ?? ''} onChange={(event) => { if (event.target.value) void assignEditor(script.id, event.target.value); }}><option value="" disabled>{script.editorUserId ? 'Reassign editor' : 'Assign editor'}</option>{adminEditors.map((editor) => <option key={editor.userId} value={editor.userId}>{editor.name ?? editor.email ?? editor.userId}</option>)}</select></article>)}{!adminScripts.length && <div className="people-empty"><FileText size={18} /><strong>No manuscripts available.</strong><span>Submitted live scripts will appear here for assignment.</span></div>}</div>}</div>}{adminPanel === 'subscriptions' && <div>{adminPanelLoading ? <div className="people-empty">Loading subscription ledger…</div> : <><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Active</span><strong>{adminOverview?.subscriptions?.active ?? 0}</strong></div><div className="admin-modal-stat"><span>Trial</span><strong>{adminOverview?.subscriptions?.trialing ?? 0}</strong></div><div className="admin-modal-stat"><span>Past due</span><strong>{adminOverview?.subscriptions?.pastDue ?? 0}</strong></div></div><div className="admin-data-list">{adminSubscriptions.length === 0 ? <div className="people-empty"><WalletCards size={18} /><strong>No live subscription records</strong><span>Billing is not connected yet; no subscription data is being fabricated.</span></div> : adminSubscriptions.map((subscription) => <article className="admin-data-row" key={subscription.id}><div><strong>{subscription.email ?? subscription.userId ?? 'Subscriber'}</strong><span>{subscription.plan ?? 'Nightjar · £5 monthly'} · {subscription.status ?? 'unknown'}</span></div><span>{subscription.currentPeriodEnd ?? '—'}</span></article>)}</div></>}</div>}{adminPanel === 'revenue' && <div><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Planning price</span><strong>£5</strong></div><div className="admin-modal-stat"><span>Live subscriptions</span><strong>{adminOverview?.subscriptions?.active ?? 0}</strong></div><div className="admin-modal-stat"><span>Confirmed gross MRR</span><strong>{adminOverview?.subscriptions?.active ? `£${(adminOverview.subscriptions.active * 5).toLocaleString('en-GB')}` : '£0'}</strong></div></div><div className="admin-formula"><div><b>01</b><strong>Subscription revenue after applicable deductions becomes the commercial base.</strong></div><div><b>02</b><strong>A defined creator pool is allocated from the eligible net revenue.</strong></div><div><b>03</b><strong>Creator shares are attributed using verified listening rather than fixed per-drop promises.</strong></div></div><div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>CONFIRMED VS PLANNING</strong><span>£5 is a planning reference. The dashboard does not present illustrative creator earnings as confirmed payouts.</span></div></div></div>}{adminPanel === 'economics' && <div><div className="admin-modal-grid"><div className="admin-modal-stat"><span>Launch reference</span><strong>£5</strong></div><div className="admin-modal-stat"><span>Creator pool</span><strong>Defined before launch</strong></div><div className="admin-modal-stat"><span>Allocation</span><strong>Verified listening</strong></div></div><div className="admin-formula"><div><b>01</b><strong>Net subscription revenue</strong></div><div><b>02</b><strong>Creator pool</strong></div><div><b>03</b><strong>Eligible verified listening determines each creator share</strong></div></div><p className="panel-note">The final pool percentage, eligible-listening definition, exclusions, payout timing and any reserve policy should be published before creators enter the commercial program.</p></div>}</section></div>}
           </section>
@@ -1431,7 +1430,7 @@ function App() {
 
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <span className="nightjar-mark"><Moon size={15} /></span>}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
-      {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id)} notify={notify} />}
+      {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, protectedReaderScript.readerSession?.sessionId)} notify={notify} />}
       {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} />}
       {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleCreatorFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} />}
       <ContentModeration open={moderationOpen} onClose={() => setModerationOpen(false)} notify={notify} />
@@ -1564,7 +1563,7 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
         <div className="reader-watermark-layer" aria-hidden="true">{Array.from({ length: 8 }).map((_, index) => <span key={index}>{pageData?.watermark ?? data.readerSession?.watermark ?? 'NIGHTJAR · AUTHORISED READER SESSION'}</span>)}</div>
         <p className="reader-watermark">{pageData?.watermark ?? data.readerSession?.watermark ?? 'NIGHTJAR · AUTHORISED READER SESSION'}</p>
         {pageLoading && !pageData ? <p>Loading protected page…</p> : content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : <p>No manuscript text is available on this page.</p>}
-        {pageData?.contentHash && <p className="reader-fingerprint">SHA-256 · {String(pageData.contentHash).slice(0, 20)}…</p>}
+        {(pageData?.forensicToken || pageData?.contentHash) && <p className="reader-fingerprint">{pageData?.forensicToken ? 'FORENSIC FP ' + String(pageData.forensicToken) + ' · ' : ''}{pageData?.contentHash ? 'SHA-256 ' + String(pageData.contentHash).slice(0, 20) + '…' : ''}</p>}
       </article>
       <div className="reader-pagination">
         <button className="secondary-button" disabled={pageLoading || !pageData?.hasPrevious} onClick={() => void loadPage(Math.max(0, Number(pageData?.page ?? 0) - 1))}>Previous page</button>
