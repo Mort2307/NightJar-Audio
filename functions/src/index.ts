@@ -466,10 +466,20 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('invalid-argument', 'Release artwork requires a release ID.');
   }
 
-  if (kind === 'release_artwork' && !identity.admin) {
-    const account = await accountRef(identity.uid).get();
-    if (account.data()?.role !== 'creator' || account.data()?.status !== 'active') {
-      throw new HttpsError('permission-denied', 'Active Creator access required.');
+  if (kind === 'release_artwork') {
+    const release = await db.collection('releases').doc(targetId).get();
+    if (!release.exists) throw new HttpsError('not-found', 'Release not found.');
+    if (!identity.admin) {
+      const account = await accountRef(identity.uid).get();
+      if (account.data()?.role !== 'creator' || account.data()?.status !== 'active') {
+        throw new HttpsError('permission-denied', 'Active Creator access required.');
+      }
+      if (release.data()?.creatorUserId !== identity.uid) {
+        throw new HttpsError('permission-denied', 'You cannot change artwork for another creator.');
+      }
+      if (release.data()?.status === 'released') {
+        throw new HttpsError('failed-precondition', 'Live release artwork cannot be replaced directly.');
+      }
     }
   }
 
@@ -536,6 +546,22 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     await brandingRef.set({
       pendingLogoAssetId: assetId,
       pendingLogoStatus: 'pending',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } else if (kind === 'release_artwork') {
+    const releaseRefForArtwork = db.collection('releases').doc(targetId);
+    const release = await releaseRefForArtwork.get();
+    const previousPendingId = cleanText(release.data()?.pendingArtworkAssetId, 160);
+    if (previousPendingId && previousPendingId !== assetId) {
+      const previousPending = await db.collection('imageAssets').doc(previousPendingId).get();
+      if (previousPending.exists && previousPending.data()?.status === 'pending') {
+        await clearAssetFile(previousPending.data() ?? {});
+        await previousPending.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+    }
+    await releaseRefForArtwork.set({
+      pendingArtworkAssetId: assetId,
+      pendingArtworkStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
   }
@@ -649,6 +675,16 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         pendingLogoStatus: 'rejected',
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+    } else if (asset.kind === 'release_artwork' && asset.targetId) {
+      const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
+      const release = await releaseRefForArtwork.get();
+      if (release.exists && release.data()?.pendingArtworkAssetId === assetId) {
+        await releaseRefForArtwork.set({
+          pendingArtworkAssetId: null,
+          pendingArtworkStatus: 'rejected',
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
     }
 
     return { assetId, status: 'rejected' };
@@ -703,15 +739,32 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       }
     }
   } else if (asset.kind === 'release_artwork' && asset.targetId) {
-    const releaseRef = db.collection('releases').doc(String(asset.targetId));
-    const release = await releaseRef.get();
-    if (release.exists) {
-      await releaseRef.set({
-        artworkAssetId: assetId,
-        artworkUrl: url,
-        artworkStatus: 'approved',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+    const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
+    const release = await releaseRefForArtwork.get();
+    if (!release.exists || release.data()?.pendingArtworkAssetId !== assetId) {
+      await clearAssetFile(asset);
+      await ref.set({ status: 'removed', publicUrl: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      throw new HttpsError('failed-precondition', 'This artwork is no longer the pending replacement for the release.');
+    }
+    const previousAssetId = cleanText(release.data()?.artworkAssetId, 160);
+    await releaseRefForArtwork.set({
+      artworkAssetId: assetId,
+      artworkUrl: url,
+      artworkStatus: 'approved',
+      pendingArtworkAssetId: null,
+      pendingArtworkStatus: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    if (previousAssetId && previousAssetId !== assetId) {
+      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
+      if (previous.exists) {
+        await clearAssetFile(previous.data() ?? {});
+        await previous.ref.set({
+          status: 'removed',
+          publicUrl: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
     }
   }
 
@@ -756,15 +809,20 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
   }, { merge: true });
 
   if (asset.kind === 'release_artwork' && asset.targetId) {
-    const releaseRef = db.collection('releases').doc(String(asset.targetId));
-    const release = await releaseRef.get();
-    if (release.exists && release.data()?.artworkAssetId === assetId) {
-      await releaseRef.set({
-        artworkAssetId: null,
-        artworkUrl: null,
-        artworkStatus: null,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+    const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
+    const release = await releaseRefForArtwork.get();
+    if (release.exists) {
+      const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+      if (release.data()?.pendingArtworkAssetId === assetId) {
+        update.pendingArtworkAssetId = null;
+        update.pendingArtworkStatus = null;
+      }
+      if (release.data()?.artworkAssetId === assetId) {
+        update.artworkAssetId = null;
+        update.artworkUrl = null;
+        update.artworkStatus = null;
+      }
+      if (Object.keys(update).length > 1) await releaseRefForArtwork.set(update, { merge: true });
     }
   }
 
@@ -1307,6 +1365,8 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
   artworkAssetId: data.artworkAssetId ?? null,
   artworkStatus: data.artworkStatus ?? null,
+  pendingArtworkAssetId: data.pendingArtworkAssetId ?? null,
+  pendingArtworkStatus: data.pendingArtworkStatus ?? null,
   audioAvailable: Boolean(data.audioStoragePath),
   status: data.status ?? 'draft',
   moderationNote: data.moderationNote ?? null,
@@ -1365,6 +1425,8 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     artworkAssetId: null,
     artworkUrl: null,
     artworkStatus: null,
+    pendingArtworkAssetId: null,
+    pendingArtworkStatus: null,
     status: 'draft' as ReleaseStatus,
     moderationNote: null,
     version: 1,
@@ -1399,9 +1461,6 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     durationMinutes: typeof input.durationMinutes === 'number' && Number.isFinite(input.durationMinutes)
       ? Math.max(0, Math.min(1440, input.durationMinutes))
       : current.durationMinutes ?? 0,
-    artworkAssetId: Object.prototype.hasOwnProperty.call(input, 'artworkAssetId') ? input.artworkAssetId ?? null : current.artworkAssetId ?? null,
-    artworkUrl: Object.prototype.hasOwnProperty.call(input, 'artworkUrl') ? input.artworkUrl ?? null : current.artworkUrl ?? null,
-    artworkStatus: Object.prototype.hasOwnProperty.call(input, 'artworkStatus') ? input.artworkStatus ?? null : current.artworkStatus ?? null,
     updatedAt: FieldValue.serverTimestamp(),
   };
   await ref.set(update, { merge: true });
@@ -1504,7 +1563,7 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
   if (!data.title || !data.description || !data.category || !data.audioStoragePath) {
     throw new HttpsError('failed-precondition', 'Complete title, description, category and audio before submitting.');
   }
-  if (data.artworkAssetId && data.artworkStatus === 'pending') {
+  if (data.pendingArtworkAssetId && data.pendingArtworkStatus === 'pending') {
     throw new HttpsError('failed-precondition', 'Artwork moderation must finish before release submission.');
   }
   await ref.set({
@@ -2341,7 +2400,7 @@ export const openProtectedScript = onCall({ region: REGION }, async (request) =>
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  void assessProtectedActivityFirebase(identity.uid, { eventType: 'script_view', relatedId: scriptId });
+  await assessProtectedActivityFirebase(identity.uid, { eventType: 'script_view', relatedId: scriptId });
 
   return {
     script: scriptPayload(script, scriptId, true),
