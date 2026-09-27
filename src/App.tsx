@@ -1561,6 +1561,7 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
       </header>
       <div className="reader-notice"><ShieldCheck size={15} /><span>The browser only receives the page you are reading. Access, page views and permitted exports are recorded against this short-lived session.</span></div>
       <article className={copyAllowed ? 'reader-body copy-enabled' : 'reader-body'}>
+        <div className="reader-watermark-layer" aria-hidden="true">{Array.from({ length: 8 }).map((_, index) => <span key={index}>{pageData?.watermark ?? data.readerSession?.watermark ?? 'NIGHTJAR · AUTHORISED READER SESSION'}</span>)}</div>
         <p className="reader-watermark">{pageData?.watermark ?? data.readerSession?.watermark ?? 'NIGHTJAR · AUTHORISED READER SESSION'}</p>
         {pageLoading && !pageData ? <p>Loading protected page…</p> : content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : <p>No manuscript text is available on this page.</p>}
         {pageData?.contentHash && <p className="reader-fingerprint">SHA-256 · {String(pageData.contentHash).slice(0, 20)}…</p>}
