@@ -340,8 +340,8 @@ function App() {
 
   const searchCatalogue = async (query: string, category: string) => {
     const next = { query: query.trim(), category: category.trim() };
-    setCatalogueSearch(next);
     if (!next.query && !next.category) {
+      setCatalogueSearch(next);
       setCatalogueResults(null);
       return;
     }
@@ -350,6 +350,7 @@ function App() {
     if (next.category) params.set('category', next.category);
     try {
       const { data } = await api.get('/api/catalogue?' + params.toString());
+      setCatalogueSearch(next);
       setCatalogueResults(mapCatalogueTracks(data?.catalogue ?? []));
       if (Array.isArray(data?.categories)) setCatalogueCategories(data.categories.map(String));
     } catch {
