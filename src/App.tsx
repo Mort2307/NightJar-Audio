@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, auth } from '@appdeploy/client';
 import {
   ArrowRight,
@@ -14,7 +14,6 @@ import {
   Moon,
   Pause,
   Play,
-  Search,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -39,6 +38,9 @@ import ContentModeration from './components/ContentModeration';
 import NightjarOnboarding from './components/NightjarOnboarding';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
+import ProfileDiscovery from './components/ProfileDiscovery';
+import RecommendationFeedback from './components/RecommendationFeedback';
+import FollowingList from './components/FollowingList';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -131,9 +133,8 @@ function App() {
   const [ageSessionActive, setAgeSessionActive] = useState(false);
   const [ageLoading, setAgeLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
   const [favouriteReleaseIds, setFavouriteReleaseIds] = useState<string[]>([]);
-  const [followingCreatorIds, setFollowingCreatorIds] = useState<string[]>([]);
+  const [followingProfileIds, setFollowingProfileIds] = useState<string[]>([]);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [role, setRole] = useState<AccountRole | null>(null);
   const [accountStatus, setAccountStatus] = useState<'active' | 'pending_review'>('active');
@@ -264,13 +265,14 @@ function App() {
   };
 
   const loadLiveProductData = async () => {
-    try {
-      const [catalogueResponse, creatorsResponse, spotlightResponse] = await Promise.all([
-        api.get('/api/catalogue'),
-        api.get('/api/creators'),
-        api.get('/api/spotlights'),
-      ]);
-      const liveTracks = (catalogueResponse.data?.catalogue ?? []).map((release: any, index: number) => ({
+    const [catalogueResult, creatorsResult, spotlightResult] = await Promise.allSettled([
+      api.get('/api/catalogue'),
+      api.get('/api/creators'),
+      api.get('/api/spotlights'),
+    ]);
+
+    if (catalogueResult.status === 'fulfilled') {
+      const liveTracks = (catalogueResult.value.data?.catalogue ?? []).map((release: any, index: number) => ({
         id: String(release.id),
         title: release.title,
         creator: release.creatorName ?? 'Nightjar creator',
@@ -283,15 +285,23 @@ function App() {
         creatorUserId: release.creatorUserId,
       })) as Track[];
       setTracks(liveTracks);
-      setCreatorDirectory((creatorsResponse.data?.creators ?? []).map((creator: any) => ({
+    }
+
+    if (creatorsResult.status === 'fulfilled') {
+      setCreatorDirectory((creatorsResult.value.data?.creators ?? []).map((creator: any) => ({
         userId: String(creator.userId),
         name: creator.displayName ?? 'Nightjar creator',
         handle: creator.handle ?? null,
         initials: creator.avatarInitials ?? undefined,
         note: creator.headline ?? creator.bio ?? undefined,
+        followers: Number(creator.followerCount ?? 0),
         releases: creator.releaseCount ?? 0,
+        share: creator.listeningShare ?? '—',
       })));
-      const spotlights = spotlightResponse.data?.spotlights ?? [];
+    }
+
+    if (spotlightResult.status === 'fulfilled') {
+      const spotlights = spotlightResult.value.data?.spotlights ?? [];
       const mapSpotlight = (item: any): Spotlight => ({
         kind: item.kind,
         name: item.name,
@@ -312,35 +322,25 @@ function App() {
       const listener = spotlights.find((item: any) => item.kind === 'listener' && item.name);
       setListenerSpotlight(listener ? mapSpotlight(listener) : null);
       setSpotlightMeta({
-        listenerTopSevenCount: Number(spotlightResponse.data?.listenerTopSevenCount ?? 0),
-        listenerSpotlightDay: spotlightResponse.data?.listenerSpotlightDay == null ? null : Number(spotlightResponse.data.listenerSpotlightDay),
-        listenerWeek: spotlightResponse.data?.listenerWeek ?? null,
+        listenerTopSevenCount: Number(spotlightResult.value.data?.listenerTopSevenCount ?? 0),
+        listenerSpotlightDay: spotlightResult.value.data?.listenerSpotlightDay == null ? null : Number(spotlightResult.value.data.listenerSpotlightDay),
+        listenerWeek: spotlightResult.value.data?.listenerWeek ?? null,
       });
-      await loadNotifications();
-      if (user) {
-        const [recommendationsResponse, trendingResponse, favouritesResponse, followsResponse] = await Promise.all([
-          api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
-          api.get('/api/trending'),
-          api.get('/api/favourites'),
-          api.get('/api/follows'),
-        ]);
-        setLiveRecommendations(recommendationsResponse.data?.recommendations ?? []);
-        setLiveTrending(trendingResponse.data?.trending ?? []);
-        setFavouriteReleaseIds((favouritesResponse.data?.favourites ?? []).map((item: any) => String(item.releaseId)));
-        setFollowingCreatorIds((followsResponse.data?.follows ?? []).map((item: any) => String(item.profileUserId ?? item.creatorUserId)).filter(Boolean));
-      }
-    } catch {
-      setTracks([]);
-      setCreatorDirectory([]);
-      setCreatorSpotlightList([]);
-      setWriterSpotlightList([]);
-      setListenerSpotlight(null);
-      setSpotlightMeta({ listenerTopSevenCount: 0, listenerSpotlightDay: null, listenerWeek: null });
-      setNotifications([]);
-      setNotificationUnreadCount(0);
-      setNotificationsOpen(false);
-      setLiveRecommendations([]);
-      setLiveTrending([]);
+    }
+
+    await loadNotifications();
+
+    if (user) {
+      const [recommendationsResult, trendingResult, favouritesResult, followsResult] = await Promise.allSettled([
+        api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
+        api.get('/api/trending'),
+        api.get('/api/favourites'),
+        api.get('/api/follows'),
+      ]);
+      if (recommendationsResult.status === 'fulfilled') setLiveRecommendations(recommendationsResult.value.data?.recommendations ?? []);
+      if (trendingResult.status === 'fulfilled') setLiveTrending(trendingResult.value.data?.trending ?? []);
+      if (favouritesResult.status === 'fulfilled') setFavouriteReleaseIds((favouritesResult.value.data?.favourites ?? []).map((item: any) => String(item.releaseId)));
+      if (followsResult.status === 'fulfilled') setFollowingProfileIds((followsResult.value.data?.follows ?? []).map((item: any) => String(item.profileUserId ?? item.creatorUserId)).filter(Boolean));
     }
   };
 
@@ -650,12 +650,12 @@ function App() {
 
   const toggleProfileFollow = async (profileUserId: string) => {
     try {
-      if (followingCreatorIds.includes(profileUserId)) {
+      if (followingProfileIds.includes(profileUserId)) {
         await api.delete('/api/follows/' + encodeURIComponent(profileUserId));
-        setFollowingCreatorIds((items) => items.filter((id) => id !== profileUserId));
+        setFollowingProfileIds((items) => items.filter((id) => id !== profileUserId));
       } else {
         await api.post('/api/follows/' + encodeURIComponent(profileUserId));
-        setFollowingCreatorIds((items) => items.includes(profileUserId) ? items : [...items, profileUserId]);
+        setFollowingProfileIds((items) => items.includes(profileUserId) ? items : [...items, profileUserId]);
       }
     } catch {
       notify('Follow could not be updated.');
@@ -1113,7 +1113,7 @@ function App() {
 
         <nav className={menuOpen ? 'nav open' : 'nav'}>
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'discover' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('discover')}>Discover</button>}
-          {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Creators</button>}
+          {canProtection && <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Community</button>}
           {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); }}>Editorial</button>}
@@ -1215,7 +1215,7 @@ function App() {
               <p className="spotlight-note">Every active Creator and Writer receives a full day in deterministic rotation, with a shareable spotlight to help the community naturally discover their work. Listener Spotlight recognises the previous completed week’s top seven Listeners, one per day, and thanks them for helping Nightjar thrive.</p>
             </section>
 
-            <WriterDiscovery followingIds={followingCreatorIds} onToggleFollow={toggleProfileFollow} notify={notify} />
+            <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} />
 
             <section id="catalogue" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
@@ -1229,7 +1229,7 @@ function App() {
               <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><select className="mood-select" value={currentIntent} onChange={(event) => setCurrentIntent(event.target.value)} aria-label="Current listening intent"><option value="">Open to anything</option><option value="wind">Wind down</option><option value="story">A story</option><option value="quiet">Something quiet</option><option value="focus">Focus</option><option value="discover">Discover something new</option></select></div>
               <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
               <div className="track-grid">
-                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} reason={release.reason} />; })}
+                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} reason={release.reason} feedback={<RecommendationFeedback release={release} notify={notify} onFeedback={(signal) => { if (signal !== 'more_like_this') setLiveRecommendations((items) => items.filter((item: any) => String(item.id) !== String(release.id))); }} />} />; })}
                 {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
               </div>
             </section>
@@ -1257,8 +1257,8 @@ function App() {
 
         {view === 'creators' && (
           <section className="page-wrap">
-            <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators building original catalogues for the Nightjar audience.</p></div><button className="secondary-button with-icon" onClick={() => notify('Creator search is part of the next catalogue pass.')}><Search size={16} /> Search creators</button></div>
-            <div className="creator-directory">{creators.map((creator, index) => <article className="creator-profile" key={creator.name}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => setSaved(saved === creator.name ? null : creator.name)} aria-label={saved === creator.name ? 'Unsave creator' : 'Save creator'}><Heart size={17} fill={saved === creator.name ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span><strong>{creator.share}</strong> listening share</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
+            <div className="page-heading"><div><p className="eyebrow">THE NIGHTJAR COMMUNITY</p><h1>Support the people behind Nightjar.</h1><p>Discover public profiles across the community and follow as many people as you choose.</p></div></div>
+            <ProfileDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onOpenCreator={setCreatorProfileUserId} notify={notify} />
           </section>
         )}
 
@@ -1314,6 +1314,7 @@ function App() {
             </div>
             <div className="profile-public-preview panel"><div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p><div className="profile-preview-chips">{[...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,6).map((item:string)=><span key={item}>{item}</span>)}</div></div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
             <article className="panel taste-panel"><div><span className="mini-label">TASTE ENGINE</span><h2>What Nightjar is learning</h2><p>Declared taste is kept separate from identity. Listening signals can refine recommendations without trying to infer who you are.</p></div><div className="taste-vector">{tasteVector.length===0 ? <span className="taste-empty">Your taste graph will grow as you save, finish, replay and explore.</span> : tasteVector.slice(0,10).map((item:any)=><div className="taste-chip" key={item.label}><strong>{item.label}</strong><span>{item.weight}</span></div>)}</div></article>
+            <FollowingList followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} />
           </section>
         )}
 
@@ -1404,7 +1405,7 @@ function App() {
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id)} notify={notify} />}
       {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} />}
-      {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingCreatorIds} onToggleFollow={toggleCreatorFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} />}
+      {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleCreatorFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} />}
       <ContentModeration open={moderationOpen} onClose={() => setModerationOpen(false)} notify={notify} />
       {showOnboarding && user && role !== 'admin' && role !== 'editor' && <NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} />}
       {toast && <div className="toast">{toast}</div>}
@@ -1432,7 +1433,7 @@ function releaseToTrack(release: any): Track {
   };
 }
 
-function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason }: { track: Track; playing: boolean; favourite: boolean; onPlay: (track: Track) => void; onFavourite: () => void; reason?: string }) {
+function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason, feedback }: { track: Track; playing: boolean; favourite: boolean; onPlay: (track: Track) => void; onFavourite: () => void; reason?: string; feedback?: ReactNode }) {
   return <article className="track-card">
     <div className="track-cover" style={track.artworkUrl ? { backgroundImage: 'url("' + track.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       <span className="track-index">{track.category}</span>
@@ -1447,6 +1448,7 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason 
       <p>{track.descriptor}</p>
       <div className="track-footer"><span className="creator-link">{track.audioUrl ? 'Playable audio' : 'Audio not connected'}</span><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove favourite' : 'Add favourite'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div>
       {reason && <p className="recommendation-reason"><Sparkles size={12} />{reason}</p>}
+      {feedback}
     </div>
   </article>;
 }
