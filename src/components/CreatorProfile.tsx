@@ -45,7 +45,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
 
   const share = async () => {
     if (!profile) return;
-    const url = window.location.origin + '/creators/' + encodeURIComponent(profile.handle ? String(profile.handle) : profile.userId);
+    const url = window.location.origin + '/creators';
     const text = 'Discover ' + profile.name + ' on Nightjar — original immersive audio from an independent creator.';
     try {
       if (navigator.share) await navigator.share({ title: 'Nightjar · ' + profile.name, text, url });
