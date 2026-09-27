@@ -503,6 +503,15 @@ function App() {
       setIdentityEmail(data.email ?? null);
       setIdentityAdmin(data.admin === true);
 
+      if (data.status === 'suspended') {
+        syncLocalAccount(data.userId, data.role, 'suspended');
+        setRole(null);
+        setRolePicker(false);
+        setAgeStage('gate');
+        notify('This Nightjar account is suspended. Contact Nightjar support if you believe this needs review.');
+        return;
+      }
+
       const nextStatus = data.status === 'pending_review' ? 'pending_review' : 'active';
       syncLocalAccount(data.userId, data.role, nextStatus);
 
