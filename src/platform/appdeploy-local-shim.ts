@@ -635,7 +635,17 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const script = state.scripts.find((item) => item.id === parts[3] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
     if (method === 'PUT') {
-      Object.assign(script, input, { id: script.id, writerUserId: script.writerUserId, updatedAt: now() });
+      if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) throw new Error('Submitted or approved manuscripts are locked from direct editing.');
+      script.title = String(input.title ?? script.title ?? '').trim().slice(0, 200);
+      script.content = String(input.content ?? script.content ?? '');
+      script.synopsis = String(input.synopsis ?? script.synopsis ?? '').trim().slice(0, 1600);
+      script.excerpt = String(input.excerpt ?? script.excerpt ?? '').trim().slice(0, 2000);
+      script.genre = String(input.genre ?? script.genre ?? '').trim().slice(0, 100);
+      script.runtimeTarget = String(input.runtimeTarget ?? script.runtimeTarget ?? '').trim().slice(0, 100);
+      if (input.characters !== undefined) script.characters = Array.isArray(input.characters) ? input.characters.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 50) : [];
+      script.ageClassification = String(input.ageClassification ?? script.ageClassification ?? '').trim().slice(0, 80);
+      if (!script.title) throw new Error('Script title is required.');
+      script.updatedAt = now();
       return send({ script });
     }
   }
@@ -644,6 +654,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const account = requireUser(state);
     const script = state.scripts.find((item) => item.id === parts[3] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
+    if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) throw new Error('Submitted or approved manuscripts are locked from version changes.');
     const version = Number(script.version ?? 1) + 1;
     state.scriptVersions[script.id] = [...(state.scriptVersions[script.id] ?? []), { scriptId: script.id, version, content: script.content ?? '', createdAt: now() }];
     script.version = version;
@@ -655,6 +666,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const account = requireUser(state);
     const script = state.scripts.find((item) => item.id === parts[3] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
+    if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) throw new Error('This manuscript is already in editorial workflow or approved.');
+    if (!String(script.title ?? '').trim() || !String(script.content ?? '').trim()) throw new Error('Add a title and manuscript content before submitting.');
     script.status = 'Submitted';
     script.submittedAt = now();
     script.updatedAt = now();
@@ -686,8 +699,26 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/scripts/catalogue' && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     if (!['creator', 'writer', 'editor', 'admin'].includes(account.role ?? '')) throw new Error('Protected script access required.');
-    const scripts = state.scripts.filter((script) => script.writerUserId === account.userId || script.status !== 'Draft').map(({ id: scriptId, title, status, version, writerUserId }) => ({ id: scriptId, title, status, version, writerUserId }));
+    const scripts = state.scripts
+      .filter((script) => script.writerUserId === account.userId || script.accessUsers?.includes(account.userId))
+      .map((script) => ({
+        id: script.id,
+        title: script.title,
+        status: script.status,
+        version: script.version,
+        writerUserId: script.writerUserId,
+        synopsis: script.synopsis ?? null,
+        excerpt: script.excerpt ?? null,
+        genre: script.genre ?? null,
+        runtimeTarget: script.runtimeTarget ?? null,
+        characters: script.characters ?? [],
+        ageClassification: script.ageClassification ?? null,
+        updatedAt: script.updatedAt ?? null,
+        protected: true,
+        canReadFull: true,
+      }));
     return send({ scripts });
   }
 
