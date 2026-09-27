@@ -27,6 +27,7 @@ const formatTime = (seconds: number) => !Number.isFinite(seconds) ? '0:00' : Mat
 export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastProgressEvent = useRef(0);
+  const lastReportedPosition = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(1);
@@ -55,6 +56,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     const node = audioRef.current;
     if (!node || !track?.audioUrl) return;
     lastProgressEvent.current = 0;
+    lastReportedPosition.current = rememberedPosition || 0;
     setPosition(0);
     setDuration(1);
     setIsPlaying(false);
@@ -93,12 +95,13 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
       preload="metadata"
       onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 1)}
       onPlay={() => setIsPlaying(true)}
-      onPause={() => setIsPlaying(false)}
+      onPause={(event) => { setIsPlaying(false); const node = event.currentTarget; if (node.currentTime > 0 && node.currentTime < (node.duration || Infinity) - 1) void api.post('/api/listening/event', { releaseId: track.id, eventType: 'pause', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {}); }}
       onTimeUpdate={(event) => {
         const node = event.currentTarget;
         setPosition(node.currentTime);
         if (node.currentTime - lastProgressEvent.current >= 15) {
           lastProgressEvent.current = node.currentTime;
+          lastReportedPosition.current = node.currentTime;
           void api.post('/api/listening/event', { releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {});
         }
       }}
@@ -113,7 +116,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     <div className="dock-art">{track.artworkUrl ? <img src={track.artworkUrl} alt="" /> : <Moon size={16} />}</div>
     <div className="dock-copy"><span>{track.category || 'Audio'}</span><strong>{track.title}</strong><small>{track.creator}</small></div>
     <div className="dock-time">{formatTime(position)} / {formatTime(duration)}</div>
-    <input className="dock-progress" type="range" min="0" max={duration} step="0.1" value={Math.min(position, duration)} onChange={(event) => { const value = Number(event.target.value); setPosition(value); if (audioRef.current) audioRef.current.currentTime = value; }} aria-label="Playback position" />
+    <input className="dock-progress" type="range" min="0" max={duration} step="0.1" value={Math.min(position, duration)} onChange={(event) => { const value = Number(event.target.value); setPosition(value); if (audioRef.current) { audioRef.current.currentTime = value; void api.post('/api/listening/event', { releaseId: track.id, eventType: 'seek', positionSeconds: value, durationSeconds: audioRef.current.duration || duration, intent }).catch(() => {}); } }} aria-label="Playback position" />
     <div className="dock-nav">
       <button className="dock-nav-button" disabled={!previousTrack || !onSelectTrack} onClick={() => choose(previousTrack)} aria-label="Previous release"><ChevronLeft size={15} /></button>
       <button className="dock-play" onClick={() => { const node = audioRef.current; if (!node) return; if (node.paused) void node.play(); else node.pause(); }} aria-label={isPlaying ? 'Pause' : 'Play'}>{isPlaying ? <Pause size={17} /> : <Play size={17} fill="currentColor" />}</button>
