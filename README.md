@@ -132,3 +132,32 @@ protected content
 ```
 
 The browser-local QA client remains temporary development scaffolding only and must not be treated as production authentication or production persistence. Archived AppDeploy files live under `legacy/appdeploy/` solely as migration reference and are not part of the active runtime.
+
+## Persistent user settings and moderated imagery
+
+Nightjar treats user-visible changes as persistent account data. Profile identity, headline, bio, welcome message, declared taste, role focus, visibility and approved imagery are stored against the verified Firebase UID and remain editable. Optional text can be cleared and saved again.
+
+All user-uploaded images follow one moderation pipeline:
+
+1. PNG, JPG or WebP only; binary signatures are checked server-side.
+2. The image is stored privately in Firebase Storage with no direct browser read access.
+3. The image is recorded as `pending` in Firestore.
+4. Administrators receive a temporary review URL in the Image Moderation queue.
+5. Approval requires an explicit administrator review for nudity, explicit sexual imagery and other unsuitable imagery.
+6. Only an approved asset is exposed through Nightjar's approved-image HTTP endpoint.
+7. Rejection deletes the stored image bytes. User/admin removal marks the asset removed and the public endpoint stops serving it.
+
+This applies to profile pictures, Nightjar branding/logo uploads and release artwork. SVG uploads are intentionally not supported.
+
+Approved profile/logo imagery remains live while a replacement is pending. A rejected replacement does not remove the previously approved image.
+
+## Commercial controls
+
+Commercial planning values live in the Firebase `settings/commercial` record and can be edited or cleared by an administrator. This includes planning monthly price, creator-pool percentage, operating reserve, payout cadence and eligible-listening definition.
+
+Confirmed subscription counts and confirmed gross MRR are read from Firebase billing records. Confirmed MRR is the sum of explicit `confirmedMonthlyAmountPence` values on active subscriptions; Nightjar does not infer confirmed revenue by multiplying a planning price.
+
+## Audio Editor role
+
+The internal role key remains `editor` for permission compatibility, while the user-facing role is **Audio Editor**. Administrators can assign this role from the Firebase-backed account directory. Active Audio Editors with public profiles participate in the deterministic daily Audio Editor Spotlight without exposing protected editorial assignments or manuscript content.
+
