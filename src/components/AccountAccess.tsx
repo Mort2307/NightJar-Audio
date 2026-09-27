@@ -26,7 +26,10 @@ const passwordChecks = (value: string) => ({
   symbol: /[^\p{L}\p{N}\s]/u.test(value),
 });
 
-const validPassword = (value: string) => passwordChecks(value).length;
+const validPassword = (value: string) => {
+  const checks = passwordChecks(value);
+  return checks.length && checks.lower && checks.upper && checks.number;
+};
 
 export default function AccountAccess({
   identity,
@@ -67,7 +70,14 @@ export default function AccountAccess({
       return;
     }
     if (mode === 'register' && !validPassword(password)) {
-      setMessage(`Your password is ${password.length} characters long. Nightjar requires at least 12 characters.`);
+      const checks = passwordChecks(password);
+      const missing = [
+        !checks.length ? '12+ characters' : null,
+        !checks.lower ? 'a lower-case letter' : null,
+        !checks.upper ? 'an upper-case letter' : null,
+        !checks.number ? 'a number' : null,
+      ].filter(Boolean);
+      setMessage('Password still needs: ' + missing.join(', ') + '.');
       return;
     }
     if (mode === 'register' && password !== confirm) {
