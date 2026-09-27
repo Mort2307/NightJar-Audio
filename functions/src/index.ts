@@ -281,6 +281,57 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
   };
 };
 
+const calculateVerifiedListening = (events: Array<Record<string, any>>) => {
+  const ordered = events
+    .filter((event) => ['start', 'progress', 'complete'].includes(String(event.eventType ?? '')))
+    .slice()
+    .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+
+  const byUser = new Map<string, number>();
+  const byCreator = new Map<string, number>();
+  const listenersByCreator = new Map<string, Set<string>>();
+  const lastPosition = new Map<string, { position: number; at: number }>();
+  let totalSeconds = 0;
+
+  for (const event of ordered) {
+    const userId = cleanText(event.userId, 160);
+    const releaseId = cleanText(event.releaseId, 160);
+    const creatorUserId = cleanText(event.creatorUserId, 160);
+    if (!userId || !releaseId) continue;
+
+    const duration = Math.max(0, Number(event.durationSeconds ?? 0));
+    let position = Math.max(0, Number(event.positionSeconds ?? 0));
+    if (!Number.isFinite(position)) continue;
+    if (duration > 0) position = Math.min(position, duration);
+
+    const at = Number(event.createdAt?.toMillis?.() ?? 0);
+    const key = userId + ':' + releaseId;
+    const previous = lastPosition.get(key);
+    let delta = 0;
+
+    if (previous && event.eventType !== 'start' && at > previous.at && at - previous.at <= 30 * 60_000) {
+      const elapsedSeconds = Math.max(0, (at - previous.at) / 1000);
+      const forwardProgress = Math.max(0, position - previous.position);
+      // Allow a small timing tolerance but never credit giant seek jumps or rapid event spam.
+      delta = Math.min(forwardProgress, elapsedSeconds + 15, 120);
+    }
+
+    lastPosition.set(key, { position, at });
+    if (delta <= 0) continue;
+
+    byUser.set(userId, (byUser.get(userId) ?? 0) + delta);
+    if (creatorUserId) {
+      byCreator.set(creatorUserId, (byCreator.get(creatorUserId) ?? 0) + delta);
+      const listeners = listenersByCreator.get(creatorUserId) ?? new Set<string>();
+      listeners.add(userId);
+      listenersByCreator.set(creatorUserId, listeners);
+    }
+    totalSeconds += delta;
+  }
+
+  return { byUser, byCreator, listenersByCreator, totalSeconds };
+};
+
 export const listCreators = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -296,19 +347,7 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
     if (creatorUserId) releaseCounts.set(creatorUserId, (releaseCounts.get(creatorUserId) ?? 0) + 1);
   }
 
-  const listeningSeconds = new Map<string, number>();
-  let totalListeningSeconds = 0;
-  for (const event of listening.docs) {
-    const data = event.data();
-    const creatorUserId = cleanText(data.creatorUserId, 160);
-    if (!creatorUserId) continue;
-    const duration = Math.max(0, Number(data.durationSeconds ?? 0));
-    const position = Math.max(0, Number(data.positionSeconds ?? 0));
-    const seconds = Math.min(position, duration || position);
-    if (!Number.isFinite(seconds) || seconds <= 0) continue;
-    listeningSeconds.set(creatorUserId, (listeningSeconds.get(creatorUserId) ?? 0) + seconds);
-    totalListeningSeconds += seconds;
-  }
+  const verified = calculateVerifiedListening(listening.docs.map((doc) => doc.data()));
 
   const creators = (await Promise.all(
     accounts.docs
@@ -316,14 +355,14 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
         if (!base) return null;
-        const seconds = listeningSeconds.get(doc.id) ?? 0;
+        const seconds = verified.byCreator.get(doc.id) ?? 0;
         return {
           ...base,
           followerCount: Number((base as any).followerCount ?? 0),
           releaseCount: releaseCounts.get(doc.id) ?? 0,
           verifiedListeningMinutes: Math.round((seconds / 60) * 10) / 10,
-          listeningSharePercent: totalListeningSeconds > 0
-            ? Math.round((seconds / totalListeningSeconds) * 1000) / 10
+          listeningSharePercent: verified.totalSeconds > 0
+            ? Math.round((seconds / verified.totalSeconds) * 1000) / 10
             : 0,
         };
       }),
@@ -1207,33 +1246,9 @@ const listenerSpotlightForToday = async (dateKey: string) => {
     })
     .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
 
-  const scores = new Map<string, number>();
-  const lastPosition = new Map<string, { position: number; at: number }>();
-
-  for (const event of weeklyEvents) {
-    const userId = cleanText(event.userId, 160);
-    if (!listenerAccounts.has(userId)) continue;
-    const releaseId = cleanText(event.releaseId, 160);
-    if (!releaseId) continue;
-    const position = Math.max(0, Number(event.positionSeconds ?? 0));
-    if (!Number.isFinite(position)) continue;
-    const key = userId + ':' + releaseId;
-    const at = event.createdAt?.toMillis?.() ?? 0;
-    const previous = lastPosition.get(key);
-    let delta = 0;
-    if (!previous || event.eventType === 'start' || at - previous.at > 30 * 60_000) {
-      delta = 0;
-    } else {
-      delta = Math.max(0, Math.min(position - previous.position, 120));
-    }
-    if (event.eventType === 'complete' && Number(event.durationSeconds) > position) {
-      delta = Math.min(Math.max(delta, Number(event.durationSeconds) - position), 300);
-    }
-    scores.set(userId, (scores.get(userId) ?? 0) + delta);
-    lastPosition.set(key, { position, at });
-  }
-
-  const topSeven = Array.from(scores, ([userId, seconds]) => ({ userId, seconds }))
+  const verified = calculateVerifiedListening(weeklyEvents);
+  const topSeven = Array.from(verified.byUser, ([userId, seconds]) => ({ userId, seconds }))
+    .filter((item) => listenerAccounts.has(item.userId))
     .sort((a, b) => b.seconds - a.seconds || a.userId.localeCompare(b.userId))
     .slice(0, 7);
 
@@ -1751,15 +1766,9 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
   const releases = releasesSnapshot.docs.map((doc) => releasePayload(doc.data(), doc.id));
   const listeningSnapshot = await db.collection('listeningEvents').where('creatorUserId', '==', targetCreatorId).limit(5000).get();
 
-  let listeningSeconds = 0;
-  const listeners = new Set<string>();
-  for (const doc of listeningSnapshot.docs) {
-    const event = doc.data();
-    const duration = Math.max(0, Number(event.durationSeconds ?? 0));
-    const position = Math.max(0, Number(event.positionSeconds ?? 0));
-    listeningSeconds += Math.min(position, duration || position);
-    if (event.userId) listeners.add(String(event.userId));
-  }
+  const verified = calculateVerifiedListening(listeningSnapshot.docs.map((doc) => doc.data()));
+  const listeningSeconds = verified.byCreator.get(targetCreatorId) ?? 0;
+  const listeners = verified.listenersByCreator.get(targetCreatorId) ?? new Set<string>();
 
   return {
     releases,
