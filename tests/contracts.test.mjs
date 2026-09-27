@@ -432,3 +432,23 @@ test('protected pages repeat the forensic watermark densely enough to survive or
   assert.match(css, /reader-watermark-layer/);
   assert.match(app, /FORENSIC FP/);
 });
+
+
+test('protected reader blocks browser print and save-page shortcuts without disabling writer-authorised export', () => {
+  assert.match(app, /event\.key\.toLowerCase\(\) === 'p'/);
+  assert.match(app, /event\.key\.toLowerCase\(\) === 's'/);
+  assert.match(app, /record\('print_blocked'\)/);
+  assert.match(app, /Export full script/);
+  assert.match(css, /@media print/);
+});
+
+test('crawler policy opts out major model-training crawlers while leaving public discovery available', () => {
+  const robots = read('public/robots.txt');
+  assert.match(robots, /User-agent: GPTBot\s+Disallow: \//);
+  assert.match(robots, /User-agent: Google-Extended\s+Disallow: \//);
+  assert.match(robots, /User-agent: ClaudeBot\s+Disallow: \//);
+  assert.match(robots, /User-agent: CCBot\s+Disallow: \//);
+  assert.match(robots, /User-agent: Applebot-Extended\s+Disallow: \//);
+  assert.match(robots, /Disallow: \/api\/scripts\//);
+  assert.match(robots, /Allow: \//);
+});
