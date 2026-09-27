@@ -86,3 +86,16 @@ Nightjar's discovery page has three separate recognition lanes:
 Listener ranking uses tracked listening activity from the completed week and is deliberately frozen during the spotlight week so the highlighted cohort cannot reshuffle mid-week. Public-profile settings are respected when displaying individual community members.
 
 Daily spotlight notifications are also materialized by the Nightjar background scheduler shortly after the Europe/London day boundary. The scheduler uses a short-lived GitHub Actions OIDC token bound to the Nightjar `main` workflow, and notification creation remains idempotent so schedule retries cannot send duplicate in-app notifications. The existing discovery request still performs the same idempotent materialization as a safety net when the scheduled job has not yet run.
+
+## Core product modules
+
+Nightjar keeps each major product surface in its own editable component so future feedback can be incorporated without turning the main application shell into a monolith:
+
+- CreatorAudioPipeline.tsx handles real release metadata, audio/artwork upload, media duration detection, draft state and moderation handoff.
+- NightjarPlayer.tsx handles playback, listening resume, progress/completion telemetry and queue navigation.
+- CreatorProfile.tsx handles public creator discovery, released work, following and sharing.
+- ContentModeration.tsx handles administrator review of submitted audio and metadata before publication.
+- WriterDiscovery.tsx handles public writer discovery while keeping protected manuscripts private.
+- NightjarOnboarding.tsx owns the explicit identity/taste question set, allowing the final compiled questions to evolve in one focused module.
+
+The Taste Engine remains explicit-first: user-declared preferences are separate from identity and behavioural signals are used to refine discovery rather than infer personal identity.
