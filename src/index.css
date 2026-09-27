@@ -1358,3 +1358,47 @@ button:focus-visible {
 .dock-nav-button { width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--line-soft); border-radius:50%; background:rgba(255,255,255,.018); color:var(--muted); }
 .dock-nav-button:hover:not(:disabled) { color:var(--ivory); border-color:rgba(239,231,223,.18); }
 .dock-nav-button:disabled { opacity:.3; cursor:not-allowed; }
+
+
+/* Universal community discovery, following and recommendation controls */
+.profile-discovery { margin-top:18px; padding:22px; }
+.profile-discovery-tools { display:grid; grid-template-columns:minmax(0,1fr) 180px; gap:10px; margin:18px 0; }
+.profile-search { display:flex; align-items:center; gap:9px; padding:0 12px; border:1px solid var(--line-soft); border-radius:12px; background:rgba(255,255,255,.018); color:var(--muted-2); }
+.profile-search input { width:100%; min-width:0; padding:11px 0; border:0; outline:0; background:transparent; color:var(--ivory); font:inherit; font-size:10px; }
+.profile-discovery-tools select { border:1px solid var(--line-soft); border-radius:12px; padding:10px 12px; background:rgba(17,15,19,.96); color:var(--ivory); font:inherit; font-size:9px; }
+.profile-discovery-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.profile-discovery-card { display:grid; grid-template-columns:auto minmax(0,1fr); gap:13px; padding:16px; border:1px solid var(--line-soft); border-radius:16px; background:linear-gradient(145deg,rgba(27,23,29,.82),rgba(14,13,16,.94)); }
+.profile-discovery-avatar,.following-avatar { display:grid; place-items:center; flex:0 0 auto; border:1px solid var(--line-soft); background:rgba(178,144,170,.08); font-family:Georgia,serif; color:var(--ivory); }
+.profile-discovery-avatar { width:54px; height:54px; border-radius:16px; font-size:17px; }
+.profile-discovery-copy { min-width:0; }
+.profile-discovery-copy h3 { margin:3px 0 2px; font-family:Georgia,serif; font-size:20px; font-weight:400; }
+.profile-discovery-copy small { color:var(--muted-2); font-size:8px; }
+.profile-discovery-copy p { margin:8px 0; color:var(--muted); font-size:9px; line-height:1.55; }
+.profile-discovery-meta { display:flex; gap:6px; flex-wrap:wrap; }
+.profile-discovery-meta span { padding:5px 7px; border:1px solid var(--line-soft); border-radius:999px; color:var(--muted-2); font-size:7px; }
+.profile-discovery-actions { grid-column:1 / -1; display:flex; justify-content:flex-end; gap:8px; padding-top:10px; border-top:1px solid var(--line-soft); }
+.profile-discovery-actions .active { border-color:rgba(203,181,204,.3); background:rgba(178,144,170,.09); }
+
+.recommendation-feedback { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:9px; border-top:1px solid var(--line-soft); }
+.recommendation-feedback button { display:inline-flex; align-items:center; gap:5px; padding:6px 8px; border:1px solid var(--line-soft); border-radius:999px; background:rgba(255,255,255,.015); color:var(--muted-2); font:inherit; font-size:7px; cursor:pointer; }
+.recommendation-feedback button:hover:not(:disabled) { border-color:rgba(203,181,204,.26); color:var(--ivory); }
+.recommendation-feedback button:disabled { opacity:.48; cursor:wait; }
+
+.following-panel { margin-top:14px; padding:22px; }
+.following-search { margin:14px 0; }
+.following-list { display:grid; gap:7px; margin-top:14px; }
+.following-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:11px 0; border-top:1px solid var(--line-soft); }
+.following-avatar { width:38px; height:38px; border-radius:12px; font-size:12px; }
+.following-row > span:nth-child(2) { display:grid; gap:3px; min-width:0; }
+.following-row strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; }
+.following-row small { color:var(--muted-2); font-size:7px; }
+
+@media (max-width:760px) {
+  .profile-discovery { padding:16px; }
+  .profile-discovery-tools,.profile-discovery-grid { grid-template-columns:1fr; }
+  .profile-discovery-actions { justify-content:flex-start; }
+  .following-panel { padding:16px; }
+  .following-row { grid-template-columns:auto minmax(0,1fr); }
+  .following-row .secondary-button { grid-column:1 / -1; justify-content:center; }
+  .recommendation-feedback button { flex:1 1 auto; justify-content:center; min-height:36px; }
+}
