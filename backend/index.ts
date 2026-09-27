@@ -1024,7 +1024,9 @@ export const handler = router({
       const body = (ctx.body ?? {}) as Record<string, unknown>;
       const title = String(body.title ?? '').trim();
       if (!title) return error('Script title is required.', 400);
-      const script = { id: 'script-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), title, content: String(body.content ?? ''), status: 'Draft', access: 'Private', version: 1, writerUserId: ctx.user!.userId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const content = String(body.content ?? '');
+      const createdAt = new Date().toISOString();
+      const script = { id: 'script-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), title: title.slice(0, 200), content, contentHash: scriptContentHash(content), status: 'Draft', access: 'Private', version: 1, writerUserId: ctx.user!.userId, createdAt, updatedAt: createdAt };
       await db.add('nightjar_scripts', [script]);
       return json({ script }, 201);
     },
@@ -1042,6 +1044,7 @@ export const handler = router({
         ...script,
         title: String(body.title ?? script.title ?? '').trim().slice(0, 200),
         content: String(body.content ?? script.content ?? ''),
+        contentHash: scriptContentHash(String(body.content ?? script.content ?? '')),
         synopsis: String(body.synopsis ?? script.synopsis ?? '').trim().slice(0, 1600),
         excerpt: String(body.excerpt ?? script.excerpt ?? '').trim().slice(0, 2000),
         genre: String(body.genre ?? script.genre ?? '').trim().slice(0, 100),
@@ -1070,7 +1073,8 @@ export const handler = router({
       if (!script) return error('Script not found.', 404);
       if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) return error('Submitted or approved manuscripts are locked from version changes.', 409);
       const version = Number(script.version ?? 1) + 1;
-      await db.add('nightjar_script_versions_' + script.id, [{ scriptId: script.id, version, content: script.content ?? '', createdAt: new Date().toISOString() }]);
+      const versionCreatedAt = new Date().toISOString();
+      await db.add('nightjar_script_versions_' + script.id, [{ scriptId: script.id, version, content: script.content ?? '', contentHash: script.contentHash ?? scriptContentHash(script.content ?? ''), writerUserId: ctx.user!.userId, createdAt: versionCreatedAt }]);
       const next = { ...script, version, updatedAt: new Date().toISOString() };
       await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
       return json({ script: next, version });
@@ -1425,23 +1429,183 @@ export const handler = router({
     requireAuth(),
     async (ctx) => {
       if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing protected scripts.', 403);
-      if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.',403);
-      const {items}=await db.list('nightjar_scripts',{limit:50});
-      const script=items.find((item)=>item.id===ctx.params.scriptId);
-      if(!script)return error('Script not found.',404);
-      const {items:accessItems}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100});
-      const access=accessItems.find((item)=>item.scriptId===ctx.params.scriptId && !item.revokedAt && (!item.expiresAt || new Date(item.expiresAt).getTime()>Date.now()));
-      const owner=script.writerUserId===ctx.user!.userId;
-      if(!owner&&!access)return json({script:{id:script.id,title:script.title,synopsis:script.synopsis,excerpt:script.excerpt,genre:script.genre,runtimeTarget:script.runtimeTarget,characters:script.characters,ageClassification:script.ageClassification,writerUserId:script.writerUserId,writerName:script.writerName,version:script.version},canReadFull:false,copyAllowed:false,exportAllowed:false});
-      const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase();
-      const expiresAt=new Date(Date.now()+15*60_000).toISOString();
-      const session={sessionId,scriptId:ctx.params.scriptId,accountId:ctx.user!.userId,accessGrantId:access?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:owner||access?.allowCopy===true,allowExport:owner||access?.allowExport===true};
-      await db.add(readerSessionTable(ctx.user!.userId),[session]);
-      await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'script_view',relatedId:ctx.params.scriptId,sessionId,createdAt:new Date().toISOString()}]);
-      await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'script_view',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,sessionId,summary:'Authorised full script view opened in a short-lived protected reader session.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
-      return json({script,canReadFull:true,copyAllowed:session.allowCopy,exportAllowed:session.allowExport,readerSession:{sessionId,expiresAt}});
+      if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = scripts.find((item) => item.id === ctx.params.scriptId);
+      if (!script) return error('Script not found.', 404);
+
+      const owner = script.writerUserId === ctx.user!.userId;
+      const { items: accessItems } = await db.list('nightjar_script_access_' + ctx.user!.userId, { limit: 100 });
+      const access = accessItems.find((item) =>
+        item.scriptId === ctx.params.scriptId &&
+        !item.revokedAt &&
+        (!item.expiresAt || new Date(String(item.expiresAt)).getTime() > Date.now())
+      );
+      const { items: assignments } = await db.list('nightjar_editor_assignments', { limit: 500 });
+      const editorAssignment = assignments.find((item) =>
+        item.scriptId === ctx.params.scriptId &&
+        item.editorUserId === ctx.user!.userId &&
+        item.status !== 'closed'
+      );
+
+      if (!owner && !access && !editorAssignment) {
+        return json({ script: publicScriptMetadata(script), canReadFull: false, copyAllowed: false, exportAllowed: false });
+      }
+
+      const sessionId = 'NJ-RD-' + randomUUID().replace(/-/g, '').slice(0, 18).toUpperCase();
+      const issuedAt = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+      const profile = await getProfile(ctx.user!.userId);
+      const viewerLabel = String(profile?.displayName ?? ctx.user!.name ?? 'Nightjar account').slice(0, 80);
+      const watermark = 'NIGHTJAR · ' + viewerLabel + ' · ' + sessionId.slice(-8) + ' · ' + issuedAt.slice(0, 16).replace('T', ' ');
+      const session = {
+        sessionId,
+        scriptId: ctx.params.scriptId,
+        accountId: ctx.user!.userId,
+        accessGrantId: owner ? 'owner' : access?.id ?? ('editor:' + String(editorAssignment?.id ?? 'assignment')),
+        issuedAt,
+        expiresAt,
+        status: 'active',
+        canReadFull: true,
+        allowCopy: owner || access?.allowCopy === true,
+        allowExport: owner || access?.allowExport === true,
+        watermark,
+      };
+      await db.add(readerSessionTable(ctx.user!.userId), [session]);
+      const signal = { userId: ctx.user!.userId, eventType: 'reader_session_issued', relatedId: ctx.params.scriptId, sessionId, createdAt: issuedAt };
+      await db.add(securityEventTable, [signal]);
+      await assessProtectedActivity(ctx.user!.userId, signal);
+      await db.add('nightjar_evidence_' + ctx.user!.userId, [{
+        eventType: 'reader_session_issued',
+        severity: 'low',
+        relatedType: 'script',
+        relatedId: ctx.params.scriptId,
+        sessionId,
+        summary: 'Protected reader session issued without returning the manuscript body in the metadata response.',
+        actorUserId: ctx.user!.userId,
+        createdAt: issuedAt,
+      }]);
+
+      return json({
+        script: publicScriptMetadata({ ...script, contentHash: script.contentHash ?? scriptContentHash(script.content ?? '') }),
+        canReadFull: true,
+        copyAllowed: session.allowCopy,
+        exportAllowed: session.allowExport,
+        readerSession: { sessionId, expiresAt, watermark },
+      });
     },
   ],
+
+  'GET /api/scripts/:scriptId/content': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing protected scripts.', 403);
+      if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
+      const sessionId = String(ctx.query.sessionId ?? '').trim();
+      const page = Math.max(0, Math.floor(Number(ctx.query.page ?? 0)));
+      if (!sessionId) return error('Reader session is required.', 400);
+
+      const { items: sessions } = await db.list(readerSessionTable(ctx.user!.userId), { limit: 500 });
+      const session = sessions.find((item) =>
+        String(item.sessionId) === sessionId &&
+        String(item.scriptId) === ctx.params.scriptId &&
+        item.status === 'active'
+      );
+      if (!session) return error('Reader session is not active.', 403);
+      if (new Date(String(session.expiresAt ?? 0)).getTime() <= Date.now()) return error('Reader session has expired.', 403);
+
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = scripts.find((item) => item.id === ctx.params.scriptId);
+      if (!script) return error('Script not found.', 404);
+
+      const pages = chunkProtectedContent(script.content ?? '');
+      if (page >= pages.length) return error('Protected page not found.', 404);
+      const createdAt = new Date().toISOString();
+      const signal = {
+        userId: ctx.user!.userId,
+        eventType: 'script_page_view',
+        relatedId: ctx.params.scriptId,
+        sessionId,
+        page,
+        totalPages: pages.length,
+        createdAt,
+      };
+      await db.add(securityEventTable, [signal]);
+      await assessProtectedActivity(ctx.user!.userId, signal);
+
+      return json({
+        scriptId: ctx.params.scriptId,
+        content: pages[page],
+        page,
+        totalPages: pages.length,
+        hasPrevious: page > 0,
+        hasNext: page + 1 < pages.length,
+        watermark: session.watermark ?? ('NIGHTJAR · ' + sessionId.slice(-8)),
+        contentHash: script.contentHash ?? scriptContentHash(script.content ?? ''),
+        sessionExpiresAt: session.expiresAt,
+      });
+    },
+  ],
+
+  'GET /api/scripts/:scriptId/export': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before exporting protected scripts.', 403);
+      if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
+      const sessionId = String(ctx.query.sessionId ?? '').trim();
+      if (!sessionId) return error('Reader session is required.', 400);
+      const { items: sessions } = await db.list(readerSessionTable(ctx.user!.userId), { limit: 500 });
+      const session = sessions.find((item) =>
+        String(item.sessionId) === sessionId &&
+        String(item.scriptId) === ctx.params.scriptId &&
+        item.status === 'active'
+      );
+      if (!session || new Date(String(session.expiresAt ?? 0)).getTime() <= Date.now()) return error('Reader session is not active.', 403);
+      if (session.allowExport !== true) return error('The writer has not granted full-script export permission.', 403);
+
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = scripts.find((item) => item.id === ctx.params.scriptId);
+      if (!script) return error('Script not found.', 404);
+      const profile = await getProfile(ctx.user!.userId);
+      const recipient = String(profile?.displayName ?? ctx.user!.name ?? 'Nightjar recipient').slice(0, 80);
+      const hash = script.contentHash ?? scriptContentHash(script.content ?? '');
+      const exportText = [
+        String(script.title ?? 'Untitled manuscript'),
+        'Nightjar protected export',
+        'Recipient: ' + recipient,
+        'Session: ' + sessionId,
+        'Version: ' + String(script.version ?? 1),
+        'SHA-256: ' + hash,
+        '',
+        String(script.content ?? ''),
+        '',
+        '---',
+        'This copy was explicitly exported under writer-controlled permission. Nightjar access and export events are logged.',
+      ].join('\n');
+
+      const createdAt = new Date().toISOString();
+      const signal = { userId: ctx.user!.userId, eventType: 'script_export', relatedId: ctx.params.scriptId, sessionId, createdAt };
+      await db.add(securityEventTable, [signal]);
+      await assessProtectedActivity(ctx.user!.userId, signal);
+      await db.add('nightjar_evidence_' + ctx.user!.userId, [{
+        eventType: 'script_export',
+        severity: 'medium',
+        relatedType: 'script',
+        relatedId: ctx.params.scriptId,
+        sessionId,
+        summary: 'Full manuscript exported under explicit writer-granted export permission.',
+        actorUserId: ctx.user!.userId,
+        createdAt,
+      }]);
+      return json({
+        fileName: String(script.title ?? 'nightjar-script').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) + '.txt',
+        content: exportText,
+        contentHash: hash,
+        watermark: session.watermark ?? null,
+      });
+    },
+  ],
+
   'POST /api/scripts/:scriptId/request-access': [
     requireAuth(),
     async (ctx) => {
