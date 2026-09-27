@@ -702,16 +702,6 @@ function App() {
     finally { setProfileLoading(false); }
   };
 
-  const requestScriptAccess = async (script: any) => {
-    if (!user || !script?.id) return;
-    try {
-      await api.post('/api/scripts/' + script.id + '/request-access', { writerUserId: script.writerUserId ?? null });
-      notify('Access request recorded. The writer can review it from their workflow.');
-    } catch {
-      notify('The access request could not be recorded.');
-    }
-  };
-
   const reviewEditorScript = async (status: string) => {
     if (!editorSelected) return;
     const comment = window.prompt('Editorial note (optional)') ?? '';
