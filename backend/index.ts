@@ -1,4 +1,4 @@
-import { createPublicKey, randomUUID, verify as verifySignature } from 'node:crypto';
+import { createHash, createPublicKey, randomUUID, verify as verifySignature } from 'node:crypto';
 import { router, json, error, requireAuth, requireAdminEmailAllowlist, withScopes } from '@appdeploy/sdk';
 import { db, storage } from '@appdeploy/sdk';
 
@@ -104,6 +104,30 @@ const decodeDataUrl = (value: string) => {
     return null;
   }
 };
+
+const assetSignatureMatches = (base64: string, contentType: string) => {
+  try {
+    const bytes = Buffer.from(base64, 'base64');
+    const ascii = (start: number, end: number) => bytes.subarray(start, end).toString('ascii');
+    if (contentType === 'image/png') return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]));
+    if (contentType === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    if (contentType === 'image/webp') return bytes.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP';
+    if (contentType === 'audio/wav' || contentType === 'audio/x-wav') return bytes.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WAVE';
+    if (contentType === 'audio/ogg') return bytes.length >= 4 && ascii(0, 4) === 'OggS';
+    if (contentType === 'audio/webm') return bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
+    if (contentType === 'audio/mp4' || contentType === 'audio/x-m4a') return bytes.length >= 12 && ascii(4, 8) === 'ftyp';
+    if (contentType === 'audio/mpeg' || contentType === 'audio/mp3') return bytes.length >= 3 && (ascii(0, 3) === 'ID3' || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0));
+    return false;
+  } catch {
+    return false;
+  }
+};
+
+const safeOriginalFileName = (value: unknown) => String(value ?? '')
+  .split(/[\\/]/)
+  .pop()!
+  .replace(/[^a-zA-Z0-9._ -]/g, '_')
+  .slice(0, 120);
 
 const extensionForContentType = (contentType: string, kind: 'audio' | 'artwork') => {
   const map: Record<string, string> = {
@@ -843,6 +867,9 @@ export const handler = router({
         : ['image/png','image/jpeg','image/webp'];
       const contentType = body.contentType || decoded.contentType;
       if (!allowed.includes(contentType)) return error('Unsupported asset format.', 400);
+      if (!assetSignatureMatches(decoded.base64, contentType)) return error('The uploaded file contents do not match the declared file format.', 400);
+      const assetSha256 = createHash('sha256').update(Buffer.from(decoded.base64, 'base64')).digest('hex');
+      const originalFileName = safeOriginalFileName(body.fileName);
       const { items } = await db.list(releaseTable, { limit: 500 });
       const release = items.find((item) => String(item.id) === String(body.releaseId) && item.creatorUserId === ctx.user!.userId);
       if (!release) return error('Release not found.', 404);
@@ -851,7 +878,10 @@ export const handler = router({
       const [ok] = await storage.write([{ path, content: decoded.base64, contentType }]);
       if (!ok) return error('Asset upload failed.', 500);
       const [{ url }] = await storage.url([path]);
-      const next = { ...release, [body.kind === 'audio' ? 'audioUrl' : 'artworkUrl']: url ?? null, [body.kind === 'audio' ? 'audioPath' : 'artworkPath']: path, ...(body.kind === 'audio' && Number(body.durationMinutes) > 0 ? { durationMinutes: Number(body.durationMinutes) } : {}), assetUpdatedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const assetMeta = body.kind === 'audio'
+        ? { audioBytes: decoded.bytes, audioSha256: assetSha256, audioOriginalFileName: originalFileName || null }
+        : { artworkBytes: decoded.bytes, artworkSha256: assetSha256, artworkOriginalFileName: originalFileName || null };
+      const next = { ...release, [body.kind === 'audio' ? 'audioUrl' : 'artworkUrl']: url ?? null, [body.kind === 'audio' ? 'audioPath' : 'artworkPath']: path, ...assetMeta, ...(body.kind === 'audio' && Number(body.durationMinutes) > 0 ? { durationMinutes: Math.min(Number(body.durationMinutes), 24 * 60) } : {}), assetUpdatedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       await db.update(releaseTable, [{ id: release.id, record: next }]);
       return json({ url: url ?? null, path, release: next });
     },
