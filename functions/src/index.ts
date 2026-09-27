@@ -373,6 +373,68 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
   return { creators };
 });
 
+export const getPublicProfile = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+
+  const userId = cleanText((request.data as { userId?: unknown } | undefined)?.userId, 160);
+  if (!userId) throw new HttpsError('invalid-argument', 'Nightjar profile is required.');
+
+  const [account, profile] = await Promise.all([
+    accountRef(userId).get(),
+    profileRef(userId).get(),
+  ]);
+
+  const accountData = account.data();
+  const data = profile.data();
+  if (
+    !account.exists
+    || !data
+    || accountData?.status !== 'active'
+    || accountData?.role === 'admin'
+    || data.publicProfile === false
+  ) {
+    throw new HttpsError('not-found', 'Public Nightjar profile not found.');
+  }
+
+  const role = String(accountData?.role ?? '');
+  let publishedWorkCount = 0;
+  let releaseCount = 0;
+
+  if (role === 'creator') {
+    const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
+    releaseCount = releases.docs.filter((doc) => doc.data().status === 'released').length;
+  } else if (role === 'writer') {
+    const scripts = await db.collection('scripts').where('writerUserId', '==', userId).limit(500).get();
+    publishedWorkCount = scripts.docs.filter((doc) => ['Approved','Published'].includes(String(doc.data().status))).length;
+  }
+
+  return {
+    profile: {
+      userId,
+      role,
+      displayName: data.displayName ?? 'Nightjar member',
+      name: data.displayName ?? 'Nightjar member',
+      handle: data.handle ?? null,
+      headline: data.headline ?? null,
+      bio: data.bio ?? null,
+      welcomeMessage: data.welcomeMessage ?? null,
+      pronouns: data.pronouns ?? null,
+      avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+      initials: data.avatarInitials ?? null,
+      avatarTone: data.avatarTone ?? 'plum',
+      followerCount: Math.max(0, Number(data.followerCount ?? 0)),
+      favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
+      favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
+      favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
+      roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
+      releaseCount,
+      publishedWorkCount,
+      publicProfile: true,
+    },
+  };
+});
+
 export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
