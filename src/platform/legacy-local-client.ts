@@ -1,3 +1,4 @@
+import { firebaseAuth, nightjarAuth } from './firebase-auth';
 type LocalUser = {
   userId: string;
   email: string;
@@ -39,7 +40,6 @@ const ADMIN_EMAILS = [
 ];
 
 const STATE_KEY = 'nightjar.local.state.v1';
-const SESSION_KEY = 'nightjar.local.session.v1';
 
 const now = () => new Date().toISOString();
 const cleanEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
@@ -86,9 +86,45 @@ function saveState(state: LocalState) {
 }
 
 function currentUser(state: LocalState): LocalUser | null {
-  if (typeof window === 'undefined') return null;
-  const userId = window.localStorage.getItem(SESSION_KEY);
-  return userId ? state.users.find((user) => user.userId === userId) ?? null : null;
+  const firebaseUser = firebaseAuth.currentUser;
+  if (!firebaseUser?.email) return null;
+
+  const email = cleanEmail(firebaseUser.email);
+  let user = state.users.find((candidate) => candidate.userId === firebaseUser.uid);
+
+  if (!user) {
+    const admin = isAdminEmail(email);
+    user = {
+      userId: firebaseUser.uid,
+      email,
+      name: firebaseUser.displayName
+        ?? email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      role: admin ? 'admin' : null,
+      status: 'active',
+      createdAt: now(),
+    };
+    state.users.push(user);
+    ensureProfile(state, user);
+  } else {
+    user.email = email;
+    user.name = firebaseUser.displayName ?? user.name;
+    if (isAdminEmail(email)) {
+      user.role = 'admin';
+      user.status = 'active';
+    }
+  }
+
+  return user;
+}
+
+export function syncLocalAccount(userId: string, role: LocalUser['role'], status: LocalUser['status']) {
+  const state = loadState();
+  const user = state.users.find((candidate) => candidate.userId === userId) ?? currentUser(state);
+  if (!user || user.userId !== userId) return;
+  user.role = role;
+  user.status = status;
+  ensureProfile(state, user);
+  saveState(state);
 }
 
 function requireUser(state: LocalState): LocalUser {
@@ -759,32 +795,18 @@ export const api = {
 };
 
 export const auth = {
-  isSignedIn: (): boolean => Boolean(typeof window !== 'undefined' && window.localStorage.getItem(SESSION_KEY)),
-  getUser: async (): Promise<LocalUser | null> => currentUser(loadState()),
-  signIn: async (options?: { email?: string }): Promise<{ user: LocalUser }> => {
+  isSignedIn: (): boolean => Boolean(firebaseAuth.currentUser),
+  getUser: async (): Promise<LocalUser | null> => {
+    await firebaseAuth.authStateReady();
     const state = loadState();
-    let email = cleanEmail(options?.email);
-    if (!email && typeof window !== 'undefined') email = cleanEmail(window.prompt('Nightjar email address') ?? '');
-    if (!email || !email.includes('@')) throw new Error('A valid email address is required.');
-    let user = state.users.find((candidate) => candidate.email === email);
-    if (!user) {
-      const admin = isAdminEmail(email);
-      user = {
-        userId: id('user'),
-        email,
-        name: admin ? email.split('@')[0] : email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
-        role: admin ? 'admin' : null,
-        status: 'active',
-        createdAt: now(),
-      };
-      state.users.push(user);
-      ensureProfile(state, user);
-    }
-    if (typeof window !== 'undefined') window.localStorage.setItem(SESSION_KEY, user.userId);
-    saveState(state);
-    return { user };
+    const user = currentUser(state);
+    if (user) saveState(state);
+    return user;
+  },
+  signIn: async (): Promise<{ user: LocalUser }> => {
+    throw new Error('firebase-account-portal-required');
   },
   signOut: async (): Promise<void> => {
-    if (typeof window !== 'undefined') window.localStorage.removeItem(SESSION_KEY);
+    await nightjarAuth.signOut();
   },
 };
