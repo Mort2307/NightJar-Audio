@@ -193,3 +193,81 @@ test('local profile and protection records are field allowlisted', () => {
   assert.doesNotMatch(reportRoute, /userId: account\.userId, \.\.\.input/);
   assert.match(reportRoute, /reporterUserId: account\.userId/);
 });
+
+
+test('protected scripts never return the manuscript body from metadata or editor APIs', () => {
+  const scriptRoute = backend.slice(backend.indexOf("'GET /api/scripts/:scriptId':"), backend.indexOf("'POST /api/scripts/:scriptId/request-access':"));
+  assert.match(scriptRoute, /publicScriptMetadata/);
+  assert.match(scriptRoute, /Protected script access has not been granted/);
+  assert.doesNotMatch(scriptRoute, /return json\(\{script,/);
+  const editorQueue = backend.slice(backend.indexOf("'GET /api/editor/queue':"), backend.indexOf("'GET /api/editor/accounts':"));
+  assert.match(editorQueue, /publicScriptMetadata/);
+  assert.doesNotMatch(editorQueue, /queue: scripts\.filter\([^\n]+\) \}/);
+});
+
+test('protected script reading is paged, short-lived and permission revalidated', () => {
+  assert.match(backend, /GET \/api\/scripts\/:scriptId\/content/);
+  assert.match(backend, /chunkProtectedContent/);
+  assert.match(backend, /readerSessionStillAuthorized/);
+  assert.match(backend, /15 \* 60_000/);
+  assert.match(backend, /Superseded by a new protected reader session/);
+  assert.match(app, /Next page/);
+  assert.match(app, /Previous page/);
+  assert.match(app, /browser only receives the page you are reading/);
+});
+
+test('rapid protected manuscript harvesting revokes the session', () => {
+  assert.match(backend, /enforceProtectedPageRate/);
+  assert.match(backend, /sameSession\.length < 18/);
+  assert.match(backend, /sameScript\.length < 24/);
+  assert.match(backend, /Protected reader rate limit exceeded/);
+  assert.match(shim, /sameSessionPages\.length >= 18/);
+});
+
+test('writers explicitly control full-script handoff and can revoke it', () => {
+  const accessManager = read('src/components/ScriptAccessManager.tsx');
+  const writerStudio = read('src/components/WriterStudio.tsx');
+  assert.match(backend, /GET \/api\/scripts\/:scriptId\/access/);
+  assert.match(backend, /POST \/api\/scripts\/:scriptId\/permissions/);
+  assert.match(backend, /recipientUserId/);
+  assert.match(backend, /allowExport/);
+  assert.match(backend, /GET \/api\/scripts\/:scriptId\/export/);
+  assert.match(backend, /writer has not granted full-script export permission/i);
+  assert.match(accessManager, /Full handoff \/ export/);
+  assert.match(accessManager, /VA recording session/);
+  assert.match(accessManager, /Revoke/);
+  assert.match(writerStudio, /ScriptAccessManager/);
+});
+
+test('protected script exports are fingerprinted, watermarked and audited', () => {
+  const accessManager = read('src/components/ScriptAccessManager.tsx');
+  assert.match(backend, /createHash\('sha256'\)/);
+  assert.match(backend, /scriptContentHash/);
+  assert.match(backend, /SHA-256:/);
+  assert.match(backend, /script_export/);
+  assert.match(backend, /Your script was exported/);
+  assert.match(app, /reader-watermark-layer/);
+  assert.match(app, /data-nosnippet/);
+  assert.match(accessManager, /RECENT ACCESS ACTIVITY/);
+});
+
+test('protected routes discourage indexing, caching and AI training crawlers', () => {
+  const robots = read('public/robots.txt');
+  const firebase = read('firebase.json');
+  assert.match(robots, /User-agent: GPTBot\nDisallow: \//);
+  assert.match(robots, /User-agent: CCBot\nDisallow: \//);
+  assert.match(robots, /User-agent: ClaudeBot\nDisallow: \//);
+  assert.match(robots, /User-agent: Google-Extended\nDisallow: \//);
+  assert.match(firebase, /private,no-store,max-age=0/);
+  assert.match(firebase, /noindex,nofollow,noarchive,nosnippet,noimageindex/);
+});
+
+test('recipient permissions may be read-only, copy-enabled or explicitly exportable', () => {
+  const accessManager = read('src/components/ScriptAccessManager.tsx');
+  assert.match(accessManager, /Protected read-only/);
+  assert.match(accessManager, /Protected read \+ copy/);
+  assert.match(accessManager, /Full handoff/);
+  assert.match(app, /copyAllowed/);
+  assert.match(app, /exportAllowed/);
+  assert.match(app, /Export full script/);
+});
