@@ -1443,3 +1443,14 @@ button:focus-visible {
   html { scroll-behavior:auto !important; }
   *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; transition-delay:0s !important; }
 }
+
+
+/* Moderation lifecycle controls */
+.moderation-scope-tabs { display:flex; gap:7px; flex-wrap:wrap; margin:15px 0 4px; padding:0 1px; }
+.moderation-scope-tabs button { display:inline-flex; align-items:center; gap:7px; padding:8px 10px; border:1px solid var(--line-soft); border-radius:999px; background:rgba(255,255,255,.015); color:var(--muted-2); font:inherit; font-size:8px; cursor:pointer; }
+.moderation-scope-tabs button span { min-width:18px; padding:2px 5px; border-radius:999px; background:rgba(255,255,255,.045); text-align:center; font-size:7px; }
+.moderation-scope-tabs button.active { border-color:rgba(203,181,204,.3); background:rgba(178,144,170,.09); color:var(--ivory); }
+.danger-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; border:1px solid rgba(201,91,105,.32); border-radius:10px; padding:10px 13px; background:rgba(129,35,48,.14); color:#efc8cf; font:inherit; font-size:9px; cursor:pointer; }
+.danger-button:hover:not(:disabled) { border-color:rgba(224,116,130,.5); background:rgba(129,35,48,.22); }
+.danger-button:disabled { opacity:.45; cursor:wait; }
+.lifecycle-actions { align-items:center; }
