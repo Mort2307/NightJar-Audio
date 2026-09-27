@@ -373,15 +373,36 @@ function App() {
   const loadNotifications = async () => {
     if (!auth.isSignedIn()) return;
     try {
-      const { data } = await api.get('/api/notifications');
-      const nextNotifications = data?.notifications ?? [];
+      const communityRequest = api.get('/api/notifications');
+      const securityRequest = role === 'admin'
+        ? api.get('/api/security/notifications')
+        : Promise.resolve({ data: { notifications: [], unreadCount: 0 } });
+      const [communityResult, securityResult] = await Promise.allSettled([communityRequest, securityRequest]);
+
+      const communityData = communityResult.status === 'fulfilled' ? communityResult.value.data : {};
+      const securityData = securityResult.status === 'fulfilled' ? securityResult.value.data : {};
+      const communityNotifications = communityData?.notifications ?? [];
+      const securityNotifications = (securityData?.notifications ?? []).map((item: any) => ({ ...item, securityOwnerNotification: true }));
+      const nextNotifications = [...securityNotifications, ...communityNotifications]
+        .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+
       setNotifications(nextNotifications);
-      setNotificationUnreadCount(Number(data?.unreadCount ?? 0));
+      setNotificationUnreadCount(nextNotifications.filter((item: any) => item.read !== true).length);
+
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-      const personalSpotlight = nextNotifications.find((item: any) => item.type === 'spotlight' && item.spotlightDate === today && item.read !== true);
+      const personalSpotlight = communityNotifications.find((item: any) => item.type === 'spotlight' && item.spotlightDate === today && item.read !== true);
       if (personalSpotlight && window.sessionStorage.getItem('nightjar_spotlight_notice:' + today) !== 'shown') {
         window.sessionStorage.setItem('nightjar_spotlight_notice:' + today, 'shown');
         notify(personalSpotlight.title + ' — ' + personalSpotlight.message);
+      }
+
+      const securityAlert = securityNotifications.find((item: any) => item.type === 'security_alert' && item.read !== true);
+      if (securityAlert) {
+        const key = 'nightjar_security_notice:' + String(securityAlert.alertId ?? securityAlert.id);
+        if (window.sessionStorage.getItem(key) !== 'shown') {
+          window.sessionStorage.setItem(key, 'shown');
+          notify((securityAlert.title ?? 'Nightjar security alert') + ' — ' + (securityAlert.message ?? 'Protected-content activity requires review.'));
+        }
       }
     } catch { /* notifications remain non-blocking */ }
   };
@@ -389,7 +410,10 @@ function App() {
   const markNotificationRead = async (notification: any) => {
     if (notification?.read === true) return;
     try {
-      await api.post('/api/notifications/' + encodeURIComponent(String(notification.id)) + '/read');
+      const route = notification.securityOwnerNotification === true
+        ? '/api/security/notifications/' + encodeURIComponent(String(notification.id)) + '/read'
+        : '/api/notifications/' + encodeURIComponent(String(notification.id)) + '/read';
+      await api.post(route);
       setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, read: true } : item));
       setNotificationUnreadCount((count) => Math.max(0, count - 1));
     } catch { /* notification read state is non-critical */ }
@@ -472,7 +496,6 @@ function App() {
         setRolePicker(false);
         navigate('admin');
         void loadAdminOverview();
-        void loadSecurityAlerts();
         return;
       }
     } catch { /* account endpoint remains authoritative */ }
@@ -1135,7 +1158,7 @@ function App() {
           {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); }}>Editorial</button>}
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
-          {canAdmin && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
+          {canAdmin && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadNotifications(); }}>Admin</button>}
           {canAdmin && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ADMIN PREVIEW · REAL ROLE: ADMINISTRATOR</span><button className={previewRole === 'listener' ? 'active' : ''} onClick={() => selectPreviewRole('listener')}>Listener</button><button className={previewRole === 'creator' ? 'active' : ''} onClick={() => selectPreviewRole('creator')}>Creator</button><button className={previewRole === 'writer' ? 'active' : ''} onClick={() => selectPreviewRole('writer')}>Writer</button><button className={previewRole === 'editor' ? 'active' : ''} onClick={() => selectPreviewRole('editor')}>Editor</button><button className={!previewRole ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
         </nav>
 
