@@ -819,6 +819,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       allowExport: grant.allowExport === true,
       watermark: 'NIGHTJAR · ' + account.name + ' · ' + issuedAt.slice(0, 16).replace('T', ' '),
     };
+    state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((item) => item.scriptId === script.id && item.status === 'active' ? { ...item, status: 'revoked', revokedAt: issuedAt, revokedReason: 'Superseded by a new protected reader session.' } : item);
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
     state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'reader_session_issued', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId: session.sessionId, createdAt: issuedAt });
     return send({
@@ -1167,6 +1168,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const grant = localScriptGrant(script, account.userId);
     if (!grant) throw new Error('Protected script access has not been granted.');
     const session = { sessionId: id('reader'), scriptId, status: 'active', expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), createdAt: now(), canReadFull: true, allowCopy: grant.allowCopy === true, allowExport: grant.allowExport === true };
+    state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((item) => item.scriptId === scriptId && item.status === 'active' ? { ...item, status: 'revoked', revokedAt: now(), revokedReason: 'Superseded by a new protected reader session.' } : item);
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
     return send({ session });
   }
