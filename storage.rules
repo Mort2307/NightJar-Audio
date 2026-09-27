@@ -2,6 +2,15 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    match /release-audio/{userId}/{releaseId}/{fileName} {
+      allow read: if false;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size <= 25 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
