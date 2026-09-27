@@ -736,7 +736,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const account = requireUser(state);
     requireVerifiedAdult(state, account);
     if (account.role !== 'writer' && account.role !== 'admin') throw new Error('Writer access required.');
-    return send({ scripts: state.scripts.filter((script) => script.writerUserId === account.userId) });
+    return send({ scripts: state.scripts.filter((script) => script.writerUserId === account.userId).map((script) => ({ ...localScriptMetadata(script), lastEditorialComment: script.lastEditorialComment ?? null, editorUserId: script.editorUserId ?? null })) });
   }
 
   if (path === '/api/writer/scripts' && method === 'POST') {
@@ -756,6 +756,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (account.role !== 'writer') throw new Error('Active Writer access required.');
     const script = state.scripts.find((item) => item.id === parts[3] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
+    if (method === 'GET') return send({ script });
     if (method === 'PUT') {
       if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) throw new Error('Submitted or approved manuscripts are locked from direct editing.');
       script.title = String(input.title ?? script.title ?? '').trim().slice(0, 200);
