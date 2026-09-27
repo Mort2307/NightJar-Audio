@@ -48,26 +48,6 @@
     "expected": "Each role preview renders its own surface, the preview banner identifies the real Administrator role, and returning to Admin restores the operational dashboard."
   },
   {
-    "name": "Daily spotlights rotate fairly in a fixed five-place order",
-    "viewport": "mobile",
-    "covers": [
-      "creator spotlight",
-      "writer spotlight",
-      "24-hour rotation",
-      "fixed-order fairness",
-      "new edition discovery"
-    ],
-    "description": "Verifies the discovery page presents separate creator and writer spotlight tiles using a deterministic one-day rotation rather than random reshuffling.",
-    "steps": [
-      "Open the Nightjar discovery page",
-      "Inspect the Creator Spotlight tile",
-      "Inspect the Writer Spotlight tile",
-      "Confirm both show a one-day spotlight window and a new edition or script",
-      "Return on a later day and confirm the rotation advances to the next fixed position"
-    ],
-    "expected": "Exactly one creator and one writer occupy the daily spotlight, each remains featured for the full day, and the sequence advances in the same fixed order across the five-place cycle."
-  },
-  {
     "name": "Creator sees transparent listening economics and protected script access",
     "viewport": "mobile",
     "covers": [
@@ -238,5 +218,133 @@
       "Call the adult catalogue endpoint again"
     ],
     "expected": "The first catalogue request returns an age-verification-required response and no adult release payload; after verified state is stored, the same account can retrieve the catalogue without another verification."
+  },
+  {
+    "name": "Inclusive spotlight system gives everyone a fair daily lane",
+    "viewport": "mobile",
+    "covers": [
+      "listener spotlight",
+      "creator spotlight",
+      "writer spotlight",
+      "daily rotation",
+      "full-roster inclusion"
+    ],
+    "description": "Verifies the discovery page has separate Listener, Creator and Writer spotlight lanes. Creators and Writers rotate through every active public member one full day at a time; listeners use the previous completed week's top seven and rotate one per day.",
+    "steps": [
+      "Open the Nightjar discovery page as an age-verified account",
+      "Inspect Creator Spotlight, Writer Spotlight and Listener Spotlight",
+      "Confirm the Creator slot changes to the next active Creator on the following day",
+      "Confirm the Writer slot changes to the next active Writer on the following day",
+      "Confirm Listener Spotlight identifies the weekly Top 7 cohort and one listener occupies each day of the seven-day cycle",
+      "Complete a new week and confirm the listener cohort is refreshed from the newly completed week's listening activity"
+    ],
+    "expected": "All three lanes are visible when eligible members/data exist. Creator and Writer rotations are deterministic and give each eligible public member a complete day; the Listener seven remains fixed for the week and refreshes as a new cohort on the following week."
+  },
+  {
+    "name": "Listener spotlight ranking uses tracked listening from the previous completed week",
+    "viewport": "desktop",
+    "covers": [
+      "weekly leaderboard",
+      "listener ranking",
+      "calendar-week freeze",
+      "privacy-respecting profile display"
+    ],
+    "description": "Verifies Listener Spotlight is based on listener-role tracked activity from the previous completed Monday-Sunday period rather than changing mid-week.",
+    "steps": [
+      "Seed a test week with tracked listening events for more than seven active Listener accounts",
+      "Open Spotlight on Monday",
+      "Inspect the selected listener and Top 7 metadata",
+      "Repeat the request during the same week after additional listening activity is recorded",
+      "Advance to the following Monday and request Spotlight again"
+    ],
+    "expected": "The same seven listeners remain the eligible cohort throughout the week and are shown one per day. The following Monday uses the newly completed week's ranking instead. Accounts with public profiles disabled are not exposed as spotlight profiles."
+  },
+  {
+    "name": "Spotlighted users receive one idempotent daily notification",
+    "viewport": "mobile",
+    "covers": [
+      "spotlight notification",
+      "creator notification",
+      "writer notification",
+      "listener thank-you notification",
+      "deduplication"
+    ],
+    "description": "Verifies the daily spotlight service creates an in-app notification for each spotlighted account, with creator/writer promotion messaging and a listener thank-you message, without duplicating the same notification on repeated reads.",
+    "steps": [
+      "Use a test environment with an eligible Creator, Writer and Listener Spotlight",
+      "Open the discovery page twice on the same day",
+      "Sign in as each spotlighted account and open Notifications",
+      "Inspect the Creator and Writer notifications",
+      "Inspect the Listener notification",
+      "Repeat the spotlight request several times"
+    ],
+    "expected": "Each spotlighted account has one notification for that day's spotlight. Creator and Writer messages invite natural discovery/share of their work; Listener messaging thanks them for contributing to the community. Repeated spotlight reads do not create duplicate notifications."
+  },
+  {
+    "name": "Creator and Writer spotlights provide natural sharing promotion",
+    "viewport": "mobile",
+    "covers": [
+      "creator promotion",
+      "writer promotion",
+      "Web Share",
+      "clipboard fallback"
+    ],
+    "description": "Verifies today's Creator and Writer spotlight cards expose a share action using the device/browser share mechanism where supported and a clipboard fallback otherwise.",
+    "steps": [
+      "Open a discovery page containing the Creator Spotlight",
+      "Use Share spotlight and confirm the message identifies today's Creator Spotlight and Nightjar",
+      "Open the Writer Spotlight",
+      "Use Share spotlight and confirm the message identifies today's Writer Spotlight and Nightjar"
+    ],
+    "expected": "Creator and Writer spotlight cards provide an optional, user-triggered share action. The generated message promotes the featured person and Nightjar without forcing a share or fabricating engagement."
+  },
+  {
+    "name": "Creator and Writer rotation reaches every roster member",
+    "viewport": "desktop",
+    "covers": [
+      "full-roster rotation",
+      "more than seven creators",
+      "more than seven writers",
+      "deterministic day index"
+    ],
+    "description": "Guards against a weekday-only rotation that would stop at the first seven people. The rotation must use the absolute calendar day against the full eligible roster.",
+    "steps": [
+      "Seed more than seven active public Creator accounts and more than seven active public Writer accounts",
+      "Inspect the daily spotlight for successive calendar days",
+      "Continue until every eligible member has received a spotlight day"
+    ],
+    "expected": "The rotation advances across the entire eligible Creator roster and entire eligible Writer roster, including members beyond the first seven. No member is skipped solely because the roster exceeds seven."
+  },
+  {
+    "name": "Small spotlight rosters cycle continuously without empty days",
+    "viewport": "mobile",
+    "covers": [
+      "small creator roster",
+      "small writer roster",
+      "continuous rotation",
+      "roster modulo"
+    ],
+    "description": "Verifies that a roster smaller than seven still produces a spotlight every calendar day. Once every eligible person has had a day, the same roster begins again immediately.",
+    "steps": [
+      "Seed three active public Creator accounts and three active public Writer accounts",
+      "Inspect the spotlight on six consecutive calendar days",
+      "Inspect the spotlight on the seventh and eighth days"
+    ],
+    "expected": "The first three days feature Creator 1, Creator 2 and Creator 3, then the sequence repeats from Creator 1 on day four. Writer rotation behaves independently in the same continuous manner. There are no empty days caused by the roster being smaller than seven."
+  },
+  {
+    "name": "Listener Top 7 repeats when fewer than seven eligible listeners exist",
+    "viewport": "desktop",
+    "covers": [
+      "listener spotlight",
+      "small listener cohort",
+      "continuous weekly rotation"
+    ],
+    "description": "Verifies that a weekly listener cohort smaller than seven still uses every available listener without creating placeholder days.",
+    "steps": [
+      "Seed three eligible Listener accounts with tracked activity in the completed week",
+      "Open Listener Spotlight across the seven days of the current week"
+    ],
+    "expected": "The three listeners are rotated across the available days using the same cohort repeatedly; no empty placeholder listener is introduced simply because the cohort contains fewer than seven people."
   }
 ]

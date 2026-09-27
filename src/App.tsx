@@ -28,8 +28,10 @@ import {
   ShieldAlert,
   ClipboardX,
   Ban,
+  Bell,
   Download,
   FileCheck2,
+  Share2,
   Coins,
   WalletCards,
 } from 'lucide-react';
@@ -71,7 +73,7 @@ type CreatorSummary = {
 };
 
 type Spotlight = {
-  kind: 'creator' | 'writer';
+  kind: 'creator' | 'writer' | 'listener';
   name: string;
   handle?: string | null;
   title?: string;
@@ -80,6 +82,10 @@ type Spotlight = {
   initials?: string;
   targetId?: string;
   releaseId?: string | null;
+  listenerRank?: number;
+  weeklyTrackedMinutes?: number;
+  weeklyTopSevenCount?: number;
+  publicProfile?: boolean;
 };
 
 const roleMeta: Record<AccountRole, { label: string; description: string }> = {
@@ -156,6 +162,8 @@ function App() {
   const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
+  const [listenerSpotlight, setListenerSpotlight] = useState<Spotlight | null>(null);
+  const [spotlightMeta, setSpotlightMeta] = useState<{ listenerTopSevenCount: number; listenerSpotlightDay: number | null; listenerWeek: string | null }>({ listenerTopSevenCount: 0, listenerSpotlightDay: null, listenerWeek: null });
   const [creatorDashboard, setCreatorDashboard] = useState<{ metrics: any; releases: any[] }>({ metrics: {}, releases: [] });
   const [creatorDashboardLoading, setCreatorDashboardLoading] = useState(false);
   const [creatorDraft, setCreatorDraft] = useState({
@@ -165,6 +173,9 @@ function App() {
   const [liveRecommendations, setLiveRecommendations] = useState<any[]>([]);
   const [liveTrending, setLiveTrending] = useState<any[]>([]);
   const [currentIntent, setCurrentIntent] = useState('');
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
@@ -175,9 +186,8 @@ function App() {
   const [protectedReaderScript, setProtectedReaderScript] = useState<any | null>(null);
 
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
-  const spotlightIndex = Math.floor(Date.now() / 86400000) % Math.max(creatorSpotlightList.length, 1);
-  const creatorSpotlight = creatorSpotlightList[spotlightIndex] ?? null;
-  const writerSpotlight = writerSpotlightList[spotlightIndex] ?? null;
+  const creatorSpotlight = creatorSpotlightList[0] ?? null;
+  const writerSpotlight = writerSpotlightList[0] ?? null;
   const creators = creatorDirectory;
   const creatorSpotlights = creatorSpotlightList;
   const writerSpotlights = writerSpotlightList;
@@ -264,8 +274,8 @@ function App() {
         releases: creator.releaseCount ?? 0,
       })));
       const spotlights = spotlightResponse.data?.spotlights ?? [];
-      setCreatorSpotlightList(spotlights.filter((item: any) => item.kind === 'creator' && item.name).map((item: any) => ({
-        kind: 'creator',
+      const mapSpotlight = (item: any): Spotlight => ({
+        kind: item.kind,
         name: item.name,
         handle: item.handle,
         title: item.title,
@@ -273,19 +283,22 @@ function App() {
         detail: item.detail,
         initials: item.initials,
         targetId: item.targetId,
-        releaseId: item.releaseId,
-      })));
-      setWriterSpotlightList(spotlights.filter((item: any) => item.kind === 'writer' && item.name).map((item: any) => ({
-        kind: 'writer',
-        name: item.name,
-        handle: item.handle,
-        title: item.title,
-        edition: item.edition,
-        detail: item.detail,
-        initials: item.initials,
-        targetId: item.targetId,
-        releaseId: item.releaseId,
-      })));
+        releaseId: item.releaseId ?? null,
+        listenerRank: item.listenerRank,
+        weeklyTrackedMinutes: item.weeklyTrackedMinutes,
+        weeklyTopSevenCount: item.weeklyTopSevenCount,
+        publicProfile: item.publicProfile !== false,
+      });
+      setCreatorSpotlightList(spotlights.filter((item: any) => item.kind === 'creator' && item.name).map(mapSpotlight));
+      setWriterSpotlightList(spotlights.filter((item: any) => item.kind === 'writer' && item.name).map(mapSpotlight));
+      const listener = spotlights.find((item: any) => item.kind === 'listener' && item.name);
+      setListenerSpotlight(listener ? mapSpotlight(listener) : null);
+      setSpotlightMeta({
+        listenerTopSevenCount: Number(spotlightResponse.data?.listenerTopSevenCount ?? 0),
+        listenerSpotlightDay: spotlightResponse.data?.listenerSpotlightDay == null ? null : Number(spotlightResponse.data.listenerSpotlightDay),
+        listenerWeek: spotlightResponse.data?.listenerWeek ?? null,
+      });
+      await loadNotifications();
       if (user) {
         const [recommendationsResponse, trendingResponse, favouritesResponse, followsResponse] = await Promise.all([
           api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
@@ -303,8 +316,55 @@ function App() {
       setCreatorDirectory([]);
       setCreatorSpotlightList([]);
       setWriterSpotlightList([]);
+      setListenerSpotlight(null);
+      setSpotlightMeta({ listenerTopSevenCount: 0, listenerSpotlightDay: null, listenerWeek: null });
+      setNotifications([]);
+      setNotificationUnreadCount(0);
+      setNotificationsOpen(false);
       setLiveRecommendations([]);
       setLiveTrending([]);
+    }
+  };
+
+  const loadNotifications = async () => {
+    if (!auth.isSignedIn()) return;
+    try {
+      const { data } = await api.get('/api/notifications');
+      const nextNotifications = data?.notifications ?? [];
+      setNotifications(nextNotifications);
+      setNotificationUnreadCount(Number(data?.unreadCount ?? 0));
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const personalSpotlight = nextNotifications.find((item: any) => item.type === 'spotlight' && item.spotlightDate === today && item.read !== true);
+      if (personalSpotlight && window.sessionStorage.getItem('nightjar_spotlight_notice:' + today) !== 'shown') {
+        window.sessionStorage.setItem('nightjar_spotlight_notice:' + today, 'shown');
+        notify(personalSpotlight.title + ' — ' + personalSpotlight.message);
+      }
+    } catch { /* notifications remain non-blocking */ }
+  };
+
+  const markNotificationRead = async (notification: any) => {
+    if (notification?.read === true) return;
+    try {
+      await api.post('/api/notifications/' + encodeURIComponent(String(notification.id)) + '/read');
+      setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, read: true } : item));
+      setNotificationUnreadCount((count) => Math.max(0, count - 1));
+    } catch { /* notification read state is non-critical */ }
+  };
+
+  const shareSpotlight = async (spotlight: Spotlight) => {
+    const kindLabel = spotlight.kind === 'creator' ? 'Creator' : 'Writer';
+    const text = spotlight.kind === 'listener'
+      ? `Nightjar is recognising ${spotlight.name} today as a Listener Spotlight. Thank you for being part of the listening community.`
+      : `Today on Nightjar: ${spotlight.name} is our ${kindLabel} Spotlight. Discover their work and support independent creators.`;
+    const url = window.location.origin + '/discover';
+    try {
+      if (navigator.share) await navigator.share({ title: 'Nightjar Spotlight', text, url });
+      else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text + ' ' + url);
+        notify('Spotlight message copied — ready to share.');
+      } else notify('Spotlight sharing is available from a compatible device/browser.');
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) notify('Spotlight sharing could not be opened.');
     }
   };
 
@@ -1096,6 +1156,19 @@ function App() {
         </nav>
 
         <div className="top-actions">
+          {user && <div className="notification-wrap">
+            <button className="ghost-button notification-button" onClick={() => setNotificationsOpen((open) => !open)} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
+              <Bell size={17} />
+              {notificationUnreadCount > 0 && <span className="notification-badge">{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</span>}
+            </button>
+            {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
+              <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR NOTIFICATIONS</span><strong>Community updates</strong></div><button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div>
+              {notifications.length ? <div className="notification-list">{notifications.slice(0, 8).map((item) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void markNotificationRead(item)}>
+                <span className="notification-row-icon">{item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : <Headphones size={15} />}</span>
+                <span><strong>{item.title}</strong><small>{item.message}</small></span>
+              </button>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new community notifications.</span></div>}
+            </section>}
+          </div>}
           {!user ? (
             <button className="primary-button" disabled={accountLoading} onClick={() => void signIn()}>Sign in <ArrowRight size={15} /></button>
           ) : (
@@ -1156,18 +1229,22 @@ function App() {
             <section className="editorial-strip"><span>VOICE</span><span>STORY</span><span>ATMOSPHERE</span><span>CHARACTER</span><span>SOUND DESIGN</span><span>AFTER DARK</span></section>
 
             <section className="spotlight-section section-wrap" aria-labelledby="daily-spotlights-title">
-              <div className="section-head spotlight-heading"><div><p className="eyebrow"><Sparkles size={14} /> DAILY ROTATION</p><h2 id="daily-spotlights-title">Today in the spotlight.</h2></div><span className="spotlight-cycle">01 DAY · 05 PLACES · FIXED ROTATION</span></div>
+              <div className="section-head spotlight-heading"><div><p className="eyebrow"><Sparkles size={14} /> INCLUSION ROTATION</p><h2 id="daily-spotlights-title">Today in the spotlight.</h2></div><span className="spotlight-cycle">03 LANES · 01 DAY EACH · FAIR ROTATION</span></div>
               <div className="spotlight-grid">
                 {creatorSpotlight ? <article className="spotlight-tile creator-spotlight-tile">
                   <div className="spotlight-art"><span className="spotlight-initials">{creatorSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><Mic2 size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{creatorSpotlight.name}</h3><p className="spotlight-handle">{creatorSpotlight.handle ? '@' + creatorSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition || 'Spotlight'}</span><strong>{creatorSpotlight.title || 'Creator profile'}</strong><p>{creatorSpotlight.detail || 'A live creator spotlight record.'}</p></div><button className="secondary-button" onClick={() => navigate('creators')}>Meet {creatorSpotlight.name} <ArrowRight size={14} /></button></div>
-                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">CREATOR SPOTLIGHT</span><h3>No live slot</h3><p className="spotlight-handle">No scheduled creator spotlight is published for today.</p></div></div>}
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{creatorSpotlight.name}</h3><p className="spotlight-handle">{creatorSpotlight.handle ? '@' + creatorSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition || 'Creator Spotlight'}</span><strong>{creatorSpotlight.title || 'Creator profile'}</strong><p>{creatorSpotlight.detail || 'A full day of discovery for this Nightjar creator.'}</p></div><div className="spotlight-actions">{creatorSpotlight.releaseId && tracks.some((track) => track.id === String(creatorSpotlight.releaseId)) ? <button className="secondary-button" onClick={() => { const track = tracks.find((item) => item.id === String(creatorSpotlight.releaseId)); if (track) togglePlayback(track); }}>Listen to highlighted release <Play size={14} /></button> : <button className="secondary-button" onClick={() => navigate('creators')}>Meet {creatorSpotlight.name} <ArrowRight size={14} /></button>}{creatorSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(creatorSpotlight)} aria-label={`Share ${creatorSpotlight.name}'s creator spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
+                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">CREATOR SPOTLIGHT</span><h3>Awaiting creators</h3><p className="spotlight-handle">Every active Creator joins the daily rotation automatically.</p></div></div>}
                 {writerSpotlight ? <article className="spotlight-tile writer-spotlight-tile">
                   <div className="spotlight-art"><span className="spotlight-initials">{writerSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><FileText size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.name}</h3><p className="spotlight-handle">{writerSpotlight.handle ? '@' + writerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{writerSpotlight.edition || 'Spotlight'}</span><strong>{writerSpotlight.title || 'Writer profile'}</strong><p>{writerSpotlight.detail || 'A live writer spotlight record.'}</p></div><button className="secondary-button" onClick={() => writerSpotlight.releaseId ? navigate('protection') : notify('This spotlight has no public release attached yet.')}>Explore work <ArrowRight size={14} /></button></div>
-                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">WRITER SPOTLIGHT</span><h3>No live slot</h3><p className="spotlight-handle">No scheduled writer spotlight is published for today.</p></div></div>}
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.name}</h3><p className="spotlight-handle">{writerSpotlight.handle ? '@' + writerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{writerSpotlight.edition || 'Writer Spotlight'}</span><strong>{writerSpotlight.title || 'Writer profile'}</strong><p>{writerSpotlight.detail || 'A full day of discovery for this Nightjar writer.'}</p></div><div className="spotlight-actions"><button className="secondary-button" onClick={() => writerSpotlight.releaseId ? navigate('protection') : notify('This writer has no public release attached yet.')}>Explore work <ArrowRight size={14} /></button>{writerSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(writerSpotlight)} aria-label={`Share ${writerSpotlight.name}'s writer spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
+                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">WRITER SPOTLIGHT</span><h3>Awaiting writers</h3><p className="spotlight-handle">Every active Writer joins the daily rotation automatically.</p></div></div>}
+                {listenerSpotlight ? <article className="spotlight-tile listener-spotlight-tile">
+                  <div className="spotlight-art"><span className="spotlight-initials">{listenerSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><Headphones size={20} /></span></div>
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">LISTENER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{listenerSpotlight.name}</h3><p className="spotlight-handle">{listenerSpotlight.handle ? '@' + listenerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{listenerSpotlight.edition || 'WEEKLY TOP 7'}</span><strong>{listenerSpotlight.title || 'Community listener'}</strong><p>{listenerSpotlight.detail || 'Recognised for the most tracked listening activity in the previous completed week.'}</p></div><div className="spotlight-listener-meta"><span>TOP {spotlightMeta.listenerTopSevenCount || 0}</span><span>DAY {spotlightMeta.listenerSpotlightDay || 1} / 7</span></div><div className="spotlight-thanks"><Headphones size={14} /><span>Thank you for helping make Nightjar’s listening community what it is.</span></div></div>
+                </article> : <div className="spotlight-tile listener-spotlight-tile"><div className="spotlight-copy"><span className="mini-label">LISTENER SPOTLIGHT</span><h3>Weekly listener recognition</h3><p className="spotlight-handle">The previous completed week’s top seven tracked Listeners rotate one per day. The seven refresh together when the new week begins.</p></div></div>}
               </div>
-              <p className="spotlight-note">Every place receives one complete day before the same fixed order begins again. No random reshuffling, paid priority or hidden rotation boost.</p>
+              <p className="spotlight-note">Every active Creator and Writer receives a full day in deterministic rotation, with a shareable spotlight to help the community naturally discover their work. Listener Spotlight recognises the previous completed week’s top seven Listeners, one per day, and thanks them for helping Nightjar thrive.</p>
             </section>
 
             <section id="catalogue" className="section-wrap">
