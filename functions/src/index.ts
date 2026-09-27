@@ -2363,6 +2363,7 @@ const activePermissionFor = async (scriptId: string, userId: string) => {
 
 export const listProtectedScripts = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','writer','editor','admin']);
+  await requireAgeVerified(identity.uid);
   const snapshot = await db.collection('scripts').limit(1000).get();
 
   const visible: any[] = [];
@@ -2526,6 +2527,7 @@ export const recordProtectionEvent = onCall({ region: REGION }, async (request) 
 
 export const openProtectedScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','writer','editor','admin']);
+  await requireAgeVerified(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
   const snapshot = await ref.get();
