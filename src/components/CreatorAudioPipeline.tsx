@@ -56,18 +56,26 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [artBusy, setArtBusy] = useState(false);
 
   const current = selectedRelease ?? null;
-  const statusLabel = current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
+  const editable = Boolean(current && ['draft', 'rejected'].includes(String(current.status ?? 'draft')));
+  const statusLabel = current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'held' ? 'ON HOLD' : current?.status === 'taken_down' ? 'TAKEN DOWN' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').replace(/_/g, ' ').toUpperCase();
   const statusHint = current?.status === 'pending_review'
-    ? 'Your submission is with Nightjar moderation.'
+    ? 'Your submission is with Nightjar moderation. Editing is locked until a decision is returned.'
     : current?.status === 'released'
-      ? 'Published and available to age-verified listeners.'
-      : current?.moderationNote
-        ? current.moderationNote
-        : 'A complete release can be submitted for moderation.';
+      ? 'Published and available to age-verified listeners. Live release fields are locked.'
+      : current?.status === 'held'
+        ? 'Temporarily removed from the public catalogue by Nightjar moderation.'
+        : current?.status === 'taken_down'
+          ? 'Removed from the public catalogue. The recorded moderation reason remains available.'
+          : current?.moderationNote
+            ? current.moderationNote
+            : 'A complete release can be submitted for moderation.';
 
   const complete = useMemo(() => Boolean(current?.title && current.description && current.audioUrl && current.category), [current]);
 
-  const setRelease = (patch: Partial<Release>) => setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
+  const setRelease = (patch: Partial<Release>) => {
+    if (!editable) return;
+    setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
+  };
 
   const createDraft = async () => {
     if (!draft.title.trim()) return notify('Give the release a title first.');
@@ -90,6 +98,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   };
 
   const uploadAsset = async (file: File, kind: 'audio' | 'artwork') => {
+    if (!editable) return notify('Submitted or live releases are locked from asset replacement.');
     const max = kind === 'audio' ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > max) return notify(kind === 'audio' ? 'Audio must be 25 MB or smaller.' : 'Artwork must be 5 MB or smaller.');
     const allowedAudio = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 'audio/webm'];
@@ -116,6 +125,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const saveMetadata = async () => {
     if (!current?.id) return;
+    if (!editable) return notify('Submitted or live releases are locked from direct editing.');
     try {
       const { data } = await api.put('/api/creator/releases/' + current.id, {
         ...current,
@@ -130,6 +140,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const submit = async () => {
     if (!current?.id) return;
+    if (!editable) return notify('Only editable drafts can be submitted to moderation.');
     if (!complete) return notify('Add a title, description, category and audio before submitting.');
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator publishing stays locked until your account is approved.');
     try {
@@ -164,22 +175,23 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       <div className="pipeline-editor">
         {current ? <>
           <div className="pipeline-status"><div><span>{statusLabel}</span><strong>{statusHint}</strong></div><Check size={18} /></div>
+          {!editable && <div className="pipeline-lock-note">This release is read-only in Creator Studio while it is submitted, live, held or taken down. Nightjar moderation controls its public state.</div>}
           <div className="pipeline-form-grid">
-            <label>Title<input value={current.title ?? ''} onChange={(event) => setRelease({ title: event.target.value })} /></label>
-            <label>Category<input value={current.category ?? ''} onChange={(event) => setRelease({ category: event.target.value })} placeholder="Story, performance, soundscape…" /></label>
-            <label>Genre<input value={current.genre ?? ''} onChange={(event) => setRelease({ genre: event.target.value })} /></label>
-            <label>Mood<input value={current.mood ?? ''} onChange={(event) => setRelease({ mood: event.target.value })} /></label>
-            <label className="pipeline-span-two">Description<textarea value={current.description ?? ''} onChange={(event) => setRelease({ description: event.target.value })} placeholder="What should a listener know before pressing play?" /></label>
-            <label>Tags<input value={(current.tags ?? []).join(', ')} onChange={(event) => setRelease({ tags: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Whisper, cinematic, character-led…" /></label>
-            <label>Tropes<input value={(current.tropes ?? []).join(', ')} onChange={(event) => setRelease({ tropes: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Slow burn, suspense…" /></label>
+            <label>Title<input disabled={!editable} value={current.title ?? ''} onChange={(event) => setRelease({ title: event.target.value })} /></label>
+            <label>Category<input disabled={!editable} value={current.category ?? ''} onChange={(event) => setRelease({ category: event.target.value })} placeholder="Story, performance, soundscape…" /></label>
+            <label>Genre<input disabled={!editable} value={current.genre ?? ''} onChange={(event) => setRelease({ genre: event.target.value })} /></label>
+            <label>Mood<input disabled={!editable} value={current.mood ?? ''} onChange={(event) => setRelease({ mood: event.target.value })} /></label>
+            <label className="pipeline-span-two">Description<textarea disabled={!editable} value={current.description ?? ''} onChange={(event) => setRelease({ description: event.target.value })} placeholder="What should a listener know before pressing play?" /></label>
+            <label>Tags<input disabled={!editable} value={(current.tags ?? []).join(', ')} onChange={(event) => setRelease({ tags: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Whisper, cinematic, character-led…" /></label>
+            <label>Tropes<input disabled={!editable} value={(current.tropes ?? []).join(', ')} onChange={(event) => setRelease({ tropes: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Slow burn, suspense…" /></label>
           </div>
 
           <div className="pipeline-assets">
-            <label className="asset-drop"><Music2 size={18} /><strong>{audioBusy ? 'Uploading audio…' : current.audioUrl ? 'Replace audio' : 'Attach audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB</span><input type="file" accept="audio/*" disabled={audioBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
-            <label className="asset-drop"><ImagePlus size={18} /><strong>{artBusy ? 'Uploading artwork…' : current.artworkUrl ? 'Replace artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB</span><input type="file" accept="image/*" disabled={artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'artwork'); event.currentTarget.value = ''; }} /></label>
+            <label className="asset-drop"><Music2 size={18} /><strong>{audioBusy ? 'Uploading audio…' : current.audioUrl ? 'Replace audio' : 'Attach audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB</span><input type="file" accept="audio/*" disabled={!editable || audioBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
+            <label className="asset-drop"><ImagePlus size={18} /><strong>{artBusy ? 'Uploading artwork…' : current.artworkUrl ? 'Replace artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB</span><input type="file" accept="image/*" disabled={!editable || artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'artwork'); event.currentTarget.value = ''; }} /></label>
           </div>
 
-          <div className="pipeline-footer"><span>{current.audioUrl ? 'Audio connected' : 'Audio missing'} · {current.artworkUrl ? 'Artwork connected' : 'Artwork optional'}</span><div><button className="secondary-button" onClick={() => void saveMetadata()}>Save draft</button><button className="primary-button" onClick={() => void submit()} disabled={!complete || current.status === 'pending_review' || current.status === 'released'}><Send size={14} /> Submit to moderation</button></div></div>
+          <div className="pipeline-footer"><span>{current.audioUrl ? 'Audio connected' : 'Audio missing'} · {current.artworkUrl ? 'Artwork connected' : 'Artwork optional'}</span><div><button className="secondary-button" disabled={!editable} onClick={() => void saveMetadata()}>Save draft</button><button className="primary-button" onClick={() => void submit()} disabled={!editable || !complete}><Send size={14} /> Submit to moderation</button></div></div>
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Select a release draft.</strong><span>The pipeline keeps upload, metadata and moderation state together.</span></div>}
       </div>
     </div>
