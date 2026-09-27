@@ -306,6 +306,31 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ trending });
   }
 
+  if (path === '/api/profiles' && method === 'GET') {
+    const account = requireUser(state);
+    const following = new Set(state.follows[account.userId] ?? []);
+    const profiles = state.users
+      .filter((candidate) => candidate.userId !== account.userId)
+      .map((candidate) => {
+        const profile = ensureProfile(state, candidate);
+        if (profile.publicProfile === false) return null;
+        return {
+          userId: candidate.userId,
+          role: candidate.role,
+          name: profile.displayName ?? candidate.name,
+          handle: profile.handle ?? null,
+          headline: profile.headline ?? null,
+          bio: profile.bio ?? null,
+          pronouns: profile.pronouns ?? null,
+          initials: profile.avatarInitials ?? null,
+          roleFocus: profile.roleFocus ?? [],
+          following: following.has(candidate.userId),
+        };
+      })
+      .filter(Boolean);
+    return send({ profiles });
+  }
+
   if (parts[0] === 'api' && parts[1] === 'favourites') {
     const account = requireUser(state);
     const list = state.favourites[account.userId] ?? [];
