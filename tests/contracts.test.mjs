@@ -173,7 +173,8 @@ test('script access requests derive writer ownership and validate grant recipien
   assert.match(requestRoute, /script\.writerUserId/);
   assert.doesNotMatch(requestRoute, /body\.writerUserId/);
   assert.match(requestRoute, /Active Creator access required/);
-  assert.match(permissionRoute, /active Creator/);
+  assert.match(permissionRoute, /active Nightjar account/);
+  assert.match(permissionRoute, /recipientUserId/);
   assert.match(permissionRoute, /Access expiry must be a future date/);
   assert.match(permissionRoute, /No existing script access grant was found to revoke/);
   assert.match(shim, /accessGrants/);
@@ -198,7 +199,7 @@ test('local profile and protection records are field allowlisted', () => {
 test('protected scripts never return the manuscript body from metadata or editor APIs', () => {
   const scriptRoute = backend.slice(backend.indexOf("'GET /api/scripts/:scriptId':"), backend.indexOf("'POST /api/scripts/:scriptId/request-access':"));
   assert.match(scriptRoute, /publicScriptMetadata/);
-  assert.match(scriptRoute, /Protected script access has not been granted/);
+  assert.match(scriptRoute, /return error\('Script not found\.', 404\)/);
   assert.doesNotMatch(scriptRoute, /return json\(\{script,/);
   const editorQueue = backend.slice(backend.indexOf("'GET /api/editor/queue':"), backend.indexOf("'GET /api/editor/accounts':"));
   assert.match(editorQueue, /publicScriptMetadata/);
@@ -270,4 +271,36 @@ test('recipient permissions may be read-only, copy-enabled or explicitly exporta
   assert.match(app, /copyAllowed/);
   assert.match(app, /exportAllowed/);
   assert.match(app, /Export full script/);
+});
+
+
+test('new manuscripts use non-enumerable identifiers and sensitive screens reject framing', () => {
+  assert.match(backend, /id: 'script-' \+ randomUUID\(\)/);
+  const firebase = read('firebase.json');
+  assert.match(firebase, /"X-Frame-Options"/);
+  assert.match(firebase, /"DENY"/);
+  assert.match(firebase, /frame-ancestors 'none'/);
+});
+
+test('manuscript tools independently enforce the adult verification boundary', () => {
+  const writerRoutes = backend.slice(backend.indexOf("'GET /api/writer/scripts':"), backend.indexOf("'GET /api/editor/accounts':"));
+  assert.match(writerRoutes, /Age verification required before accessing adult manuscript tools/);
+  const accessRoute = backend.slice(backend.indexOf("'GET /api/scripts/:scriptId/access':"), backend.indexOf("'POST /api/admin/creator-applications"));
+  assert.match(accessRoute, /Age verification required before accessing adult manuscript tools/);
+  assert.match(shim, /requireVerifiedAdult\(state, account\)/);
+});
+
+test('editor and admin script workflow responses are metadata only', () => {
+  const queueRoute = backend.slice(backend.indexOf("'GET /api/editor/queue':"), backend.indexOf("'GET /api/editor/accounts':"));
+  const assignRoute = backend.slice(backend.indexOf("'POST /api/admin/scripts/:scriptId/assign-editor':"), backend.indexOf("'GET /api/admin/creator-applications':"));
+  assert.match(queueRoute, /publicScriptMetadata/);
+  assert.match(assignRoute, /publicScriptMetadata/);
+  assert.doesNotMatch(queueRoute, /content:/);
+  assert.doesNotMatch(assignRoute, /content:/);
+  assert.match(backend, /Editorial assignment was reassigned/);
+});
+
+test('full handoff export states that AI training is not implicitly licensed', () => {
+  assert.match(backend, /No AI training, dataset ingestion, automated extraction or redistribution/);
+  assert.match(shim, /No AI training, dataset ingestion, automated extraction or redistribution/);
 });
