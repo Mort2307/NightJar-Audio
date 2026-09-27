@@ -338,6 +338,7 @@ async function saveAgeRecord(userId: string, record: AgeRecord) {
 }
 
 async function isAgeVerified(userId: string) {
+  if (await isSuspended(userId)) return false;
   const record = await getAgeRecord(userId);
   return record?.verified === true && record.ageThreshold === AGE_THRESHOLD && record.reverifyRequired !== true;
 }
@@ -385,8 +386,14 @@ type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
 
 type AccountRecord = {
   role: Role;
-  status: 'active' | 'pending_review';
+  status: 'active' | 'pending_review' | 'suspended';
   createdAt: string;
+  removed?: boolean;
+  securityPreviousStatus?: 'active' | 'pending_review';
+  suspendedAt?: string | null;
+  suspendedBy?: string | null;
+  removedAt?: string | null;
+  removedBy?: string | null;
 };
 
 const getAccountRecord = async (userId: string) => {
@@ -396,7 +403,7 @@ const getAccountRecord = async (userId: string) => {
 
 const requireRole = async (userId: string, roles: Role[]) => {
   const account = await getAccountRecord(userId);
-  return account ? roles.includes(account.role) : false;
+  return Boolean(account && account.status !== 'suspended' && account.removed !== true && roles.includes(account.role));
 };
 
 
@@ -1383,6 +1390,7 @@ export const handler = router({
       return json({
         role: items[0]?.role ?? null,
         status: items[0]?.status ?? null,
+        removed: items[0]?.removed === true,
         owner: false,
         ageVerified,
         ageVerifiedAt: age?.verifiedAt ?? null,
