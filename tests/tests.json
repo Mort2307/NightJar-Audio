@@ -530,5 +530,59 @@
       "Open the same release again"
     ],
     "expected": "The resume endpoint returns zero position for the completed release so the next listen starts from the beginning."
+  },
+  {
+    "name": "Listener can directly tune recommendation relevance",
+    "viewport": "mobile",
+    "covers": [
+      "recommendation feedback",
+      "explicit taste",
+      "negative preference",
+      "privacy"
+    ],
+    "description": "Verifies a listener can explicitly tell Nightjar what to show more or less of without changing identity data.",
+    "steps": [
+      "Open the discovery catalogue",
+      "Choose Tune this on a release",
+      "Select More like this",
+      "Repeat with Less like this or Not for me",
+      "Reload recommendations"
+    ],
+    "expected": "Feedback is stored as explicit taste signals, recommendation ranking changes using those signals, and identity/profile fields are unchanged."
+  },
+  {
+    "name": "Recommendation engine decays behaviour and limits creator concentration",
+    "viewport": "desktop",
+    "covers": [
+      "taste engine v2",
+      "behaviour decay",
+      "negative suppression",
+      "creator diversity"
+    ],
+    "description": "Guards against stale listening behaviour dominating discovery and against a single creator occupying the whole recommendation set.",
+    "steps": [
+      "Seed recent positive and negative signals",
+      "Seed older signals with the same tags",
+      "Seed many releases from one creator",
+      "Request recommendations"
+    ],
+    "expected": "Recent explicit feedback carries stronger weight than old behaviour, negative signals suppress matching work when appropriate, and no creator contributes more than three items to the recommendation set."
+  },
+  {
+    "name": "Listening telemetry derives catalogue metadata server-side",
+    "viewport": "mobile",
+    "covers": [
+      "listening telemetry",
+      "catalogue metadata",
+      "data integrity",
+      "anti-tampering"
+    ],
+    "description": "Verifies recommendation learning does not depend on the client being trusted to supply tags or categories.",
+    "steps": [
+      "Play a released item",
+      "Inspect the listening event in a test environment",
+      "Compare recorded metadata with the released catalogue record"
+    ],
+    "expected": "The backend validates the release and records its current category, genre, mood, tags and tropes from the server-side release record."
   }
 ]
