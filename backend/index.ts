@@ -2165,7 +2165,16 @@ export const handler = router({
     requireAdminEmailAllowlist(ADMIN_EMAILS),
     async () => {
       const { items } = await db.list(securityAlertTable, { limit: 250 });
-      return json({ alerts: items.slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))) });
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
+      const alerts = items.map((alert) => {
+        const account = accounts.find((candidate) => String(candidate.userId) === String(alert.userId));
+        return {
+          ...alert,
+          subjectAccountStatus: account?.status ?? null,
+          subjectRemoved: account?.removed === true,
+        };
+      }).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+      return json({ alerts });
     },
   ],
   'GET /api/admin/security/trace/:forensicToken': [
