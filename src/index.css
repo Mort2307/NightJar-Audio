@@ -1435,3 +1435,11 @@ button:focus-visible {
   .catalogue-search select { grid-column:1 / -1; }
   .catalogue-search .secondary-button,.catalogue-search .ghost-button { justify-content:center; }
 }
+
+
+/* Accessibility foundations */
+:where(button,a,input,select,textarea,[tabindex]):focus-visible { outline:2px solid var(--plum-soft); outline-offset:3px; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior:auto !important; }
+  *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; transition-delay:0s !important; }
+}
