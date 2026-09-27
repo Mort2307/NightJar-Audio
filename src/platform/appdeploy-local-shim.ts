@@ -245,7 +245,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ verified: true, status: 'COMPLETE', provider: 'local-development' });
   }
 
-  if (path === '/api/catalogue' && method === 'GET') {
+  if (parts[0] === 'api' && parts[1] === 'catalogue' && parts.length === 2 && method === 'GET') {
     const query = String(q.get('q') ?? '').trim().toLowerCase();
     const category = String(q.get('category') ?? '').trim().toLowerCase();
     const released = state.releases.filter((release) => release.status === 'released');
