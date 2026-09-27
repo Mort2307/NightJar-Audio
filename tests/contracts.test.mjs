@@ -1,0 +1,64 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const read = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+const backend = read('backend/index.ts');
+const app = read('src/App.tsx');
+const shim = read('src/platform/appdeploy-local-shim.ts');
+const moderation = read('src/components/ContentModeration.tsx');
+const discovery = read('src/components/ProfileDiscovery.tsx');
+const feedback = read('src/components/RecommendationFeedback.tsx');
+
+test('universal following is many-to-many and privacy guarded', () => {
+  assert.match(backend, /GET \/api\/profiles/);
+  assert.match(backend, /POST \/api\/follows\/:profileUserId/);
+  assert.match(backend, /DELETE \/api\/follows\/:profileUserId/);
+  assert.match(backend, /profileUserId === ctx\.user!\.userId/);
+  assert.match(backend, /profile\?\.publicProfile/);
+  assert.match(backend, /followIndexTable/);
+});
+
+test('community UI uses account follow state rather than local save state', () => {
+  assert.match(app, /ProfileDiscovery/);
+  assert.match(app, /FollowingList/);
+  assert.match(app, /followingProfileIds/);
+  assert.doesNotMatch(app, /followingCreatorIds/);
+  assert.doesNotMatch(app, /setSaved\(/);
+  assert.match(discovery, /Follow as many public Nightjar profiles as you choose/);
+});
+
+test('product data failures are isolated', () => {
+  assert.match(app, /Promise\.allSettled/);
+  assert.doesNotMatch(app, /setTracks\(\[\]\);\s*setCreatorDirectory\(\[\]\);/);
+});
+
+test('recommendation controls send explicit taste signals', () => {
+  assert.match(feedback, /more_like_this/);
+  assert.match(feedback, /less_like_this/);
+  assert.match(feedback, /not_for_me/);
+  assert.match(backend, /tasteSignalWeight/);
+  assert.match(backend, /diversifyReleases/);
+});
+
+test('creator discovery is age gated', () => {
+  const route = backend.slice(backend.indexOf("'GET /api/creators':"), backend.indexOf("'GET /api/spotlights':"));
+  assert.match(route, /requireAuth\(\)/);
+  assert.match(route, /isAgeVerified/);
+});
+
+test('moderation decisions retain an audit trail', () => {
+  assert.match(backend, /moderationHistoryTable/);
+  assert.match(backend, /moderation-history/);
+  assert.match(backend, /reasonCode/);
+  assert.match(moderation, /Audit trail/);
+  assert.match(moderation, /Decision reason/);
+});
+
+test('local shim mirrors critical social, taste and moderation contracts', () => {
+  assert.match(shim, /\/api\/following/);
+  assert.match(shim, /tasteSignalWeight/);
+  assert.match(shim, /diversifyReleases/);
+  assert.match(shim, /moderationHistory/);
+  assert.match(shim, /Unsupported taste signal/);
+});
