@@ -27,6 +27,8 @@ const formatTime = (seconds: number) => !Number.isFinite(seconds) ? '0:00' : Mat
 export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastProgressEvent = useRef(0);
+  const playbackSessionId = useRef('');
+  const seekFrom = useRef<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(1);
@@ -55,11 +57,13 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     const node = audioRef.current;
     if (!node || !track?.audioUrl) return;
     lastProgressEvent.current = 0;
+    playbackSessionId.current = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : track.id + '-' + Date.now();
+    seekFrom.current = null;
     setPosition(0);
     setDuration(1);
     setIsPlaying(false);
     void node.play().catch(() => notify('Press play to start this release.'));
-    void api.post('/api/listening/event', { releaseId: track.id, eventType: 'start', positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent }).catch(() => {});
+    void api.post('/api/listening/event', { releaseId: track.id, eventType: 'start', sessionId: playbackSessionId.current, positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent }).catch(() => {});
     return () => { node.pause(); };
   }, [track?.id, track?.audioUrl]);
 
@@ -99,13 +103,21 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         setPosition(node.currentTime);
         if (node.currentTime - lastProgressEvent.current >= 15) {
           lastProgressEvent.current = node.currentTime;
-          void api.post('/api/listening/event', { releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {});
+          void api.post('/api/listening/event', { releaseId: track.id, eventType: 'progress', sessionId: playbackSessionId.current, positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {});
         }
+      }}
+      onSeeking={(event) => { seekFrom.current = event.currentTarget.currentTime; }}
+      onSeeked={(event) => {
+        const to = event.currentTarget.currentTime;
+        const from = seekFrom.current;
+        lastProgressEvent.current = to;
+        seekFrom.current = null;
+        void api.post('/api/listening/event', { releaseId: track.id, eventType: 'seek', sessionId: playbackSessionId.current, fromSeconds: from, positionSeconds: to, durationSeconds: event.currentTarget.duration || duration, intent }).catch(() => {});
       }}
       onEnded={() => {
         setIsPlaying(false);
         setPosition(duration);
-        void api.post('/api/listening/event', { releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
+        void api.post('/api/listening/event', { releaseId: track.id, eventType: 'complete', sessionId: playbackSessionId.current, positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
         if (nextTrack && onSelectTrack) window.setTimeout(() => onSelectTrack(nextTrack), 350);
       }}
       onError={() => notify('Nightjar could not play this audio file.')}
