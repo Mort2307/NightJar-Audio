@@ -2224,7 +2224,7 @@ export const handler = router({
       if (!current) {
         await db.add('nightjar_editor_assignments', [{ scriptId: script.id, editorUserId, assignedBy: ctx.user!.userId, status: 'open', assignedAt: now }]);
       }
-      return json({ script: next });
+      return json({ script: { ...publicScriptMetadata(next), editorUserId: next.editorUserId ?? null } });
     },
   ],
   'GET /api/admin/creator-applications': [
