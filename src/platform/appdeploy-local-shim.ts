@@ -191,6 +191,11 @@ async function localDeviceHash(deviceToken: unknown) {
   return token ? (await localScriptHash('nightjar-device:' + token)).replace(/^local-/, '') : null;
 }
 
+async function localEnvironmentHash(environmentToken: unknown) {
+  const token = String(environmentToken ?? '').trim().toLowerCase().replace(/[^a-f0-9]/g, '').slice(0, 128);
+  return token ? (await localScriptHash('nightjar-environment:' + token)).replace(/^local-/, '') : null;
+}
+
 async function localForensicToken(userId: string, scriptId: string, sessionId: string, page: number, issuedAt: unknown) {
   return (await localScriptHash(['nightjar-forensic', userId, scriptId, sessionId, String(page), String(issuedAt ?? '')].join('|'))).replace(/^local-/, '').slice(0, 16).toUpperCase();
 }
