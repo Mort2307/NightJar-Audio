@@ -8,11 +8,11 @@ GitHub is the canonical source repository for Nightjar.
 
 - Repository: https://github.com/Mort2307/NightJar-Audio
 - Current source-of-truth branch: `main`
-- Imported AppDeploy baseline: `import/appdeploy-current`
+- Original prototype baseline imported from the earlier runtime and preserved only as migration history
 
 ## Hosting
 
-The intended public/tester frontend is Firebase Hosting. AppDeploy remains the development/QA environment until the deployment workflow is connected.
+Firebase Hosting is the intended public/tester frontend. GitHub `main` is the source of truth, with Firebase Authentication, Cloud Functions and Firestore as the production platform.
 
 Target public domain:
 
@@ -60,7 +60,7 @@ The Taste Engine separates identity from taste. Explicit preferences seed recomm
 
 ### Runtime URL configuration
 
-The backend uses `NIGHTJAR_APP_URL` for age-assurance callback/cancel URLs when configured. The AppDeploy URL remains the fallback for development; the Firebase/custom-domain deployment should set the runtime value to `https://nightjar.audio/`.
+Age-assurance callback/cancel URLs must resolve to the Firebase/custom-domain deployment. Production configuration should use `https://nightjar.audio/` once that domain is verified.
 
 
 ## Age assurance
@@ -109,7 +109,7 @@ The Taste Engine remains explicit-first: user-declared preferences are separate 
 
 Nightjar now contains a Firebase Authentication account client for email/password registration, persistent sign-in, email verification/resend, password reset and reauthenticated password changes.
 
-The Firebase identity layer is intentionally **not yet wired to unlock the AppDeploy backend**. The existing backend uses AppDeploy `requireAuth()`; production must fail closed until the backend can verify Firebase ID tokens and map the verified Firebase `uid` to a Nightjar account. Do not replace that boundary with client-supplied user IDs or an unverified header.
+The Firebase identity layer is now the production account foundation. Callable Firebase Functions receive Firebase Authentication context, and protected backend operations must use the verified Firebase `uid` rather than client-supplied user IDs. Production remains fail-closed for any route that has not yet been migrated to the Firebase backend.
 
 Required production flow:
 
@@ -131,4 +131,4 @@ subscription / explicit content permission
 protected content
 ```
 
-The browser-local AppDeploy shim remains development/QA only and must not be treated as production authentication or production persistence.
+The browser-local QA client remains temporary development scaffolding only and must not be treated as production authentication or production persistence. Archived AppDeploy files live under `legacy/appdeploy/` solely as migration reference and are not part of the active runtime.
