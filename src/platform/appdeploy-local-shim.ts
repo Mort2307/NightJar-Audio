@@ -590,6 +590,26 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ recorded: true });
   }
 
+  if (path === '/api/taste/feedback' && method === 'POST') {
+    const account = requireUser(state);
+    const releaseId = String(input.releaseId ?? '');
+    const signal = String(input.signal ?? '');
+    if (!releaseId || !['more_like_this', 'less_like_this', 'not_for_me'].includes(signal)) throw new Error('A release and valid feedback signal are required.');
+    const release = state.releases.find((item) => item.id === releaseId && item.status === 'released');
+    if (!release) throw new Error('Release not found.');
+    state.taste[account.userId] = [...(state.taste[account.userId] ?? []), {
+      type: signal,
+      releaseId,
+      category: release.category ?? null,
+      genre: release.genre ?? null,
+      mood: release.mood ?? null,
+      tags: Array.isArray(release.tags) ? release.tags.slice(0, 16) : [],
+      tropes: Array.isArray(release.tropes) ? release.tropes.slice(0, 16) : [],
+      createdAt: now(),
+    }];
+    return send({ recorded: true, signal });
+  }
+
   if (path === '/api/protection/evidence' && method === 'GET') {
     const account = requireUser(state);
     return send({ evidence: state.evidence.filter((item) => item.userId === account.userId) });
