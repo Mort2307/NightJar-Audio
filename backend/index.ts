@@ -627,7 +627,7 @@ export const handler = router({
     requireAuth(),
     async (ctx) => {
       if (!(await requireRole(ctx.user!.userId, ['creator']))) return error('Active Creator access required.', 403);
-      const body = (ctx.body ?? {}) as { releaseId?: string; kind?: 'audio'|'artwork'; dataUrl?: string; contentType?: string; fileName?: string };
+      const body = (ctx.body ?? {}) as { releaseId?: string; kind?: 'audio'|'artwork'; dataUrl?: string; contentType?: string; fileName?: string; durationMinutes?: number };
       if (!body.releaseId || !body.kind || !body.dataUrl) return error('Release, asset kind and file are required.', 400);
       if (!['audio', 'artwork'].includes(body.kind)) return error('Unsupported asset kind.', 400);
       const decoded = decodeDataUrl(body.dataUrl);
@@ -646,7 +646,7 @@ export const handler = router({
       const [ok] = await storage.write([{ path, content: decoded.base64, contentType }]);
       if (!ok) return error('Asset upload failed.', 500);
       const [{ url }] = await storage.url([path]);
-      const next = { ...release, [body.kind === 'audio' ? 'audioUrl' : 'artworkUrl']: url ?? null, [body.kind === 'audio' ? 'audioPath' : 'artworkPath']: path, assetUpdatedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const next = { ...release, [body.kind === 'audio' ? 'audioUrl' : 'artworkUrl']: url ?? null, [body.kind === 'audio' ? 'audioPath' : 'artworkPath']: path, ...(body.kind === 'audio' && Number(body.durationMinutes) > 0 ? { durationMinutes: Number(body.durationMinutes) } : {}), assetUpdatedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       await db.update(releaseTable, [{ id: release.id, record: next }]);
       return json({ url: url ?? null, path, release: next });
     },
