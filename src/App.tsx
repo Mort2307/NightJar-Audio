@@ -114,7 +114,8 @@ const getNightjarEnvironmentId = () => {
   if (nightjarEnvironmentIdPromise) return nightjarEnvironmentIdPromise;
   nightjarEnvironmentIdPromise = (async () => {
     try {
-      if (!crypto?.subtle) return null;
+      const browserCrypto = globalThis.crypto;
+      if (!browserCrypto?.subtle) return null;
       const memory = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0);
       const traits = [
         navigator.userAgent,
@@ -126,7 +127,7 @@ const getNightjarEnvironmentId = () => {
         String(navigator.hardwareConcurrency ?? 0),
         String(memory),
       ].join('|');
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(traits));
+      const digest = await browserCrypto.subtle.digest('SHA-256', new TextEncoder().encode(traits));
       return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
     } catch {
       return null;
