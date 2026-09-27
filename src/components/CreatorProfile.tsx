@@ -40,6 +40,13 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
     return () => { cancelled = true; };
   }, [creatorUserId]);
 
+  useEffect(() => {
+    if (!creatorUserId) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [creatorUserId, onClose]);
+
   if (!creatorUserId) return null;
   const following = followingIds.includes(creatorUserId);
 
@@ -56,9 +63,9 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
     }
   };
 
-  return <div className="creator-profile-backdrop" role="dialog" aria-modal="true">
+  return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-labelledby="creator-profile-title">
     <section className="creator-profile-modal">
-      <header className="creator-profile-head"><div><span className="mini-label">NIGHTJAR / CREATOR</span><h2>{loading ? 'Loading creator…' : profile?.name ?? 'Creator profile'}</h2><p>{profile?.handle ? '@' + profile.handle.replace(/^@/, '') : 'Independent Nightjar creator'}</p></div><button className="icon-button" onClick={onClose}>×</button></header>
+      <header className="creator-profile-head"><div><span className="mini-label">NIGHTJAR / CREATOR</span><h2 id="creator-profile-title">{loading ? 'Loading creator…' : profile?.name ?? 'Creator profile'}</h2><p>{profile?.handle ? '@' + profile.handle.replace(/^@/, '') : 'Independent Nightjar creator'}</p></div><button className="icon-button" onClick={onClose} aria-label="Close creator profile">×</button></header>
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero"><span className="creator-profile-avatar">{profile.initials || 'NJ'}</span><div><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button></div>
         {profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
