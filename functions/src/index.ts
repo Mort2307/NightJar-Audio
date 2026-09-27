@@ -530,7 +530,7 @@ export const approvedImage = onRequest({ region: REGION }, async (request, respo
   }
 
   response.setHeader('Content-Type', cleanText(asset.contentType, 80) || 'application/octet-stream');
-  response.setHeader('Cache-Control', 'public,max-age=3600');
+  response.setHeader('Cache-Control', 'no-store,max-age=0');
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
 
@@ -626,6 +626,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
     publicUrl: url,
     moderationNote: note || null,
     reviewedBy: admin.uid,
+    moderationPolicy: 'no-explicit-imagery-v1',
     reviewedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
@@ -807,7 +808,11 @@ const readCommercialSettings = async (): Promise<CommercialSettings> => {
   const snapshot = await db.collection('settings').doc('commercial').get();
   const data = snapshot.data() ?? {};
   return {
-    planningMonthlyPricePence: typeof data.planningMonthlyPricePence === 'number' ? data.planningMonthlyPricePence : 500,
+    planningMonthlyPricePence: typeof data.planningMonthlyPricePence === 'number'
+      ? data.planningMonthlyPricePence
+      : snapshot.exists && Object.prototype.hasOwnProperty.call(data, 'planningMonthlyPricePence')
+        ? null
+        : 500,
     creatorPoolPercent: typeof data.creatorPoolPercent === 'number' ? data.creatorPoolPercent : null,
     reservePercent: typeof data.reservePercent === 'number' ? data.reservePercent : null,
     payoutCadence: data.payoutCadence ? String(data.payoutCadence) : null,
@@ -1059,5 +1064,23 @@ export const decideCreatorApplication = onCall({ region: REGION }, async (reques
   }, { merge: true });
 
   return { applicationId, userId, decision, accountStatus: decision === 'approved' ? 'active' : 'pending_review' };
+});
+
+export const listBillingSubscriptions = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('subscriptions').limit(1000).get();
+  const subscriptions = snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      userId: data.userId ?? null,
+      email: data.email ?? null,
+      plan: data.plan ?? null,
+      status: data.status ?? 'unknown',
+      confirmedMonthlyAmountPence: typeof data.confirmedMonthlyAmountPence === 'number' ? data.confirmedMonthlyAmountPence : null,
+      currentPeriodEnd: data.currentPeriodEnd ?? null,
+    };
+  });
+  return { subscriptions };
 });
 
