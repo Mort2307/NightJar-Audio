@@ -109,6 +109,35 @@ const getNightjarDeviceId = () => {
   window.localStorage.setItem(key, next);
   return next;
 };
+let nightjarEnvironmentIdPromise: Promise<string | null> | null = null;
+const getNightjarEnvironmentId = () => {
+  if (nightjarEnvironmentIdPromise) return nightjarEnvironmentIdPromise;
+  nightjarEnvironmentIdPromise = (async () => {
+    try {
+      if (!crypto?.subtle) return null;
+      const memory = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0);
+      const traits = [
+        navigator.userAgent,
+        navigator.platform,
+        navigator.language,
+        (navigator.languages ?? []).join(','),
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        String(screen.width) + 'x' + String(screen.height) + 'x' + String(screen.colorDepth),
+        String(navigator.hardwareConcurrency ?? 0),
+        String(memory),
+      ].join('|');
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(traits));
+      return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
+    } catch {
+      return null;
+    }
+  })();
+  return nightjarEnvironmentIdPromise;
+};
+const getNightjarSecurityDeviceContext = async () => ({
+  deviceId: getNightjarDeviceId(),
+  environmentId: await getNightjarEnvironmentId(),
+});
 
 const roleMeta: Record<AccountRole, { label: string; description: string }> = {
   admin: {
@@ -275,9 +304,9 @@ function App() {
 
   const registerCurrentSecurityDevice = async () => {
     try {
-      await api.post('/api/security/device/register', { deviceId: getNightjarDeviceId() });
+      await api.post('/api/security/device/register', await getNightjarSecurityDeviceContext());
     } catch {
-      /* Device correlation is a non-blocking security signal. */
+      /* Device/environment correlation is a non-blocking security signal. */
     }
   };
 
@@ -687,12 +716,13 @@ function App() {
   const recordProtectionEvent = async (eventType: string, relatedId = 'protected-script', sessionId?: string) => {
     if (!user) return;
     try {
+      const deviceContext = await getNightjarSecurityDeviceContext();
       await api.post('/api/protection/event', {
         eventType,
         relatedType: 'script',
         relatedId,
         sessionId: sessionId ?? null,
-        deviceId: getNightjarDeviceId(),
+        ...deviceContext,
         summary: eventType === 'copy_blocked'
           ? 'Protected copy interaction blocked; no clipboard contents were captured.'
           : 'Protected interaction recorded by Nightjar.',
@@ -702,8 +732,10 @@ function App() {
 
   const openProtectedReader = async (scriptId: string) => {
     try {
-      const deviceId = getNightjarDeviceId();
-      const { data } = await api.get('/api/scripts/' + encodeURIComponent(scriptId) + '?deviceId=' + encodeURIComponent(deviceId));
+      const deviceContext = await getNightjarSecurityDeviceContext();
+      const params = new URLSearchParams({ deviceId: deviceContext.deviceId });
+      if (deviceContext.environmentId) params.set('environmentId', deviceContext.environmentId);
+      const { data } = await api.get('/api/scripts/' + encodeURIComponent(scriptId) + '?' + params.toString());
       if (data?.canReadFull === false) {
         notify('This manuscript has not been granted for full reading by the writer.');
         return;
