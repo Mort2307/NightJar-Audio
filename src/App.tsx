@@ -133,6 +133,18 @@ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
   },
 };
 
+const formatMoneyPence = (pence: number | null | undefined) => {
+  if (pence == null || !Number.isFinite(Number(pence))) return 'Not set';
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(pence) / 100);
+};
+
+const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
   const [playing, setPlaying] = useState<string | null>(null);
@@ -684,13 +696,9 @@ function App() {
 
   const toggleFavouriteRelease = async (releaseId: string) => {
     try {
-      if (favouriteReleaseIds.includes(releaseId)) {
-        await api.delete('/api/favourites/' + releaseId);
-        setFavouriteReleaseIds((items) => items.filter((id) => id !== releaseId));
-      } else {
-        await api.post('/api/favourites/' + releaseId);
-        setFavouriteReleaseIds((items) => [...items, releaseId]);
-      }
+      const next = !favouriteReleaseIds.includes(releaseId);
+      await nightjarCommunity.setFavouriteRelease(releaseId, next);
+      setFavouriteReleaseIds((items) => next ? Array.from(new Set([...items, releaseId])) : items.filter((id) => id !== releaseId));
     } catch {
       notify('Favourite could not be updated.');
     }
@@ -698,13 +706,9 @@ function App() {
 
   const toggleCreatorFollow = async (creatorUserId: string) => {
     try {
-      if (followingCreatorIds.includes(creatorUserId)) {
-        await api.delete('/api/follows/creators/' + creatorUserId);
-        setFollowingCreatorIds((items) => items.filter((id) => id !== creatorUserId));
-      } else {
-        await api.post('/api/follows/creators/' + creatorUserId);
-        setFollowingCreatorIds((items) => [...items, creatorUserId]);
-      }
+      const next = !followingCreatorIds.includes(creatorUserId);
+      await nightjarCommunity.setCreatorFollow(creatorUserId, next);
+      setFollowingCreatorIds((items) => next ? Array.from(new Set([...items, creatorUserId])) : items.filter((id) => id !== creatorUserId));
     } catch {
       notify('Follow could not be updated.');
     }
@@ -729,8 +733,16 @@ function App() {
     if (!canAdmin) return;
     setAdminOverviewLoading(true);
     try {
-      const { data } = await api.get('/api/admin/overview');
-      setAdminOverview(data ?? null);
+      const [{ data }, commercial] = await Promise.all([
+        api.get('/api/admin/overview'),
+        nightjarCommercial.overview(),
+      ]);
+      setCommercialOverview(commercial);
+      setCommercialSettings(commercial.settings);
+      setAdminOverview({
+        ...(data ?? {}),
+        subscriptions: commercial.subscriptions,
+      });
     } catch {
       notify('Administrator overview could not be loaded right now.');
     } finally {
@@ -742,7 +754,10 @@ function App() {
     if (!user) return;
     setProfileLoading(true);
     try {
-      const [{ data: profileData }, { data: tasteData }] = await Promise.all([api.get('/api/profile/me'), api.get('/api/taste/profile')]);
+      const [profileData, { data: tasteData }] = await Promise.all([
+        nightjarCommunity.getMyProfile(),
+        api.get('/api/taste/profile'),
+      ]);
       if (profileData?.profile) setProfile((current: any) => ({ ...current, ...profileData.profile }));
       setTasteVector(tasteData?.vector ?? []);
     } catch { notify('Profile could not be loaded right now.'); }
@@ -766,13 +781,12 @@ function App() {
     if (!user) return;
     setProfileLoading(true);
     try {
-      const { data } = await api.put('/api/profile/me', profile);
-      if (data?.profile) setProfile(data.profile);
-      await loadProfile();
+      const data = await nightjarCommunity.saveMyProfile(profile);
+      if (data?.profile) setProfile((current: any) => ({ ...current, ...data.profile }));
       notify('Your Nightjar profile has been saved.');
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
-      notify(message.includes('409') ? 'That @handle is already in use.' : 'Profile could not be saved.');
+      notify(message.includes('already-exists') ? 'That @handle is already in use.' : 'Profile could not be saved.');
     } finally { setProfileLoading(false); }
   };
 
@@ -861,32 +875,119 @@ function App() {
   const canAdmin = role === 'admin';
   const canProtection = Boolean(user);
 
+  const loadBranding = async () => {
+    try {
+      const data = await nightjarMedia.getBranding();
+      setLogoUrl(data.logoUrl ?? null);
+    } catch { /* wordmark fallback remains available */ }
+  };
+
   const uploadLogo = async (file: File) => {
     if (!canAdmin) return;
-    if (!['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.type)) {
-      notify('Use PNG, JPG, WebP or SVG for the Nightjar logo.');
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      notify('Use PNG, JPG or WebP for the Nightjar logo.');
       return;
     }
-    if (file.size > 3 * 1024 * 1024) {
-      notify('Logo must be 3 MB or smaller.');
+    if (file.size > 5 * 1024 * 1024) {
+      notify('Logo must be 5 MB or smaller.');
       return;
     }
     setLogoUploading(true);
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const { data } = await api.post('/api/admin/branding/logo', { dataUrl, contentType: file.type });
-      if (data?.logoUrl) setLogoUrl(data.logoUrl);
-      notify('Nightjar logo updated.');
+      const dataUrl = await readFileDataUrl(file);
+      await nightjarMedia.submitImage({ kind: 'brand_logo', dataUrl, contentType: file.type, fileName: file.name });
+      notify('Logo submitted for image moderation. It will not appear publicly until an administrator approves it.');
+      void loadPendingImages();
     } catch {
       notify('Logo upload failed.');
     } finally {
       setLogoUploading(false);
     }
+  };
+
+  const removeLogo = async () => {
+    if (!canAdmin) return;
+    try {
+      await nightjarMedia.removeBrandLogo();
+      setLogoUrl(null);
+      notify('Nightjar logo removed.');
+    } catch { notify('Logo could not be removed.'); }
+  };
+
+  const uploadProfileAvatar = async (file: File) => {
+    if (!user) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      notify('Use PNG, JPG or WebP for profile images.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notify('Profile image must be 5 MB or smaller.');
+      return;
+    }
+    setProfileImageBusy(true);
+    try {
+      const dataUrl = await readFileDataUrl(file);
+      const result = await nightjarMedia.submitImage({ kind: 'profile_avatar', dataUrl, contentType: file.type, fileName: file.name });
+      setProfile((current: any) => ({ ...current, avatarStatus: result.status, pendingAvatarAssetId: result.assetId }));
+      notify('Profile image submitted for administrator approval. Your current approved image stays live until the replacement is approved.');
+    } catch { notify('Profile image could not be uploaded.'); }
+    finally { setProfileImageBusy(false); }
+  };
+
+  const removeProfileImage = async () => {
+    setProfileImageBusy(true);
+    try {
+      await nightjarMedia.removeProfileAvatar();
+      setProfile((current: any) => ({ ...current, avatarUrl: null, avatarAssetId: null, avatarStatus: null, pendingAvatarAssetId: null }));
+      notify('Profile image removed.');
+    } catch { notify('Profile image could not be removed.'); }
+    finally { setProfileImageBusy(false); }
+  };
+
+  const loadPendingImages = async () => {
+    if (!canAdmin) return;
+    setAdminPanelLoading(true);
+    try {
+      const data = await nightjarMedia.listPending();
+      setImageModeration(data.assets ?? []);
+    } catch { notify('Pending image moderation could not be loaded.'); }
+    finally { setAdminPanelLoading(false); }
+  };
+
+  const moderateImage = async (asset: any, decision: 'approved' | 'rejected') => {
+    if (!canAdmin || !asset?.id) return;
+    const note = decision === 'rejected' ? (window.prompt('Reason for rejecting this image (optional)') ?? '') : '';
+    try {
+      await nightjarMedia.moderate(asset.id, decision, note);
+      await loadPendingImages();
+      await loadBranding();
+      await loadProfile();
+      notify(decision === 'approved' ? 'Image approved for public use.' : 'Image rejected and its stored image bytes removed.');
+    } catch { notify('Image moderation action could not be completed.'); }
+  };
+
+  const loadCommercialControls = async () => {
+    if (!canAdmin) return;
+    setAdminPanelLoading(true);
+    try {
+      const data = await nightjarCommercial.overview();
+      setCommercialOverview(data);
+      setCommercialSettings(data.settings);
+      setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: data.subscriptions }));
+    } catch { notify('Commercial controls could not be loaded.'); }
+    finally { setAdminPanelLoading(false); }
+  };
+
+  const saveCommercialControls = async () => {
+    if (!canAdmin) return;
+    setCommercialSaving(true);
+    try {
+      const data = await nightjarCommercial.save(commercialSettings);
+      setCommercialSettings(data.settings);
+      await loadCommercialControls();
+      notify('Commercial assumptions saved.');
+    } catch { notify('Commercial assumptions could not be saved.'); }
+    finally { setCommercialSaving(false); }
   };
 
   const openAdminPeople = (nextRole: 'listener' | 'creator' | 'writer' | 'editor' | 'admin') => {
@@ -912,8 +1013,14 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const { data } = await api.get('/api/admin/subscriptions');
+      const [{ data }, commercial] = await Promise.all([
+        api.get('/api/admin/subscriptions'),
+        nightjarCommercial.overview(),
+      ]);
       setAdminSubscriptions(data?.subscriptions ?? []);
+      setCommercialOverview(commercial);
+      setCommercialSettings(commercial.settings);
+      setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: commercial.subscriptions }));
     } catch {
       notify('Subscription ledger could not be loaded.');
     } finally {
@@ -949,13 +1056,15 @@ function App() {
     }
   };
 
-  const openAdminPanel = (panel: 'approvals' | 'revenue' | 'subscriptions' | 'economics' | 'editorial') => {
+  const openAdminPanel = (panel: 'approvals' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images') => {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
     setAdminPanel(panel);
     if (panel === 'approvals') void loadAdminApplications();
     if (panel === 'subscriptions') void loadAdminSubscriptions();
     if (panel === 'editorial') void loadAdminEditorial();
+    if (panel === 'images') void loadPendingImages();
+    if (panel === 'revenue' || panel === 'economics') void loadCommercialControls();
   };
 
   const decideCreatorApplication = async (application: any, decision: 'approved' | 'waitlist' | 'rejected') => {
