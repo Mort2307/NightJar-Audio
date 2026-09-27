@@ -11,6 +11,8 @@ const discovery = read('src/components/ProfileDiscovery.tsx');
 const feedback = read('src/components/RecommendationFeedback.tsx');
 const catalogueSearch = read('src/components/CatalogueSearch.tsx');
 const creatorProfile = read('src/components/CreatorProfile.tsx');
+const writerStudio = read('src/components/WriterStudio.tsx');
+const creatorPipeline = read('src/components/CreatorAudioPipeline.tsx');
 const css = read('src/index.css');
 
 test('universal following is many-to-many and privacy guarded', () => {
@@ -116,4 +118,78 @@ test('keyboard and motion accessibility foundations are present', () => {
   assert.match(moderation, /event\.key === 'Escape'/);
   assert.match(creatorProfile, /aria-labelledby="creator-profile-title"/);
   assert.match(creatorProfile, /Close creator profile/);
+});
+
+
+test('creator release writes cannot bypass moderation state', () => {
+  const createRoute = backend.slice(backend.indexOf("'POST /api/creator/releases':"), backend.indexOf("'PUT /api/creator/releases/:releaseId':"));
+  const updateRoute = backend.slice(backend.indexOf("'PUT /api/creator/releases/:releaseId':"), backend.indexOf("'DELETE /api/creator/releases/:releaseId':"));
+  assert.match(createRoute, /audioUrl: null/);
+  assert.match(createRoute, /artworkUrl: null/);
+  assert.doesNotMatch(updateRoute, /\.\.\.\(ctx\.body \?\? \{\}\)/);
+  assert.match(updateRoute, /\['draft', 'rejected'\]/);
+  assert.match(updateRoute, /status: release\.status/);
+  assert.match(creatorPipeline, /const editable/);
+  assert.match(creatorPipeline, /Submitted or live releases are locked/);
+});
+
+test('creator assets verify actual file signatures and integrity metadata', () => {
+  assert.match(backend, /assetSignatureMatches/);
+  assert.match(backend, /createHash\('sha256'\)/);
+  assert.match(backend, /audioSha256/);
+  assert.match(backend, /artworkSha256/);
+  assert.match(backend, /audioBytes/);
+  assert.match(backend, /artworkBytes/);
+});
+
+test('writer workflow fields cannot be mass assigned', () => {
+  const updateRoute = backend.slice(backend.indexOf("'PUT /api/writer/scripts/:scriptId':"), backend.indexOf("'POST /api/writer/scripts/:scriptId/versions':"));
+  assert.doesNotMatch(updateRoute, /\.\.\.\(ctx\.body \?\? \{\}\)/);
+  assert.match(updateRoute, /Submitted or approved manuscripts are locked/);
+  assert.match(updateRoute, /status: script\.status/);
+  assert.match(updateRoute, /version: script\.version/);
+  assert.match(writerStudio, /const editable/);
+  assert.match(writerStudio, /read-only while it is submitted/);
+});
+
+test('protected manuscript catalogue never returns raw manuscript content', () => {
+  const route = backend.slice(backend.indexOf("'GET /api/scripts/catalogue':"), backend.indexOf("'GET /api/scripts/:scriptId':"));
+  assert.match(route, /activeAccess/);
+  assert.match(route, /writerUserId === ctx\.user!\.userId/);
+  assert.doesNotMatch(route, /content:/);
+  assert.doesNotMatch(route, /return json\(\{ scripts: items/);
+});
+
+test('protected reader grants reject revoked and expired access', () => {
+  assert.match(backend, /!item\.revokedAt/);
+  assert.match(backend, /new Date\(String\(item\.expiresAt\)\)\.getTime\(\)>Date\.now\(\)/);
+  assert.match(shim, /function localScriptGrant/);
+  assert.match(shim, /grant\.revokedAt/);
+});
+
+test('script access requests derive writer ownership and validate grant recipients', () => {
+  const requestRoute = backend.slice(backend.indexOf("'POST /api/scripts/:scriptId/request-access':"), backend.indexOf("'POST /api/scripts/:scriptId/permissions':"));
+  const permissionRoute = backend.slice(backend.indexOf("'POST /api/scripts/:scriptId/permissions':"), backend.indexOf("'POST /api/admin/creator-applications"));
+  assert.match(requestRoute, /script\.writerUserId/);
+  assert.doesNotMatch(requestRoute, /body\.writerUserId/);
+  assert.match(requestRoute, /Active Creator access required/);
+  assert.match(permissionRoute, /active Creator/);
+  assert.match(permissionRoute, /Access expiry must be a future date/);
+  assert.match(permissionRoute, /No existing script access grant was found to revoke/);
+  assert.match(shim, /accessGrants/);
+});
+
+test('editor reassignment closes stale access', () => {
+  assert.match(backend, /closedReason: 'reassigned'/);
+  assert.match(backend, /closedReason: body\.status/);
+  assert.match(backend, /openAssignments/);
+});
+
+test('local profile and protection records are field allowlisted', () => {
+  const profileRoute = shim.slice(shim.indexOf("if (path === '/api/profile/me' && method === 'PUT')"), shim.indexOf("if (parts[0] === 'api' && parts[1] === 'profile'"));
+  const reportRoute = shim.slice(shim.indexOf("if (path === '/api/protection/report'"), shim.indexOf("if (path === '/api/security/reader-session'"));
+  assert.doesNotMatch(profileRoute, /Object\.assign\(profile, input/);
+  assert.match(profileRoute, /profile\.displayName/);
+  assert.doesNotMatch(reportRoute, /userId: account\.userId, \.\.\.input/);
+  assert.match(reportRoute, /reporterUserId: account\.userId/);
 });
