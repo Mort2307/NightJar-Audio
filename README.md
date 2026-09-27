@@ -29,11 +29,15 @@ npm run build:firebase
 
 ## Security model
 
-Protected manuscripts use backend authorization, short-lived reader sessions, access expiry/revocation, identity-bound evidence, visible session watermarks, browser interaction restrictions, and suspicious-activity signals.
+Protected manuscripts use backend authorization, short-lived reader sessions, access expiry/revocation, identity-bound evidence, repeated session/account/script provenance watermarks, browser interaction restrictions, device-token correlation and suspicious-activity signals.
 
-A browser application cannot guarantee prevention of screenshots, screen recording, OCR, or determined extraction. Security signals are evidence for review, not proof of wrongdoing.
+Writers remain in control of their own work. A writer can explicitly grant a VA, creator, editor or collaborator full-script access and independently allow copy/export, set an expiry, or revoke the grant. Writer-authorised copy/export is logged as authorised activity rather than treated as theft.
 
-Qualifying suspicious protected-content activity creates a retained security alert addressed to **all three configured Nightjar owners**. Administrator review can suspend the account and revoke active protected-reader sessions without deleting the evidence trail.
+A browser application cannot reliably detect screenshots, screen recording, OCR, or determined extraction. Nightjar therefore uses attribution and retained access evidence rather than pretending screenshots can always be detected. Security signals are evidence for review, not proof of wrongdoing.
+
+Qualifying suspicious protected-content activity creates a retained security alert addressed to **all three configured Nightjar owners**. The response is graduated: administrators can close activity as benign, revoke protected-reader sessions while leaving the account active, or explicitly suspend the account. A single screenshot-like or blocked interaction does not automatically freeze an account.
+
+IP/network reputation can later be added at the trusted edge when request metadata is available. Nightjar must not treat an IP address as a person or use IP alone as the basis for permanent account action; shared networks, mobile carriers, VPNs and dynamic addressing make that unsafe.
 
 ## Identity and Taste
 
