@@ -10,6 +10,7 @@ const saveMyProfileCall = httpsCallable<Profile, { profile: Profile | null }>(fu
 const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'listCreators');
 const getCreatorProfileCall = httpsCallable<{ userId: string }, { creator: any }>(functions, 'getCreatorProfile');
 const listWritersCall = httpsCallable<void, { writers: any[] }>(functions, 'listWriters');
+const spotlightStateCall = httpsCallable<void, { date: string; spotlights: any[] }>(functions, 'spotlightState');
 const communityStateCall = httpsCallable<void, { follows: { creatorUserId: string }[]; favourites: { releaseId: string }[] }>(functions, 'communityState');
 const setCreatorFollowCall = httpsCallable<{ creatorUserId: string; following: boolean }, { creatorUserId: string; following: boolean }>(functions, 'setCreatorFollow');
 const setFavouriteReleaseCall = httpsCallable<{ releaseId: string; favourite: boolean }, { releaseId: string; favourite: boolean }>(functions, 'setFavouriteRelease');
@@ -33,6 +34,10 @@ export const nightjarCommunity = {
 
   async listWriters() {
     return (await listWritersCall()).data;
+  },
+
+  async spotlightState() {
+    return (await spotlightStateCall()).data;
   },
 
   async state() {
