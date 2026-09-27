@@ -38,13 +38,20 @@ type AgeRecord = {
   provider: string;
   verifiedAt?: string;
   verificationReference?: string;
+  verificationMethod?: string;
   sessionId?: string;
+  sessionExpiresAt?: string | null;
   status?: string;
   testMode?: boolean;
+  reverifyRequired?: boolean;
 };
 
 const appUrl = process.env.NIGHTJAR_APP_URL || 'https://nightjar-42eeag.v2.appdeploy.ai/';
-const yotiConfigured = () => Boolean(process.env.YOTI_SDK_ID && process.env.YOTI_ACCESS_TOKEN);
+const ageEnvironment = () => process.env.NIGHTJAR_AGE_ENV === 'production' ? 'production' : 'sandbox';
+const yotiCredential = () => ageEnvironment() === 'production' ? process.env.YOTI_API_KEY : process.env.YOTI_ACCESS_TOKEN;
+const yotiConfigured = () => Boolean(process.env.YOTI_SDK_ID && yotiCredential());
+const yotiApiBase = () => ageEnvironment() === 'production' ? 'https://age.yoti.com/api/v1' : 'https://age.yoti.com/sandbox/api/v1';
+const yotiProviderName = () => ageEnvironment() === 'production' ? 'yoti' : 'yoti-sandbox';
 
 async function getAgeRecord(userId: string) {
   const { items } = await db.list<AgeRecord>(ageTable(userId), { limit: 1 });
@@ -63,32 +70,44 @@ async function saveAgeRecord(userId: string, record: AgeRecord) {
   }
 }
 
-async function refreshYotiSandboxResult(userId: string, record: AgeRecord) {
+async function isAgeVerified(userId: string) {
+  const record = await getAgeRecord(userId);
+  return record?.verified === true && record.ageThreshold === AGE_THRESHOLD && record.reverifyRequired !== true;
+}
+
+const opaqueVerificationReference = () => `nj-${crypto.randomUUID()}`;
+
+async function refreshYotiResult(userId: string, record: AgeRecord) {
   if (!record.sessionId || !yotiConfigured()) return record;
-  const response = await fetch(`https://age.yoti.com/sandbox/api/v1/sessions/${record.sessionId}/result`, {
+  const credential = yotiCredential();
+  if (!credential) return record;
+  const response = await fetch(`${yotiApiBase()}/sessions/${record.sessionId}/result`, {
     headers: {
-      Authorization: `Bearer ${process.env.YOTI_ACCESS_TOKEN}`,
+      Authorization: `Bearer ${credential}`,
       'Content-Type': 'application/json',
       'Yoti-Sdk-Id': process.env.YOTI_SDK_ID!,
     },
   });
-  if (!response.ok) throw new Error(`Yoti sandbox result request failed (${response.status}).`);
+  if (!response.ok) throw new Error(`Yoti age result request failed (${response.status}).`);
   const result = await response.json() as { status?: string; age?: number; method?: string };
   if (result.status === 'COMPLETE' && typeof result.age === 'number' && result.age >= AGE_THRESHOLD) {
     const verifiedRecord: AgeRecord = {
+      ...record,
       verified: true,
       ageThreshold: AGE_THRESHOLD,
-      provider: 'yoti-sandbox',
-      verifiedAt: new Date().toISOString(),
-      verificationReference: result.method ?? 'sandbox',
-      sessionId: record.sessionId,
+      provider: yotiProviderName(),
+      verifiedAt: record.verifiedAt ?? new Date().toISOString(),
+      verificationMethod: result.method ?? record.verificationMethod,
       status: 'COMPLETE',
+      sessionId: record.sessionId,
+      sessionExpiresAt: record.sessionExpiresAt ?? null,
+      reverifyRequired: false,
     };
     await saveAgeRecord(userId, verifiedRecord);
     return verifiedRecord;
   }
   if (['FAIL', 'ERROR', 'CANCELLED'].includes(result.status ?? '')) {
-    const failedRecord = { ...record, verified: false, status: result.status };
+    const failedRecord: AgeRecord = { ...record, verified: false, status: result.status, reverifyRequired: false };
     await saveAgeRecord(userId, failedRecord);
     return failedRecord;
   }
@@ -116,7 +135,9 @@ const requireRole = async (userId: string, roles: Role[]) => {
 export const handler = router({
   'GET /api/_healthcheck': [async () => json({ message: 'Success' })],
   'GET /api/catalogue': [
+    requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing the adult catalogue.', 403);
       const query = String(ctx.query.q ?? '').trim().toLowerCase();
       const category = String(ctx.query.category ?? '').trim().toLowerCase();
       const { items } = await db.list(releaseTable, { limit: 500 });
@@ -152,6 +173,7 @@ export const handler = router({
   'GET /api/recommendations': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult recommendations.', 403);
       const profile = await getProfile(ctx.user!.userId);
       const { items: events } = await db.list(tasteTable(ctx.user!.userId), { limit: 500 });
       const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
@@ -183,7 +205,9 @@ export const handler = router({
     },
   ],
   'GET /api/trending': [
-    async () => {
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult trending content.', 403);
       const { items: releases } = await db.list(releaseTable, { limit: 500 });
       const { items: events } = await db.list(listeningTable, { limit: 5000 });
       const counts: Record<string, number> = {};
@@ -377,17 +401,23 @@ export const handler = router({
       let record = await getAgeRecord(ctx.user!.userId);
       if (record?.sessionId && yotiConfigured() && !record.verified) {
         try {
-          record = await refreshYotiSandboxResult(ctx.user!.userId, record);
+          record = await refreshYotiResult(ctx.user!.userId, record);
         } catch {
           // Preserve the pending state if the provider is temporarily unavailable.
         }
       }
       return json({
-        verified: record?.verified === true,
+        verified: record?.verified === true && record.ageThreshold === AGE_THRESHOLD && record.reverifyRequired !== true,
+        verifiedOnce: record?.verified === true,
         ageThreshold: AGE_THRESHOLD,
-        provider: record?.provider ?? 'yoti-sandbox',
+        provider: record?.provider ?? yotiProviderName(),
         status: record?.status ?? 'NOT_STARTED',
         configured: yotiConfigured(),
+        environment: ageEnvironment(),
+        verifiedAt: record?.verifiedAt ?? null,
+        verificationMethod: record?.verificationMethod ?? null,
+        sessionActive: Boolean(record?.sessionId && !record?.verified),
+        reverifyRequired: record?.reverifyRequired === true,
         testAvailable: isAdmin(ctx.user!.email),
       });
     },
@@ -396,13 +426,25 @@ export const handler = router({
     requireAuth(),
     async (ctx) => {
       const existing = await getAgeRecord(ctx.user!.userId);
-      if (existing?.verified) return json({ verified: true, status: 'COMPLETE', provider: existing.provider });
-      if (!yotiConfigured()) return json({ verified: false, configured: false, provider: 'yoti-sandbox', testAvailable: isAdmin(ctx.user!.email) });
+      if (existing?.verified && existing.ageThreshold === AGE_THRESHOLD && existing.reverifyRequired !== true) {
+        return json({
+          verified: true,
+          verifiedOnce: true,
+          status: 'COMPLETE',
+          provider: existing.provider,
+          verifiedAt: existing.verifiedAt ?? null,
+          verificationMethod: existing.verificationMethod ?? null,
+        });
+      }
+      if (!yotiConfigured()) return json({ verified: false, configured: false, provider: yotiProviderName(), environment: ageEnvironment(), testAvailable: isAdmin(ctx.user!.email) });
 
-      const response = await fetch('https://age.yoti.com/sandbox/api/v1/sessions', {
+      const credential = yotiCredential();
+      if (!credential) return error('Age verification provider credentials are not configured.', 503);
+      const verificationReference = opaqueVerificationReference();
+      const response = await fetch(`${yotiApiBase()}/sessions`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${process.env.YOTI_ACCESS_TOKEN}`,
+          Authorization: `Bearer ${credential}`,
           'Content-Type': 'application/json',
           'Yoti-Sdk-Id': process.env.YOTI_SDK_ID!,
         },
@@ -414,7 +456,7 @@ export const handler = router({
           doc_scan: { allowed: true, threshold: AGE_THRESHOLD, authenticity: 'AUTO', level: 'PASSIVE', preset_issuing_country: 'GBR', retry_limit: 2 },
           credit_card: { allowed: false, retry_limit: 1 },
           mobile: { allowed: false, retry_limit: 1 },
-          reference_id: ctx.user!.userId,
+          reference_id: verificationReference,
           callback: { auto: true, url: appUrl },
           cancel_url: appUrl,
           retry_enabled: true,
@@ -422,26 +464,30 @@ export const handler = router({
           synchronous_checks: true,
         }),
       });
-      if (!response.ok) return error(`Yoti sandbox could not create a verification session (${response.status}).`, 502);
+      if (!response.ok) return error(`Yoti ${ageEnvironment()} could not create a verification session (${response.status}).`, 502);
       const session = await response.json() as { id?: string; status?: string; expires_at?: string };
-      if (!session.id) return error('Yoti sandbox did not return a session ID.', 502);
+      if (!session.id) return error(`Yoti ${ageEnvironment()} did not return a session ID.`, 502);
       const record: AgeRecord = {
         verified: false,
         ageThreshold: AGE_THRESHOLD,
-        provider: 'yoti-sandbox',
-        verificationReference: ctx.user!.userId,
+        provider: yotiProviderName(),
+        verificationReference,
         sessionId: session.id,
+        sessionExpiresAt: session.expires_at ?? null,
         status: session.status ?? 'PENDING',
+        reverifyRequired: false,
       };
       await saveAgeRecord(ctx.user!.userId, record);
+      const launchBase = ageEnvironment() === 'production' ? 'https://age.yoti.com' : 'https://age.yoti.com/sandbox';
       return json({
         verified: false,
         configured: true,
-        provider: 'yoti-sandbox',
+        provider: yotiProviderName(),
+        environment: ageEnvironment(),
         status: record.status,
         sessionId: session.id,
         expiresAt: session.expires_at ?? null,
-        launchUrl: `https://age.yoti.com/sandbox?sessionId=${encodeURIComponent(session.id)}&sdkId=${encodeURIComponent(process.env.YOTI_SDK_ID!)}`,
+        launchUrl: `${launchBase}?sessionId=${encodeURIComponent(session.id)}&sdkId=${encodeURIComponent(process.env.YOTI_SDK_ID!)}`,
       });
     },
   ],
@@ -455,7 +501,9 @@ export const handler = router({
         provider: 'nightjar-sandbox-test',
         verifiedAt: new Date().toISOString(),
         verificationReference: 'admin-test',
+        verificationMethod: 'administrator-test',
         status: 'COMPLETE',
+        reverifyRequired: false,
         testMode: true,
       };
       await saveAgeRecord(ctx.user!.userId, verifiedRecord);
@@ -466,17 +514,21 @@ export const handler = router({
     requireAuth(),
     withScopes('email'),
     async (ctx) => {
+      const age = await getAgeRecord(ctx.user!.userId);
+      const ageVerified = age?.verified === true && age.ageThreshold === AGE_THRESHOLD && age.reverifyRequired !== true;
       if (isAdmin(ctx.user!.email)) {
         const table = accountTable(ctx.user!.userId);
         const existing = await db.list<AccountRecord>(table, { limit: 1 });
         if (existing.items.length > 0) await db.delete(table, [existing.items[0].id]);
-        return json({ role: 'admin', status: 'active', owner: true });
+        return json({ role: 'admin', status: 'active', owner: true, ageVerified, ageVerifiedAt: age?.verifiedAt ?? null });
       }
       const { items } = await db.list<AccountRecord>(accountTable(ctx.user!.userId), { limit: 1 });
       return json({
         role: items[0]?.role ?? null,
         status: items[0]?.status ?? null,
         owner: false,
+        ageVerified,
+        ageVerifiedAt: age?.verifiedAt ?? null,
       });
     },
   ],
@@ -591,7 +643,8 @@ export const handler = router({
   ],
   'GET /api/scripts/catalogue': [
     requireAuth(),
-    async () => {
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing protected scripts.', 403);
       const { items } = await db.list('nightjar_scripts', { limit: 50 });
       return json({ scripts: items.map(({ body, ...script }) => ({ ...script, protected: true })) });
     },
@@ -599,6 +652,7 @@ export const handler = router({
   'GET /api/scripts/:scriptId': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing protected scripts.', 403);
       if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.',403);
       const {items}=await db.list('nightjar_scripts',{limit:50});
       const script=items.find((item)=>item.id===ctx.params.scriptId);
@@ -691,7 +745,7 @@ export const handler = router({
   'GET /api/profile/:handle': [async (ctx) => { const handle=cleanHandle(ctx.params.handle); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const account=indexes.find((item)=>cleanHandle(item.handle)===handle); if(!account)return error('Profile not found.',404); const profile=await getProfile(account.userId); if(!profile?.publicProfile)return error('Profile not found.',404); return json({profile:{...profile,role:account.role}}); }],
   'POST /api/taste/event': [requireAuth(), async (ctx) => { const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; if(!body.eventType)return error('Taste event type is required.',400); await db.add(tasteTable(ctx.user!.userId),[{type:body.eventType,contentId:body.contentId??null,category:body.category??null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Number(body.durationSeconds??0)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
   'GET /api/taste/profile': [requireAuth(), async (ctx) => { const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])])weights[value]=(weights[value]??0)+3; for(const item of items)for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])])weights[value]=(weights[value]??0)+(item.type==='skip'||item.type==='hide'?-0.5:item.completed?2:1); return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
-  'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
+  'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before opening protected content.',403); if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
   'GET /api/security/notifications': [requireAuth(), withScopes('email'), async (ctx) => { if(!isAdmin(ctx.user!.email))return json({notifications:[]}); const {items}=await db.list(ownerNotificationTable(ctx.user!.email),{limit:100}); return json({notifications:items}); }],
   'GET /api/admin/security-alerts': [requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(securityAlertTable,{limit:100}); return json({alerts:items}); }],
   'POST /api/admin/security-alerts/:alertId/suspend': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const {items}=await db.list(securityAlertTable,{limit:100}); const alert=items.find((item)=>item.id===ctx.params.alertId); if(!alert)return error('Security alert not found.',404); const userId=String(alert.userId); const {items:accounts}=await db.list(accountTable(userId),{limit:1}); if(accounts[0])await db.update(accountTable(userId),[{id:accounts[0].id,record:{...accounts[0],status:'suspended',suspendedAt:new Date().toISOString(),suspendedBy:ctx.user!.email??null}}]); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===userId); if(indexed)await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,status:'suspended'}}]); await revokeReaderSessions(userId,'Account suspended after security review.'); await db.update(securityAlertTable,[{id:alert.id,record:{...alert,status:'actioned',action:'suspended',actionedAt:new Date().toISOString(),actionedBy:ctx.user!.email??null}}]); await db.add(securityEventTable,[{userId,eventType:'account_suspended',actorEmail:ctx.user!.email??null,relatedId:alert.id,createdAt:new Date().toISOString()}]); return json({suspended:true,userId}); }],
