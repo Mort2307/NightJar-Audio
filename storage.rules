@@ -12,6 +12,12 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/accounts/$(request.auth.uid)).data.status == 'active';
     }
 
+    function ownsEditableRelease(releaseId) {
+      return signedIn()
+        && firestore.get(/databases/(default)/documents/releases/$(releaseId)).data.creatorUserId == request.auth.uid
+        && firestore.get(/databases/(default)/documents/releases/$(releaseId)).data.status != 'released';
+    }
+
     function supportedAudio() {
       return request.resource != null
         && request.resource.size > 0
@@ -32,6 +38,7 @@ service firebase.storage {
       allow read: if false;
       allow create: if activeCreator()
         && request.auth.uid == userId
+        && ownsEditableRelease(releaseId)
         && supportedAudio();
       allow update: if false;
       allow delete: if signedIn() && request.auth.uid == userId;
