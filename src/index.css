@@ -1421,3 +1421,17 @@ button:focus-visible {
 @media (max-width:760px) {
   .moderation-history-row { grid-template-columns:1fr; }
 }
+
+
+/* Catalogue search */
+.catalogue-search { display:grid; grid-template-columns:minmax(0,1fr) 170px auto auto; gap:8px; align-items:center; margin:16px 0 18px; }
+.catalogue-search-input { display:flex; align-items:center; gap:9px; min-width:0; padding:0 12px; border:1px solid var(--line-soft); border-radius:12px; background:rgba(255,255,255,.018); color:var(--muted-2); }
+.catalogue-search-input input { width:100%; min-width:0; padding:11px 0; border:0; outline:0; background:transparent; color:var(--ivory); font:inherit; font-size:10px; }
+.catalogue-search select { min-width:0; border:1px solid var(--line-soft); border-radius:12px; padding:10px 11px; background:rgba(17,15,19,.96); color:var(--ivory); font:inherit; font-size:9px; }
+.catalogue-search-count { grid-column:1 / -1; color:var(--muted-2); font-size:7px; text-transform:uppercase; letter-spacing:.08em; }
+@media (max-width:760px) {
+  .catalogue-search { grid-template-columns:1fr 1fr; }
+  .catalogue-search-input { grid-column:1 / -1; }
+  .catalogue-search select { grid-column:1 / -1; }
+  .catalogue-search .secondary-button,.catalogue-search .ghost-button { justify-content:center; }
+}
