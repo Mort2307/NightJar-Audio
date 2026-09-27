@@ -1489,6 +1489,7 @@ export const handler = router({
 
       if (!owner && !access && !editorAssignment) return error('Protected script access has not been granted.', 403);
 
+      await revokeReaderSessionsForScript(ctx.user!.userId, ctx.params.scriptId, 'Superseded by a new protected reader session.');
       const sessionId = 'NJ-RD-' + randomUUID().replace(/-/g, '').slice(0, 18).toUpperCase();
       const issuedAt = new Date().toISOString();
       const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
@@ -1948,6 +1949,7 @@ export const handler = router({
       );
       if (!owner && !grant && !editorAssignment) return error('Protected script access has not been granted.', 403);
 
+      await revokeReaderSessionsForScript(ctx.user!.userId, scriptId, 'Superseded by a new protected reader session.');
       const issuedAt = new Date().toISOString();
       const sessionId = 'NJ-RD-' + randomUUID().replace(/-/g, '').slice(0, 18).toUpperCase();
       const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
