@@ -12,6 +12,9 @@ const friendlyError = (error: unknown) => {
   if (value.includes('too-many-requests')) return 'Too many attempts. Please wait before trying again.';
   if (value.includes('invalid-email')) return 'Enter a valid email address.';
   if (value.includes('requires-recent-login')) return 'For security, sign in again before changing your password.';
+  if (value.includes('operation-not-allowed')) return 'Email/password accounts are not enabled in Firebase Authentication yet. Enable the Email/Password provider, then try again.';
+  if (value.includes('network-request-failed')) return 'Nightjar could not reach Firebase. Check your connection and try again.';
+  if (value.includes('user-disabled')) return 'This Nightjar account has been disabled. Contact an administrator for review.';
   return 'Nightjar could not complete that account request. Please try again.';
 };
 
@@ -48,29 +51,44 @@ export default function AccountAccess({
     finally { setBusy(false); }
   };
 
-  const submit = () => void run(async () => {
-    if (mode === 'register') {
-      if (!passwordReady) {
-        setMessage('Use 12+ characters with upper-case, lower-case and a number, and make both passwords match.');
+  const submit = () => {
+    if (!email.trim()) {
+      setMessage('Enter the email address you want to use for Nightjar.');
+      return;
+    }
+    if (mode !== 'reset' && !password) {
+      setMessage('Enter your password.');
+      return;
+    }
+    if (mode === 'register' && !validPassword(password)) {
+      setMessage('Use 12+ characters with upper-case, lower-case and a number.');
+      return;
+    }
+    if (mode === 'register' && password !== confirm) {
+      setMessage('Your password confirmation does not match.');
+      return;
+    }
+
+    void run(async () => {
+      if (mode === 'register') {
+        const next = await nightjarAuth.register(email, password);
+        onAuthenticated(next);
+        setMode('verify');
+        setMessage('Account created. We sent a verification link to your email.');
         return;
       }
-      const next = await nightjarAuth.register(email, password);
-      onAuthenticated(next);
-      setMode('verify');
-      setMessage('Account created. We sent a verification link to your email.');
-      return;
-    }
-    if (mode === 'signin') {
-      const next = await nightjarAuth.signIn(email, password);
-      onAuthenticated(next);
-      setMode(next.emailVerified ? 'security' : 'verify');
-      return;
-    }
-    if (mode === 'reset') {
-      await nightjarAuth.resetPassword(email);
-      setMessage('If that address belongs to a Nightjar account, a password reset email has been sent.');
-    }
-  });
+      if (mode === 'signin') {
+        const next = await nightjarAuth.signIn(email, password);
+        onAuthenticated(next);
+        setMode(next.emailVerified ? 'security' : 'verify');
+        return;
+      }
+      if (mode === 'reset') {
+        await nightjarAuth.resetPassword(email);
+        setMessage('If that address belongs to a Nightjar account, a password reset email has been sent.');
+      }
+    });
+  };
 
   if (mode === 'verify' && identity) {
     return <section className="account-access-card">
@@ -125,8 +143,8 @@ export default function AccountAccess({
       <div className="account-access-field"><label>Password</label><div className="account-password-input"><input type={showPassword ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
       {mode === 'register' && <div className="account-access-field"><label>Confirm password</label><input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /><small>12+ characters · upper-case · lower-case · number</small></div>}
     </>}
-    {message && <p className="account-access-message">{message}</p>}
-    <button className="primary-button account-access-submit" disabled={busy || !email || (mode !== 'reset' && !password) || (mode === 'register' && !passwordReady)} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create protected account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
+    {message && <p className="account-access-message" role="status" aria-live="polite">{message}</p>}
+    <button type="button" className="primary-button account-access-submit" disabled={busy} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create protected account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
     <div className="account-access-switches">
       {mode !== 'signin' && <button onClick={() => { setMode('signin'); setMessage(''); }}>Already have an account?</button>}
       {mode !== 'register' && <button onClick={() => { setMode('register'); setMessage(''); }}>Create account</button>}
