@@ -2130,7 +2130,29 @@ export const handler = router({
       return json({ read: true });
     },
   ],
-  'GET /api/security/notifications': [requireAuth(), withScopes('email'), async (ctx) => { if(!isAdmin(ctx.user!.email))return json({notifications:[]}); const {items}=await db.list(ownerNotificationTable(ctx.user!.email),{limit:100}); return json({notifications:items}); }],
+  'GET /api/security/notifications': [
+    requireAuth(),
+    withScopes('email'),
+    async (ctx) => {
+      if (!isAdmin(ctx.user!.email)) return json({ notifications: [], unreadCount: 0 });
+      const { items } = await db.list(ownerNotificationTable(ctx.user!.email), { limit: 100 });
+      const sorted = items.slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+      return json({ notifications: sorted, unreadCount: sorted.filter((item) => item.read !== true).length });
+    },
+  ],
+  'POST /api/security/notifications/:notificationId/read': [
+    requireAuth(),
+    withScopes('email'),
+    async (ctx) => {
+      if (!isAdmin(ctx.user!.email)) return error('Administrator access required.', 403);
+      const table = ownerNotificationTable(ctx.user!.email);
+      const { items } = await db.list(table, { limit: 100 });
+      const notification = items.find((item) => item.id === ctx.params.notificationId);
+      if (!notification) return error('Security notification not found.', 404);
+      await db.update(table, [{ id: notification.id, record: { ...notification, read: true, readAt: new Date().toISOString() } }]);
+      return json({ read: true });
+    },
+  ],
   'GET /api/admin/security-alerts': [
     requireAdminEmailAllowlist(ADMIN_EMAILS),
     async () => {
