@@ -1365,6 +1365,7 @@ function App() {
             onVersion={createWriterVersion}
             onSubmit={submitWriterScript}
             onOpenProtected={openProtectedReader}
+            notify={notify}
           />
         )}
 
@@ -1388,6 +1389,7 @@ function App() {
                 <div className="panel-title"><div><span className="mini-label">CURRENT REVIEW</span><h2>{editorSelected.title}</h2></div><span className="status-pill">{editorSelected.status}</span></div>
                 <p className="panel-note">{editorSelected.lastEditorialComment || 'No previous editorial note.'}</p>
                 <div className="script-card-actions">
+                  <button className="secondary-button with-icon" onClick={() => void openProtectedReader(editorSelected.id)}><LockKeyhole size={14}/> Open protected manuscript</button>
                   <button className="secondary-button" onClick={() => void reviewEditorScript('Under review')}>Mark under review</button>
                   <button className="secondary-button" onClick={() => void reviewEditorScript('Revision requested')}>Request revision</button>
                   <button className="primary-button" onClick={() => void reviewEditorScript('Approved')}>Approve</button>
@@ -1485,22 +1487,98 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason,
 
 function ProtectedReader({ data, close, record, notify }: { data: any; close: () => void; record: (eventType: string) => void; notify: (message: string) => void }) {
   const script = data.script ?? {};
-  const content = String(script.content ?? '');
+  const sessionId = String(data.readerSession?.sessionId ?? '');
+  const [pageData, setPageData] = useState<any | null>(null);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const loadPage = async (page: number) => {
+    if (!script.id || !sessionId || pageLoading) return;
+    setPageLoading(true);
+    try {
+      const { data: next } = await api.get('/api/scripts/' + encodeURIComponent(String(script.id)) + '/content?sessionId=' + encodeURIComponent(sessionId) + '&page=' + String(page));
+      setPageData(next ?? null);
+    } catch {
+      notify('This protected page could not be loaded. The reader session may have expired or been revoked.');
+    } finally {
+      setPageLoading(false);
+    }
+  };
+
+  const exportFullScript = async () => {
+    if (!script.id || !sessionId || exporting || data.exportAllowed !== true) return;
+    setExporting(true);
+    try {
+      const { data: exported } = await api.get('/api/scripts/' + encodeURIComponent(String(script.id)) + '/export?sessionId=' + encodeURIComponent(sessionId));
+      const blob = new Blob([String(exported?.content ?? '')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = String(exported?.fileName ?? 'nightjar-script.txt');
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      notify('Full script exported under the writer’s explicit permission.');
+    } catch {
+      notify('Full script export is not available for this reader session.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   useEffect(() => {
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = original; };
-  }, []);
-  return <div className="protected-reader-backdrop" role="dialog" aria-modal="true" aria-label="Protected manuscript reader">
-    <section className="protected-reader" onCopy={(event) => { event.preventDefault(); record('copy_blocked'); notify('Copy is disabled for this protected manuscript.'); }} onCut={(event) => { event.preventDefault(); record('cut_blocked'); }} onPaste={(event) => { event.preventDefault(); record('paste_blocked'); }} onContextMenu={(event) => { event.preventDefault(); record('contextmenu_blocked'); }} onDragStart={(event) => { event.preventDefault(); record('drag_blocked'); }}>
-      <header><div><span className="mini-label">NIGHTJAR / PROTECTED SCRIPT</span><h2>{script.title ?? 'Protected manuscript'}</h2><p>Reader session {data.readerSession?.sessionId ?? 'authorised'} · expires {data.readerSession?.expiresAt ? new Date(data.readerSession.expiresAt).toLocaleTimeString('en-GB') : 'soon'}</p></div><button className="icon-button" onClick={close} aria-label="Close protected manuscript"><X size={18} /></button></header>
-      <div className="reader-notice"><ShieldCheck size={15} /><span>Access is granted by the backend. Client-side restrictions are deterrents, not the security boundary.</span></div>
-      <article className="reader-body"><p className="reader-watermark">NIGHTJAR · AUTHORISED READER SESSION · {data.readerSession?.sessionId ?? ''}</p>{content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : <p>No manuscript content supplied.</p>}</article>
-      <footer><span><LockKeyhole size={14} /> Copy {data.copyAllowed ? 'allowed by writer' : 'off'}</span><span><Download size={14} /> Export {data.exportAllowed ? 'allowed by writer' : 'off'}</span><span>Access logged</span></footer>
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKeyDown);
+    void loadPage(0);
+    return () => {
+      document.body.style.overflow = original;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [script.id, sessionId]);
+
+  const content = String(pageData?.content ?? '');
+  const copyAllowed = data.copyAllowed === true;
+  const blockUnlessAllowed = (event: React.ClipboardEvent | React.MouseEvent | React.DragEvent, type: string) => {
+    if (copyAllowed) return;
+    event.preventDefault();
+    record(type);
+    if (type === 'copy_blocked') notify('Copy is disabled unless the writer explicitly grants it.');
+  };
+
+  return <div className="protected-reader-backdrop" role="dialog" aria-modal="true" aria-labelledby="protected-reader-title">
+    <section className="protected-reader"
+      onCopy={(event) => blockUnlessAllowed(event, 'copy_blocked')}
+      onCut={(event) => blockUnlessAllowed(event, 'cut_blocked')}
+      onPaste={(event) => blockUnlessAllowed(event, 'paste_blocked')}
+      onContextMenu={(event) => blockUnlessAllowed(event, 'contextmenu_blocked')}
+      onDragStart={(event) => blockUnlessAllowed(event, 'drag_blocked')}>
+      <header>
+        <div><span className="mini-label">NIGHTJAR / PROTECTED SCRIPT</span><h2 id="protected-reader-title">{script.title ?? 'Protected manuscript'}</h2><p>Reader session {sessionId || 'authorised'} · expires {data.readerSession?.expiresAt ? new Date(data.readerSession.expiresAt).toLocaleTimeString('en-GB') : 'soon'}</p></div>
+        <button className="icon-button" onClick={close} aria-label="Close protected manuscript"><X size={18} /></button>
+      </header>
+      <div className="reader-notice"><ShieldCheck size={15} /><span>The browser only receives the page you are reading. Access, page views and permitted exports are recorded against this short-lived session.</span></div>
+      <article className={copyAllowed ? 'reader-body copy-enabled' : 'reader-body'}>
+        <p className="reader-watermark">{pageData?.watermark ?? data.readerSession?.watermark ?? 'NIGHTJAR · AUTHORISED READER SESSION'}</p>
+        {pageLoading && !pageData ? <p>Loading protected page…</p> : content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : <p>No manuscript text is available on this page.</p>}
+        {pageData?.contentHash && <p className="reader-fingerprint">SHA-256 · {String(pageData.contentHash).slice(0, 20)}…</p>}
+      </article>
+      <div className="reader-pagination">
+        <button className="secondary-button" disabled={pageLoading || !pageData?.hasPrevious} onClick={() => void loadPage(Math.max(0, Number(pageData?.page ?? 0) - 1))}>Previous page</button>
+        <span>Page {Number(pageData?.page ?? 0) + 1} of {Number(pageData?.totalPages ?? 1)}</span>
+        <button className="secondary-button" disabled={pageLoading || !pageData?.hasNext} onClick={() => void loadPage(Number(pageData?.page ?? 0) + 1)}>Next page</button>
+      </div>
+      <footer>
+        <span><LockKeyhole size={14} /> Copy {copyAllowed ? 'allowed by writer' : 'blocked'}</span>
+        <span><Download size={14} /> Export {data.exportAllowed ? 'allowed by writer' : 'blocked'}</span>
+        <span>Page access logged</span>
+        {data.exportAllowed && <button className="ghost-button with-icon reader-export-button" disabled={exporting} onClick={() => void exportFullScript()}><Download size={13}/>{exporting ? 'Preparing…' : 'Export full script'}</button>}
+      </footer>
     </section>
   </div>;
 }
-
 
 
 export default App;
