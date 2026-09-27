@@ -39,6 +39,12 @@ export default function ContentModeration({ open, onClose, notify }: Props) {
 
   useEffect(() => { if (open) void load(); }, [open]);
   useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+  useEffect(() => {
     if (!selected?.id) {
       setHistory([]);
       return;
@@ -64,9 +70,9 @@ export default function ContentModeration({ open, onClose, notify }: Props) {
   };
 
   if (!open) return null;
-  return <div className="admin-panel-modal" role="dialog" aria-modal="true">
+  return <div className="admin-panel-modal" role="dialog" aria-modal="true" aria-labelledby="release-moderation-title">
     <section className="moderation-modal">
-      <div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / CONTENT</span><h2>Release moderation</h2><p>Preview the actual submission before it reaches the public adult catalogue. Every decision is retained in the moderation audit trail.</p></div><button className="icon-button" onClick={onClose} aria-label="Close moderation"><X size={18} /></button></div>
+      <div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / CONTENT</span><h2 id="release-moderation-title">Release moderation</h2><p>Preview the actual submission before it reaches the public adult catalogue. Every decision is retained in the moderation audit trail.</p></div><button className="icon-button" onClick={onClose} aria-label="Close moderation"><X size={18} /></button></div>
       <div className="moderation-layout">
         <aside className="moderation-queue">{loading ? <div className="people-empty">Loading moderation queue…</div> : queue.length ? queue.map((release) => <button key={release.id} className={selected?.id === release.id ? 'moderation-item active' : 'moderation-item'} onClick={() => setSelected(release)}><FileAudio size={16} /><span><strong>{release.title}</strong><small>{release.creatorName || 'Creator'} · {release.category || 'Audio'}</small></span></button>) : <div className="people-empty"><Check size={18} /><strong>Queue is clear.</strong><span>New creator submissions will appear here.</span></div>}</aside>
         <article className="moderation-preview">{selected ? <>
