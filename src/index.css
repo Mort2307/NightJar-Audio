@@ -1358,3 +1358,11 @@ button:focus-visible {
 .dock-nav-button { width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--line-soft); border-radius:50%; background:rgba(255,255,255,.018); color:var(--muted); }
 .dock-nav-button:hover:not(:disabled) { color:var(--ivory); border-color:rgba(239,231,223,.18); }
 .dock-nav-button:disabled { opacity:.3; cursor:not-allowed; }
+
+
+.recommendation-feedback { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:9px; }
+.recommendation-feedback-label { display:inline-flex; align-items:center; gap:4px; color:var(--muted-2); font-size:7px; text-transform:uppercase; letter-spacing:.08em; margin-right:2px; }
+.recommendation-feedback button { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line-soft); border-radius:999px; padding:6px 8px; background:rgba(255,255,255,.018); color:var(--muted-2); font:inherit; font-size:7px; cursor:pointer; }
+.recommendation-feedback button:hover,.recommendation-feedback button.active { color:var(--ivory); border-color:rgba(203,181,204,.3); background:rgba(178,144,170,.07); }
+.recommendation-feedback button:disabled { opacity:.5; cursor:wait; }
+.recommendation-feedback.compact button { width:27px; height:25px; justify-content:center; padding:0; }
