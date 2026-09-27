@@ -379,3 +379,8 @@ test('frozen and removed accounts are rejected by central adult and role guards'
   assert.match(app, /This account is frozen while a Nightjar security review is active/);
   assert.match(app, /This account has been removed from Nightjar after administrator review/);
 });
+
+
+test('security-forced sign-out cannot fall through into age assurance', () => {
+  assert.match(app, /if \(!auth\.isSignedIn\(\)\) \{\s*setAgeStage\('gate'\);\s*return true;/);
+});
