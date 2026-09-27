@@ -984,7 +984,27 @@ export const handler = router({
       const { items } = await db.list('nightjar_scripts', { limit: 500 });
       const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
       if (!script) return error('Script not found.', 404);
-      const next = { ...script, ...(ctx.body ?? {}), id: script.id, writerUserId: script.writerUserId, updatedAt: new Date().toISOString() };
+      if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) return error('Submitted or approved manuscripts are locked from direct editing.', 409);
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const next = {
+        ...script,
+        title: String(body.title ?? script.title ?? '').trim().slice(0, 200),
+        content: String(body.content ?? script.content ?? ''),
+        synopsis: String(body.synopsis ?? script.synopsis ?? '').trim().slice(0, 1600),
+        excerpt: String(body.excerpt ?? script.excerpt ?? '').trim().slice(0, 2000),
+        genre: String(body.genre ?? script.genre ?? '').trim().slice(0, 100),
+        runtimeTarget: String(body.runtimeTarget ?? script.runtimeTarget ?? '').trim().slice(0, 100),
+        characters: body.characters === undefined ? (script.characters ?? []) : cleanList(body.characters, 50),
+        ageClassification: String(body.ageClassification ?? script.ageClassification ?? '').trim().slice(0, 80),
+        id: script.id,
+        writerUserId: script.writerUserId,
+        status: script.status,
+        version: script.version,
+        editorUserId: script.editorUserId ?? null,
+        access: script.access ?? 'Private',
+        updatedAt: new Date().toISOString(),
+      };
+      if (!next.title) return error('Script title is required.', 400);
       await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
       return json({ script: next });
     },
@@ -996,6 +1016,7 @@ export const handler = router({
       const { items } = await db.list('nightjar_scripts', { limit: 500 });
       const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
       if (!script) return error('Script not found.', 404);
+      if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) return error('Submitted or approved manuscripts are locked from version changes.', 409);
       const version = Number(script.version ?? 1) + 1;
       await db.add('nightjar_script_versions_' + script.id, [{ scriptId: script.id, version, content: script.content ?? '', createdAt: new Date().toISOString() }]);
       const next = { ...script, version, updatedAt: new Date().toISOString() };
@@ -1010,6 +1031,8 @@ export const handler = router({
       const { items } = await db.list('nightjar_scripts', { limit: 500 });
       const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
       if (!script) return error('Script not found.', 404);
+      if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) return error('This manuscript is already in editorial workflow or approved.', 409);
+      if (!String(script.title ?? '').trim() || !String(script.content ?? '').trim()) return error('Add a title and manuscript content before submitting.', 400);
       const next = { ...script, status: 'Submitted', submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       await db.update('nightjar_scripts', [{ id: script.id, record: next }]);
       return json({ script: next });
@@ -1311,8 +1334,33 @@ export const handler = router({
     requireAuth(),
     async (ctx) => {
       if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing protected scripts.', 403);
-      const { items } = await db.list('nightjar_scripts', { limit: 50 });
-      return json({ scripts: items.map(({ body, ...script }) => ({ ...script, protected: true })) });
+      if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
+      const { items } = await db.list('nightjar_scripts', { limit: 500 });
+      const { items: accessItems } = await db.list('nightjar_script_access_' + ctx.user!.userId, { limit: 500 });
+      const now = Date.now();
+      const activeAccess = new Set(accessItems
+        .filter((grant) => !grant.revokedAt && (!grant.expiresAt || new Date(String(grant.expiresAt)).getTime() > now))
+        .map((grant) => String(grant.scriptId)));
+      const scripts = items
+        .filter((script) => script.writerUserId === ctx.user!.userId || activeAccess.has(String(script.id)))
+        .map((script) => ({
+          id: script.id,
+          title: script.title,
+          status: script.status,
+          version: script.version,
+          writerUserId: script.writerUserId,
+          writerName: script.writerName ?? null,
+          synopsis: script.synopsis ?? null,
+          excerpt: script.excerpt ?? null,
+          genre: script.genre ?? null,
+          runtimeTarget: script.runtimeTarget ?? null,
+          characters: script.characters ?? [],
+          ageClassification: script.ageClassification ?? null,
+          updatedAt: script.updatedAt ?? null,
+          protected: true,
+          canReadFull: script.writerUserId === ctx.user!.userId || activeAccess.has(String(script.id)),
+        }));
+      return json({ scripts });
     },
   ],
   'GET /api/scripts/:scriptId': [
