@@ -19,8 +19,6 @@ jobs:
       - name: Materialize today's spotlight notifications
         env:
           NIGHTJAR_BACKEND_URL: https://nightjar-42eeag.v2.appdeploy.ai
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
