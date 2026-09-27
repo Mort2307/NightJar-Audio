@@ -712,5 +712,78 @@
       "Load discovery spotlight state"
     ],
     "expected": "The Firestore account role is editor, the account is eligible for deterministic Audio Editor Spotlight rotation when active/public, and private editorial work is never exposed."
+  },
+  {
+    "name": "Approved image remains live while replacement is reviewed",
+    "viewport": "desktop",
+    "covers": [
+      "profile picture",
+      "Nightjar logo",
+      "release artwork",
+      "replacement moderation"
+    ],
+    "description": "Protects the currently approved image while a replacement is still awaiting Nightjar review.",
+    "steps": [
+      "Start with an approved image",
+      "Submit a replacement image",
+      "Verify the old approved image remains public during pending review",
+      "Reject the replacement and verify the old image remains",
+      "Submit another replacement and approve it"
+    ],
+    "expected": "Pending or rejected replacements never blank the approved image. Approval atomically swaps to the replacement and removes the superseded stored image."
+  },
+  {
+    "name": "Private release audio requires verified age-gated playback",
+    "viewport": "desktop",
+    "covers": [
+      "Firebase Storage",
+      "release audio",
+      "signed playback URL",
+      "age assurance",
+      "creator media removal"
+    ],
+    "description": "Verifies release audio has no direct public Storage read path.",
+    "steps": [
+      "Upload Creator audio to the Creator-owned release path",
+      "Attempt a direct Storage read",
+      "Request playback without recorded age assurance",
+      "Record approved test age state as an allowlisted administrator and request playback",
+      "Remove audio or delete a removable draft"
+    ],
+    "expected": "Direct reads are denied, unverified playback fails closed, verified playback returns only a short-lived signed URL, and removal/deletion cleans up owned audio."
+  },
+  {
+    "name": "Active Nightjar runtime has no local or AppDeploy data client",
+    "viewport": "desktop",
+    "covers": [
+      "Firebase-only runtime",
+      "GitHub main",
+      "runtime imports"
+    ],
+    "description": "Prevents the archived prototype runtime from silently re-entering production.",
+    "steps": [
+      "Search active src for legacy-local-client and @appdeploy/client",
+      "Search active src for api.get/api.post/api.put/api.delete compatibility calls",
+      "Build the frontend and Firebase Functions"
+    ],
+    "expected": "Active source contains no legacy/AppDeploy runtime imports or compatibility API calls; Firebase is the sole active data layer."
+  },
+  {
+    "name": "Protected manuscript signals never auto-freeze accounts",
+    "viewport": "desktop",
+    "covers": [
+      "protected reader",
+      "security scoring",
+      "admin alerts",
+      "manual suspension"
+    ],
+    "description": "Preserves the graduated evidence-first anti-scraping policy after Firebase migration.",
+    "steps": [
+      "Generate ordinary low-volume reader activity",
+      "Generate enough qualifying protected-content signals to cross alert threshold",
+      "Inspect the security alert",
+      "Use administrator actions to close benign, revoke sessions or explicitly suspend"
+    ],
+    "expected": "Scores below 40 do not alert. Qualifying alerts use Medium/High/Critical thresholds, retain automaticAction none and reviewRequired true, and no account is automatically frozen."
   }
 ]
