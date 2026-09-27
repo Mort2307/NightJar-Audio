@@ -1300,7 +1300,7 @@ function App() {
     );
   }
 
-  if (ageStage === 'assurance') {
+  if (ageStage === 'assurance' && !rolePicker) {
     return (
       <main className="access-shell">
         <div className="access-card assurance-card">
