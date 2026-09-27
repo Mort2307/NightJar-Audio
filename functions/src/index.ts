@@ -275,6 +275,7 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
     avatarInitials: data.avatarInitials ?? null,
     initials: data.avatarInitials ?? null,
     avatarTone: data.avatarTone ?? 'plum',
+    followerCount: Math.max(0, Number(data.followerCount ?? 0)),
     favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
     roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
   };
@@ -283,15 +284,48 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
 export const listCreators = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const accounts = await db.collection('accounts').where('role', '==', 'creator').limit(200).get();
+  const [accounts, releases, listening] = await Promise.all([
+    db.collection('accounts').where('role', '==', 'creator').limit(200).get(),
+    db.collection('releases').where('status', '==', 'released').limit(1000).get(),
+    db.collection('listeningEvents').limit(5000).get(),
+  ]);
+
+  const releaseCounts = new Map<string, number>();
+  for (const release of releases.docs) {
+    const creatorUserId = cleanText(release.data().creatorUserId, 160);
+    if (creatorUserId) releaseCounts.set(creatorUserId, (releaseCounts.get(creatorUserId) ?? 0) + 1);
+  }
+
+  const listeningSeconds = new Map<string, number>();
+  let totalListeningSeconds = 0;
+  for (const event of listening.docs) {
+    const data = event.data();
+    const creatorUserId = cleanText(data.creatorUserId, 160);
+    if (!creatorUserId) continue;
+    const duration = Math.max(0, Number(data.durationSeconds ?? 0));
+    const position = Math.max(0, Number(data.positionSeconds ?? 0));
+    const seconds = Math.min(position, duration || position);
+    if (!Number.isFinite(seconds) || seconds <= 0) continue;
+    listeningSeconds.set(creatorUserId, (listeningSeconds.get(creatorUserId) ?? 0) + seconds);
+    totalListeningSeconds += seconds;
+  }
+
   const creators = (await Promise.all(
     accounts.docs
       .filter((doc) => doc.data().status === 'active')
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
         if (!base) return null;
-        const releases = await db.collection('releases').where('creatorUserId', '==', doc.id).limit(500).get();
-        return { ...base, releaseCount: releases.docs.filter((release) => release.data().status === 'released').length };
+        const seconds = listeningSeconds.get(doc.id) ?? 0;
+        return {
+          ...base,
+          followerCount: Number((base as any).followerCount ?? 0),
+          releaseCount: releaseCounts.get(doc.id) ?? 0,
+          verifiedListeningMinutes: Math.round((seconds / 60) * 10) / 10,
+          listeningSharePercent: totalListeningSeconds > 0
+            ? Math.round((seconds / totalListeningSeconds) * 1000) / 10
+            : 0,
+        };
       }),
   )).filter(Boolean);
 
@@ -331,6 +365,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
       avatarStatus: data.avatarStatus ?? null,
       initials: data.avatarInitials ?? null,
+      followers: Math.max(0, Number(data.followerCount ?? 0)),
       favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
       releases,
     },
@@ -373,6 +408,43 @@ export const communityState = onCall({ region: REGION }, async (request) => {
   };
 });
 
+const persistProfileFollow = async (
+  followerUserId: string,
+  targetUserId: string,
+  targetRole: string | null,
+  following: boolean,
+) => {
+  const followRef = accountRef(followerUserId).collection('follows').doc(targetUserId);
+  const targetProfileRef = profileRef(targetUserId);
+
+  await db.runTransaction(async (transaction) => {
+    const [existingFollow, targetProfile] = await Promise.all([
+      transaction.get(followRef),
+      transaction.get(targetProfileRef),
+    ]);
+    if (!targetProfile.exists) throw new HttpsError('not-found', 'Public Nightjar profile not found.');
+
+    const currentCount = Math.max(0, Number(targetProfile.data()?.followerCount ?? 0));
+    if (following && !existingFollow.exists) {
+      transaction.set(followRef, {
+        targetUserId,
+        targetRole,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      transaction.set(targetProfileRef, {
+        followerCount: currentCount + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } else if (!following && existingFollow.exists) {
+      transaction.delete(followRef);
+      transaction.set(targetProfileRef, {
+        followerCount: Math.max(0, currentCount - 1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  });
+};
+
 export const setProfileFollow = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as { targetUserId?: unknown; following?: unknown };
@@ -392,25 +464,17 @@ export const setProfileFollow = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
 
-  const ref = accountRef(identity.uid).collection('follows').doc(targetUserId);
-  if (input.following === false) {
-    await ref.delete();
-  } else {
-    await ref.set({
-      targetUserId,
-      targetRole: target.data()?.role ?? null,
-      createdAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-  }
+  const following = input.following !== false;
+  await persistProfileFollow(identity.uid, targetUserId, String(target.data()?.role ?? '') || null, following);
 
   return {
     targetUserId,
     targetRole: target.data()?.role ?? null,
-    following: input.following !== false,
+    following,
   };
 });
 
-// Backward-compatible callable name while active clients migrate to generic profile follows.
+// Backward-compatible callable name while older clients migrate to generic profile follows.
 export const setCreatorFollow = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as { creatorUserId?: unknown; following?: unknown };
@@ -427,11 +491,9 @@ export const setCreatorFollow = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('not-found', 'Creator profile not found.');
   }
 
-  const ref = accountRef(identity.uid).collection('follows').doc(targetUserId);
-  if (input.following === false) await ref.delete();
-  else await ref.set({ targetUserId, targetRole: 'creator', createdAt: FieldValue.serverTimestamp() }, { merge: true });
-
-  return { creatorUserId: targetUserId, following: input.following !== false };
+  const following = input.following !== false;
+  await persistProfileFollow(identity.uid, targetUserId, 'creator', following);
+  return { creatorUserId: targetUserId, following };
 });
 
 export const setFavouriteRelease = onCall({ region: REGION }, async (request) => {
