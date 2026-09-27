@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, auth } from '@appdeploy/client';
+import { api, auth } from './platform/legacy-local-client';
 import {
   ArrowRight,
   BarChart3,
