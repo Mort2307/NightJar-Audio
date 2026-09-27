@@ -598,5 +598,24 @@
       "Confirm the selected release reacts without navigating away"
     ],
     "expected": "Feedback controls are available on the release card, provide a visible acknowledgement and Not for me removes that release from the current shelf."
+  },
+  {
+    "name": "Creator directory search stays real and public-data-only",
+    "viewport": "mobile",
+    "covers": [
+      "creator search",
+      "directory",
+      "public profile",
+      "modularity"
+    ],
+    "description": "Verifies creator discovery can be searched locally without exposing non-public account data or coupling search logic to the application shell.",
+    "steps": [
+      "Open Creator Directory",
+      "Search by creator name",
+      "Search by handle or creative focus",
+      "Clear the search",
+      "Open a matching creator profile"
+    ],
+    "expected": "Results update immediately, only public directory fields are searched, clearing restores the full roster, and opening a result reaches the creator profile."
   }
 ]
