@@ -43,6 +43,17 @@ const requireAdminIdentity = (request: { auth?: { uid: string; token: Record<str
 
 const accountRef = (uid: string) => db.collection('accounts').doc(uid);
 
+const requireActiveIdentity = async (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
+  const identity = requireVerifiedIdentity(request);
+  if (identity.admin) return identity;
+  const snapshot = await accountRef(identity.uid).get();
+  if (snapshot.exists && snapshot.data()?.status === 'suspended') {
+    throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
+  }
+  return identity;
+};
+
+
 export const health = onRequest({ region: REGION }, (_request, response) => {
   response.status(200).json({ service: 'nightjar', status: 'ok' });
 });
@@ -101,7 +112,7 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
 });
 
 export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   if (identity.admin) throw new HttpsError('failed-precondition', 'Administrator roles are assigned by Nightjar.');
 
   const requestedRole = String((request.data as { role?: unknown } | undefined)?.role ?? '') as SelectableRole;
@@ -167,13 +178,13 @@ const validateHandle = (value: string) => {
 const profileRef = (uid: string) => db.collection('profiles').doc(uid);
 
 export const getMyProfile = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const snapshot = await profileRef(identity.uid).get();
   return { profile: snapshot.exists ? snapshot.data() : null };
 });
 
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const handle = cleanHandle(input.handle);
   validateHandle(handle);
@@ -257,7 +268,7 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
 };
 
 export const listCreators = onCall({ region: REGION }, async (request) => {
-  requireVerifiedIdentity(request);
+  await requireActiveIdentity(request);
   const accounts = await db.collection('accounts').where('role', '==', 'creator').limit(200).get();
   const creators = (await Promise.all(
     accounts.docs
@@ -305,7 +316,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
 });
 
 export const listWriters = onCall({ region: REGION }, async (request) => {
-  requireVerifiedIdentity(request);
+  await requireActiveIdentity(request);
   const accounts = await db.collection('accounts').where('role', '==', 'writer').limit(200).get();
   const writers = (await Promise.all(
     accounts.docs
@@ -320,7 +331,7 @@ export const listWriters = onCall({ region: REGION }, async (request) => {
 });
 
 export const communityState = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const [follows, favourites] = await Promise.all([
     accountRef(identity.uid).collection('follows').limit(500).get(),
     accountRef(identity.uid).collection('favourites').limit(500).get(),
@@ -333,7 +344,7 @@ export const communityState = onCall({ region: REGION }, async (request) => {
 });
 
 export const setCreatorFollow = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as { creatorUserId?: unknown; following?: unknown };
   const creatorUserId = cleanText(input.creatorUserId, 128);
   if (!creatorUserId || creatorUserId === identity.uid) {
@@ -353,7 +364,7 @@ export const setCreatorFollow = onCall({ region: REGION }, async (request) => {
 });
 
 export const setFavouriteRelease = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as { releaseId?: unknown; favourite?: unknown };
   const releaseId = cleanText(input.releaseId, 160);
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
@@ -414,7 +425,7 @@ const clearAssetFile = async (asset: Record<string, unknown>) => {
 };
 
 export const submitImageAsset = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const kind = cleanText(input.kind, 40) as ModeratedImageKind;
   if (!['profile_avatar', 'brand_logo', 'release_artwork'].includes(kind)) {
@@ -685,7 +696,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
 });
 
 export const getImageAssetStatus = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const assetId = cleanText((request.data as { assetId?: unknown } | undefined)?.assetId, 160);
   const snapshot = await db.collection('imageAssets').doc(assetId).get();
   const data = snapshot.data();
@@ -702,7 +713,7 @@ export const getImageAssetStatus = onCall({ region: REGION }, async (request) =>
 });
 
 export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const assetId = cleanText((request.data as { assetId?: unknown } | undefined)?.assetId, 160);
   if (!assetId) throw new HttpsError('invalid-argument', 'Image asset is required.');
 
@@ -738,7 +749,7 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
 });
 
 export const removeProfileAvatar = onCall({ region: REGION }, async (request) => {
-  const identity = requireVerifiedIdentity(request);
+  const identity = await requireActiveIdentity(request);
   const profile = await profileRef(identity.uid).get();
   const data = profile.data() ?? {};
   for (const assetId of [data.avatarAssetId, data.pendingAvatarAssetId]) {
@@ -927,7 +938,7 @@ const spotlightForRole = async (role: 'creator' | 'writer' | 'editor', dateKey: 
 };
 
 export const spotlightState = onCall({ region: REGION }, async (request) => {
-  requireVerifiedIdentity(request);
+  await requireActiveIdentity(request);
   const date = londonDateKey();
   const [creator, writer, editor] = await Promise.all([
     spotlightForRole('creator', date),
