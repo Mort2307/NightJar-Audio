@@ -21,7 +21,7 @@ const securityCaseTable = 'nightjar_security_cases';
 const ownerNotificationTable = (email: string) => `nightjar_owner_notifications_${normalizeEmail(email).replace(/[^a-z0-9]/g, '_')}`;
 const userNotificationTable = (userId: string) => `nightjar_notifications_${userId}`;
 
-type NightjarProfile = { displayName?: string|null; handle?: string|null; headline?: string|null; bio?: string|null; pronouns?: string|null; avatarInitials?: string|null; avatarTone?: string|null; favouriteTags?: string[]; favouriteTropes?: string[]; favouriteCategories?: string[]; roleFocus?: string[]; publicProfile?: boolean; createdAt?: string; updatedAt?: string; };
+type NightjarProfile = { displayName?: string|null; handle?: string|null; headline?: string|null; bio?: string|null; pronouns?: string|null; avatarInitials?: string|null; avatarTone?: string|null; favouriteTags?: string[]; favouriteTropes?: string[]; favouriteCategories?: string[]; roleFocus?: string[]; publicProfile?: boolean; onboardingComplete?: boolean; onboardingVersion?: number; createdAt?: string; updatedAt?: string; };
 const cleanList = (value: unknown, max = 16) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean).slice(0, max) : [];
 const cleanHandle = (value?: unknown) => String(value ?? '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_\.\-]/g, '').slice(0, 30);
 const getProfile = async (userId: string) => { const { items } = await db.list<NightjarProfile>(profileTable(userId), { limit: 1 }); return items[0] ?? null; };
@@ -37,6 +37,34 @@ const createUserNotificationOnce = async (userId: string, notification: Record<s
   const key = String(notification.dedupeKey ?? '');
   if (key && items.some((item) => String(item.dedupeKey ?? '') === key)) return;
   await db.add(table, [{ ...notification, userId, read: false, createdAt: notification.createdAt ?? new Date().toISOString() }]);
+};
+
+const decodeDataUrl = (value: string) => {
+  const match = /^data:([^;]+);base64,(.+)$/s.exec(value);
+  if (!match) return null;
+  const [, contentType, base64] = match;
+  try {
+    return { contentType, base64, bytes: Buffer.byteLength(base64, 'base64') };
+  } catch {
+    return null;
+  }
+};
+
+const extensionForContentType = (contentType: string, kind: 'audio' | 'artwork') => {
+  const map: Record<string, string> = {
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/mp4': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/ogg': 'ogg',
+    'audio/webm': 'webm',
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+  };
+  return map[contentType] ?? (kind === 'audio' ? 'bin' : 'img');
 };
 
 const brandingTable = 'nightjar_branding';
@@ -478,6 +506,36 @@ export const handler = router({
       return json({ ok: true, date: state.date, attempted: result.attempted, created: result.created });
     },
   ],
+  'GET /api/creators/:creatorUserId': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before viewing creator profiles.', 403);
+      const creatorUserId = String(ctx.params.creatorUserId ?? '');
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
+      const account = accounts.find((item) => String(item.userId) === creatorUserId && item.role === 'creator' && item.status !== 'suspended');
+      const profile = account ? await getProfile(creatorUserId) : null;
+      if (!account || !profile?.publicProfile) return error('Creator profile not found.', 404);
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const publicReleases = releases
+        .filter((release) => release.creatorUserId === creatorUserId && release.status === 'released')
+        .map((release) => ({
+          id: release.id,
+          title: release.title,
+          description: release.description,
+          category: release.category,
+          genre: release.genre,
+          mood: release.mood,
+          tags: release.tags ?? [],
+          tropes: release.tropes ?? [],
+          durationMinutes: release.durationMinutes ?? 0,
+          audioUrl: release.audioUrl ?? null,
+          artworkUrl: release.artworkUrl ?? null,
+          releaseDate: release.releaseDate ?? release.createdAt ?? null,
+        }));
+      const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
+      return json({ creator: { userId: creatorUserId, name: profile.displayName ?? account.name ?? 'Nightjar creator', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, pronouns: profile.pronouns ?? null, initials: profile.avatarInitials ?? null, favouriteTags: profile.favouriteTags ?? [], followers: 0, following: follows.some((follow) => String(follow.creatorUserId) === creatorUserId), releases: publicReleases } });
+    },
+  ],
   'GET /api/recommendations': [
     requireAuth(),
     async (ctx) => {
@@ -510,6 +568,19 @@ export const handler = router({
         return { ...release, score, reason: matched.length ? 'Because you have expressed interest in ' + matched.join(', ') + '.' : followed.has(String(release.creatorUserId)) ? 'From a creator you follow.' : 'A new release matching your current discovery context.' };
       }).sort((a,b) => b.score-a.score).slice(0,24);
       return json({ recommendations });
+    },
+  ],
+  'GET /api/listening/resume/:releaseId': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before retrieving listening progress.', 403);
+      const releaseId = String(ctx.params.releaseId ?? '');
+      const { items } = await db.list(listeningTable, { limit: 1000 });
+      const relevant = items
+        .filter((event) => String(event.userId) === ctx.user!.userId && String(event.releaseId) === releaseId)
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+      const position = relevant.find((event) => typeof event.positionSeconds !== 'undefined')?.positionSeconds;
+      return json({ releaseId, positionSeconds: Math.max(0, Number(position ?? 0)), durationSeconds: Math.max(0, Number(relevant.find((event) => typeof event.durationSeconds !== 'undefined')?.durationSeconds ?? 0)) });
     },
   ],
   'GET /api/trending': [
@@ -548,6 +619,34 @@ export const handler = router({
       if (!(await requireRole(ctx.user!.userId, ['creator', 'admin']))) return error('Creator access required.', 403);
       const { items } = await db.list(releaseTable, { limit: 500 });
       return json({ releases: items.filter((release) => release.creatorUserId === ctx.user!.userId) });
+    },
+  ],
+  'POST /api/creator/assets': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await requireRole(ctx.user!.userId, ['creator']))) return error('Active Creator access required.', 403);
+      const body = (ctx.body ?? {}) as { releaseId?: string; kind?: 'audio'|'artwork'; dataUrl?: string; contentType?: string; fileName?: string };
+      if (!body.releaseId || !body.kind || !body.dataUrl) return error('Release, asset kind and file are required.', 400);
+      if (!['audio', 'artwork'].includes(body.kind)) return error('Unsupported asset kind.', 400);
+      const decoded = decodeDataUrl(body.dataUrl);
+      if (!decoded) return error('Invalid uploaded file.', 400);
+      const maxBytes = body.kind === 'audio' ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (decoded.bytes > maxBytes) return error(body.kind === 'audio' ? 'Audio must be 25 MB or smaller.' : 'Artwork must be 5 MB or smaller.', 413);
+      const allowed = body.kind === 'audio'
+        ? ['audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/x-m4a','audio/ogg','audio/webm']
+        : ['image/png','image/jpeg','image/webp'];
+      const contentType = body.contentType || decoded.contentType;
+      if (!allowed.includes(contentType)) return error('Unsupported asset format.', 400);
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      const release = items.find((item) => String(item.id) === String(body.releaseId) && item.creatorUserId === ctx.user!.userId);
+      if (!release) return error('Release not found.', 404);
+      const path = 'creators/' + ctx.user!.userId + '/' + body.kind + '/' + randomUUID() + '.' + extensionForContentType(contentType, body.kind);
+      const [ok] = await storage.write([{ path, content: decoded.base64, contentType }]);
+      if (!ok) return error('Asset upload failed.', 500);
+      const [{ url }] = await storage.url([path]);
+      const next = { ...release, [body.kind === 'audio' ? 'audioUrl' : 'artworkUrl']: url ?? null, [body.kind === 'audio' ? 'audioPath' : 'artworkPath']: path, assetUpdatedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      await db.update(releaseTable, [{ id: release.id, record: next }]);
+      return json({ url: url ?? null, path, release: next });
     },
   ],
   'POST /api/creator/releases': [
@@ -593,9 +692,13 @@ export const handler = router({
       const { items } = await db.list(releaseTable, { limit: 500 });
       const release = items.find((item) => item.id === ctx.params.releaseId && item.creatorUserId === ctx.user!.userId);
       if (!release) return error('Release not found.', 404);
-      if (!release.audioUrl) return error('An audio URL is required before publishing.', 400);
-      const next = { ...release, status: 'released', releaseDate: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      if (!release.audioUrl) return error('An audio URL is required before submitting.', 400);
+      if (!release.title || !release.description || !release.category) return error('Complete the release title, description and category before submitting.', 400);
+      if (release.status === 'pending_review') return json({ release });
+      if (release.status === 'released') return json({ release });
+      const next = { ...release, status: 'pending_review', submittedAt: new Date().toISOString(), moderationNote: null, updatedAt: new Date().toISOString() };
       await db.update(releaseTable, [{ id: release.id, record: next }]);
+      await db.add('nightjar_evidence_' + ctx.user!.userId, [{ eventType: 'release_submitted', severity: 'low', relatedType: 'release', relatedId: release.id, summary: 'Creator submitted a release for Nightjar moderation.', createdAt: new Date().toISOString() }]);
       return json({ release: next });
     },
   ],
@@ -1043,7 +1146,7 @@ export const handler = router({
     async (ctx) => {
       const body=(ctx.body??{}) as NightjarProfile; const handle=cleanHandle(body.handle);
       if(handle){ const {items}=await db.list(accountIndexTable,{limit:1000}); if(items.some((item)=>item.userId!==ctx.user!.userId&&cleanHandle(item.handle)===handle)) return error('That @handle is already in use.',409); }
-      const current=await getProfile(ctx.user!.userId); const profile:NightjarProfile={displayName:String(body.displayName??ctx.user!.name??'Nightjar account').trim().slice(0,80),handle:handle||null,headline:String(body.headline??'').trim().slice(0,120),bio:String(body.bio??'').trim().slice(0,500),pronouns:String(body.pronouns??'').trim().slice(0,60),avatarInitials:String(body.avatarInitials??'').trim().slice(0,4).toUpperCase(),avatarTone:String(body.avatarTone??'plum').trim().slice(0,24),favouriteTags:cleanList(body.favouriteTags),favouriteTropes:cleanList(body.favouriteTropes),favouriteCategories:cleanList(body.favouriteCategories),roleFocus:cleanList(body.roleFocus),publicProfile:body.publicProfile!==false,createdAt:current?.createdAt??new Date().toISOString(),updatedAt:new Date().toISOString()};
+      const current=await getProfile(ctx.user!.userId); const profile:NightjarProfile={displayName:String(body.displayName??ctx.user!.name??'Nightjar account').trim().slice(0,80),handle:handle||null,headline:String(body.headline??'').trim().slice(0,120),bio:String(body.bio??'').trim().slice(0,500),pronouns:String(body.pronouns??'').trim().slice(0,60),avatarInitials:String(body.avatarInitials??'').trim().slice(0,4).toUpperCase(),avatarTone:String(body.avatarTone??'plum').trim().slice(0,24),favouriteTags:cleanList(body.favouriteTags),favouriteTropes:cleanList(body.favouriteTropes),favouriteCategories:cleanList(body.favouriteCategories),roleFocus:cleanList(body.roleFocus),publicProfile:body.publicProfile!==false,onboardingComplete:body.onboardingComplete===true,onboardingVersion:Number(body.onboardingVersion??0)||undefined,createdAt:current?.createdAt??new Date().toISOString(),updatedAt:new Date().toISOString()};
       if(current){const {items}=await db.list(profileTable(ctx.user!.userId),{limit:1}); if(items[0]) await db.update(profileTable(ctx.user!.userId),[{id:items[0].id,record:profile}]);} else await db.add(profileTable(ctx.user!.userId),[profile]);
       const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===ctx.user!.userId); if(indexed) await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,name:profile.displayName,handle:profile.handle}}]); else if(isAdmin(ctx.user!.email)) await db.add(accountIndexTable,[{userId:ctx.user!.userId,email:normalizeEmail(ctx.user!.email),name:profile.displayName,handle:profile.handle,role:'admin',status:'active',createdAt:profile.createdAt}]);
       await db.add(tasteTable(ctx.user!.userId),[{type:'declared_preferences',tags:profile.favouriteTags,tropes:profile.favouriteTropes,categories:profile.favouriteCategories,updatedAt:profile.updatedAt}]);
@@ -1054,6 +1157,32 @@ export const handler = router({
   'POST /api/taste/event': [requireAuth(), async (ctx) => { const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; if(!body.eventType)return error('Taste event type is required.',400); await db.add(tasteTable(ctx.user!.userId),[{type:body.eventType,contentId:body.contentId??null,category:body.category??null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Number(body.durationSeconds??0)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
   'GET /api/taste/profile': [requireAuth(), async (ctx) => { const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])])weights[value]=(weights[value]??0)+3; for(const item of items)for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])])weights[value]=(weights[value]??0)+(item.type==='skip'||item.type==='hide'?-0.5:item.completed?2:1); return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
   'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before opening protected content.',403); if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
+  'GET /api/writers': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before discovering writers.', 403);
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+      const writers = await Promise.all(accounts
+        .filter((account) => account.role === 'writer' && account.status !== 'suspended')
+        .map(async (account) => {
+          const profile = await getProfile(String(account.userId));
+          if (!profile?.publicProfile) return null;
+          return {
+            userId: String(account.userId),
+            name: profile.displayName ?? account.name ?? 'Nightjar writer',
+            handle: profile.handle ?? account.handle ?? null,
+            headline: profile.headline ?? null,
+            bio: profile.bio ?? null,
+            initials: profile.avatarInitials ?? null,
+            pronouns: profile.pronouns ?? null,
+            roleFocus: profile.roleFocus ?? [],
+            publishedWorkCount: scripts.filter((script) => script.writerUserId === account.userId && ['Approved', 'Published'].includes(String(script.status))).length,
+          };
+        }));
+      return json({ writers: writers.filter(Boolean) });
+    },
+  ],
   'GET /api/notifications': [
     requireAuth(),
     async (ctx) => {
@@ -1108,6 +1237,43 @@ export const handler = router({
         },
         subscriptions: { ...subscriptionCounts, totalTracked: subscriptions.length, billingConnected: subscriptions.length > 0 },
       });
+    },
+  ],
+  'GET /api/admin/release-queue': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async () => {
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      return json({ releases: releases.filter((release) => release.status === 'pending_review').slice(0, 100) });
+    },
+  ],
+  'POST /api/admin/releases/:releaseId/moderate': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async (ctx) => {
+      const body = (ctx.body ?? {}) as { decision?: 'approved'|'changes'|'rejected'; note?: string };
+      if (!['approved', 'changes', 'rejected'].includes(body.decision ?? '')) return error('Choose a moderation decision.', 400);
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      const release = items.find((item) => item.id === ctx.params.releaseId);
+      if (!release) return error('Release not found.', 404);
+      const now = new Date().toISOString();
+      const status = body.decision === 'approved' ? 'released' : body.decision === 'changes' ? 'draft' : 'rejected';
+      const next = { ...release, status, moderationNote: String(body.note ?? '').trim().slice(0, 1000) || null, moderatedAt: now, moderatedBy: ctx.user!.userId, releaseDate: body.decision === 'approved' ? now : release.releaseDate ?? null, updatedAt: now };
+      await db.update(releaseTable, [{ id: release.id, record: next }]);
+      if (release.creatorUserId) {
+        await createUserNotificationOnce(String(release.creatorUserId), {
+          type: 'content',
+          subtype: 'release',
+          dedupeKey: 'release-moderation:' + release.id + ':' + now,
+          title: body.decision === 'approved' ? 'Your release is live on Nightjar' : body.decision === 'changes' ? 'Changes requested for your release' : 'Your release was not approved',
+          message: body.decision === 'approved'
+            ? 'Your release has passed Nightjar moderation and is now available to age-verified listeners.'
+            : body.decision === 'changes'
+              ? 'Nightjar moderation has requested changes before this release can be published. Open Creator Studio to review the note.'
+              : 'Your release was not approved for publication. Open Creator Studio to review the moderation note.',
+          releaseId: release.id,
+          moderationNote: next.moderationNote,
+        });
+      }
+      return json({ release: next });
     },
   ],
   'GET /api/admin/scripts': [
