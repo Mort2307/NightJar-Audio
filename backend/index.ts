@@ -457,6 +457,33 @@ const verifyGithubActionsOidc = async (token: string) => {
   }
 };
 
+const verifiedListeningSeconds = (events: any[]) => {
+  const sessions = new Map<string, any[]>();
+  for (const event of events) {
+    const key = String(event.sessionId || [event.userId, event.releaseId, String(event.createdAt || '').slice(0, 13)].join(':'));
+    sessions.set(key, [...(sessions.get(key) ?? []), event]);
+  }
+  let total = 0;
+  for (const session of sessions.values()) {
+    session.sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+    let previous: number | null = null;
+    for (const event of session) {
+      const position = Math.max(0, Number(event.positionSeconds ?? 0));
+      if (event.eventType === 'start' || event.eventType === 'seek') {
+        previous = position;
+        continue;
+      }
+      if (event.eventType !== 'progress' && event.eventType !== 'complete') continue;
+      if (previous !== null) {
+        const delta = position - previous;
+        if (delta > 0 && delta <= 45) total += delta;
+      }
+      previous = position;
+    }
+  }
+  return total;
+};
+
 export const handler = router({
   'GET /api/_healthcheck': [async () => json({ message: 'Success' })],
   'GET /api/catalogue': [
@@ -550,7 +577,7 @@ export const handler = router({
         weights[key] = (weights[key] ?? 0) + 5;
       }
       for (const event of events) {
-        const factor = event.type === 'skip' || event.type === 'hide' ? -1 : 1;
+        const factor = event.type === 'not_for_me' ? -12 : event.type === 'hide' ? -10 : event.type === 'less_like_this' ? -5 : event.type === 'more_like_this' ? 4 : event.type === 'complete' ? 2 : event.type === 'skip' ? -1 : 0.5;
         for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : [])]) {
           const key = String(value).toLowerCase();
           weights[key] = (weights[key] ?? 0) + factor;
@@ -602,7 +629,43 @@ export const handler = router({
   'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); return json({ follows: items }); }],
   'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.creatorUserId === ctx.params.creatorUserId)) await db.add(followTable(ctx.user!.userId), [{ creatorUserId: ctx.params.creatorUserId, createdAt: new Date().toISOString() }]); return json({ following: true }); }],
   'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.creatorUserId === ctx.params.creatorUserId).map((item) => item.id); if (ids.length) await db.delete(followTable(ctx.user!.userId), ids); return json({ following: false }); }],
-  'POST /api/listening/event': [requireAuth(), async (ctx) => { const body = (ctx.body ?? {}) as Record<string, unknown>; const record = { ...body, userId: ctx.user!.userId, createdAt: new Date().toISOString() }; await db.add(listeningTable, [record]); await db.add(tasteTable(ctx.user!.userId), [{ type: body.eventType, category: body.category ?? null, tags: Array.isArray(body.tags) ? body.tags : [], completed: body.completed === true, createdAt: record.createdAt }]); return json({ recorded: true }); }],
+  'POST /api/listening/event': [requireAuth(), async (ctx) => {
+    if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before recording listening activity.', 403);
+    const body = (ctx.body ?? {}) as Record<string, unknown>;
+    const eventType = String(body.eventType ?? '');
+    if (!['start', 'progress', 'seek', 'complete', 'pause'].includes(eventType)) return error('Unsupported listening event.', 400);
+    const releaseId = String(body.releaseId ?? '');
+    const { items: releases } = await db.list(releaseTable, { limit: 500 });
+    const release = releases.find((item) => String(item.id) === releaseId && item.status === 'released');
+    if (!release) return error('Release not found.', 404);
+    const durationSeconds = Math.max(0, Math.min(Number(body.durationSeconds ?? 0), 24 * 60 * 60));
+    const positionSeconds = Math.max(0, Math.min(Number(body.positionSeconds ?? 0), durationSeconds || 24 * 60 * 60));
+    const fromSeconds = body.fromSeconds == null ? null : Math.max(0, Math.min(Number(body.fromSeconds), durationSeconds || 24 * 60 * 60));
+    const record = {
+      releaseId,
+      eventType,
+      sessionId: String(body.sessionId ?? '').slice(0, 100) || null,
+      positionSeconds,
+      durationSeconds,
+      fromSeconds,
+      intent: String(body.intent ?? '').slice(0, 80),
+      completed: eventType === 'complete' || body.completed === true,
+      userId: ctx.user!.userId,
+      createdAt: new Date().toISOString(),
+    };
+    await db.add(listeningTable, [record]);
+    if (eventType !== 'seek' && eventType !== 'pause') {
+      await db.add(tasteTable(ctx.user!.userId), [{
+        type: eventType,
+        contentId: releaseId,
+        category: release.category ?? null,
+        tags: cleanList([...(release.tags ?? []), ...(release.tropes ?? [])], 16),
+        completed: record.completed,
+        createdAt: record.createdAt,
+      }]);
+    }
+    return json({ recorded: true });
+  }],
   'GET /api/creator/dashboard': [
     requireAuth(),
     async (ctx) => {
@@ -611,7 +674,7 @@ export const handler = router({
       const mine = releases.filter((release) => release.creatorUserId === ctx.user!.userId);
       const { items: events } = await db.list(listeningTable, { limit: 5000 });
       const listening = events.filter((event) => mine.some((release) => release.id === event.releaseId));
-      const seconds = listening.reduce((sum, event) => sum + Math.min(Number(event.positionSeconds ?? 0), Number(event.durationSeconds ?? 0)), 0);
+      const seconds = verifiedListeningSeconds(listening);
       return json({ releases: mine, metrics: { released: mine.filter((release) => release.status === 'released').length, drafts: mine.filter((release) => release.status !== 'released').length, verifiedListeningMinutes: Number((seconds / 60).toFixed(1)), uniqueListeners: new Set(listening.map((event) => event.userId)).size } });
     },
   ],
@@ -1156,7 +1219,7 @@ export const handler = router({
     },
   ],
   'GET /api/profile/:handle': [async (ctx) => { const handle=cleanHandle(ctx.params.handle); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const account=indexes.find((item)=>cleanHandle(item.handle)===handle); if(!account)return error('Profile not found.',404); const profile=await getProfile(account.userId); if(!profile?.publicProfile)return error('Profile not found.',404); return json({profile:{...profile,role:account.role}}); }],
-  'POST /api/taste/event': [requireAuth(), async (ctx) => { const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; if(!body.eventType)return error('Taste event type is required.',400); await db.add(tasteTable(ctx.user!.userId),[{type:body.eventType,contentId:body.contentId??null,category:body.category??null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Number(body.durationSeconds??0)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
+  'POST /api/taste/event': [requireAuth(), async (ctx) => { const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; const eventType=String(body.eventType??''); if(!['more_like_this','less_like_this','not_for_me','hide','skip','save','follow','complete','replay'].includes(eventType))return error('Unsupported taste signal.',400); await db.add(tasteTable(ctx.user!.userId),[{type:eventType,contentId:String(body.contentId??'').slice(0,100)||null,category:String(body.category??'').slice(0,80)||null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Math.min(Number(body.durationSeconds??0),86400)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
   'GET /api/taste/profile': [requireAuth(), async (ctx) => { const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])])weights[value]=(weights[value]??0)+3; for(const item of items)for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])])weights[value]=(weights[value]??0)+(item.type==='skip'||item.type==='hide'?-0.5:item.completed?2:1); return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
   'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before opening protected content.',403); if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
   'GET /api/writers': [
