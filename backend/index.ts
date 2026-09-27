@@ -1150,22 +1150,42 @@ export const handler = router({
       return json({ requested: true });
     },
   ],
+  'GET /api/scripts/:scriptId/permissions': [
+    requireAuth(),
+    async (ctx) => {
+      const { items: scripts } = await db.list('nightjar_scripts', { limit: 100 });
+      const script = scripts.find((item) => item.id === ctx.params.scriptId);
+      if (!script || script.writerUserId !== ctx.user!.userId) return error('Writer ownership is required.', 403);
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
+      const grants: any[] = [];
+      for (const account of accounts) {
+        const { items } = await db.list('nightjar_script_access_' + account.userId, { limit: 100 });
+        for (const grant of items.filter((item) => item.scriptId === ctx.params.scriptId)) {
+          grants.push({ ...grant, recipientUserId: account.userId, recipientName: account.name ?? null, recipientEmail: account.email ?? null, recipientRole: account.role ?? null });
+        }
+      }
+      return json({ grants });
+    },
+  ],
   'POST /api/scripts/:scriptId/permissions': [
     requireAuth(),
     async (ctx) => {
-      const body=(ctx.body??{}) as {creatorUserId?:string;allowCopy?:boolean;allowExport?:boolean;expiresAt?:string|null;revoke?:boolean};
-      if(!body.creatorUserId)return error('Creator account is required.',400);
-      const {items}=await db.list('nightjar_scripts',{limit:50});
+      const body=(ctx.body??{}) as {recipientUserId?:string;creatorUserId?:string;allowCopy?:boolean;allowExport?:boolean;expiresAt?:string|null;revoke?:boolean};
+      const recipientUserId=String(body.recipientUserId??body.creatorUserId??'').trim();
+      if(!recipientUserId)return error('Recipient account is required.',400);
+      const {items}=await db.list('nightjar_scripts',{limit:100});
       const script=items.find((item)=>item.id===ctx.params.scriptId);
       if(!script||script.writerUserId!==ctx.user!.userId)return error('Writer ownership is required.',403);
-      const table='nightjar_script_access_'+body.creatorUserId;
+      if(recipientUserId===ctx.user!.userId)return error('You already own this manuscript.',400);
+      const table='nightjar_script_access_'+recipientUserId;
       const existing=await db.list(table,{limit:100});
       const match=existing.items.find((item)=>item.scriptId===ctx.params.scriptId);
-      const record={scriptId:ctx.params.scriptId,writerUserId:ctx.user!.userId,collaborationId:body.creatorUserId+':'+ctx.params.scriptId,allowCopy:body.allowCopy===true,allowExport:body.allowExport===true,grantedAt:match?.grantedAt??new Date().toISOString(),expiresAt:body.expiresAt??null,revokedAt:body.revoke?new Date().toISOString():null};
+      const record={scriptId:ctx.params.scriptId,writerUserId:ctx.user!.userId,recipientUserId,collaborationId:recipientUserId+':'+ctx.params.scriptId,allowCopy:body.allowCopy===true,allowExport:body.allowExport===true,grantedAt:match?.grantedAt??new Date().toISOString(),expiresAt:body.expiresAt??null,revokedAt:body.revoke?new Date().toISOString():null};
       if(match)await db.update(table,[{id:match.id,record}]); else await db.add(table,[record]);
-      await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'permission_changed',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,summary:body.revoke?'Writer revoked script access.':'Writer changed script read/copy/export permissions.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
-      if(body.revoke)await revokeReaderSessions(body.creatorUserId,'Writer revoked protected script access.');
-      return json({allowCopy:record.allowCopy,allowExport:record.allowExport,expiresAt:record.expiresAt,revoked:body.revoke===true});
+      await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:body.revoke?'access_revoked':'permission_changed',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,summary:body.revoke?'Writer revoked recipient script access.':'Writer explicitly granted or changed recipient read/copy/export permissions.',actorUserId:ctx.user!.userId,recipientUserId,allowCopy:record.allowCopy,allowExport:record.allowExport,expiresAt:record.expiresAt,createdAt:new Date().toISOString()}]);
+      await db.add(securityEventTable,[{userId:recipientUserId,eventType:body.revoke?'writer_access_revoked':'writer_access_granted',relatedId:ctx.params.scriptId,writerUserId:ctx.user!.userId,allowCopy:record.allowCopy,allowExport:record.allowExport,createdAt:new Date().toISOString()}]);
+      if(body.revoke)await revokeReaderSessions(recipientUserId,'Writer revoked protected script access.');
+      return json({recipientUserId,allowCopy:record.allowCopy,allowExport:record.allowExport,expiresAt:record.expiresAt,revoked:body.revoke===true});
     },
   ],
   'POST /api/admin/creator-applications/:applicationId/decision': [
