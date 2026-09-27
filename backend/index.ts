@@ -1427,15 +1427,19 @@ export const handler = router({
       const {items}=await db.list('nightjar_scripts',{limit:500});
       const script=items.find((item)=>item.id===ctx.params.scriptId);
       if(!script||script.writerUserId!==ctx.user!.userId)return error('Writer ownership is required.',403);
-      const {items:accounts}=await db.list(accountIndexTable,{limit:1000});
-      const target=accounts.find((item)=>String(item.userId)===String(body.creatorUserId)&&item.role==='creator'&&item.status!=='suspended');
-      if(!target)return error('The selected account is not an active Creator.',400);
-      const expiry=body.expiresAt?new Date(body.expiresAt):null;
-      if(expiry&&(!Number.isFinite(expiry.getTime())||expiry.getTime()<=Date.now()))return error('Access expiry must be a future date.',400);
       const table='nightjar_script_access_'+body.creatorUserId;
       const existing=await db.list(table,{limit:100});
       const match=existing.items.find((item)=>item.scriptId===ctx.params.scriptId);
-      const record={scriptId:ctx.params.scriptId,writerUserId:ctx.user!.userId,collaborationId:body.creatorUserId+':'+ctx.params.scriptId,allowCopy:body.allowCopy===true,allowExport:body.allowExport===true,grantedAt:match?.grantedAt??new Date().toISOString(),expiresAt:expiry?expiry.toISOString():null,revokedAt:body.revoke?new Date().toISOString():null};
+      if (!body.revoke) {
+        const {items:accounts}=await db.list(accountIndexTable,{limit:1000});
+        const target=accounts.find((item)=>String(item.userId)===String(body.creatorUserId)&&item.role==='creator'&&item.status!=='suspended');
+        if(!target)return error('The selected account is not an active Creator.',400);
+      } else if (!match) {
+        return error('No existing script access grant was found to revoke.',404);
+      }
+      const expiry=body.expiresAt?new Date(body.expiresAt):null;
+      if(!body.revoke&&expiry&&(!Number.isFinite(expiry.getTime())||expiry.getTime()<=Date.now()))return error('Access expiry must be a future date.',400);
+      const record={scriptId:ctx.params.scriptId,writerUserId:ctx.user!.userId,collaborationId:body.creatorUserId+':'+ctx.params.scriptId,allowCopy:body.revoke?false:body.allowCopy===true,allowExport:body.revoke?false:body.allowExport===true,grantedAt:match?.grantedAt??new Date().toISOString(),expiresAt:body.revoke?(match?.expiresAt??null):(expiry?expiry.toISOString():null),revokedAt:body.revoke?new Date().toISOString():null};
       if(match)await db.update(table,[{id:match.id,record}]); else await db.add(table,[record]);
       await db.add('nightjar_evidence_'+ctx.user!.userId,[{eventType:'permission_changed',severity:'low',relatedType:'script',relatedId:ctx.params.scriptId,summary:body.revoke?'Writer revoked script access.':'Writer changed script read/copy/export permissions.',actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()}]);
       if(body.revoke)await revokeReaderSessions(body.creatorUserId,'Writer revoked protected script access.');
