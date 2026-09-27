@@ -1352,9 +1352,68 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!script) throw new Error('Script not found.');
     const grant = localScriptGrant(script, account.userId);
     if (!grant) throw new Error('Protected script access has not been granted.');
-    const session = { sessionId: id('reader'), scriptId, status: 'active', expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), createdAt: now(), canReadFull: true, allowCopy: grant.allowCopy === true, allowExport: grant.allowExport === true };
-    state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((item) => item.scriptId === scriptId && item.status === 'active' ? { ...item, status: 'revoked', revokedAt: now(), revokedReason: 'Superseded by a new protected reader session.' } : item);
+
+    const deviceHash = await localDeviceHash(input.deviceId);
+    const environmentHash = await localEnvironmentHash(input.environmentId);
+    const sameDevice = deviceHash ? state.securityDevices.filter((item) => item.deviceHash === deviceHash) : [];
+    const sameEnvironment = environmentHash ? state.securityDevices.filter((item) => item.environmentHash === environmentHash) : [];
+    const restricted = (userId: string) => state.users.some((user) => user.userId === userId && (user.status === 'suspended' || user.removed === true));
+    const linkedSuspendedUserIds = Array.from(new Set(sameDevice.map((item) => item.userId).filter((userId) => userId !== account.userId))).filter(restricted);
+    const linkedSuspendedEnvironmentUserIds = Array.from(new Set(sameEnvironment.map((item) => item.userId).filter((userId) => userId !== account.userId))).filter(restricted);
+    const sameScriptEnvironmentUserIds = script.writerUserId === account.userId ? [] : linkedSuspendedEnvironmentUserIds.filter((userId) =>
+      sameEnvironment.some((item) => item.userId === userId && item.relatedId === scriptId) ||
+      state.evidence.some((item) => item.userId === userId && item.relatedId === scriptId && item.environmentHash === environmentHash)
+    );
+    const blocked = sameDevice.some((item) => item.blocked === true);
+    const environmentBlocked = sameEnvironment.some((item) => item.environmentBlocked === true);
+
+    if (deviceHash || environmentHash) {
+      const existing = state.securityDevices.find((item) => item.userId === account.userId && ((deviceHash && item.deviceHash === deviceHash) || (!deviceHash && environmentHash && item.environmentHash === environmentHash)));
+      if (existing) Object.assign(existing, { deviceHash, environmentHash, lastSeenAt: now(), relatedId: scriptId, blocked: existing.blocked === true || blocked, environmentBlocked: existing.environmentBlocked === true || environmentBlocked });
+      else state.securityDevices.push({ id: id('device'), deviceHash, environmentHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked, environmentBlocked, relatedId: scriptId });
+    }
+
+    if (blocked || environmentBlocked || linkedSuspendedUserIds.length || sameScriptEnvironmentUserIds.length) {
+      addLocalSecurityAlert(state, {
+        userId: account.userId,
+        severity: 'critical',
+        riskScore: 95,
+        reason: blocked
+          ? 'Protected-script access attempted from a device token blocked by an administrator.'
+          : environmentBlocked
+            ? 'Protected-script access attempted from a browser/device environment blocked by an administrator.'
+            : linkedSuspendedUserIds.length
+              ? 'Protected-script access attempted from a device token previously linked to a suspended account.'
+              : 'Protected-script access attempted from a browser/device environment previously used by a restricted account on this same manuscript.',
+        relatedId: scriptId,
+        deviceHash,
+        environmentHash,
+        linkedSuspendedUserIds,
+        linkedSuspendedEnvironmentUserIds,
+        sameScriptEnvironmentUserIds,
+        signal: { eventType: 'blocked_device_or_environment_reader_attempt' },
+      });
+      throw new Error('Protected-script access is paused for security review.');
+    }
+
+    const issuedAt = now();
+    const session = {
+      sessionId: id('reader'),
+      scriptId,
+      accountId: account.userId,
+      status: 'active',
+      issuedAt,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      canReadFull: true,
+      allowCopy: grant.allowCopy === true,
+      allowExport: grant.allowExport === true,
+      watermark: 'NIGHTJAR · ' + account.name + ' · ' + issuedAt.slice(0, 16).replace('T', ' '),
+      deviceHash,
+      environmentHash,
+    };
+    state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((item) => item.scriptId === scriptId && item.status === 'active' ? { ...item, status: 'revoked', revokedAt: issuedAt, revokedReason: 'Superseded by a new protected reader session.' } : item);
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'reader_session_issued', severity: 'low', relatedType: 'script', relatedId: scriptId, sessionId: session.sessionId, deviceHash, environmentHash, createdAt: issuedAt });
     return send({ session });
   }
 
