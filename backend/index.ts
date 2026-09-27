@@ -165,10 +165,158 @@ export const handler = router({
     },
   ],
   'GET /api/spotlights': [
-    async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { items } = await db.list('nightjar_spotlights', { limit: 100 });
-      return json({ date: today, spotlights: items.filter((item) => item.date === today).sort((a,b) => Number(a.slot ?? 0) - Number(b.slot ?? 0)).slice(0,5) });
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before viewing community spotlights.', 403);
+
+      const now = new Date();
+      const getLondonParts = (date: Date) => {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Europe/London',
+          weekday: 'short',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).formatToParts(date);
+        const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+        return { weekday: value('weekday'), year: Number(value('year')), month: Number(value('month')), day: Number(value('day')) };
+      };
+      const local = getLondonParts(now);
+      const weekdayIndex = ({ Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 } as Record<string, number>)[local.weekday] ?? 0;
+      const localDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
+
+      // Creator + Writer: every active member gets a deterministic full-day slot.
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
+      const eligibleAccounts = accounts.filter((account) => account.status !== 'suspended' && ['creator', 'writer', 'listener'].includes(account.role));
+      const sortAccounts = (items: any[]) => items.slice().sort((a, b) => {
+        const created = String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? ''));
+        return created || String(a.userId ?? '').localeCompare(String(b.userId ?? ''));
+      });
+      const creators = sortAccounts(eligibleAccounts.filter((account) => account.role === 'creator'));
+      const writers = sortAccounts(eligibleAccounts.filter((account) => account.role === 'writer'));
+
+      const toProfileSpotlight = async (account: any, kind: 'creator' | 'writer') => {
+        if (!account) return null;
+        const profile = await getProfile(String(account.userId));
+        if (profile?.publicProfile === false) return null;
+        const name = profile?.displayName ?? account.name ?? (kind === 'creator' ? 'Nightjar creator' : 'Nightjar writer');
+        const initials = profile?.avatarInitials ?? String(name).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase();
+        let title = kind === 'creator' ? 'Creator profile' : 'Writer profile';
+        let edition = kind === 'creator' ? 'Creator Spotlight' : 'Writer Spotlight';
+        let detail = profile?.headline ?? profile?.bio ?? (kind === 'creator' ? 'A Nightjar creator in today’s full-day spotlight.' : 'A Nightjar writer in today’s full-day spotlight.');
+        let releaseId: string | null = null;
+        if (kind === 'creator') {
+          const { items: releases } = await db.list(releaseTable, { limit: 500 });
+          const latest = releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').sort((a,b) => String(b.publishedAt ?? b.createdAt ?? '').localeCompare(String(a.publishedAt ?? a.createdAt ?? '')))[0];
+          if (latest) { title = String(latest.title ?? title); edition = 'Latest release'; detail = String(latest.description ?? detail); releaseId = String(latest.id); }
+        } else {
+          const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
+          const latest = scripts.filter((script) => script.writerUserId === account.userId).sort((a,b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')))[0];
+          if (latest) { title = String(latest.title ?? title); edition = 'Latest manuscript'; detail = String(latest.synopsis ?? latest.excerpt ?? detail); }
+        }
+        return {
+          kind,
+          name: String(name),
+          handle: profile?.handle ?? account.handle ?? null,
+          title,
+          edition,
+          detail: String(detail).slice(0, 320),
+          initials,
+          targetId: String(account.userId),
+          releaseId,
+          date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
+        };
+      };
+
+      const creator = creators.length ? await toProfileSpotlight(creators[weekdayIndex % creators.length], 'creator') : null;
+      const writer = writers.length ? await toProfileSpotlight(writers[weekdayIndex % writers.length], 'writer') : null;
+
+      // Listener Spotlight: freeze the top seven from the previous completed Monday-Sunday period.
+      // This makes the seven stable for the entire current week, then a new seven is selected next week.
+      const weekStart = new Date(localDate);
+      weekStart.setUTCDate(weekStart.getUTCDate() - weekdayIndex);
+      const previousWeekStart = new Date(weekStart);
+      previousWeekStart.setUTCDate(previousWeekStart.getUTCDate() - 7);
+      const previousWeekEnd = new Date(weekStart);
+
+      const { items: listeningEvents } = await db.list(listeningTable, { limit: 10000 });
+      const weeklyEvents = listeningEvents.filter((event) => {
+        const at = new Date(String(event.createdAt ?? '')).getTime();
+        return Number.isFinite(at) && at >= previousWeekStart.getTime() && at < previousWeekEnd.getTime();
+      });
+
+      const listenerAccounts = new Map(eligibleAccounts.filter((account) => account.role === 'listener').map((account) => [String(account.userId), account]));
+      const scores = new Map<string, number>();
+      const lastPosition = new Map<string, { position: number; at: number }>();
+
+      for (const event of weeklyEvents.sort((a,b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))) {
+        const userId = String(event.userId ?? '');
+        if (!listenerAccounts.has(userId)) continue;
+        const releaseId = String(event.releaseId ?? '');
+        if (!releaseId) continue;
+        const position = Math.max(0, Number(event.positionSeconds ?? 0));
+        if (!Number.isFinite(position)) continue;
+        const key = userId + ':' + releaseId;
+        const at = new Date(String(event.createdAt ?? '')).getTime();
+        const previous = lastPosition.get(key);
+        let delta = 0;
+        if (!previous || event.eventType === 'start' || at - previous.at > 30 * 60_000) {
+          delta = 0;
+        } else {
+          delta = Math.max(0, Math.min(position - previous.position, 120));
+        }
+        if (event.eventType === 'complete' && Number(event.durationSeconds) > position) {
+          delta = Math.min(Math.max(delta, Number(event.durationSeconds) - position), 300);
+        }
+        scores.set(userId, (scores.get(userId) ?? 0) + delta);
+        lastPosition.set(key, { position, at });
+      }
+
+      const rankedListeners = [...scores.entries()]
+        .map(([userId, seconds]) => ({ account: listenerAccounts.get(userId)!, seconds }))
+        .filter((item) => item.account)
+        .sort((a, b) => b.seconds - a.seconds || String(a.account.userId).localeCompare(String(b.account.userId)));
+
+      const topSeven = rankedListeners.slice(0, 7);
+      const listenerRankIndex = topSeven.length ? weekdayIndex % topSeven.length : -1;
+      let listener: any = null;
+      if (listenerRankIndex >= 0) {
+        const selected = topSeven[listenerRankIndex];
+        const profile = await getProfile(String(selected.account.userId));
+        if (profile?.publicProfile !== false) {
+          const name = profile?.displayName ?? selected.account.name ?? 'Nightjar listener';
+          const initials = profile?.avatarInitials ?? String(name).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase();
+          listener = {
+            kind: 'listener',
+            name: String(name),
+            handle: profile?.handle ?? selected.account.handle ?? null,
+            title: 'Community listener',
+            edition: 'WEEKLY TOP 7 · #' + String(listenerRankIndex + 1),
+            detail: 'Recognised for the most tracked listening activity in the previous completed week.',
+            initials,
+            targetId: String(selected.account.userId),
+            releaseId: null,
+            date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
+            listenerRank: listenerRankIndex + 1,
+            weeklyTrackedMinutes: Math.round(selected.seconds / 60),
+            weeklyTopSevenCount: topSeven.length,
+          };
+        }
+      }
+
+      return json({
+        date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
+        weekdayIndex,
+        listenerWeek: previousWeekStart.toISOString().slice(0, 10),
+        spotlights: [creator, writer, listener].filter(Boolean),
+        listenerTopSevenCount: topSeven.length,
+        listenerSpotlightDay: listener ? listenerRankIndex + 1 : null,
+        rotation: {
+          creator: 'all active Creators, one full day each, deterministic rotation',
+          writer: 'all active Writers, one full day each, deterministic rotation',
+          listener: 'previous completed week top seven Listeners, one full day each, then refreshed next week',
+        },
+      });
     },
   ],
   'GET /api/recommendations': [
