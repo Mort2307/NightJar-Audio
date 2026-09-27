@@ -216,6 +216,19 @@ const registerProtectedDevice = async (userId: string, deviceToken: unknown, rel
   else await db.add(securityDeviceTable, [record]);
   return { deviceHash, environmentHash, blocked, environmentBlocked, linkedSuspendedUserIds, linkedSuspendedEnvironmentUserIds };
 };
+const restrictedEnvironmentUsersForScript = async (userIds: string[], scriptId: string) => {
+  if (!userIds.length || !scriptId) return [] as string[];
+  const restricted = new Set(userIds);
+  const { items: events } = await db.list(securityEventTable, { limit: 5000 });
+  return Array.from(new Set(events
+    .filter((item) =>
+      restricted.has(String(item.userId ?? '')) &&
+      String(item.relatedId ?? '') === scriptId &&
+      ['reader_session_issued', 'script_page_view', 'script_view', 'blocked_interaction', 'copy_blocked', 'print_blocked'].includes(String(item.eventType ?? ''))
+    )
+    .map((item) => String(item.userId ?? ''))
+    .filter(Boolean)));
+};
 
 const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => {
   const now = Date.now();
@@ -236,6 +249,7 @@ const assessProtectedActivity = async (userId: string, signal: Record<string, un
     reason: `Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,
     relatedId: scriptId || null,
     deviceHash: signal.deviceHash ?? null,
+    environmentHash: signal.environmentHash ?? null,
     signal: { eventType: signal.eventType, recentEvents: recent.length, relatedEvents: sameScriptRecent.length },
   });
 };
@@ -257,6 +271,7 @@ const enforceProtectedPageRate = async (userId: string, scriptId: string, sessio
     reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.',
     relatedId: scriptId,
     deviceHash: sameSession[sameSession.length - 1]?.deviceHash ?? sameScript[sameScript.length - 1]?.deviceHash ?? null,
+    environmentHash: sameSession[sameSession.length - 1]?.environmentHash ?? sameScript[sameScript.length - 1]?.environmentHash ?? null,
     signal: { eventType: 'script_page_rate_limit', recentPages: recentPages.length, scriptPages: sameScript.length, sessionPages: sameSession.length },
   });
   return false;
