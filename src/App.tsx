@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, auth, syncLocalAccount } from './platform/legacy-local-client';
 import { nightjarAuth } from './platform/firebase-auth';
 import { nightjarAccount } from './platform/firebase-account';
+import { nightjarCommunity } from './platform/firebase-community';
+import { nightjarMedia } from './platform/firebase-media';
+import { nightjarCommercial, type CommercialOverview, type CommercialSettings } from './platform/firebase-commercial';
 import {
   ArrowRight,
   BarChart3,
@@ -34,6 +37,7 @@ import {
   Share2,
   Coins,
   WalletCards,
+  ImagePlus,
 } from 'lucide-react';
 import CreatorAudioPipeline from './components/CreatorAudioPipeline';
 import CreatorProfile from './components/CreatorProfile';
@@ -80,7 +84,7 @@ type CreatorSummary = {
 };
 
 type Spotlight = {
-  kind: 'creator' | 'writer' | 'listener';
+  kind: 'creator' | 'writer' | 'editor' | 'listener';
   name: string;
   handle?: string | null;
   title?: string;
@@ -93,6 +97,7 @@ type Spotlight = {
   weeklyTrackedMinutes?: number;
   weeklyTopSevenCount?: number;
   publicProfile?: boolean;
+  imageUrl?: string | null;
 };
 
 const getProtectionDeviceToken = () => {
@@ -123,8 +128,8 @@ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
     description: 'Write, protect and license scripts with controlled collaboration access.',
   },
   editor: {
-    label: 'Editor',
-    description: 'Review assigned scripts, revisions and editorial workflow.',
+    label: 'Audio Editor',
+    description: 'Shape productions, review assigned scripts, revisions and controlled editorial workflow.',
   },
 };
 
@@ -164,21 +169,27 @@ function App() {
   const [adminOverview, setAdminOverview] = useState<any | null>(null);
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'admin' | null>(null);
-  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], publicProfile: true });
+  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], publicProfile: true });
   const [profileLoading, setProfileLoading] = useState(false);
   const [tasteVector, setTasteVector] = useState<any[]>([]);
   const [securityAlerts, setSecurityAlerts] = useState<any[]>([]);
   const [securityAlertsLoading, setSecurityAlertsLoading] = useState(false);
-  const [adminPanel, setAdminPanel] = useState<'approvals' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | null>(null);
+  const [adminPanel, setAdminPanel] = useState<'approvals' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | null>(null);
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
   const [adminScripts, setAdminScripts] = useState<any[]>([]);
   const [adminEditors, setAdminEditors] = useState<any[]>([]);
   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
+  const [imageModeration, setImageModeration] = useState<any[]>([]);
+  const [profileImageBusy, setProfileImageBusy] = useState(false);
+  const [commercialOverview, setCommercialOverview] = useState<CommercialOverview | null>(null);
+  const [commercialSettings, setCommercialSettings] = useState<CommercialSettings>({ planningMonthlyPricePence: 500, creatorPoolPercent: null, reservePercent: null, payoutCadence: null, eligibleListeningDefinition: null });
+  const [commercialSaving, setCommercialSaving] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
+  const [editorSpotlightList, setEditorSpotlightList] = useState<Spotlight[]>([]);
   const [listenerSpotlight, setListenerSpotlight] = useState<Spotlight | null>(null);
   const [spotlightMeta, setSpotlightMeta] = useState<{ listenerTopSevenCount: number; listenerSpotlightDay: number | null; listenerWeek: string | null }>({ listenerTopSevenCount: 0, listenerSpotlightDay: null, listenerWeek: null });
   const [creatorDashboard, setCreatorDashboard] = useState<{ metrics: any; releases: any[] }>({ metrics: {}, releases: [] });
@@ -204,6 +215,7 @@ function App() {
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
   const creatorSpotlight = creatorSpotlightList[0] ?? null;
   const writerSpotlight = writerSpotlightList[0] ?? null;
+  const editorSpotlight = editorSpotlightList[0] ?? null;
   const creators = creatorDirectory;
   const studioMetrics = [
     ['Published releases', String(creatorDashboard.metrics?.released ?? 0)],
@@ -220,8 +232,8 @@ function App() {
     window.addEventListener('popstate', onPop);
     void (async () => {
       try {
-        const { data } = await api.get('/api/branding');
-        if (data?.logoUrl) setLogoUrl(data.logoUrl);
+        const data = await nightjarMedia.getBranding();
+        setLogoUrl(data.logoUrl ?? null);
       } catch { /* branded wordmark remains available */ }
     })();
     let cancelled = false;
@@ -259,9 +271,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!user || !ageVerified || !role || role === 'admin' || role === 'editor') return;
+    if (!user || !ageVerified || !role || role === 'admin') return;
     let cancelled = false;
-    void api.get('/api/profile/me').then(({ data }) => {
+    void nightjarCommunity.getMyProfile().then((data) => {
       if (cancelled) return;
       const nextProfile = data?.profile;
       if (nextProfile) {
@@ -297,10 +309,11 @@ function App() {
 
   const loadLiveProductData = async () => {
     try {
-      const [catalogueResponse, creatorsResponse, spotlightResponse] = await Promise.all([
+      const [catalogueResponse, localSpotlightResponse, creatorsResponse, firebaseSpotlightResponse] = await Promise.all([
         api.get('/api/catalogue'),
-        api.get('/api/creators'),
         api.get('/api/spotlights'),
+        nightjarCommunity.listCreators(),
+        nightjarCommunity.spotlightState(),
       ]);
       const liveTracks = (catalogueResponse.data?.catalogue ?? []).map((release: any, index: number) => ({
         id: String(release.id),
@@ -315,15 +328,16 @@ function App() {
         creatorUserId: release.creatorUserId,
       })) as Track[];
       setTracks(liveTracks);
-      setCreatorDirectory((creatorsResponse.data?.creators ?? []).map((creator: any) => ({
+      setCreatorDirectory((creatorsResponse.creators ?? []).map((creator: any) => ({
         userId: String(creator.userId),
         name: creator.displayName ?? 'Nightjar creator',
         handle: creator.handle ?? null,
         initials: creator.avatarInitials ?? undefined,
         note: creator.headline ?? creator.bio ?? undefined,
         releases: creator.releaseCount ?? 0,
+        imageUrl: creator.avatarUrl ?? null,
       })));
-      const spotlights = spotlightResponse.data?.spotlights ?? [];
+      const spotlights = firebaseSpotlightResponse.spotlights ?? [];
       const mapSpotlight = (item: any): Spotlight => ({
         kind: item.kind,
         name: item.name,
@@ -338,34 +352,37 @@ function App() {
         weeklyTrackedMinutes: item.weeklyTrackedMinutes,
         weeklyTopSevenCount: item.weeklyTopSevenCount,
         publicProfile: item.publicProfile !== false,
+        imageUrl: item.imageUrl ?? null,
       });
       setCreatorSpotlightList(spotlights.filter((item: any) => item.kind === 'creator' && item.name).map(mapSpotlight));
       setWriterSpotlightList(spotlights.filter((item: any) => item.kind === 'writer' && item.name).map(mapSpotlight));
-      const listener = spotlights.find((item: any) => item.kind === 'listener' && item.name);
+      setEditorSpotlightList(spotlights.filter((item: any) => item.kind === 'editor' && item.name).map(mapSpotlight));
+      const localSpotlights = localSpotlightResponse.data?.spotlights ?? [];
+      const listener = localSpotlights.find((item: any) => item.kind === 'listener' && item.name);
       setListenerSpotlight(listener ? mapSpotlight(listener) : null);
       setSpotlightMeta({
-        listenerTopSevenCount: Number(spotlightResponse.data?.listenerTopSevenCount ?? 0),
-        listenerSpotlightDay: spotlightResponse.data?.listenerSpotlightDay == null ? null : Number(spotlightResponse.data.listenerSpotlightDay),
-        listenerWeek: spotlightResponse.data?.listenerWeek ?? null,
+        listenerTopSevenCount: Number(localSpotlightResponse.data?.listenerTopSevenCount ?? 0),
+        listenerSpotlightDay: localSpotlightResponse.data?.listenerSpotlightDay == null ? null : Number(localSpotlightResponse.data.listenerSpotlightDay),
+        listenerWeek: localSpotlightResponse.data?.listenerWeek ?? null,
       });
       await loadNotifications();
       if (user) {
-        const [recommendationsResponse, trendingResponse, favouritesResponse, followsResponse] = await Promise.all([
+        const [recommendationsResponse, trendingResponse, communityState] = await Promise.all([
           api.get('/api/recommendations' + (currentIntent ? '?intent=' + encodeURIComponent(currentIntent) : '')),
           api.get('/api/trending'),
-          api.get('/api/favourites'),
-          api.get('/api/follows'),
+          nightjarCommunity.state(),
         ]);
         setLiveRecommendations(recommendationsResponse.data?.recommendations ?? []);
         setLiveTrending(trendingResponse.data?.trending ?? []);
-        setFavouriteReleaseIds((favouritesResponse.data?.favourites ?? []).map((item: any) => String(item.releaseId)));
-        setFollowingCreatorIds((followsResponse.data?.follows ?? []).map((item: any) => String(item.creatorUserId)));
+        setFavouriteReleaseIds((communityState.favourites ?? []).map((item: any) => String(item.releaseId)));
+        setFollowingCreatorIds((communityState.follows ?? []).map((item: any) => String(item.creatorUserId)));
       }
     } catch {
       setTracks([]);
       setCreatorDirectory([]);
       setCreatorSpotlightList([]);
       setWriterSpotlightList([]);
+      setEditorSpotlightList([]);
       setListenerSpotlight(null);
       setSpotlightMeta({ listenerTopSevenCount: 0, listenerSpotlightDay: null, listenerWeek: null });
       setNotifications([]);
@@ -402,10 +419,10 @@ function App() {
   };
 
   const shareSpotlight = async (spotlight: Spotlight) => {
-    const kindLabel = spotlight.kind === 'creator' ? 'Creator' : 'Writer';
+    const kindLabel = spotlight.kind === 'creator' ? 'Creator' : spotlight.kind === 'editor' ? 'Audio Editor' : 'Writer';
     const text = spotlight.kind === 'listener'
       ? `Nightjar is recognising ${spotlight.name} today as a Listener Spotlight. Thank you for being part of the listening community.`
-      : `Today on Nightjar: ${spotlight.name} is our ${kindLabel} Spotlight. Discover their work and support independent creators.`;
+      : `Today on Nightjar: ${spotlight.name} is our ${kindLabel} Spotlight. Discover the people shaping Nightjar's independent productions.`;
     const url = window.location.origin + '/discover';
     try {
       if (navigator.share) await navigator.share({ title: 'Nightjar Spotlight', text, url });
