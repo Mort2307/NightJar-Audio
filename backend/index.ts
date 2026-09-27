@@ -217,11 +217,11 @@ export const handler = router({
         let edition = kind === 'creator' ? 'Creator Spotlight' : 'Writer Spotlight';
         let detail = profile?.headline ?? profile?.bio ?? (kind === 'creator' ? 'A Nightjar creator in today’s full-day spotlight.' : 'A Nightjar writer in today’s full-day spotlight.');
         let releaseId: string | null = null;
-        if (kind === 'creator') {
+        if (isPublic && kind === 'creator') {
           const { items: releases } = await db.list(releaseTable, { limit: 500 });
           const latest = releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').sort((a,b) => String(b.publishedAt ?? b.createdAt ?? '').localeCompare(String(a.publishedAt ?? a.createdAt ?? '')))[0];
           if (latest) { title = String(latest.title ?? title); edition = 'Latest release'; detail = String(latest.description ?? detail); releaseId = String(latest.id); }
-        } else {
+        } else if (isPublic && kind === 'writer') {
           const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
           const latest = scripts.filter((script) => script.writerUserId === account.userId).sort((a,b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')))[0];
           if (latest) { title = String(latest.title ?? title); edition = 'Latest manuscript'; detail = String(latest.synopsis ?? latest.excerpt ?? detail); }
