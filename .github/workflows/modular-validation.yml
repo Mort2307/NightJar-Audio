@@ -1,1 +1,48 @@
-name: Nightjar modular validation\n\non:\n  pull_request:\n    branches: [main]\n  workflow_dispatch:\n\npermissions:\n  contents: read\n  issues: write\n  pull-requests: write\n\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n          cache: npm\n      - name: Install dependencies\n        run: npm install --no-audit --no-fund\n      - name: Build frontend\n        id: build\n        continue-on-error: true\n        shell: bash\n        run: |\n          set -o pipefail\n          npm run build 2>&1 | tee modular-build.log\n      - name: Report build failure on the PR\n        if: steps.build.outcome == 'failure'\n        uses: actions/github-script@v8\n        with:\n          script: |\n            const fs = require('fs');\n            const log = fs.existsSync('modular-build.log') ? fs.readFileSync('modular-build.log', 'utf8') : 'No build log was created.';\n            const tail = log.split(/\r?\n/).slice(-140).join('\n');\n            const body = '## Nightjar modular validation failed\n\n```text\n' + tail.slice(-9000) + '\n```\n\nThis is an automated diagnostic comment from the modular validation workflow.';\n            await github.rest.issues.createComment({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              issue_number: context.issue.number,\n              body\n            });\n      - name: Fail validation\n        if: steps.build.outcome == 'failure'\n        run: exit 1\n
+name: Nightjar modular validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build frontend
+        id: build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee modular-build.log
+      - name: Report build failure on the PR
+        if: steps.build.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('modular-build.log') ? fs.readFileSync('modular-build.log', 'utf8') : 'No build log was created.';
+            const tail = log.split(/\r?\n/).slice(-140).join('\n');
+            const body = '## Nightjar modular validation failed\n\n```text\n' + tail.slice(-9000) + '\n```\n\nThis is an automated diagnostic comment from the modular validation workflow.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+      - name: Fail validation
+        if: steps.build.outcome == 'failure'
+        run: exit 1
