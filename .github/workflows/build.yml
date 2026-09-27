@@ -11,12 +11,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install dependencies
+          cache: npm
+
+      - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
-      - name: Build
+
+      - name: Build frontend
         run: npm run build
-      - name: Firebase build
+
+      - name: Build Firebase frontend
         run: npm run build:firebase
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck Firebase Functions
+        working-directory: functions
+        run: npm run check
+
+      - name: Build Firebase Functions
+        working-directory: functions
+        run: npm run build
