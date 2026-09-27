@@ -10,6 +10,8 @@ import { nightjarCatalogue } from './platform/firebase-catalogue';
 import { nightjarListening } from './platform/firebase-listening';
 import { nightjarNotifications } from './platform/firebase-notifications';
 import { nightjarAge } from './platform/firebase-age';
+import { nightjarScripts } from './platform/firebase-scripts';
+import { nightjarProtection } from './platform/firebase-protection';
 import {
   ArrowRight,
   BarChart3,
@@ -229,6 +231,8 @@ function App() {
   const [editorSelected, setEditorSelected] = useState<any | null>(null);
   const [protectedScripts, setProtectedScripts] = useState<any[]>([]);
   const [protectedReaderScript, setProtectedReaderScript] = useState<any | null>(null);
+  const [writerPermissions, setWriterPermissions] = useState<any[]>([]);
+  const [writerPermissionsLoading, setWriterPermissionsLoading] = useState(false);
 
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
   const creatorSpotlight = creatorSpotlightList[0] ?? null;
@@ -470,8 +474,8 @@ function App() {
   const loadWriterScripts = async () => {
     if (!user) return;
     try {
-      const { data } = await api.get('/api/writer/scripts');
-      const items = data?.scripts ?? [];
+      const data = await nightjarScripts.writerScripts();
+      const items = data.scripts ?? [];
       setWriterScripts(items);
       setWriterSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
     } catch {
@@ -482,8 +486,8 @@ function App() {
   const loadEditorQueue = async () => {
     if (!user) return;
     try {
-      const { data } = await api.get('/api/editor/queue');
-      const items = data?.queue ?? [];
+      const data = await nightjarScripts.editorQueue();
+      const items = data.queue ?? [];
       setEditorQueue(items);
       setEditorSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
     } catch {
@@ -495,8 +499,8 @@ function App() {
   const loadProtectedScripts = async () => {
     if (!user) return;
     try {
-      const { data } = await api.get('/api/scripts/catalogue');
-      setProtectedScripts(data?.scripts ?? []);
+      const data = await nightjarScripts.protectedCatalogue();
+      setProtectedScripts(data.scripts ?? []);
     } catch {
       setProtectedScripts([]);
     }
@@ -681,7 +685,7 @@ function App() {
   const recordProtectionEvent = async (eventType: string, relatedId = 'protected-script') => {
     if (!user) return;
     try {
-      await api.post('/api/protection/event', {
+      await nightjarProtection.record({
         eventType,
         relatedType: 'script',
         relatedId,
@@ -693,7 +697,7 @@ function App() {
 
   const openProtectedReader = async (scriptId: string) => {
     try {
-      const { data } = await api.get('/api/scripts/' + scriptId);
+      const data = await nightjarScripts.openProtected(scriptId);
       if (data?.canReadFull === false) {
         notify('This manuscript has not been granted for full reading by the writer.');
         return;
@@ -780,8 +784,8 @@ function App() {
     if (!editorSelected) return;
     const comment = window.prompt('Editorial note (optional)') ?? '';
     try {
-      const { data } = await api.post('/api/editor/scripts/' + editorSelected.id + '/review', { status, comment });
-      setEditorSelected(data?.script ?? editorSelected);
+      const data = await nightjarScripts.review(editorSelected.id, status, comment);
+      setEditorSelected(data.script ?? editorSelected);
       await loadEditorQueue();
       notify('Editorial decision recorded.');
     } catch {
@@ -810,8 +814,8 @@ function App() {
     if (!canAdmin) return;
     setSecurityAlertsLoading(true);
     try {
-      const { data } = await api.get('/api/admin/security-alerts');
-      setSecurityAlerts(data?.alerts ?? []);
+      const data = await nightjarProtection.alerts();
+      setSecurityAlerts(data.alerts ?? []);
     } catch { notify('Security alerts could not be loaded.'); }
     finally { setSecurityAlertsLoading(false); }
   };
@@ -819,7 +823,7 @@ function App() {
   const suspendFromSecurityAlert = async (alert: any) => {
     if (!canAdmin || !alert?.id) return;
     try {
-      await api.post('/api/admin/security-alerts/' + alert.id + '/suspend', {});
+      await nightjarProtection.suspend(alert.id);
       await loadSecurityAlerts();
       await loadAdminOverview();
       notify('Account suspended and active protected-reader sessions revoked.');
@@ -829,7 +833,7 @@ function App() {
   const revokeSessionsFromSecurityAlert = async (alert: any) => {
     if (!canAdmin || !alert?.id) return;
     try {
-      await api.post('/api/admin/security-alerts/' + alert.id + '/revoke-sessions', {});
+      await nightjarProtection.revokeSessions(alert.id);
       await loadSecurityAlerts();
       notify('Protected-reader sessions revoked. The account itself remains active pending review.');
     } catch { notify('Reader sessions could not be revoked.'); }
@@ -839,46 +843,79 @@ function App() {
     if (!canAdmin || !alert?.id) return;
     const note = window.prompt('Optional review note — why is this activity considered benign?') ?? '';
     try {
-      await api.post('/api/admin/security-alerts/' + alert.id + '/close-benign', { note });
+      await nightjarProtection.closeBenign(alert.id, note);
       await loadSecurityAlerts();
       notify('Security alert closed as benign. Evidence remains retained.');
     } catch { notify('Security alert could not be closed.'); }
   };
 
+  const loadWriterPermissions = async (scriptId?: string) => {
+    const targetId = scriptId ?? writerSelected?.id;
+    if (!targetId) {
+      setWriterPermissions([]);
+      return;
+    }
+    setWriterPermissionsLoading(true);
+    try {
+      const data = await nightjarScripts.permissions(targetId);
+      setWriterPermissions(data.permissions ?? []);
+    } catch {
+      setWriterPermissions([]);
+    } finally {
+      setWriterPermissionsLoading(false);
+    }
+  };
+
   const shareWriterScript = async () => {
     if (!writerSelected?.id) return;
-    const recipientUserId = window.prompt('Nightjar recipient account ID (VA, creator, editor or collaborator)');
+    const recipientUserId = window.prompt('Nightjar recipient account ID (VA, creator, Audio Editor or collaborator)');
     if (!recipientUserId?.trim()) return;
     const allowCopy = window.confirm('Allow this recipient to copy text from the manuscript?');
     const allowExport = window.confirm('Allow this recipient to export/download the full manuscript?');
     const expiry = window.prompt('Optional expiry date/time (ISO format), or leave blank for no expiry') ?? '';
     try {
-      await api.post('/api/scripts/' + writerSelected.id + '/permissions', {
+      await nightjarScripts.setPermission(writerSelected.id, {
         recipientUserId: recipientUserId.trim(),
         allowCopy,
         allowExport,
         expiresAt: expiry.trim() || null,
       });
+      await loadWriterPermissions(writerSelected.id);
       notify('Full-script access granted. The recipient permissions are explicit, logged and revocable.');
     } catch { notify('Script access could not be granted. Check the recipient account ID.'); }
+  };
+
+  const revokeWriterPermission = async (permission: any) => {
+    if (!writerSelected?.id || !permission?.recipientUserId) return;
+    if (!window.confirm('Revoke this recipient\'s full-script access and active reader sessions?')) return;
+    try {
+      await nightjarScripts.setPermission(writerSelected.id, {
+        recipientUserId: permission.recipientUserId,
+        revoke: true,
+      });
+      await loadWriterPermissions(writerSelected.id);
+      notify('Full-script access revoked and active reader sessions closed.');
+    } catch {
+      notify('Script access could not be revoked.');
+    }
   };
 
   const loadProtection = async () => {
     if (!user) return;
     try {
-      const [evidence, reports] = await Promise.all([api.get('/api/protection/evidence'), api.get('/api/protection/reports')]);
-      setProtectionEvidence(evidence.data?.evidence ?? []);
-      setProtectionReports(reports.data?.reports ?? []);
+      const [evidence, reports] = await Promise.all([nightjarProtection.evidence(), nightjarProtection.reports()]);
+      setProtectionEvidence(evidence.evidence ?? []);
+      setProtectionReports(reports.reports ?? []);
     } catch { notify('Protection records could not be loaded right now.'); }
   };
 
   const submitProtectionReport = async () => {
     if (!reportSummary.trim()) return notify('Please describe what happened.');
     try {
-      const { data } = await api.post('/api/protection/report', { category: reportCategory, summary: reportSummary });
+      const data = await nightjarProtection.submitReport(reportCategory, reportSummary);
       setReportSummary('');
       await loadProtection();
-      notify(`Report ${data?.report?.caseId ?? ''} submitted.`);
+      notify(`Report ${data.report?.caseId ?? ''} submitted.`);
     } catch { notify('We could not submit the report. Please try again.'); }
   };
 
@@ -1048,12 +1085,12 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const [{ data: scriptsData }, { data: editorsData }] = await Promise.all([
-        api.get('/api/admin/scripts'),
-        api.get('/api/editor/accounts'),
+      const [scriptsData, editorsData] = await Promise.all([
+        nightjarScripts.adminScripts(),
+        nightjarScripts.editorAccounts(),
       ]);
-      setAdminScripts(scriptsData?.scripts ?? []);
-      setAdminEditors(editorsData?.editors ?? []);
+      setAdminScripts(scriptsData.scripts ?? []);
+      setAdminEditors(editorsData.editors ?? []);
     } catch {
       notify('Editorial controls could not be loaded.');
     } finally {
@@ -1064,7 +1101,7 @@ function App() {
   const assignEditor = async (scriptId: string, editorUserId: string) => {
     if (!canAdmin || !scriptId || !editorUserId) return;
     try {
-      await api.post('/api/admin/scripts/' + scriptId + '/assign-editor', { editorUserId });
+      await nightjarScripts.assignEditor(scriptId, editorUserId);
       await loadAdminEditorial();
       notify('Audio Editor assignment saved.');
     } catch {
@@ -1138,8 +1175,8 @@ function App() {
   const saveWriterScript = async () => {
     if (!writerSelected) return;
     try {
-      const { data } = await api.put('/api/writer/scripts/' + writerSelected.id, writerSelected);
-      setWriterSelected(data?.script ?? writerSelected);
+      const data = await nightjarScripts.update(writerSelected.id, writerSelected);
+      setWriterSelected(data.script ?? writerSelected);
       await loadWriterScripts();
       notify('Script saved.');
     } catch {
@@ -1150,8 +1187,8 @@ function App() {
   const createWriterVersion = async () => {
     if (!writerSelected) return;
     try {
-      const { data } = await api.post('/api/writer/scripts/' + writerSelected.id + '/versions');
-      setWriterSelected(data?.script ?? writerSelected);
+      const data = await nightjarScripts.createVersion(writerSelected.id);
+      setWriterSelected(data.script ?? writerSelected);
       await loadWriterScripts();
       notify('Version recorded.');
     } catch {
@@ -1162,8 +1199,8 @@ function App() {
   const submitWriterScript = async () => {
     if (!writerSelected) return;
     try {
-      const { data } = await api.post('/api/writer/scripts/' + writerSelected.id + '/submit');
-      setWriterSelected(data?.script ?? writerSelected);
+      const data = await nightjarScripts.submit(writerSelected.id);
+      setWriterSelected(data.script ?? writerSelected);
       await loadWriterScripts();
       notify('Script submitted to editorial.');
     } catch {
