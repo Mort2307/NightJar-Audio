@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '@appdeploy/client';
+import { api } from '../platform/legacy-local-client';
 import { ArrowRight, Check, Sparkles, X } from 'lucide-react';
 
 type Props = {
