@@ -913,7 +913,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const recentPages = state.evidence.filter((item) => item.userId === account.userId && item.eventType === 'script_page_view' && new Date(String(item.createdAt ?? 0)).getTime() >= cutoff);
     const sameScriptPages = recentPages.filter((item) => item.relatedId === script.id);
     const sameSessionPages = sameScriptPages.filter((item) => item.sessionId === sessionId);
-    if (sameSessionPages.length >= 18 || sameScriptPages.length >= 24) {
+    if (script.writerUserId !== account.userId && (sameSessionPages.length >= 18 || sameScriptPages.length >= 24)) {
       session.status = 'revoked';
       session.revokedAt = now();
       session.revokedReason = 'Protected reader rate limit exceeded.';
