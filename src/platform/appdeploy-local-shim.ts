@@ -804,7 +804,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const script = state.scripts.find((item) => item.id === parts[2]);
     if (!script) throw new Error('Script not found.');
     const grant = localScriptGrant(script, account.userId);
-    if (!grant) return send({ script: localScriptMetadata(script), canReadFull: false, copyAllowed: false, exportAllowed: false });
+    if (!grant) throw new Error('Protected script access has not been granted.');
 
     const issuedAt = now();
     const session = {
