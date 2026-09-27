@@ -111,6 +111,7 @@ function requireVerifiedAdult(state: LocalState, account: LocalUser) {
 
 function localScriptGrant(script: Record<string, any>, userId: string) {
   if (script.writerUserId === userId) return { owner: true, allowCopy: true, allowExport: true };
+  if (script.editorUserId === userId && ['Submitted', 'Under review', 'Revision requested'].includes(String(script.status ?? ''))) return { editor: true, allowCopy: false, allowExport: false };
   const grant = script.accessGrants?.[userId];
   if (grant) {
     if (grant.revokedAt) return null;
@@ -119,6 +120,61 @@ function localScriptGrant(script: Record<string, any>, userId: string) {
   }
   if (script.accessUsers?.includes(userId)) return { legacy: true, allowCopy: script.copyAllowed === true, allowExport: script.exportAllowed === true };
   return null;
+}
+
+function localScriptMetadata(script: Record<string, any>) {
+  return {
+    id: script.id,
+    title: script.title,
+    synopsis: script.synopsis ?? null,
+    excerpt: script.excerpt ?? null,
+    genre: script.genre ?? null,
+    runtimeTarget: script.runtimeTarget ?? null,
+    characters: script.characters ?? [],
+    ageClassification: script.ageClassification ?? null,
+    writerUserId: script.writerUserId,
+    writerName: script.writerName ?? null,
+    version: script.version ?? 1,
+    status: script.status ?? null,
+    contentHash: script.contentHash ?? null,
+    updatedAt: script.updatedAt ?? null,
+  };
+}
+
+function localChunkProtectedContent(content: unknown, maxChars = 3600) {
+  const paragraphs = String(content ?? '').split(/\n{2,}/).map((value) => value.trim()).filter(Boolean);
+  const pages: string[] = [];
+  let page = '';
+  for (const paragraph of paragraphs) {
+    if (!page) {
+      if (paragraph.length <= maxChars) page = paragraph;
+      else for (let offset = 0; offset < paragraph.length; offset += maxChars) pages.push(paragraph.slice(offset, offset + maxChars));
+      continue;
+    }
+    const candidate = page + '\n\n' + paragraph;
+    if (candidate.length <= maxChars) page = candidate;
+    else {
+      pages.push(page);
+      if (paragraph.length <= maxChars) page = paragraph;
+      else {
+        for (let offset = 0; offset < paragraph.length; offset += maxChars) pages.push(paragraph.slice(offset, offset + maxChars));
+        page = '';
+      }
+    }
+  }
+  if (page) pages.push(page);
+  return pages.length ? pages : [''];
+}
+
+async function localScriptHash(content: unknown) {
+  const bytes = new TextEncoder().encode(String(content ?? ''));
+  if (globalThis.crypto?.subtle) {
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
+  }
+  let fallback = 2166136261;
+  for (const value of bytes) fallback = Math.imul(fallback ^ value, 16777619);
+  return 'local-' + (fallback >>> 0).toString(16).padStart(8, '0');
 }
 
 function ensureProfile(state: LocalState, user: LocalUser) {
@@ -637,7 +693,9 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   if (path === '/api/writer/scripts' && method === 'POST') {
     const account = requireUser(state);
     if (account.role !== 'writer') throw new Error('Active Writer access required.');
-    const script = { id: id('script'), title: String(input.title ?? 'Untitled manuscript'), content: String(input.content ?? ''), status: 'Draft', access: 'Private', version: 1, writerUserId: account.userId, createdAt: now(), updatedAt: now() };
+    const content = String(input.content ?? '');
+    const createdAt = now();
+    const script = { id: id('script'), title: String(input.title ?? 'Untitled manuscript').trim().slice(0, 200), content, contentHash: await localScriptHash(content), status: 'Draft', access: 'Private', version: 1, writerUserId: account.userId, createdAt, updatedAt: createdAt };
     state.scripts.push(script);
     return send({ script });
   }
@@ -651,6 +709,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) throw new Error('Submitted or approved manuscripts are locked from direct editing.');
       script.title = String(input.title ?? script.title ?? '').trim().slice(0, 200);
       script.content = String(input.content ?? script.content ?? '');
+      script.contentHash = await localScriptHash(script.content);
       script.synopsis = String(input.synopsis ?? script.synopsis ?? '').trim().slice(0, 1600);
       script.excerpt = String(input.excerpt ?? script.excerpt ?? '').trim().slice(0, 2000);
       script.genre = String(input.genre ?? script.genre ?? '').trim().slice(0, 100);
@@ -669,7 +728,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!script) throw new Error('Script not found.');
     if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) throw new Error('Submitted or approved manuscripts are locked from version changes.');
     const version = Number(script.version ?? 1) + 1;
-    state.scriptVersions[script.id] = [...(state.scriptVersions[script.id] ?? []), { scriptId: script.id, version, content: script.content ?? '', createdAt: now() }];
+    state.scriptVersions[script.id] = [...(state.scriptVersions[script.id] ?? []), { scriptId: script.id, version, content: script.content ?? '', contentHash: script.contentHash ?? await localScriptHash(script.content ?? ''), writerUserId: account.userId, createdAt: now() }];
     script.version = version;
     script.updatedAt = now();
     return send({ script, version });
@@ -691,7 +750,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const account = requireUser(state);
     if (account.role !== 'editor' && account.role !== 'admin') throw new Error('Editor access required.');
     const assignments = state.scripts.filter((script) => ['Submitted', 'Under review', 'Revision requested'].includes(script.status));
-    return send({ queue: account.role === 'admin' ? assignments : assignments.filter((script) => script.editorUserId === account.userId) });
+    const visible = account.role === 'admin' ? assignments : assignments.filter((script) => script.editorUserId === account.userId);
+    return send({ queue: visible.map((script) => ({ ...localScriptMetadata(script), lastEditorialComment: script.lastEditorialComment ?? null, editorUserId: script.editorUserId ?? null })) });
   }
 
   if (path === '/api/editor/accounts' && method === 'GET') {
@@ -699,15 +759,18 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ editors: state.users.filter((account) => account.role === 'editor' && account.status === 'active').map((account) => ({ userId: account.userId, email: account.email, name: account.name })) });
   }
 
-  if (parts[0] === 'api' && parts[1] === 'editor' && parts[2] === 'scripts' && parts.length === 4 && method === 'POST') {
+  if (parts[0] === 'api' && parts[1] === 'editor' && parts[2] === 'scripts' && parts.length === 5 && parts[4] === 'review' && method === 'POST') {
     const account = requireUser(state);
     if (account.role !== 'editor') throw new Error('Active Editor access required.');
     const script = state.scripts.find((item) => item.id === parts[3] && item.editorUserId === account.userId);
     if (!script) throw new Error('This manuscript is not assigned to you.');
     const status = String(input.status ?? '');
     if (!['Under review', 'Revision requested', 'Approved', 'Rejected'].includes(status)) throw new Error('Invalid editorial state.');
-    Object.assign(script, { status, lastEditorialComment: String(input.comment ?? ''), updatedAt: now() });
-    return send({ script });
+    Object.assign(script, { status, lastEditorialComment: String(input.comment ?? '').slice(0, 1200), updatedAt: now() });
+    if (status === 'Approved' || status === 'Rejected') {
+      state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((session) => session.scriptId === script.id && session.status === 'active' ? { ...session, status: 'revoked', revokedAt: now(), revokedReason: 'Editorial assignment closed.' } : session);
+    }
+    return send({ script: { ...localScriptMetadata(script), lastEditorialComment: script.lastEditorialComment ?? null, editorUserId: script.editorUserId ?? null } });
   }
 
   if (path === '/api/scripts/catalogue' && method === 'GET') {
