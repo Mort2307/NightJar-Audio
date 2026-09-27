@@ -1169,9 +1169,9 @@ function App() {
               {notificationUnreadCount > 0 && <span className="notification-badge">{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</span>}
             </button>
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
-              <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR NOTIFICATIONS</span><strong>Community updates</strong></div><button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div>
-              {notifications.length ? <div className="notification-list">{notifications.slice(0, 8).map((item) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void markNotificationRead(item)}>
-                <span className="notification-row-icon">{item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : <Headphones size={15} />}</span>
+              <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR NOTIFICATIONS</span><strong>{canAdmin ? 'Community & security updates' : 'Community updates'}</strong></div><button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div>
+              {notifications.length ? <div className="notification-list">{notifications.slice(0, 8).map((item) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => { void markNotificationRead(item); if (item.securityOwnerNotification === true) { setNotificationsOpen(false); navigate('admin'); } }}>
+                <span className="notification-row-icon">{item.type === 'security_alert' ? <ShieldAlert size={15} /> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small></span>
               </button>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new community notifications.</span></div>}
             </section>}
