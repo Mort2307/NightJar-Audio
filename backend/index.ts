@@ -1102,7 +1102,7 @@ export const handler = router({
       if (!title) return error('Script title is required.', 400);
       const content = String(body.content ?? '');
       const createdAt = new Date().toISOString();
-      const script = { id: 'script-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), title: title.slice(0, 200), content, contentHash: scriptContentHash(content), status: 'Draft', access: 'Private', version: 1, writerUserId: ctx.user!.userId, createdAt, updatedAt: createdAt };
+      const script = { id: 'script-' + randomUUID(), title: title.slice(0, 200), content, contentHash: scriptContentHash(content), status: 'Draft', access: 'Private', version: 1, writerUserId: ctx.user!.userId, createdAt, updatedAt: createdAt };
       await db.add('nightjar_scripts', [script]);
       return json({ script }, 201);
     },
@@ -1525,7 +1525,7 @@ export const handler = router({
         item.status !== 'closed'
       );
 
-      if (!owner && !access && !editorAssignment) return error('Protected script access has not been granted.', 403);
+      if (!owner && !access && !editorAssignment) return error('Script not found.', 404);
 
       await revokeReaderSessionsForScript(ctx.user!.userId, ctx.params.scriptId, 'Superseded by a new protected reader session.');
       const sessionId = 'NJ-RD-' + randomUUID().replace(/-/g, '').slice(0, 18).toUpperCase();
@@ -1686,6 +1686,7 @@ export const handler = router({
         '',
         '---',
         'This copy was explicitly exported under writer-controlled permission. Nightjar access and export events are logged.',
+        'No AI training, dataset ingestion, automated extraction or redistribution is authorised by this export unless the writer separately grants that permission in writing.',
       ].join('\n');
 
       const createdAt = new Date().toISOString();
