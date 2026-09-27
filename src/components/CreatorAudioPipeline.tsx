@@ -79,27 +79,38 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!current?.id || !current.pendingArtworkAssetId || current.pendingArtworkStatus !== 'pending') return;
     let cancelled = false;
     const pendingAssetId = current.pendingArtworkAssetId;
-    void nightjarMedia.status(pendingAssetId).then(async (status) => {
-      if (cancelled || status.status === 'pending') return;
-      if (status.status === 'approved') {
-        setSelectedRelease((value) => value?.id === current.id ? {
-          ...value,
-          artworkAssetId: pendingAssetId,
-          artworkUrl: status.publicUrl,
-          artworkStatus: 'approved',
-          pendingArtworkAssetId: null,
-          pendingArtworkStatus: null,
-        } : value);
-      } else if (status.status === 'rejected' || status.status === 'removed') {
-        setSelectedRelease((value) => value?.id === current.id ? {
-          ...value,
-          pendingArtworkAssetId: null,
-          pendingArtworkStatus: status.status === 'rejected' ? 'rejected' : null,
-        } : value);
-      }
-      await onRefresh();
-    }).catch(() => { /* moderation sync is non-blocking */ });
-    return () => { cancelled = true; };
+    const releaseId = current.id;
+
+    const checkStatus = async () => {
+      try {
+        const status = await nightjarMedia.status(pendingAssetId);
+        if (cancelled || status.status === 'pending') return;
+        if (status.status === 'approved') {
+          setSelectedRelease((value) => value?.id === releaseId ? {
+            ...value,
+            artworkAssetId: pendingAssetId,
+            artworkUrl: status.publicUrl,
+            artworkStatus: 'approved',
+            pendingArtworkAssetId: null,
+            pendingArtworkStatus: null,
+          } : value);
+        } else if (status.status === 'rejected' || status.status === 'removed') {
+          setSelectedRelease((value) => value?.id === releaseId ? {
+            ...value,
+            pendingArtworkAssetId: null,
+            pendingArtworkStatus: status.status === 'rejected' ? 'rejected' : null,
+          } : value);
+        }
+        await onRefresh();
+      } catch { /* moderation sync is non-blocking */ }
+    };
+
+    void checkStatus();
+    const timer = window.setInterval(() => void checkStatus(), 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [current?.id, current?.pendingArtworkAssetId, current?.pendingArtworkStatus]);
 
   const createDraft = async () => {
