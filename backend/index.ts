@@ -1166,8 +1166,6 @@ export const handler = router({
       if (body.status === 'Approved' || body.status === 'Rejected') {
         const mine = assignments.filter((item) => item.editorUserId === ctx.user!.userId && item.scriptId === script.id && item.status !== 'closed');
         if (mine.length) await db.update('nightjar_editor_assignments', mine.map((item) => ({ id: item.id, record: { ...item, status: 'closed', closedAt: now, closedReason: body.status } })));
-      }
-      if (body.status === 'Approved' || body.status === 'Rejected') {
         await revokeReaderSessionsForScript(ctx.user!.userId, script.id, 'Editorial assignment closed.');
       }
       return json({ script: { ...publicScriptMetadata(next), lastEditorialComment: next.lastEditorialComment ?? null, editorUserId: next.editorUserId ?? null } });
@@ -2219,7 +2217,10 @@ export const handler = router({
       const { items: existing } = await db.list('nightjar_editor_assignments', { limit: 500 });
       const now = new Date().toISOString();
       const stale = existing.filter((item) => item.scriptId === script.id && item.editorUserId !== editorUserId && item.status !== 'closed');
-      if (stale.length) await db.update('nightjar_editor_assignments', stale.map((item) => ({ id: item.id, record: { ...item, status: 'closed', closedAt: now, closedReason: 'reassigned' } })));
+      if (stale.length) {
+        await db.update('nightjar_editor_assignments', stale.map((item) => ({ id: item.id, record: { ...item, status: 'closed', closedAt: now, closedReason: 'reassigned' } })));
+        for (const assignment of stale) await revokeReaderSessionsForScript(String(assignment.editorUserId), script.id, 'Editorial assignment was reassigned.');
+      }
       const current = existing.find((item) => item.scriptId === script.id && item.editorUserId === editorUserId && item.status !== 'closed');
       if (!current) {
         await db.add('nightjar_editor_assignments', [{ scriptId: script.id, editorUserId, assignedBy: ctx.user!.userId, status: 'open', assignedAt: now }]);
