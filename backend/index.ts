@@ -540,33 +540,49 @@ export const handler = router({
     requireAuth(),
     async (ctx) => {
       if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult recommendations.', 403);
-      const profile = await getProfile(ctx.user!.userId);
-      const { items: events } = await db.list(tasteTable(ctx.user!.userId), { limit: 500 });
-      const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
+      const userId = ctx.user!.userId;
+      const profile = await getProfile(userId);
+      const { items: events } = await db.list(tasteTable(userId), { limit: 500 });
+      const { items: follows } = await db.list(followTable(userId), { limit: 500 });
       const followed = new Set(follows.map((item) => String(item.creatorUserId)));
       const weights: Record<string, number> = {};
-      for (const value of [...(profile?.favouriteTags ?? []), ...(profile?.favouriteTropes ?? []), ...(profile?.favouriteCategories ?? [])]) {
-        const key = String(value).toLowerCase();
-        weights[key] = (weights[key] ?? 0) + 5;
-      }
+      const suppressed = new Set<string>();
+      const now = Date.now();
+      const addWeight = (value: unknown, amount: number) => {
+        const key = String(value ?? '').trim().toLowerCase();
+        if (key) weights[key] = (weights[key] ?? 0) + amount;
+      };
+      for (const value of [...(profile?.favouriteTags ?? []), ...(profile?.favouriteTropes ?? []), ...(profile?.favouriteCategories ?? [])]) addWeight(value, 5);
       for (const event of events) {
-        const factor = event.type === 'skip' || event.type === 'hide' ? -1 : 1;
-        for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : [])]) {
-          const key = String(value).toLowerCase();
-          weights[key] = (weights[key] ?? 0) + factor;
-        }
+        if (event.type === 'declared_preferences') continue;
+        const ageDays = Math.max(0, (now - new Date(event.createdAt ?? 0).getTime()) / 86400000);
+        const decay = Math.max(0.2, Math.pow(0.5, ageDays / 30));
+        const factor = event.type === 'recommendation_more' ? 4 : event.type === 'complete' ? 3 : event.type === 'replay' ? 2 : event.type === 'start' ? 0.5 : event.type === 'skip' || event.type === 'hide' || event.type === 'recommendation_less' ? -2 : 0;
+        if (!factor) continue;
+        for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : []), ...(event.genre ? [event.genre] : []), ...(event.mood ? [event.mood] : [])]) addWeight(value, factor * decay);
+        if (event.type === 'recommendation_not_for_me' && event.contentId) suppressed.add(String(event.contentId));
       }
       const intent = String(ctx.query.intent ?? '').trim().toLowerCase();
       const { items: releases } = await db.list(releaseTable, { limit: 500 });
-      const recommendations = releases.filter((release) => release.status === 'released').map((release) => {
-        const values = [release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].filter(Boolean).map(String);
+      const candidates = releases.filter((release) => release.status === 'released' && !suppressed.has(String(release.id))).map((release) => {
+        const values = [release.category, release.genre, release.mood, ...(Array.isArray(release.tags) ? release.tags : []), ...(Array.isArray(release.tropes) ? release.tropes : [])].filter(Boolean).map(String);
         let score = 0;
         values.forEach((value) => { score += weights[value.toLowerCase()] ?? 0; });
         if (followed.has(String(release.creatorUserId))) score += 8;
         if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
         const matched = values.filter((value) => (weights[value.toLowerCase()] ?? 0) > 0).slice(0, 3);
-        return { ...release, score, reason: matched.length ? 'Because you have expressed interest in ' + matched.join(', ') + '.' : followed.has(String(release.creatorUserId)) ? 'From a creator you follow.' : 'A new release matching your current discovery context.' };
-      }).sort((a,b) => b.score-a.score).slice(0,24);
+        return { ...release, score, reason: matched.length ? 'Because you explicitly expressed interest in ' + matched.join(', ') + '.' : followed.has(String(release.creatorUserId)) ? 'From a creator you follow.' : 'A release matching your current discovery context.' };
+      }).sort((a, b) => b.score - a.score);
+      const recommendations: any[] = [];
+      const creatorCounts = new Map<string, number>();
+      for (const release of candidates) {
+        const creatorId = String(release.creatorUserId ?? 'unknown');
+        const count = creatorCounts.get(creatorId) ?? 0;
+        if (count >= 2 && candidates.some((item) => String(item.creatorUserId ?? 'unknown') !== creatorId && !recommendations.includes(item))) continue;
+        recommendations.push(release);
+        creatorCounts.set(creatorId, count + 1);
+        if (recommendations.length >= 24) break;
+      }
       return json({ recommendations });
     },
   ],
@@ -602,7 +618,25 @@ export const handler = router({
   'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); return json({ follows: items }); }],
   'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.creatorUserId === ctx.params.creatorUserId)) await db.add(followTable(ctx.user!.userId), [{ creatorUserId: ctx.params.creatorUserId, createdAt: new Date().toISOString() }]); return json({ following: true }); }],
   'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.creatorUserId === ctx.params.creatorUserId).map((item) => item.id); if (ids.length) await db.delete(followTable(ctx.user!.userId), ids); return json({ following: false }); }],
-  'POST /api/listening/event': [requireAuth(), async (ctx) => { const body = (ctx.body ?? {}) as Record<string, unknown>; const record = { ...body, userId: ctx.user!.userId, createdAt: new Date().toISOString() }; await db.add(listeningTable, [record]); await db.add(tasteTable(ctx.user!.userId), [{ type: body.eventType, category: body.category ?? null, tags: Array.isArray(body.tags) ? body.tags : [], completed: body.completed === true, createdAt: record.createdAt }]); return json({ recorded: true }); }],
+  'POST /api/listening/event': [requireAuth(), async (ctx) => {
+    if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before recording listening activity.',403);
+    const body=(ctx.body??{}) as Record<string,unknown>;
+    const eventType=String(body.eventType??'');
+    if(!['start','pause','seek','progress','complete','replay','skip'].includes(eventType)) return error('Unsupported listening event.',400);
+    const releaseId=String(body.releaseId??'');
+    if(!releaseId) return error('Release ID is required.',400);
+    const {items:releases}=await db.list(releaseTable,{limit:500});
+    const release=releases.find((item)=>String(item.id)===releaseId && item.status==='released');
+    if(!release) return error('Release not found.',404);
+    const durationSeconds=Math.max(0,Number(body.durationSeconds??release.durationMinutes*60??0));
+    const positionSeconds=Math.min(Math.max(0,Number(body.positionSeconds??0)),durationSeconds||Number.MAX_SAFE_INTEGER);
+    const record={...body,releaseId,eventType,positionSeconds,durationSeconds,userId:ctx.user!.userId,createdAt:new Date().toISOString()};
+    await db.add(listeningTable,[record]);
+    if(['start','complete','replay','skip'].includes(eventType)){
+      await db.add(tasteTable(ctx.user!.userId),[{type:eventType,contentId:releaseId,category:release.category??null,genre:release.genre??null,mood:release.mood??null,tags:cleanList(release.tags,12),tropes:cleanList(release.tropes,12),completed:eventType==='complete',createdAt:record.createdAt}]);
+    }
+    return json({recorded:true});
+  }],
   'GET /api/creator/dashboard': [
     requireAuth(),
     async (ctx) => {
@@ -1156,8 +1190,40 @@ export const handler = router({
     },
   ],
   'GET /api/profile/:handle': [async (ctx) => { const handle=cleanHandle(ctx.params.handle); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const account=indexes.find((item)=>cleanHandle(item.handle)===handle); if(!account)return error('Profile not found.',404); const profile=await getProfile(account.userId); if(!profile?.publicProfile)return error('Profile not found.',404); return json({profile:{...profile,role:account.role}}); }],
-  'POST /api/taste/event': [requireAuth(), async (ctx) => { const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; if(!body.eventType)return error('Taste event type is required.',400); await db.add(tasteTable(ctx.user!.userId),[{type:body.eventType,contentId:body.contentId??null,category:body.category??null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Number(body.durationSeconds??0)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
-  'GET /api/taste/profile': [requireAuth(), async (ctx) => { const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])])weights[value]=(weights[value]??0)+3; for(const item of items)for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])])weights[value]=(weights[value]??0)+(item.type==='skip'||item.type==='hide'?-0.5:item.completed?2:1); return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
+  'POST /api/taste/event': [requireAuth(), async (ctx) => {
+    const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;genre?:string;mood?:string;tags?:string[];durationSeconds?:number;completed?:boolean};
+    const allowed = new Set(['start','pause','seek','progress','complete','replay','skip','hide']);
+    if(!body.eventType || !allowed.has(body.eventType)) return error('Unsupported taste event type.',400);
+    await db.add(tasteTable(ctx.user!.userId),[{type:body.eventType,contentId:body.contentId??null,category:body.category??null,genre:body.genre??null,mood:body.mood??null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Number(body.durationSeconds??0)),completed:body.completed===true,createdAt:new Date().toISOString()}]);
+    return json({recorded:true});
+  }],
+  'POST /api/taste/feedback': [requireAuth(), async (ctx) => {
+    if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before tuning adult recommendations.', 403);
+    const body=(ctx.body??{}) as {feedback?:string;releaseId?:string;creatorUserId?:string|null;category?:string|null;genre?:string|null;mood?:string|null;tags?:string[];tropes?:string[]};
+    if(!['more_like_this','less_like_this','not_for_me'].includes(body.feedback ?? '') || !body.releaseId) return error('Valid recommendation feedback and release are required.',400);
+    const {items}=await db.list(releaseTable,{limit:500});
+    const release=items.find((item)=>String(item.id)===String(body.releaseId) && item.status==='released');
+    if(!release) return error('Release not found.',404);
+    const eventType=body.feedback==='more_like_this'?'recommendation_more':body.feedback==='less_like_this'?'recommendation_less':'recommendation_not_for_me';
+    await db.add(tasteTable(ctx.user!.userId),[{type:eventType,contentId:String(release.id),creatorUserId:String(release.creatorUserId??body.creatorUserId??''),category:release.category??body.category??null,genre:release.genre??body.genre??null,mood:release.mood??body.mood??null,tags:cleanList(release.tags??body.tags,12),tropes:cleanList(release.tropes??body.tropes,12),createdAt:new Date().toISOString()}]);
+    return json({recorded:true,feedback:body.feedback});
+  }],
+  'GET /api/taste/profile': [requireAuth(), async (ctx) => {
+    const profile=await getProfile(ctx.user!.userId);
+    const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500});
+    const weights:Record<string,number>={};
+    const add=(value:unknown, amount:number)=>{const key=String(value??'').trim().toLowerCase();if(key)weights[key]=(weights[key]??0)+amount;};
+    for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])]) add(value,5);
+    for(const item of items){
+      if(item.type==='declared_preferences') continue;
+      const ageDays=Math.max(0,(Date.now()-new Date(item.createdAt??0).getTime())/86400000);
+      const decay=Math.max(0.2,Math.pow(0.5,ageDays/30));
+      const factor=item.type==='recommendation_more'?4:item.type==='complete'?3:item.type==='replay'?2:item.type==='start'?0.5:item.type==='skip'||item.type==='hide'||item.type==='recommendation_less'?-2:0;
+      if(!factor) continue;
+      for(const value of [...(item.tags??[]),...(item.category?[item.category]:[]),...(item.genre?[item.genre]:[]),...(item.mood?[item.mood]:[])]) add(value,factor*decay);
+    }
+    return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))});
+  }],
   'POST /api/security/reader-session': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before opening protected content.',403); if(await isSuspended(ctx.user!.userId))return error('This account is suspended.',403); const body=(ctx.body??{}) as {scriptId?:string}; if(!body.scriptId)return error('Script ID is required.',400); const {items}=await db.list('nightjar_script_access_'+ctx.user!.userId,{limit:100}); const grant=items.find((item)=>item.scriptId===body.scriptId); const {items:scripts}=await db.list('nightjar_scripts',{limit:100}); const script=scripts.find((item)=>item.id===body.scriptId); if(!script||(!grant&&script.writerUserId!==ctx.user!.userId))return error('Protected script access has not been granted.',403); const sessionId='NJ-RD-'+Math.random().toString(36).slice(2,12).toUpperCase(); const expiresAt=new Date(Date.now()+900000).toISOString(); const session={sessionId,scriptId:body.scriptId,accountId:ctx.user!.userId,accessGrantId:grant?.id??'owner',issuedAt:new Date().toISOString(),expiresAt,status:'active',canReadFull:true,allowCopy:grant?.allowCopy===true||script.writerUserId===ctx.user!.userId,allowExport:grant?.allowExport===true||script.writerUserId===ctx.user!.userId}; await db.add(readerSessionTable(ctx.user!.userId),[session]); await db.add(securityEventTable,[{userId:ctx.user!.userId,eventType:'reader_session_issued',relatedId:body.scriptId,sessionId,createdAt:new Date().toISOString()}]); return json({session}); }],
   'GET /api/writers': [
     requireAuth(),
