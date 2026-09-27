@@ -2401,27 +2401,6 @@ export const handler = router({
       return json({ ok: true, action, userId, status: alertStatus });
     },
   ],
-  'POST /api/admin/security-alerts/:alertId/suspend': [
-    requireAdminEmailAllowlist(ADMIN_EMAILS),
-    async (ctx) => {
-      const { items } = await db.list(securityAlertTable, { limit: 250 });
-      const alert = items.find((item) => item.id === ctx.params.alertId);
-      if (!alert) return error('Security alert not found.', 404);
-      const userId = String(alert.userId ?? '');
-      const at = new Date().toISOString();
-      const { items: accounts } = await db.list(accountTable(userId), { limit: 1 });
-      const account = accounts[0];
-      if (account?.id) await db.update(accountTable(userId), [{ id: account.id, record: { ...account, status: 'suspended', securityPreviousStatus: account.status ?? 'active', suspendedAt: at, suspendedBy: ctx.user!.email ?? null } }]);
-      const { items: indexes } = await db.list(accountIndexTable, { limit: 2000 });
-      const indexed = indexes.find((item) => String(item.userId) === userId);
-      if (indexed?.id) await db.update(accountIndexTable, [{ id: indexed.id, record: { ...indexed, status: 'suspended', securityPreviousStatus: indexed.status ?? 'active' } }]);
-      await revokeReaderSessions(userId, 'Account suspended after security review.');
-      await db.update(securityAlertTable, [{ id: alert.id, record: { ...alert, status: 'actioned', action: 'freeze_account', actionedAt: at, actionedBy: ctx.user!.email ?? null } }]);
-      await db.add(securityEventTable, [{ userId, eventType: 'account_suspended', actorEmail: ctx.user!.email ?? null, relatedId: alert.id, createdAt: at }]);
-      return json({ suspended: true, userId });
-    },
-  ],
-
   'GET /api/admin/overview': [
     requireAdminEmailAllowlist(ADMIN_EMAILS),
     async () => {
