@@ -820,6 +820,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       watermark: 'NIGHTJAR · ' + account.name + ' · ' + issuedAt.slice(0, 16).replace('T', ' '),
     };
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'reader_session_issued', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId: session.sessionId, createdAt: issuedAt });
     return send({
       script: localScriptMetadata(script),
       readerSession: { sessionId: session.sessionId, expiresAt: session.expiresAt, watermark: session.watermark },
@@ -838,6 +839,12 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const page = Math.max(0, Math.floor(Number(q.get('page') ?? 0)));
     const session = (state.readerSessions[account.userId] ?? []).find((item) => item.sessionId === sessionId && item.scriptId === script.id && item.status === 'active');
     if (!session || new Date(String(session.expiresAt ?? 0)).getTime() <= Date.now()) throw new Error('Reader session is not active.');
+    if (!localScriptGrant(script, account.userId)) {
+      session.status = 'revoked';
+      session.revokedAt = now();
+      session.revokedReason = 'Underlying script permission expired or was revoked.';
+      throw new Error('Script access is no longer authorised.');
+    }
     const pages = localChunkProtectedContent(script.content ?? '');
     if (page >= pages.length) throw new Error('Protected page not found.');
     state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_page_view', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId, page, createdAt: now() });
@@ -862,6 +869,12 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const sessionId = String(q.get('sessionId') ?? '');
     const session = (state.readerSessions[account.userId] ?? []).find((item) => item.sessionId === sessionId && item.scriptId === script.id && item.status === 'active');
     if (!session || new Date(String(session.expiresAt ?? 0)).getTime() <= Date.now()) throw new Error('Reader session is not active.');
+    if (!localScriptGrant(script, account.userId)) {
+      session.status = 'revoked';
+      session.revokedAt = now();
+      session.revokedReason = 'Underlying script permission expired or was revoked.';
+      throw new Error('Script access is no longer authorised.');
+    }
     if (session.allowExport !== true) throw new Error('The writer has not granted full-script export permission.');
     const hash = script.contentHash ?? await localScriptHash(script.content ?? '');
     const exportText = [
@@ -877,7 +890,12 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       '---',
       'This copy was explicitly exported under writer-controlled permission. Nightjar access and export events are logged.',
     ].join('\n');
-    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_export', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, createdAt: now() });
+    const exportedAt = now();
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_export', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, createdAt: exportedAt });
+    if (script.writerUserId && script.writerUserId !== account.userId) {
+      state.evidence.push({ id: id('evidence'), userId: script.writerUserId, actorUserId: account.userId, eventType: 'script_export_by_recipient', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, createdAt: exportedAt });
+      addLocalNotification(state, script.writerUserId, { type: 'script_access', title: 'Your script was exported', message: account.name + ' exported the full manuscript using the Full handoff permission you granted.', scriptId: script.id, recipientUserId: account.userId, createdAt: exportedAt });
+    }
     return send({
       fileName: String(script.title ?? 'nightjar-script').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) + '.txt',
       content: exportText,
@@ -917,7 +935,16 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       const requester = state.users.find((candidate) => candidate.userId === item.userId);
       return { id: item.userId + ':' + script.id, requesterUserId: item.userId, requesterName: requester?.name ?? 'Nightjar account', requesterRole: requester?.role ?? null, createdAt: item.createdAt ?? null };
     });
-    return send({ grants, pendingRequests, eligibleRecipients });
+    const recentActivity = state.evidence
+      .filter((item) => item.relatedId === script.id && ['reader_session_issued', 'script_page_view', 'script_export'].includes(String(item.eventType ?? '')))
+      .slice()
+      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+      .slice(0, 50)
+      .map((item) => {
+        const actor = state.users.find((candidate) => candidate.userId === item.actorUserId);
+        return { id: item.id, eventType: item.eventType, actorUserId: item.actorUserId, actorName: actor?.name ?? (item.actorUserId === account.userId ? 'You' : 'Nightjar account'), sessionId: item.sessionId ?? null, page: item.page ?? null, totalPages: item.totalPages ?? null, createdAt: item.createdAt ?? null };
+      });
+    return send({ grants, pendingRequests, eligibleRecipients, recentActivity });
   }
 
   if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'request-access' && method === 'POST') {
