@@ -335,6 +335,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'listening' && parts[2] === 'resume' && parts.length === 4 && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const releaseId = parts[3];
     const events = state.listening.filter((event) => event.userId === account.userId && event.releaseId === releaseId).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
     const latest = events[0];
@@ -354,7 +355,11 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ creators });
   }
 
-  if (path === '/api/spotlights' && method === 'GET') return send({ date: new Date().toISOString().slice(0, 10), spotlights: state.spotlights });
+  if (path === '/api/spotlights' && method === 'GET') {
+    const account = requireUser(state);
+    requireVerifiedAdult(state, account);
+    return send({ date: new Date().toISOString().slice(0, 10), spotlights: state.spotlights });
+  }
 
   if (path.startsWith('/api/recommendations') && method === 'GET') {
     const account = requireUser(state);
@@ -388,6 +393,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   }
 
   if (path === '/api/trending' && method === 'GET') {
+    const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const counts: Record<string, number> = {};
     state.listening.forEach((event) => { counts[event.releaseId] = (counts[event.releaseId] ?? 0) + 1; });
     const trending = state.releases.filter((release) => release.status === 'released').map((release) => ({ ...release, listeningEvents: counts[release.id] ?? 0 })).sort((a, b) => b.listeningEvents - a.listeningEvents).slice(0, 24);
@@ -467,6 +474,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/listening/event' && method === 'POST') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const eventType = String(input.eventType ?? '');
     if (!['start', 'progress', 'seek', 'complete', 'pause'].includes(eventType)) throw new Error('Unsupported listening event.');
     const releaseId = String(input.releaseId ?? '');
