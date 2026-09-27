@@ -29,7 +29,55 @@ const isSuspended = async (userId: string) => { const { items } = await db.list(
 const revokeReaderSessions = async (userId: string, reason: string) => { const { items } = await db.list(readerSessionTable(userId), { limit: 500 }); const now = new Date().toISOString(); const updates = items.filter((item) => item.status === 'active').map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } })); if (updates.length) await db.update(readerSessionTable(userId), updates); };
 const createOwnerSecurityNotifications = async (alert: Record<string, unknown>) => { for (const email of ADMIN_EMAILS) await db.add(ownerNotificationTable(email), [{ type:'security_alert', alertId:alert.id??null, severity:alert.severity??'high', title:'Nightjar security alert', message:alert.reason??'Suspicious protected-content activity detected.', createdAt:new Date().toISOString(), read:false, recipientEmail:normalizeEmail(email) }]); };
 const createSecurityAlert = async (userId: string, details: Record<string, unknown>) => { const now=new Date().toISOString(); const recipients=ADMIN_EMAILS.map(normalizeEmail); const [id]=await db.add(securityAlertTable,[{userId,...details,recipients,createdAt:now,status:'open'}]); const alert={id:id??null,userId,...details,recipients,createdAt:now,status:'open'}; await createOwnerSecurityNotifications(alert); await db.add(securityCaseTable,[{alertId:id??null,userId,state:'detection',history:[{state:'detection',at:now,note:'Suspicious activity detected; alert sent to all three Nightjar owners.'}],createdAt:now,updatedAt:now}]); return alert; };
-const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => { const now=Date.now(); const {items}=await db.list(securityEventTable,{limit:500}); const recent=items.filter((item)=>item.userId===userId && now-new Date(item.createdAt??0).getTime()<60000); const scriptId=String(signal.relatedId??''); const sameScriptRecent=recent.filter((item)=>String(item.relatedId??'')===scriptId); const score=(recent.length>=40?35:recent.length>=20?20:0)+(sameScriptRecent.length>=25?40:sameScriptRecent.length>=12?25:0)+(signal.eventType==='script_view'&&sameScriptRecent.length>=8?20:0)+(signal.eventType==='blocked_interaction'?8:0); if(score<50)return null; const existing=await db.list(securityAlertTable,{limit:100}); if(existing.items.some((item)=>item.userId===userId&&item.status==='open'&&now-new Date(item.createdAt??0).getTime()<600000))return null; return createSecurityAlert(userId,{severity:score>=75?'critical':'high',riskScore:score,reason:`Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,relatedId:scriptId||null,signal:{eventType:signal.eventType,recentEvents:recent.length,relatedEvents:sameScriptRecent.length}}); };
+const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => {
+  const now = Date.now();
+  const { items } = await db.list(securityEventTable, { limit: 1000 });
+  const recent = items.filter((item) => item.userId === userId && now - new Date(item.createdAt ?? 0).getTime() < 60_000);
+  const tenMinute = items.filter((item) => item.userId === userId && now - new Date(item.createdAt ?? 0).getTime() < 600_000);
+  const scriptId = String(signal.relatedId ?? '');
+  const sameScriptRecent = recent.filter((item) => String(item.relatedId ?? '') === scriptId);
+  const sameDeviceTenMinute = signal.deviceId ? tenMinute.filter((item) => item.deviceId === signal.deviceId) : [];
+  const blocked = recent.filter((item) => ['blocked_interaction','copy_blocked','cut_blocked','selection_blocked','print_blocked','repeated_protected_interaction'].includes(String(item.eventType)));
+  const rapidViews = sameScriptRecent.filter((item) => item.eventType === 'script_view' || item.eventType === 'reader_chunk_view');
+  const distinctScripts = new Set(tenMinute.map((item) => String(item.relatedId ?? '')).filter(Boolean)).size;
+
+  // Signals are evidence, not guilt. A single screenshot-like/browser interaction never freezes an account.
+  let score = 0;
+  const reasons: string[] = [];
+  if (recent.length >= 45) { score += 25; reasons.push('very high protected-content request velocity'); }
+  else if (recent.length >= 25) { score += 12; reasons.push('elevated protected-content request velocity'); }
+  if (sameScriptRecent.length >= 30) { score += 30; reasons.push('dense activity against one manuscript'); }
+  else if (sameScriptRecent.length >= 15) { score += 15; reasons.push('repeated activity against one manuscript'); }
+  if (rapidViews.length >= 20) { score += 25; reasons.push('rapid manuscript traversal'); }
+  if (blocked.length >= 8) { score += 20; reasons.push('repeated blocked extraction interactions'); }
+  else if (blocked.length >= 3) { score += 8; reasons.push('multiple blocked interactions'); }
+  if (distinctScripts >= 6) { score += 15; reasons.push('unusually broad manuscript access'); }
+  if (sameDeviceTenMinute.length >= 80) { score += 10; reasons.push('high-volume activity from the same device token'); }
+  if (signal.eventType === 'automation_pattern') { score += 35; reasons.push('automation-like access pattern'); }
+  if (signal.eventType === 'reader_session_replay') { score += 40; reasons.push('reader-session replay detected'); }
+
+  if (score < 40) return null;
+  const existing = await db.list(securityAlertTable, { limit: 200 });
+  if (existing.items.some((item) => item.userId === userId && item.status === 'open' && now - new Date(item.createdAt ?? 0).getTime() < 600_000)) return null;
+
+  return createSecurityAlert(userId, {
+    severity: score >= 85 ? 'critical' : score >= 60 ? 'high' : 'medium',
+    riskScore: Math.min(score, 100),
+    reason: reasons.join('; ') || 'Unusual protected-content activity requires review.',
+    relatedId: scriptId || null,
+    signal: {
+      eventType: signal.eventType,
+      recentEvents: recent.length,
+      relatedEvents: sameScriptRecent.length,
+      blockedEvents: blocked.length,
+      rapidViews: rapidViews.length,
+      distinctScripts,
+      deviceId: signal.deviceId ?? null,
+    },
+    automaticAction: 'none',
+    reviewRequired: true,
+  });
+};
 
 const createUserNotificationOnce = async (userId: string, notification: Record<string, unknown>) => {
   const table = userNotificationTable(userId);
@@ -1208,7 +1256,34 @@ export const handler = router({
     },
   ],
   'GET /api/security/notifications': [requireAuth(), withScopes('email'), async (ctx) => { if(!isAdmin(ctx.user!.email))return json({notifications:[]}); const {items}=await db.list(ownerNotificationTable(ctx.user!.email),{limit:100}); return json({notifications:items}); }],
-  'GET /api/admin/security-alerts': [requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(securityAlertTable,{limit:100}); return json({alerts:items}); }],
+  'GET /api/admin/security-alerts': [requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(securityAlertTable,{limit:200}); return json({alerts:items}); }],
+  'GET /api/admin/security-cases/:alertId': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => {
+    const { items: alerts } = await db.list(securityAlertTable, { limit: 200 });
+    const alert = alerts.find((item) => item.id === ctx.params.alertId);
+    if (!alert) return error('Security alert not found.', 404);
+    const { items: cases } = await db.list(securityCaseTable, { limit: 200 });
+    const securityCase = cases.find((item) => item.alertId === alert.id) ?? null;
+    const { items: events } = await db.list(securityEventTable, { limit: 1000 });
+    return json({ alert, case: securityCase, evidence: events.filter((item) => item.userId === alert.userId).slice(-250) });
+  }],
+  'POST /api/admin/security-alerts/:alertId/close-benign': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => {
+    const { items } = await db.list(securityAlertTable, { limit: 200 });
+    const alert = items.find((item) => item.id === ctx.params.alertId);
+    if (!alert) return error('Security alert not found.', 404);
+    const body = (ctx.body ?? {}) as { note?: string };
+    const record = { ...alert, status: 'closed', action: 'benign', actionedAt: new Date().toISOString(), actionedBy: ctx.user!.email ?? null, reviewNote: String(body.note ?? '').trim().slice(0, 500) };
+    await db.update(securityAlertTable, [{ id: alert.id, record }]);
+    await db.add(securityEventTable, [{ userId: alert.userId, eventType: 'security_case_closed_benign', actorEmail: ctx.user!.email ?? null, relatedId: alert.id, createdAt: new Date().toISOString() }]);
+    return json({ closed: true, alert: record });
+  }],
+  'POST /api/admin/security-alerts/:alertId/revoke-sessions': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => {
+    const { items } = await db.list(securityAlertTable, { limit: 200 });
+    const alert = items.find((item) => item.id === ctx.params.alertId);
+    if (!alert) return error('Security alert not found.', 404);
+    await revokeReaderSessions(String(alert.userId), 'Administrator revoked protected-reader sessions during security review.');
+    await db.add(securityEventTable, [{ userId: alert.userId, eventType: 'reader_sessions_revoked_by_admin', actorEmail: ctx.user!.email ?? null, relatedId: alert.id, createdAt: new Date().toISOString() }]);
+    return json({ revoked: true, userId: alert.userId });
+  }],
   'POST /api/admin/security-alerts/:alertId/suspend': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const {items}=await db.list(securityAlertTable,{limit:100}); const alert=items.find((item)=>item.id===ctx.params.alertId); if(!alert)return error('Security alert not found.',404); const userId=String(alert.userId); const {items:accounts}=await db.list(accountTable(userId),{limit:1}); if(accounts[0])await db.update(accountTable(userId),[{id:accounts[0].id,record:{...accounts[0],status:'suspended',suspendedAt:new Date().toISOString(),suspendedBy:ctx.user!.email??null}}]); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===userId); if(indexed)await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,status:'suspended'}}]); await revokeReaderSessions(userId,'Account suspended after security review.'); await db.update(securityAlertTable,[{id:alert.id,record:{...alert,status:'actioned',action:'suspended',actionedAt:new Date().toISOString(),actionedBy:ctx.user!.email??null}}]); await db.add(securityEventTable,[{userId,eventType:'account_suspended',actorEmail:ctx.user!.email??null,relatedId:alert.id,createdAt:new Date().toISOString()}]); return json({suspended:true,userId}); }],
 
   'GET /api/admin/overview': [
