@@ -16,6 +16,7 @@ const submitImageCall = httpsCallable<{
 const listPendingCall = httpsCallable<void, { assets: any[] }>(functions, 'listPendingImages');
 const moderateCall = httpsCallable<{ assetId: string; decision: 'approved' | 'rejected'; note?: string }, { assetId: string; status: string; publicUrl?: string | null }>(functions, 'moderateImageAsset');
 const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status: string; publicUrl: string | null; moderationNote: string | null }>(functions, 'getImageAssetStatus');
+const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string }>(functions, 'removeOwnedImageAsset');
 const removeAvatarCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileAvatar');
 const brandingCall = httpsCallable<void, { logoUrl: string | null; logoStatus: string | null }>(functions, 'getBranding');
 const removeBrandLogoCall = httpsCallable<void, { removed: boolean }>(functions, 'removeBrandLogo');
@@ -35,6 +36,10 @@ export const nightjarMedia = {
 
   async status(assetId: string) {
     return (await statusCall({ assetId })).data;
+  },
+
+  async removeOwnedImage(assetId: string) {
+    return (await removeOwnedImageCall({ assetId })).data;
   },
 
   async removeProfileAvatar() {
