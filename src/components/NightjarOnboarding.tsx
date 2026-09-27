@@ -42,6 +42,7 @@ const QUESTION_GROUPS = [
     description: 'You can change these later. The answers are used to make discovery more relevant without turning behaviour into identity.',
     fields: [
       { key: 'bio', label: 'About you', placeholder: 'Optional short introduction' },
+      { key: 'welcomeMessage', label: 'Welcome message', placeholder: 'Optional message visitors see on your profile' },
     ],
   },
 ];
@@ -61,6 +62,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     pronouns: initialProfile?.pronouns || '',
     headline: initialProfile?.headline || '',
     bio: initialProfile?.bio || '',
+    welcomeMessage: initialProfile?.welcomeMessage || '',
     favouriteTags: initialProfile?.favouriteTags || [],
     favouriteTropes: initialProfile?.favouriteTropes || [],
     favouriteCategories: initialProfile?.favouriteCategories || [],
