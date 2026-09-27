@@ -200,6 +200,10 @@ async function localForensicToken(userId: string, scriptId: string, sessionId: s
   return (await localScriptHash(['nightjar-forensic', userId, scriptId, sessionId, String(page), String(issuedAt ?? '')].join('|'))).replace(/^local-/, '').slice(0, 16).toUpperCase();
 }
 
+async function localExportForensicToken(userId: string, scriptId: string, sessionId: string, exportedAt: unknown) {
+  return (await localScriptHash(['nightjar-export-forensic', userId, scriptId, sessionId, String(exportedAt ?? '')].join('|'))).replace(/^local-/, '').slice(0, 16).toUpperCase();
+}
+
 function ensureProfile(state: LocalState, user: LocalUser) {
   if (!state.profiles[user.userId]) {
     state.profiles[user.userId] = {
@@ -991,24 +995,27 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     }
     if (session.allowExport !== true) throw new Error('The writer has not granted full-script export permission.');
     const hash = script.contentHash ?? await localScriptHash(script.content ?? '');
+    const exportedAt = now();
+    const forensicToken = await localExportForensicToken(account.userId, script.id, sessionId, exportedAt);
     const exportText = [
       String(script.title ?? 'Untitled manuscript'),
       'Nightjar protected export',
       'Recipient: ' + account.name,
       'Session: ' + sessionId,
+      'Forensic FP: ' + forensicToken,
       'Version: ' + String(script.version ?? 1),
       'SHA-256: ' + hash,
       '',
       String(script.content ?? ''),
       '',
       '---',
+      'Nightjar handoff FP: ' + forensicToken,
       'This copy was explicitly exported under writer-controlled permission. Nightjar access and export events are logged.',
       'No AI training, dataset ingestion, automated extraction or redistribution is authorised by this export unless the writer separately grants that permission in writing.',
     ].join('\n');
-    const exportedAt = now();
-    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_export', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, createdAt: exportedAt });
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_export', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, forensicToken, createdAt: exportedAt });
     if (script.writerUserId && script.writerUserId !== account.userId) {
-      state.evidence.push({ id: id('evidence'), userId: script.writerUserId, actorUserId: account.userId, eventType: 'script_export_by_recipient', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, createdAt: exportedAt });
+      state.evidence.push({ id: id('evidence'), userId: script.writerUserId, actorUserId: account.userId, eventType: 'script_export_by_recipient', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, forensicToken, createdAt: exportedAt });
       addLocalNotification(state, script.writerUserId, { type: 'script_access', title: 'Your script was exported', message: account.name + ' exported the full manuscript using the Full handoff permission you granted.', scriptId: script.id, recipientUserId: account.userId, createdAt: exportedAt });
     }
     return send({
@@ -1016,6 +1023,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       content: exportText,
       contentHash: hash,
       watermark: session.watermark ?? null,
+      forensicToken,
     });
   }
 
