@@ -248,8 +248,9 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   if (path === '/api/catalogue' && method === 'GET') {
     const query = String(q.get('q') ?? '').trim().toLowerCase();
     const category = String(q.get('category') ?? '').trim().toLowerCase();
-    const catalogue = state.releases
-      .filter((release) => release.status === 'released')
+    const released = state.releases.filter((release) => release.status === 'released');
+    const categories = Array.from(new Set(released.map((release) => String(release.category ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    const catalogue = released
       .filter((release) => !category || String(release.category ?? '').toLowerCase() === category)
       .filter((release) => !query || [release.title, release.description, release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].join(' ').toLowerCase().includes(query))
       .map((release) => ({
@@ -257,7 +258,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
         creatorName: state.profiles[release.creatorUserId]?.displayName ?? release.creatorName,
         creatorHandle: state.profiles[release.creatorUserId]?.handle ?? release.creatorHandle,
       }));
-    return send({ catalogue });
+    return send({ catalogue, categories });
   }
 
   if (parts[0] === 'api' && parts[1] === 'creators' && parts.length === 3 && method === 'GET') {
