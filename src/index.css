@@ -1435,3 +1435,108 @@ button:focus-visible {
 .account-access-switches { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem 1rem; margin-top: 1.2rem; }
 .account-access-switches button { border: 0; background: none; color: inherit; cursor: pointer; opacity: .7; text-decoration: underline; text-underline-offset: .2rem; }
 .account-access-message { padding: .75rem .9rem; border-radius: .7rem; background: rgba(167,116,151,.09); border: 1px solid rgba(226,208,223,.1); }
+
+
+.account-portal-shell {
+  min-height: 100vh;
+  padding: 0 18px 72px;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(112, 61, 99, .2), transparent 28%),
+    #0a090b;
+}
+
+.account-portal-header {
+  width: min(100%, 1180px);
+  min-height: 68px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted-2);
+  font-size: 11px;
+}
+
+.account-portal-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ivory);
+  text-decoration: none;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.account-backend-card {
+  width: min(100%, 34rem);
+  margin: 0 auto;
+  padding: 1.25rem 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: rgba(255,255,255,.025);
+}
+
+.account-backend-heading {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  margin-bottom: 1rem;
+}
+
+.account-backend-heading > div {
+  display: grid;
+  gap: .2rem;
+}
+
+.account-backend-heading span {
+  color: var(--muted-2);
+  font-size: .72rem;
+}
+
+.account-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+  margin: 1rem 0 0;
+}
+
+.account-identity-grid div {
+  min-width: 0;
+  padding: .8rem;
+  border: 1px solid var(--line-soft);
+  border-radius: .75rem;
+  background: rgba(0,0,0,.16);
+}
+
+.account-identity-grid dt {
+  margin-bottom: .35rem;
+  color: var(--muted-2);
+  font-size: .67rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.account-identity-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: .82rem;
+}
+
+.account-role-picker {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.account-role-picker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+}
+
+@media (max-width: 620px) {
+  .account-identity-grid { grid-template-columns: 1fr; }
+  .account-portal-header span { display: none; }
+}
