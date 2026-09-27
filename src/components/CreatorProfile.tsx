@@ -10,6 +10,8 @@ type CreatorProfileData = {
   bio?: string | null;
   pronouns?: string | null;
   initials?: string | null;
+  avatarUrl?: string | null;
+  welcomeMessage?: string | null;
   followers?: number;
   releases?: any[];
   favouriteTags?: string[];
@@ -60,8 +62,8 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
     <section className="creator-profile-modal">
       <header className="creator-profile-head"><div><span className="mini-label">NIGHTJAR / CREATOR</span><h2>{loading ? 'Loading creator…' : profile?.name ?? 'Creator profile'}</h2><p>{profile?.handle ? '@' + profile.handle.replace(/^@/, '') : 'Independent Nightjar creator'}</p></div><button className="icon-button" onClick={onClose}>×</button></header>
       {profile && <div className="creator-profile-body">
-        <div className="creator-profile-hero"><span className="creator-profile-avatar">{profile.initials || 'NJ'}</span><div><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button></div>
-        {profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
+        <div className="creator-profile-hero"><span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" /> : profile.initials || 'NJ'}</span><div><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button></div>
+        {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}{profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
         <div className="creator-profile-releases"><div className="section-head"><div><span className="mini-label">CATALOGUE</span><h3>Released work</h3></div><button className="ghost-button" onClick={() => void share()}><Share2 size={14} /> Share</button></div>{profile.releases?.length ? profile.releases.map((release: any) => <article key={release.id} className="creator-profile-release"><div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p></div><button className="round-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15} /></button></article>) : <div className="people-empty"><Mic2 size={18} /><strong>No public releases yet.</strong><span>Check back as this creator publishes.</span></div>}</div>
       </div>}
