@@ -103,3 +103,32 @@ Nightjar keeps each major product surface in its own editable component so futur
 - NightjarOnboarding.tsx owns the explicit identity/taste question set, allowing the final compiled questions to evolve in one focused module.
 
 The Taste Engine remains explicit-first: user-declared preferences are separate from identity and behavioural signals are used to refine discovery rather than infer personal identity.
+
+
+## Production account identity
+
+Nightjar now contains a Firebase Authentication account client for email/password registration, persistent sign-in, email verification/resend, password reset and reauthenticated password changes.
+
+The Firebase identity layer is intentionally **not yet wired to unlock the AppDeploy backend**. The existing backend uses AppDeploy `requireAuth()`; production must fail closed until the backend can verify Firebase ID tokens and map the verified Firebase `uid` to a Nightjar account. Do not replace that boundary with client-supplied user IDs or an unverified header.
+
+Required production flow:
+
+```text
+Firebase email/password account
+        ↓
+verified email
+        ↓
+Firebase ID token
+        ↓
+Nightjar trusted backend token verification
+        ↓
+verified uid → Nightjar account / role / suspension
+        ↓
+age assurance
+        ↓
+subscription / explicit content permission
+        ↓
+protected content
+```
+
+The browser-local AppDeploy shim remains development/QA only and must not be treated as production authentication or production persistence.
