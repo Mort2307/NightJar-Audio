@@ -1471,7 +1471,52 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     requireAdmin(state);
     const alerts = state.securityAlerts.map((alert) => {
       const account = state.users.find((candidate) => candidate.userId === alert.userId);
-      return { ...alert, subjectAccountStatus: account?.status ?? null, subjectRemoved: account?.removed === true };
+      const profile = account ? ensureProfile(state, account) : null;
+      const createdMs = new Date(String(alert.createdAt ?? 0)).getTime();
+      const recentEvents = state.evidence
+        .filter((item) => String(item.userId ?? '') === String(alert.userId ?? '') && Math.abs(new Date(String(item.createdAt ?? 0)).getTime() - createdMs) <= 15 * 60_000)
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+        .slice(0, 30)
+        .map((item) => ({
+          id: item.id,
+          eventType: item.eventType,
+          relatedId: item.relatedId ?? null,
+          sessionId: item.sessionId ?? null,
+          deviceHash: item.deviceHash ?? null,
+          forensicToken: item.forensicToken ?? null,
+          page: item.page ?? null,
+          totalPages: item.totalPages ?? null,
+          action: item.action ?? null,
+          createdAt: item.createdAt ?? null,
+        }));
+      const evidenceSummary = {
+        pageViews: recentEvents.filter((item) => item.eventType === 'script_page_view').length,
+        blockedInteractions: recentEvents.filter((item) => String(item.eventType ?? '').includes('blocked')).length,
+        exports: recentEvents.filter((item) => item.eventType === 'script_export').length,
+        distinctScripts: new Set(recentEvents.map((item) => String(item.relatedId ?? '')).filter(Boolean)).size,
+        forensicTokens: recentEvents.map((item) => String(item.forensicToken ?? '')).filter(Boolean).slice(0, 12),
+      };
+      const deviceHash = String(alert.deviceHash ?? '');
+      const linkedDevices = deviceHash ? state.securityDevices.filter((item) => item.deviceHash === deviceHash) : [];
+      const linkedAccountIds = Array.from(new Set(linkedDevices.map((item) => String(item.userId ?? '')).filter(Boolean)));
+      const linkedAccounts = linkedAccountIds.map((linkedUserId) => {
+        const linked = state.users.find((candidate) => candidate.userId === linkedUserId);
+        return { userId: linkedUserId, status: linked?.status ?? null, removed: linked?.removed === true, sameAsSubject: linkedUserId === String(alert.userId ?? '') };
+      });
+      return {
+        ...alert,
+        subjectDisplayName: profile?.displayName ?? account?.name ?? null,
+        subjectEmail: account?.email ?? null,
+        subjectAccountStatus: account?.status ?? null,
+        subjectRemoved: account?.removed === true,
+        recentEvents,
+        evidenceSummary,
+        linkedAccounts,
+        caseHistory: [],
+        deviceBlocked: linkedDevices.some((item) => item.blocked === true),
+        networkCorrelationAvailable: false,
+        networkCorrelationNote: 'The local development shim does not expose or trust a client-network address. Nightjar uses device and forensic correlation instead.',
+      };
     }).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
     return send({ alerts });
   }
@@ -1513,6 +1558,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!account) throw new Error('Alert account not found.');
     const at = now();
     const note = String(input.note ?? '').trim().slice(0, 1000) || null;
+    if (['freeze_account', 'remove_account', 'block_device'].includes(action) && !note) throw new Error('Add a review note before taking a destructive security action.');
 
     if (action === 'revoke_sessions' || action === 'freeze_account' || action === 'remove_account' || action === 'block_device') {
       state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((session) => session.status === 'active'
