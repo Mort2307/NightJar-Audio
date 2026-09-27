@@ -108,6 +108,7 @@ export default function SecurityReviewPanel({ notify, onAccountStateChange }: Pr
 
   const summary = selected?.evidenceSummary ?? {};
   const linkedOthers = (selected?.linkedAccounts ?? []).filter((item: any) => item.sameAsSubject !== true);
+  const linkedEnvironmentOthers = (selected?.linkedEnvironmentAccounts ?? []).filter((item: any) => item.sameAsSubject !== true);
 
   return <section className="security-review-panel">
     <div className="security-review-head">
@@ -115,12 +116,12 @@ export default function SecurityReviewPanel({ notify, onAccountStateChange }: Pr
       <button className="secondary-button with-icon" onClick={() => void load()} disabled={loading}><RefreshCw size={14}/>{loading ? 'Refreshing…' : 'Refresh alerts'}</button>
     </div>
 
-    <div className="security-review-principle"><ShieldCheck size={17}/><div><strong>REVIEW FIRST</strong><span>Automatic protection can revoke a reader session that exceeds human-reading thresholds. Whole-account freeze, removal and device blocking remain administrator decisions.</span></div></div>
+    <div className="security-review-principle"><ShieldCheck size={17}/><div><strong>REVIEW FIRST</strong><span>Automatic protection can revoke or pause a protected-reader session when evidence is strong. Whole-account freeze, removal, exact-device blocking and broader environment blocking remain administrator decisions.</span></div></div>
 
     <div className="security-trace-card">
       <div><Fingerprint size={18}/><span><strong>Trace a leaked screenshot</strong><small>Enter the FP token visible in a protected-page watermark. Nightjar can trace it back to the authorised account, script, reader session and page.</small></span></div>
       <div className="security-trace-form"><input value={traceToken} onChange={(event) => setTraceToken(event.target.value)} placeholder="e.g. 2A91F84C…" aria-label="Forensic screenshot token"/><button className="secondary-button with-icon" onClick={() => void trace()} disabled={traceLoading}><Search size={13}/>{traceLoading ? 'Tracing…' : 'Trace'}</button></div>
-      {!!traces.length && <div className="security-trace-results">{traces.map((trace) => <article key={String(trace.forensicToken) + String(trace.sessionId)}><strong>FP {trace.forensicToken}</strong><span>{trace.displayName || trace.accountEmail || trace.userId} · account {trace.accountStatus || 'unknown'}</span><span>Script {trace.scriptId || '—'} · page {Number(trace.page ?? 0) + 1}/{trace.totalPages ?? '—'}</span><small>Session {trace.sessionId || '—'} · device {trace.deviceHash ? String(trace.deviceHash).slice(0, 12) + '…' : 'not recorded'} · {trace.createdAt ? new Date(trace.createdAt).toLocaleString('en-GB') : 'time unavailable'}</small></article>)}</div>}
+      {!!traces.length && <div className="security-trace-results">{traces.map((trace) => <article key={String(trace.forensicToken) + String(trace.sessionId)}><strong>FP {trace.forensicToken}</strong><span>{trace.displayName || trace.accountEmail || trace.userId} · account {trace.accountStatus || 'unknown'}</span><span>Script {trace.scriptId || '—'} · page {Number(trace.page ?? 0) + 1}/{trace.totalPages ?? '—'}</span><small>Session {trace.sessionId || '—'} · device {trace.deviceHash ? String(trace.deviceHash).slice(0, 12) + '…' : 'not recorded'} · environment {trace.environmentHash ? String(trace.environmentHash).slice(0, 12) + '…' : 'not recorded'} · {trace.createdAt ? new Date(trace.createdAt).toLocaleString('en-GB') : 'time unavailable'}</small></article>)}</div>}
     </div>
 
     <div className="security-review-toolbar">
@@ -151,11 +152,14 @@ export default function SecurityReviewPanel({ notify, onAccountStateChange }: Pr
             <div><span>Account</span><strong>{selected.subjectAccountStatus || 'unknown'}{selected.subjectRemoved ? ' · removed' : ''}</strong></div>
             <div><span>Device token</span><strong>{selected.deviceHash ? String(selected.deviceHash).slice(0, 16) + '…' : 'Not recorded'}</strong></div>
             <div><span>Device blocked</span><strong>{selected.deviceBlocked ? 'Yes' : 'No'}</strong></div>
+            <div><span>Environment signature</span><strong>{selected.environmentHash ? String(selected.environmentHash).slice(0, 16) + '…' : 'Not recorded'}</strong></div>
             <div><span>Environment blocked</span><strong>{selected.environmentBlocked ? 'Yes' : 'No'}</strong></div>
-            <div><span>Other accounts on token</span><strong>{linkedOthers.length}</strong></div>
+            <div><span>Other accounts on exact token</span><strong>{linkedOthers.length}</strong></div>
+            <div><span>Other accounts on environment</span><strong>{linkedEnvironmentOthers.length}</strong></div>
           </div>
 
           {linkedOthers.length > 0 && <div className="security-linked-accounts"><strong>Linked accounts on the same device token</strong>{linkedOthers.map((item: any) => <div key={item.userId}><span>{item.userId}</span><em>{item.status || 'unknown'}{item.removed ? ' · removed' : ''}</em></div>)}<small>Device correlation is supporting evidence only. Shared devices are possible.</small></div>}
+          {linkedEnvironmentOthers.length > 0 && <div className="security-linked-accounts security-environment-links"><strong>Accounts sharing the browser/device environment</strong>{linkedEnvironmentOthers.map((item: any) => <div key={item.userId}><span>{item.userId}</span><em>{item.status || 'unknown'}{item.removed ? ' · removed' : ''}</em></div>)}<small>This is weaker correlation than an exact Nightjar device token. Similar or shared devices can match; treat it as supporting evidence, not proof.</small></div>}
 
           <div className="security-event-timeline">
             <div className="security-section-title"><History size={14}/><strong>Recent evidence</strong></div>
