@@ -305,6 +305,13 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       creatorCounts.set(creatorId, count + 1);
       if (recommendations.length >= 24) break;
     }
+    if (recommendations.length < 24) {
+      for (const release of candidates) {
+        if (recommendations.some((item) => item.id === release.id)) continue;
+        recommendations.push(release);
+        if (recommendations.length >= 24) break;
+      }
+    }
     return send({ recommendations, model: { declaredWeight: 5, observedWeight: 3, socialWeight: 8, intentWeight: 4, creatorDiversityCap: 2 } });
   }
 
