@@ -17,6 +17,7 @@ test('universal following is many-to-many and privacy guarded', () => {
   assert.match(backend, /profileUserId === ctx\.user!\.userId/);
   assert.match(backend, /profile\?\.publicProfile/);
   assert.match(backend, /followIndexTable/);
+  assert.match(backend, /ensureFollowIndexForUser/);
 });
 
 test('community UI uses account follow state rather than local save state', () => {
@@ -26,6 +27,7 @@ test('community UI uses account follow state rather than local save state', () =
   assert.doesNotMatch(app, /followingCreatorIds/);
   assert.doesNotMatch(app, /setSaved\(/);
   assert.match(discovery, /Follow as many public Nightjar profiles as you choose/);
+  assert.match(app, />Community<\/button>/);
 });
 
 test('product data failures are isolated', () => {
@@ -45,6 +47,7 @@ test('creator discovery is age gated', () => {
   const route = backend.slice(backend.indexOf("'GET /api/creators':"), backend.indexOf("'GET /api/spotlights':"));
   assert.match(route, /requireAuth\(\)/);
   assert.match(route, /isAgeVerified/);
+  assert.match(route, /if \(!profile\?\.publicProfile\) return null/);
 });
 
 test('moderation decisions retain an audit trail', () => {
@@ -61,4 +64,6 @@ test('local shim mirrors critical social, taste and moderation contracts', () =>
   assert.match(shim, /diversifyReleases/);
   assert.match(shim, /moderationHistory/);
   assert.match(shim, /Unsupported taste signal/);
+  assert.match(shim, /parts\.length === 5 && parts\[4\] === 'assign-editor'/);
+  assert.equal((shim.match(/path === '\/api\/editor\/accounts'/g) ?? []).length, 1);
 });
