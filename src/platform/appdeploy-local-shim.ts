@@ -180,6 +180,38 @@ function diversifyReleases(items: any[], limit = 24, maxPerCreator = 3) {
   return selected;
 }
 
+function verifiedListeningSeconds(events: any[]) {
+  const sessions = new Map<string, any[]>();
+  for (const event of events) {
+    const userId = String(event.userId ?? '');
+    const releaseId = String(event.releaseId ?? '');
+    const createdAt = String(event.createdAt ?? '');
+    const legacyHour = createdAt.slice(0, 13);
+    const key = String(event.sessionId ?? '') || [userId, releaseId, legacyHour].join(':');
+    if (!sessions.has(key)) sessions.set(key, []);
+    sessions.get(key)!.push(event);
+  }
+  let total = 0;
+  for (const session of sessions.values()) {
+    session.sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+    let previous: number | null = null;
+    for (const event of session) {
+      const position = Math.max(0, Number(event.positionSeconds ?? 0));
+      if (event.eventType === 'start' || event.eventType === 'seek') {
+        previous = position;
+        continue;
+      }
+      if (event.eventType !== 'progress' && event.eventType !== 'complete') continue;
+      if (previous !== null) {
+        const delta = position - previous;
+        if (delta > 0 && delta <= 45) total += delta;
+      }
+      previous = position;
+    }
+  }
+  return total;
+}
+
 
 async function request(path: string, method: string, body?: unknown): Promise<Response<any>> {
   const state = loadState();
@@ -485,7 +517,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!['creator', 'admin'].includes(account.role ?? '')) throw new Error('Creator access required.');
     const mine = state.releases.filter((release) => release.creatorUserId === account.userId);
     const events = state.listening.filter((event) => mine.some((release) => release.id === event.releaseId));
-    const listeningSeconds = events.reduce((sum, event) => sum + Math.min(Number(event.positionSeconds ?? 0), Number(event.durationSeconds ?? 0)), 0);
+    const listeningSeconds = verifiedListeningSeconds(events);
     return send({ releases: mine, metrics: { released: mine.filter((release) => release.status === 'released').length, drafts: mine.filter((release) => release.status !== 'released').length, verifiedListeningMinutes: Math.round((listeningSeconds / 60) * 10) / 10, uniqueListeners: new Set(events.map((event) => event.userId)).size } });
   }
 
