@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { api } from '@appdeploy/client';
+import { api } from '../platform/legacy-local-client';
 import { Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
 
 type Release = {
