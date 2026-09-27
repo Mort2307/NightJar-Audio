@@ -18,7 +18,10 @@ jobs:
           cache: npm
 
       - name: Install frontend dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck frontend
+        run: npm run typecheck
 
       - name: Build frontend
         run: npm run build
@@ -28,7 +31,7 @@ jobs:
 
       - name: Install Functions dependencies
         working-directory: functions
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck Firebase Functions
         working-directory: functions
