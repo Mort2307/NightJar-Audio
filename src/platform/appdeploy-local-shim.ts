@@ -1548,12 +1548,17 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
         forensicTokens: recentEvents.map((item) => String(item.forensicToken ?? '')).filter(Boolean).slice(0, 12),
       };
       const deviceHash = String(alert.deviceHash ?? '');
+      const environmentHash = String(alert.environmentHash ?? '');
       const linkedDevices = deviceHash ? state.securityDevices.filter((item) => item.deviceHash === deviceHash) : [];
+      const linkedEnvironments = environmentHash ? state.securityDevices.filter((item) => item.environmentHash === environmentHash) : [];
       const linkedAccountIds = Array.from(new Set(linkedDevices.map((item) => String(item.userId ?? '')).filter(Boolean)));
-      const linkedAccounts = linkedAccountIds.map((linkedUserId) => {
+      const linkedEnvironmentAccountIds = Array.from(new Set(linkedEnvironments.map((item) => String(item.userId ?? '')).filter(Boolean)));
+      const mapLinkedAccount = (linkedUserId: string) => {
         const linked = state.users.find((candidate) => candidate.userId === linkedUserId);
         return { userId: linkedUserId, status: linked?.status ?? null, removed: linked?.removed === true, sameAsSubject: linkedUserId === String(alert.userId ?? '') };
-      });
+      };
+      const linkedAccounts = linkedAccountIds.map(mapLinkedAccount);
+      const linkedEnvironmentAccounts = linkedEnvironmentAccountIds.map(mapLinkedAccount);
       return {
         ...alert,
         subjectDisplayName: profile?.displayName ?? account?.name ?? null,
@@ -1563,8 +1568,10 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
         recentEvents,
         evidenceSummary,
         linkedAccounts,
+        linkedEnvironmentAccounts,
         caseHistory: [],
         deviceBlocked: linkedDevices.some((item) => item.blocked === true),
+        environmentBlocked: linkedEnvironments.some((item) => item.environmentBlocked === true),
         networkCorrelationAvailable: false,
         networkCorrelationNote: 'The local development shim does not expose or trust a client-network address. Nightjar uses device and forensic correlation instead.',
       };
@@ -1590,6 +1597,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
           scriptId: item.relatedId ?? null,
           sessionId: item.sessionId ?? null,
           deviceHash: item.deviceHash ?? null,
+          environmentHash: item.environmentHash ?? null,
           page: item.page ?? null,
           totalPages: item.totalPages ?? null,
           createdAt: item.createdAt ?? null,
@@ -1603,15 +1611,15 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const alert = state.securityAlerts.find((item) => item.id === parts[3]);
     if (!alert) throw new Error('Alert not found.');
     const action = String(input.action ?? '');
-    const allowed = new Set(['benign', 'revoke_sessions', 'freeze_account', 'restore_account', 'remove_account', 'block_device']);
+    const allowed = new Set(['benign', 'revoke_sessions', 'freeze_account', 'restore_account', 'remove_account', 'block_device', 'block_environment']);
     if (!allowed.has(action)) throw new Error('Choose a valid security action.');
     const account = state.users.find((item) => item.userId === alert.userId);
     if (!account) throw new Error('Alert account not found.');
     const at = now();
     const note = String(input.note ?? '').trim().slice(0, 1000) || null;
-    if (['freeze_account', 'remove_account', 'block_device'].includes(action) && !note) throw new Error('Add a review note before taking a destructive security action.');
+    if (['freeze_account', 'remove_account', 'block_device', 'block_environment'].includes(action) && !note) throw new Error('Add a review note before taking a destructive security action.');
 
-    if (action === 'revoke_sessions' || action === 'freeze_account' || action === 'remove_account' || action === 'block_device') {
+    if (action === 'revoke_sessions' || action === 'freeze_account' || action === 'remove_account' || action === 'block_device' || action === 'block_environment') {
       state.readerSessions[account.userId] = (state.readerSessions[account.userId] ?? []).map((session) => session.status === 'active'
         ? { ...session, status: 'revoked', revokedAt: at, revokedReason: 'Administrator security action: ' + action }
         : session);
