@@ -669,6 +669,42 @@ export const getImageAssetStatus = onCall({ region: REGION }, async (request) =>
   };
 });
 
+export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const assetId = cleanText((request.data as { assetId?: unknown } | undefined)?.assetId, 160);
+  if (!assetId) throw new HttpsError('invalid-argument', 'Image asset is required.');
+
+  const ref = db.collection('imageAssets').doc(assetId);
+  const snapshot = await ref.get();
+  const asset = snapshot.data();
+  if (!asset) throw new HttpsError('not-found', 'Image record not found.');
+  if (!identity.admin && asset.ownerUserId !== identity.uid) {
+    throw new HttpsError('permission-denied', 'You cannot remove this image.');
+  }
+
+  await clearAssetFile(asset);
+  await ref.set({
+    status: 'removed',
+    publicUrl: null,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  if (asset.kind === 'release_artwork' && asset.targetId) {
+    const releaseRef = db.collection('releases').doc(String(asset.targetId));
+    const release = await releaseRef.get();
+    if (release.exists && release.data()?.artworkAssetId === assetId) {
+      await releaseRef.set({
+        artworkAssetId: null,
+        artworkUrl: null,
+        artworkStatus: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  }
+
+  return { removed: true, assetId };
+});
+
 export const removeProfileAvatar = onCall({ region: REGION }, async (request) => {
   const identity = requireVerifiedIdentity(request);
   const profile = await profileRef(identity.uid).get();
