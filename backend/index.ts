@@ -533,41 +533,95 @@ export const handler = router({
           releaseDate: release.releaseDate ?? release.createdAt ?? null,
         }));
       const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
-      return json({ creator: { userId: creatorUserId, name: profile.displayName ?? account.name ?? 'Nightjar creator', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, pronouns: profile.pronouns ?? null, initials: profile.avatarInitials ?? null, favouriteTags: profile.favouriteTags ?? [], followers: 0, following: follows.some((follow) => String(follow.creatorUserId) === creatorUserId), releases: publicReleases } });
+      const { items: allAccounts } = await db.list(accountIndexTable, { limit: 1000 });
+      let followers = 0;
+      for (const follower of allAccounts) {
+        if (String(follower.userId) === creatorUserId) continue;
+        const { items: followerFollows } = await db.list(followTable(String(follower.userId)), { limit: 500 });
+        if (followerFollows.some((follow) => String(follow.creatorUserId) === creatorUserId)) followers += 1;
+      }
+      return json({ creator: { userId: creatorUserId, name: profile.displayName ?? account.name ?? 'Nightjar creator', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, pronouns: profile.pronouns ?? null, initials: profile.avatarInitials ?? null, favouriteTags: profile.favouriteTags ?? [], followers, following: follows.some((follow) => String(follow.creatorUserId) === creatorUserId), releases: publicReleases } });
     },
   ],
   'GET /api/recommendations': [
     requireAuth(),
     async (ctx) => {
       if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult recommendations.', 403);
-      const profile = await getProfile(ctx.user!.userId);
-      const { items: events } = await db.list(tasteTable(ctx.user!.userId), { limit: 500 });
-      const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
+      const userId = ctx.user!.userId;
+      const profile = await getProfile(userId);
+      const { items: events } = await db.list(tasteTable(userId), { limit: 1000 });
+      const { items: follows } = await db.list(followTable(userId), { limit: 500 });
       const followed = new Set(follows.map((item) => String(item.creatorUserId)));
-      const weights: Record<string, number> = {};
-      for (const value of [...(profile?.favouriteTags ?? []), ...(profile?.favouriteTropes ?? []), ...(profile?.favouriteCategories ?? [])]) {
-        const key = String(value).toLowerCase();
-        weights[key] = (weights[key] ?? 0) + 5;
-      }
+      const positive: Record<string, number> = {};
+      const negative: Record<string, number> = {};
+      const now = Date.now();
+      const addWeight = (target: Record<string, number>, key: string, amount: number) => {
+        const clean = key.trim().toLowerCase();
+        if (clean) target[clean] = (target[clean] ?? 0) + amount;
+      };
+      for (const value of [...(profile?.favouriteTags ?? []), ...(profile?.favouriteTropes ?? []), ...(profile?.favouriteCategories ?? [])]) addWeight(positive, String(value), 6);
       for (const event of events) {
-        const factor = event.type === 'skip' || event.type === 'hide' ? -1 : 1;
-        for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : [])]) {
-          const key = String(value).toLowerCase();
-          weights[key] = (weights[key] ?? 0) + factor;
-        }
+        const ageDays = Math.max(0, (now - new Date(String(event.createdAt ?? now)).getTime()) / 86400000);
+        const decay = Math.max(0.2, Math.exp(-ageDays / 30));
+        const signal = String(event.type ?? '');
+        const direction = ['less_like_this', 'not_for_me', 'skip', 'hide'].includes(signal) ? -1 : 1;
+        const magnitude = signal === 'more_like_this' ? 7 : signal === 'not_for_me' ? 9 : signal === 'complete' ? 3 : signal === 'start' ? 0.5 : 1;
+        const target = direction < 0 ? negative : positive;
+        for (const value of [...(Array.isArray(event.tags) ? event.tags : []), ...(event.category ? [event.category] : []), ...(event.genre ? [event.genre] : []), ...(event.mood ? [event.mood] : []), ...(Array.isArray(event.tropes) ? event.tropes : [])]) addWeight(target, String(value), magnitude * decay);
       }
       const intent = String(ctx.query.intent ?? '').trim().toLowerCase();
       const { items: releases } = await db.list(releaseTable, { limit: 500 });
-      const recommendations = releases.filter((release) => release.status === 'released').map((release) => {
+      const scored = releases.filter((release) => release.status === 'released').map((release) => {
         const values = [release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].filter(Boolean).map(String);
         let score = 0;
-        values.forEach((value) => { score += weights[value.toLowerCase()] ?? 0; });
+        let positiveMatches = 0;
+        let negativeMatches = 0;
+        values.forEach((value) => {
+          const key = value.toLowerCase();
+          score += (positive[key] ?? 0) * 1.0;
+          score -= (negative[key] ?? 0) * 1.25;
+          if ((positive[key] ?? 0) > 1) positiveMatches += 1;
+          if ((negative[key] ?? 0) > 1) negativeMatches += 1;
+        });
         if (followed.has(String(release.creatorUserId))) score += 8;
         if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
-        const matched = values.filter((value) => (weights[value.toLowerCase()] ?? 0) > 0).slice(0, 3);
-        return { ...release, score, reason: matched.length ? 'Because you have expressed interest in ' + matched.join(', ') + '.' : followed.has(String(release.creatorUserId)) ? 'From a creator you follow.' : 'A new release matching your current discovery context.' };
-      }).sort((a,b) => b.score-a.score).slice(0,24);
-      return json({ recommendations });
+        const matched = values.filter((value) => (positive[value.toLowerCase()] ?? 0) > 1).slice(0, 3);
+        const suppressed = negativeMatches >= 2 && positiveMatches === 0;
+        return { ...release, score, suppressed, reason: matched.length ? 'Because you have expressed interest in ' + matched.join(', ') + '.' : followed.has(String(release.creatorUserId)) ? 'From a creator you follow.' : 'A new release matching your current discovery context.' };
+      }).filter((release) => !release.suppressed);
+      const creatorCounts: Record<string, number> = {};
+      const recommendations = scored.sort((a,b) => b.score-a.score).filter((release) => {
+        const creatorId = String(release.creatorUserId ?? 'unknown');
+        creatorCounts[creatorId] = (creatorCounts[creatorId] ?? 0) + 1;
+        return creatorCounts[creatorId] <= 3;
+      }).slice(0,24);
+      return json({ recommendations, model: { version: 2, explicitPreferences: true, negativeSignals: true, behaviourDecayDays: 30, creatorCap: 3 } });
+    },
+  ],
+  'POST /api/taste/feedback': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before changing adult discovery preferences.', 403);
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const releaseId = String(body.releaseId ?? '').trim();
+      const signal = String(body.signal ?? '').trim();
+      if (!releaseId || !['more_like_this', 'less_like_this', 'not_for_me'].includes(signal)) return error('A release and valid feedback signal are required.', 400);
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const release = releases.find((item) => String(item.id) === releaseId && item.status === 'released');
+      if (!release) return error('Release not found.', 404);
+      const values = [release.category, release.genre, release.mood, ...(Array.isArray(release.tags) ? release.tags : []), ...(Array.isArray(release.tropes) ? release.tropes : [])].filter(Boolean).map(String);
+      await db.add(tasteTable(ctx.user!.userId), [{
+        type: signal,
+        releaseId,
+        category: release.category ?? null,
+        genre: release.genre ?? null,
+        mood: release.mood ?? null,
+        tags: Array.isArray(release.tags) ? release.tags.slice(0, 16) : [],
+        tropes: Array.isArray(release.tropes) ? release.tropes.slice(0, 16) : [],
+        values,
+        createdAt: new Date().toISOString(),
+      }]);
+      return json({ recorded: true, signal });
     },
   ],
   'GET /api/listening/resume/:releaseId': [
@@ -602,7 +656,40 @@ export const handler = router({
   'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); return json({ follows: items }); }],
   'POST /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.creatorUserId === ctx.params.creatorUserId)) await db.add(followTable(ctx.user!.userId), [{ creatorUserId: ctx.params.creatorUserId, createdAt: new Date().toISOString() }]); return json({ following: true }); }],
   'DELETE /api/follows/creators/:creatorUserId': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.creatorUserId === ctx.params.creatorUserId).map((item) => item.id); if (ids.length) await db.delete(followTable(ctx.user!.userId), ids); return json({ following: false }); }],
-  'POST /api/listening/event': [requireAuth(), async (ctx) => { const body = (ctx.body ?? {}) as Record<string, unknown>; const record = { ...body, userId: ctx.user!.userId, createdAt: new Date().toISOString() }; await db.add(listeningTable, [record]); await db.add(tasteTable(ctx.user!.userId), [{ type: body.eventType, category: body.category ?? null, tags: Array.isArray(body.tags) ? body.tags : [], completed: body.completed === true, createdAt: record.createdAt }]); return json({ recorded: true }); }],
+  'POST /api/listening/event': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before recording adult listening activity.', 403);
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const eventType = String(body.eventType ?? '');
+      if (!['start', 'progress', 'complete'].includes(eventType)) return error('Invalid listening event.', 400);
+      const releaseId = String(body.releaseId ?? '').trim();
+      if (!releaseId) return error('Release id is required.', 400);
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const release = releases.find((item) => String(item.id) === releaseId && item.status === 'released');
+      if (!release) return error('Release not found.', 404);
+      const positionSeconds = Math.max(0, Number(body.positionSeconds ?? 0));
+      const durationSeconds = Math.max(0, Number(body.durationSeconds ?? 0));
+      if (!Number.isFinite(positionSeconds) || !Number.isFinite(durationSeconds)) return error('Invalid listening position.', 400);
+      const createdAt = new Date().toISOString();
+      const record = { releaseId, eventType, positionSeconds: Math.min(positionSeconds, durationSeconds || positionSeconds), durationSeconds, completed: body.completed === true || eventType === 'complete', intent: String(body.intent ?? '').slice(0, 80), userId: ctx.user!.userId, createdAt };
+      await db.add(listeningTable, [record]);
+      const tags = Array.isArray(release.tags) ? release.tags.slice(0, 16) : [];
+      const tropes = Array.isArray(release.tropes) ? release.tropes.slice(0, 16) : [];
+      await db.add(tasteTable(ctx.user!.userId), [{
+        type: eventType,
+        releaseId,
+        category: release.category ?? null,
+        genre: release.genre ?? null,
+        mood: release.mood ?? null,
+        tags,
+        tropes,
+        completed: record.completed,
+        createdAt,
+      }]);
+      return json({ recorded: true });
+    },
+  ],
   'GET /api/creator/dashboard': [
     requireAuth(),
     async (ctx) => {
