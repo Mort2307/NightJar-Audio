@@ -823,5 +823,76 @@
       "Inspect Creator Studio verified listening, creator listening share and weekly Listener Spotlight totals"
     ],
     "expected": "Only bounded forward progress earns credit, credit is limited by elapsed time plus tolerance and per-event ceiling, and all three product surfaces use the same server calculation."
+  },
+  {
+    "name": "Private release audio cannot be read or uploaded outside creator ownership",
+    "viewport": "desktop",
+    "covers": [
+      "Firebase Storage",
+      "creator audio",
+      "release ownership",
+      "signed playback"
+    ],
+    "description": "Verifies release audio remains private and creators can only upload supported audio to active releases they own.",
+    "steps": [
+      "Attempt an authenticated Storage upload under another user's release ID",
+      "Attempt an upload to a made-up or already released release ID",
+      "Upload supported audio to an owned editable release",
+      "Attempt a direct browser read of the stored audio",
+      "Request playback through the callable playback endpoint after age verification"
+    ],
+    "expected": "Unauthorized/orphan/live-release uploads are denied, direct reads are denied, valid owned uploads succeed, and listening uses short-lived signed URLs only after server-side age verification."
+  },
+  {
+    "name": "Generic public profiles respect profile privacy",
+    "viewport": "mobile",
+    "covers": [
+      "Listener profile",
+      "Audio Editor profile",
+      "publicProfile",
+      "follow"
+    ],
+    "description": "Ensures every public non-admin role can have a social profile without exposing private accounts or protected work.",
+    "steps": [
+      "Open a public Audio Editor profile from Spotlight",
+      "Follow and unfollow it",
+      "Open a public Listener profile from Spotlight",
+      "Set a profile private and attempt to fetch it directly"
+    ],
+    "expected": "Public profiles render saved identity fields and approved imagery, follows persist, private profiles return not-found, and Audio Editor manuscript/editorial assignments are never returned."
+  },
+  {
+    "name": "Optional profile handle can be removed cleanly",
+    "viewport": "desktop",
+    "covers": [
+      "profile handle",
+      "uniqueness",
+      "profile editing"
+    ],
+    "description": "Verifies an optional @handle is editable and removable without leaving a stale uniqueness reservation.",
+    "steps": [
+      "Save a valid unique handle",
+      "Clear the handle and save the profile",
+      "Confirm the profile remains valid without a handle",
+      "Use the former handle on another eligible account"
+    ],
+    "expected": "The handle clears, the old handles document is released transactionally, and uniqueness continues to apply whenever a handle is present."
+  },
+  {
+    "name": "Protected manuscripts require age assurance at the server",
+    "viewport": "desktop",
+    "covers": [
+      "protected scripts",
+      "age assurance",
+      "direct callable bypass"
+    ],
+    "description": "Guards protected manuscript data from UI-gate bypasses.",
+    "steps": [
+      "Authenticate an active permitted account without completed age assurance",
+      "Call protected script listing/opening directly",
+      "Complete age assurance",
+      "Repeat the permitted protected reader request"
+    ],
+    "expected": "Protected manuscript listing/opening fails before age assurance and succeeds only when both age verification and script permissions are valid."
   }
 ]
