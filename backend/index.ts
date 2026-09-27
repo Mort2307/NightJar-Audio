@@ -190,7 +190,28 @@ const registerProtectedDevice = async (userId: string, deviceToken: unknown, rel
   return { deviceHash, blocked, linkedSuspendedUserIds };
 };
 
-const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => { const now=Date.now(); const {items}=await db.list(securityEventTable,{limit:500}); const recent=items.filter((item)=>item.userId===userId && now-new Date(item.createdAt??0).getTime()<60000); const scriptId=String(signal.relatedId??''); const sameScriptRecent=recent.filter((item)=>String(item.relatedId??'')===scriptId); const score=(recent.length>=40?35:recent.length>=20?20:0)+(sameScriptRecent.length>=25?40:sameScriptRecent.length>=12?25:0)+(signal.eventType==='script_view'&&sameScriptRecent.length>=8?20:0)+(signal.eventType==='blocked_interaction'?8:0); if(score<50)return null; const existing=await db.list(securityAlertTable,{limit:100}); if(existing.items.some((item)=>item.userId===userId&&item.status==='open'&&now-new Date(item.createdAt??0).getTime()<600000))return null; return createSecurityAlert(userId,{severity:score>=75?'critical':'high',riskScore:score,reason:`Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,relatedId:scriptId||null,signal:{eventType:signal.eventType,recentEvents:recent.length,relatedEvents:sameScriptRecent.length}}); };
+const assessProtectedActivity = async (userId: string, signal: Record<string, unknown>) => {
+  const now = Date.now();
+  const { items } = await db.list(securityEventTable, { limit: 500 });
+  const recent = items.filter((item) => item.userId === userId && now - new Date(item.createdAt ?? 0).getTime() < 60000);
+  const scriptId = String(signal.relatedId ?? '');
+  const sameScriptRecent = recent.filter((item) => String(item.relatedId ?? '') === scriptId);
+  const score = (recent.length >= 40 ? 35 : recent.length >= 20 ? 20 : 0)
+    + (sameScriptRecent.length >= 25 ? 40 : sameScriptRecent.length >= 12 ? 25 : 0)
+    + (signal.eventType === 'script_view' && sameScriptRecent.length >= 8 ? 20 : 0)
+    + (signal.eventType === 'blocked_interaction' ? 8 : 0);
+  if (score < 50) return null;
+  const existing = await db.list(securityAlertTable, { limit: 100 });
+  if (existing.items.some((item) => item.userId === userId && item.status === 'open' && now - new Date(item.createdAt ?? 0).getTime() < 600000)) return null;
+  return createSecurityAlert(userId, {
+    severity: score >= 75 ? 'critical' : 'high',
+    riskScore: score,
+    reason: `Unusually dense protected-content activity detected (${sameScriptRecent.length} related events in under a minute).`,
+    relatedId: scriptId || null,
+    deviceHash: signal.deviceHash ?? null,
+    signal: { eventType: signal.eventType, recentEvents: recent.length, relatedEvents: sameScriptRecent.length },
+  });
+};
 const enforceProtectedPageRate = async (userId: string, scriptId: string, sessionId: string) => {
   const now = Date.now();
   const { items } = await db.list(securityEventTable, { limit: 1000 });
@@ -208,6 +229,7 @@ const enforceProtectedPageRate = async (userId: string, scriptId: string, sessio
     riskScore: 85,
     reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.',
     relatedId: scriptId,
+    deviceHash: sameSession.at(-1)?.deviceHash ?? sameScript.at(-1)?.deviceHash ?? null,
     signal: { eventType: 'script_page_rate_limit', recentPages: recentPages.length, scriptPages: sameScript.length, sessionPages: sameSession.length },
   });
   return false;
@@ -1417,13 +1439,14 @@ export const handler = router({
     requireAuth(),
     async (ctx) => {
       if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
-      const body = (ctx.body ?? {}) as { eventType?: string; relatedType?: string; relatedId?: string; severity?: string; summary?: string; sessionId?: string };
+      const body = (ctx.body ?? {}) as { eventType?: string; relatedType?: string; relatedId?: string; severity?: string; summary?: string; sessionId?: string; deviceId?: string };
       const allowed = new Set(['script_view','copy_blocked','cut_blocked','paste_blocked','contextmenu_blocked','selection_blocked','drag_blocked','print_blocked','export_requested','export_completed','permission_changed','script_access_requested','report_submitted','blocked_interaction','repeated_protected_interaction']);
       if (!body.eventType || !allowed.has(body.eventType)) return error('Unsupported protection event.',400);
-      const record={eventType:body.eventType,severity:body.severity==='high'||body.severity==='medium'?body.severity:'low',relatedType:body.relatedType??null,relatedId:body.relatedId??null,sessionId:body.sessionId??null,summary:(body.summary??'Protected interaction recorded.').slice(0,300),actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()};
+      const device = await registerProtectedDevice(ctx.user!.userId, body.deviceId, body.relatedId ?? null);
+      const record={eventType:body.eventType,severity:body.severity==='high'||body.severity==='medium'?body.severity:'low',relatedType:body.relatedType??null,relatedId:body.relatedId??null,sessionId:body.sessionId??null,deviceHash:device.deviceHash,summary:(body.summary??'Protected interaction recorded.').slice(0,300),actorUserId:ctx.user!.userId,createdAt:new Date().toISOString()};
       const [id]=await db.add('nightjar_evidence_'+ctx.user!.userId,[record]);
       await db.add(securityEventTable,[{userId:ctx.user!.userId,...record}]);
-      const alert=await assessProtectedActivity(ctx.user!.userId,{eventType:body.eventType,relatedId:body.relatedId,sessionId:body.sessionId});
+      const alert=await assessProtectedActivity(ctx.user!.userId,{eventType:body.eventType,relatedId:body.relatedId,sessionId:body.sessionId,deviceHash:device.deviceHash});
       return json({recorded:Boolean(id),eventId:id??null,suspicious:Boolean(alert),alertId:alert?.id??null});
     },
   ],
