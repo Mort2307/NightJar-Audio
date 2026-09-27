@@ -2108,8 +2108,158 @@ export const handler = router({
     },
   ],
   'GET /api/security/notifications': [requireAuth(), withScopes('email'), async (ctx) => { if(!isAdmin(ctx.user!.email))return json({notifications:[]}); const {items}=await db.list(ownerNotificationTable(ctx.user!.email),{limit:100}); return json({notifications:items}); }],
-  'GET /api/admin/security-alerts': [requireAdminEmailAllowlist(ADMIN_EMAILS), async () => { const {items}=await db.list(securityAlertTable,{limit:100}); return json({alerts:items}); }],
-  'POST /api/admin/security-alerts/:alertId/suspend': [requireAdminEmailAllowlist(ADMIN_EMAILS), async (ctx) => { const {items}=await db.list(securityAlertTable,{limit:100}); const alert=items.find((item)=>item.id===ctx.params.alertId); if(!alert)return error('Security alert not found.',404); const userId=String(alert.userId); const {items:accounts}=await db.list(accountTable(userId),{limit:1}); if(accounts[0])await db.update(accountTable(userId),[{id:accounts[0].id,record:{...accounts[0],status:'suspended',suspendedAt:new Date().toISOString(),suspendedBy:ctx.user!.email??null}}]); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const indexed=indexes.find((item)=>item.userId===userId); if(indexed)await db.update(accountIndexTable,[{id:indexed.id,record:{...indexed,status:'suspended'}}]); await revokeReaderSessions(userId,'Account suspended after security review.'); await db.update(securityAlertTable,[{id:alert.id,record:{...alert,status:'actioned',action:'suspended',actionedAt:new Date().toISOString(),actionedBy:ctx.user!.email??null}}]); await db.add(securityEventTable,[{userId,eventType:'account_suspended',actorEmail:ctx.user!.email??null,relatedId:alert.id,createdAt:new Date().toISOString()}]); return json({suspended:true,userId}); }],
+  'GET /api/admin/security-alerts': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async () => {
+      const { items } = await db.list(securityAlertTable, { limit: 250 });
+      return json({ alerts: items.slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))) });
+    },
+  ],
+  'GET /api/admin/security/trace/:forensicToken': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async (ctx) => {
+      const token = String(ctx.params.forensicToken ?? '').trim().toUpperCase().replace(/[^A-F0-9]/g, '').slice(0, 32);
+      if (token.length < 8) return error('Enter at least eight characters from the forensic token.', 400);
+      const { items: events } = await db.list(securityEventTable, { limit: 5000 });
+      const matches = events.filter((item) => String(item.forensicToken ?? '').toUpperCase().startsWith(token));
+      const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
+      const traces = await Promise.all(matches.map(async (item) => {
+        const account = accounts.find((candidate) => String(candidate.userId) === String(item.userId));
+        const profile = item.userId ? await getProfile(String(item.userId)) : null;
+        return {
+          forensicToken: item.forensicToken,
+          userId: item.userId,
+          accountStatus: account?.status ?? null,
+          accountEmail: account?.email ?? null,
+          displayName: profile?.displayName ?? account?.name ?? null,
+          scriptId: item.relatedId ?? null,
+          sessionId: item.sessionId ?? null,
+          deviceHash: item.deviceHash ?? null,
+          page: item.page ?? null,
+          totalPages: item.totalPages ?? null,
+          createdAt: item.createdAt ?? null,
+        };
+      }));
+      return json({ traces });
+    },
+  ],
+  'POST /api/admin/security-alerts/:alertId/action': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async (ctx) => {
+      const body = (ctx.body ?? {}) as { action?: string; note?: string };
+      const action = String(body.action ?? '');
+      const allowed = new Set(['benign', 'revoke_sessions', 'freeze_account', 'restore_account', 'remove_account', 'block_device']);
+      if (!allowed.has(action)) return error('Choose a valid security action.', 400);
+      const { items } = await db.list(securityAlertTable, { limit: 250 });
+      const alert = items.find((item) => item.id === ctx.params.alertId);
+      if (!alert) return error('Security alert not found.', 404);
+      const userId = String(alert.userId ?? '');
+      if (!userId) return error('Alert has no subject account.', 400);
+      const at = new Date().toISOString();
+      const actor = ctx.user!.email ?? null;
+      const note = String(body.note ?? '').trim().slice(0, 1000) || null;
+
+      const { items: accounts } = await db.list(accountTable(userId), { limit: 1 });
+      const account = accounts[0] ?? null;
+      const { items: indexes } = await db.list(accountIndexTable, { limit: 2000 });
+      const indexed = indexes.find((item) => String(item.userId) === userId) ?? null;
+
+      if (action === 'revoke_sessions') {
+        await revokeReaderSessions(userId, 'Protected-reader sessions revoked by an administrator during security review.');
+      }
+
+      if (action === 'freeze_account' || action === 'remove_account') {
+        const previousStatus = account?.securityPreviousStatus ?? account?.status ?? indexed?.status ?? 'active';
+        if (account?.id) await db.update(accountTable(userId), [{
+          id: account.id,
+          record: {
+            ...account,
+            status: 'suspended',
+            securityPreviousStatus: previousStatus === 'suspended' ? 'active' : previousStatus,
+            suspendedAt: at,
+            suspendedBy: actor,
+            removed: action === 'remove_account',
+            removedAt: action === 'remove_account' ? at : account.removedAt ?? null,
+            removedBy: action === 'remove_account' ? actor : account.removedBy ?? null,
+          },
+        }]);
+        if (indexed?.id) await db.update(accountIndexTable, [{
+          id: indexed.id,
+          record: { ...indexed, status: 'suspended', removed: action === 'remove_account', securityPreviousStatus: previousStatus === 'suspended' ? 'active' : previousStatus },
+        }]);
+        if (action === 'remove_account') {
+          const { items: profileRows } = await db.list(profileTable(userId), { limit: 1 });
+          const profileRow = profileRows[0];
+          if (profileRow?.id) await db.update(profileTable(userId), [{ id: profileRow.id, record: { ...profileRow, publicProfile: false, removedAt: at } }]);
+        }
+        await revokeReaderSessions(userId, action === 'remove_account' ? 'Account removed from Nightjar after administrator review.' : 'Account frozen after administrator security review.');
+      }
+
+      if (action === 'restore_account') {
+        const nextStatus = String(account?.securityPreviousStatus ?? indexed?.securityPreviousStatus ?? 'active');
+        if (account?.id) await db.update(accountTable(userId), [{ id: account.id, record: { ...account, status: nextStatus, removed: false, restoredAt: at, restoredBy: actor } }]);
+        if (indexed?.id) await db.update(accountIndexTable, [{ id: indexed.id, record: { ...indexed, status: nextStatus, removed: false, restoredAt: at, restoredBy: actor } }]);
+      }
+
+      if (action === 'block_device') {
+        const deviceHash = String(alert.deviceHash ?? '');
+        if (!deviceHash) return error('This alert does not contain a device correlation token.', 409);
+        const { items: devices } = await db.list(securityDeviceTable, { limit: 5000 });
+        const updates = devices.filter((item) => String(item.deviceHash ?? '') === deviceHash).map((item) => ({
+          id: item.id,
+          record: { ...item, blocked: true, blockedAt: at, blockedBy: actor, blockReason: note ?? 'Blocked from a Nightjar security alert.' },
+        }));
+        if (updates.length) await db.update(securityDeviceTable, updates);
+        await revokeReaderSessions(userId, 'Protected-reader device blocked by an administrator.');
+      }
+
+      const alertStatus = action === 'benign' ? 'benign' : 'actioned';
+      await db.update(securityAlertTable, [{
+        id: alert.id,
+        record: { ...alert, status: alertStatus, action, actionedAt: at, actionedBy: actor, actionNote: note },
+      }]);
+      const { items: cases } = await db.list(securityCaseTable, { limit: 500 });
+      const securityCase = cases.find((item) => String(item.alertId ?? '') === String(alert.id));
+      if (securityCase?.id) {
+        const history = Array.isArray(securityCase.history) ? securityCase.history : [];
+        await db.update(securityCaseTable, [{
+          id: securityCase.id,
+          record: { ...securityCase, state: action, history: [...history, { state: action, at, note: note ?? 'Administrator action recorded.' }], updatedAt: at },
+        }]);
+      }
+      await db.add(securityEventTable, [{
+        userId,
+        eventType: 'admin_security_action',
+        action,
+        actorEmail: actor,
+        relatedId: alert.id,
+        deviceHash: alert.deviceHash ?? null,
+        note,
+        createdAt: at,
+      }]);
+      return json({ ok: true, action, userId, status: alertStatus });
+    },
+  ],
+  'POST /api/admin/security-alerts/:alertId/suspend': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async (ctx) => {
+      const { items } = await db.list(securityAlertTable, { limit: 250 });
+      const alert = items.find((item) => item.id === ctx.params.alertId);
+      if (!alert) return error('Security alert not found.', 404);
+      const userId = String(alert.userId ?? '');
+      const at = new Date().toISOString();
+      const { items: accounts } = await db.list(accountTable(userId), { limit: 1 });
+      const account = accounts[0];
+      if (account?.id) await db.update(accountTable(userId), [{ id: account.id, record: { ...account, status: 'suspended', securityPreviousStatus: account.status ?? 'active', suspendedAt: at, suspendedBy: ctx.user!.email ?? null } }]);
+      const { items: indexes } = await db.list(accountIndexTable, { limit: 2000 });
+      const indexed = indexes.find((item) => String(item.userId) === userId);
+      if (indexed?.id) await db.update(accountIndexTable, [{ id: indexed.id, record: { ...indexed, status: 'suspended', securityPreviousStatus: indexed.status ?? 'active' } }]);
+      await revokeReaderSessions(userId, 'Account suspended after security review.');
+      await db.update(securityAlertTable, [{ id: alert.id, record: { ...alert, status: 'actioned', action: 'freeze_account', actionedAt: at, actionedBy: ctx.user!.email ?? null } }]);
+      await db.add(securityEventTable, [{ userId, eventType: 'account_suspended', actorEmail: ctx.user!.email ?? null, relatedId: alert.id, createdAt: at }]);
+      return json({ suspended: true, userId });
+    },
+  ],
 
   'GET /api/admin/overview': [
     requireAdminEmailAllowlist(ADMIN_EMAILS),
