@@ -6,6 +6,7 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 const eventCall = httpsCallable<Record<string, unknown>, { recorded: boolean; evidenceId: string; alert?: any }>(functions, 'recordProtectionEvent');
 const evidenceCall = httpsCallable<void, { evidence: any[] }>(functions, 'listProtectionEvidence');
 const reportsCall = httpsCallable<void, { reports: any[] }>(functions, 'listProtectionReports');
+const adminReportsCall = httpsCallable<void, { reports: any[] }>(functions, 'listAdminProtectionReports');
 const submitReportCall = httpsCallable<{ category: string; summary: string }, { report: any }>(functions, 'submitProtectionReport');
 const alertsCall = httpsCallable<void, { alerts: any[] }>(functions, 'listSecurityAlerts');
 const suspendCall = httpsCallable<{ alertId: string }, { suspended: boolean; revokedReaderSessions: number }>(functions, 'suspendFromSecurityAlert');
@@ -23,6 +24,10 @@ export const nightjarProtection = {
 
   async reports() {
     return (await reportsCall()).data;
+  },
+
+  async adminReports() {
+    return (await adminReportsCall()).data;
   },
 
   async submitReport(category: string, summary: string) {
