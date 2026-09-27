@@ -319,16 +319,19 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     }
   }
 
-  if (parts[0] === 'api' && parts[1] === 'follows' && parts[2] === 'creators') {
+  if (parts[0] === 'api' && parts[1] === 'follows') {
     const account = requireUser(state);
     const list = state.follows[account.userId] ?? [];
-    if (parts.length === 3 && method === 'GET') return send({ follows: list.map((creatorUserId) => ({ creatorUserId })) });
-    if (parts.length === 4) {
-      const creatorId = parts[3];
-      if (method === 'POST' && !list.includes(creatorId)) list.push(creatorId);
-      if (method === 'DELETE') state.follows[account.userId] = list.filter((item) => item !== creatorId);
+    if (parts.length === 2 && method === 'GET') return send({ follows: list.map((profileUserId) => ({ profileUserId, creatorUserId: profileUserId })) });
+    const legacyCreatorRoute = parts[2] === 'creators' && parts.length === 4;
+    const universalRoute = parts.length === 3 && parts[2] !== 'creators';
+    if (legacyCreatorRoute || universalRoute) {
+      const profileUserId = legacyCreatorRoute ? parts[3] : parts[2];
+      if (profileUserId === account.userId) throw new Error('Choose another Nightjar profile to follow.');
+      if (method === 'POST' && !list.includes(profileUserId)) list.push(profileUserId);
+      if (method === 'DELETE') state.follows[account.userId] = list.filter((item) => item !== profileUserId);
       else state.follows[account.userId] = list;
-      return send({ following: method === 'POST' });
+      return send({ following: method === 'POST', profileUserId });
     }
   }
 
