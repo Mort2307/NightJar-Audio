@@ -1493,8 +1493,8 @@ button:focus-visible {
 /* Protected manuscript paging and watermarking */
 .reader-body { position:relative; overflow:hidden; }
 .reader-body.copy-enabled { user-select:text; -webkit-user-select:text; }
-.reader-watermark-layer { position:absolute; inset:0; z-index:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-content:space-around; gap:22px 36px; padding:18px; pointer-events:none; transform:rotate(-13deg) scale(1.08); transform-origin:center; opacity:.09; }
-.reader-watermark-layer span { display:block; color:#d6c1d7; font-size:8px; font-weight:800; letter-spacing:.08em; text-align:center; white-space:nowrap; }
+.reader-watermark-layer { position:absolute; inset:-5%; z-index:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-content:space-around; gap:16px 22px; padding:14px; pointer-events:none; transform:rotate(-13deg) scale(1.1); transform-origin:center; opacity:.105; }
+.reader-watermark-layer span { display:block; overflow:hidden; color:#d6c1d7; font-size:7px; font-weight:800; letter-spacing:.075em; text-align:center; white-space:nowrap; text-overflow:clip; }
 .reader-body > *:not(.reader-watermark-layer) { position:relative; z-index:1; }
 .reader-pagination { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:12px 20px; border-top:1px solid var(--line-soft); }
 .reader-pagination > span { text-align:center; color:var(--muted-2); font-size:8px; }
