@@ -452,3 +452,25 @@ test('crawler policy opts out major model-training crawlers while leaving public
   assert.match(robots, /Disallow: \/api\/scripts\//);
   assert.match(robots, /Allow: \//);
 });
+
+
+test('administrators can block exact devices or broader browser environments after review', () => {
+  const securityReview = read('src/components/SecurityReviewPanel.tsx');
+  assert.match(backend, /block_environment/);
+  assert.match(backend, /environmentBlocked/);
+  assert.match(backend, /browser\/device environment blocked by an administrator/);
+  assert.match(securityReview, /Block device/);
+  assert.match(securityReview, /Block environment/);
+  assert.match(securityReview, /environmentBlocked/);
+  assert.match(shim, /block_environment/);
+  assert.match(shim, /environmentBlockedAt/);
+});
+
+test('blocked repeat environments pause protected content instead of automatically freezing the account', () => {
+  const readerStart = backend.indexOf("'POST /api/security/reader-session':");
+  const readerEnd = backend.indexOf("'GET /api/writers':", readerStart);
+  const readerRoute = backend.slice(readerStart, readerEnd);
+  assert.match(readerRoute, /device\.environmentBlocked/);
+  assert.match(readerRoute, /Protected-script access is paused for security review/);
+  assert.doesNotMatch(readerRoute, /status:\s*'suspended'/);
+});
