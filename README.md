@@ -187,3 +187,18 @@ Follows are account-to-account relationships stored under the verified Firebase 
 
 Nightjar uses one bounded verified-listening calculation for Creator Studio metrics, creator listening-share displays and weekly Listener Spotlight ranking. It credits only forward playback progress and bounds credit by elapsed wall time plus a small tolerance and a per-event ceiling. Cumulative player positions, large seek jumps and rapid event spam are not counted as if they were continuous listening.
 
+### Private creator audio
+
+Creator audio is stored privately under `release-audio/{firebaseUid}/{releaseId}/...`. Browser reads are denied. Storage rules allow creation only when the authenticated account is an active Creator, the referenced Firestore release exists, belongs to that Creator, is still editable, the MIME type is supported and the file is no larger than 25 MB. The backend re-validates path ownership, MIME type and size before attaching the upload to the release.
+
+Released audio is played through short-lived signed URLs issued by a callable Function only after server-side age assurance succeeds. Administrator moderation previews use separate short-lived signed URLs.
+
+### Public profiles
+
+Every active non-admin Nightjar role can have a public profile. Creator and Writer surfaces may add role-specific context, while the generic public profile supports Listener and Audio Editor discovery without exposing private listening history, editorial assignments, manuscript data or account credentials.
+
+Profiles marked private are not returned by the public profile endpoint and cannot receive new follows through the public follow API. Optional handles can be changed or removed; clearing a handle transactionally releases its uniqueness reservation.
+
+### Adult-content boundary
+
+Catalogue discovery, recommendations, trending, creator/writer discovery, spotlight state, audio playback and protected manuscript listing/opening all enforce age assurance in Firebase Functions. UI gating is not treated as the security boundary.
