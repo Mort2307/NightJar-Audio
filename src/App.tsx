@@ -41,6 +41,7 @@ import WriterDiscovery from './components/WriterDiscovery';
 import ProfileDiscovery from './components/ProfileDiscovery';
 import RecommendationFeedback from './components/RecommendationFeedback';
 import FollowingList from './components/FollowingList';
+import CatalogueSearch from './components/CatalogueSearch';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -165,6 +166,9 @@ function App() {
   const [adminEditors, setAdminEditors] = useState<any[]>([]);
   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [catalogueResults, setCatalogueResults] = useState<Track[] | null>(null);
+  const [catalogueCategories, setCatalogueCategories] = useState<string[]>([]);
+  const [catalogueSearch, setCatalogueSearch] = useState({ query: '', category: '' });
   const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
@@ -272,19 +276,9 @@ function App() {
     ]);
 
     if (catalogueResult.status === 'fulfilled') {
-      const liveTracks = (catalogueResult.value.data?.catalogue ?? []).map((release: any, index: number) => ({
-        id: String(release.id),
-        title: release.title,
-        creator: release.creatorName ?? 'Nightjar creator',
-        duration: release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',
-        category: release.category ?? 'Audio',
-        descriptor: release.description ?? 'No description supplied.',
-        featured: release.featured === true || index === 0,
-        audioUrl: release.audioUrl ?? null,
-        artworkUrl: release.artworkUrl ?? null,
-        creatorUserId: release.creatorUserId,
-      })) as Track[];
+      const liveTracks = mapCatalogueTracks(catalogueResult.value.data?.catalogue ?? []);
       setTracks(liveTracks);
+      setCatalogueCategories((catalogueResult.value.data?.categories ?? []).map(String));
     }
 
     if (creatorsResult.status === 'fulfilled') {
@@ -341,6 +335,25 @@ function App() {
       if (trendingResult.status === 'fulfilled') setLiveTrending(trendingResult.value.data?.trending ?? []);
       if (favouritesResult.status === 'fulfilled') setFavouriteReleaseIds((favouritesResult.value.data?.favourites ?? []).map((item: any) => String(item.releaseId)));
       if (followsResult.status === 'fulfilled') setFollowingProfileIds((followsResult.value.data?.follows ?? []).map((item: any) => String(item.profileUserId ?? item.creatorUserId)).filter(Boolean));
+    }
+  };
+
+  const searchCatalogue = async (query: string, category: string) => {
+    const next = { query: query.trim(), category: category.trim() };
+    setCatalogueSearch(next);
+    if (!next.query && !next.category) {
+      setCatalogueResults(null);
+      return;
+    }
+    const params = new URLSearchParams();
+    if (next.query) params.set('q', next.query);
+    if (next.category) params.set('category', next.category);
+    try {
+      const { data } = await api.get('/api/catalogue?' + params.toString());
+      setCatalogueResults(mapCatalogueTracks(data?.catalogue ?? []));
+      if (Array.isArray(data?.categories)) setCatalogueCategories(data.categories.map(String));
+    } catch {
+      notify('Catalogue search could not be loaded.');
     }
   };
 
@@ -1219,9 +1232,11 @@ function App() {
 
             <section id="catalogue" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
+              <CatalogueSearch categories={catalogueCategories} activeQuery={catalogueSearch.query} activeCategory={catalogueSearch.category} resultCount={(catalogueResults ?? tracks).length} onSearch={searchCatalogue} />
               <div className="track-grid">
-                {tracks.slice(0, 6).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} />)}
-                {!tracks.length && <div className="people-empty"><Headphones size={18}/><strong>No published releases yet.</strong><span>The listening room will populate from real creator releases once audio is published.</span></div>}
+                {(catalogueResults ?? tracks.slice(0, 6)).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} />)}
+                {catalogueResults !== null && !catalogueResults.length && <div className="people-empty"><Headphones size={18}/><strong>No releases match that search.</strong><span>Try another title, mood, genre, trope, tag or category.</span></div>}
+                {catalogueResults === null && !tracks.length && <div className="people-empty"><Headphones size={18}/><strong>No published releases yet.</strong><span>The listening room will populate from real creator releases once audio is published.</span></div>}
               </div>
             </section>
 
@@ -1417,6 +1432,10 @@ function App() {
       )}
     </div>
   );
+}
+
+function mapCatalogueTracks(releases: any[]): Track[] {
+  return releases.map((release, index) => ({ ...releaseToTrack(release), featured: release.featured === true || index === 0 }));
 }
 
 function releaseToTrack(release: any): Track {
