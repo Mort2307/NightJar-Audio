@@ -44,6 +44,7 @@ test('catalogue search is server backed and does not replace the master playback
   assert.match(app, /catalogueResults/);
   assert.match(app, /setCatalogueResults/);
   assert.match(catalogueSearch, /Search title, mood, trope, genre or tag/);
+  assert.match(shim, /parts\[1\] === 'catalogue'/);
 });
 
 test('recommendation controls send explicit taste signals', () => {
