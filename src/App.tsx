@@ -501,6 +501,15 @@ function App() {
     } catch { /* account endpoint remains authoritative */ }
     try {
       const { data } = await api.get('/api/account');
+      if (data?.status === 'suspended' || data?.removed === true) {
+        notify(data?.removed === true ? 'This account has been removed from Nightjar after administrator review.' : 'This account is frozen while a Nightjar security review is active.');
+        await auth.signOut();
+        setUser(null);
+        setRole(null);
+        setAgeVerified(false);
+        setAgeStage('gate');
+        return;
+      }
       if (data?.role === 'admin' || data?.role === 'creator' || data?.role === 'listener' || data?.role === 'writer' || data?.role === 'editor') {
         setRole(data.role);
         setAccountStatus(data.status === 'pending_review' ? 'pending_review' : 'active');
