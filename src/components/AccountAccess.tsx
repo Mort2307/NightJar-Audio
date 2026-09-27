@@ -24,7 +24,8 @@ const friendlyError = (error: unknown) => {
   if (detail.includes('too-many-requests')) return 'Too many attempts. Please wait before trying again.';
   if (detail.includes('invalid-email')) return 'Enter a valid email address.';
   if (detail.includes('requires-recent-login')) return 'For security, sign in again before changing your password.';
-  if (detail.includes('operation-not-allowed') || detail.includes('configuration-not-found')) return 'Email/password registration is not enabled correctly in Firebase Authentication for this project.';
+  if (detail.includes('operation-not-allowed')) return 'Firebase is returning auth/operation-not-allowed: Email/Password is disabled for the Firebase project NightJar is actually connected to.';
+  if (detail.includes('configuration-not-found')) return 'Firebase is returning auth/configuration-not-found: the Authentication configuration for the Firebase project NightJar is connected to cannot be found.';
   if (detail.includes('admin-restricted-operation')) return 'Firebase is currently configured to block end-user account creation. Enable user sign-up in Authentication settings.';
   if (detail.includes('network-request-failed')) return 'Nightjar could not reach Firebase. Check your connection and try again.';
   if (detail.includes('user-disabled')) return 'This Nightjar account has been disabled. Contact an administrator for review.';
