@@ -848,7 +848,15 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/security/reader-session' && method === 'POST') {
     const account = requireUser(state);
-    const session = { sessionId: id('reader'), scriptId: input.scriptId ?? null, status: 'active', expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), createdAt: now() };
+    requireVerifiedAdult(state, account);
+    if (account.status === 'suspended') throw new Error('This account is suspended.');
+    const scriptId = String(input.scriptId ?? '');
+    if (!scriptId) throw new Error('Script ID is required.');
+    const script = state.scripts.find((item) => item.id === scriptId);
+    if (!script) throw new Error('Script not found.');
+    const permitted = script.writerUserId === account.userId || script.accessUsers?.includes(account.userId);
+    if (!permitted) throw new Error('Protected script access has not been granted.');
+    const session = { sessionId: id('reader'), scriptId, status: 'active', expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), createdAt: now(), canReadFull: true, allowCopy: script.writerUserId === account.userId || script.copyAllowed === true, allowExport: script.writerUserId === account.userId || script.exportAllowed === true };
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
     return send({ session });
   }
@@ -982,9 +990,14 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const application = state.applications.find((item) => item.id === parts[3]);
     if (!application) throw new Error('Application not found.');
     const decision = String(input.decision ?? '');
+    if (!['approved', 'waitlist', 'rejected'].includes(decision)) throw new Error('Choose a valid creator application decision.');
     application.status = decision;
+    application.reviewedAt = now();
     const userRecord = state.users.find((item) => item.userId === application.userId);
-    if (decision === 'approved' && userRecord) userRecord.status = 'active';
+    if (decision === 'approved' && userRecord) {
+      userRecord.role = 'creator';
+      userRecord.status = 'active';
+    }
     return send({ application });
   }
 
