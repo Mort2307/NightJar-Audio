@@ -1430,6 +1430,8 @@ button:focus-visible {
 .account-password-input { display: flex; align-items: center; border-radius: .8rem; background: rgba(5,4,6,.42); }
 .account-password-input input { background: transparent; }
 .account-password-input button { border: 0; background: transparent; color: inherit; padding: .8rem; cursor: pointer; opacity: .72; }
+.account-password-requirements { display: flex; flex-wrap: wrap; gap: .45rem .75rem; margin-top: .65rem; }
+.account-password-requirements small { font-size: .72rem; opacity: .72; }
 .account-access-submit { width: 100%; justify-content: center; margin-top: 1.25rem; }
 .account-access-actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.3rem; }
 .account-access-switches { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem 1rem; margin-top: 1.2rem; }
