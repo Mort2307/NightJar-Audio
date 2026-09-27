@@ -623,6 +623,31 @@ export const handler = router({
       return json({ trending: releases.filter((release) => release.status === 'released').map((release) => ({ ...release, listeningEvents: counts[String(release.id)] ?? 0 })).sort((a,b) => b.listeningEvents-a.listeningEvents).slice(0,24) });
     },
   ],
+  'GET /api/profiles': [requireAuth(), async (ctx) => {
+    if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before discovering profiles.', 403);
+    const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
+    const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    const followed = new Set(follows.map((item) => String(item.profileUserId ?? item.creatorUserId)).filter(Boolean));
+    const profiles = (await Promise.all(accounts
+      .filter((account) => String(account.userId) !== ctx.user!.userId && account.status !== 'suspended')
+      .map(async (account) => {
+        const profile = await getProfile(String(account.userId));
+        if (!profile?.publicProfile) return null;
+        return {
+          userId: String(account.userId),
+          role: account.role,
+          name: profile.displayName ?? account.name ?? 'Nightjar member',
+          handle: profile.handle ?? account.handle ?? null,
+          headline: profile.headline ?? null,
+          bio: profile.bio ?? null,
+          pronouns: profile.pronouns ?? null,
+          initials: profile.avatarInitials ?? null,
+          roleFocus: profile.roleFocus ?? [],
+          following: followed.has(String(account.userId)),
+        };
+      }))).filter(Boolean);
+    return json({ profiles });
+  }],
   'GET /api/favourites': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); return json({ favourites: items }); }],
   'POST /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.releaseId === ctx.params.releaseId)) await db.add(favouriteTable(ctx.user!.userId), [{ releaseId: ctx.params.releaseId, createdAt: new Date().toISOString() }]); return json({ favourite: true }); }],
   'DELETE /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.releaseId === ctx.params.releaseId).map((item) => item.id); if (ids.length) await db.delete(favouriteTable(ctx.user!.userId), ids); return json({ favourite: false }); }],
