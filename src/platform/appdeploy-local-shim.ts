@@ -1392,6 +1392,22 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ application });
   }
 
+  if (path === '/api/security/notifications' && method === 'GET') {
+    const account = requireAdmin(state);
+    const items = (state.securityNotifications[account.email] ?? []).slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+    return send({ notifications: items, unreadCount: items.filter((item) => item.read !== true).length });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'security' && parts[2] === 'notifications' && parts.length === 5 && parts[4] === 'read' && method === 'POST') {
+    const account = requireAdmin(state);
+    const items = state.securityNotifications[account.email] ?? [];
+    const notification = items.find((item) => item.id === parts[3]);
+    if (!notification) throw new Error('Security notification not found.');
+    notification.read = true;
+    notification.readAt = now();
+    return send({ read: true });
+  }
+
   if (path === '/api/admin/security-alerts' && method === 'GET') {
     requireAdmin(state);
     return send({ alerts: state.securityAlerts.slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))) });
