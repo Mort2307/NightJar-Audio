@@ -209,9 +209,10 @@ export const handler = router({
       const toProfileSpotlight = async (account: any, kind: 'creator' | 'writer') => {
         if (!account) return null;
         const profile = await getProfile(String(account.userId));
-        if (profile?.publicProfile === false) return null;
-        const name = profile?.displayName ?? account.name ?? (kind === 'creator' ? 'Nightjar creator' : 'Nightjar writer');
-        const initials = profile?.avatarInitials ?? String(name).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase();
+        const isPublic = profile?.publicProfile !== false;
+        const publicName = profile?.displayName ?? account.name ?? (kind === 'creator' ? 'Nightjar creator' : 'Nightjar writer');
+        const name = isPublic ? publicName : (kind === 'creator' ? 'A Nightjar creator' : 'A Nightjar writer');
+        const initials = isPublic ? (profile?.avatarInitials ?? String(publicName).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase()) : 'NJ';
         let title = kind === 'creator' ? 'Creator profile' : 'Writer profile';
         let edition = kind === 'creator' ? 'Creator Spotlight' : 'Writer Spotlight';
         let detail = profile?.headline ?? profile?.bio ?? (kind === 'creator' ? 'A Nightjar creator in today’s full-day spotlight.' : 'A Nightjar writer in today’s full-day spotlight.');
@@ -228,13 +229,14 @@ export const handler = router({
         return {
           kind,
           name: String(name),
-          handle: profile?.handle ?? account.handle ?? null,
+          handle: isPublic ? (profile?.handle ?? account.handle ?? null) : null,
           title,
           edition,
           detail: String(detail).slice(0, 320),
           initials,
           targetId: String(account.userId),
           releaseId,
+          publicProfile: isPublic,
           date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
         };
       };
@@ -298,25 +300,26 @@ export const handler = router({
       if (listenerRankIndex >= 0) {
         const selected = topSeven[listenerRankIndex];
         const profile = await getProfile(String(selected.account.userId));
-        if (profile?.publicProfile !== false) {
-          const name = profile?.displayName ?? selected.account.name ?? 'Nightjar listener';
-          const initials = profile?.avatarInitials ?? String(name).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase();
-          listener = {
-            kind: 'listener',
-            name: String(name),
-            handle: profile?.handle ?? selected.account.handle ?? null,
-            title: 'Community listener',
-            edition: 'WEEKLY TOP 7 · #' + String(listenerRankIndex + 1),
-            detail: 'Recognised for the most tracked listening activity in the previous completed week.',
-            initials,
-            targetId: String(selected.account.userId),
-            releaseId: null,
-            date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
-            listenerRank: listenerRankIndex + 1,
-            weeklyTrackedMinutes: Math.round(selected.seconds / 60),
-            weeklyTopSevenCount: topSeven.length,
-          };
-        }
+        const isPublic = profile?.publicProfile !== false;
+        const displayName = profile?.displayName ?? selected.account.name ?? 'Nightjar listener';
+        const name = isPublic ? String(displayName) : 'A Nightjar listener';
+        const initials = isPublic ? (profile?.avatarInitials ?? String(displayName).split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase()) : 'NJ';
+        listener = {
+          kind: 'listener',
+          name,
+          handle: isPublic ? (profile?.handle ?? selected.account.handle ?? null) : null,
+          title: 'Community listener',
+          edition: 'WEEKLY TOP 7 · #' + String(listenerRankIndex + 1),
+          detail: 'Recognised for the most tracked listening activity in the previous completed week.',
+          initials,
+          targetId: String(selected.account.userId),
+          releaseId: null,
+          publicProfile: isPublic,
+          date: local.year + '-' + String(local.month).padStart(2, '0') + '-' + String(local.day).padStart(2, '0'),
+          listenerRank: listenerRankIndex + 1,
+          weeklyTrackedMinutes: Math.round(selected.seconds / 60),
+          weeklyTopSevenCount: topSeven.length,
+        };
       }
 
       const dailySpotlights = [creator, writer, listener].filter(Boolean) as any[];
