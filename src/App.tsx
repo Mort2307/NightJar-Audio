@@ -327,7 +327,7 @@ function App() {
         setLiveRecommendations(recommendationsResponse.data?.recommendations ?? []);
         setLiveTrending(trendingResponse.data?.trending ?? []);
         setFavouriteReleaseIds((favouritesResponse.data?.favourites ?? []).map((item: any) => String(item.releaseId)));
-        setFollowingCreatorIds((followsResponse.data?.follows ?? []).map((item: any) => String(item.creatorUserId)));
+        setFollowingCreatorIds((followsResponse.data?.follows ?? []).map((item: any) => String(item.profileUserId ?? item.creatorUserId)).filter(Boolean));
       }
     } catch {
       setTracks([]);
@@ -648,19 +648,21 @@ function App() {
     }
   };
 
-  const toggleCreatorFollow = async (creatorUserId: string) => {
+  const toggleProfileFollow = async (profileUserId: string) => {
     try {
-      if (followingCreatorIds.includes(creatorUserId)) {
-        await api.delete('/api/follows/creators/' + creatorUserId);
-        setFollowingCreatorIds((items) => items.filter((id) => id !== creatorUserId));
+      if (followingCreatorIds.includes(profileUserId)) {
+        await api.delete('/api/follows/' + encodeURIComponent(profileUserId));
+        setFollowingCreatorIds((items) => items.filter((id) => id !== profileUserId));
       } else {
-        await api.post('/api/follows/creators/' + creatorUserId);
-        setFollowingCreatorIds((items) => [...items, creatorUserId]);
+        await api.post('/api/follows/' + encodeURIComponent(profileUserId));
+        setFollowingCreatorIds((items) => items.includes(profileUserId) ? items : [...items, profileUserId]);
       }
     } catch {
       notify('Follow could not be updated.');
     }
   };
+
+  const toggleCreatorFollow = toggleProfileFollow;
 
   const playReleaseFromCreatorProfile = (release: any) => {
     const track = releaseToTrack(release);
@@ -1213,7 +1215,7 @@ function App() {
               <p className="spotlight-note">Every active Creator and Writer receives a full day in deterministic rotation, with a shareable spotlight to help the community naturally discover their work. Listener Spotlight recognises the previous completed week’s top seven Listeners, one per day, and thanks them for helping Nightjar thrive.</p>
             </section>
 
-            <WriterDiscovery notify={notify} />
+            <WriterDiscovery followingIds={followingCreatorIds} onToggleFollow={toggleProfileFollow} notify={notify} />
 
             <section id="catalogue" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
