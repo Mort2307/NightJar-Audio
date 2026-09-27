@@ -520,9 +520,10 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (!script) throw new Error('Script not found.');
     const permitted = script.writerUserId === account.userId || script.accessUsers?.includes(account.userId);
     if (!permitted) throw new Error('You do not have an active access grant for this manuscript.');
-    const session = { sessionId: id('reader'), expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), status: 'active' };
+    const permission = script.writerUserId === account.userId ? { allowCopy: true, allowExport: true } : (script.accessPermissions?.[account.userId] ?? { allowCopy: false, allowExport: false });
+    const session = { sessionId: id('reader'), accountId: account.userId, expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), status: 'active' };
     state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), { ...session, scriptId: script.id }];
-    return send({ script, readerSession: session, copyAllowed: false, exportAllowed: false, canReadFull: true });
+    return send({ script, readerSession: session, copyAllowed: permission.allowCopy === true, exportAllowed: permission.allowExport === true, canReadFull: true });
   }
 
   if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'request-access' && method === 'POST') {
@@ -539,11 +540,20 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (account.role !== 'writer') throw new Error('Writer access required.');
     const script = state.scripts.find((item) => item.id === parts[2] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
-    const users = Array.isArray(input.userIds) ? input.userIds.map(String) : [];
-    script.accessUsers = users;
-    script.copyAllowed = Boolean(input.copyAllowed);
-    script.exportAllowed = Boolean(input.exportAllowed);
-    return send({ script });
+    const recipientUserId = String(input.recipientUserId ?? input.creatorUserId ?? '').trim();
+    const users = Array.isArray(input.userIds) ? input.userIds.map(String) : recipientUserId ? [recipientUserId] : [];
+    script.accessUsers = Array.from(new Set([...(script.accessUsers ?? []), ...users]));
+    script.accessPermissions = script.accessPermissions ?? {};
+    users.forEach((userId: string) => {
+      script.accessPermissions[userId] = {
+        allowCopy: Boolean(input.allowCopy ?? input.copyAllowed),
+        allowExport: Boolean(input.allowExport ?? input.exportAllowed),
+        expiresAt: input.expiresAt ?? null,
+        revokedAt: input.revoke ? now() : null,
+      };
+      if (input.revoke) script.accessUsers = script.accessUsers.filter((id: string) => id !== userId);
+    });
+    return send({ recipientUserId: recipientUserId || users[0] || null, allowCopy: Boolean(input.allowCopy ?? input.copyAllowed), allowExport: Boolean(input.allowExport ?? input.exportAllowed), expiresAt: input.expiresAt ?? null, revoked: Boolean(input.revoke) });
   }
 
   if (path === '/api/profile/me' && method === 'GET') {
@@ -712,6 +722,22 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const account = state.users.find((item) => item.userId === alert.userId);
     if (account) account.status = 'suspended';
     return send({ suspended: true });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'security-alerts' && parts.length === 5 && parts[4] === 'revoke-sessions' && method === 'POST') {
+    requireAdmin(state);
+    const alert = state.securityAlerts.find((item) => item.id === parts[3]);
+    if (!alert) throw new Error('Alert not found.');
+    state.readerSessions[alert.userId] = (state.readerSessions[alert.userId] ?? []).map((session) => ({ ...session, status: 'revoked', revokedAt: now() }));
+    return send({ revoked: true, userId: alert.userId });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'security-alerts' && parts.length === 5 && parts[4] === 'close-benign' && method === 'POST') {
+    requireAdmin(state);
+    const alert = state.securityAlerts.find((item) => item.id === parts[3]);
+    if (!alert) throw new Error('Alert not found.');
+    Object.assign(alert, { status: 'closed', action: 'benign', reviewNote: String(input.note ?? ''), actionedAt: now() });
+    return send({ closed: true, alert });
   }
 
   if (path === '/api/admin/branding/logo' && method === 'POST') {
