@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../platform/legacy-local-client';
+import { nightjarCommunity } from '../platform/firebase-community';
 import { FileText, Share2, X } from 'lucide-react';
 
 type Writer = {
@@ -25,7 +25,7 @@ export default function WriterDiscovery({ notify }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    void api.get('/api/writers').then(({ data }) => {
+    void nightjarCommunity.listWriters().then((data) => {
       if (!cancelled) setWriters(data?.writers ?? []);
     }).catch(() => {
       if (!cancelled) notify('Writer discovery could not be loaded.');
