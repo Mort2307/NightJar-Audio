@@ -693,6 +693,22 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       }
     }
 
+    if (asset.ownerUserId) {
+      await createNotification(String(asset.ownerUserId), {
+        type: 'image_moderation',
+        subtype: 'rejected',
+        title: asset.kind === 'profile_avatar'
+          ? 'Profile picture not approved'
+          : asset.kind === 'release_artwork'
+            ? 'Release artwork not approved'
+            : 'Nightjar image not approved',
+        message: note || 'The submitted image was not approved for use on Nightjar. You can remove it or submit a different image.',
+        assetId,
+        imageKind: asset.kind,
+        targetId: asset.targetId ?? null,
+      });
+    }
+
     return { assetId, status: 'rejected' };
   }
 
@@ -773,6 +789,24 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         }, { merge: true });
       }
     }
+  }
+
+  if (asset.ownerUserId) {
+    await createNotification(String(asset.ownerUserId), {
+      type: 'image_moderation',
+      subtype: 'approved',
+      title: asset.kind === 'profile_avatar'
+        ? 'Profile picture approved'
+        : asset.kind === 'release_artwork'
+          ? 'Release artwork approved'
+          : 'Nightjar image approved',
+      message: asset.kind === 'release_artwork'
+        ? 'Your artwork passed Nightjar image moderation and is now available to the release.'
+        : 'Your image passed Nightjar moderation and is now approved for use.',
+      assetId,
+      imageKind: asset.kind,
+      targetId: asset.targetId ?? null,
+    });
   }
 
   return { assetId, status: 'approved', publicUrl: url };
