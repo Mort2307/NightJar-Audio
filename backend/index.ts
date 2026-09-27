@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { router, json, error, requireAuth, requireAdminEmailAllowlist, withScopes } from '@appdeploy/sdk';
 import { db, storage } from '@appdeploy/sdk';
 
@@ -75,7 +76,7 @@ async function isAgeVerified(userId: string) {
   return record?.verified === true && record.ageThreshold === AGE_THRESHOLD && record.reverifyRequired !== true;
 }
 
-const opaqueVerificationReference = () => `nj-${crypto.randomUUID()}`;
+const opaqueVerificationReference = () => `nj-${randomUUID()}`;
 
 async function refreshYotiResult(userId: string, record: AgeRecord) {
   if (!record.sessionId || !yotiConfigured()) return record;
