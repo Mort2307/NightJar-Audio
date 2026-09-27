@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '@appdeploy/client';
+import { api } from '../platform/legacy-local-client';
 import { FileText, Share2, X } from 'lucide-react';
 
 type Writer = {
