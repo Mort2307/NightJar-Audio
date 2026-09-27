@@ -13,6 +13,7 @@ const catalogueSearch = read('src/components/CatalogueSearch.tsx');
 const creatorProfile = read('src/components/CreatorProfile.tsx');
 const writerStudio = read('src/components/WriterStudio.tsx');
 const creatorPipeline = read('src/components/CreatorAudioPipeline.tsx');
+const securityReview = read('src/components/SecurityReviewPanel.tsx');
 const css = read('src/index.css');
 
 test('universal following is many-to-many and privacy guarded', () => {
@@ -303,4 +304,57 @@ test('editor and admin script workflow responses are metadata only', () => {
 test('full handoff export states that AI training is not implicitly licensed', () => {
   assert.match(backend, /No AI training, dataset ingestion, automated extraction or redistribution/);
   assert.match(shim, /No AI training, dataset ingestion, automated extraction or redistribution/);
+});
+
+
+test('protected pages carry traceable forensic tokens without exposing a raw device identifier', () => {
+  assert.match(backend, /securityDeviceTable/);
+  assert.match(backend, /securityTokenHash\('nightjar-device'/);
+  assert.match(backend, /pageForensicToken/);
+  assert.match(backend, /forensicToken/);
+  assert.match(backend, /GET \/api\/admin\/security\/trace\/:forensicToken/);
+  assert.match(app, /getNightjarDeviceId/);
+  assert.match(app, /deviceId=/);
+  assert.match(app, /FORENSIC FP/);
+  assert.match(securityReview, /Trace a leaked screenshot/);
+  assert.match(shim, /localForensicToken/);
+  assert.match(shim, /securityDevices/);
+});
+
+test('security alerts require human account action and fan out to all approved administrators', () => {
+  const alertHelper = backend.slice(backend.indexOf('const createSecurityAlert'), backend.indexOf('const assessProtectedActivity'));
+  assert.match(alertHelper, /automaticAccountFreeze: false/);
+  assert.match(alertHelper, /createOwnerSecurityNotifications/);
+  assert.match(backend, /for \(const email of ADMIN_EMAILS\)/);
+  assert.doesNotMatch(alertHelper, /status:'suspended'|status: 'suspended'/);
+  assert.match(securityReview, /does not automatically freeze accounts/);
+  assert.match(securityReview, /Benign/);
+  assert.match(securityReview, /Restore/);
+});
+
+test('blocked or previously suspended device reuse pauses protected access rather than silently creating another reader session', () => {
+  assert.match(backend, /registerProtectedDevice/);
+  assert.match(backend, /linkedSuspendedUserIds/);
+  assert.match(backend, /Protected-script access is paused for security review/);
+  assert.match(backend, /blocked_device_reader_attempt/);
+  assert.match(securityReview, /Block device/);
+  assert.match(shim, /Protected-script access is paused for security review/);
+});
+
+test('administrators can revoke reader access, freeze, restore, remove or classify an alert as benign', () => {
+  assert.match(backend, /revoke_sessions/);
+  assert.match(backend, /freeze_account/);
+  assert.match(backend, /restore_account/);
+  assert.match(backend, /remove_account/);
+  assert.match(backend, /block_device/);
+  assert.match(backend, /state: action/);
+  assert.match(securityReview, /Revoke reader/);
+  assert.match(securityReview, /Remove account/);
+  assert.match(shim, /admin_security_action/);
+});
+
+test('ordinary browser focus changes are not treated as screenshot evidence', () => {
+  assert.doesNotMatch(app, /visibilitychange[^\n]{0,200}recordProtectionEvent/);
+  assert.doesNotMatch(app, /blur[^\n]{0,200}recordProtectionEvent/);
+  assert.doesNotMatch(backend, /screenshot_detected/);
 });
