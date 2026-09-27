@@ -1374,7 +1374,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
     creator: accounts.filter((account) => account.role === 'creator').length,
     writer: accounts.filter((account) => account.role === 'writer').length,
     editor: accounts.filter((account) => account.role === 'editor').length,
-    admin: accounts.filter((account) => account.role === 'admin').length,
+    admin: ADMIN_EMAILS.size,
   };
 
   return {
