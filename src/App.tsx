@@ -1005,7 +1005,7 @@ function App() {
     }
     const note = decision === 'rejected' ? (window.prompt('Reason for rejecting this image (optional)') ?? '') : '';
     try {
-      await nightjarMedia.moderate(asset.id, decision, note);
+      await nightjarMedia.moderate(asset.id, decision, note, decision === 'approved');
       await loadPendingImages();
       await loadBranding();
       await loadProfile();
