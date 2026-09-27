@@ -358,3 +358,24 @@ test('ordinary browser focus changes are not treated as screenshot evidence', ()
   assert.doesNotMatch(app, /blur[^\n]{0,200}recordProtectionEvent/);
   assert.doesNotMatch(backend, /screenshot_detected/);
 });
+
+
+test('administrator security alerts surface through the normal notification bell', () => {
+  assert.match(backend, /POST \/api\/security\/notifications\/:notificationId\/read/);
+  assert.match(app, /securityOwnerNotification/);
+  assert.match(app, /\/api\/security\/notifications/);
+  assert.match(app, /Community & security updates/);
+  assert.match(app, /item\.type === 'security_alert'/);
+  assert.match(shim, /path === '\/api\/security\/notifications'/);
+});
+
+test('frozen and removed accounts are rejected by central adult and role guards', () => {
+  assert.match(backend, /if \(await isSuspended\(userId\)\) return false/);
+  assert.match(backend, /account\.status !== 'suspended'/);
+  assert.match(backend, /account\.removed !== true/);
+  assert.match(backend, /status: 'active' \| 'pending_review' \| 'suspended'/);
+  assert.match(shim, /function requireActiveLocalAccount/);
+  assert.match(shim, /account\.status === 'suspended' \|\| account\.removed === true/);
+  assert.match(app, /This account is frozen while a Nightjar security review is active/);
+  assert.match(app, /This account has been removed from Nightjar after administrator review/);
+});
