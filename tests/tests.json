@@ -635,5 +635,82 @@
       "Attempt to access protected manuscript data"
     ],
     "expected": "The backend fails closed until it can cryptographically verify the Firebase ID token and map its uid to the Nightjar account. Frontend sign-in alone never grants backend access."
+  },
+  {
+    "name": "All user-editable profile fields persist and remain removable",
+    "viewport": "desktop",
+    "covers": [
+      "Firebase profiles",
+      "bio",
+      "welcome message",
+      "headline",
+      "taste",
+      "public profile",
+      "profile image"
+    ],
+    "description": "Verifies Nightjar profile edits survive reloads and optional fields can be cleared without losing unrelated profile data.",
+    "steps": [
+      "Edit display name, headline, bio, welcome message, pronouns, taste fields and role focus",
+      "Save the profile and reload",
+      "Clear optional text fields and save again",
+      "Upload a profile image and verify it remains pending until approved",
+      "Remove the pending or approved image"
+    ],
+    "expected": "Text changes persist in Firestore, cleared optional fields stay cleared, profile images never become public before admin approval, and removal revokes the image while preserving the rest of the profile."
+  },
+  {
+    "name": "Every uploaded image requires administrator approval",
+    "viewport": "desktop",
+    "covers": [
+      "profile avatar",
+      "Nightjar logo",
+      "release artwork",
+      "Storage rules",
+      "image moderation"
+    ],
+    "description": "Guards Nightjar's no-explicit-imagery upload boundary.",
+    "steps": [
+      "Upload each supported image type",
+      "Attempt to view the pending image outside the administrator moderation queue",
+      "Review the image as an administrator",
+      "Approve or reject it",
+      "Remove an approved image"
+    ],
+    "expected": "Pending images are private, direct Storage access is denied, only approved images resolve through the approved-image endpoint, rejected image bytes are deleted, and removed images stop resolving publicly."
+  },
+  {
+    "name": "Commercial boxes use one persistent Firebase source",
+    "viewport": "desktop",
+    "covers": [
+      "planning price",
+      "creator pool",
+      "reserve",
+      "billing subscriptions",
+      "confirmed MRR"
+    ],
+    "description": "Ensures all commercial controls distinguish editable planning assumptions from confirmed billing data.",
+    "steps": [
+      "Edit or clear the planning monthly price, creator pool, reserve, payout cadence and listening definition",
+      "Save and reopen Revenue and Listening Economics",
+      "Inspect subscription totals and confirmed gross MRR"
+    ],
+    "expected": "Planning changes persist across admin surfaces, cleared values remain cleared, subscription counts come from the Firebase billing ledger, and confirmed MRR only sums confirmed monthly billing amounts."
+  },
+  {
+    "name": "Audio Editor role feeds public spotlight",
+    "viewport": "desktop",
+    "covers": [
+      "Audio Editor",
+      "admin role management",
+      "public profile",
+      "spotlight rotation"
+    ],
+    "description": "Verifies Audio Editor is a real persisted Nightjar role with public recognition.",
+    "steps": [
+      "Assign an eligible account the Audio Editor role as an administrator",
+      "Complete and publish that account's public profile",
+      "Load discovery spotlight state"
+    ],
+    "expected": "The Firestore account role is editor, the account is eligible for deterministic Audio Editor Spotlight rotation when active/public, and private editorial work is never exposed."
   }
 ]
