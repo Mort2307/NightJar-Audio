@@ -804,7 +804,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const script = state.scripts.find((item) => item.id === parts[2]);
     if (!script) throw new Error('Script not found.');
     const grant = localScriptGrant(script, account.userId);
-    if (!grant) throw new Error('Protected script access has not been granted.');
+    if (!grant) throw new Error('Script not found.');
 
     const issuedAt = now();
     const session = {
@@ -901,6 +901,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       '',
       '---',
       'This copy was explicitly exported under writer-controlled permission. Nightjar access and export events are logged.',
+      'No AI training, dataset ingestion, automated extraction or redistribution is authorised by this export unless the writer separately grants that permission in writing.',
     ].join('\n');
     const exportedAt = now();
     state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_export', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, createdAt: exportedAt });
