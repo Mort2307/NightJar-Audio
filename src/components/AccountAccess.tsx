@@ -107,8 +107,8 @@ export default function AccountAccess({
         onAuthenticated(result.identity);
         setMode('verify');
         setMessage(result.verificationSent
-          ? 'Account created. We sent a verification link to your email.'
-          : 'Account created, but the verification email could not be sent. Use Resend email below.');
+          ? 'Account created. We sent a verification link to your email. If you cannot see it, check your spam or junk folder.'
+          : 'Account created, but the verification email could not be sent. Use Resend email below. If a later email does not appear, also check your spam or junk folder.');
         return;
       }
       if (mode === 'signin') {
@@ -129,7 +129,7 @@ export default function AccountAccess({
       <div className="account-access-mark"><Mail size={22} /></div>
       <span className="mini-label">ACCOUNT SECURITY</span>
       <h2>Verify your email</h2>
-      <p>Nightjar needs a verified email before age assurance, subscriptions or protected content can be attached to this account.</p>
+      <p>Nightjar needs a verified email before age assurance, subscriptions or protected content can be attached to this account. We have sent a verification link to your email; if it is not in your inbox, check your spam or junk folder.</p>
       <strong>{identity.email}</strong>
       {message && <p className="account-access-message">{message}</p>}
       <div className="account-access-actions">
@@ -140,7 +140,7 @@ export default function AccountAccess({
         })}>I've verified my email</button>
         <button className="secondary-button" disabled={busy} onClick={() => void run(async () => {
           await nightjarAuth.resendVerification();
-          setMessage('A new verification email has been sent.');
+          setMessage('A new verification email has been sent. If it does not appear in your inbox, check your spam or junk folder.');
         })}>Resend email</button>
       </div>
     </section>;
