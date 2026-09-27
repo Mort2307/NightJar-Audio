@@ -9,6 +9,7 @@ const shim = read('src/platform/appdeploy-local-shim.ts');
 const moderation = read('src/components/ContentModeration.tsx');
 const discovery = read('src/components/ProfileDiscovery.tsx');
 const feedback = read('src/components/RecommendationFeedback.tsx');
+const catalogueSearch = read('src/components/CatalogueSearch.tsx');
 
 test('universal following is many-to-many and privacy guarded', () => {
   assert.match(backend, /GET \/api\/profiles/);
@@ -33,6 +34,16 @@ test('community UI uses account follow state rather than local save state', () =
 test('product data failures are isolated', () => {
   assert.match(app, /Promise\.allSettled/);
   assert.doesNotMatch(app, /setTracks\(\[\]\);\s*setCreatorDirectory\(\[\]\);/);
+});
+
+test('catalogue search is server backed and does not replace the master playback queue', () => {
+  assert.match(backend, /ctx\.query\.q/);
+  assert.match(backend, /ctx\.query\.category/);
+  assert.match(backend, /catalogue, categories/);
+  assert.match(app, /CatalogueSearch/);
+  assert.match(app, /catalogueResults/);
+  assert.match(app, /setCatalogueResults/);
+  assert.match(catalogueSearch, /Search title, mood, trope, genre or tag/);
 });
 
 test('recommendation controls send explicit taste signals', () => {
