@@ -940,6 +940,7 @@ export const handler = router({
   'GET /api/notifications': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before viewing notifications.', 403);
       const { items } = await db.list(userNotificationTable(ctx.user!.userId), { limit: 50 });
       const sorted = items.slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
       return json({
