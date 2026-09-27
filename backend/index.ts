@@ -1162,7 +1162,22 @@ export const handler = router({
       if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       if (!(await requireRole(ctx.user!.userId, ['writer', 'admin']))) return error('Writer access required.', 403);
       const { items } = await db.list('nightjar_scripts', { limit: 500 });
-      return json({ scripts: items.filter((script) => script.writerUserId === ctx.user!.userId) });
+      return json({
+        scripts: items
+          .filter((script) => script.writerUserId === ctx.user!.userId)
+          .map((script) => ({ ...publicScriptMetadata(script), lastEditorialComment: script.lastEditorialComment ?? null, editorUserId: script.editorUserId ?? null })),
+      });
+    },
+  ],
+  'GET /api/writer/scripts/:scriptId': [
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
+      if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
+      const { items } = await db.list('nightjar_scripts', { limit: 500 });
+      const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
+      if (!script) return error('Script not found.', 404);
+      return json({ script });
     },
   ],
   'POST /api/writer/scripts': [
