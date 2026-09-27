@@ -72,6 +72,31 @@ test('moderation decisions retain an audit trail', () => {
   assert.match(moderation, /Decision reason/);
 });
 
+test('post-publication moderation can hold, restore and take down releases', () => {
+  assert.match(backend, /release-library/);
+  assert.match(backend, /POST \/api\/admin\/releases\/:releaseId\/lifecycle/);
+  assert.match(backend, /'hold', 'restore', 'takedown'/);
+  assert.match(backend, /status: toStatus/);
+  assert.match(moderation, /Place on hold/);
+  assert.match(moderation, /Take down/);
+  assert.match(moderation, /Restore live/);
+  assert.match(shim, /parts\[4\] === 'lifecycle'/);
+});
+
+test('verified listening is shared by creator metrics and listener spotlights', () => {
+  assert.match(backend, /verifiedListeningSeconds\(listening\)/);
+  assert.match(backend, /verifiedListeningSeconds\(userEvents\)/);
+  assert.match(shim, /function verifiedListeningSeconds/);
+  assert.match(shim, /verifiedListeningSeconds\(events\)/);
+});
+
+test('local adult-content routes enforce age verification parity', () => {
+  assert.match(shim, /function requireVerifiedAdult/);
+  assert.match(shim, /requireVerifiedAdult\(state, account\)/);
+  assert.match(shim, /path === '\/api\/trending'/);
+  assert.match(shim, /path === '\/api\/spotlights'/);
+});
+
 test('local shim mirrors critical social, taste and moderation contracts', () => {
   assert.match(shim, /\/api\/following/);
   assert.match(shim, /tasteSignalWeight/);
