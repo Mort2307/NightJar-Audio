@@ -339,29 +339,10 @@ async function buildDailySpotlightState(now = new Date()) {
     eligibleAccounts.filter((account) => account.role === 'listener').map((account) => [String(account.userId), account])
   );
   const scores = new Map<string, number>();
-  const lastPosition = new Map<string, { position: number; at: number }>();
-
-  for (const event of weeklyEvents.sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))) {
-    const userId = String(event.userId ?? '');
-    if (!listenerAccounts.has(userId)) continue;
-    const releaseId = String(event.releaseId ?? '');
-    if (!releaseId) continue;
-    const position = Math.max(0, Number(event.positionSeconds ?? 0));
-    if (!Number.isFinite(position)) continue;
-    const key = userId + ':' + releaseId;
-    const at = new Date(String(event.createdAt ?? '')).getTime();
-    const previous = lastPosition.get(key);
-    let delta = 0;
-    if (!previous || event.eventType === 'start' || at - previous.at > 30 * 60_000) {
-      delta = 0;
-    } else {
-      delta = Math.max(0, Math.min(position - previous.position, 120));
-    }
-    if (event.eventType === 'complete' && Number(event.durationSeconds) > position) {
-      delta = Math.min(Math.max(delta, Number(event.durationSeconds) - position), 300);
-    }
-    scores.set(userId, (scores.get(userId) ?? 0) + delta);
-    lastPosition.set(key, { position, at });
+  for (const userId of listenerAccounts.keys()) {
+    const userEvents = weeklyEvents.filter((event) => String(event.userId ?? '') === userId);
+    const seconds = verifiedListeningSeconds(userEvents);
+    if (seconds > 0) scores.set(userId, seconds);
   }
 
   const rankedListeners = [...scores.entries()]
