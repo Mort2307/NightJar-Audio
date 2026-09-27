@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "build:firebase": "vite build"
+    "build:firebase": "vite build",
+    "typecheck": "tsc --noEmit --pretty false",
+    "validate": "npm run typecheck && npm run build && npm run build:firebase"
   },
   "dependencies": {
     "lucide-react": "^0.469.0",
