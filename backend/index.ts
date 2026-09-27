@@ -36,6 +36,32 @@ const tasteSignalWeight = (type: unknown, completed = false) => {
   if (signal === 'save' || signal === 'follow' || signal === 'replay') return 1;
   return 0.5;
 };
+const diversifyReleases = (items: any[], limit = 24, maxPerCreator = 3) => {
+  const selected: any[] = [];
+  const selectedIds = new Set<string>();
+  const creatorCounts: Record<string, number> = {};
+  for (let pass = 1; pass <= maxPerCreator && selected.length < limit; pass += 1) {
+    for (const item of items) {
+      if (selected.length >= limit) break;
+      const id = String(item.id ?? '');
+      const creatorId = String(item.creatorUserId ?? 'unknown');
+      if (!id || selectedIds.has(id) || (creatorCounts[creatorId] ?? 0) >= pass) continue;
+      selected.push(item);
+      selectedIds.add(id);
+      creatorCounts[creatorId] = (creatorCounts[creatorId] ?? 0) + 1;
+    }
+  }
+  if (selected.length < limit) {
+    for (const item of items) {
+      if (selected.length >= limit) break;
+      const id = String(item.id ?? '');
+      if (!id || selectedIds.has(id)) continue;
+      selected.push(item);
+      selectedIds.add(id);
+    }
+  }
+  return selected;
+};
 const getProfile = async (userId: string) => { const { items } = await db.list<NightjarProfile>(profileTable(userId), { limit: 1 }); return items[0] ?? null; };
 const isSuspended = async (userId: string) => { const { items } = await db.list(accountTable(userId), { limit: 1 }); return items[0]?.status === 'suspended'; };
 const revokeReaderSessions = async (userId: string, reason: string) => { const { items } = await db.list(readerSessionTable(userId), { limit: 500 }); const now = new Date().toISOString(); const updates = items.filter((item) => item.status === 'active').map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } })); if (updates.length) await db.update(readerSessionTable(userId), updates); };
@@ -517,7 +543,9 @@ export const handler = router({
     },
   ],
   'GET /api/creators': [
-    async () => {
+    requireAuth(),
+    async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before discovering creators.', 403);
       const { items: accounts } = await db.list(accountIndexTable, { limit: 1000 });
       const { items: releases } = await db.list(releaseTable, { limit: 500 });
       const { items: followIndex } = await db.list(followIndexTable, { limit: 5000 });
@@ -605,7 +633,7 @@ export const handler = router({
       }
       const intent = String(ctx.query.intent ?? '').trim().toLowerCase();
       const { items: releases } = await db.list(releaseTable, { limit: 500 });
-      const recommendations = releases.filter((release) => release.status === 'released').map((release) => {
+      const ranked = releases.filter((release) => release.status === 'released').map((release) => {
         const values = [release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].filter(Boolean).map(String);
         let score = 0;
         values.forEach((value) => { score += weights[value.toLowerCase()] ?? 0; });
@@ -613,8 +641,9 @@ export const handler = router({
         if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
         const matched = values.filter((value) => (weights[value.toLowerCase()] ?? 0) > 0).slice(0, 3);
         return { ...release, score, reason: matched.length ? 'Because you have expressed interest in ' + matched.join(', ') + '.' : followed.has(String(release.creatorUserId)) ? 'From a creator you follow.' : 'A new release matching your current discovery context.' };
-      }).sort((a,b) => b.score-a.score).slice(0,24);
-      return json({ recommendations });
+      }).sort((a,b) => b.score-a.score);
+      const recommendations = diversifyReleases(ranked, 24, 3);
+      return json({ recommendations, diversity: { maxInitialReleasesPerCreator: 3 } });
     },
   ],
   'GET /api/listening/resume/:releaseId': [
