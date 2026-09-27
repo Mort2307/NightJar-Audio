@@ -4,7 +4,7 @@ type LocalUser = {
   email: string;
   name: string;
   role: 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | null;
-  status: 'active' | 'pending_review';
+  status: 'active' | 'pending_review' | 'suspended';
   createdAt: string;
 };
 
