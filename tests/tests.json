@@ -595,5 +595,45 @@
       "Explicitly suspend the test account"
     ],
     "expected": "Single low-confidence signals remain evidence only. Qualifying patterns alert all three owners. Administrators can close benign activity, revoke sensitive sessions without freezing the account, or explicitly suspend after review."
+  },
+  {
+    "name": "Nightjar account supports secure email password lifecycle",
+    "viewport": "mobile",
+    "covers": [
+      "Firebase Authentication",
+      "email/password registration",
+      "email verification",
+      "persistent session",
+      "password reset",
+      "password change reauthentication"
+    ],
+    "description": "Verifies the production identity layer has a complete consumer account lifecycle before it is allowed to unlock protected Nightjar backend data.",
+    "steps": [
+      "Create an account with email and a strong password",
+      "Confirm a verification email is sent",
+      "Verify the email and refresh identity",
+      "Sign out and sign back in",
+      "Request a password reset",
+      "Reauthenticate and change the password"
+    ],
+    "expected": "Firebase owns password credentials, Nightjar never stores plaintext passwords, unverified identities cannot progress into protected account access, and password changes require recent credentials."
+  },
+  {
+    "name": "Firebase identity must not bypass Nightjar backend authorization",
+    "viewport": "desktop",
+    "covers": [
+      "Firebase ID token",
+      "custom backend authorization",
+      "fail closed",
+      "identity bridge"
+    ],
+    "description": "Guards the production boundary between Firebase Authentication and the Nightjar/AppDeploy backend.",
+    "steps": [
+      "Sign into Firebase Authentication",
+      "Obtain the Firebase ID token",
+      "Call a protected Nightjar backend endpoint without a verified backend identity bridge",
+      "Attempt to access protected manuscript data"
+    ],
+    "expected": "The backend fails closed until it can cryptographically verify the Firebase ID token and map its uid to the Nightjar account. Frontend sign-in alone never grants backend access."
   }
 ]
