@@ -1251,28 +1251,39 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   if (path === '/api/security/device/register' && method === 'POST') {
     const account = requireUser(state);
     const deviceHash = await localDeviceHash(input.deviceId);
-    if (!deviceHash) return send({ registered: false, protectedAccessPaused: false, linkedRestrictedAccountCount: 0, securityReviewRequired: false, alertId: null });
+    const environmentHash = await localEnvironmentHash(input.environmentId);
+    if (!deviceHash && !environmentHash) return send({ registered: false, protectedAccessPaused: false, linkedRestrictedAccountCount: 0, linkedRestrictedEnvironmentAccountCount: 0, securityReviewRequired: false, alertId: null });
 
-    let current = state.securityDevices.find((item) => item.deviceHash === deviceHash && item.userId === account.userId);
-    if (current) Object.assign(current, { lastSeenAt: now() });
+    const sameDevice = deviceHash ? state.securityDevices.filter((item) => item.deviceHash === deviceHash) : [];
+    const sameEnvironment = environmentHash ? state.securityDevices.filter((item) => item.environmentHash === environmentHash) : [];
+    const blocked = sameDevice.some((item) => item.blocked === true);
+    const environmentBlocked = sameEnvironment.some((item) => item.environmentBlocked === true);
+
+    let current = state.securityDevices.find((item) =>
+      item.userId === account.userId &&
+      ((deviceHash && item.deviceHash === deviceHash) || (!deviceHash && environmentHash && item.environmentHash === environmentHash))
+    );
+    if (current) Object.assign(current, { deviceHash, environmentHash, lastSeenAt: now(), blocked: current.blocked === true || blocked, environmentBlocked: current.environmentBlocked === true || environmentBlocked });
     else {
-      current = { id: id('device'), deviceHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked: false };
+      current = { id: id('device'), deviceHash, environmentHash, userId: account.userId, firstSeenAt: now(), lastSeenAt: now(), blocked, environmentBlocked };
       state.securityDevices.push(current);
     }
 
-    const sameDevice = state.securityDevices.filter((item) => item.deviceHash === deviceHash);
-    const blocked = sameDevice.some((item) => item.blocked === true);
-    const linkedRestrictedUserIds = Array.from(new Set(sameDevice.map((item) => item.userId).filter((userId) => userId !== account.userId))).filter((userId) => {
+    const restricted = (userId: string) => {
       const linked = state.users.find((candidate) => candidate.userId === userId);
       return linked?.status === 'suspended' || linked?.removed === true;
-    });
-    const suspicious = blocked || linkedRestrictedUserIds.length > 0;
+    };
+    const linkedRestrictedUserIds = Array.from(new Set(sameDevice.map((item) => item.userId).filter((userId) => userId !== account.userId))).filter(restricted);
+    const linkedRestrictedEnvironmentUserIds = Array.from(new Set(sameEnvironment.map((item) => item.userId).filter((userId) => userId !== account.userId))).filter(restricted);
+    const exactRisk = blocked || linkedRestrictedUserIds.length > 0;
+    const environmentRisk = environmentBlocked || linkedRestrictedEnvironmentUserIds.length > 0;
+    const suspicious = exactRisk || environmentRisk;
     let alertId: string | null = null;
 
     if (suspicious) {
       const recent = state.securityAlerts.find((item) =>
         item.userId === account.userId &&
-        item.deviceHash === deviceHash &&
+        ((deviceHash && item.deviceHash === deviceHash) || (environmentHash && item.environmentHash === environmentHash)) &&
         item.status === 'open' &&
         Date.now() - new Date(String(item.createdAt ?? 0)).getTime() < 24 * 60 * 60_000
       );
@@ -1280,20 +1291,33 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       else {
         const alert = addLocalSecurityAlert(state, {
           userId: account.userId,
-          severity: blocked ? 'critical' : 'high',
-          riskScore: blocked ? 95 : 78,
+          severity: blocked || environmentBlocked ? 'critical' : exactRisk ? 'high' : 'medium',
+          riskScore: blocked || environmentBlocked ? 95 : exactRisk ? 78 : 62,
           reason: blocked
             ? 'A Nightjar session was opened from a device token previously blocked by an administrator.'
-            : 'A Nightjar session was opened from a device token previously linked to a suspended or removed account.',
+            : environmentBlocked
+              ? 'A Nightjar session was opened from a browser/device environment explicitly blocked by an administrator.'
+              : linkedRestrictedUserIds.length
+                ? 'A Nightjar session was opened from a device token previously linked to a suspended or removed account.'
+                : 'A Nightjar session shares a pseudonymous browser/device environment with a previously suspended or removed account. Shared devices are possible; review is required before account action.',
           deviceHash,
+          environmentHash,
           linkedSuspendedUserIds: linkedRestrictedUserIds,
-          signal: { eventType: 'device_linked_to_restricted_account', accountSessionOnly: true },
+          linkedSuspendedEnvironmentUserIds: linkedRestrictedEnvironmentUserIds,
+          signal: { eventType: 'device_or_environment_linked_to_restricted_account', accountSessionOnly: true },
         });
         alertId = String(alert.id);
       }
     }
 
-    return send({ registered: true, protectedAccessPaused: blocked, linkedRestrictedAccountCount: linkedRestrictedUserIds.length, securityReviewRequired: suspicious, alertId });
+    return send({
+      registered: Boolean(deviceHash || environmentHash),
+      protectedAccessPaused: blocked || environmentBlocked,
+      linkedRestrictedAccountCount: linkedRestrictedUserIds.length,
+      linkedRestrictedEnvironmentAccountCount: linkedRestrictedEnvironmentUserIds.length,
+      securityReviewRequired: suspicious,
+      alertId,
+    });
   }
 
   if (path === '/api/security/reader-session' && method === 'POST') {
