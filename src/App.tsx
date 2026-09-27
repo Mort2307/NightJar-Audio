@@ -235,6 +235,7 @@ function App() {
       const current = await auth.getUser();
       if (cancelled || !current) return;
       setUser(current);
+      await registerCurrentSecurityDevice();
       await loadAccount();
       const verified = await refreshAgeStatus();
       if (!verified) setAgeStage('assurance');
@@ -271,6 +272,15 @@ function App() {
     setToast(message);
     window.setTimeout(() => setToast(null), 2800);
   };
+
+  const registerCurrentSecurityDevice = async () => {
+    try {
+      await api.post('/api/security/device/register', { deviceId: getNightjarDeviceId() });
+    } catch {
+      /* Device correlation is a non-blocking security signal. */
+    }
+  };
+
 
   const navigate = (nextView: View) => {
     const path = nextView === 'discover' ? '/discover' : '/' + nextView;
@@ -624,6 +634,7 @@ function App() {
     try {
       const result = await auth.signIn({ scope: 'openid email profile offline_access' });
       setUser(result.user);
+      await registerCurrentSecurityDevice();
       await loadAccount();
       const verified = await refreshAgeStatus();
       if (!verified) setAgeStage('assurance');
