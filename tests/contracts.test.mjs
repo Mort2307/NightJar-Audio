@@ -384,3 +384,51 @@ test('frozen and removed accounts are rejected by central adult and role guards'
 test('security-forced sign-out cannot fall through into age assurance', () => {
   assert.match(app, /if \(!auth\.isSignedIn\(\)\) \{\s*setAgeStage\('gate'\);\s*return true;/);
 });
+
+
+test('account session registration flags restricted-device reuse without auto-freezing the new account', () => {
+  const routeStart = backend.indexOf("'POST /api/security/device/register':");
+  const routeEnd = backend.indexOf("'POST /api/security/reader-session':", routeStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  const route = backend.slice(routeStart, routeEnd);
+  assert.match(route, /device_linked_to_restricted_account/);
+  assert.match(route, /securityReviewRequired/);
+  assert.doesNotMatch(route, /status:\s*'suspended'/);
+  assert.match(app, /\/api\/security\/device\/register/);
+  assert.match(app, /registerCurrentSecurityDevice/);
+  assert.match(shim, /path === '\/api\/security\/device\/register'/);
+});
+
+test('security review receives evidence summaries, linked accounts and case history', () => {
+  assert.match(backend, /evidenceSummary/);
+  assert.match(backend, /linkedAccounts/);
+  assert.match(backend, /caseHistory/);
+  assert.match(backend, /networkCorrelationAvailable:\s*false/);
+  assert.match(securityReview, /Page views near alert/);
+  assert.match(securityReview, /Linked accounts on the same device token/);
+  assert.match(securityReview, /Recent evidence/);
+  assert.match(securityReview, /Case history/);
+  assert.match(shim, /evidenceSummary/);
+  assert.match(shim, /linkedAccounts/);
+});
+
+test('destructive security actions require an administrator review note and have no legacy freeze shortcut', () => {
+  assert.match(backend, /Add a review note before taking a destructive security action/);
+  assert.match(shim, /Add a review note before taking a destructive security action/);
+  assert.doesNotMatch(backend, /POST \/api\/admin\/security-alerts\/:alertId\/suspend/);
+  assert.doesNotMatch(shim, /parts\[4\] === 'suspend'/);
+});
+
+test('nightjar does not pretend client supplied IP data is trustworthy security evidence', () => {
+  assert.doesNotMatch(backend, /x-forwarded-for/i);
+  assert.doesNotMatch(backend, /cf-connecting-ip/i);
+  assert.doesNotMatch(backend, /clientIp|requestIp|remoteAddress/);
+  assert.match(backend, /does not expose a trusted client-network address/);
+  assert.match(securityReview, /device and forensic correlation|pseudonymous device and forensic correlation/i);
+});
+
+test('protected pages repeat the forensic watermark densely enough to survive ordinary cropping', () => {
+  assert.match(app, /Array\.from\(\{ length: 18 \}\)/);
+  assert.match(css, /reader-watermark-layer/);
+  assert.match(app, /FORENSIC FP/);
+});
