@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '@appdeploy/client';
+import { api } from '../platform/legacy-local-client';
 import { ChevronLeft, ChevronRight, Moon, Pause, Play, Volume2, X } from 'lucide-react';
 
 export type NightjarPlayerTrack = {
