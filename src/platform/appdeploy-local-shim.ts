@@ -669,7 +669,10 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const profile = ensureProfile(state, account);
     const events = state.taste[account.userId] ?? [];
     const weights: Record<string, number> = {};
-    for (const value of [...(profile.favouriteTags as any[] ?? []), ...(profile.favouriteTropes as any[] ?? []), ...(profile.favouriteCategories as any[] ?? [])]) {
+    const declaredTags = Array.isArray(profile.favouriteTags) ? profile.favouriteTags : [];
+    const declaredTropes = Array.isArray(profile.favouriteTropes) ? profile.favouriteTropes : [];
+    const declaredCategories = Array.isArray(profile.favouriteCategories) ? profile.favouriteCategories : [];
+    for (const value of [...declaredTags, ...declaredTropes, ...declaredCategories]) {
       const key = String(value).toLowerCase();
       weights[key] = (weights[key] ?? 0) + 5;
     }
