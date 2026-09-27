@@ -530,5 +530,73 @@
       "Open the same release again"
     ],
     "expected": "The resume endpoint returns zero position for the completed release so the next listen starts from the beginning."
+  },
+  {
+    "name": "Recommendation feedback tunes the taste graph",
+    "viewport": "mobile",
+    "covers": [
+      "more like this",
+      "less like this",
+      "not for me",
+      "explicit feedback"
+    ],
+    "description": "Verifies recommendation feedback is recorded as a durable preference signal and remains separate from identity fields.",
+    "steps": [
+      "Open a personalised release",
+      "Choose More like this",
+      "Choose Less like this on another release",
+      "Choose Not for me on a third release",
+      "Reload recommendations"
+    ],
+    "expected": "Feedback is persisted, Not for me suppresses the selected release, and later recommendations use the explicit signals without changing identity data."
+  },
+  {
+    "name": "Recommendation diversity prevents creator concentration",
+    "viewport": "desktop",
+    "covers": [
+      "creator diversity",
+      "personalisation",
+      "discovery fairness"
+    ],
+    "description": "Verifies a highly productive creator cannot occupy the whole personalised shelf when other eligible releases exist.",
+    "steps": [
+      "Seed several releases from one creator and releases from other creators",
+      "Open For You",
+      "Inspect the first 24 recommendations"
+    ],
+    "expected": "The recommendation shelf limits repeated releases from one creator and continues filling from other eligible creators."
+  },
+  {
+    "name": "Listening telemetry does not treat progress ticks as taste",
+    "viewport": "desktop",
+    "covers": [
+      "listening telemetry",
+      "progress",
+      "taste graph",
+      "analytics"
+    ],
+    "description": "Verifies frequent playback progress events are stored for listening analytics but do not create repeated positive taste signals.",
+    "steps": [
+      "Play one release for more than a minute",
+      "Inspect listening events",
+      "Inspect the taste vector"
+    ],
+    "expected": "Progress events exist for resume and listening analytics, while taste signals are generated only from meaningful listening actions such as start, completion, replay or skip."
+  },
+  {
+    "name": "Recommendation feedback is modular and immediately actionable",
+    "viewport": "mobile",
+    "covers": [
+      "component modularity",
+      "feedback UI",
+      "recommendation controls"
+    ],
+    "description": "Verifies each personalised release exposes compact feedback controls without coupling feedback state to the main application shell.",
+    "steps": [
+      "Open For You",
+      "Use More, Less and Not for me controls",
+      "Confirm the selected release reacts without navigating away"
+    ],
+    "expected": "Feedback controls are available on the release card, provide a visible acknowledgement and Not for me removes that release from the current shelf."
   }
 ]
