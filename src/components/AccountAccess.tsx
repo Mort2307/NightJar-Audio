@@ -18,8 +18,15 @@ const friendlyError = (error: unknown) => {
   return 'Nightjar could not complete that account request. Please try again.';
 };
 
-const validPassword = (value: string) =>
-  value.length >= 12 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value);
+const passwordChecks = (value: string) => ({
+  length: value.length >= 12,
+  lower: /\p{Ll}/u.test(value),
+  upper: /\p{Lu}/u.test(value),
+  number: /\p{N}/u.test(value),
+  symbol: /[^\p{L}\p{N}\s]/u.test(value),
+});
+
+const validPassword = (value: string) => passwordChecks(value).length;
 
 export default function AccountAccess({
   identity,
@@ -60,7 +67,7 @@ export default function AccountAccess({
       return;
     }
     if (mode === 'register' && !validPassword(password)) {
-      setMessage('Use 12+ characters with upper-case, lower-case and a number.');
+      setMessage(`Your password is ${password.length} characters long. Nightjar requires at least 12 characters.`);
       return;
     }
     if (mode === 'register' && password !== confirm) {
@@ -140,7 +147,21 @@ export default function AccountAccess({
     <div className="account-access-field"><label>Email</label><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
     {mode !== 'reset' && <>
       <div className="account-access-field"><label>Password</label><div className="account-password-input"><input type={showPassword ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
-      {mode === 'register' && <div className="account-access-field"><label>Confirm password</label><input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /><small>12+ characters · upper-case · lower-case · number</small></div>}
+      {mode === 'register' && <>
+        <div className="account-password-requirements" aria-live="polite">
+          {(() => {
+            const checks = passwordChecks(password);
+            return <>
+              <small>{checks.length ? '✓' : '○'} 12+ characters ({password.length})</small>
+              <small>{checks.lower ? '✓' : '○'} lower-case</small>
+              <small>{checks.upper ? '✓' : '○'} upper-case</small>
+              <small>{checks.number ? '✓' : '○'} number</small>
+              <small>{checks.symbol ? '✓' : '○'} symbol</small>
+            </>;
+          })()}
+        </div>
+        <div className="account-access-field"><label>Confirm password</label><input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /><small>{confirm ? (password === confirm ? '✓ Passwords match' : 'Passwords do not match yet') : 'Re-enter your password'}</small></div>
+      </>}
     </>}
     {message && <p className="account-access-message" role="status" aria-live="polite">{message}</p>}
     <button type="button" className="primary-button account-access-submit" disabled={busy} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create protected account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
