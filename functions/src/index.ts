@@ -960,17 +960,171 @@ const spotlightForRole = async (role: 'creator' | 'writer' | 'editor', dateKey: 
   return deterministicDailyPick(eligible, dateKey);
 };
 
+const londonSpotlightContext = () => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  const weekdayIndex = ({ Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 } as Record<string, number>)[value('weekday')] ?? 0;
+  const localDate = new Date(Date.UTC(Number(value('year')), Number(value('month')) - 1, Number(value('day'))));
+  return { weekdayIndex, localDate };
+};
+
+const listenerSpotlightForToday = async (dateKey: string) => {
+  const { weekdayIndex, localDate } = londonSpotlightContext();
+  const weekStart = new Date(localDate);
+  weekStart.setUTCDate(weekStart.getUTCDate() - weekdayIndex);
+  const previousWeekStart = new Date(weekStart);
+  previousWeekStart.setUTCDate(previousWeekStart.getUTCDate() - 7);
+  const previousWeekEnd = new Date(weekStart);
+
+  const [listenersSnapshot, eventsSnapshot] = await Promise.all([
+    db.collection('accounts').where('role', '==', 'listener').limit(1000).get(),
+    db.collection('listeningEvents').limit(10000).get(),
+  ]);
+
+  const listenerAccounts = new Map(
+    listenersSnapshot.docs
+      .filter((doc) => doc.data().status === 'active')
+      .map((doc) => [doc.id, doc]),
+  );
+
+  const weeklyEvents = eventsSnapshot.docs
+    .map((doc) => doc.data())
+    .filter((event) => {
+      const at = event.createdAt?.toMillis?.() ?? 0;
+      return at >= previousWeekStart.getTime() && at < previousWeekEnd.getTime();
+    })
+    .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+
+  const scores = new Map<string, number>();
+  const lastPosition = new Map<string, { position: number; at: number }>();
+
+  for (const event of weeklyEvents) {
+    const userId = cleanText(event.userId, 160);
+    if (!listenerAccounts.has(userId)) continue;
+    const releaseId = cleanText(event.releaseId, 160);
+    if (!releaseId) continue;
+    const position = Math.max(0, Number(event.positionSeconds ?? 0));
+    if (!Number.isFinite(position)) continue;
+    const key = userId + ':' + releaseId;
+    const at = event.createdAt?.toMillis?.() ?? 0;
+    const previous = lastPosition.get(key);
+    let delta = 0;
+    if (!previous || event.eventType === 'start' || at - previous.at > 30 * 60_000) {
+      delta = 0;
+    } else {
+      delta = Math.max(0, Math.min(position - previous.position, 120));
+    }
+    if (event.eventType === 'complete' && Number(event.durationSeconds) > position) {
+      delta = Math.min(Math.max(delta, Number(event.durationSeconds) - position), 300);
+    }
+    scores.set(userId, (scores.get(userId) ?? 0) + delta);
+    lastPosition.set(key, { position, at });
+  }
+
+  const topSeven = Array.from(scores, ([userId, seconds]) => ({ userId, seconds }))
+    .sort((a, b) => b.seconds - a.seconds || a.userId.localeCompare(b.userId))
+    .slice(0, 7);
+
+  const selectedIndex = topSeven.length ? weekdayIndex % topSeven.length : -1;
+  if (selectedIndex < 0) {
+    return {
+      listener: null,
+      listenerTopSevenCount: 0,
+      listenerSpotlightDay: null,
+      listenerWeek: previousWeekStart.toISOString().slice(0, 10),
+    };
+  }
+
+  const selected = topSeven[selectedIndex];
+  const profile = await profileRef(selected.userId).get();
+  const data = profile.data() ?? {};
+  const isPublic = data.publicProfile !== false;
+  const displayName = data.displayName ?? 'Nightjar listener';
+
+  return {
+    listener: {
+      kind: 'listener',
+      name: isPublic ? displayName : 'A Nightjar listener',
+      handle: isPublic ? data.handle ?? null : null,
+      title: 'Community listener',
+      edition: 'WEEKLY TOP 7 · #' + String(selectedIndex + 1),
+      detail: 'Recognised for the most tracked listening activity in the previous completed week.',
+      initials: isPublic ? data.avatarInitials ?? null : 'NJ',
+      imageUrl: isPublic && data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+      targetId: selected.userId,
+      publicProfile: isPublic,
+      date: dateKey,
+      listenerRank: selectedIndex + 1,
+      weeklyTrackedMinutes: Math.round(selected.seconds / 60),
+      weeklyTopSevenCount: topSeven.length,
+    },
+    listenerTopSevenCount: topSeven.length,
+    listenerSpotlightDay: selectedIndex + 1,
+    listenerWeek: previousWeekStart.toISOString().slice(0, 10),
+  };
+};
+
+const materializeSpotlightNotification = async (item: any, date: string) => {
+  const targetId = cleanText(item?.targetId, 160);
+  const kind = cleanText(item?.kind, 40);
+  if (!targetId || !kind) return;
+  const ref = accountRef(targetId).collection('notifications').doc('spotlight_' + date + '_' + kind);
+  const existing = await ref.get();
+  if (existing.exists) return;
+
+  const title = kind === 'creator'
+    ? 'You are today’s Creator Spotlight'
+    : kind === 'writer'
+      ? 'You are today’s Writer Spotlight'
+      : kind === 'editor'
+        ? 'You are today’s Audio Editor Spotlight'
+        : 'Thank you — you’re today’s Listener Spotlight';
+
+  const message = kind === 'creator'
+    ? 'Your public Nightjar creator profile is featured for the full day.'
+    : kind === 'writer'
+      ? 'Your public Nightjar writer profile is featured for the full day.'
+      : kind === 'editor'
+        ? 'Your public Audio Editor profile is featured for the full day.'
+        : 'Thank you for being part of Nightjar. You are being recognised from the previous week’s Top 7 listeners.';
+
+  await ref.set({
+    type: 'spotlight',
+    subtype: kind,
+    spotlightDate: date,
+    targetUserId: targetId,
+    title,
+    message,
+    listenerRank: kind === 'listener' ? item.listenerRank ?? null : null,
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+};
+
 export const spotlightState = onCall({ region: REGION }, async (request) => {
   await requireActiveIdentity(request);
   const date = londonDateKey();
-  const [creator, writer, editor] = await Promise.all([
+  const [creator, writer, editor, listenerState] = await Promise.all([
     spotlightForRole('creator', date),
     spotlightForRole('writer', date),
     spotlightForRole('editor', date),
+    listenerSpotlightForToday(date),
   ]);
+  const spotlights = [creator, writer, editor, listenerState.listener].filter(Boolean);
+  await Promise.all(spotlights.map((item) => materializeSpotlightNotification(item, date)));
+
   return {
     date,
-    spotlights: [creator, writer, editor].filter(Boolean),
+    spotlights,
+    listenerTopSevenCount: listenerState.listenerTopSevenCount,
+    listenerSpotlightDay: listenerState.listenerSpotlightDay,
+    listenerWeek: listenerState.listenerWeek,
   };
 });
 
