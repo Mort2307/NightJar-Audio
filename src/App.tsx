@@ -1364,7 +1364,7 @@ function App() {
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <span className="nightjar-mark"><Moon size={15} /></span>}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id)} notify={notify} />}
-      {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} />}
+      {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} />}
       {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingCreatorIds} onToggleFollow={toggleCreatorFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} />}
       <ContentModeration open={moderationOpen} onClose={() => setModerationOpen(false)} notify={notify} />
       {showOnboarding && user && role !== 'admin' && role !== 'editor' && <NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} />}
