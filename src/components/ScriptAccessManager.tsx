@@ -81,7 +81,7 @@ export default function ScriptAccessManager({ scriptId, notify }: Props) {
       <div><p className="eyebrow"><KeyRound size={14}/> SCRIPT ACCESS</p><h3 id="script-access-title">You decide who gets the manuscript.</h3></div>
       <button className="ghost-button with-icon" onClick={() => void load()}><RefreshCw size={13}/> Refresh</button>
     </div>
-    <p className="panel-note">Default access is protected and non-exportable. Full handoff is an explicit writer choice for cases such as sending the complete script to a VA. Nightjar logs the handoff but does not stop a writer distributing their own work.</p>
+    <p className="panel-note">Default access is protected and non-exportable. Full handoff is an explicit writer choice for cases such as sending the complete script to a VA. Nightjar logs the handoff but does not stop a writer distributing their own work. If the VA is not a Nightjar user, open your own Protected reader, choose Export full script, then send that watermarked copy yourself.</p>
 
     <div className="script-access-form">
       <label>Recipient<select value={recipientUserId} onChange={(event) => setRecipientUserId(event.target.value)}><option value="">Choose a Nightjar account…</option>{recipients.map((recipient) => <option key={recipient.userId} value={recipient.userId}>{recipient.name} · {recipient.role}{recipient.handle ? ' · @' + String(recipient.handle).replace(/^@/, '') : ''}</option>)}</select></label>
