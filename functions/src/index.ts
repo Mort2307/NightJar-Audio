@@ -239,6 +239,19 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     }, { merge: true });
   });
 
+  const releases = await db.collection('releases').where('creatorUserId', '==', identity.uid).limit(450).get();
+  if (!releases.empty) {
+    const batch = db.batch();
+    for (const release of releases.docs) {
+      batch.set(release.ref, {
+        creatorName: nextProfile.displayName,
+        creatorHandle: nextProfile.handle,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    await batch.commit();
+  }
+
   const saved = await targetProfileRef.get();
   return { profile: saved.data() ?? null };
 });
@@ -276,7 +289,8 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
         if (!base) return null;
-        return { ...base, releaseCount: 0 };
+        const releases = await db.collection('releases').where('creatorUserId', '==', doc.id).limit(500).get();
+        return { ...base, releaseCount: releases.docs.filter((release) => release.data().status === 'released').length };
       }),
   )).filter(Boolean);
 
@@ -284,7 +298,7 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
 });
 
 export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
-  requireVerifiedIdentity(request);
+  await requireActiveIdentity(request);
   const creatorUserId = cleanText((request.data as { userId?: unknown } | undefined)?.userId, 128);
   if (!creatorUserId) throw new HttpsError('invalid-argument', 'Creator account is required.');
 
@@ -296,6 +310,12 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
   const profile = await profileRef(creatorUserId).get();
   const data = profile.data();
   if (!data || data.publicProfile === false) throw new HttpsError('not-found', 'Creator profile not found.');
+
+  const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', creatorUserId).limit(500).get();
+  const releases = releasesSnapshot.docs
+    .filter((doc) => doc.data().status === 'released')
+    .map((doc) => releasePayload(doc.data(), doc.id))
+    .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
   return {
     creator: {
@@ -310,7 +330,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       avatarStatus: data.avatarStatus ?? null,
       initials: data.avatarInitials ?? null,
       favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
-      releases: [],
+      releases,
     },
   };
 });
@@ -323,7 +343,10 @@ export const listWriters = onCall({ region: REGION }, async (request) => {
       .filter((doc) => doc.data().status === 'active')
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
-        return base ? { ...base, publishedWorkCount: 0 } : null;
+        if (!base) return null;
+        const scripts = await db.collection('scripts').where('writerUserId', '==', doc.id).limit(500).get();
+        const publishedWorkCount = scripts.docs.filter((script) => ['Approved','Published'].includes(String(script.data().status))).length;
+        return { ...base, publishedWorkCount };
       }),
   )).filter(Boolean);
 
