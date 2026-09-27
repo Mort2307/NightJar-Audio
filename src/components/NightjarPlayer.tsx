@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../platform/legacy-local-client';
+import { nightjarCatalogue } from '../platform/firebase-catalogue';
+import { nightjarListening } from '../platform/firebase-listening';
 import { ChevronLeft, ChevronRight, Moon, Pause, Play, Volume2, X } from 'lucide-react';
 
 export type NightjarPlayerTrack = {
@@ -9,6 +10,7 @@ export type NightjarPlayerTrack = {
   duration?: string;
   category?: string;
   descriptor?: string;
+  audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
 };
@@ -32,6 +34,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const [duration, setDuration] = useState(1);
   const [volume, setVolume] = useState(1);
   const [rememberedPosition, setRememberedPosition] = useState(0);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(track?.audioUrl ?? null);
 
   const currentIndex = track ? queue.findIndex((item) => item.id === track.id) : -1;
   const previousTrack = currentIndex > 0 ? queue[currentIndex - 1] : null;
@@ -43,8 +46,8 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     const loadResume = async () => {
       if (!track?.id) return;
       try {
-        const { data } = await api.get('/api/listening/resume/' + encodeURIComponent(track.id));
-        if (!cancelled && typeof data?.positionSeconds === 'number') setRememberedPosition(Math.max(0, data.positionSeconds));
+        const data = await nightjarListening.resume(track.id);
+        if (!cancelled && typeof data.positionSeconds === 'number') setRememberedPosition(Math.max(0, data.positionSeconds));
       } catch { /* resume is enhancement, never blocks playback */ }
     };
     void loadResume();
@@ -52,16 +55,31 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   }, [track?.id]);
 
   useEffect(() => {
+    let cancelled = false;
+    setPlaybackUrl(track?.audioUrl ?? null);
+    if (!track?.id || track.audioUrl || !track.audioAvailable) return () => { cancelled = true; };
+    void nightjarCatalogue.playback(track.id).then((data) => {
+      if (!cancelled) setPlaybackUrl(data.url);
+    }).catch(() => {
+      if (!cancelled) {
+        setPlaybackUrl(null);
+        notify('Age-verified playback could not be opened for this release.');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [track?.id, track?.audioAvailable, track?.audioUrl]);
+
+  useEffect(() => {
     const node = audioRef.current;
-    if (!node || !track?.audioUrl) return;
+    if (!node || !playbackUrl || !track?.id) return;
     lastProgressEvent.current = 0;
     setPosition(0);
     setDuration(1);
     setIsPlaying(false);
     void node.play().catch(() => notify('Press play to start this release.'));
-    void api.post('/api/listening/event', { releaseId: track.id, eventType: 'start', positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent }).catch(() => {});
+    void nightjarListening.record({ releaseId: track.id, eventType: 'start', positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent }).catch(() => {});
     return () => { node.pause(); };
-  }, [track?.id, track?.audioUrl]);
+  }, [track?.id, playbackUrl]);
 
   useEffect(() => {
     const node = audioRef.current;
@@ -79,7 +97,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
 
   useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
 
-  if (!track?.audioUrl) return null;
+  if (!track || (!track.audioAvailable && !track.audioUrl)) return null;
 
   const choose = (next: NightjarPlayerTrack | null) => {
     if (next && onSelectTrack) onSelectTrack(next);
@@ -89,7 +107,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   return <div className="player-dock" role="region" aria-label="Nightjar audio player">
     <audio
       ref={audioRef}
-      src={track.audioUrl}
+      src={playbackUrl ?? undefined}
       preload="metadata"
       onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 1)}
       onPlay={() => setIsPlaying(true)}
@@ -99,13 +117,13 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         setPosition(node.currentTime);
         if (node.currentTime - lastProgressEvent.current >= 15) {
           lastProgressEvent.current = node.currentTime;
-          void api.post('/api/listening/event', { releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {});
+          void nightjarListening.record({ releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {});
         }
       }}
       onEnded={() => {
         setIsPlaying(false);
         setPosition(duration);
-        void api.post('/api/listening/event', { releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
+        void nightjarListening.record({ releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
         if (nextTrack && onSelectTrack) window.setTimeout(() => onSelectTrack(nextTrack), 350);
       }}
       onError={() => notify('Nightjar could not play this audio file.')}
