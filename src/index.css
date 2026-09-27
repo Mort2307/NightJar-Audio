@@ -1454,3 +1454,11 @@ button:focus-visible {
 .danger-button:hover:not(:disabled) { border-color:rgba(224,116,130,.5); background:rgba(129,35,48,.22); }
 .danger-button:disabled { opacity:.45; cursor:wait; }
 .lifecycle-actions { align-items:center; }
+
+
+/* Workflow lock notices */
+.pipeline-lock-note,.writer-lock-note { display:flex; align-items:flex-start; gap:9px; margin:10px 0 14px; padding:11px 12px; border:1px solid rgba(203,181,204,.18); border-radius:11px; background:rgba(178,144,170,.045); color:var(--muted); font-size:8px; line-height:1.55; }
+.pipeline-lock-note::before { content:'LOCKED'; flex:0 0 auto; color:var(--plum-soft); font-size:7px; font-weight:800; letter-spacing:.09em; }
+.writer-lock-note svg { flex:0 0 auto; color:var(--plum-soft); margin-top:1px; }
+.pipeline-form-grid input:disabled,.pipeline-form-grid textarea:disabled,.script-editor:disabled,.editor-toolbar input:disabled { opacity:.72; cursor:not-allowed; }
+.asset-drop:has(input:disabled) { opacity:.6; cursor:not-allowed; }
