@@ -57,3 +57,19 @@ The Taste Engine separates identity from taste. Explicit preferences seed recomm
 ### Runtime URL configuration
 
 The backend uses `NIGHTJAR_APP_URL` for age-assurance callback/cancel URLs when configured. The AppDeploy URL remains the fallback for development; the Firebase/custom-domain deployment should set the runtime value to `https://nightjar.audio/`.
+
+
+## Age assurance
+
+Nightjar uses **account-level 18+ age assurance**. A successful provider result is stored against the authenticated Nightjar account and reused on later logins and devices. A new provider session is created only when the account has no verified result or an explicit re-verification requirement is recorded.
+
+The backend is provider-ready for Yoti sandbox and production:
+
+- `NIGHTJAR_AGE_ENV=sandbox` (default) uses Yoti's sandbox API and `YOTI_ACCESS_TOKEN`.
+- `NIGHTJAR_AGE_ENV=production` uses Yoti's production Age API and `YOTI_API_KEY`.
+- Both environments require `YOTI_SDK_ID`.
+- `NIGHTJAR_APP_URL` controls the post-verification callback/cancel URL.
+
+Nightjar stores verification state and an opaque provider reference. Raw identity documents are not stored in the Nightjar content database.
+
+The adult catalogue, recommendations, trending releases and protected manuscript access are also checked server-side against the stored verified state, so the client cannot bypass the age gate.
