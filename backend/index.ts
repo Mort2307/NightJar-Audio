@@ -2020,6 +2020,48 @@ export const handler = router({
   'GET /api/profile/:handle': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before viewing public profiles.',403); const handle=cleanHandle(ctx.params.handle); const {items:indexes}=await db.list(accountIndexTable,{limit:1000}); const account=indexes.find((item)=>cleanHandle(item.handle)===handle&&item.status!=='suspended'); if(!account)return error('Profile not found.',404); const profile=await getProfile(account.userId); if(!profile?.publicProfile)return error('Profile not found.',404); return json({profile:{...profile,role:account.role}}); }],
   'POST /api/taste/event': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before recording adult taste signals.',403); const body=(ctx.body??{}) as {eventType?:string;contentId?:string;category?:string;tags?:string[];durationSeconds?:number;completed?:boolean}; const eventType=String(body.eventType??''); if(!['more_like_this','less_like_this','not_for_me','hide','skip','save','follow','complete','replay'].includes(eventType))return error('Unsupported taste signal.',400); await db.add(tasteTable(ctx.user!.userId),[{type:eventType,contentId:String(body.contentId??'').slice(0,100)||null,category:String(body.category??'').slice(0,80)||null,tags:cleanList(body.tags,12),durationSeconds:Math.max(0,Math.min(Number(body.durationSeconds??0),86400)),completed:body.completed===true,createdAt:new Date().toISOString()}]); return json({recorded:true}); }],
   'GET /api/taste/profile': [requireAuth(), async (ctx) => { if(!(await isAgeVerified(ctx.user!.userId)))return error('Age verification required before viewing the adult taste profile.',403); const profile=await getProfile(ctx.user!.userId); const {items}=await db.list(tasteTable(ctx.user!.userId),{limit:500}); const weights:Record<string,number>={}; for(const value of [...(profile?.favouriteTags??[]),...(profile?.favouriteTropes??[]),...(profile?.favouriteCategories??[])]){const key=String(value).toLowerCase();weights[key]=(weights[key]??0)+5;} for(const item of items){const factor=tasteSignalWeight(item.type,item.completed===true);for(const value of [...(item.tags??[]),...(item.category?[item.category]:[])]){const key=String(value).toLowerCase();weights[key]=(weights[key]??0)+factor;}} return json({declared:{tags:profile?.favouriteTags??[],tropes:profile?.favouriteTropes??[],categories:profile?.favouriteCategories??[]},vector:Object.entries(weights).sort((a,b)=>b[1]-a[1]).slice(0,24).map(([label,value])=>({label,weight:Number(value.toFixed(2))}))}); }],
+  'POST /api/security/device/register': [
+    requireAuth(),
+    async (ctx) => {
+      const body = (ctx.body ?? {}) as { deviceId?: string };
+      const device = await registerProtectedDevice(ctx.user!.userId, body.deviceId, null);
+      const linkedRestrictedUserIds = device.linkedSuspendedUserIds.filter((userId) => userId !== ctx.user!.userId);
+      const suspicious = device.blocked || linkedRestrictedUserIds.length > 0;
+      let alertId: string | null = null;
+      if (suspicious) {
+        const { items: existing } = await db.list(securityAlertTable, { limit: 250 });
+        const recent = existing.find((item) =>
+          String(item.userId ?? '') === ctx.user!.userId &&
+          String(item.deviceHash ?? '') === String(device.deviceHash ?? '') &&
+          item.status === 'open' &&
+          Date.now() - new Date(String(item.createdAt ?? 0)).getTime() < 24 * 60 * 60_000
+        );
+        if (recent?.id) {
+          alertId = String(recent.id);
+        } else {
+          const alert = await createSecurityAlert(ctx.user!.userId, {
+            severity: device.blocked ? 'critical' : 'high',
+            riskScore: device.blocked ? 95 : 78,
+            reason: device.blocked
+              ? 'A Nightjar session was opened from a device token previously blocked by an administrator.'
+              : 'A Nightjar session was opened from a device token previously linked to a suspended or removed account.',
+            relatedId: null,
+            deviceHash: device.deviceHash,
+            linkedSuspendedUserIds: linkedRestrictedUserIds,
+            signal: { eventType: 'device_linked_to_restricted_account', accountSessionOnly: true },
+          });
+          alertId = alert.id ? String(alert.id) : null;
+        }
+      }
+      return json({
+        registered: Boolean(device.deviceHash),
+        protectedAccessPaused: device.blocked,
+        linkedRestrictedAccountCount: linkedRestrictedUserIds.length,
+        securityReviewRequired: suspicious,
+        alertId,
+      });
+    },
+  ],
   'POST /api/security/reader-session': [
     requireAuth(),
     async (ctx) => {
