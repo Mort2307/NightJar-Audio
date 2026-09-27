@@ -560,7 +560,7 @@ export const handler = router({
           releaseDate: release.releaseDate ?? release.createdAt ?? null,
         }));
       const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
-      return json({ creator: { userId: creatorUserId, name: profile.displayName ?? account.name ?? 'Nightjar creator', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, pronouns: profile.pronouns ?? null, initials: profile.avatarInitials ?? null, favouriteTags: profile.favouriteTags ?? [], followers: 0, following: follows.some((follow) => String(follow.creatorUserId) === creatorUserId), releases: publicReleases } });
+      return json({ creator: { userId: creatorUserId, name: profile.displayName ?? account.name ?? 'Nightjar creator', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, pronouns: profile.pronouns ?? null, initials: profile.avatarInitials ?? null, favouriteTags: profile.favouriteTags ?? [], followers: (await Promise.all(accounts.map(async (account) => { const { items } = await db.list(followTable(String(account.userId)), { limit: 2000 }); return items.some((follow) => String(follow.profileUserId ?? follow.creatorUserId) === creatorUserId); }))).filter(Boolean).length, following: follows.some((follow) => String(follow.profileUserId ?? follow.creatorUserId) === creatorUserId), releases: publicReleases } });
     },
   ],
   'GET /api/recommendations': [
@@ -570,7 +570,7 @@ export const handler = router({
       const profile = await getProfile(ctx.user!.userId);
       const { items: events } = await db.list(tasteTable(ctx.user!.userId), { limit: 500 });
       const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 500 });
-      const followed = new Set(follows.map((item) => String(item.creatorUserId)));
+      const followed = new Set(follows.map((item) => String(item.profileUserId ?? item.creatorUserId)).filter(Boolean));
       const weights: Record<string, number> = {};
       for (const value of [...(profile?.favouriteTags ?? []), ...(profile?.favouriteTropes ?? []), ...(profile?.favouriteCategories ?? [])]) {
         const key = String(value).toLowerCase();
