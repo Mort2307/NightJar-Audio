@@ -7,6 +7,7 @@ const ADMIN_EMAILS = ['mike.owen230792@gmail.com', 'megan.wright666@hotmail.com'
 const accountIndexTable = 'nightjar_account_index';
 const subscriptionTable = 'nightjar_subscriptions';
 const releaseTable = 'nightjar_releases';
+const moderationHistoryTable = 'nightjar_moderation_history';
 const followTable = (userId: string) => `nightjar_follows_${userId}`;
 const followIndexTable = 'nightjar_follow_index';
 const favouriteTable = (userId: string) => `nightjar_favourites_${userId}`;
@@ -1451,10 +1452,22 @@ export const handler = router({
       return json({ releases: releases.filter((release) => release.status === 'pending_review').slice(0, 100) });
     },
   ],
+  'GET /api/admin/releases/:releaseId/moderation-history': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async (ctx) => {
+      const releaseId = String(ctx.params.releaseId ?? '');
+      const { items } = await db.list(moderationHistoryTable, { limit: 2000 });
+      const history = items
+        .filter((item) => String(item.releaseId) === releaseId)
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+        .slice(0, 100);
+      return json({ history });
+    },
+  ],
   'POST /api/admin/releases/:releaseId/moderate': [
     requireAdminEmailAllowlist(ADMIN_EMAILS),
     async (ctx) => {
-      const body = (ctx.body ?? {}) as { decision?: 'approved'|'changes'|'rejected'; note?: string };
+      const body = (ctx.body ?? {}) as { decision?: 'approved'|'changes'|'rejected'; note?: string; reasonCode?: string };
       if (!['approved', 'changes', 'rejected'].includes(body.decision ?? '')) return error('Choose a moderation decision.', 400);
       const { items } = await db.list(releaseTable, { limit: 500 });
       const release = items.find((item) => item.id === ctx.params.releaseId);
@@ -1463,6 +1476,17 @@ export const handler = router({
       const status = body.decision === 'approved' ? 'released' : body.decision === 'changes' ? 'draft' : 'rejected';
       const next = { ...release, status, moderationNote: String(body.note ?? '').trim().slice(0, 1000) || null, moderatedAt: now, moderatedBy: ctx.user!.userId, releaseDate: body.decision === 'approved' ? now : release.releaseDate ?? null, updatedAt: now };
       await db.update(releaseTable, [{ id: release.id, record: next }]);
+      await db.add(moderationHistoryTable, [{
+        releaseId: release.id,
+        creatorUserId: release.creatorUserId ?? null,
+        decision: body.decision,
+        reasonCode: String(body.reasonCode ?? (body.decision === 'approved' ? 'approved' : 'other')).trim().slice(0, 80),
+        note: next.moderationNote,
+        fromStatus: release.status ?? null,
+        toStatus: status,
+        moderatorUserId: ctx.user!.userId,
+        createdAt: now,
+      }]);
       if (release.creatorUserId) {
         await createUserNotificationOnce(String(release.creatorUserId), {
           type: 'content',
