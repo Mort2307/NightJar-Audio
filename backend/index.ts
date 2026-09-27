@@ -1088,6 +1088,7 @@ export const handler = router({
   'GET /api/writer/scripts': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       if (!(await requireRole(ctx.user!.userId, ['writer', 'admin']))) return error('Writer access required.', 403);
       const { items } = await db.list('nightjar_scripts', { limit: 500 });
       return json({ scripts: items.filter((script) => script.writerUserId === ctx.user!.userId) });
@@ -1096,6 +1097,7 @@ export const handler = router({
   'POST /api/writer/scripts': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
       const body = (ctx.body ?? {}) as Record<string, unknown>;
       const title = String(body.title ?? '').trim();
@@ -1110,6 +1112,7 @@ export const handler = router({
   'PUT /api/writer/scripts/:scriptId': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
       const { items } = await db.list('nightjar_scripts', { limit: 500 });
       const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
@@ -1143,6 +1146,7 @@ export const handler = router({
   'POST /api/writer/scripts/:scriptId/versions': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
       const { items } = await db.list('nightjar_scripts', { limit: 500 });
       const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
@@ -1159,6 +1163,7 @@ export const handler = router({
   'POST /api/writer/scripts/:scriptId/submit': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       if (!(await requireRole(ctx.user!.userId, ['writer']))) return error('Active Writer access required.', 403);
       const { items } = await db.list('nightjar_scripts', { limit: 500 });
       const script = items.find((item) => item.id === ctx.params.scriptId && item.writerUserId === ctx.user!.userId);
@@ -1173,6 +1178,7 @@ export const handler = router({
   'GET /api/editor/queue': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       if (!(await requireRole(ctx.user!.userId, ['editor', 'admin']))) return error('Editor access required.', 403);
       const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
       const { items: assignments } = await db.list('nightjar_editor_assignments', { limit: 500 });
@@ -1192,6 +1198,7 @@ export const handler = router({
   'POST /api/editor/scripts/:scriptId/review': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       if (!(await requireRole(ctx.user!.userId, ['editor']))) return error('Active Editor access required.', 403);
       const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
       const script = scripts.find((item) => item.id === ctx.params.scriptId);
@@ -1764,6 +1771,7 @@ export const handler = router({
   'GET /api/scripts/:scriptId/access': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       const { items: scripts } = await db.list('nightjar_scripts', { limit: 500 });
       const script = scripts.find((item) => item.id === ctx.params.scriptId);
       if (!script || script.writerUserId !== ctx.user!.userId) return error('Writer ownership is required.', 403);
@@ -1839,6 +1847,7 @@ export const handler = router({
   'POST /api/scripts/:scriptId/permissions': [
     requireAuth(),
     async (ctx) => {
+      if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before accessing adult manuscript tools.', 403);
       const body = (ctx.body ?? {}) as {
         recipientUserId?: string;
         creatorUserId?: string;
