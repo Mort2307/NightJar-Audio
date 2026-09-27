@@ -364,29 +364,74 @@ export const communityState = onCall({ region: REGION }, async (request) => {
   ]);
 
   return {
-    follows: follows.docs.map((doc) => ({ creatorUserId: doc.id })),
+    follows: follows.docs.map((doc) => ({
+      targetUserId: doc.id,
+      creatorUserId: doc.id,
+      targetRole: doc.data().targetRole ?? null,
+    })),
     favourites: favourites.docs.map((doc) => ({ releaseId: doc.id })),
   };
 });
 
+export const setProfileFollow = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as { targetUserId?: unknown; following?: unknown };
+  const targetUserId = cleanText(input.targetUserId, 128);
+  if (!targetUserId || targetUserId === identity.uid) {
+    throw new HttpsError('invalid-argument', 'Choose another Nightjar profile to follow.');
+  }
+
+  const [target, profile] = await Promise.all([
+    accountRef(targetUserId).get(),
+    profileRef(targetUserId).get(),
+  ]);
+  if (!target.exists || target.data()?.status !== 'active' || target.data()?.role === 'admin') {
+    throw new HttpsError('not-found', 'Public Nightjar profile not found.');
+  }
+  if (!profile.exists || profile.data()?.publicProfile === false) {
+    throw new HttpsError('not-found', 'Public Nightjar profile not found.');
+  }
+
+  const ref = accountRef(identity.uid).collection('follows').doc(targetUserId);
+  if (input.following === false) {
+    await ref.delete();
+  } else {
+    await ref.set({
+      targetUserId,
+      targetRole: target.data()?.role ?? null,
+      createdAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
+  return {
+    targetUserId,
+    targetRole: target.data()?.role ?? null,
+    following: input.following !== false,
+  };
+});
+
+// Backward-compatible callable name while active clients migrate to generic profile follows.
 export const setCreatorFollow = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as { creatorUserId?: unknown; following?: unknown };
-  const creatorUserId = cleanText(input.creatorUserId, 128);
-  if (!creatorUserId || creatorUserId === identity.uid) {
-    throw new HttpsError('invalid-argument', 'Choose another creator to follow.');
+  const targetUserId = cleanText(input.creatorUserId, 128);
+  if (!targetUserId || targetUserId === identity.uid) {
+    throw new HttpsError('invalid-argument', 'Choose another Nightjar profile to follow.');
   }
 
-  const creator = await accountRef(creatorUserId).get();
-  if (!creator.exists || creator.data()?.role !== 'creator' || creator.data()?.status !== 'active') {
+  const [target, profile] = await Promise.all([
+    accountRef(targetUserId).get(),
+    profileRef(targetUserId).get(),
+  ]);
+  if (!target.exists || target.data()?.status !== 'active' || target.data()?.role !== 'creator' || !profile.exists || profile.data()?.publicProfile === false) {
     throw new HttpsError('not-found', 'Creator profile not found.');
   }
 
-  const ref = accountRef(identity.uid).collection('follows').doc(creatorUserId);
+  const ref = accountRef(identity.uid).collection('follows').doc(targetUserId);
   if (input.following === false) await ref.delete();
-  else await ref.set({ createdAt: FieldValue.serverTimestamp() }, { merge: true });
+  else await ref.set({ targetUserId, targetRole: 'creator', createdAt: FieldValue.serverTimestamp() }, { merge: true });
 
-  return { creatorUserId, following: input.following !== false };
+  return { creatorUserId: targetUserId, following: input.following !== false };
 });
 
 export const setFavouriteRelease = onCall({ region: REGION }, async (request) => {
