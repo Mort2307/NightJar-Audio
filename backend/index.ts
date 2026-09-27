@@ -371,7 +371,7 @@ const githubOidcKeysUrl = 'https://token.actions.githubusercontent.com/.well-kno
 const githubOidcIssuer = 'https://token.actions.githubusercontent.com';
 const githubOidcAudience = 'nightjar';
 const githubOidcRepository = 'Mort2307/NightJar-Audio';
-let githubOidcKeysCache: { fetchedAt: number; keys: Record<string, JsonWebKey> } | null = null;
+let githubOidcKeysCache: { fetchedAt: number; keys: Record<string, any> } | null = null;
 
 const base64UrlDecode = (value: string) => Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (value.length % 4)) % 4), 'base64');
 const readGithubOidcToken = (body: unknown) => {
@@ -406,9 +406,9 @@ const verifyGithubActionsOidc = async (token: string) => {
     const response = await fetch(githubOidcKeysUrl);
     if (!response.ok) return false;
     const body = await response.json() as { keys?: Array<Record<string, unknown>> };
-    const keys: Record<string, JsonWebKey> = {};
+    const keys: Record<string, any> = {};
     for (const key of body.keys ?? []) {
-      if (typeof key.kid === 'string') keys[key.kid] = key as unknown as JsonWebKey;
+      if (typeof key.kid === 'string') keys[key.kid] = key;
     }
     githubOidcKeysCache = { fetchedAt: Date.now(), keys };
   }
