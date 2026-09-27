@@ -64,6 +64,22 @@ const diversifyReleases = (items: any[], limit = 24, maxPerCreator = 3) => {
   return selected;
 };
 const getProfile = async (userId: string) => { const { items } = await db.list<NightjarProfile>(profileTable(userId), { limit: 1 }); return items[0] ?? null; };
+const ensureFollowIndexForUser = async (userId: string) => {
+  const { items: follows } = await db.list(followTable(userId), { limit: 2000 });
+  if (!follows.length) return follows;
+  const { items: indexed } = await db.list(followIndexTable, { limit: 5000 });
+  const indexedTargets = new Set(indexed.filter((item) => String(item.followerUserId) === userId).map((item) => String(item.profileUserId)));
+  const missing = follows
+    .map((item) => ({
+      profileUserId: String(item.profileUserId ?? item.creatorUserId ?? ''),
+      profileRole: item.profileRole ?? (item.creatorUserId ? 'creator' : null),
+      createdAt: item.createdAt ?? new Date().toISOString(),
+    }))
+    .filter((item) => item.profileUserId && !indexedTargets.has(item.profileUserId))
+    .map((item) => ({ followerUserId: userId, ...item }));
+  if (missing.length) await db.add(followIndexTable, missing);
+  return follows;
+};
 const isSuspended = async (userId: string) => { const { items } = await db.list(accountTable(userId), { limit: 1 }); return items[0]?.status === 'suspended'; };
 const revokeReaderSessions = async (userId: string, reason: string) => { const { items } = await db.list(readerSessionTable(userId), { limit: 500 }); const now = new Date().toISOString(); const updates = items.filter((item) => item.status === 'active').map((item) => ({ id: item.id, record: { ...item, status: 'revoked', revokedAt: now, revokedReason: reason } })); if (updates.length) await db.update(readerSessionTable(userId), updates); };
 const createOwnerSecurityNotifications = async (alert: Record<string, unknown>) => { for (const email of ADMIN_EMAILS) await db.add(ownerNotificationTable(email), [{ type:'security_alert', alertId:alert.id??null, severity:alert.severity??'high', title:'Nightjar security alert', message:alert.reason??'Suspicious protected-content activity detected.', createdAt:new Date().toISOString(), read:false, recipientEmail:normalizeEmail(email) }]); };
@@ -557,9 +573,10 @@ export const handler = router({
       }, {});
       const creators = await Promise.all(accounts.filter((account) => account.role === 'creator' && account.status !== 'suspended').map(async (account) => {
         const profile = await getProfile(account.userId);
-        return { userId: account.userId, displayName: profile?.displayName ?? account.name ?? 'Nightjar creator', handle: profile?.handle ?? account.handle ?? null, headline: profile?.headline ?? null, bio: profile?.bio ?? null, avatarInitials: profile?.avatarInitials ?? null, avatarTone: profile?.avatarTone ?? 'plum', followerCount: followerCounts[String(account.userId)] ?? 0, releaseCount: releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').length };
+        if (!profile?.publicProfile) return null;
+        return { userId: account.userId, displayName: profile.displayName ?? account.name ?? 'Nightjar creator', handle: profile.handle ?? account.handle ?? null, headline: profile.headline ?? null, bio: profile.bio ?? null, avatarInitials: profile.avatarInitials ?? null, avatarTone: profile.avatarTone ?? 'plum', followerCount: followerCounts[String(account.userId)] ?? 0, releaseCount: releases.filter((release) => release.creatorUserId === account.userId && release.status === 'released').length };
       }));
-      return json({ creators });
+      return json({ creators: creators.filter(Boolean) });
     },
   ],
   'GET /api/spotlights': [
@@ -676,7 +693,7 @@ export const handler = router({
   'GET /api/profiles': [requireAuth(), async (ctx) => {
     if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before discovering profiles.', 403);
     const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
-    const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    const follows = await ensureFollowIndexForUser(ctx.user!.userId);
     const { items: followIndex } = await db.list(followIndexTable, { limit: 5000 });
     const followed = new Set(follows.map((item) => String(item.profileUserId ?? item.creatorUserId)).filter(Boolean));
     const followerCounts = followIndex.reduce<Record<string, number>>((counts, follow) => {
@@ -708,9 +725,9 @@ export const handler = router({
   'GET /api/favourites': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); return json({ favourites: items }); }],
   'POST /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); if (!items.some((item) => item.releaseId === ctx.params.releaseId)) await db.add(favouriteTable(ctx.user!.userId), [{ releaseId: ctx.params.releaseId, createdAt: new Date().toISOString() }]); return json({ favourite: true }); }],
   'DELETE /api/favourites/:releaseId': [requireAuth(), async (ctx) => { const { items } = await db.list(favouriteTable(ctx.user!.userId), { limit: 500 }); const ids = items.filter((item) => item.releaseId === ctx.params.releaseId).map((item) => item.id); if (ids.length) await db.delete(favouriteTable(ctx.user!.userId), ids); return json({ favourite: false }); }],
-  'GET /api/follows': [requireAuth(), async (ctx) => { const { items } = await db.list(followTable(ctx.user!.userId), { limit: 2000 }); return json({ follows: items }); }],
+  'GET /api/follows': [requireAuth(), async (ctx) => { const follows = await ensureFollowIndexForUser(ctx.user!.userId); return json({ follows }); }],
   'GET /api/following': [requireAuth(), async (ctx) => {
-    const { items: follows } = await db.list(followTable(ctx.user!.userId), { limit: 2000 });
+    const follows = await ensureFollowIndexForUser(ctx.user!.userId);
     const targetIds = Array.from(new Set(follows.map((item) => String(item.profileUserId ?? item.creatorUserId ?? '')).filter(Boolean)));
     const { items: accounts } = await db.list(accountIndexTable, { limit: 2000 });
     const profiles = await Promise.all(targetIds.map(async (userId) => {
