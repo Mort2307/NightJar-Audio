@@ -314,5 +314,37 @@
       "Continue until every eligible member has received a spotlight day"
     ],
     "expected": "The rotation advances across the entire eligible Creator roster and entire eligible Writer roster, including members beyond the first seven. No member is skipped solely because the roster exceeds seven."
+  },
+  {
+    "name": "Small spotlight rosters cycle continuously without empty days",
+    "viewport": "mobile",
+    "covers": [
+      "small creator roster",
+      "small writer roster",
+      "continuous rotation",
+      "roster modulo"
+    ],
+    "description": "Verifies that a roster smaller than seven still produces a spotlight every calendar day. Once every eligible person has had a day, the same roster begins again immediately.",
+    "steps": [
+      "Seed three active public Creator accounts and three active public Writer accounts",
+      "Inspect the spotlight on six consecutive calendar days",
+      "Inspect the spotlight on the seventh and eighth days"
+    ],
+    "expected": "The first three days feature Creator 1, Creator 2 and Creator 3, then the sequence repeats from Creator 1 on day four. Writer rotation behaves independently in the same continuous manner. There are no empty days caused by the roster being smaller than seven."
+  },
+  {
+    "name": "Listener Top 7 repeats when fewer than seven eligible listeners exist",
+    "viewport": "desktop",
+    "covers": [
+      "listener spotlight",
+      "small listener cohort",
+      "continuous weekly rotation"
+    ],
+    "description": "Verifies that a weekly listener cohort smaller than seven still uses every available listener without creating placeholder days.",
+    "steps": [
+      "Seed three eligible Listener accounts with tracked activity in the completed week",
+      "Open Listener Spotlight across the seven days of the current week"
+    ],
+    "expected": "The three listeners are rotated across the available days using the same cohort repeatedly; no empty placeholder listener is introduced simply because the cohort contains fewer than seven people."
   }
 ]
