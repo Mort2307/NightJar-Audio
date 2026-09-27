@@ -172,10 +172,6 @@ function App() {
   const [spotlightMeta, setSpotlightMeta] = useState<{ listenerTopSevenCount: number; listenerSpotlightDay: number | null; listenerWeek: string | null }>({ listenerTopSevenCount: 0, listenerSpotlightDay: null, listenerWeek: null });
   const [creatorDashboard, setCreatorDashboard] = useState<{ metrics: any; releases: any[] }>({ metrics: {}, releases: [] });
   const [creatorDashboardLoading, setCreatorDashboardLoading] = useState(false);
-  const [creatorDraft, setCreatorDraft] = useState({
-    title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '',
-    durationMinutes: '', audioUrl: '', artworkUrl: '',
-  });
   const [liveRecommendations, setLiveRecommendations] = useState<any[]>([]);
   const [liveTrending, setLiveTrending] = useState<any[]>([]);
   const [currentIntent, setCurrentIntent] = useState('');
@@ -198,8 +194,6 @@ function App() {
   const creatorSpotlight = creatorSpotlightList[0] ?? null;
   const writerSpotlight = writerSpotlightList[0] ?? null;
   const creators = creatorDirectory;
-  const creatorSpotlights = creatorSpotlightList;
-  const writerSpotlights = writerSpotlightList;
   const studioMetrics = [
     ['Published releases', String(creatorDashboard.metrics?.released ?? 0)],
     ['Draft releases', String(creatorDashboard.metrics?.drafts ?? 0)],
@@ -390,55 +384,6 @@ function App() {
       } else notify('Spotlight sharing is available from a compatible device/browser.');
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) notify('Spotlight sharing could not be opened.');
-    }
-  };
-
-  const createCreatorRelease = async () => {
-    if (!creatorDraft.title.trim()) return notify('Release title is required.');
-    try {
-      const { data } = await api.post('/api/creator/releases', {
-        ...creatorDraft,
-        tags: creatorDraft.tags.split(',').map((item) => item.trim()).filter(Boolean),
-        tropes: creatorDraft.tropes.split(',').map((item) => item.trim()).filter(Boolean),
-        durationMinutes: Number(creatorDraft.durationMinutes || 0),
-      });
-      if (data?.release) setCreatorDraft({ title:'', description:'', category:'', genre:'', mood:'', tags:'', tropes:'', durationMinutes:'', audioUrl:'', artworkUrl:'' });
-      await loadCreatorDashboard();
-      notify('Release draft created.');
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'Release could not be created.');
-    }
-  };
-
-  const updateCreatorRelease = async (release: any) => {
-    try {
-      await api.put('/api/creator/releases/' + release.id, release);
-      await loadCreatorDashboard();
-      notify('Release updated.');
-    } catch {
-      notify('Release could not be updated.');
-    }
-  };
-
-  const publishCreatorRelease = async (releaseId: string) => {
-    try {
-      await api.post('/api/creator/releases/' + releaseId + '/publish');
-      await loadCreatorDashboard();
-      await loadLiveProductData();
-      notify('Release published.');
-    } catch {
-      notify('Release could not be published. Attach a real audio URL first.');
-    }
-  };
-
-  const deleteCreatorRelease = async (releaseId: string) => {
-    if (!window.confirm('Delete this release draft?')) return;
-    try {
-      await api.delete('/api/creator/releases/' + releaseId);
-      await loadCreatorDashboard();
-      notify('Release draft deleted.');
-    } catch {
-      notify('Release could not be deleted.');
     }
   };
 
