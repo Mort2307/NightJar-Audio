@@ -28,6 +28,7 @@ type LocalState = {
   readerSessions: Record<string, any[]>;
   brandingUrl: string | null;
   spotlights: any[];
+  moderationHistory: any[];
 };
 
 type Response<T = unknown> = { data: T };
@@ -67,6 +68,7 @@ const emptyState = (): LocalState => ({
   readerSessions: {},
   brandingUrl: null,
   spotlights: [],
+  moderationHistory: [],
 });
 
 function loadState(): LocalState {
@@ -149,6 +151,33 @@ function tasteSignalWeight(type: unknown, completed = false) {
   if (signal === 'skip') return -1;
   if (signal === 'save' || signal === 'follow' || signal === 'replay') return 1;
   return 0.5;
+}
+
+function diversifyReleases(items: any[], limit = 24, maxPerCreator = 3) {
+  const selected: any[] = [];
+  const selectedIds = new Set<string>();
+  const creatorCounts: Record<string, number> = {};
+  for (let pass = 1; pass <= maxPerCreator && selected.length < limit; pass += 1) {
+    for (const item of items) {
+      if (selected.length >= limit) break;
+      const releaseId = String(item.id ?? '');
+      const creatorId = String(item.creatorUserId ?? 'unknown');
+      if (!releaseId || selectedIds.has(releaseId) || (creatorCounts[creatorId] ?? 0) >= pass) continue;
+      selected.push(item);
+      selectedIds.add(releaseId);
+      creatorCounts[creatorId] = (creatorCounts[creatorId] ?? 0) + 1;
+    }
+  }
+  if (selected.length < limit) {
+    for (const item of items) {
+      if (selected.length >= limit) break;
+      const releaseId = String(item.id ?? '');
+      if (!releaseId || selectedIds.has(releaseId)) continue;
+      selected.push(item);
+      selectedIds.add(releaseId);
+    }
+  }
+  return selected;
 }
 
 
@@ -300,7 +329,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     }
     const intent = q.get('intent') ?? '';
     const following = new Set(state.follows[account.userId] ?? []);
-    const recommendations = state.releases.filter((release) => release.status === 'released').map((release) => {
+    const ranked = state.releases.filter((release) => release.status === 'released').map((release) => {
       const values = [release.category, release.genre, release.mood, ...(release.tags ?? []), ...(release.tropes ?? [])].filter(Boolean).map(String);
       let score = 0;
       values.forEach((value) => { score += liked.get(value.toLowerCase()) ?? 0; });
@@ -308,8 +337,9 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       if (intent && values.some((value) => value.toLowerCase().includes(intent.toLowerCase()))) score += 4;
       const matches = values.filter((value) => (liked.get(value.toLowerCase()) ?? 0) > 0).slice(0, 3);
       return { ...release, score, reason: matches.length ? 'Because you chose ' + matches.join(', ') + '.' : following.has(release.creatorUserId) ? 'From a creator you follow.' : 'A new release for your current discovery context.' };
-    }).sort((a, b) => b.score - a.score).slice(0, 24);
-    return send({ recommendations, model: { declaredWeight: 5, observedWeight: 1, socialWeight: 8, intentWeight: 4 } });
+    }).sort((a, b) => b.score - a.score);
+    const recommendations = diversifyReleases(ranked, 24, 3);
+    return send({ recommendations, model: { declaredWeight: 5, socialWeight: 8, intentWeight: 4, maxInitialReleasesPerCreator: 3 } });
   }
 
   if (path === '/api/trending' && method === 'GET') {
@@ -706,6 +736,13 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ releases: state.releases.filter((release) => release.status === 'pending_review').slice(0, 100) });
   }
 
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'releases' && parts.length === 5 && parts[4] === 'moderation-history' && method === 'GET') {
+    requireAdmin(state);
+    const history = state.moderationHistory.filter((item) => item.releaseId === parts[3]).slice().sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))).slice(0, 100);
+    return send({ history });
+  }
+
+
   if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'releases' && parts.length === 5 && parts[4] === 'moderate' && method === 'POST') {
     const admin = requireAdmin(state);
     const release = state.releases.find((item) => item.id === parts[3]);
@@ -713,12 +750,25 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const decision = String(input.decision ?? '');
     if (!['approved', 'changes', 'rejected'].includes(decision)) throw new Error('Invalid moderation decision.');
     const note = String(input.note ?? '').trim();
+    const fromStatus = release.status;
     release.status = decision === 'approved' ? 'released' : decision === 'changes' ? 'draft' : 'rejected';
     release.moderationNote = note || null;
     release.moderatedAt = now();
     release.moderatedBy = admin.userId;
     release.releaseDate = decision === 'approved' ? now() : release.releaseDate ?? null;
     release.updatedAt = now();
+    state.moderationHistory.push({
+      id: id('moderation'),
+      releaseId: release.id,
+      creatorUserId: release.creatorUserId ?? null,
+      decision,
+      reasonCode: String(input.reasonCode ?? (decision === 'approved' ? 'approved' : 'other')).slice(0, 80),
+      note: release.moderationNote,
+      fromStatus,
+      toStatus: release.status,
+      moderatorUserId: admin.userId,
+      createdAt: release.moderatedAt,
+    });
     if (release.creatorUserId) addLocalNotification(state, release.creatorUserId, {
       type: 'content',
       subtype: 'release',
