@@ -113,6 +113,11 @@ function App() {
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
+  const [ageProvider, setAgeProvider] = useState('yoti-sandbox');
+  const [ageEnvironment, setAgeEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [ageVerifiedAt, setAgeVerifiedAt] = useState<string | null>(null);
+  const [ageReverifyRequired, setAgeReverifyRequired] = useState(false);
+  const [ageSessionActive, setAgeSessionActive] = useState(false);
   const [ageLoading, setAgeLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -437,11 +442,17 @@ function App() {
     if (!auth.isSignedIn()) return false;
     try {
       const { data } = await api.get('/api/age/status');
-      setAgeVerified(data?.verified === true);
+      const verified = data?.verified === true;
+      setAgeVerified(verified);
       setAgeConfigured(data?.configured === true);
-      setAgeStatus(data?.status === 'COMPLETE' ? 'COMPLETE' : data?.status === 'PENDING' ? 'PENDING' : data?.status === 'FAIL' ? 'FAIL' : 'NOT_STARTED');
-      if (data?.verified === true) setAgeStage('app');
-      return data?.verified === true;
+      setAgeProvider(String(data?.provider ?? 'yoti-sandbox'));
+      setAgeEnvironment(data?.environment === 'production' ? 'production' : 'sandbox');
+      setAgeVerifiedAt(data?.verifiedAt ?? null);
+      setAgeReverifyRequired(data?.reverifyRequired === true);
+      setAgeSessionActive(data?.sessionActive === true);
+      setAgeStatus(data?.status === 'COMPLETE' ? 'COMPLETE' : data?.status === 'PENDING' || data?.status === 'PROCESSING' || data?.status === 'IN_PROGRESS' ? 'PENDING' : data?.status === 'FAIL' || data?.status === 'ERROR' || data?.status === 'CANCELLED' ? 'FAIL' : 'NOT_STARTED');
+      if (verified) setAgeStage('app');
+      return verified;
     } catch {
       return false;
     }
@@ -454,8 +465,13 @@ function App() {
       if (data?.verified) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
+        setAgeProvider('nightjar-sandbox-test');
+        setAgeEnvironment('sandbox');
+        setAgeVerifiedAt(new Date().toISOString());
+        setAgeReverifyRequired(false);
+        setAgeSessionActive(false);
         setAgeStage('app');
-        notify('Sandbox age verification marked complete for this administrator test account.');
+        notify('Age verification is now stored on this Nightjar account; future logins will not repeat the check.');
       }
     } catch {
       notify('Sandbox test could not be completed.');
@@ -473,22 +489,31 @@ function App() {
         await loadAccount();
       }
       const alreadyVerified = await refreshAgeStatus();
-      if (alreadyVerified) return;
+      if (alreadyVerified) {
+        notify('Your Nightjar account is already age verified. No new check is needed.');
+        return;
+      }
       const { data } = await api.post('/api/age/session');
       setAgeConfigured(data?.configured === true);
+      setAgeProvider(String(data?.provider ?? 'yoti-sandbox'));
+      setAgeEnvironment(data?.environment === 'production' ? 'production' : 'sandbox');
+      setAgeSessionActive(Boolean(data?.sessionId && !data?.verified));
       if (data?.verified === true) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
+        setAgeVerifiedAt(data?.verifiedAt ?? new Date().toISOString());
+        setAgeReverifyRequired(false);
+        setAgeSessionActive(false);
         setAgeStage('app');
-        notify('Age verification already completed.');
+        notify('Your Nightjar account is already age verified. No new check was required.');
       } else if (data?.launchUrl) {
         setAgeStatus('PENDING');
         window.open(data.launchUrl, '_blank', 'noopener,noreferrer');
-        notify('Secure Yoti sandbox opened. Complete the check, then return to Nightjar.');
+        notify(data?.environment === 'production' ? 'Secure age verification opened. Complete it, then return to Nightjar.' : 'Secure Yoti sandbox opened. Complete the test, then return to Nightjar.');
       } else if (data?.testAvailable) {
         notify('Yoti sandbox is not configured yet. The administrator sandbox test is available below.');
       } else {
-        notify('Secure age verification is being connected. Please try again once the provider is configured.');
+        notify('Secure age verification is not configured yet. Please try again once the provider is connected.');
       }
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
@@ -528,6 +553,11 @@ function App() {
     setAgeVerified(false);
     setAgeStatus('NOT_STARTED');
     setAgeConfigured(false);
+    setAgeProvider('yoti-sandbox');
+    setAgeEnvironment('sandbox');
+    setAgeVerifiedAt(null);
+    setAgeReverifyRequired(false);
+    setAgeSessionActive(false);
     setView('discover');
     setRolePicker(false);
     notify('Signed out of Nightjar.');
@@ -941,16 +971,28 @@ function App() {
           </p>
           <div className="verification-panel">
             <div className="verification-icon"><ShieldCheck size={23} /></div>
-            <div><strong>Yoti Age Verification</strong><span>{ageConfigured ? 'Sandbox provider connected and ready for a verification session.' : 'Sandbox integration is ready; provider credentials still need to be added.'}</span></div>
-            <span className="status-pill">{ageStatus === 'COMPLETE' ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
+            <div>
+              <strong>{ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'}</strong>
+              <span>
+                {ageVerified
+                  ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins use this stored verification state.`
+                  : ageSessionActive
+                    ? 'A verification session is in progress. Finish it and return to Nightjar; the account state will update automatically.'
+                    : ageConfigured
+                      ? `Secure ${ageEnvironment} provider connected and ready for a verification session.`
+                      : 'Verification integration is ready; provider credentials still need to be added.'}
+              </span>
+            </div>
+            <span className="status-pill">{ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
           </div>
           <div className="verification-list">
             <div><Check size={16} /><span>Adult access is checked before the catalogue is released.</span></div>
-            <div><Check size={16} /><span>Verification can be designed around data minimisation.</span></div>
-            <div><Check size={16} /><span>Raw identity documents do not belong in the Nightjar content database.</span></div>
+            <div><Check size={16} /><span>Verification is stored against your Nightjar account, not repeated on each login or device.</span></div>
+            <div><Check size={16} /><span>Nightjar stores verification state and an opaque reference rather than raw identity documents.</span></div>
+            {ageReverifyRequired && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
           </div>
-          <button className="primary-button wide-button" disabled={ageLoading} onClick={() => void openAgeCheck()}>
-            {ageLoading ? 'Opening secure check…' : ageVerified ? 'Age verified — continue' : 'Open secure age check'} <LockKeyhole size={16} />
+          <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
+            {ageLoading ? 'Opening secure check…' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
           </button>
           {!ageConfigured && user && role === 'admin' && <button className="secondary-button wide-button" disabled={ageLoading} onClick={() => void runAdminSandboxTest()}>
             Run administrator sandbox test <ShieldCheck size={16} />
