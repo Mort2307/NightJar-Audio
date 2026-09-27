@@ -258,5 +258,44 @@
       "Advance to the following Monday and request Spotlight again"
     ],
     "expected": "The same seven listeners remain the eligible cohort throughout the week and are shown one per day. The following Monday uses the newly completed week's ranking instead. Accounts with public profiles disabled are not exposed as spotlight profiles."
+  },
+  {
+    "name": "Spotlighted users receive one idempotent daily notification",
+    "viewport": "mobile",
+    "covers": [
+      "spotlight notification",
+      "creator notification",
+      "writer notification",
+      "listener thank-you notification",
+      "deduplication"
+    ],
+    "description": "Verifies the daily spotlight service creates an in-app notification for each spotlighted account, with creator/writer promotion messaging and a listener thank-you message, without duplicating the same notification on repeated reads.",
+    "steps": [
+      "Use a test environment with an eligible Creator, Writer and Listener Spotlight",
+      "Open the discovery page twice on the same day",
+      "Sign in as each spotlighted account and open Notifications",
+      "Inspect the Creator and Writer notifications",
+      "Inspect the Listener notification",
+      "Repeat the spotlight request several times"
+    ],
+    "expected": "Each spotlighted account has one notification for that day's spotlight. Creator and Writer messages invite natural discovery/share of their work; Listener messaging thanks them for contributing to the community. Repeated spotlight reads do not create duplicate notifications."
+  },
+  {
+    "name": "Creator and Writer spotlights provide natural sharing promotion",
+    "viewport": "mobile",
+    "covers": [
+      "creator promotion",
+      "writer promotion",
+      "Web Share",
+      "clipboard fallback"
+    ],
+    "description": "Verifies today's Creator and Writer spotlight cards expose a share action using the device/browser share mechanism where supported and a clipboard fallback otherwise.",
+    "steps": [
+      "Open a discovery page containing the Creator Spotlight",
+      "Use Share spotlight and confirm the message identifies today's Creator Spotlight and Nightjar",
+      "Open the Writer Spotlight",
+      "Use Share spotlight and confirm the message identifies today's Writer Spotlight and Nightjar"
+    ],
+    "expected": "Creator and Writer spotlight cards provide an optional, user-triggered share action. The generated message promotes the featured person and Nightjar without forcing a share or fabricating engagement."
   }
 ]
