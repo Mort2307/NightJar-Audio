@@ -1366,3 +1366,9 @@ button:focus-visible {
 .recommendation-feedback button:hover,.recommendation-feedback button.active { color:var(--ivory); border-color:rgba(203,181,204,.3); background:rgba(178,144,170,.07); }
 .recommendation-feedback button:disabled { opacity:.5; cursor:wait; }
 .recommendation-feedback.compact button { width:27px; height:25px; justify-content:center; padding:0; }
+
+
+.creator-directory-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 18px; }
+.creator-search { width:min(520px,100%); display:flex; align-items:center; gap:9px; border:1px solid var(--line-soft); border-radius:12px; padding:10px 12px; background:rgba(255,255,255,.018); color:var(--muted-2); }
+.creator-search input { width:100%; border:0; outline:0; background:transparent; color:var(--ivory); font:inherit; font-size:10px; }
+@media (max-width:760px) { .creator-directory-toolbar { display:grid; } }
