@@ -1618,7 +1618,7 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      notify('Full script exported under the writer’s explicit permission.');
+      notify('Full script exported under the writer’s explicit permission' + (exported?.forensicToken ? ' · FP ' + String(exported.forensicToken) : '') + '.');
     } catch {
       notify('Full script export is not available for this reader session.');
     } finally {
