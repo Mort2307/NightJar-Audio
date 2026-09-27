@@ -1,0 +1,35 @@
+name: Nightjar modular validation
+
+on:
+  push:
+    branches: [feature/six-core-product-modules]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build frontend
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee modular-build.log
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightjar-modular-build-log
+          path: modular-build.log
+          if-no-files-found: ignore
