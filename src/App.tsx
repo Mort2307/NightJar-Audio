@@ -526,7 +526,10 @@ function App() {
   };
 
   const refreshAgeStatus = async () => {
-    if (!auth.isSignedIn()) return false;
+    if (!auth.isSignedIn()) {
+      setAgeStage('gate');
+      return true;
+    }
     try {
       const { data } = await api.get('/api/age/status');
       const verified = data?.verified === true;
