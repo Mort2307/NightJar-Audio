@@ -109,7 +109,12 @@ function requireAdmin(state: LocalState): LocalUser {
   return user;
 }
 
+function requireActiveLocalAccount(account: LocalUser) {
+  if (account.status === 'suspended' || account.removed === true) throw new Error('This account is suspended.');
+}
+
 function requireVerifiedAdult(state: LocalState, account: LocalUser) {
+  requireActiveLocalAccount(account);
   if (state.age[account.userId]?.verified !== true) throw new Error('Age verification required.');
 }
 
@@ -614,6 +619,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'creator' && parts[2] === 'assets' && method === 'POST') {
     const account = requireUser(state);
+    requireActiveLocalAccount(account);
     if (account.role !== 'creator') throw new Error('Active Creator access required.');
     const releaseId = String(input.releaseId ?? '');
     const kind = String(input.kind ?? '');
@@ -635,6 +641,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/creator/dashboard' && method === 'GET') {
     const account = requireUser(state);
+    requireActiveLocalAccount(account);
     if (!['creator', 'admin'].includes(account.role ?? '')) throw new Error('Creator access required.');
     const mine = state.releases.filter((release) => release.creatorUserId === account.userId);
     const events = state.listening.filter((event) => mine.some((release) => release.id === event.releaseId));
@@ -644,12 +651,14 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (path === '/api/creator/releases' && method === 'GET') {
     const account = requireUser(state);
+    requireActiveLocalAccount(account);
     if (!['creator', 'admin'].includes(account.role ?? '')) throw new Error('Creator access required.');
     return send({ releases: state.releases.filter((release) => release.creatorUserId === account.userId) });
   }
 
   if (path === '/api/creator/releases' && method === 'POST') {
     const account = requireUser(state);
+    requireActiveLocalAccount(account);
     if (account.role !== 'creator') throw new Error('Active Creator access required.');
     const release = {
       id: id('release'),
@@ -677,6 +686,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'creator' && parts[2] === 'releases' && parts.length === 4) {
     const account = requireUser(state);
+    requireActiveLocalAccount(account);
     if (account.role !== 'creator') throw new Error('Active Creator access required.');
     const release = state.releases.find((item) => item.id === parts[3] && item.creatorUserId === account.userId);
     if (!release) throw new Error('Release not found.');
@@ -703,6 +713,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'creator' && parts[2] === 'releases' && parts.length === 5 && parts[4] === 'publish' && method === 'POST') {
     const account = requireUser(state);
+    requireActiveLocalAccount(account);
     if (account.role !== 'creator') throw new Error('Active Creator access required.');
     const release = state.releases.find((item) => item.id === parts[3] && item.creatorUserId === account.userId);
     if (!release) throw new Error('Release not found.');
