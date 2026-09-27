@@ -788,9 +788,48 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     return send({ session });
   }
 
+  if (path === '/api/admin/release-library' && method === 'GET') {
+    requireAdmin(state);
+    const statuses = new Set(['pending_review', 'released', 'held', 'taken_down', 'rejected']);
+    return send({ releases: state.releases.filter((release) => statuses.has(String(release.status ?? ''))).slice().sort((a, b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? ''))) });
+  }
+
   if (path === '/api/admin/release-queue' && method === 'GET') {
     requireAdmin(state);
     return send({ releases: state.releases.filter((release) => release.status === 'pending_review').slice(0, 100) });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'releases' && parts.length === 5 && parts[4] === 'lifecycle' && method === 'POST') {
+    const admin = requireAdmin(state);
+    const release = state.releases.find((item) => item.id === parts[3]);
+    if (!release) throw new Error('Release not found.');
+    const action = String(input.action ?? '');
+    const fromStatus = String(release.status ?? '');
+    let toStatus = fromStatus;
+    if (action === 'hold' && fromStatus === 'released') toStatus = 'held';
+    else if (action === 'takedown' && ['released', 'held'].includes(fromStatus)) toStatus = 'taken_down';
+    else if (action === 'restore' && ['held', 'taken_down'].includes(fromStatus)) toStatus = 'released';
+    else throw new Error('That lifecycle action is not valid for the release’s current status.');
+    const at = now();
+    const note = String(input.note ?? '').trim().slice(0, 1000) || null;
+    const reasonCode = String(input.reasonCode ?? 'other').trim().slice(0, 80) || 'other';
+    release.status = toStatus;
+    release.lifecycleNote = note;
+    release.lifecycleReasonCode = reasonCode;
+    release.lifecycleUpdatedAt = at;
+    release.lifecycleUpdatedBy = admin.userId;
+    release.updatedAt = at;
+    state.moderationHistory.push({ id: id('moderation'), releaseId: release.id, creatorUserId: release.creatorUserId ?? null, decision: action, reasonCode, note, fromStatus, toStatus, moderatorUserId: admin.userId, createdAt: at });
+    if (release.creatorUserId) addLocalNotification(state, release.creatorUserId, {
+      type: 'content',
+      subtype: 'release',
+      title: action === 'hold' ? 'Your release has been placed on hold' : action === 'takedown' ? 'Your release has been taken down' : 'Your release has been restored',
+      message: action === 'hold' ? 'Nightjar has temporarily removed this release from the public catalogue while it is reviewed.' : action === 'takedown' ? 'Nightjar has removed this release from the public catalogue.' : 'Nightjar has restored this release to the public catalogue.',
+      releaseId: release.id,
+      moderationNote: note,
+      reasonCode,
+    });
+    return send({ release });
   }
 
   if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'releases' && parts.length === 5 && parts[4] === 'moderation-history' && method === 'GET') {
