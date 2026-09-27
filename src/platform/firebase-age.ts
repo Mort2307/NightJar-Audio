@@ -13,6 +13,8 @@ export type AgeStatus = {
   verifiedAt: any;
   reverifyRequired: boolean;
   testAvailable: boolean;
+  temporaryBypass?: boolean;
+  temporaryBypassReason?: string | null;
 };
 
 const statusCall = httpsCallable<void, AgeStatus>(functions, 'ageStatus');
