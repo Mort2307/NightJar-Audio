@@ -1476,9 +1476,9 @@ function App() {
                     </div>
                     <div className="feature-meta">
                       <div><span className="mini-label">{featured.category}</span><strong>{featured.title}</strong></div>
-                      <button className="round-play" disabled={!featured.audioUrl} onClick={() => togglePlayback(featured)} aria-label={playing === featured.id ? 'Pause release' : 'Play release'}>{playing === featured.id ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
+                      <button className="round-play" disabled={!featured.audioAvailable && !featured.audioUrl} onClick={() => togglePlayback(featured)} aria-label={playing === featured.id ? 'Pause release' : 'Play release'}>{playing === featured.id ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
                     </div>
-                    <div className="player-meta"><span>{featured.duration}</span><span>{featured.audioUrl ? 'Audio connected' : 'Audio not connected'}</span></div>
+                    <div className="player-meta"><span>{featured.duration}</span><span>{featured.audioAvailable || featured.audioUrl ? 'Private audio connected' : 'Audio not connected'}</span></div>
                   </> : <div className="empty-feature"><Moon size={40}/><strong>No featured release yet.</strong><span>Published catalogue records will appear here as creators release audio.</span></div>}
                 </div>
               </div>
@@ -1531,7 +1531,7 @@ function App() {
             <section className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
               <div className="track-grid">
-                {liveTrending.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioUrl:release.audioUrl || null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
+                {liveTrending.map((release: any) => <LiveReleaseCard key={release.id} release={release} playing={playing === String(release.id)} favourite={favouriteReleaseIds.includes(String(release.id))} onPlay={() => togglePlayback({id:String(release.id),title:String(release.title),creator:release.creatorName || 'Nightjar creator',duration:release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',category:release.category || 'Audio',descriptor:release.description || 'No description supplied.',audioAvailable:release.audioAvailable===true,audioUrl:null,artworkUrl:release.artworkUrl || null,creatorUserId:release.creatorUserId})} onFavourite={() => void toggleFavouriteRelease(String(release.id))} />)}
                 {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
               </div>
             </section>
@@ -1725,7 +1725,8 @@ function releaseToTrack(release: any): Track {
     duration: release.durationMinutes ? String(release.durationMinutes) + ' min' : '—',
     category: String(release.category ?? 'Audio'),
     descriptor: String(release.description ?? 'No description supplied.'),
-    audioUrl: release.audioUrl ?? null,
+    audioAvailable: release.audioAvailable === true,
+    audioUrl: null,
     artworkUrl: release.artworkUrl ?? null,
     creatorUserId: release.creatorUserId,
   };
@@ -1736,7 +1737,7 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason 
     <div className="track-cover" style={track.artworkUrl ? { backgroundImage: 'url("' + track.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       <span className="track-index">{track.category}</span>
       {!track.artworkUrl && <div className="track-cover-mark"><Moon size={22} /></div>}
-      <button className="cover-play" disabled={!track.audioUrl} onClick={() => onPlay(track)} aria-label={!track.audioUrl ? 'Audio not connected' : playing ? 'Pause ' + track.title : 'Play ' + track.title}>
+      <button className="cover-play" disabled={!track.audioAvailable && !track.audioUrl} onClick={() => onPlay(track)} aria-label={!track.audioAvailable && !track.audioUrl ? 'Audio not connected' : playing ? 'Pause ' + track.title : 'Play ' + track.title}>
         {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
       </button>
     </div>
@@ -1744,7 +1745,7 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason 
       <div className="track-type"><span>{track.creator}</span><span>{track.duration}</span></div>
       <h3>{track.title}</h3>
       <p>{track.descriptor}</p>
-      <div className="track-footer"><span className="creator-link">{track.audioUrl ? 'Playable audio' : 'Audio not connected'}</span><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove favourite' : 'Add favourite'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div>
+      <div className="track-footer"><span className="creator-link">{track.audioAvailable || track.audioUrl ? 'Age-gated audio ready' : 'Audio not connected'}</span><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove favourite' : 'Add favourite'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div>
       {reason && <p className="recommendation-reason"><Sparkles size={12} />{reason}</p>}
     </div>
   </article>;
