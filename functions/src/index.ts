@@ -1669,3 +1669,16 @@ export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
   return { verified: true, status: 'COMPLETE', provider: 'admin-test' };
 });
 
+export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  const snapshot = await releaseRef(releaseId).get();
+  const data = snapshot.data();
+  if (!data || !data.audioStoragePath) throw new HttpsError('not-found', 'Release audio not found.');
+  const [url] = await getStorage().bucket().file(String(data.audioStoragePath)).getSignedUrl({
+    action: 'read',
+    expires: Date.now() + 10 * 60 * 1000,
+  });
+  return { releaseId, url, expiresInSeconds: 600 };
+});
+
