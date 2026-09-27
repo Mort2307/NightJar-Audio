@@ -355,7 +355,9 @@ function App() {
         handle: creator.handle ?? null,
         initials: creator.avatarInitials ?? undefined,
         note: creator.headline ?? creator.bio ?? undefined,
+        followers: creator.followerCount ?? 0,
         releases: creator.releaseCount ?? 0,
+        share: (creator.listeningSharePercent ?? 0) + '%',
         imageUrl: creator.avatarUrl ?? null,
       })));
       const spotlights = firebaseSpotlightResponse.spotlights ?? [];
