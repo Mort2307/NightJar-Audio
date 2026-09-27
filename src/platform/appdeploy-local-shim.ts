@@ -800,14 +800,124 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
 
   if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 3 && method === 'GET') {
     const account = requireUser(state);
+    requireVerifiedAdult(state, account);
     const script = state.scripts.find((item) => item.id === parts[2]);
     if (!script) throw new Error('Script not found.');
-    requireVerifiedAdult(state, account);
     const grant = localScriptGrant(script, account.userId);
-    if (!grant) throw new Error('You do not have an active access grant for this manuscript.');
-    const session = { sessionId: id('reader'), expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), status: 'active' };
-    state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), { ...session, scriptId: script.id }];
-    return send({ script, readerSession: session, copyAllowed: grant.allowCopy === true, exportAllowed: grant.allowExport === true, canReadFull: true });
+    if (!grant) return send({ script: localScriptMetadata(script), canReadFull: false, copyAllowed: false, exportAllowed: false });
+
+    const issuedAt = now();
+    const session = {
+      sessionId: id('reader'),
+      scriptId: script.id,
+      accountId: account.userId,
+      status: 'active',
+      issuedAt,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      canReadFull: true,
+      allowCopy: grant.allowCopy === true,
+      allowExport: grant.allowExport === true,
+      watermark: 'NIGHTJAR · ' + account.name + ' · ' + issuedAt.slice(0, 16).replace('T', ' '),
+    };
+    state.readerSessions[account.userId] = [...(state.readerSessions[account.userId] ?? []), session];
+    return send({
+      script: localScriptMetadata(script),
+      readerSession: { sessionId: session.sessionId, expiresAt: session.expiresAt, watermark: session.watermark },
+      copyAllowed: session.allowCopy,
+      exportAllowed: session.allowExport,
+      canReadFull: true,
+    });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'content' && method === 'GET') {
+    const account = requireUser(state);
+    requireVerifiedAdult(state, account);
+    const script = state.scripts.find((item) => item.id === parts[2]);
+    if (!script) throw new Error('Script not found.');
+    const sessionId = String(q.get('sessionId') ?? '');
+    const page = Math.max(0, Math.floor(Number(q.get('page') ?? 0)));
+    const session = (state.readerSessions[account.userId] ?? []).find((item) => item.sessionId === sessionId && item.scriptId === script.id && item.status === 'active');
+    if (!session || new Date(String(session.expiresAt ?? 0)).getTime() <= Date.now()) throw new Error('Reader session is not active.');
+    const pages = localChunkProtectedContent(script.content ?? '');
+    if (page >= pages.length) throw new Error('Protected page not found.');
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_page_view', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId, page, createdAt: now() });
+    return send({
+      scriptId: script.id,
+      content: pages[page],
+      page,
+      totalPages: pages.length,
+      hasPrevious: page > 0,
+      hasNext: page + 1 < pages.length,
+      watermark: session.watermark ?? ('NIGHTJAR · ' + sessionId),
+      contentHash: script.contentHash ?? await localScriptHash(script.content ?? ''),
+      sessionExpiresAt: session.expiresAt,
+    });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'export' && method === 'GET') {
+    const account = requireUser(state);
+    requireVerifiedAdult(state, account);
+    const script = state.scripts.find((item) => item.id === parts[2]);
+    if (!script) throw new Error('Script not found.');
+    const sessionId = String(q.get('sessionId') ?? '');
+    const session = (state.readerSessions[account.userId] ?? []).find((item) => item.sessionId === sessionId && item.scriptId === script.id && item.status === 'active');
+    if (!session || new Date(String(session.expiresAt ?? 0)).getTime() <= Date.now()) throw new Error('Reader session is not active.');
+    if (session.allowExport !== true) throw new Error('The writer has not granted full-script export permission.');
+    const hash = script.contentHash ?? await localScriptHash(script.content ?? '');
+    const exportText = [
+      String(script.title ?? 'Untitled manuscript'),
+      'Nightjar protected export',
+      'Recipient: ' + account.name,
+      'Session: ' + sessionId,
+      'Version: ' + String(script.version ?? 1),
+      'SHA-256: ' + hash,
+      '',
+      String(script.content ?? ''),
+      '',
+      '---',
+      'This copy was explicitly exported under writer-controlled permission. Nightjar access and export events are logged.',
+    ].join('\n');
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_export', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, createdAt: now() });
+    return send({
+      fileName: String(script.title ?? 'nightjar-script').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) + '.txt',
+      content: exportText,
+      contentHash: hash,
+      watermark: session.watermark ?? null,
+    });
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'access' && method === 'GET') {
+    const account = requireUser(state);
+    if (account.role !== 'writer') throw new Error('Writer access required.');
+    const script = state.scripts.find((item) => item.id === parts[2] && item.writerUserId === account.userId);
+    if (!script) throw new Error('Script not found.');
+    const eligibleRecipients = state.users
+      .filter((candidate) => candidate.userId !== account.userId && candidate.status !== 'suspended')
+      .map((candidate) => {
+        const profile = ensureProfile(state, candidate);
+        return { userId: candidate.userId, role: candidate.role, name: profile.displayName ?? candidate.name, handle: profile.handle ?? null };
+      });
+    const grants = Object.entries(script.accessGrants ?? {}).map(([recipientUserId, raw]) => {
+      const grant = raw as any;
+      const recipient = eligibleRecipients.find((item) => item.userId === recipientUserId);
+      return {
+        id: recipientUserId + ':' + script.id,
+        recipientUserId,
+        recipientName: recipient?.name ?? 'Nightjar account',
+        recipientHandle: recipient?.handle ?? null,
+        recipientRole: recipient?.role ?? grant.recipientRole ?? null,
+        allowCopy: grant.allowCopy === true,
+        allowExport: grant.allowExport === true,
+        grantedAt: grant.grantedAt ?? null,
+        expiresAt: grant.expiresAt ?? null,
+        revokedAt: grant.revokedAt ?? null,
+      };
+    });
+    const pendingRequests = (script.accessRequests ?? []).filter((item: any) => item.status === 'pending').map((item: any) => {
+      const requester = state.users.find((candidate) => candidate.userId === item.userId);
+      return { id: item.userId + ':' + script.id, requesterUserId: item.userId, requesterName: requester?.name ?? 'Nightjar account', requesterRole: requester?.role ?? null, createdAt: item.createdAt ?? null };
+    });
+    return send({ grants, pendingRequests, eligibleRecipients });
   }
 
   if (parts[0] === 'api' && parts[1] === 'scripts' && parts.length === 4 && parts[3] === 'request-access' && method === 'POST') {
@@ -828,24 +938,49 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (account.role !== 'writer') throw new Error('Writer access required.');
     const script = state.scripts.find((item) => item.id === parts[2] && item.writerUserId === account.userId);
     if (!script) throw new Error('Script not found.');
-    const creatorUserId = String(input.creatorUserId ?? '');
-    if (!creatorUserId) throw new Error('Creator account is required.');
+    const recipientUserId = String(input.recipientUserId ?? input.creatorUserId ?? '').trim();
+    if (!recipientUserId) throw new Error('Recipient account is required.');
+    if (recipientUserId === account.userId) throw new Error('Writers already control their own manuscript.');
     script.accessGrants = script.accessGrants && typeof script.accessGrants === 'object' ? script.accessGrants : {};
-    const existingGrant = script.accessGrants[creatorUserId];
+    const existingGrant = script.accessGrants[recipientUserId];
+
     if (input.revoke === true) {
-      if (!existingGrant && !script.accessUsers?.includes(creatorUserId)) throw new Error('No existing script access grant was found to revoke.');
-      script.accessGrants[creatorUserId] = { ...(existingGrant ?? {}), allowCopy: false, allowExport: false, revokedAt: now() };
-      script.accessUsers = (script.accessUsers ?? []).filter((userId: string) => userId !== creatorUserId);
-      return send({ allowCopy: false, allowExport: false, expiresAt: existingGrant?.expiresAt ?? null, revoked: true });
+      if (!existingGrant && !script.accessUsers?.includes(recipientUserId)) throw new Error('No existing script access grant was found to revoke.');
+      script.accessGrants[recipientUserId] = { ...(existingGrant ?? {}), allowCopy: false, allowExport: false, revokedAt: now(), updatedAt: now() };
+      script.accessUsers = (script.accessUsers ?? []).filter((userId: string) => userId !== recipientUserId);
+      state.readerSessions[recipientUserId] = (state.readerSessions[recipientUserId] ?? []).map((session) => session.scriptId === script.id && session.status === 'active' ? { ...session, status: 'revoked', revokedAt: now(), revokedReason: 'Writer revoked protected script access.' } : session);
+      addLocalNotification(state, recipientUserId, { type: 'script_access', title: 'Script access revoked', message: 'The writer has revoked your access to this manuscript.', scriptId: script.id });
+      return send({ recipientUserId, allowCopy: false, allowExport: false, expiresAt: existingGrant?.expiresAt ?? null, revoked: true });
     }
-    const target = state.users.find((candidate) => candidate.userId === creatorUserId && candidate.role === 'creator' && candidate.status !== 'suspended');
-    if (!target) throw new Error('The selected account is not an active Creator.');
+
+    const target = state.users.find((candidate) => candidate.userId === recipientUserId && candidate.status !== 'suspended');
+    if (!target) throw new Error('The selected recipient is not an active Nightjar account.');
     const expiry = input.expiresAt ? new Date(String(input.expiresAt)) : null;
     if (expiry && (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now())) throw new Error('Access expiry must be a future date.');
-    script.accessGrants[creatorUserId] = { allowCopy: input.allowCopy === true, allowExport: input.allowExport === true, grantedAt: existingGrant?.grantedAt ?? now(), expiresAt: expiry ? expiry.toISOString() : null, revokedAt: null };
-    script.accessUsers = Array.from(new Set([...(script.accessUsers ?? []), creatorUserId]));
-    script.accessRequests = (script.accessRequests ?? []).map((item: any) => item.userId === creatorUserId && item.status === 'pending' ? { ...item, status: 'granted', resolvedAt: now() } : item);
-    return send({ allowCopy: input.allowCopy === true, allowExport: input.allowExport === true, expiresAt: expiry ? expiry.toISOString() : null, revoked: false });
+    const updatedAt = now();
+    script.accessGrants[recipientUserId] = {
+      allowCopy: input.allowCopy === true,
+      allowExport: input.allowExport === true,
+      purpose: String(input.purpose ?? existingGrant?.purpose ?? '').trim().slice(0, 160) || null,
+      recipientRole: target.role,
+      grantedAt: existingGrant?.grantedAt ?? updatedAt,
+      expiresAt: expiry ? expiry.toISOString() : null,
+      revokedAt: null,
+      updatedAt,
+    };
+    script.accessUsers = Array.from(new Set([...(script.accessUsers ?? []), recipientUserId]));
+    script.accessRequests = (script.accessRequests ?? []).map((item: any) => item.userId === recipientUserId && item.status === 'pending' ? { ...item, status: 'granted', resolvedAt: updatedAt } : item);
+    state.readerSessions[recipientUserId] = (state.readerSessions[recipientUserId] ?? []).map((session) => session.scriptId === script.id && session.status === 'active' ? { ...session, status: 'revoked', revokedAt: updatedAt, revokedReason: 'Writer changed protected script permissions.' } : session);
+    addLocalNotification(state, recipientUserId, {
+      type: 'script_access',
+      title: input.allowExport === true ? 'Full script handoff granted' : 'Protected script access granted',
+      message: input.allowExport === true ? 'The writer has explicitly allowed you to read and export the full manuscript.' : input.allowCopy === true ? 'The writer has allowed protected reading and copying for this manuscript.' : 'The writer has granted protected read-only access to this manuscript.',
+      scriptId: script.id,
+      allowCopy: input.allowCopy === true,
+      allowExport: input.allowExport === true,
+      expiresAt: expiry ? expiry.toISOString() : null,
+    });
+    return send({ recipientUserId, allowCopy: input.allowCopy === true, allowExport: input.allowExport === true, expiresAt: expiry ? expiry.toISOString() : null, revoked: false });
   }
 
   if (path === '/api/profile/me' && method === 'GET') {
