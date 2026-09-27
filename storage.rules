@@ -2,13 +2,39 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    match /release-audio/{userId}/{releaseId}/{fileName} {
-      allow read: if false;
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function activeCreator() {
+      return signedIn()
+        && firestore.get(/databases/(default)/documents/accounts/$(request.auth.uid)).data.role == 'creator'
+        && firestore.get(/databases/(default)/documents/accounts/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function supportedAudio() {
+      return request.resource != null
+        && request.resource.size > 0
         && request.resource.size <= 25 * 1024 * 1024
-        && request.resource.contentType.matches('audio/.*');
-      allow delete: if request.auth != null && request.auth.uid == userId;
+        && (
+          request.resource.contentType == 'audio/mpeg'
+          || request.resource.contentType == 'audio/mp3'
+          || request.resource.contentType == 'audio/wav'
+          || request.resource.contentType == 'audio/x-wav'
+          || request.resource.contentType == 'audio/mp4'
+          || request.resource.contentType == 'audio/x-m4a'
+          || request.resource.contentType == 'audio/ogg'
+          || request.resource.contentType == 'audio/webm'
+        );
+    }
+
+    match /release-audio/{userId}/{releaseId}/{fileId} {
+      allow read: if false;
+      allow create: if activeCreator()
+        && request.auth.uid == userId
+        && supportedAudio();
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid == userId;
     }
 
     match /{allPaths=**} {
