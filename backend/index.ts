@@ -1533,6 +1533,21 @@ export const handler = router({
       const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
       const profile = await getProfile(ctx.user!.userId);
       const viewerLabel = String(profile?.displayName ?? ctx.user!.name ?? 'Nightjar account').slice(0, 80);
+      const device = await registerProtectedDevice(ctx.user!.userId, ctx.query.deviceId, ctx.params.scriptId);
+      if (device.blocked || device.linkedSuspendedUserIds.length) {
+        const alert = await createSecurityAlert(ctx.user!.userId, {
+          severity: 'critical',
+          riskScore: 95,
+          reason: device.blocked
+            ? 'Protected-script access attempted from a device token blocked by an administrator.'
+            : 'Protected-script access attempted from a device token previously linked to a suspended account.',
+          relatedId: ctx.params.scriptId,
+          deviceHash: device.deviceHash,
+          linkedSuspendedUserIds: device.linkedSuspendedUserIds,
+          signal: { eventType: 'blocked_device_reader_attempt' },
+        });
+        return error('Protected-script access is paused for security review.', 403, { alertId: alert.id ?? null });
+      }
       const watermark = 'NIGHTJAR · ' + viewerLabel + ' · ' + sessionId.slice(-8) + ' · ' + issuedAt.slice(0, 16).replace('T', ' ');
       const session = {
         sessionId,
@@ -1546,9 +1561,10 @@ export const handler = router({
         allowCopy: owner || access?.allowCopy === true,
         allowExport: owner || access?.allowExport === true,
         watermark,
+        deviceHash: device.deviceHash,
       };
       await db.add(readerSessionTable(ctx.user!.userId), [session]);
-      const signal = { userId: ctx.user!.userId, eventType: 'reader_session_issued', relatedId: ctx.params.scriptId, sessionId, createdAt: issuedAt };
+      const signal = { userId: ctx.user!.userId, eventType: 'reader_session_issued', relatedId: ctx.params.scriptId, sessionId, deviceHash: device.deviceHash, createdAt: issuedAt };
       await db.add(securityEventTable, [signal]);
       await assessProtectedActivity(ctx.user!.userId, signal);
       await db.add('nightjar_evidence_' + ctx.user!.userId, [{
@@ -1602,11 +1618,14 @@ export const handler = router({
       const pages = chunkProtectedContent(script.content ?? '');
       if (page >= pages.length) return error('Protected page not found.', 404);
       const createdAt = new Date().toISOString();
+      const forensicToken = pageForensicToken(ctx.user!.userId, ctx.params.scriptId, sessionId, page, session.issuedAt);
       const signal = {
         userId: ctx.user!.userId,
         eventType: 'script_page_view',
         relatedId: ctx.params.scriptId,
         sessionId,
+        deviceHash: session.deviceHash ?? null,
+        forensicToken,
         page,
         totalPages: pages.length,
         createdAt,
@@ -1621,7 +1640,8 @@ export const handler = router({
         totalPages: pages.length,
         hasPrevious: page > 0,
         hasNext: page + 1 < pages.length,
-        watermark: session.watermark ?? ('NIGHTJAR · ' + sessionId.slice(-8)),
+        watermark: (session.watermark ?? ('NIGHTJAR · ' + sessionId.slice(-8))) + ' · FP ' + forensicToken + ' · P' + String(page + 1),
+        forensicToken,
         contentHash: script.contentHash ?? scriptContentHash(script.content ?? ''),
         sessionExpiresAt: session.expiresAt,
       });
@@ -1964,7 +1984,7 @@ export const handler = router({
     async (ctx) => {
       if (!(await isAgeVerified(ctx.user!.userId))) return error('Age verification required before opening protected content.', 403);
       if (await isSuspended(ctx.user!.userId)) return error('This account is suspended.', 403);
-      const body = (ctx.body ?? {}) as { scriptId?: string };
+      const body = (ctx.body ?? {}) as { scriptId?: string; deviceId?: string };
       const scriptId = String(body.scriptId ?? '');
       if (!scriptId) return error('Script ID is required.', 400);
 
@@ -1993,6 +2013,21 @@ export const handler = router({
       const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
       const profile = await getProfile(ctx.user!.userId);
       const viewerLabel = String(profile?.displayName ?? ctx.user!.name ?? 'Nightjar account').slice(0, 80);
+      const device = await registerProtectedDevice(ctx.user!.userId, body.deviceId, scriptId);
+      if (device.blocked || device.linkedSuspendedUserIds.length) {
+        const alert = await createSecurityAlert(ctx.user!.userId, {
+          severity: 'critical',
+          riskScore: 95,
+          reason: device.blocked
+            ? 'Protected-script access attempted from a device token blocked by an administrator.'
+            : 'Protected-script access attempted from a device token previously linked to a suspended account.',
+          relatedId: scriptId,
+          deviceHash: device.deviceHash,
+          linkedSuspendedUserIds: device.linkedSuspendedUserIds,
+          signal: { eventType: 'blocked_device_reader_attempt' },
+        });
+        return error('Protected-script access is paused for security review.', 403, { alertId: alert.id ?? null });
+      }
       const session = {
         sessionId,
         scriptId,
@@ -2005,9 +2040,10 @@ export const handler = router({
         allowCopy: owner || grant?.allowCopy === true,
         allowExport: owner || grant?.allowExport === true,
         watermark: 'NIGHTJAR · ' + viewerLabel + ' · ' + sessionId.slice(-8) + ' · ' + issuedAt.slice(0, 16).replace('T', ' '),
+        deviceHash: device.deviceHash,
       };
       await db.add(readerSessionTable(ctx.user!.userId), [session]);
-      const signal = { userId: ctx.user!.userId, eventType: 'reader_session_issued', relatedId: scriptId, sessionId, createdAt: issuedAt };
+      const signal = { userId: ctx.user!.userId, eventType: 'reader_session_issued', relatedId: scriptId, sessionId, deviceHash: device.deviceHash, createdAt: issuedAt };
       await db.add(securityEventTable, [signal]);
       await assessProtectedActivity(ctx.user!.userId, signal);
       return json({ session });
