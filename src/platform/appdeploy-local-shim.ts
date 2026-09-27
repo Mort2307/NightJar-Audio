@@ -279,7 +279,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       liked.set(key, (liked.get(key) ?? 0) + 5);
     }
     for (const event of state.taste[account.userId] ?? []) {
-      const factor = event.type === 'skip' || event.type === 'hide' ? -1 : 1;
+      const factor = event.type === 'not_for_me' ? -12 : event.type === 'hide' ? -10 : event.type === 'less_like_this' ? -5 : event.type === 'more_like_this' ? 4 : event.type === 'complete' ? 2 : event.type === 'skip' ? -1 : 0.5;
       for (const tag of [...(event.tags ?? []), ...(event.category ? [event.category] : [])]) {
         const key = String(tag).toLowerCase();
         liked.set(key, (liked.get(key) ?? 0) + factor);
@@ -328,6 +328,9 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     if (legacyCreatorRoute || universalRoute) {
       const profileUserId = legacyCreatorRoute ? parts[3] : parts[2];
       if (profileUserId === account.userId) throw new Error('Choose another Nightjar profile to follow.');
+      const target = state.users.find((candidate) => candidate.userId === profileUserId);
+      const targetProfile = target ? ensureProfile(state, target) : null;
+      if (!target || targetProfile?.publicProfile === false) throw new Error('Profile not found.');
       if (method === 'POST' && !list.includes(profileUserId)) list.push(profileUserId);
       if (method === 'DELETE') state.follows[account.userId] = list.filter((item) => item !== profileUserId);
       else state.follows[account.userId] = list;
