@@ -14,7 +14,7 @@ const submitImageCall = httpsCallable<{
 }, { assetId: string; status: string }>(functions, 'submitImageAsset');
 
 const listPendingCall = httpsCallable<void, { assets: any[] }>(functions, 'listPendingImages');
-const moderateCall = httpsCallable<{ assetId: string; decision: 'approved' | 'rejected'; note?: string }, { assetId: string; status: string; publicUrl?: string | null }>(functions, 'moderateImageAsset');
+const moderateCall = httpsCallable<{ assetId: string; decision: 'approved' | 'rejected'; note?: string; safetyConfirmed?: boolean }, { assetId: string; status: string; publicUrl?: string | null }>(functions, 'moderateImageAsset');
 const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status: string; publicUrl: string | null; moderationNote: string | null }>(functions, 'getImageAssetStatus');
 const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string }>(functions, 'removeOwnedImageAsset');
 const removeAvatarCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileAvatar');
@@ -30,8 +30,8 @@ export const nightjarMedia = {
     return (await listPendingCall()).data;
   },
 
-  async moderate(assetId: string, decision: 'approved' | 'rejected', note?: string) {
-    return (await moderateCall({ assetId, decision, note })).data;
+  async moderate(assetId: string, decision: 'approved' | 'rejected', note?: string, safetyConfirmed = false) {
+    return (await moderateCall({ assetId, decision, note, safetyConfirmed })).data;
   },
 
   async status(assetId: string) {
