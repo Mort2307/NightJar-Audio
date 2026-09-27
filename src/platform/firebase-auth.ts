@@ -16,13 +16,13 @@ import {
 } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyAj-_xUmbO1E4KOPag4Cc1gfs3GsjFFjZ8',
-  authDomain: 'nightjar-audio-9d659.firebaseapp.com',
-  projectId: 'nightjar-audio-9d659',
-  storageBucket: 'nightjar-audio-9d659.firebasestorage.app',
-  messagingSenderId: '816045852400',
-  appId: '1:816045852400:web:f58345e14c5612a73d2435',
-  measurementId: 'G-K9G3Y77J7F',
+  apiKey: 'AIzaSyBHgKqK9SRYJoWWrKH0DeMX4I35AVIoMJs',
+  authDomain: 'nightjar-audio.firebaseapp.com',
+  projectId: 'nightjar-audio',
+  storageBucket: 'nightjar-audio.firebasestorage.app',
+  messagingSenderId: '981039114349',
+  appId: '1:981039114349:web:80defbb59c7a56889af764',
+  measurementId: 'G-QRMGT02JRD',
 };
 
 export const firebaseApp = getApps()[0] ?? initializeApp(firebaseConfig);
