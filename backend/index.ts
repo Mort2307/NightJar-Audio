@@ -2306,6 +2306,7 @@ export const handler = router({
             relatedId: item.relatedId ?? null,
             sessionId: item.sessionId ?? null,
             deviceHash: item.deviceHash ?? null,
+            environmentHash: item.environmentHash ?? null,
             forensicToken: item.forensicToken ?? null,
             page: item.page ?? null,
             totalPages: item.totalPages ?? null,
@@ -2320,9 +2321,12 @@ export const handler = router({
           forensicTokens: recentEvents.map((item) => String(item.forensicToken ?? '')).filter(Boolean).slice(0, 12),
         };
         const deviceHash = String(alert.deviceHash ?? '');
+        const environmentHash = String(alert.environmentHash ?? '');
         const linkedDevices = deviceHash ? devices.filter((item) => String(item.deviceHash ?? '') === deviceHash) : [];
+        const linkedEnvironments = environmentHash ? devices.filter((item) => String(item.environmentHash ?? '') === environmentHash) : [];
         const linkedAccountIds = Array.from(new Set(linkedDevices.map((item) => String(item.userId ?? '')).filter(Boolean)));
-        const linkedAccounts = linkedAccountIds.map((linkedUserId) => {
+        const linkedEnvironmentAccountIds = Array.from(new Set(linkedEnvironments.map((item) => String(item.userId ?? '')).filter(Boolean)));
+        const mapAccountContext = (linkedUserId: string) => {
           const linked = accounts.find((candidate) => String(candidate.userId) === linkedUserId);
           return {
             userId: linkedUserId,
@@ -2330,7 +2334,9 @@ export const handler = router({
             removed: linked?.removed === true,
             sameAsSubject: linkedUserId === userId,
           };
-        });
+        };
+        const linkedAccounts = linkedAccountIds.map(mapAccountContext);
+        const linkedEnvironmentAccounts = linkedEnvironmentAccountIds.map(mapAccountContext);
         const securityCase = cases.find((item) => String(item.alertId ?? '') === String(alert.id ?? ''));
         return {
           ...alert,
@@ -2341,10 +2347,12 @@ export const handler = router({
           recentEvents,
           evidenceSummary,
           linkedAccounts,
+          linkedEnvironmentAccounts,
           caseHistory: Array.isArray(securityCase?.history) ? securityCase.history : [],
           deviceBlocked: linkedDevices.some((item) => item.blocked === true),
+          environmentBlocked: linkedEnvironments.some((item) => item.environmentBlocked === true),
           networkCorrelationAvailable: false,
-          networkCorrelationNote: 'The current AppDeploy request context does not expose a trusted client-network address. Nightjar therefore uses device and forensic correlation rather than storing or trusting a client-supplied IP address.',
+          networkCorrelationNote: 'The current AppDeploy request context does not expose a trusted client-network address. Nightjar does not trust client-supplied IP values; it uses pseudonymous device, browser-environment and forensic correlation instead.',
         };
       }));
       alerts.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
@@ -2371,6 +2379,7 @@ export const handler = router({
           scriptId: item.relatedId ?? null,
           sessionId: item.sessionId ?? null,
           deviceHash: item.deviceHash ?? null,
+          environmentHash: item.environmentHash ?? null,
           page: item.page ?? null,
           totalPages: item.totalPages ?? null,
           createdAt: item.createdAt ?? null,
@@ -2384,7 +2393,7 @@ export const handler = router({
     async (ctx) => {
       const body = (ctx.body ?? {}) as { action?: string; note?: string };
       const action = String(body.action ?? '');
-      const allowed = new Set(['benign', 'revoke_sessions', 'freeze_account', 'restore_account', 'remove_account', 'block_device']);
+      const allowed = new Set(['benign', 'revoke_sessions', 'freeze_account', 'restore_account', 'remove_account', 'block_device', 'block_environment']);
       if (!allowed.has(action)) return error('Choose a valid security action.', 400);
       const { items } = await db.list(securityAlertTable, { limit: 250 });
       const alert = items.find((item) => item.id === ctx.params.alertId);
@@ -2394,7 +2403,7 @@ export const handler = router({
       const at = new Date().toISOString();
       const actor = ctx.user!.email ?? null;
       const note = String(body.note ?? '').trim().slice(0, 1000) || null;
-      if (['freeze_account', 'remove_account', 'block_device'].includes(action) && !note) {
+      if (['freeze_account', 'remove_account', 'block_device', 'block_environment'].includes(action) && !note) {
         return error('Add a review note before taking a destructive security action.', 400);
       }
 
@@ -2451,6 +2460,17 @@ export const handler = router({
         if (updates.length) await db.update(securityDeviceTable, updates);
         await revokeReaderSessions(userId, 'Protected-reader device blocked by an administrator.');
       }
+      if (action === 'block_environment') {
+        const environmentHash = String(alert.environmentHash ?? '');
+        if (!environmentHash) return error('This alert does not contain a browser/device environment correlation token.', 409);
+        const { items: devices } = await db.list(securityDeviceTable, { limit: 5000 });
+        const updates = devices.filter((item) => String(item.environmentHash ?? '') === environmentHash).map((item) => ({
+          id: item.id,
+          record: { ...item, environmentBlocked: true, environmentBlockedAt: at, environmentBlockedBy: actor, environmentBlockReason: note ?? 'Environment blocked from a Nightjar security alert.' },
+        }));
+        if (updates.length) await db.update(securityDeviceTable, updates);
+        await revokeReaderSessions(userId, 'Protected-reader environment blocked by an administrator.');
+      }
 
       const alertStatus = action === 'benign' ? 'benign' : 'actioned';
       await db.update(securityAlertTable, [{
@@ -2473,6 +2493,7 @@ export const handler = router({
         actorEmail: actor,
         relatedId: alert.id,
         deviceHash: alert.deviceHash ?? null,
+        environmentHash: alert.environmentHash ?? null,
         note,
         createdAt: at,
       }]);
