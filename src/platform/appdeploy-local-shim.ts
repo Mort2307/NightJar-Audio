@@ -518,6 +518,7 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const kind = String(input.kind ?? '');
     const release = state.releases.find((item) => item.id === releaseId && item.creatorUserId === account.userId);
     if (!release) throw new Error('Release not found.');
+    if (!['draft', 'rejected'].includes(String(release.status ?? 'draft'))) throw new Error('Submitted or live releases cannot have assets replaced.');
     if (!['audio', 'artwork'].includes(kind)) throw new Error('Unsupported asset kind.');
     const dataUrl = typeof input.dataUrl === 'string' ? input.dataUrl : '';
     if (!dataUrl.startsWith('data:') || !dataUrl.includes(',')) throw new Error('Invalid uploaded file.');
@@ -549,9 +550,26 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   if (path === '/api/creator/releases' && method === 'POST') {
     const account = requireUser(state);
     if (account.role !== 'creator') throw new Error('Active Creator access required.');
-    const release = { ...input, id: id('release'), creatorUserId: account.userId, creatorName: ensureProfile(state, account).displayName ?? account.name, status: 'draft', version: 1, createdAt: now(), updatedAt: now() };
-    release.tags = Array.isArray(release.tags) ? release.tags : [];
-    release.tropes = Array.isArray(release.tropes) ? release.tropes : [];
+    const release = {
+      id: id('release'),
+      title: String(input.title ?? '').trim().slice(0, 160),
+      description: String(input.description ?? '').trim().slice(0, 1200),
+      category: String(input.category ?? '').trim().slice(0, 80),
+      genre: String(input.genre ?? '').trim().slice(0, 80),
+      mood: String(input.mood ?? '').trim().slice(0, 80),
+      tags: Array.isArray(input.tags) ? input.tags.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 16) : [],
+      tropes: Array.isArray(input.tropes) ? input.tropes.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 16) : [],
+      durationMinutes: 0,
+      audioUrl: null,
+      artworkUrl: null,
+      creatorUserId: account.userId,
+      creatorName: ensureProfile(state, account).displayName ?? account.name,
+      status: 'draft',
+      version: 1,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    if (!release.title) throw new Error('Release title is required.');
     state.releases.push(release);
     return send({ release });
   }
@@ -562,10 +580,21 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
     const release = state.releases.find((item) => item.id === parts[3] && item.creatorUserId === account.userId);
     if (!release) throw new Error('Release not found.');
     if (method === 'PUT') {
-      Object.assign(release, input, { id: release.id, creatorUserId: release.creatorUserId, updatedAt: now() });
+      if (!['draft', 'rejected'].includes(String(release.status ?? 'draft'))) throw new Error('Submitted or live releases cannot be edited directly.');
+      release.title = String(input.title ?? release.title ?? '').trim().slice(0, 160);
+      release.description = String(input.description ?? release.description ?? '').trim().slice(0, 1200);
+      release.category = String(input.category ?? release.category ?? '').trim().slice(0, 80);
+      release.genre = String(input.genre ?? release.genre ?? '').trim().slice(0, 80);
+      release.mood = String(input.mood ?? release.mood ?? '').trim().slice(0, 80);
+      if (input.tags !== undefined) release.tags = Array.isArray(input.tags) ? input.tags.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 16) : [];
+      if (input.tropes !== undefined) release.tropes = Array.isArray(input.tropes) ? input.tropes.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 16) : [];
+      if (!release.title) throw new Error('Release title is required.');
+      release.version = Number(release.version ?? 1) + 1;
+      release.updatedAt = now();
       return send({ release });
     }
     if (method === 'DELETE') {
+      if (!['draft', 'rejected'].includes(String(release.status ?? 'draft'))) throw new Error('Submitted or live releases cannot be deleted directly.');
       state.releases = state.releases.filter((item) => item.id !== release.id);
       return send({ deleted: true });
     }
