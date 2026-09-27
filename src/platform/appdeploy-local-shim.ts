@@ -953,13 +953,13 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       session.status = 'revoked';
       session.revokedAt = now();
       session.revokedReason = 'Protected reader rate limit exceeded.';
-      addLocalSecurityAlert(state, { userId: account.userId, severity: 'high', riskScore: 85, reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.', relatedId: script.id, deviceHash: session.deviceHash ?? null });
+      addLocalSecurityAlert(state, { userId: account.userId, severity: 'high', riskScore: 85, reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.', relatedId: script.id, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null });
       throw new Error('Protected reader rate limit reached.');
     }
     const pages = localChunkProtectedContent(script.content ?? '');
     if (page >= pages.length) throw new Error('Protected page not found.');
     const forensicToken = await localForensicToken(account.userId, script.id, sessionId, page, session.issuedAt);
-    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_page_view', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, forensicToken, page, totalPages: pages.length, createdAt: now() });
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_page_view', severity: 'low', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, forensicToken, page, totalPages: pages.length, createdAt: now() });
     return send({
       scriptId: script.id,
       content: pages[page],
@@ -1005,9 +1005,9 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
       'No AI training, dataset ingestion, automated extraction or redistribution is authorised by this export unless the writer separately grants that permission in writing.',
     ].join('\n');
     const exportedAt = now();
-    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_export', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, createdAt: exportedAt });
+    state.evidence.push({ id: id('evidence'), userId: account.userId, actorUserId: account.userId, eventType: 'script_export', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, createdAt: exportedAt });
     if (script.writerUserId && script.writerUserId !== account.userId) {
-      state.evidence.push({ id: id('evidence'), userId: script.writerUserId, actorUserId: account.userId, eventType: 'script_export_by_recipient', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, createdAt: exportedAt });
+      state.evidence.push({ id: id('evidence'), userId: script.writerUserId, actorUserId: account.userId, eventType: 'script_export_by_recipient', severity: 'medium', relatedType: 'script', relatedId: script.id, sessionId, deviceHash: session.deviceHash ?? null, environmentHash: session.environmentHash ?? null, createdAt: exportedAt });
       addLocalNotification(state, script.writerUserId, { type: 'script_access', title: 'Your script was exported', message: account.name + ' exported the full manuscript using the Full handoff permission you granted.', scriptId: script.id, recipientUserId: account.userId, createdAt: exportedAt });
     }
     return send({
