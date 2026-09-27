@@ -229,7 +229,7 @@ const enforceProtectedPageRate = async (userId: string, scriptId: string, sessio
     riskScore: 85,
     reason: 'Protected manuscript paging exceeded the human-reading threshold and the active session was revoked.',
     relatedId: scriptId,
-    deviceHash: sameSession.at(-1)?.deviceHash ?? sameScript.at(-1)?.deviceHash ?? null,
+    deviceHash: sameSession[sameSession.length - 1]?.deviceHash ?? sameScript[sameScript.length - 1]?.deviceHash ?? null,
     signal: { eventType: 'script_page_rate_limit', recentPages: recentPages.length, scriptPages: sameScript.length, sessionPages: sameSession.length },
   });
   return false;
