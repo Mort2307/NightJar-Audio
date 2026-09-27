@@ -48,26 +48,6 @@
     "expected": "Each role preview renders its own surface, the preview banner identifies the real Administrator role, and returning to Admin restores the operational dashboard."
   },
   {
-    "name": "Daily spotlights rotate fairly in a fixed five-place order",
-    "viewport": "mobile",
-    "covers": [
-      "creator spotlight",
-      "writer spotlight",
-      "24-hour rotation",
-      "fixed-order fairness",
-      "new edition discovery"
-    ],
-    "description": "Verifies the discovery page presents separate creator and writer spotlight tiles using a deterministic one-day rotation rather than random reshuffling.",
-    "steps": [
-      "Open the Nightjar discovery page",
-      "Inspect the Creator Spotlight tile",
-      "Inspect the Writer Spotlight tile",
-      "Confirm both show a one-day spotlight window and a new edition or script",
-      "Return on a later day and confirm the rotation advances to the next fixed position"
-    ],
-    "expected": "Exactly one creator and one writer occupy the daily spotlight, each remains featured for the full day, and the sequence advances in the same fixed order across the five-place cycle."
-  },
-  {
     "name": "Creator sees transparent listening economics and protected script access",
     "viewport": "mobile",
     "covers": [
@@ -238,5 +218,45 @@
       "Call the adult catalogue endpoint again"
     ],
     "expected": "The first catalogue request returns an age-verification-required response and no adult release payload; after verified state is stored, the same account can retrieve the catalogue without another verification."
+  },
+  {
+    "name": "Inclusive spotlight system gives everyone a fair daily lane",
+    "viewport": "mobile",
+    "covers": [
+      "listener spotlight",
+      "creator spotlight",
+      "writer spotlight",
+      "daily rotation",
+      "full-roster inclusion"
+    ],
+    "description": "Verifies the discovery page has separate Listener, Creator and Writer spotlight lanes. Creators and Writers rotate through every active public member one full day at a time; listeners use the previous completed week's top seven and rotate one per day.",
+    "steps": [
+      "Open the Nightjar discovery page as an age-verified account",
+      "Inspect Creator Spotlight, Writer Spotlight and Listener Spotlight",
+      "Confirm the Creator slot changes to the next active Creator on the following day",
+      "Confirm the Writer slot changes to the next active Writer on the following day",
+      "Confirm Listener Spotlight identifies the weekly Top 7 cohort and one listener occupies each day of the seven-day cycle",
+      "Complete a new week and confirm the listener cohort is refreshed from the newly completed week's listening activity"
+    ],
+    "expected": "All three lanes are visible when eligible members/data exist. Creator and Writer rotations are deterministic and give each eligible public member a complete day; the Listener seven remains fixed for the week and refreshes as a new cohort on the following week."
+  },
+  {
+    "name": "Listener spotlight ranking uses tracked listening from the previous completed week",
+    "viewport": "desktop",
+    "covers": [
+      "weekly leaderboard",
+      "listener ranking",
+      "calendar-week freeze",
+      "privacy-respecting profile display"
+    ],
+    "description": "Verifies Listener Spotlight is based on listener-role tracked activity from the previous completed Monday-Sunday period rather than changing mid-week.",
+    "steps": [
+      "Seed a test week with tracked listening events for more than seven active Listener accounts",
+      "Open Spotlight on Monday",
+      "Inspect the selected listener and Top 7 metadata",
+      "Repeat the request during the same week after additional listening activity is recorded",
+      "Advance to the following Monday and request Spotlight again"
+    ],
+    "expected": "The same seven listeners remain the eligible cohort throughout the week and are shown one per day. The following Monday uses the newly completed week's ranking instead. Accounts with public profiles disabled are not exposed as spotlight profiles."
   }
 ]
