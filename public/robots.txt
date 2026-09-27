@@ -1,0 +1,28 @@
+# Nightjar crawler policy
+# Public marketing/discovery pages may be indexed by ordinary search engines.
+# Protected account, manuscript, editorial and security surfaces must not be crawled.
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: *
+Disallow: /writer
+Disallow: /editor
+Disallow: /profile
+Disallow: /protection
+Disallow: /admin
+Disallow: /api/scripts/
+Disallow: /api/writer/
+Disallow: /api/editor/
+Disallow: /api/security/
+Disallow: /api/protection/
+Allow: /
