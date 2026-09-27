@@ -297,5 +297,22 @@
       "Use Share spotlight and confirm the message identifies today's Writer Spotlight and Nightjar"
     ],
     "expected": "Creator and Writer spotlight cards provide an optional, user-triggered share action. The generated message promotes the featured person and Nightjar without forcing a share or fabricating engagement."
+  },
+  {
+    "name": "Creator and Writer rotation reaches every roster member",
+    "viewport": "desktop",
+    "covers": [
+      "full-roster rotation",
+      "more than seven creators",
+      "more than seven writers",
+      "deterministic day index"
+    ],
+    "description": "Guards against a weekday-only rotation that would stop at the first seven people. The rotation must use the absolute calendar day against the full eligible roster.",
+    "steps": [
+      "Seed more than seven active public Creator accounts and more than seven active public Writer accounts",
+      "Inspect the daily spotlight for successive calendar days",
+      "Continue until every eligible member has received a spotlight day"
+    ],
+    "expected": "The rotation advances across the entire eligible Creator roster and entire eligible Writer roster, including members beyond the first seven. No member is skipped solely because the roster exceeds seven."
   }
 ]
