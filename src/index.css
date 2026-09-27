@@ -1358,3 +1358,44 @@ button:focus-visible {
 .dock-nav-button { width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--line-soft); border-radius:50%; background:rgba(255,255,255,.018); color:var(--muted); }
 .dock-nav-button:hover:not(:disabled) { color:var(--ivory); border-color:rgba(239,231,223,.18); }
 .dock-nav-button:disabled { opacity:.3; cursor:not-allowed; }
+
+
+/* Protected-reader provenance and graduated security controls */
+.reader-body { position: relative; isolation: isolate; overflow: hidden; }
+.reader-body > p:not(.reader-watermark) { position: relative; z-index: 2; }
+.reader-watermark-field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: space-around;
+  gap: 5rem 2rem;
+  transform: rotate(-8deg) scale(1.08);
+  opacity: .055;
+  user-select: none;
+}
+.reader-watermark-field span {
+  font-size: .66rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-align: center;
+}
+.reader-export-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  cursor: pointer;
+}
+.reader-export-button:disabled { opacity: .5; cursor: not-allowed; }
+.security-alert-actions { display: flex; flex-wrap: wrap; gap: .55rem; justify-content: flex-end; }
+@media (max-width: 720px) {
+  .reader-watermark-field { grid-template-columns: 1fr; gap: 4rem; }
+  .security-alert-actions { justify-content: flex-start; width: 100%; }
+}
