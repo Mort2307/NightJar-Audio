@@ -331,9 +331,8 @@ function App() {
 
   const loadLiveProductData = async () => {
     try {
-      const [catalogueResponse, localSpotlightResponse, creatorsResponse, firebaseSpotlightResponse] = await Promise.all([
+      const [catalogueResponse, creatorsResponse, firebaseSpotlightResponse] = await Promise.all([
         nightjarCatalogue.list(),
-        api.get('/api/spotlights'),
         nightjarCommunity.listCreators(),
         nightjarCommunity.spotlightState(),
       ]);
@@ -380,13 +379,12 @@ function App() {
       setCreatorSpotlightList(spotlights.filter((item: any) => item.kind === 'creator' && item.name).map(mapSpotlight));
       setWriterSpotlightList(spotlights.filter((item: any) => item.kind === 'writer' && item.name).map(mapSpotlight));
       setEditorSpotlightList(spotlights.filter((item: any) => item.kind === 'editor' && item.name).map(mapSpotlight));
-      const localSpotlights = localSpotlightResponse.data?.spotlights ?? [];
-      const listener = localSpotlights.find((item: any) => item.kind === 'listener' && item.name);
+      const listener = spotlights.find((item: any) => item.kind === 'listener' && item.name);
       setListenerSpotlight(listener ? mapSpotlight(listener) : null);
       setSpotlightMeta({
-        listenerTopSevenCount: Number(localSpotlightResponse.data?.listenerTopSevenCount ?? 0),
-        listenerSpotlightDay: localSpotlightResponse.data?.listenerSpotlightDay == null ? null : Number(localSpotlightResponse.data.listenerSpotlightDay),
-        listenerWeek: localSpotlightResponse.data?.listenerWeek ?? null,
+        listenerTopSevenCount: Number(firebaseSpotlightResponse.listenerTopSevenCount ?? 0),
+        listenerSpotlightDay: firebaseSpotlightResponse.listenerSpotlightDay == null ? null : Number(firebaseSpotlightResponse.listenerSpotlightDay),
+        listenerWeek: firebaseSpotlightResponse.listenerWeek ?? null,
       });
       await loadNotifications();
       if (user) {
