@@ -96,6 +96,8 @@ type Spotlight = {
   publicProfile?: boolean;
 };
 
+const preferredScrollBehavior = (): ScrollBehavior => window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
 const roleMeta: Record<AccountRole, { label: string; description: string }> = {
   admin: {
     label: 'Administrator',
@@ -265,7 +267,7 @@ function App() {
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
     setView(nextView);
     setMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: preferredScrollBehavior() });
   };
 
   const loadLiveProductData = async () => {
@@ -1179,7 +1181,7 @@ function App() {
                 <h1>Premium immersive<span> audio for adults.</span></h1>
                 <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
                 <div className="hero-actions">
-                  <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
+                  <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: preferredScrollBehavior() })}>Enter the listening room <ArrowRight size={16} /></button>
                   <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
                 </div>
                 <div className="hero-signals">
@@ -1219,7 +1221,7 @@ function App() {
                 </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">CREATOR SPOTLIGHT</span><h3>Awaiting creators</h3><p className="spotlight-handle">Every active Creator joins the daily rotation automatically.</p></div></div>}
                 {writerSpotlight ? <article className="spotlight-tile writer-spotlight-tile">
                   <div className="spotlight-art"><span className="spotlight-initials">{writerSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><FileText size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.name}</h3><p className="spotlight-handle">{writerSpotlight.handle ? '@' + writerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{writerSpotlight.edition || 'Writer Spotlight'}</span><strong>{writerSpotlight.title || 'Writer profile'}</strong><p>{writerSpotlight.detail || 'A full day of discovery for this Nightjar writer.'}</p></div><div className="spotlight-actions"><button className="secondary-button" onClick={() => document.getElementById('writer-discovery-title')?.scrollIntoView({ behavior: 'smooth' })}>Explore writer <ArrowRight size={14} /></button>{writerSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(writerSpotlight)} aria-label={`Share ${writerSpotlight.name}'s writer spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.name}</h3><p className="spotlight-handle">{writerSpotlight.handle ? '@' + writerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{writerSpotlight.edition || 'Writer Spotlight'}</span><strong>{writerSpotlight.title || 'Writer profile'}</strong><p>{writerSpotlight.detail || 'A full day of discovery for this Nightjar writer.'}</p></div><div className="spotlight-actions"><button className="secondary-button" onClick={() => document.getElementById('writer-discovery-title')?.scrollIntoView({ behavior: preferredScrollBehavior() })}>Explore writer <ArrowRight size={14} /></button>{writerSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(writerSpotlight)} aria-label={`Share ${writerSpotlight.name}'s writer spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
                 </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">WRITER SPOTLIGHT</span><h3>Awaiting writers</h3><p className="spotlight-handle">Every active Writer joins the daily rotation automatically.</p></div></div>}
                 {listenerSpotlight ? <article className="spotlight-tile listener-spotlight-tile">
                   <div className="spotlight-art"><span className="spotlight-initials">{listenerSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><Headphones size={20} /></span></div>
@@ -1232,7 +1234,7 @@ function App() {
             <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} />
 
             <section id="catalogue" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
+              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:preferredScrollBehavior()})}>Personalise <Sparkles size={14}/></button></div>
               <CatalogueSearch categories={catalogueCategories} activeQuery={catalogueSearch.query} activeCategory={catalogueSearch.category} resultCount={(catalogueResults ?? tracks).length} onSearch={searchCatalogue} />
               <div className="track-grid">
                 {(catalogueResults ?? tracks.slice(0, 6)).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} />)}
@@ -1286,7 +1288,7 @@ function App() {
                 <h1>Your audience. Your catalogue. Your listening revenue.</h1>
                 <p>{accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Your real release pipeline, from upload through moderation to live catalogue.'}</p>
               </div>
-              <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: 'smooth' })}>
+              <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: preferredScrollBehavior() })}>
                 <Upload size={16} /> New release
               </button>
             </div>
