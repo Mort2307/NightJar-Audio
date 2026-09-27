@@ -4,18 +4,33 @@ import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 
 type Mode = 'signin' | 'register' | 'reset' | 'verify' | 'security';
 
-const friendlyError = (error: unknown) => {
+const firebaseErrorCode = (error: unknown) => {
+  if (error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string') {
+    return String((error as { code: string }).code);
+  }
   const value = error instanceof Error ? error.message : String(error ?? '');
-  if (value.includes('email-already-in-use')) return 'That email already has a Nightjar account.';
-  if (value.includes('invalid-credential')) return 'The email or password is incorrect.';
-  if (value.includes('weak-password')) return 'Use a stronger password of at least 12 characters.';
-  if (value.includes('too-many-requests')) return 'Too many attempts. Please wait before trying again.';
-  if (value.includes('invalid-email')) return 'Enter a valid email address.';
-  if (value.includes('requires-recent-login')) return 'For security, sign in again before changing your password.';
-  if (value.includes('operation-not-allowed')) return 'Email/password accounts are not enabled in Firebase Authentication yet. Enable the Email/Password provider, then try again.';
-  if (value.includes('network-request-failed')) return 'Nightjar could not reach Firebase. Check your connection and try again.';
-  if (value.includes('user-disabled')) return 'This Nightjar account has been disabled. Contact an administrator for review.';
-  return 'Nightjar could not complete that account request. Please try again.';
+  const match = value.match(/auth\/[a-z0-9-]+/i);
+  return match?.[0] ?? '';
+};
+
+const friendlyError = (error: unknown) => {
+  const code = firebaseErrorCode(error);
+  const value = error instanceof Error ? error.message : String(error ?? '');
+  const detail = code || value;
+
+  if (detail.includes('email-already-in-use')) return 'That email already has a Nightjar account. Try signing in instead.';
+  if (detail.includes('invalid-credential')) return 'The email or password is incorrect.';
+  if (detail.includes('weak-password') || detail.includes('password-does-not-meet-requirements')) return 'Firebase rejected that password under the project password policy. Try a longer password with upper-case, lower-case, a number and a symbol.';
+  if (detail.includes('too-many-requests')) return 'Too many attempts. Please wait before trying again.';
+  if (detail.includes('invalid-email')) return 'Enter a valid email address.';
+  if (detail.includes('requires-recent-login')) return 'For security, sign in again before changing your password.';
+  if (detail.includes('operation-not-allowed') || detail.includes('configuration-not-found')) return 'Email/password registration is not enabled correctly in Firebase Authentication for this project.';
+  if (detail.includes('admin-restricted-operation')) return 'Firebase is currently configured to block end-user account creation. Enable user sign-up in Authentication settings.';
+  if (detail.includes('network-request-failed')) return 'Nightjar could not reach Firebase. Check your connection and try again.';
+  if (detail.includes('user-disabled')) return 'This Nightjar account has been disabled. Contact an administrator for review.';
+  if (detail.includes('app-not-authorized') || detail.includes('unauthorized-domain')) return 'This Nightjar domain is not authorised for Firebase Authentication yet.';
+  if (detail.includes('invalid-api-key')) return 'Nightjar is using an invalid Firebase web API key. Check the Firebase web app configuration.';
+  return `Nightjar account request failed (${code || 'unknown Firebase error'}). Please try again.`;
 };
 
 const passwordChecks = (value: string) => ({
@@ -87,10 +102,12 @@ export default function AccountAccess({
 
     void run(async () => {
       if (mode === 'register') {
-        const next = await nightjarAuth.register(email, password);
-        onAuthenticated(next);
+        const result = await nightjarAuth.register(email, password);
+        onAuthenticated(result.identity);
         setMode('verify');
-        setMessage('Account created. We sent a verification link to your email.');
+        setMessage(result.verificationSent
+          ? 'Account created. We sent a verification link to your email.'
+          : 'Account created, but the verification email could not be sent. Use Resend email below.');
         return;
       }
       if (mode === 'signin') {
