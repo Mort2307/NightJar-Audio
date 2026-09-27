@@ -1445,11 +1445,82 @@ export const handler = router({
       });
     },
   ],
+  'GET /api/admin/release-library': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async () => {
+      const { items: releases } = await db.list(releaseTable, { limit: 500 });
+      const moderationStatuses = new Set(['pending_review', 'released', 'held', 'taken_down', 'rejected']);
+      return json({
+        releases: releases
+          .filter((release) => moderationStatuses.has(String(release.status ?? '')))
+          .sort((a, b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? ''))),
+      });
+    },
+  ],
   'GET /api/admin/release-queue': [
     requireAdminEmailAllowlist(ADMIN_EMAILS),
     async () => {
       const { items: releases } = await db.list(releaseTable, { limit: 500 });
       return json({ releases: releases.filter((release) => release.status === 'pending_review').slice(0, 100) });
+    },
+  ],
+  'POST /api/admin/releases/:releaseId/lifecycle': [
+    requireAdminEmailAllowlist(ADMIN_EMAILS),
+    async (ctx) => {
+      const body = (ctx.body ?? {}) as { action?: 'hold'|'restore'|'takedown'; note?: string; reasonCode?: string };
+      const action = String(body.action ?? '');
+      if (!['hold', 'restore', 'takedown'].includes(action)) return error('Choose a valid release lifecycle action.', 400);
+      const { items } = await db.list(releaseTable, { limit: 500 });
+      const release = items.find((item) => item.id === ctx.params.releaseId);
+      if (!release) return error('Release not found.', 404);
+      const fromStatus = String(release.status ?? '');
+      let toStatus = fromStatus;
+      if (action === 'hold' && fromStatus === 'released') toStatus = 'held';
+      else if (action === 'takedown' && ['released', 'held'].includes(fromStatus)) toStatus = 'taken_down';
+      else if (action === 'restore' && ['held', 'taken_down'].includes(fromStatus)) toStatus = 'released';
+      else return error('That lifecycle action is not valid for the release’s current status.', 409);
+      const now = new Date().toISOString();
+      const note = String(body.note ?? '').trim().slice(0, 1000) || null;
+      const reasonCode = String(body.reasonCode ?? 'other').trim().slice(0, 80) || 'other';
+      const next = {
+        ...release,
+        status: toStatus,
+        lifecycleNote: note,
+        lifecycleReasonCode: reasonCode,
+        lifecycleUpdatedAt: now,
+        lifecycleUpdatedBy: ctx.user!.userId,
+        releaseDate: action === 'restore' ? (release.releaseDate ?? now) : release.releaseDate ?? null,
+        updatedAt: now,
+      };
+      await db.update(releaseTable, [{ id: release.id, record: next }]);
+      await db.add(moderationHistoryTable, [{
+        releaseId: release.id,
+        creatorUserId: release.creatorUserId ?? null,
+        decision: action,
+        reasonCode,
+        note,
+        fromStatus,
+        toStatus,
+        moderatorUserId: ctx.user!.userId,
+        createdAt: now,
+      }]);
+      if (release.creatorUserId) {
+        await createUserNotificationOnce(String(release.creatorUserId), {
+          type: 'content',
+          subtype: 'release',
+          dedupeKey: 'release-lifecycle:' + release.id + ':' + action + ':' + now,
+          title: action === 'hold' ? 'Your release has been placed on hold' : action === 'takedown' ? 'Your release has been taken down' : 'Your release has been restored',
+          message: action === 'hold'
+            ? 'Nightjar has temporarily removed this release from the public catalogue while it is reviewed.'
+            : action === 'takedown'
+              ? 'Nightjar has removed this release from the public catalogue. Open Creator Studio for the recorded moderation reason.'
+              : 'Nightjar has restored this release to the public catalogue.',
+          releaseId: release.id,
+          moderationNote: note,
+          reasonCode,
+        });
+      }
+      return json({ release: next });
     },
   ],
   'GET /api/admin/releases/:releaseId/moderation-history': [
