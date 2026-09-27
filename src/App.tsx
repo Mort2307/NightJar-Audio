@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, auth } from '@appdeploy/client';
 import {
   ArrowRight,
@@ -35,6 +35,12 @@ import {
   Coins,
   WalletCards,
 } from 'lucide-react';
+import CreatorAudioPipeline from './components/CreatorAudioPipeline';
+import CreatorProfile from './components/CreatorProfile';
+import ContentModeration from './components/ContentModeration';
+import NightjarOnboarding from './components/NightjarOnboarding';
+import NightjarPlayer from './components/NightjarPlayer';
+import WriterDiscovery from './components/WriterDiscovery';
 
 type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -176,6 +182,9 @@ function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [creatorProfileUserId, setCreatorProfileUserId] = useState<string | null>(null);
+  const [moderationOpen, setModerationOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
@@ -223,6 +232,22 @@ function App() {
     void restore();
     return () => { cancelled = true; window.removeEventListener('popstate', onPop); };
   }, []);
+
+  useEffect(() => {
+    if (!user || !ageVerified || !role || role === 'admin' || role === 'editor') return;
+    let cancelled = false;
+    void api.get('/api/profile/me').then(({ data }) => {
+      if (cancelled) return;
+      const nextProfile = data?.profile;
+      if (nextProfile) {
+        setProfile((current: any) => ({ ...current, ...nextProfile }));
+        setShowOnboarding(nextProfile.onboardingComplete !== true);
+      } else {
+        setShowOnboarding(true);
+      }
+    }).catch(() => { /* onboarding remains optional if the profile endpoint is unavailable */ });
+    return () => { cancelled = true; };
+  }, [user, ageVerified, role]);
 
   useEffect(() => {
     if (!user || !ageVerified) return;
@@ -691,6 +716,13 @@ function App() {
     } catch {
       notify('Follow could not be updated.');
     }
+  };
+
+  const playReleaseFromCreatorProfile = (release: any) => {
+    const track = releaseToTrack(release);
+    setTracks((items) => items.some((item) => item.id === track.id) ? items : [...items, track]);
+    setCreatorProfileUserId(null);
+    setPlaying(track.id);
   };
 
   const togglePlayback = (track: Track) => {
@@ -1247,6 +1279,8 @@ function App() {
               <p className="spotlight-note">Every active Creator and Writer receives a full day in deterministic rotation, with a shareable spotlight to help the community naturally discover their work. Listener Spotlight recognises the previous completed week’s top seven Listeners, one per day, and thanks them for helping Nightjar thrive.</p>
             </section>
 
+            <WriterDiscovery notify={notify} />
+
             <section id="catalogue" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
               <div className="track-grid">
@@ -1288,7 +1322,7 @@ function App() {
         {view === 'creators' && (
           <section className="page-wrap">
             <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators building original catalogues for the Nightjar audience.</p></div><button className="secondary-button with-icon" onClick={() => notify('Creator search is part of the next catalogue pass.')}><Search size={16} /> Search creators</button></div>
-            <div className="creator-directory">{creators.map((creator, index) => <article className="creator-profile" key={creator.name}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => setSaved(saved === creator.name ? null : creator.name)} aria-label={saved === creator.name ? 'Unsave creator' : 'Save creator'}><Heart size={17} fill={saved === creator.name ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span><strong>{creator.share}</strong> listening share</span></div></div><button className="round-arrow" onClick={() => notify(`${creator.name}'s catalogue would open here.`)}><ArrowRight size={18} /></button></article>)}</div>
+            <div className="creator-directory">{creators.map((creator, index) => <article className="creator-profile" key={creator.name}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => setSaved(saved === creator.name ? null : creator.name)} aria-label={saved === creator.name ? 'Unsave creator' : 'Save creator'}><Heart size={17} fill={saved === creator.name ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span><strong>{creator.share}</strong> listening share</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
           </section>
         )}
 
@@ -1298,9 +1332,9 @@ function App() {
               <div>
                 <p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p>
                 <h1>Your audience. Your catalogue. Your listening revenue.</h1>
-                <p>{accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Live catalogue and verified-listening records only.'}</p>
+                <p>{accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Your real release pipeline, from upload through moderation to live catalogue.'}</p>
               </div>
-              <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-new-release')?.scrollIntoView({ behavior: 'smooth' })}>
+              <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: 'smooth' })}>
                 <Upload size={16} /> New release
               </button>
             </div>
@@ -1308,76 +1342,10 @@ function App() {
             <div className="dashboard-metric-grid">
               {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
             </div>
-            {creatorOnly && <article className="creator-create-card" id="creator-new-release">
-              <div><span className="mini-label">NEW RELEASE</span><h2>Create a release draft</h2><p>A release stays private until you attach real audio and publish it.</p></div>
-              <div className="writer-create-form">
-                <input value={creatorDraft.title} onChange={(e)=>setCreatorDraft({...creatorDraft,title:e.target.value})} placeholder="Release title" />
-                <input value={creatorDraft.category} onChange={(e)=>setCreatorDraft({...creatorDraft,category:e.target.value})} placeholder="Category" />
-                <input value={creatorDraft.genre} onChange={(e)=>setCreatorDraft({...creatorDraft,genre:e.target.value})} placeholder="Genre" />
-                <input value={creatorDraft.mood} onChange={(e)=>setCreatorDraft({...creatorDraft,mood:e.target.value})} placeholder="Mood" />
-                <input value={creatorDraft.durationMinutes} onChange={(e)=>setCreatorDraft({...creatorDraft,durationMinutes:e.target.value})} placeholder="Duration in minutes" inputMode="numeric" />
-                <input value={creatorDraft.audioUrl} onChange={(e)=>setCreatorDraft({...creatorDraft,audioUrl:e.target.value})} placeholder="Audio URL" />
-                <input value={creatorDraft.artworkUrl} onChange={(e)=>setCreatorDraft({...creatorDraft,artworkUrl:e.target.value})} placeholder="Artwork URL (optional)" />
-                <textarea value={creatorDraft.description} onChange={(e)=>setCreatorDraft({...creatorDraft,description:e.target.value})} placeholder="Description" />
-                <input value={creatorDraft.tags} onChange={(e)=>setCreatorDraft({...creatorDraft,tags:e.target.value})} placeholder="Tags, comma separated" />
-                <input value={creatorDraft.tropes} onChange={(e)=>setCreatorDraft({...creatorDraft,tropes:e.target.value})} placeholder="Tropes, comma separated" />
-                <button className="primary-button" onClick={()=>void createCreatorRelease()}>Save draft <ArrowRight size={15}/></button>
-              </div>
-            </article>}
-            <section className="section-wrap compact"><div className="section-head"><div><p className="eyebrow">CATALOGUE</p><h2>Release records</h2></div></div>
-              <div className="data-list">{creatorDashboard.releases.map((release:any)=><article className="data-row" key={release.id}><div><strong>{release.title}</strong><span>{release.status ?? 'draft'} · v{release.version ?? 1} · {release.durationMinutes ? release.durationMinutes+' min' : 'duration not set'}</span><em>{release.audioUrl ? 'Audio attached' : 'Audio not attached'}</em></div><div className="data-actions">{creatorOnly&&release.status!=='released'&&<button className="secondary-button" disabled={!release.audioUrl} onClick={()=>void publishCreatorRelease(release.id)}>Publish</button>}{creatorOnly&&release.status!=='released'&&<button className="ghost-button" onClick={()=>void deleteCreatorRelease(release.id)}><Trash2 size={14}/></button>}</div></article>)}
-              {!creatorDashboard.releases.length&&<div className="people-empty"><Headphones size={18}/><strong>No release records yet.</strong><span>Live creator releases will appear here.</span></div>}
-              </div>
-            </section>
+            <div id="creator-pipeline">
+              {creatorOnly ? <CreatorAudioPipeline releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} /> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
+            </div>
             <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS</span><h2>Verified listening allocation</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Net subscription revenue</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Creator pool</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Eligible verified listening</strong></div></div><p className="panel-note">Commercial outputs remain empty until real billing records and payout rules are connected.</p></article>
-          </section>
-        )}
-
-        {view === 'profile' && (
-          <section className="page-section profile-page">
-            <div className="page-heading"><div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Make Nightjar yours.</h1><p>Every account gets a personal identity and taste profile. Your role controls permissions; your profile controls how you present yourself.</p></div></div>
-            <div className="profile-editor-grid">
-              <article className="panel profile-editor-card">
-                <span className="mini-label">IDENTITY</span>
-                <div className="profile-avatar-preview" data-tone={profile.avatarTone || 'plum'}><strong>{profile.avatarInitials || (profile.displayName || user?.name || 'N').slice(0,2).toUpperCase()}</strong></div>
-                <h2>{profile.displayName || user?.name || 'Choose your name'}</h2>
-                <label>Chosen name<input value={profile.displayName} onChange={(e)=>setProfile((p:any)=>({...p,displayName:e.target.value}))} placeholder="How Nightjar should call you"/></label>
-                <label>@handle<input value={profile.handle} onChange={(e)=>setProfile((p:any)=>({...p,handle:e.target.value}))} placeholder="youruniquehandle"/></label>
-                <div className="profile-inline-fields"><label>Avatar initials<input maxLength={4} value={profile.avatarInitials} onChange={(e)=>setProfile((p:any)=>({...p,avatarInitials:e.target.value.toUpperCase()}))} placeholder="NJ"/></label><label>Profile tone<select value={profile.avatarTone || 'plum'} onChange={(e)=>setProfile((p:any)=>({...p,avatarTone:e.target.value}))}><option value="plum">Plum</option><option value="wine">Wine</option><option value="mauve">Mauve</option><option value="ivory">Ivory</option></select></label></div>
-                <label>Headline<input value={profile.headline} onChange={(e)=>setProfile((p:any)=>({...p,headline:e.target.value}))} placeholder="A short line that feels like you"/></label>
-                <label>Pronouns <span className="optional-label">optional</span><input value={profile.pronouns} onChange={(e)=>setProfile((p:any)=>({...p,pronouns:e.target.value}))} placeholder="e.g. she/her"/></label>
-                <label>Bio<textarea value={profile.bio} onChange={(e)=>setProfile((p:any)=>({...p,bio:e.target.value}))} placeholder="Tell people a little about you"/></label>
-              </article>
-              <article className="panel profile-editor-card">
-                <span className="mini-label">TASTE & ROLE</span>
-                <h2>What you love</h2>
-                <p className="panel-note">Declared preferences are yours to choose. Nightjar keeps them separate from identity and uses them to refine recommendations.</p>
-                <label>Favourite tags <input value={(profile.favouriteTags??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteTags',e.target.value)} placeholder="Atmospheric, Whisper, Cinematic"/></label>
-                <label>Favourite tropes <input value={(profile.favouriteTropes??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteTropes',e.target.value)} placeholder="Slow burn, suspense, character-led"/></label>
-                <label>Favourite categories <input value={(profile.favouriteCategories??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteCategories',e.target.value)} placeholder="Story, Atmospheric, Performance"/></label>
-                <label>Role focus <input value={(profile.roleFocus??[]).join(', ')} onChange={(e)=>setProfile((p:any)=>({...p,roleFocus:e.target.value.split(',').map((x:string)=>x.trim()).filter(Boolean).slice(0,16)}))} placeholder="Performance, writing, editing"/></label>
-                <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile</label>
-                <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my profile'} <Check size={15}/></button>
-              </article>
-            </div>
-            <div className="profile-public-preview panel"><div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p><div className="profile-preview-chips">{[...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,6).map((item:string)=><span key={item}>{item}</span>)}</div></div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
-            <article className="panel taste-panel"><div><span className="mini-label">TASTE ENGINE</span><h2>What Nightjar is learning</h2><p>Declared taste is kept separate from identity. Listening signals can refine recommendations without trying to infer who you are.</p></div><div className="taste-vector">{tasteVector.length===0 ? <span className="taste-empty">Your taste graph will grow as you save, finish, replay and explore.</span> : tasteVector.slice(0,10).map((item:any)=><div className="taste-chip" key={item.label}><strong>{item.label}</strong><span>{item.weight}</span></div>)}</div></article>
-          </section>
-        )}
-
-        {view === 'protection' && (
-          <section className="page-wrap protection-page">
-            <div className="page-heading">
-              <div><p className="eyebrow"><ShieldAlert size={14} /> PROTECTION CENTRE</p><h1>Your account. Your work. Your safety.</h1><p>You are not expected to deal with harassment, abuse, fraud, theft, threats or other wrongdoing alone. Nightjar gives you a direct reporting path and keeps a supporting record of relevant platform events.</p></div>
-            </div>
-            <div className="protection-banner"><ShieldCheck size={20} /><div><strong>PROTECTED BY DESIGN</strong><span>Security signals are supporting evidence, not an automatic finding of wrongdoing or intent. Nightjar does not capture clipboard contents.</span></div></div>
-            <div className="admin-grid">
-              <div className="admin-panel"><span className="admin-icon"><ShieldAlert size={19} /></span><span className="mini-label">REPORT SOMETHING</span><h2>Tell Nightjar what happened</h2><select value={reportCategory} onChange={(event) => setReportCategory(event.target.value)}><option>Harassment or abuse</option><option>Fraud or scam</option><option>Impersonation</option><option>Copyright / script theft</option><option>Unauthorised sharing</option><option>Threats or coercion</option><option>Suspected illegal activity</option><option>Account security</option><option>Something else</option></select><textarea value={reportSummary} onChange={(event) => setReportSummary(event.target.value)} placeholder="Describe what happened. Include dates, account names, content references or other useful detail." /><button className="primary-button" onClick={() => void submitProtectionReport()}>Submit protected report <ArrowRight size={15} /></button></div>
-              <div className="admin-panel"><span className="admin-icon"><ClipboardX size={19} /></span><span className="mini-label">EVIDENCE LOG</span><h2>Quiet security record</h2><p>Blocked copy, cut, print, selection and other protected interactions can be recorded against your account. This helps establish a timeline if a concern is later reported.</p><strong>{protectionEvidence.length} recorded signal{protectionEvidence.length === 1 ? '' : 's'}</strong><button className="secondary-button" onClick={() => void loadProtection()}>Refresh evidence</button></div>
-              <div className="admin-panel"><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">MY CASES</span><h2>Reports and support</h2><p>{protectionReports.length ? `${protectionReports.length} case${protectionReports.length === 1 ? '' : 's'} recorded on this account.` : 'No protection reports have been submitted from this account yet.'}</p><div className="evidence-list">{protectionReports.slice(0, 6).map((report) => <div key={report.caseId}><strong>{report.caseId}</strong><span>{report.category} · {report.status}</span></div>)}</div></div>
-              <div className="admin-panel"><span className="admin-icon"><Ban size={19} /></span><span className="mini-label">ACCOUNT CONTROL</span><h2>Block and disengage</h2><p>If a user is causing a problem, blocking is available from supported account surfaces. For serious incidents, block and report rather than relying on either action alone.</p><button className="secondary-button" onClick={() => notify('Open the relevant user profile to block that account.')}>How blocking works</button></div>
-            </div>
-            <div className="protection-footnote"><strong>Immediate danger?</strong><span>Nightjar is not emergency services. In the UK, call 999 for immediate danger. For platform incidents, use this report path so relevant Nightjar records can be reviewed.</span></div>
           </section>
         )}
 
@@ -1431,6 +1399,8 @@ function App() {
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('writer')}><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">PEOPLE · WRITERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.writer ?? 0}</h2><p>Writers with protected manuscript and script-marketplace access.</p><strong>Open writer profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('editor')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">PEOPLE · EDITORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.editor ?? 0}</h2><p>Editors assigned to controlled editorial workflows.</p><strong>Open editor profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('approvals')}><span className="admin-icon"><Sparkles size={19} /></span><span className="mini-label">CREATOR APPROVALS</span><h2>{adminApplications.filter((application) => application.status === 'pending' || application.status === 'submitted').length || 'Review'}</h2><p>Open the live creator application queue and make an explicit approve, waitlist or reject decision.</p><strong>Open approval workflow <ArrowRight size={13} /></strong></button>
+              <button className="admin-panel admin-tile" onClick={() => setModerationOpen(true)}><span className="admin-icon"><Headphones size={19} /></span><span className="mini-label">CONTENT MODERATION</span><h2>Review</h2><p>Preview submitted release audio and metadata before anything enters the public adult catalogue.</p><strong>Open release moderation <ArrowRight size={13} /></strong></button>
+
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('revenue')}><span className="admin-icon"><BarChart3 size={19} /></span><span className="mini-label">REVENUE</span><h2>Commercial controls</h2><p>Open the operating view for subscription revenue, creator-pool assumptions and payout readiness.</p><strong>Open commercial controls <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('editorial')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">EDITORIAL</span><h2>{adminScripts.length}</h2><p>Assign live manuscripts to controlled editors and review production workflow.</p><strong>Open editorial controls <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => navigate('protection')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">SAFETY</span><h2>Access & moderation</h2><p>Review reports, protection signals and age-assurance boundaries.</p><strong>Open Protection Centre <ArrowRight size={13} /></strong></button>
@@ -1449,7 +1419,10 @@ function App() {
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <span className="nightjar-mark"><Moon size={15} /></span>}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id)} notify={notify} />}
-      {playing && <AudioDock track={tracks.find((track) => track.id === playing) ?? null} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} />}
+      {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} />}
+      {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingCreatorIds} onToggleFollow={toggleCreatorFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} />}
+      <ContentModeration open={moderationOpen} onClose={() => setModerationOpen(false)} notify={notify} />
+      {showOnboarding && user && role !== 'admin' && role !== 'editor' && <NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} />}
       {toast && <div className="toast">{toast}</div>}
 
       {user && !rolePicker && (
@@ -1512,42 +1485,6 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
   </div>;
 }
 
-function AudioDock({ track, intent, onClose, notify }: { track: Track | null; intent: string; onClose: () => void; notify: (message: string) => void }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const lastEvent = useRef(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(1);
-  const [volume, setVolume] = useState(1);
-
-  useEffect(() => {
-    const node = audioRef.current;
-    if (!node || !track?.audioUrl) return;
-    lastEvent.current = 0;
-    setPosition(0);
-    setDuration(1);
-    void node.play().catch(() => notify('Press play to start this release.'));
-    void api.post('/api/listening/event', { releaseId: track.id, eventType: 'start', positionSeconds: 0, durationSeconds: 0, intent }).catch(() => {});
-    return () => { node.pause(); };
-  }, [track?.id, track?.audioUrl, intent]);
-
-  useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
-
-  if (!track?.audioUrl) return null;
-
-  const formatTime = (seconds: number) => !Number.isFinite(seconds) ? '0:00' : Math.floor(seconds / 60) + ':' + String(Math.floor(seconds % 60)).padStart(2, '0');
-
-  return <div className="player-dock">
-    <audio ref={audioRef} src={track.audioUrl} preload="metadata" onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 1)} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={(event) => { const node = event.currentTarget; setPosition(node.currentTime); if (node.currentTime - lastEvent.current >= 15) { lastEvent.current = node.currentTime; void api.post('/api/listening/event', { releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {}); } }} onEnded={() => { setIsPlaying(false); setPosition(duration); void api.post('/api/listening/event', { releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {}); }} />
-    <div className="dock-art">{track.artworkUrl ? <img src={track.artworkUrl} alt="" /> : <Moon size={16} />}</div>
-    <div className="dock-copy"><span>{track.category}</span><strong>{track.title}</strong><small>{track.creator}</small></div>
-    <div className="dock-time">{formatTime(position)} / {formatTime(duration)}</div>
-    <input className="dock-progress" type="range" min="0" max={duration} step="0.1" value={Math.min(position, duration)} onChange={(event) => { const value = Number(event.target.value); setPosition(value); if (audioRef.current) audioRef.current.currentTime = value; }} aria-label="Playback position" />
-    <button className="dock-play" onClick={() => { const node = audioRef.current; if (!node) return; if (node.paused) void node.play(); else node.pause(); }} aria-label={isPlaying ? 'Pause' : 'Play'}>{isPlaying ? <Pause size={17} /> : <Play size={17} fill="currentColor" />}</button>
-    <div className="dock-volume"><Volume2 size={15} /><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume" /></div>
-    <button className="dock-close" onClick={onClose} aria-label="Close player"><X size={15} /></button>
-  </div>;
-}
 
 
 export default App;
