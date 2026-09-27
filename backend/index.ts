@@ -548,7 +548,9 @@ export const handler = router({
       const query = String(ctx.query.q ?? '').trim().toLowerCase();
       const category = String(ctx.query.category ?? '').trim().toLowerCase();
       const { items } = await db.list(releaseTable, { limit: 500 });
-      const catalogue = await Promise.all(items.filter((release) => release.status === 'released').filter((release) => {
+      const released = items.filter((release) => release.status === 'released');
+      const categories = Array.from(new Set(released.map((release) => String(release.category ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      const catalogue = await Promise.all(released.filter((release) => {
         if (category && String(release.category ?? '').toLowerCase() !== category) return false;
         if (!query) return true;
         return [release.title, release.description, release.category, release.genre, release.mood, ...(Array.isArray(release.tags) ? release.tags : []), ...(Array.isArray(release.tropes) ? release.tropes : [])].join(' ').toLowerCase().includes(query);
@@ -556,7 +558,7 @@ export const handler = router({
         const profile = release.creatorUserId ? await getProfile(String(release.creatorUserId)) : null;
         return { ...release, creatorName: profile?.displayName ?? release.creatorName ?? 'Nightjar creator', creatorHandle: profile?.handle ?? release.creatorHandle ?? null };
       }));
-      return json({ catalogue });
+      return json({ catalogue, categories });
     },
   ],
   'GET /api/creators': [
