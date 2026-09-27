@@ -102,7 +102,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     try {
       const dataUrl = await readDataUrl(file);
       const durationMinutes = kind === 'audio' ? await readAudioDurationMinutes(file) : null;
-      const { data } = await api.post('/api/creator/assets', { releaseId: current.id, kind, dataUrl, contentType: file.type, fileName: file.name });
+      const { data } = await api.post('/api/creator/assets', { releaseId: current.id, kind, dataUrl, contentType: file.type, fileName: file.name, ...(durationMinutes ? { durationMinutes } : {}) });
       setRelease({
         audioUrl: kind === 'audio' ? data?.url ?? null : current.audioUrl,
         artworkUrl: kind === 'artwork' ? data?.url ?? null : current.artworkUrl,
