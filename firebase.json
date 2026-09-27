@@ -16,7 +16,7 @@
     ],
     "headers": [
       {
-        "source": "/admin{,/**}",
+        "source": "/writer",
         "headers": [
           {
             "key": "Cache-Control",
@@ -37,7 +37,7 @@
         ]
       },
       {
-        "source": "/protection{,/**}",
+        "source": "/writer/**",
         "headers": [
           {
             "key": "Cache-Control",
@@ -58,7 +58,7 @@
         ]
       },
       {
-        "source": "/profile{,/**}",
+        "source": "/editor",
         "headers": [
           {
             "key": "Cache-Control",
@@ -79,7 +79,7 @@
         ]
       },
       {
-        "source": "/editor{,/**}",
+        "source": "/editor/**",
         "headers": [
           {
             "key": "Cache-Control",
@@ -100,7 +100,112 @@
         ]
       },
       {
-        "source": "/writer{,/**}",
+        "source": "/profile",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "private,no-store,max-age=0"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex,nofollow,noarchive,nosnippet,noimageindex"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          }
+        ]
+      },
+      {
+        "source": "/profile/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "private,no-store,max-age=0"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex,nofollow,noarchive,nosnippet,noimageindex"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          }
+        ]
+      },
+      {
+        "source": "/protection",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "private,no-store,max-age=0"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex,nofollow,noarchive,nosnippet,noimageindex"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          }
+        ]
+      },
+      {
+        "source": "/protection/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "private,no-store,max-age=0"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex,nofollow,noarchive,nosnippet,noimageindex"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          }
+        ]
+      },
+      {
+        "source": "/admin",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "private,no-store,max-age=0"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex,nofollow,noarchive,nosnippet,noimageindex"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          }
+        ]
+      },
+      {
+        "source": "/admin/**",
         "headers": [
           {
             "key": "Cache-Control",
