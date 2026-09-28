@@ -1294,6 +1294,15 @@ function App() {
   const effectiveRole: AccountRole | null = role === 'admin' ? (previewRole ?? 'admin') : role;
   const canAdmin = role === 'admin';
   const canProtection = Boolean(user);
+  const simulationIdentity = previewRole === 'listener'
+    ? { name: 'Jamie', initials: 'JL', label: 'Listener' }
+    : previewRole === 'creator'
+      ? { name: 'Aria Vale', initials: 'AV', label: 'Creator' }
+      : previewRole === 'writer'
+        ? { name: 'Mara Bell', initials: 'MB', label: 'Writer' }
+        : previewRole === 'editor'
+          ? { name: 'Sam Reed', initials: 'SR', label: 'Audio Editor' }
+          : { name: 'Nightjar Admin', initials: 'NJ', label: 'Administrator' };
 
   const loadBranding = async () => {
     try {
@@ -1884,8 +1893,8 @@ function App() {
           {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); }}>Editorial</button>}
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
-          {canAdmin && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
-          {canAdmin && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ADMIN PREVIEW · REAL ROLE: ADMINISTRATOR</span><button className={previewRole === 'listener' ? 'active' : ''} onClick={() => selectPreviewRole('listener')}>Listener</button><button className={previewRole === 'creator' ? 'active' : ''} onClick={() => selectPreviewRole('creator')}>Creator</button><button className={previewRole === 'writer' ? 'active' : ''} onClick={() => selectPreviewRole('writer')}>Writer</button><button className={previewRole === 'editor' ? 'active' : ''} onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button className={!previewRole ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
+          {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
+          {canAdmin && !simulationMode && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ADMIN PREVIEW · REAL ROLE: ADMINISTRATOR</span><button className={previewRole === 'listener' ? 'active' : ''} onClick={() => selectPreviewRole('listener')}>Listener</button><button className={previewRole === 'creator' ? 'active' : ''} onClick={() => selectPreviewRole('creator')}>Creator</button><button className={previewRole === 'writer' ? 'active' : ''} onClick={() => selectPreviewRole('writer')}>Writer</button><button className={previewRole === 'editor' ? 'active' : ''} onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button className={!previewRole ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
         </nav>
 
         <div className="top-actions">
@@ -1906,9 +1915,9 @@ function App() {
             <button className="primary-button" disabled={accountLoading} onClick={() => void signIn()}>Sign in <ArrowRight size={15} /></button>
           ) : (
             <>
-              <button className="account-chip" onClick={() => setRolePicker(true)}>
-                <span className="account-chip-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" /> : (user.name ?? user.email ?? 'N').slice(0, 1).toUpperCase()}</span>
-                <span><strong>{user.name ?? 'Nightjar account'}</strong><em>{canAdmin && previewRole ? `Administrator · previewing ${roleMeta[previewRole].label}` : accountLabel}</em></span>
+              <button className="account-chip" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)}>
+                <span className="account-chip-avatar">{simulationMode ? simulationIdentity.initials : profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" /> : (user.name ?? user.email ?? 'N').slice(0, 1).toUpperCase()}</span>
+                <span><strong>{simulationMode ? simulationIdentity.name : user.name ?? 'Nightjar account'}</strong><em>{simulationMode ? simulationIdentity.label + ' · Simulation' : canAdmin && previewRole ? `Administrator · previewing ${roleMeta[previewRole].label}` : accountLabel}</em></span>
               </button>
               <button className="ghost-button desktop-only" onClick={() => void signOut()}><LogOut size={15} /></button>
             </>
@@ -2269,8 +2278,8 @@ function App() {
       {toast && <div className="toast">{toast}</div>}
 
       {user && !rolePicker && (
-        <button className="floating-account" onClick={() => setRolePicker(true)} aria-label="Open account information">
-          <UserCircle2 size={16} /><span>{roleMeta[role ?? 'listener'].label}</span>
+        <button className="floating-account" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)} aria-label="Open account information">
+          <UserCircle2 size={16} /><span>{simulationMode ? simulationIdentity.label + ' simulation' : roleMeta[role ?? 'listener'].label}</span>
         </button>
       )}
     </div>
