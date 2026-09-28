@@ -1793,7 +1793,7 @@ function App() {
               </div>
             </section>
 
-            <TransparencyPanel notify={notify} />
+            <TransparencyPanel />
 
             <section className="creator-band section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
