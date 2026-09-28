@@ -142,6 +142,174 @@ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
   },
 };
 
+
+const PROFILE_TAG_OPTIONS = [
+  'Atmospheric',
+  'ASMR',
+  'Binaural',
+  'Cinematic',
+  'Conversational',
+  'Dialogue-heavy',
+  'Gentle',
+  'Immersive',
+  'Intimate',
+  'Playful',
+  'Romantic',
+  'Slow-paced',
+  'Story-led',
+  'Voice-led',
+  'Whispered',
+  'Sound-rich',
+] as const;
+
+const PROFILE_TROPE_OPTIONS = [
+  'Slow burn',
+  'Friends to lovers',
+  'Enemies to lovers',
+  'Forbidden attraction',
+  'Second chance',
+  'Strangers to lovers',
+  'Secret relationship',
+  'Workplace romance',
+  'Neighbours',
+  'Roommates',
+  'Meet-cute',
+  'Reunion',
+  'Mutual pining',
+  'Protective partner',
+  'Praise',
+  'Teasing',
+  'Comfort & reassurance',
+  'Aftercare',
+  'Power exchange',
+  'Jealousy',
+  'Possessive romance',
+  'Fantasy romance',
+  'Sci-fi romance',
+  'Supernatural romance',
+] as const;
+
+const PROFILE_CATEGORY_OPTIONS = [
+  'Erotic romance',
+  'Romantic story',
+  'Audio roleplay',
+  'Audio drama',
+  'Guided fantasy',
+  'ASMR / whisper',
+  'Sleep / wind-down',
+  'Character performance',
+  'Fantasy',
+  'Sci-fi',
+  'Paranormal / supernatural',
+  'Thriller / suspense',
+  'Dark romance',
+  'Comedy / playful',
+  'Contemporary romance',
+  'Historical romance',
+] as const;
+
+const ROLE_FOCUS_OPTIONS: Record<AccountRole, readonly string[]> = {
+  admin: [
+    'Platform operations',
+    'Community safety',
+    'Content moderation',
+    'Creator support',
+    'Editorial oversight',
+    'Commercial operations',
+  ],
+  creator: [
+    'Voice performance',
+    'Character acting',
+    'Narration',
+    'Audio roleplay',
+    'Performance direction',
+    'Audio production',
+    'Sound design',
+    'Creator collaboration',
+  ],
+  listener: [
+    'Discovery',
+    'Following creators',
+    'Community participation',
+    'Supporting creators',
+    'Curating favourites',
+    'Exploring new genres',
+  ],
+  writer: [
+    'Script writing',
+    'Story development',
+    'Dialogue writing',
+    'Character development',
+    'Romance writing',
+    'Worldbuilding',
+    'Script collaboration',
+    'Editorial revisions',
+  ],
+  editor: [
+    'Audio editing',
+    'Dialogue editing',
+    'Sound design',
+    'Mixing',
+    'Mastering',
+    'Noise cleanup',
+    'Production polish',
+    'Editorial collaboration',
+  ],
+};
+
+function MultiSelectField({
+  label,
+  options,
+  values,
+  onChange,
+}: {
+  label: string;
+  options: readonly string[];
+  values: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const selected = Array.isArray(values) ? values : [];
+  const allOptions = Array.from(new Set([...options, ...selected]));
+
+  const toggle = (option: string) => {
+    if (selected.includes(option)) {
+      onChange(selected.filter((value) => value !== option));
+      return;
+    }
+    if (selected.length >= 16) return;
+    onChange([...selected, option]);
+  };
+
+  return <div className="profile-multi-field">
+    <span className="profile-multi-label">{label}</span>
+    <details className="profile-multi-select">
+      <summary>
+        <span>{selected.length ? `${selected.length} selected` : 'Choose options'}</span>
+        <small>{selected.length}/16</small>
+      </summary>
+      <div className="profile-multi-options">
+        {allOptions.map((option) => {
+          const checked = selected.includes(option);
+          return <label className="profile-multi-option" key={option}>
+            <input
+              type="checkbox"
+              checked={checked}
+              disabled={!checked && selected.length >= 16}
+              onChange={() => toggle(option)}
+            />
+            <span>{option}</span>
+          </label>;
+        })}
+      </div>
+    </details>
+    {selected.length > 0 && <div className="profile-multi-chips" aria-label={`${label} selections`}>
+      {selected.map((item) => <button type="button" key={item} onClick={() => toggle(item)} title={`Remove ${item}`}>
+        {item} <span aria-hidden="true">×</span>
+      </button>)}
+    </div>}
+  </div>;
+}
+
 const formatMoneyPence = (pence: number | null | undefined) => {
   if (pence == null || !Number.isFinite(Number(pence))) return 'Not set';
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(pence) / 100);
@@ -804,10 +972,6 @@ function App() {
       const message = error instanceof Error ? error.message : '';
       notify(message.includes('already-exists') ? 'That @handle is already in use.' : 'Profile could not be saved.');
     } finally { setProfileLoading(false); }
-  };
-
-  const updateProfileList = (key: 'favouriteTags'|'favouriteTropes'|'favouriteCategories', value: string) => {
-    setProfile((current: any) => ({ ...current, [key]: value.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 16) }));
   };
 
   const loadSecurityAlerts = async () => {
@@ -1626,10 +1790,10 @@ function App() {
                 <span className="mini-label">TASTE & ROLE</span>
                 <h2>What you love</h2>
                 <p className="panel-note">Declared preferences are yours to choose. Nightjar keeps them separate from identity and uses them to refine recommendations.</p>
-                <label>Favourite tags <input value={(profile.favouriteTags??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteTags',e.target.value)} placeholder="Atmospheric, Whisper, Cinematic"/></label>
-                <label>Favourite tropes <input value={(profile.favouriteTropes??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteTropes',e.target.value)} placeholder="Slow burn, suspense, character-led"/></label>
-                <label>Favourite categories <input value={(profile.favouriteCategories??[]).join(', ')} onChange={(e)=>updateProfileList('favouriteCategories',e.target.value)} placeholder="Story, Atmospheric, Performance"/></label>
-                <label>Role focus <input value={(profile.roleFocus??[]).join(', ')} onChange={(e)=>setProfile((p:any)=>({...p,roleFocus:e.target.value.split(',').map((x:string)=>x.trim()).filter(Boolean).slice(0,16)}))} placeholder="Performance, writing, editing"/></label>
+                <MultiSelectField label="Favourite tags" options={PROFILE_TAG_OPTIONS} values={profile.favouriteTags ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTags:values}))}/>
+                <MultiSelectField label="Favourite tropes" options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTropes:values}))}/>
+                <MultiSelectField label="Favourite categories" options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteCategories:values}))}/>
+                <MultiSelectField label="Role focus" options={ROLE_FOCUS_OPTIONS[role ?? 'listener']} values={profile.roleFocus ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleFocus:values}))}/>
                 <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile</label>
                 <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my profile'} <Check size={15}/></button>
               </article>
