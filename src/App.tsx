@@ -492,7 +492,10 @@ function App() {
     void (async () => {
       try {
         const data = await nightjarMedia.getBranding();
-        setLogoUrl(data.logoUrl ?? null);
+        const nextLogo = data.logoUrl ?? null;
+        setLogoUrl(nextLogo);
+        const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+        if (favicon) favicon.href = nextLogo ?? '/favicon.svg';
       } catch { /* branded wordmark remains available */ }
     })();
     let cancelled = false;
@@ -1383,6 +1386,21 @@ function App() {
       applyRuntimeLogo(data.logoUrl ?? null);
     } catch { /* wordmark fallback remains available */ }
   };
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (!demoMode) void loadBranding();
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'nightjar.branding.version' && !demoMode) void loadBranding();
+    };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [demoMode, demoLogoPreviewUrl]);
 
   const uploadLogo = async (file: File) => {
     if (!canAdmin) return;
