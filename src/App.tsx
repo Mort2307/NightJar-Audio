@@ -69,6 +69,32 @@ type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor
 type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor';
+type TestingMode = 'off' | 'demo' | 'simulation';
+
+const TESTING_SESSION_KEY = 'nightjar.testing.session.v1';
+
+const readTestingSession = (): { mode: TestingMode; role: PreviewRole | null } => {
+  try {
+    const raw = window.sessionStorage.getItem(TESTING_SESSION_KEY);
+    if (!raw) return { mode: 'off', role: null };
+    const parsed = JSON.parse(raw);
+    const mode: TestingMode = parsed?.mode === 'simulation' ? 'simulation' : parsed?.mode === 'demo' ? 'demo' : 'off';
+    const role: PreviewRole | null = ['listener', 'creator', 'writer', 'editor'].includes(parsed?.role) ? parsed.role : null;
+    return mode === 'simulation' && role ? { mode, role } : mode === 'demo' ? { mode, role: null } : { mode: 'off', role: null };
+  } catch {
+    return { mode: 'off', role: null };
+  }
+};
+
+const writeTestingSession = (mode: TestingMode, role: PreviewRole | null = null) => {
+  try {
+    window.sessionStorage.setItem(TESTING_SESSION_KEY, JSON.stringify({ mode, role: mode === 'simulation' ? role : null }));
+  } catch { /* session persistence is an enhancement, never a blocker */ }
+};
+
+const clearTestingSession = () => {
+  try { window.sessionStorage.removeItem(TESTING_SESSION_KEY); } catch { /* ignore unavailable storage */ }
+};
 
 type AuthenticatedUser = {
   userId: string;
@@ -367,6 +393,7 @@ function App() {
   const [previewRole, setPreviewRole] = useState<PreviewRole | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [simulationMode, setSimulationMode] = useState(false);
+  const [testingSessionHydrated, setTestingSessionHydrated] = useState(false);
   const [demoSessionKey, setDemoSessionKey] = useState(0);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [pendingLogoPreviewUrl, setPendingLogoPreviewUrl] = useState<string | null>(null);
@@ -533,6 +560,39 @@ function App() {
       window.removeEventListener('popstate', onPop);
     };
   }, []);
+
+  useEffect(() => {
+    if (role !== 'admin') {
+      if (role) clearTestingSession();
+      setTestingSessionHydrated(false);
+      return;
+    }
+
+    const testing = readTestingSession();
+    if (testing.mode === 'simulation' && testing.role) {
+      setDemoMode(true);
+      setSimulationMode(true);
+      setPreviewRole(testing.role);
+      const restoredView: View = testing.role === 'creator' ? 'creator' : testing.role === 'writer' ? 'writer' : testing.role === 'editor' ? 'editor' : 'discover';
+      const restoredPath = restoredView === 'discover' ? '/discover' : '/' + restoredView;
+      if (window.location.pathname !== restoredPath) window.history.replaceState({}, '', restoredPath);
+      setView(restoredView);
+    } else if (testing.mode === 'demo') {
+      setDemoMode(true);
+      setSimulationMode(false);
+      setPreviewRole(null);
+    } else {
+      setDemoMode(false);
+      setSimulationMode(false);
+      setPreviewRole(null);
+    }
+    setTestingSessionHydrated(true);
+  }, [role]);
+
+  useEffect(() => {
+    if (role !== 'admin' || !testingSessionHydrated) return;
+    writeTestingSession(simulationMode ? 'simulation' : demoMode ? 'demo' : 'off', simulationMode ? previewRole : null);
+  }, [role, testingSessionHydrated, demoMode, simulationMode, previewRole]);
 
   useEffect(() => {
     if (!user || !ageVerified || !role || role === 'admin') return;
@@ -938,6 +998,11 @@ function App() {
 
   const signOut = async () => {
     await nightjarAuth.signOut();
+    clearTestingSession();
+    setDemoMode(false);
+    setSimulationMode(false);
+    setPreviewRole(null);
+    setTestingSessionHydrated(false);
     setUser(null);
     setRole(null);
     setAgeVerified(false);
@@ -1481,17 +1546,17 @@ function App() {
 
   const uploadProfileAvatar = async (file: File) => {
     if (!user) return;
-    if (demoMode) {
-      setProfile((current: any) => ({ ...current, pendingAvatarStatus:'pending', pendingAvatarAssetId:'demo-avatar' }));
-      notify('Simulation: profile image placed into local moderation state; nothing was uploaded.');
-      return;
-    }
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       notify('Use PNG, JPG or WebP for profile images.');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
       notify('Profile image must be 5 MB or smaller.');
+      return;
+    }
+    if (demoMode) {
+      setProfile((current: any) => ({ ...current, pendingAvatarStatus:'pending', pendingAvatarAssetId:'demo-avatar-' + Date.now() }));
+      notify('Simulation: profile image passed local validation and entered the fictional moderation queue. Nothing was uploaded.');
       return;
     }
     setProfileImageBusy(true);
@@ -1950,17 +2015,7 @@ function App() {
   };
 
   const selectPreviewRole = (next: PreviewRole) => {
-    if (!canAdmin) return;
-    if (demoMode) setSimulationMode(true);
-    setPreviewRole(next);
-    setRolePicker(false);
-    if (next === 'creator') navigate('creator');
-    else if (next === 'listener') navigate('discover');
-    else if (next === 'writer') navigate('writer');
-    else navigate('editor');
-    notify(simulationMode
-      ? `Simulation Mode: ${roleMeta[next].label}. No live writes.`
-      : `Admin preview: ${roleMeta[next].label} experience. Your Administrator role remains active.`);
+    startSimulation(next);
   };
 
   const clearAdminPreview = () => {
@@ -2136,7 +2191,7 @@ function App() {
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
-          {canAdmin && !simulationMode && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ADMIN PREVIEW · REAL ROLE: ADMINISTRATOR</span><button className={previewRole === 'listener' ? 'active' : ''} onClick={() => selectPreviewRole('listener')}>Listener</button><button className={previewRole === 'creator' ? 'active' : ''} onClick={() => selectPreviewRole('creator')}>Creator</button><button className={previewRole === 'writer' ? 'active' : ''} onClick={() => selectPreviewRole('writer')}>Writer</button><button className={previewRole === 'editor' ? 'active' : ''} onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button className={!previewRole ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
+          {canAdmin && !simulationMode && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ROLE SIMULATION · REAL ROLE: ADMINISTRATOR</span><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button className="active" onClick={clearAdminPreview}>Admin</button></div>}
         </nav>
 
         <div className="top-actions">
@@ -2517,7 +2572,7 @@ function App() {
       {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={demoMode} />}
       {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} demoMode={demoMode} />}
       {publicProfileUserId && <PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={() => setPublicProfileUserId(null)} notify={notify} demoMode={demoMode} />}
-      <ContentModeration open={moderationOpen} onClose={() => setModerationOpen(false)} notify={notify} />
+      <ContentModeration open={moderationOpen} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} />
       {reviewTrack && <ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} />}
       {showOnboarding && user && role !== 'admin' && <NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} />}
       {toast && <div className="toast">{toast}</div>}
