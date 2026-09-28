@@ -1373,7 +1373,9 @@ function App() {
   const applyRuntimeLogo = (nextLogo: string | null) => {
     setLogoUrl(nextLogo);
     const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+    const touchIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
     if (favicon) favicon.href = nextLogo ?? '/favicon.svg';
+    if (touchIcon) touchIcon.href = nextLogo ?? '/favicon.svg';
   };
 
   const loadBranding = async () => {
