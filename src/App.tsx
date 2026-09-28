@@ -1470,8 +1470,11 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const data = await nightjarAdministration.creatorApplications();
-      setAdminApplications(data.applications ?? []);
+      if (demoMode) setAdminApplications(structuredClone(demoAdminData.applications));
+      else {
+        const data = await nightjarAdministration.creatorApplications();
+        setAdminApplications(data.applications ?? []);
+      }
     } catch {
       notify('Creator approval queue could not be loaded.');
     } finally {
@@ -1483,14 +1486,22 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const [ledger, commercial] = await Promise.all([
-        nightjarCommercial.subscriptions(),
-        nightjarCommercial.overview(),
-      ]);
-      setAdminSubscriptions(ledger.subscriptions ?? []);
-      setCommercialOverview(commercial);
-      setCommercialSettings(commercial.settings);
-      setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: commercial.subscriptions }));
+      if (demoMode) {
+        const commercial:any = structuredClone(demoAdminData.commercial);
+        setAdminSubscriptions(structuredClone(demoAdminData.subscriptions));
+        setCommercialOverview(commercial);
+        setCommercialSettings(commercial.settings);
+        setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: commercial.subscriptions }));
+      } else {
+        const [ledger, commercial] = await Promise.all([
+          nightjarCommercial.subscriptions(),
+          nightjarCommercial.overview(),
+        ]);
+        setAdminSubscriptions(ledger.subscriptions ?? []);
+        setCommercialOverview(commercial);
+        setCommercialSettings(commercial.settings);
+        setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: commercial.subscriptions }));
+      }
     } catch {
       notify('Subscription ledger could not be loaded.');
     } finally {
@@ -1502,12 +1513,17 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const [scriptsData, editorsData] = await Promise.all([
-        nightjarScripts.adminScripts(),
-        nightjarScripts.editorAccounts(),
-      ]);
-      setAdminScripts(scriptsData.scripts ?? []);
-      setAdminEditors(editorsData.editors ?? []);
+      if (demoMode) {
+        setAdminScripts(structuredClone(demoAdminData.scripts));
+        setAdminEditors(structuredClone(demoAdminData.editors));
+      } else {
+        const [scriptsData, editorsData] = await Promise.all([
+          nightjarScripts.adminScripts(),
+          nightjarScripts.editorAccounts(),
+        ]);
+        setAdminScripts(scriptsData.scripts ?? []);
+        setAdminEditors(editorsData.editors ?? []);
+      }
     } catch {
       notify('Editorial controls could not be loaded.');
     } finally {
@@ -1518,6 +1534,11 @@ function App() {
   const assignEditor = async (scriptId: string, editorUserId: string) => {
     if (!canAdmin || !scriptId || !editorUserId) return;
     try {
+      if (demoMode) {
+        setAdminScripts((items:any[]) => items.map((item:any) => item.id === scriptId ? { ...item, editorUserId } : item));
+        notify('Demo Audio Editor assignment saved locally.');
+        return;
+      }
       await nightjarScripts.assignEditor(scriptId, editorUserId);
       await loadAdminEditorial();
       notify('Audio Editor assignment saved.');
@@ -1542,6 +1563,11 @@ function App() {
   const decideCreatorApplication = async (application: any, decision: 'approved' | 'waitlist' | 'rejected') => {
     if (!canAdmin || !application?.id) return;
     try {
+      if (demoMode) {
+        setAdminApplications((items:any[]) => items.map((item:any) => item.id === application.id ? { ...item, status:decision } : item));
+        notify(`Demo Creator application ${decision} locally.`);
+        return;
+      }
       await nightjarAdministration.decideCreatorApplication(application.id, decision);
       await loadAdminApplications();
       await loadAdminOverview();
@@ -1554,6 +1580,16 @@ function App() {
   const changeAccountRole = async (account: any, nextRole: 'listener' | 'creator' | 'writer' | 'editor') => {
     if (!canAdmin || !account?.userId) return;
     try {
+      if (demoMode) {
+        setAdminOverview((current:any) => {
+          const accounts = (current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, role:nextRole, status:'active' } : item);
+          const counts = { listener:0, creator:0, writer:0, editor:0, admin:current?.people?.counts?.admin ?? 3 } as any;
+          accounts.forEach((item:any) => { if (counts[item.role] != null) counts[item.role] += 1; });
+          return { ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts, counts } };
+        });
+        notify(`Demo account role changed to ${roleMeta[nextRole].label} locally.`);
+        return;
+      }
       await nightjarAdministration.setAccountRole(account.userId, nextRole, 'active');
       await loadAdminOverview();
       if (nextRole === 'editor') {
@@ -1569,6 +1605,11 @@ function App() {
   const changeAccountStatus = async (account: any, nextStatus: 'active' | 'pending_review' | 'suspended') => {
     if (!canAdmin || !account?.userId || !account?.role || account.role === 'admin') return;
     try {
+      if (demoMode) {
+        setAdminOverview((current:any) => ({ ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts:(current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, status:nextStatus } : item) } }));
+        notify(`Demo account status changed to ${nextStatus.replace('_', ' ')} locally.`);
+        return;
+      }
       await nightjarAdministration.setAccountRole(account.userId, account.role, nextStatus);
       await loadAdminOverview();
       notify(`Account status changed to ${nextStatus.replace('_', ' ')}.`);
@@ -1580,6 +1621,11 @@ function App() {
   const changeTestAccess = async (account: any, enabled: boolean) => {
     if (!canAdmin || !account?.userId || account.role === 'admin') return;
     try {
+      if (demoMode) {
+        setAdminOverview((current:any) => ({ ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts:(current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, testAccess:enabled } : item) } }));
+        notify(enabled ? 'Demo tester access enabled locally.' : 'Demo tester access removed locally.');
+        return;
+      }
       await nightjarAdministration.setTestAccess(account.userId, enabled);
       await loadAdminOverview();
       notify(enabled
