@@ -549,6 +549,7 @@ function App() {
     if (role === 'creator' || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
     if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
     if (role === 'editor' || (canAdmin && previewRole === 'editor')) void loadEditorQueue();
+    if (canAdmin) void loadAdminOverview();
   }, [user, ageVerified, role, currentIntent, previewRole, demoMode]);
 
   const notify = (message: string) => {
@@ -1599,6 +1600,42 @@ function App() {
     }
   };
 
+  const enableDemoMode = () => {
+    if (!canAdmin) return;
+    setDemoMode(true);
+    notify('Demo data enabled. All demo records are isolated from live Nightjar data.');
+  };
+
+  const disableDemoMode = () => {
+    if (!canAdmin) return;
+    setSimulationMode(false);
+    setDemoMode(false);
+    setPreviewRole(null);
+    navigate('admin');
+    notify('Demo and simulation data disabled. Nightjar is showing live records again.');
+  };
+
+  const startSimulation = (next: PreviewRole = 'listener') => {
+    if (!canAdmin) return;
+    setDemoMode(true);
+    setSimulationMode(true);
+    setPreviewRole(next);
+    setRolePicker(false);
+    if (next === 'creator') navigate('creator');
+    else if (next === 'listener') navigate('discover');
+    else if (next === 'writer') navigate('writer');
+    else navigate('editor');
+    notify(`Simulation Mode: ${roleMeta[next].label}. No simulated action writes to live Nightjar data.`);
+  };
+
+  const stopSimulation = () => {
+    if (!canAdmin) return;
+    setSimulationMode(false);
+    setPreviewRole(null);
+    navigate('admin');
+    notify('Simulation ended. Demo data remains enabled until you switch it off.');
+  };
+
   const selectPreviewRole = (next: PreviewRole) => {
     if (!canAdmin) return;
     setPreviewRole(next);
@@ -1607,7 +1644,9 @@ function App() {
     else if (next === 'listener') navigate('discover');
     else if (next === 'writer') navigate('writer');
     else navigate('editor');
-    notify(`Admin preview: ${roleMeta[next].label} experience. Your Administrator role remains active.`);
+    notify(simulationMode
+      ? `Simulation Mode: ${roleMeta[next].label}. No live writes.`
+      : `Admin preview: ${roleMeta[next].label} experience. Your Administrator role remains active.`);
   };
 
   const clearAdminPreview = () => {
@@ -1814,6 +1853,14 @@ function App() {
           <button className="menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Open navigation menu">{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </header>
+
+      {demoMode && <div className={simulationMode ? 'simulation-banner active' : 'simulation-banner'}>
+        <div><strong>{simulationMode ? 'SIMULATION MODE' : 'DEMO DATA'}</strong><span>{simulationMode ? `Viewing Nightjar as ${previewRole ? roleMeta[previewRole].label : 'Administrator'} · no simulated actions write to production` : 'Populated fictional records · live production data is not being changed'}</span></div>
+        <div className="simulation-banner-actions">
+          {simulationMode && <><button onClick={() => startSimulation('listener')}>Listener</button><button onClick={() => startSimulation('creator')}>Creator</button><button onClick={() => startSimulation('writer')}>Writer</button><button onClick={() => startSimulation('editor')}>Audio Editor</button><button onClick={stopSimulation}>Return to Admin</button></>}
+          <button onClick={disableDemoMode}>Turn demo off</button>
+        </div>
+      </div>}
 
       <main>
         {view === 'discover' && (
