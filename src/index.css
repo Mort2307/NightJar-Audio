@@ -3126,4 +3126,21 @@ select:disabled {
   .launch-lock small { grid-column: auto; }
   .nav.open { max-height: calc(100dvh - 74px); overflow-y: auto; overscroll-behavior: contain; }
   .admin-preview-strip { display: flex; flex-wrap: wrap; }
+
+  /* Readable controls and reliable touch targets on phones. */
+  input:not([type="range"]):not([type="file"]), textarea, select { font-size: 16px; }
+  .nav-link, .primary-button, .secondary-button, .ghost-button,
+  .admin-data-actions button, .admin-preview-buttons button,
+  .simulation-banner-actions button, .people-row-controls button {
+    min-height: 44px;
+  }
+  .admin-panel p, .admin-modal-head p, .people-drawer-head p,
+  .writer-create-card p, .writer-script-card p, .editor-queue-card p,
+  .subscription-finance-card small { font-size: 13px; line-height: 1.55; }
+  .admin-data-row strong, .people-row strong { font-size: 14px; }
+  .admin-data-row span, .people-row span:not(.account-chip-avatar),
+  .people-row em, .people-empty span { font-size: 12px; }
+  .admin-data-actions button { font-size: 12px; }
+  .admin-panel-modal > section { max-height: 100dvh; overscroll-behavior: contain; }
+  .dock-speed select, .dock-sleep select { font-size: 16px; }
 }
