@@ -1156,12 +1156,24 @@ export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
   return { removed: true };
 });
 
+type CreatorRateBand = {
+  minPaidSubscribers: number;
+  monthlyRatePence: number;
+};
+
 type CommercialSettings = {
   planningMonthlyPricePence: number | null;
   creatorPoolPercent: number | null;
   reservePercent: number | null;
   payoutCadence: string | null;
   eligibleListeningDefinition: string | null;
+  compensationModel: 'capped_equal_rate' | null;
+  creatorMonthlyCapPence: number | null;
+  creatorRateBands: CreatorRateBand[];
+  creatorEligibilityDefinition: string | null;
+  popularityAffectsBaseRate: false;
+  tipsEnabled: boolean;
+  individualPurchasesEnabled: boolean;
 };
 
 const readCommercialSettings = async (): Promise<CommercialSettings> => {
@@ -1177,6 +1189,22 @@ const readCommercialSettings = async (): Promise<CommercialSettings> => {
     reservePercent: typeof data.reservePercent === 'number' ? data.reservePercent : null,
     payoutCadence: data.payoutCadence ? String(data.payoutCadence) : null,
     eligibleListeningDefinition: data.eligibleListeningDefinition ? String(data.eligibleListeningDefinition) : null,
+    compensationModel: data.compensationModel === 'capped_equal_rate' ? 'capped_equal_rate' : 'capped_equal_rate',
+    creatorMonthlyCapPence: typeof data.creatorMonthlyCapPence === 'number' ? Math.max(0, Math.round(data.creatorMonthlyCapPence)) : null,
+    creatorRateBands: Array.isArray(data.creatorRateBands)
+      ? data.creatorRateBands
+        .map((item: any) => ({
+          minPaidSubscribers: Math.max(0, Math.round(Number(item?.minPaidSubscribers ?? 0))),
+          monthlyRatePence: Math.max(0, Math.round(Number(item?.monthlyRatePence ?? 0))),
+        }))
+        .filter((item: CreatorRateBand) => Number.isFinite(item.minPaidSubscribers) && Number.isFinite(item.monthlyRatePence))
+        .sort((a: CreatorRateBand, b: CreatorRateBand) => a.minPaidSubscribers - b.minPaidSubscribers)
+        .slice(0, 24)
+      : [],
+    creatorEligibilityDefinition: data.creatorEligibilityDefinition ? String(data.creatorEligibilityDefinition) : null,
+    popularityAffectsBaseRate: false,
+    tipsEnabled: data.tipsEnabled === true,
+    individualPurchasesEnabled: data.individualPurchasesEnabled === true,
   };
 };
 
@@ -1224,12 +1252,29 @@ export const saveCommercialSettings = onCall({ region: REGION }, async (request)
     return integer ? Math.round(number) : Math.round(number * 100) / 100;
   };
 
+  const rawBands = Array.isArray(input.creatorRateBands) ? input.creatorRateBands : [];
+  const creatorRateBands: CreatorRateBand[] = rawBands
+    .map((item: any) => ({
+      minPaidSubscribers: Math.max(0, Math.round(Number(item?.minPaidSubscribers ?? 0))),
+      monthlyRatePence: Math.max(0, Math.round(Number(item?.monthlyRatePence ?? 0))),
+    }))
+    .filter((item) => Number.isFinite(item.minPaidSubscribers) && Number.isFinite(item.monthlyRatePence))
+    .sort((a, b) => a.minPaidSubscribers - b.minPaidSubscribers)
+    .slice(0, 24);
+
   const settings: CommercialSettings = {
     planningMonthlyPricePence: nullableNumber(input.planningMonthlyPricePence, 0, 100000, true),
-    creatorPoolPercent: nullableNumber(input.creatorPoolPercent, 0, 100),
+    creatorPoolPercent: null,
     reservePercent: nullableNumber(input.reservePercent, 0, 100),
     payoutCadence: cleanText(input.payoutCadence, 80) || null,
     eligibleListeningDefinition: cleanText(input.eligibleListeningDefinition, 1200) || null,
+    compensationModel: 'capped_equal_rate',
+    creatorMonthlyCapPence: nullableNumber(input.creatorMonthlyCapPence, 0, 10000000, true),
+    creatorRateBands,
+    creatorEligibilityDefinition: cleanText(input.creatorEligibilityDefinition, 1600) || null,
+    popularityAffectsBaseRate: false,
+    tipsEnabled: input.tipsEnabled === true,
+    individualPurchasesEnabled: input.individualPurchasesEnabled === true,
   };
 
   await db.collection('settings').doc('commercial').set({
@@ -1642,6 +1687,12 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   audioAvailable: Boolean(data.audioStoragePath),
   status: data.status ?? 'draft',
   moderationNote: data.moderationNote ?? null,
+  contributors: normaliseReleaseContributors(data.contributors),
+  contentRating: cleanText(data.contentRating, 24) || 'adult',
+  seriesTitle: cleanText(data.seriesTitle, 160) || null,
+  episodeNumber: typeof data.episodeNumber === 'number' ? Math.max(0, Math.round(data.episodeNumber)) : null,
+  nightjarOriginal: data.nightjarOriginal === true,
+  productionNote: cleanText(data.productionNote, 1800) || null,
   releaseDate: toIso(data.releaseDate),
   createdAt: toIso(data.createdAt),
   updatedAt: toIso(data.updatedAt),
@@ -1653,8 +1704,11 @@ const releaseSearchText = (data: Record<string, unknown>) => [
   data.category,
   data.genre,
   data.mood,
+  data.seriesTitle,
+  data.contentRating,
   ...(Array.isArray(data.tags) ? data.tags : []),
   ...(Array.isArray(data.tropes) ? data.tropes : []),
+  ...normaliseReleaseContributors(data.contributors).flatMap((item) => [item.name, item.role]),
 ].filter(Boolean).join(' ').toLowerCase();
 
 export const listCatalogue = onCall({ region: REGION }, async (request) => {
@@ -1693,6 +1747,12 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     mood: cleanText(input.mood, 80),
     tags: cleanStringList(input.tags, 24),
     tropes: cleanStringList(input.tropes, 24),
+    contributors: normaliseReleaseContributors(input.contributors),
+    contentRating: cleanReleaseContentRating(input.contentRating),
+    seriesTitle: cleanText(input.seriesTitle, 160) || null,
+    episodeNumber: cleanEpisodeNumber(input.episodeNumber),
+    nightjarOriginal: false,
+    productionNote: cleanText(input.productionNote, 1800) || null,
     durationMinutes: 0,
     audioStoragePath: null,
     artworkAssetId: null,
@@ -1731,6 +1791,11 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     mood: cleanText(input.mood ?? current.mood, 80),
     tags: Array.isArray(input.tags) ? cleanStringList(input.tags, 24) : (current.tags ?? []),
     tropes: Array.isArray(input.tropes) ? cleanStringList(input.tropes, 24) : (current.tropes ?? []),
+    contributors: Array.isArray(input.contributors) ? normaliseReleaseContributors(input.contributors) : normaliseReleaseContributors(current.contributors),
+    contentRating: typeof input.contentRating !== 'undefined' ? cleanReleaseContentRating(input.contentRating) : cleanReleaseContentRating(current.contentRating),
+    seriesTitle: typeof input.seriesTitle !== 'undefined' ? cleanText(input.seriesTitle, 160) || null : current.seriesTitle ?? null,
+    episodeNumber: typeof input.episodeNumber !== 'undefined' ? cleanEpisodeNumber(input.episodeNumber) : cleanEpisodeNumber(current.episodeNumber),
+    productionNote: typeof input.productionNote !== 'undefined' ? cleanText(input.productionNote, 1800) || null : current.productionNote ?? null,
     durationMinutes: typeof input.durationMinutes === 'number' && Number.isFinite(input.durationMinutes)
       ? Math.max(0, Math.min(1440, input.durationMinutes))
       : current.durationMinutes ?? 0,
@@ -2261,6 +2326,8 @@ const scriptPayload = (data: Record<string, any>, id: string, includeContent = t
   writerUserId: data.writerUserId ?? null,
   editorUserId: data.editorUserId ?? null,
   lastEditorialComment: data.lastEditorialComment ?? null,
+  rights: normaliseScriptRights(data.rights),
+  marketplace: normaliseScriptMarketplace(data.marketplace),
   createdAt: toIso(data.createdAt),
   updatedAt: toIso(data.updatedAt),
   submittedAt: toIso(data.submittedAt),
@@ -2290,6 +2357,8 @@ export const createWriterScript = onCall({ region: REGION }, async (request) => 
     writerUserId: identity.uid,
     editorUserId: null,
     lastEditorialComment: null,
+    rights: normaliseScriptRights(null),
+    marketplace: normaliseScriptMarketplace(null),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -3006,3 +3075,67 @@ export const closeSecurityAlertBenign = onCall({ region: REGION }, async (reques
   return { closed: true };
 });
 
+
+
+const RELEASE_CONTENT_RATINGS = new Set(['sfw', 'suggestive', 'adult', 'explicit']);
+
+const cleanReleaseContentRating = (value: unknown) => {
+  const rating = cleanText(value, 24).toLowerCase();
+  return RELEASE_CONTENT_RATINGS.has(rating) ? rating : 'adult';
+};
+
+const cleanEpisodeNumber = (value: unknown) => {
+  if (value === null || value === '' || typeof value === 'undefined') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(10000, Math.round(number))) : null;
+};
+
+const normaliseReleaseContributors = (value: unknown) => {
+  if (!Array.isArray(value)) return [];
+  const allowedRoles = new Set([
+    'Voice Actor', 'Writer', 'Audio Editor', 'Producer', 'Director',
+    'Sound Designer', 'Cover Artist', 'Composer', 'Other',
+  ]);
+  return value.slice(0, 24).map((item: any) => {
+    const role = cleanText(item?.role, 48);
+    return {
+      userId: cleanText(item?.userId, 160) || null,
+      name: cleanText(item?.name, 100),
+      role: allowedRoles.has(role) ? role : 'Other',
+    };
+  }).filter((item) => item.name);
+};
+
+const normaliseScriptRights = (value: unknown) => {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const licenceType = cleanText(input.licenceType, 40);
+  return {
+    copyrightOwner: cleanText(input.copyrightOwner, 120) || 'Writer',
+    writerRetainsCopyright: input.writerRetainsCopyright !== false,
+    licenceType: ['none','non-exclusive','exclusive'].includes(licenceType) ? licenceType : 'none',
+    licenceLength: cleanText(input.licenceLength, 100) || null,
+    adaptationApprovalRequired: input.adaptationApprovalRequired !== false,
+    significantEditsApprovalRequired: input.significantEditsApprovalRequired !== false,
+    castingApprovalRequired: input.castingApprovalRequired === true,
+    finalAudioApprovalRequired: input.finalAudioApprovalRequired === true,
+    aiTrainingAllowed: false,
+    commercialUse: input.commercialUse === true,
+    withdrawalTerms: cleanText(input.withdrawalTerms, 1200) || null,
+  };
+};
+
+const normaliseScriptMarketplace = (value: unknown) => {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const visibility = cleanText(input.visibility, 40);
+  return {
+    visibility: ['private','invitation','marketplace','unavailable','licensed'].includes(visibility) ? visibility : 'private',
+    synopsis: cleanText(input.synopsis, 1800),
+    genres: cleanStringList(input.genres, 16),
+    tropes: cleanStringList(input.tropes, 24),
+    commissionPricePence: typeof input.commissionPricePence === 'number'
+      ? Math.max(0, Math.min(10000000, Math.round(input.commissionPricePence)))
+      : null,
+    collaborationWanted: input.collaborationWanted === true,
+    editorWanted: input.editorWanted === true,
+  };
+};
