@@ -2,15 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Check, FileText, Handshake, MessageCircle, X } from 'lucide-react';
 import { nightjarCollaboration, type CollaborationStatus } from '../platform/firebase-collaboration';
 import { nightjarScripts } from '../platform/firebase-scripts';
+import { demoCollaborations, demoDirectory, demoWriterScripts } from '../demo/nightjarDemo';
 
 type Props = {
   role: 'writer' | 'creator' | 'editor';
   notify: (message: string) => void;
+  demoMode?: boolean;
+  simulationMode?: boolean;
 };
 
 const statusLabel = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-export default function CollaborationHub({ role, notify }: Props) {
+export default function CollaborationHub({ role, notify, demoMode = false, simulationMode = false }: Props) {
   const [proposals, setProposals] = useState<any[]>([]);
   const [directory, setDirectory] = useState<any[]>([]);
   const [scripts, setScripts] = useState<any[]>([]);
@@ -25,15 +28,25 @@ export default function CollaborationHub({ role, notify }: Props) {
   const load = async () => {
     setLoading(true);
     try {
-      const tasks: Promise<any>[] = [nightjarCollaboration.list(), nightjarCollaboration.directory()];
-      if (role === 'writer') tasks.push(nightjarScripts.writerScripts());
-      const [collaborationData, directoryData, scriptData] = await Promise.all(tasks);
-      setProposals(collaborationData.proposals ?? []);
-      setDirectory(directoryData.people ?? []);
-      if (role === 'writer') {
-        const nextScripts = scriptData?.scripts ?? [];
-        setScripts(nextScripts);
-        setScriptId((value) => value || nextScripts[0]?.id || '');
+      if (demoMode) {
+        setProposals(structuredClone(demoCollaborations));
+        setDirectory(structuredClone(demoDirectory));
+        if (role === 'writer') {
+          const nextScripts = structuredClone(demoWriterScripts);
+          setScripts(nextScripts);
+          setScriptId((value) => value || nextScripts[0]?.id || '');
+        }
+      } else {
+        const tasks: Promise<any>[] = [nightjarCollaboration.list(), nightjarCollaboration.directory()];
+        if (role === 'writer') tasks.push(nightjarScripts.writerScripts());
+        const [collaborationData, directoryData, scriptData] = await Promise.all(tasks);
+        setProposals(collaborationData.proposals ?? []);
+        setDirectory(directoryData.people ?? []);
+        if (role === 'writer') {
+          const nextScripts = scriptData?.scripts ?? [];
+          setScripts(nextScripts);
+          setScriptId((value) => value || nextScripts[0]?.id || '');
+        }
       }
     } catch {
       notify('Collaboration workspace could not be loaded.');
@@ -42,7 +55,7 @@ export default function CollaborationHub({ role, notify }: Props) {
     }
   };
 
-  useEffect(() => { void load(); }, [role]);
+  useEffect(() => { void load(); }, [role, demoMode]);
 
   const relevant = useMemo(() => proposals.filter((proposal) => role === 'writer'
     ? Boolean(proposal.writerUserId)
@@ -52,11 +65,22 @@ export default function CollaborationHub({ role, notify }: Props) {
     if (!scriptId || !recipientUserId) return notify('Choose a script and collaborator first.');
     setSending(true);
     try {
-      await nightjarCollaboration.send({ scriptId, recipientUserId, message, paymentProposal, licenceSummary });
+      if (simulationMode) {
+        const script = scripts.find((item) => item.id === scriptId);
+        const person = directory.find((item) => item.userId === recipientUserId);
+        setProposals((items) => [...items, {
+          id: 'demo-collab-' + Date.now(), scriptId, scriptTitle: script?.title ?? 'Demo manuscript',
+          writerUserId: 'demo-writer-mara', writerName: 'Mara Bell',
+          recipientUserId, recipientName: person?.name ?? 'Demo collaborator', recipientRole: person?.role ?? 'creator',
+          message, paymentProposal, licenceSummary, status: 'sent', responseNote: '',
+        }]);
+      } else {
+        await nightjarCollaboration.send({ scriptId, recipientUserId, message, paymentProposal, licenceSummary });
+        await load();
+      }
       setMessage('');
       setPaymentProposal('');
       setLicenceSummary('');
-      await load();
       notify('Collaboration proposal sent. Its response state will stay visible here.');
     } catch {
       notify('Collaboration proposal could not be sent.');
@@ -70,8 +94,12 @@ export default function CollaborationHub({ role, notify }: Props) {
       ? window.prompt('Optional response note') ?? ''
       : '';
     try {
-      await nightjarCollaboration.respond(proposal.id, status, note);
-      await load();
+      if (simulationMode) {
+        setProposals((items) => items.map((item) => item.id === proposal.id ? { ...item, status, responseNote: note } : item));
+      } else {
+        await nightjarCollaboration.respond(proposal.id, status, note);
+        await load();
+      }
       notify('Collaboration response saved.');
     } catch {
       notify('Collaboration response could not be saved.');
@@ -80,8 +108,12 @@ export default function CollaborationHub({ role, notify }: Props) {
 
   const setStatus = async (proposal: any, status: CollaborationStatus) => {
     try {
-      await nightjarCollaboration.setStatus(proposal.id, status);
-      await load();
+      if (simulationMode) {
+        setProposals((items) => items.map((item) => item.id === proposal.id ? { ...item, status } : item));
+      } else {
+        await nightjarCollaboration.setStatus(proposal.id, status);
+        await load();
+      }
       notify('Collaboration status updated.');
     } catch {
       notify('Collaboration status could not be updated.');
