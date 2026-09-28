@@ -99,6 +99,16 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               <h3>{profile.followerCount ?? 0} followers</h3>
             </div>
           </div>
+          {(profile.role === 'writer' || profile.role === 'editor') && <div className="public-credit-summary">
+            <span>{profile.role === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
+            <strong>{profile.creditedReleaseCount ?? 0} credited release{profile.creditedReleaseCount === 1 ? '' : 's'}</strong>
+          </div>}
+          {!!profile.creditedReleases?.length && <div className="public-credit-list">
+            {profile.creditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
+              <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
+              <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
+            </article>)}
+          </div>}
         </div>
       </div>}
     </section>
