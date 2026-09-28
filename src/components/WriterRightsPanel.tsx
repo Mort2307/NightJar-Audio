@@ -6,6 +6,7 @@ type Props = {
   script: any;
   onUpdated: (script: any) => void;
   notify: (message: string) => void;
+  simulationMode?: boolean;
 };
 
 const defaultRights = {
@@ -32,7 +33,7 @@ const defaultMarketplace = {
   editorWanted: false,
 };
 
-export default function WriterRightsPanel({ script, onUpdated, notify }: Props) {
+export default function WriterRightsPanel({ script, onUpdated, notify, simulationMode = false }: Props) {
   const [rights, setRights] = useState(defaultRights);
   const [marketplace, setMarketplace] = useState<any>(defaultMarketplace);
   const [saving, setSaving] = useState(false);
@@ -46,9 +47,14 @@ export default function WriterRightsPanel({ script, onUpdated, notify }: Props) 
     if (!script?.id) return;
     setSaving(true);
     try {
-      const data = await nightjarScripts.updateRights(script.id, { ...rights, aiTrainingAllowed: false }, marketplace);
-      onUpdated(data.script ?? script);
-      notify('Rights and listing controls saved.');
+      if (simulationMode) {
+        onUpdated({ ...script, rights: { ...rights, aiTrainingAllowed: false }, marketplace });
+        notify('Simulation: rights and listing controls updated locally.');
+      } else {
+        const data = await nightjarScripts.updateRights(script.id, { ...rights, aiTrainingAllowed: false }, marketplace);
+        onUpdated(data.script ?? script);
+        notify('Rights and listing controls saved.');
+      }
     } catch {
       notify('Rights and listing controls could not be saved.');
     } finally {
