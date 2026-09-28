@@ -6,9 +6,10 @@ type Props = {
   release: { id: string; title: string; creator?: string };
   onClose: () => void;
   notify: (message: string) => void;
+  simulationMode?: boolean;
 };
 
-export default function ReleaseReviews({ release, onClose, notify }: Props) {
+export default function ReleaseReviews({ release, onClose, notify, simulationMode = false }: Props) {
   const [data, setData] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState('');
@@ -18,11 +19,23 @@ export default function ReleaseReviews({ release, onClose, notify }: Props) {
   const load = async () => {
     setLoading(true);
     try {
-      const next = await nightjarReviews.list(release.id);
-      setData(next);
-      if (next.myReview) {
-        setRating(next.myReview.rating ?? 5);
-        setReview(next.myReview.review ?? '');
+      if (simulationMode) {
+        setData({
+          reviews: [
+            { id:'demo-review-1', reviewerName:'Jamie', rating:5, review:'Loved the pacing and the production detail.' },
+            { id:'demo-review-2', reviewerName:'Lex', rating:4, review:'Strong performance and really clean audio.' },
+          ],
+          averageRating:4.5,
+          ratingCount:2,
+          myReview:null,
+        });
+      } else {
+        const next = await nightjarReviews.list(release.id);
+        setData(next);
+        if (next.myReview) {
+          setRating(next.myReview.rating ?? 5);
+          setReview(next.myReview.review ?? '');
+        }
       }
     } catch {
       notify('Reviews could not be loaded.');
@@ -31,14 +44,20 @@ export default function ReleaseReviews({ release, onClose, notify }: Props) {
     }
   };
 
-  useEffect(() => { void load(); }, [release.id]);
+  useEffect(() => { void load(); }, [release.id, simulationMode]);
 
   const submit = async () => {
     setSaving(true);
     try {
-      const next = await nightjarReviews.submit(release.id, rating, review);
-      setData((current: any) => ({ ...current, myReview: next.review }));
-      notify('Review submitted for moderation.');
+      if (simulationMode) {
+        const next = { id:'demo-own-review', reviewerName:'You', rating, review, status:'pending' };
+        setData((current: any) => ({ ...current, myReview: next }));
+        notify('Simulation: review submitted locally for moderation.');
+      } else {
+        const next = await nightjarReviews.submit(release.id, rating, review);
+        setData((current: any) => ({ ...current, myReview: next.review }));
+        notify('Review submitted for moderation.');
+      }
     } catch {
       notify('Review could not be submitted.');
     } finally {
