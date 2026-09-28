@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Moon, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import AccountAccess from './AccountAccess';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount, type NightjarAccountIdentity } from '../platform/firebase-account';
@@ -73,7 +73,7 @@ export default function AccountPortal() {
 
   return <main className="account-portal-shell">
     <header className="account-portal-header">
-      <a href="/discover" className="account-portal-brand"><Moon size={20} /> Nightjar</a>
+      <a href="/discover" className="account-portal-brand"><img className="account-portal-logo" src="/favicon.svg" alt="" /> Nightjar</a>
       <span>Secure account access</span>
     </header>
 
