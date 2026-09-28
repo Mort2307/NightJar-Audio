@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
-import { demoCreatorDashboard } from '../demo/nightjarDemo';
+import { demoCreatorDashboard, demoTracks } from '../demo/nightjarDemo';
+import { readDemo, writeDemo } from '../demo/demoSession';
 import { Check, Eye, FileAudio, MessageSquare, X } from 'lucide-react';
 
 type Props = {
@@ -21,7 +22,7 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
     setLoading(true);
     try {
       if (demoMode) {
-        setQueue(structuredClone(demoCreatorDashboard.releases.filter((release: any) => release.status === 'pending_review')).map((release: any) => ({
+        setQueue(readDemo('creatorDashboard', demoCreatorDashboard).releases.filter((release: any) => release.status === 'pending_review').map((release: any) => ({
           ...release,
           creatorName: 'Aria Vale',
           creatorHandle: 'ariavale',
@@ -55,6 +56,21 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
     const note = decision === 'changes' ? (window.prompt('What should the creator change?') ?? '') : (window.prompt('Moderator note (optional)') ?? '');
     try {
       if (demoMode) {
+        const dashboard = readDemo('creatorDashboard', demoCreatorDashboard);
+        const status = decision === 'approved' ? 'released' : decision === 'changes' ? 'draft' : 'rejected';
+        const releases = dashboard.releases.map((release: any) => release.id === selected.id ? { ...release, status, moderationNote: note } : release);
+        writeDemo('creatorDashboard', { ...dashboard, releases });
+        if (decision === 'approved') {
+          const tracks = readDemo('tracks', demoTracks);
+          writeDemo('tracks', [...tracks.filter((track: any) => track.id !== selected.id), {
+            id: selected.id, title: selected.title, creator: selected.creatorName || 'Aria Vale',
+            creatorUserId: 'demo-creator-aria', duration: String(selected.durationMinutes || 0) + ' min',
+            category: selected.category || 'Audio', descriptor: selected.description || 'Demo release',
+            genre: selected.genre || '', tags: selected.tags || [], tropes: selected.tropes || [],
+            contributors: selected.contributors || [], contentRating: selected.contentRating || 'adult',
+            audioAvailable: selected.audioAvailable === true, audioUrl: null, artworkUrl: null,
+          }]);
+        }
         setQueue((items) => items.filter((item) => item.id !== selected.id));
         setSelected(null);
         notify(decision === 'approved' ? 'Demo release approved locally.' : decision === 'changes' ? 'Demo changes request recorded locally.' : 'Demo release rejected locally.');
