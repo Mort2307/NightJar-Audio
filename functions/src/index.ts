@@ -1708,7 +1708,7 @@ export const listBillingSubscriptions = onCall({ region: REGION }, async (reques
       plan: data.plan ?? null,
       status: data.status ?? 'unknown',
       confirmedMonthlyAmountPence: typeof data.confirmedMonthlyAmountPence === 'number' ? data.confirmedMonthlyAmountPence : null,
-      currentPeriodEnd: data.currentPeriodEnd ?? null,
+      currentPeriodEnd: toIso(data.currentPeriodEnd),
     };
   });
   return { subscriptions };
