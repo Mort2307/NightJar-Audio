@@ -191,6 +191,9 @@ export const demoNotifications = [
 ];
 
 
+const demoModerationProfileImage = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#3e2438"/><stop offset="1" stop-color="#151017"/></linearGradient></defs><rect width="900" height="900" fill="url(#g)"/><circle cx="450" cy="330" r="150" fill="#b995ad"/><path d="M170 850c20-210 135-320 280-320s260 110 280 320" fill="#7c536f"/><text x="450" y="790" text-anchor="middle" fill="#f4eaf1" font-family="Arial" font-size="42">SAFE DEMO PROFILE</text></svg>`)}`;
+const demoModerationArtworkImage = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17131b"/><stop offset=".55" stop-color="#5f3d58"/><stop offset="1" stop-color="#140f15"/></linearGradient></defs><rect width="1200" height="800" fill="url(#g2)"/><circle cx="930" cy="180" r="105" fill="#c6a8bc" opacity=".42"/><path d="M0 610C220 500 330 690 550 590s350-30 650-130v340H0z" fill="#0a080b" opacity=".72"/><text x="80" y="150" fill="#f4eaf1" font-family="Georgia" font-size="76">WINDOW SEAT</text><text x="84" y="205" fill="#cdb9c7" font-family="Arial" font-size="28">SAFE FICTIONAL DEMO ARTWORK</text></svg>`)}`;
+
 export const demoAdminData = {
   applications: [
     { id:'demo-application-1', creatorName:'Nia Stone', email:'nia.demo@example.invalid', status:'pending' },
@@ -260,7 +263,7 @@ export const demoAdminData = {
     { id:'demo-alert-2', severity:'low', riskScore:31, reason:'Rapid protected-reader selection attempts', userName:'Sample User', userHandle:'sampleuser', relatedId:'demo-script-2', createdAt:'2026-09-27T21:05:00.000Z', status:'open' },
   ],
   imageModeration: [
-    { id:'demo-image-1', kind:'profile_avatar', ownerEmail:'aria.demo@example.invalid', fileName:'aria-profile.webp', contentType:'image/webp', previewUrl:null },
-    { id:'demo-image-2', kind:'release_artwork', ownerEmail:'rowan.demo@example.invalid', fileName:'window-seat-cover.webp', contentType:'image/webp', previewUrl:null },
+    { id:'demo-image-1', kind:'profile_avatar', ownerEmail:'aria.demo@example.invalid', fileName:'aria-profile.webp', contentType:'image/webp', previewUrl:demoModerationProfileImage },
+    { id:'demo-image-2', kind:'release_artwork', ownerEmail:'rowan.demo@example.invalid', fileName:'window-seat-cover.webp', contentType:'image/webp', previewUrl:demoModerationArtworkImage },
   ],
 };
