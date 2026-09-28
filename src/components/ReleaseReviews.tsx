@@ -6,10 +6,11 @@ type Props = {
   release: { id: string; title: string; creator?: string };
   onClose: () => void;
   notify: (message: string) => void;
+  demoMode?: boolean;
   simulationMode?: boolean;
 };
 
-export default function ReleaseReviews({ release, onClose, notify, simulationMode = false }: Props) {
+export default function ReleaseReviews({ release, onClose, notify, demoMode = false, simulationMode = false }: Props) {
   const [data, setData] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState('');
@@ -19,7 +20,7 @@ export default function ReleaseReviews({ release, onClose, notify, simulationMod
   const load = async () => {
     setLoading(true);
     try {
-      if (simulationMode) {
+      if (demoMode) {
         setData({
           reviews: [
             { id:'demo-review-1', reviewerName:'Jamie', rating:5, review:'Loved the pacing and the production detail.' },
@@ -44,11 +45,15 @@ export default function ReleaseReviews({ release, onClose, notify, simulationMod
     }
   };
 
-  useEffect(() => { void load(); }, [release.id, simulationMode]);
+  useEffect(() => { void load(); }, [release.id, demoMode]);
 
   const submit = async () => {
     setSaving(true);
     try {
+      if (demoMode && !simulationMode) {
+        notify('Demo data is read-only. Start Listener Simulation to submit a review.');
+        return;
+      }
       if (simulationMode) {
         const next = { id:'demo-own-review', reviewerName:'You', rating, review, status:'pending' };
         setData((current: any) => ({ ...current, myReview: next }));
