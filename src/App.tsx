@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { readDemo, writeDemo, resetDemo } from './demo/demoSession';
 import { nightjarAuth } from './platform/firebase-auth';
 import { nightjarAccount } from './platform/firebase-account';
 import { nightjarCommunity } from './platform/firebase-community';
@@ -63,7 +64,7 @@ import CreatorCompensationCard from './components/CreatorCompensationCard';
 import TransparencyPanel from './components/TransparencyPanel';
 import ScriptMarketplace from './components/ScriptMarketplace';
 import ReleaseReviews from './components/ReleaseReviews';
-import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData } from './demo/nightjarDemo';
+import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -392,6 +393,7 @@ function App() {
   const [rolePicker, setRolePicker] = useState(false);
   const [previewRole, setPreviewRole] = useState<PreviewRole | null>(null);
   const [demoMode, setDemoMode] = useState(false);
+  const productLoadEpoch = useRef(0);
   const [simulationMode, setSimulationMode] = useState(false);
   const [testingSessionHydrated, setTestingSessionHydrated] = useState(false);
   const [demoSessionKey, setDemoSessionKey] = useState(0);
@@ -531,6 +533,9 @@ function App() {
     const unsubscribe = nightjarAuth.observe((identity) => {
       if (cancelled) return;
       if (!identity) {
+        setDemoMode(false);
+        setSimulationMode(false);
+        setPreviewRole(null);
         setUser(null);
         setRole(null);
         return;
@@ -647,26 +652,36 @@ function App() {
   };
 
   useEffect(() => {
-    if (view !== 'admin' || accountLoading || !role || role === 'admin') return;
-    navigate(role === 'creator' ? 'creator' : role === 'writer' ? 'writer' : role === 'editor' ? 'editor' : 'discover');
-  }, [view, role, accountLoading]);
+    if (accountLoading || !role) return;
+    const perspective = role === 'admin' ? (simulationMode ? previewRole : 'admin') : role;
+    const home: View = perspective === 'creator' ? 'creator' : perspective === 'writer' ? 'writer' : perspective === 'editor' ? 'editor' : 'discover';
+    if ((view === 'admin' && (role !== 'admin' || simulationMode)) ||
+        (view === 'creator' && perspective !== 'creator' && perspective !== 'admin') ||
+        (view === 'writer' && perspective !== 'writer') ||
+        (view === 'editor' && perspective !== 'editor') ||
+        (view === 'library' && perspective !== 'listener')) {
+      navigate(home);
+    }
+  }, [view, role, accountLoading, simulationMode, previewRole]);
 
   const loadLiveProductData = async () => {
+    const epoch = ++productLoadEpoch.current;
     try {
       if (demoMode) {
-        setTracks(structuredClone(demoTracks) as Track[]);
+        setTracks(readDemo('tracks', demoTracks) as Track[]);
         setCreatorDirectory(structuredClone(demoCreators));
         setCreatorSpotlightList(structuredClone(demoSpotlights.creators) as Spotlight[]);
         setWriterSpotlightList(structuredClone(demoSpotlights.writers) as Spotlight[]);
         setEditorSpotlightList(structuredClone(demoSpotlights.editors) as Spotlight[]);
         setListenerSpotlight(structuredClone(demoSpotlights.listener) as Spotlight);
         setSpotlightMeta({ listenerTopSevenCount: 2, listenerSpotlightDay: 3, listenerWeek: 'Demo week' });
-        setNotifications(structuredClone(demoNotifications));
-        setNotificationUnreadCount(demoNotifications.filter((item) => !item.read).length);
+        const demoMessages = readDemo('notifications', demoNotifications);
+        setNotifications(demoMessages);
+        setNotificationUnreadCount(demoMessages.filter((item) => !item.read).length);
         setLiveRecommendations(structuredClone(demoTracks.slice(0, 4)).map((item: any, index: number) => ({ ...item, reason: index === 0 ? 'Because you like cinematic slow-burn stories' : 'Demo recommendation based on your selected preferences' })));
         setLiveTrending(structuredClone(demoTracks.slice(1, 5)));
-        setFavouriteReleaseIds(['demo-release-1','demo-release-2']);
-        setFollowingProfileIds(['demo-creator-aria','demo-creator-rowan']);
+        setFavouriteReleaseIds(readDemo('favourites', ['demo-release-1','demo-release-2']));
+        setFollowingProfileIds(readDemo('following', ['demo-creator-aria','demo-creator-rowan']));
         return;
       }
       const [catalogueResponse, creatorsResponse, firebaseSpotlightResponse] = await Promise.all([
@@ -674,6 +689,7 @@ function App() {
         nightjarCommunity.listCreators(),
         nightjarCommunity.spotlightState(),
       ]);
+      if (epoch !== productLoadEpoch.current) return;
       const liveTracks = (catalogueResponse.catalogue ?? []).map((release: any, index: number) => ({
         id: String(release.id),
         title: release.title,
@@ -734,19 +750,21 @@ function App() {
         listenerSpotlightDay: firebaseSpotlightResponse.listenerSpotlightDay == null ? null : Number(firebaseSpotlightResponse.listenerSpotlightDay),
         listenerWeek: firebaseSpotlightResponse.listenerWeek ?? null,
       });
-      await loadNotifications();
+      await loadNotifications(epoch);
       if (user) {
         const [recommendationsResponse, trendingResponse, communityState] = await Promise.all([
           nightjarCatalogue.recommendations(currentIntent),
           nightjarCatalogue.trending(),
           nightjarCommunity.state(),
         ]);
+        if (epoch !== productLoadEpoch.current) return;
         setLiveRecommendations(recommendationsResponse.recommendations ?? []);
         setLiveTrending(trendingResponse.trending ?? []);
         setFavouriteReleaseIds((communityState.favourites ?? []).map((item: any) => String(item.releaseId)));
         setFollowingProfileIds((communityState.follows ?? []).map((item: any) => String(item.targetUserId ?? item.creatorUserId)).filter(Boolean));
       }
     } catch {
+      if (epoch !== productLoadEpoch.current) return;
       setTracks([]);
       setCreatorDirectory([]);
       setCreatorSpotlightList([]);
@@ -762,10 +780,11 @@ function App() {
     }
   };
 
-  const loadNotifications = async () => {
+  const loadNotifications = async (epoch: number) => {
     if (!nightjarAuth.current()) return;
     try {
       const data = await nightjarNotifications.list();
+      if (epoch !== productLoadEpoch.current) return;
       const nextNotifications = data.notifications ?? [];
       setNotifications(nextNotifications);
       setNotificationUnreadCount(Number(data.unreadCount ?? 0));
@@ -782,7 +801,11 @@ function App() {
     if (notification?.read === true) return;
     try {
       if (!demoMode) await nightjarNotifications.markRead(String(notification.id));
-      setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, read: true } : item));
+      setNotifications((items) => {
+        const next = items.map((item) => item.id === notification.id ? { ...item, read: true } : item);
+        if (demoMode) writeDemo('notifications', next);
+        return next;
+      });
       setNotificationUnreadCount((count) => Math.max(0, count - 1));
     } catch { /* notification read state is non-critical */ }
   };
@@ -808,7 +831,7 @@ function App() {
     if (!user || (role !== 'creator' && !canAdmin)) return;
     setCreatorDashboardLoading(true);
     try {
-      if (demoMode) setCreatorDashboard(structuredClone(demoCreatorDashboard));
+      if (demoMode) setCreatorDashboard(readDemo('creatorDashboard', demoCreatorDashboard));
       else {
         const data = await nightjarCatalogue.dashboard();
         setCreatorDashboard({ metrics: data.metrics ?? {}, releases: data.releases ?? [] });
@@ -823,7 +846,7 @@ function App() {
   const loadWriterScripts = async () => {
     if (!user) return;
     try {
-      const items = demoMode ? structuredClone(demoWriterScripts) : (await nightjarScripts.writerScripts()).scripts ?? [];
+      const items = demoMode ? readDemo('writerScripts', demoWriterScripts) : (await nightjarScripts.writerScripts()).scripts ?? [];
       setWriterScripts(items);
       setWriterSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
     } catch {
@@ -834,7 +857,7 @@ function App() {
   const loadEditorQueue = async () => {
     if (!user) return;
     try {
-      const items = demoMode ? structuredClone(demoEditorQueue) : (await nightjarScripts.editorQueue()).queue ?? [];
+      const items = demoMode ? readDemo('editorQueue', demoEditorQueue) : (await nightjarScripts.editorQueue()).queue ?? [];
       setEditorQueue(items);
       setEditorSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
     } catch {
@@ -847,7 +870,7 @@ function App() {
     if (!user) return;
     try {
       if (demoMode) {
-        setProtectedScripts(structuredClone(demoWriterScripts).map((script:any) => ({
+        setProtectedScripts(readDemo('writerScripts', demoWriterScripts).map((script:any) => ({
           id:script.id,
           title:script.title,
           status:script.status,
@@ -997,6 +1020,10 @@ function App() {
   };
 
   const signOut = async () => {
+    resetDemo();
+    setDemoMode(false);
+    setSimulationMode(false);
+    setPreviewRole(null);
     await nightjarAuth.signOut();
     clearTestingSession();
     setDemoMode(false);
@@ -1061,7 +1088,7 @@ function App() {
   const openProtectedReader = async (scriptId: string) => {
     try {
       if (demoMode) {
-        const script = demoWriterScripts.find((item:any) => item.id === scriptId);
+        const script = readDemo('writerScripts', demoWriterScripts).find((item:any) => item.id === scriptId);
         if (!script) {
           notify('Demo manuscript could not be found.');
           return;
@@ -1092,7 +1119,19 @@ function App() {
       }
       const next = !favouriteReleaseIds.includes(releaseId);
       if (!simulationMode) await nightjarCommunity.setFavouriteRelease(releaseId, next);
-      setFavouriteReleaseIds((items) => next ? Array.from(new Set([...items, releaseId])) : items.filter((id) => id !== releaseId));
+      setFavouriteReleaseIds((items) => {
+        const updated = next ? Array.from(new Set([...items, releaseId])) : items.filter((id) => id !== releaseId);
+        if (simulationMode) {
+          writeDemo('favourites', updated);
+          const library = readDemo('library', demoLibrary);
+          const release = readDemo('tracks', demoTracks).find((item) => item.id === releaseId);
+          const favourites = next
+            ? [...(library.favourites ?? []).filter((item: any) => item.id !== releaseId), ...(release ? [{ ...release, creatorName: release.creator, favourite: true }] : [])]
+            : (library.favourites ?? []).filter((item: any) => item.id !== releaseId);
+          writeDemo('library', { ...library, favourites });
+        }
+        return updated;
+      });
       if (simulationMode) notify(next ? 'Simulation: added to favourites.' : 'Simulation: removed from favourites.');
     } catch {
       notify('Favourite could not be updated.');
@@ -1108,7 +1147,11 @@ function App() {
       }
       const next = !followingProfileIds.includes(targetUserId);
       if (!simulationMode) await nightjarCommunity.setProfileFollow(targetUserId, next);
-      setFollowingProfileIds((items) => next ? Array.from(new Set([...items, targetUserId])) : items.filter((id) => id !== targetUserId));
+      setFollowingProfileIds((items) => {
+        const updated = next ? Array.from(new Set([...items, targetUserId])) : items.filter((id) => id !== targetUserId);
+        if (simulationMode) writeDemo('following', updated);
+        return updated;
+      });
       if (simulationMode) notify(next ? 'Simulation: profile followed.' : 'Simulation: profile unfollowed.');
     } catch {
       notify('Follow could not be updated.');
@@ -1145,7 +1188,7 @@ function App() {
           { userId:'demo-listener-lex', name:'Lex', email:'lex@demo.invalid', handle:'lexlistens', role:'listener', status:'active' },
         ];
         setCommercialOverview(null);
-        setAdminOverview({
+        setAdminOverview(readDemo('adminOverview', {
           people: {
             counts: { listener:18, creator:5, writer:4, editor:3, admin:3 },
             accounts: demoAccounts,
@@ -1156,7 +1199,7 @@ function App() {
             ],
           },
           subscriptions: { active:12500, trialing:420, pastDue:86 },
-        });
+        }));
       } else {
         const [people, commercial] = await Promise.all([
           nightjarAdministration.overview(),
@@ -1188,7 +1231,7 @@ function App() {
           editor: { displayName:'Sam Reed', handle:'samreed', headline:'Dialogue editing, mixing and production polish', bio:'Fictional Audio Editor profile for Nightjar Simulation Mode.', welcomeMessage:'Clean edits, clear handoffs, properly credited work.', pronouns:'', avatarInitials:'SR', avatarTone:'plum', avatarUrl:null, favouriteTags:['Sound-rich','Cinematic'], favouriteTropes:[], favouriteCategories:['Audio drama'], roleFocus:['Audio editing','Mixing','Mastering'], publicProfile:true },
           admin: { displayName:'Nightjar Admin Demo', handle:'nightjardemo', headline:'Administrator demo profile', bio:'Fictional admin-facing profile while Demo Data is enabled.', welcomeMessage:'', pronouns:'', avatarInitials:'NJ', avatarTone:'plum', avatarUrl:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:['Platform operations'], publicProfile:false },
         };
-        setProfile((current:any) => ({ ...current, ...demoProfiles[previewRole ?? 'admin'] }));
+        setProfile(readDemo('profile:' + (previewRole ?? 'admin'), demoProfiles[previewRole ?? 'admin']));
         setTasteVector([{label:'Atmospheric',weight:0.92},{label:'Slow burn',weight:0.81},{label:'Story-led',weight:0.76},{label:'Cinematic',weight:0.69}]);
         return;
       }
@@ -1209,7 +1252,13 @@ function App() {
       if (simulationMode) {
         const next = { ...editorSelected, status, lastEditorialComment: comment || editorSelected.lastEditorialComment };
         setEditorSelected(next);
-        setEditorQueue((items) => items.map((item) => item.id === next.id ? next : item));
+        setEditorQueue((items) => {
+          const updated = items.map((item) => item.id === next.id ? next : item);
+          writeDemo('editorQueue', updated);
+          return updated;
+        });
+        const scripts = readDemo('writerScripts', demoWriterScripts);
+        writeDemo('writerScripts', scripts.map((item: any) => item.id === next.id ? { ...item, status, lastEditorialComment: comment || item.lastEditorialComment } : item));
         notify('Simulation: editorial decision recorded locally.');
       } else {
         const data = await nightjarScripts.review(editorSelected.id, status, comment);
@@ -1227,7 +1276,8 @@ function App() {
     setProfileLoading(true);
     try {
       if (demoMode) {
-        notify(simulationMode ? 'Simulation: profile changes saved locally for this session.' : 'Demo data is read-only. Profile changes were not written to your live account.');
+        if (simulationMode) writeDemo('profile:' + (previewRole ?? 'admin'), profile);
+        notify(simulationMode ? 'Simulation: profile saved for this testing session.' : 'Demo data is read-only. Profile changes were not written to your live account.');
         return;
       }
       const data = await nightjarCommunity.saveMyProfile(profile);
@@ -1243,7 +1293,7 @@ function App() {
     if (!canAdmin) return;
     setSecurityAlertsLoading(true);
     try {
-      if (demoMode) setSecurityAlerts(structuredClone(demoAdminData.securityAlerts));
+      if (demoMode) setSecurityAlerts(readDemo('securityAlerts', demoAdminData.securityAlerts));
       else {
         const data = await nightjarProtection.alerts();
         setSecurityAlerts(data.alerts ?? []);
@@ -1256,7 +1306,7 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      if (demoMode) setAdminReports(structuredClone(demoAdminData.reports));
+      if (demoMode) setAdminReports(readDemo('adminReports', demoAdminData.reports));
       else {
         const data = await nightjarProtection.adminReports();
         setAdminReports(data.reports ?? []);
@@ -1269,7 +1319,7 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      if (demoMode) setAdminReviewQueue(structuredClone(demoAdminData.reviews));
+      if (demoMode) setAdminReviewQueue(readDemo('adminReviews', demoAdminData.reviews));
       else {
         const data = await nightjarReviews.adminQueue();
         setAdminReviewQueue(data.reviews ?? []);
@@ -1285,7 +1335,7 @@ function App() {
     if (!canAdmin || !review?.id) return;
     try {
       if (demoMode) {
-        setAdminReviewQueue((items:any[]) => items.filter((item:any) => item.id !== review.id));
+        setAdminReviewQueue((items:any[]) => { const updated=items.filter((item:any)=>item.id!==review.id); writeDemo('adminReviews',updated); return updated; });
         notify(decision === 'approved' ? 'Demo review approved locally.' : 'Demo review rejected locally.');
         return;
       }
@@ -1301,7 +1351,7 @@ function App() {
     if (!canAdmin || !alert?.id) return;
     try {
       if (demoMode) {
-        setSecurityAlerts((items:any[]) => items.map((item:any) => item.id === alert.id ? { ...item, status:'actioned' } : item));
+        setSecurityAlerts((items:any[]) => { const updated=items.map((item:any)=>item.id===alert.id?{...item,status:'actioned'}:item); writeDemo('securityAlerts',updated); return updated; });
         notify('Demo account suspended locally; no live account was changed.');
         return;
       }
@@ -1316,7 +1366,7 @@ function App() {
     if (!canAdmin || !alert?.id) return;
     try {
       if (demoMode) {
-        setSecurityAlerts((items:any[]) => items.map((item:any) => item.id === alert.id ? { ...item, sessionsRevoked:true } : item));
+        setSecurityAlerts((items:any[]) => { const updated=items.map((item:any)=>item.id===alert.id?{...item,sessionsRevoked:true}:item); writeDemo('securityAlerts',updated); return updated; });
         notify('Demo reader sessions revoked locally.');
         return;
       }
@@ -1331,7 +1381,7 @@ function App() {
     const note = window.prompt('Optional review note — why is this activity considered benign?') ?? '';
     try {
       if (demoMode) {
-        setSecurityAlerts((items:any[]) => items.map((item:any) => item.id === alert.id ? { ...item, status:'closed', reviewNote:note } : item));
+        setSecurityAlerts((items:any[]) => { const updated=items.map((item:any)=>item.id===alert.id?{...item,status:'closed',reviewNote:note}:item); writeDemo('securityAlerts',updated); return updated; });
         notify('Demo security alert closed as benign locally.');
         return;
       }
@@ -1350,10 +1400,10 @@ function App() {
     setWriterPermissionsLoading(true);
     try {
       if (demoMode) {
-        setWriterPermissions([
+        setWriterPermissions(readDemo('permissions:' + targetId, [
           { recipientUserId:'demo-creator-aria', allowCopy:false, allowExport:true, expiresAt:null, revokedAt:null },
           { recipientUserId:'demo-editor-sam', allowCopy:true, allowExport:false, expiresAt:null, revokedAt:null },
-        ]);
+        ]));
       } else {
         const data = await nightjarScripts.permissions(targetId);
         setWriterPermissions(data.permissions ?? []);
@@ -1374,7 +1424,7 @@ function App() {
     const expiry = window.prompt('Optional expiry date/time (ISO format), or leave blank for no expiry') ?? '';
     try {
       if (simulationMode) {
-        setWriterPermissions((items) => [...items, { recipientUserId:recipientUserId.trim(), allowCopy, allowExport, expiresAt:expiry.trim() || null, revokedAt:null }]);
+        setWriterPermissions((items) => { const updated=[...items, { recipientUserId:recipientUserId.trim(), allowCopy, allowExport, expiresAt:expiry.trim() || null, revokedAt:null }]; writeDemo('permissions:' + writerSelected.id,updated); return updated; });
         notify('Simulation: full-script access granted locally.');
         return;
       }
@@ -1394,7 +1444,7 @@ function App() {
     if (!window.confirm('Revoke this recipient\'s full-script access and active reader sessions?')) return;
     try {
       if (simulationMode) {
-        setWriterPermissions((items) => items.map((item) => item.recipientUserId === permission.recipientUserId ? { ...item, revokedAt:new Date().toISOString() } : item));
+        setWriterPermissions((items) => { const updated=items.map((item)=>item.recipientUserId===permission.recipientUserId?{...item,revokedAt:new Date().toISOString()}:item); writeDemo('permissions:' + writerSelected.id,updated); return updated; });
         notify('Simulation: full-script access revoked locally.');
         return;
       }
@@ -1588,7 +1638,7 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      if (demoMode) setImageModeration(structuredClone(demoAdminData.imageModeration));
+      if (demoMode) setImageModeration(readDemo('imageModeration', demoAdminData.imageModeration));
       else {
         const data = await nightjarMedia.listPending();
         const assets = data.assets ?? [];
@@ -1609,7 +1659,7 @@ function App() {
     const note = decision === 'rejected' ? (window.prompt('Reason for rejecting this image (optional)') ?? '') : '';
     try {
       if (demoMode) {
-        setImageModeration((items:any[]) => items.filter((item:any) => item.id !== asset.id));
+        setImageModeration((items:any[]) => { const updated=items.filter((item:any)=>item.id!==asset.id); writeDemo('imageModeration',updated); return updated; });
         notify(decision === 'approved' ? 'Demo image approved locally.' : 'Demo image rejected locally.');
         return;
       }
@@ -1640,7 +1690,7 @@ function App() {
     setAdminPanelLoading(true);
     try {
       if (demoMode) {
-        const data:any = structuredClone(demoAdminData.commercial);
+        const data:any = readDemo('commercial', demoAdminData.commercial);
         setCommercialOverview(data);
         setCommercialSettings(data.settings);
         setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: data.subscriptions }));
@@ -1659,6 +1709,7 @@ function App() {
     setCommercialSaving(true);
     try {
       if (demoMode) {
+        writeDemo('commercial', { ...readDemo('commercial', demoAdminData.commercial), settings: commercialSettings });
         notify('Demo commercial assumptions saved locally for this session only.');
         return;
       }
@@ -1680,7 +1731,7 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      if (demoMode) setAdminApplications(structuredClone(demoAdminData.applications));
+      if (demoMode) setAdminApplications(readDemo('adminApplications', demoAdminData.applications));
       else {
         const data = await nightjarAdministration.creatorApplications();
         setAdminApplications(data.applications ?? []);
@@ -1697,8 +1748,8 @@ function App() {
     setAdminPanelLoading(true);
     try {
       if (demoMode) {
-        const commercial:any = structuredClone(demoAdminData.commercial);
-        setAdminSubscriptions(structuredClone(demoAdminData.subscriptions));
+        const commercial:any = readDemo('commercial', demoAdminData.commercial);
+        setAdminSubscriptions(readDemo('adminSubscriptions', demoAdminData.subscriptions));
         setCommercialOverview(commercial);
         setCommercialSettings(commercial.settings);
         setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: commercial.subscriptions }));
@@ -1724,7 +1775,7 @@ function App() {
     setAdminPanelLoading(true);
     try {
       if (demoMode) {
-        setAdminScripts(structuredClone(demoAdminData.scripts));
+        setAdminScripts(readDemo('adminScripts', demoAdminData.scripts));
         setAdminEditors(structuredClone(demoAdminData.editors));
       } else {
         const [scriptsData, editorsData] = await Promise.all([
@@ -1745,7 +1796,7 @@ function App() {
     if (!canAdmin || !scriptId || !editorUserId) return;
     try {
       if (demoMode) {
-        setAdminScripts((items:any[]) => items.map((item:any) => item.id === scriptId ? { ...item, editorUserId } : item));
+        setAdminScripts((items:any[]) => { const updated=items.map((item:any)=>item.id===scriptId?{...item,editorUserId}:item); writeDemo('adminScripts',updated); return updated; });
         notify('Demo Audio Editor assignment saved locally.');
         return;
       }
@@ -1774,7 +1825,7 @@ function App() {
     if (!canAdmin || !application?.id) return;
     try {
       if (demoMode) {
-        setAdminApplications((items:any[]) => items.map((item:any) => item.id === application.id ? { ...item, status:decision } : item));
+        setAdminApplications((items:any[]) => { const updated=items.map((item:any)=>item.id===application.id?{...item,status:decision}:item); writeDemo('adminApplications',updated); return updated; });
         notify(`Demo Creator application ${decision} locally.`);
         return;
       }
@@ -1797,7 +1848,9 @@ function App() {
           const previousRole = account.role;
           if (previousRole && previousRole !== nextRole && typeof counts[previousRole] === 'number') counts[previousRole] = Math.max(0, counts[previousRole] - 1);
           if (previousRole !== nextRole && typeof counts[nextRole] === 'number') counts[nextRole] += 1;
-          return { ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts, counts } };
+          const updated = { ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts, counts } };
+          writeDemo('adminOverview', updated);
+          return updated;
         });
         notify(`Demo account role changed to ${roleMeta[nextRole].label} locally.`);
         return;
@@ -1818,7 +1871,7 @@ function App() {
     if (!canAdmin || !account?.userId || !account?.role || account.role === 'admin') return;
     try {
       if (demoMode) {
-        setAdminOverview((current:any) => ({ ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts:(current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, status:nextStatus } : item) } }));
+        setAdminOverview((current:any) => { const updated={ ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts:(current?.people?.accounts ?? []).map((item:any) => item.userId===account.userId?{...item,status:nextStatus}:item) } }; writeDemo('adminOverview',updated); return updated; });
         notify(`Demo account status changed to ${nextStatus.replace('_', ' ')} locally.`);
         return;
       }
@@ -1834,7 +1887,7 @@ function App() {
     if (!canAdmin || !account?.userId || account.role === 'admin') return;
     try {
       if (demoMode) {
-        setAdminOverview((current:any) => ({ ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts:(current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, testAccess:enabled } : item) } }));
+        setAdminOverview((current:any) => { const updated={ ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts:(current?.people?.accounts ?? []).map((item:any) => item.userId===account.userId?{...item,testAccess:enabled}:item) } }; writeDemo('adminOverview',updated); return updated; });
         notify(enabled ? 'Demo tester access enabled locally.' : 'Demo tester access removed locally.');
         return;
       }
@@ -1859,7 +1912,7 @@ function App() {
           rights:{ copyrightOwner:'Demo Writer', writerRetainsCopyright:true, licenceType:'none', licenceLength:'', adaptationApprovalRequired:true, significantEditsApprovalRequired:true, castingApprovalRequired:false, finalAudioApprovalRequired:false, aiTrainingAllowed:false, commercialUse:false, withdrawalTerms:'' },
           marketplace:{ visibility:'private', synopsis:'', genres:[], tropes:[], commissionPricePence:null, collaborationWanted:false, editorWanted:false },
         };
-        setWriterScripts((items) => [next, ...items]);
+        setWriterScripts((items) => { const updated = [next, ...items]; writeDemo('writerScripts', updated); return updated; });
         setWriterSelected(next);
         setWriterDraftTitle('');
         notify('Simulation: draft created locally.');
@@ -1880,7 +1933,7 @@ function App() {
     if (!writerSelected) return;
     try {
       if (simulationMode) {
-        setWriterScripts((items) => items.map((item) => item.id === writerSelected.id ? writerSelected : item));
+        setWriterScripts((items) => { const updated = items.map((item) => item.id === writerSelected.id ? writerSelected : item); writeDemo('writerScripts', updated); return updated; });
         notify('Simulation: script saved locally.');
         return;
       }
@@ -1899,7 +1952,7 @@ function App() {
       if (simulationMode) {
         const next = { ...writerSelected, version: Number(writerSelected.version ?? 1) + 1 };
         setWriterSelected(next);
-        setWriterScripts((items) => items.map((item) => item.id === next.id ? next : item));
+        setWriterScripts((items) => { const updated = items.map((item) => item.id === next.id ? next : item); writeDemo('writerScripts', updated); return updated; });
         notify('Simulation: manuscript version recorded locally.');
         return;
       }
@@ -1921,7 +1974,7 @@ function App() {
     if (!window.confirm('Delete this manuscript and its saved versions? This cannot be undone.')) return;
     try {
       if (simulationMode) {
-        setWriterScripts((items) => items.filter((item) => item.id !== writerSelected.id));
+        setWriterScripts((items) => { const updated = items.filter((item) => item.id !== writerSelected.id); writeDemo('writerScripts', updated); return updated; });
         setWriterSelected(null);
         setWriterPermissions([]);
         notify('Simulation: manuscript deleted locally.');
@@ -1943,8 +1996,13 @@ function App() {
       if (simulationMode) {
         const next = { ...writerSelected, status:'Submitted' };
         setWriterSelected(next);
-        setWriterScripts((items) => items.map((item) => item.id === next.id ? next : item));
-        notify('Simulation: script submitted to editorial locally.');
+        setWriterScripts((items) => { const updated = items.map((item) => item.id === next.id ? next : item); writeDemo('writerScripts', updated); return updated; });
+        setEditorQueue((items) => {
+          const updated = [...items.filter((item) => item.id !== next.id), { id: next.id, title: next.title, status: 'Submitted', version: next.version, lastEditorialComment: next.lastEditorialComment }];
+          writeDemo('editorQueue', updated);
+          return updated;
+        });
+        notify('Simulation: script submitted to the Audio Editor queue.');
         return;
       }
       const data = await nightjarScripts.submit(writerSelected.id);
@@ -1958,6 +2016,8 @@ function App() {
 
   const enableDemoMode = () => {
     if (!canAdmin) return;
+    resetDemo();
+    productLoadEpoch.current++;
     setDemoMode(true);
     notify('Demo data enabled. All demo records are isolated from live Nightjar data.');
   };
@@ -1968,6 +2028,8 @@ function App() {
     setDemoLogoPreviewUrl(null);
     setSimulationMode(false);
     setDemoMode(false);
+    productLoadEpoch.current++;
+    resetDemo();
     setPreviewRole(null);
     navigate('admin');
     void nightjarMedia.getBranding().then((data) => applyRuntimeLogo(data.logoUrl ?? null)).catch(() => applyRuntimeLogo(null));
@@ -1976,6 +2038,7 @@ function App() {
 
   const startSimulation = (next: PreviewRole = 'listener') => {
     if (!canAdmin) return;
+    if (!demoMode) { resetDemo(); productLoadEpoch.current++; }
     setDemoMode(true);
     setSimulationMode(true);
     setPreviewRole(next);
@@ -1997,6 +2060,7 @@ function App() {
 
   const resetSimulation = () => {
     if (!canAdmin || !demoMode) return;
+    resetDemo();
     setDemoSessionKey((value) => value + 1);
     setPlaying(null);
     setReviewTrack(null);
@@ -2011,10 +2075,12 @@ function App() {
     void loadWriterScripts();
     void loadEditorQueue();
     void loadAdminOverview();
+    void loadProfile();
     notify('Demo / simulation state reset to the original fictional dataset.');
   };
 
   const selectPreviewRole = (next: PreviewRole) => {
+    if (!canAdmin) return;
     startSimulation(next);
   };
 
@@ -2172,6 +2238,16 @@ function App() {
   }
 
   const creatorOnly = effectiveRole === 'creator';
+  const updateSimulatedRelease = (release: any | null, deletedId?: string) => {
+    if (!simulationMode) return;
+    const current = readDemo('creatorDashboard', demoCreatorDashboard);
+    const releases = deletedId
+      ? current.releases.filter((item: any) => item.id !== deletedId)
+      : release ? [...current.releases.filter((item: any) => item.id !== release.id), release] : current.releases;
+    const next = { ...current, releases };
+    writeDemo('creatorDashboard', next);
+    setCreatorDashboard(next);
+  };
   const adminOnly = canAdmin && !simulationMode;
 
   return (
@@ -2299,7 +2375,7 @@ function App() {
               <p className="spotlight-note">Every active Creator, Writer and public Audio Editor receives a full day in deterministic rotation, with a shareable spotlight to help the community naturally discover the people shaping Nightjar. Listener Spotlight recognises the previous completed week’s top seven Listeners, one per day, and thanks them for helping Nightjar thrive.</p>
             </section>
 
-            <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} />
+            <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} />
 
             <section id="catalogue" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
@@ -2353,7 +2429,7 @@ function App() {
           </section>
         )}
 
-        {view === 'creator' && (
+        {view === 'creator' && (creatorOnly || adminOnly) && (
           <section className="page-wrap studio-page">
             <div className="page-heading studio-page-heading">
               <div>
@@ -2370,7 +2446,7 @@ function App() {
               {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
             </div>
             <div id="creator-pipeline">
-              {creatorOnly ? <CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} /> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
+              {creatorOnly ? <CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} /> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
             </div>
             {creatorOnly && <CreatorCompensationCard key={'creator-pay-' + demoSessionKey} notify={notify} demoMode={demoMode} />}
             {creatorOnly && <ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={(userId)=>setPublicProfileUserId(userId)} demoMode={demoMode} simulationMode={simulationMode} />}
@@ -2417,7 +2493,7 @@ function App() {
                 <MultiSelectField label="Favourite tags" options={PROFILE_TAG_OPTIONS} values={profile.favouriteTags ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTags:values}))}/>
                 <MultiSelectField label="Favourite tropes" options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTropes:values}))}/>
                 <MultiSelectField label="Favourite categories" options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteCategories:values}))}/>
-                <MultiSelectField label="Role focus" options={ROLE_FOCUS_OPTIONS[role ?? 'listener']} values={profile.roleFocus ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleFocus:values}))}/>
+                <MultiSelectField label="Role focus" options={ROLE_FOCUS_OPTIONS[effectiveRole ?? 'listener']} values={profile.roleFocus ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleFocus:values}))}/>
                 <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile</label>
                 <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my profile'} <Check size={15}/></button>
               </article>
@@ -2449,7 +2525,7 @@ function App() {
             <div className="page-heading"><div><p className="eyebrow"><FileText size={14}/> WRITER STUDIO</p><h1>Write it. Protect it.</h1><p>Live manuscripts, version history and editorial handoff.</p></div></div>
             <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a manuscript</h2><p>Every new script begins private.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title"/><button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button></div></div>
             <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div><textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder="Begin writing…"/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
-            {writerSelected && <WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>items.map((item:any)=>item.id===next.id?next:item));}} notify={notify} simulationMode={simulationMode} />}
+            {writerSelected && <WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} />}
             <CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} />
           </section>
         )}
@@ -2486,11 +2562,11 @@ function App() {
           </section>
         )}
 
-        {view === 'admin' && canAdmin && (
+        {view === 'admin' && canAdmin && !simulationMode && (
           <section className="page-wrap admin-page">
             <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, Creator, Writer and Audio Editor accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAdminApplications(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
-            <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><div><span className="mini-label">TESTING</span><strong>Demo & Simulation</strong><small>Safe fictional data and role-perspective testing</small></div><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
-            <div className="admin-preview-control demo-control"><div><span className="mini-label">DEMO / SIMULATION</span><strong>See Nightjar populated, then step into every role.</strong><p>Demo records are fictional and isolated. Simulation actions stay local to this browser session and never become live subscriptions, payouts, manuscripts, reviews or user accounts.</p><div className="demo-state-line"><span className={demoMode ? 'status-pill' : 'status-pill muted'}>Demo data {demoMode ? 'ON' : 'OFF'}</span><span className={simulationMode ? 'status-pill' : 'status-pill muted'}>Simulation {simulationMode ? 'ON' : 'OFF'}</span></div></div><div className="admin-preview-buttons">{!demoMode && <button onClick={enableDemoMode}>Enable demo data</button>}{demoMode && !simulationMode && <button onClick={disableDemoMode}>Disable demo data</button>}<button onClick={() => startSimulation('listener')}>Simulate Listener</button><button onClick={() => startSimulation('creator')}>Simulate Creator</button><button onClick={() => startSimulation('writer')}>Simulate Writer</button><button onClick={() => startSimulation('editor')}>Simulate Audio Editor</button>{simulationMode && <button onClick={stopSimulation}>End simulation</button>}<button onClick={clearAdminPreview}>Return to Admin</button></div></div>
+            <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">TESTING</span><strong>Demo & Simulation</strong><small>Safe fictional data and role-perspective testing · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
+            <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">DEMO / SIMULATION</span><strong>See Nightjar populated, then step into every role.</strong><p>Demo records are fictional and isolated. Simulation actions stay local to this browser session and never become live subscriptions, payouts, manuscripts, reviews or user accounts.</p><div className="demo-state-line"><span className={demoMode ? 'status-pill' : 'status-pill muted'}>Demo data {demoMode ? 'ON' : 'OFF'}</span><span className={simulationMode ? 'status-pill' : 'status-pill muted'}>Simulation {simulationMode ? 'ON' : 'OFF'}</span></div></div><div className="admin-preview-buttons">{!demoMode && <button onClick={enableDemoMode}>Enable demo data</button>}{demoMode && !simulationMode && <button onClick={disableDemoMode}>Disable demo data</button>}<button onClick={() => startSimulation('listener')}>Simulate Listener</button><button onClick={() => startSimulation('creator')}>Simulate Creator</button><button onClick={() => startSimulation('writer')}>Simulate Writer</button><button onClick={() => startSimulation('editor')}>Simulate Audio Editor</button>{simulationMode && <button onClick={stopSimulation}>End simulation</button>}<button onClick={clearAdminPreview}>Return to Admin</button></div></div>
             <div className="admin-grid">
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('listener')}><span className="admin-icon"><Headphones size={19} /></span><span className="mini-label">PEOPLE · LISTENERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.listener ?? 0}</h2><p>Listener accounts with access to the catalogue and listening surfaces.</p><strong>Open listener profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('creator')}><span className="admin-icon"><Mic2 size={19} /></span><span className="mini-label">PEOPLE · CREATORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.creator ?? 0}</h2><p>Creator accounts and their current onboarding status.</p><strong>Open creator profiles <ArrowRight size={13} /></strong></button>
