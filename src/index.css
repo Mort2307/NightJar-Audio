@@ -2389,3 +2389,34 @@ button:focus-visible {
   .marketplace-rights { grid-template-columns: 1fr; }
   .release-credit-row { grid-template-columns: 1fr; }
 }
+
+
+.public-credit-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: rgba(255,255,255,.018);
+}
+.public-credit-summary span { color: var(--muted-2); font-size: 8px; }
+.public-credit-summary strong { font-size: 9px; }
+.public-credit-list { display: grid; gap: 7px; }
+.public-credit-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: rgba(0,0,0,.14);
+}
+.public-credit-list article > div:first-child { display: grid; gap: 3px; }
+.public-credit-list article strong { font-size: 10px; }
+.public-credit-list article span { color: var(--muted-2); font-size: 8px; }
+@media (max-width: 620px) {
+  .public-credit-summary, .public-credit-list article { align-items: flex-start; flex-direction: column; }
+}
