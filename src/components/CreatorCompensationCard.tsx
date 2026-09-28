@@ -1,19 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Coins, ShieldCheck } from 'lucide-react';
 import { nightjarCommercial } from '../platform/firebase-commercial';
+import { demoCompensation } from '../demo/nightjarDemo';
 
 const money = (pence: number | null | undefined) => pence == null
   ? 'Not set'
   : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(pence / 100);
 
-type Props = { notify: (message: string) => void };
+type Props = { notify: (message: string) => void; demoMode?: boolean };
 
-export default function CreatorCompensationCard({ notify }: Props) {
+export default function CreatorCompensationCard({ notify, demoMode = false }: Props) {
   const [data, setData] = useState<any | null>(null);
 
   useEffect(() => {
+    if (demoMode) {
+      setData(demoCompensation);
+      return;
+    }
     void nightjarCommercial.creatorCompensation().then(setData).catch(() => notify('Creator compensation status could not be loaded.'));
-  }, []);
+  }, [demoMode]);
 
   return <section className="research-panel creator-compensation-card">
     <div className="research-panel-head">
