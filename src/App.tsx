@@ -105,7 +105,6 @@ type CreatorSummary = {
   handle?: string | null;
   followers?: number;
   releases?: number;
-  share?: string | number;
   initials?: string;
   note?: string;
   imageUrl?: string | null;
@@ -600,7 +599,6 @@ function App() {
         note: creator.headline ?? creator.bio ?? undefined,
         followers: creator.followerCount ?? 0,
         releases: creator.releaseCount ?? 0,
-        share: (creator.listeningSharePercent ?? 0) + '%',
         imageUrl: creator.avatarUrl ?? null,
       })));
       const spotlights = firebaseSpotlightResponse.spotlights ?? [];
@@ -1845,7 +1843,7 @@ function App() {
         {view === 'creators' && (
           <section className="page-wrap">
             <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators building original catalogues for the Nightjar audience.</p></div><label className="creator-directory-search"><Search size={16}/><input value={creatorQuery} onChange={(event)=>setCreatorQuery(event.target.value)} placeholder="Search creator or handle"/></label></div>
-            <div className="creator-directory">{filteredCreators.map((creator, index) => <article className="creator-profile" key={creator.userId}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => void toggleProfileFollow(creator.userId)} aria-label={followingProfileIds.includes(creator.userId) ? 'Unfollow creator' : 'Follow creator'}><Heart size={17} fill={followingProfileIds.includes(creator.userId) ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span><strong>{creator.share}</strong> listening share</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
+            <div className="creator-directory">{filteredCreators.map((creator, index) => <article className="creator-profile" key={creator.userId}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => void toggleProfileFollow(creator.userId)} aria-label={followingProfileIds.includes(creator.userId) ? 'Unfollow creator' : 'Follow creator'}><Heart size={17} fill={followingProfileIds.includes(creator.userId) ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span>Fair discovery rotation</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
           </section>
         )}
 
