@@ -3,6 +3,7 @@ import { ShieldCheck } from 'lucide-react';
 import AccountAccess from './AccountAccess';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount, type NightjarAccountIdentity } from '../platform/firebase-account';
+import { nightjarMedia } from '../platform/firebase-media';
 
 const accountDestination = (account: NightjarAccountIdentity) => {
   if (account.admin || account.role === 'admin') return '/admin';
@@ -18,6 +19,7 @@ export default function AccountPortal() {
   const [account, setAccount] = useState<NightjarAccountIdentity | null>(null);
   const [loadingAccount, setLoadingAccount] = useState(false);
   const [message, setMessage] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   const loadAccount = async (nextIdentity: NightjarIdentity | null, enterApp = false) => {
     if (!nextIdentity?.emailVerified) {
@@ -50,10 +52,19 @@ export default function AccountPortal() {
     }
   };
 
-  useEffect(() => nightjarAuth.observe((next) => {
-    setIdentity(next);
-    void loadAccount(next);
-  }), []);
+  useEffect(() => {
+    void nightjarMedia.getBranding().then((data) => {
+      const nextLogo = data.logoUrl ?? null;
+      setLogoUrl(nextLogo);
+      const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+      if (favicon) favicon.href = nextLogo ?? '/favicon.svg';
+    }).catch(() => { /* static fallback remains available */ });
+
+    return nightjarAuth.observe((next) => {
+      setIdentity(next);
+      void loadAccount(next, Boolean(next?.emailVerified));
+    });
+  }, []);
 
   const chooseRole = async (role: 'listener' | 'creator' | 'writer') => {
     setLoadingAccount(true);
@@ -73,7 +84,7 @@ export default function AccountPortal() {
 
   return <main className="account-portal-shell">
     <header className="account-portal-header">
-      <a href="/discover" className="account-portal-brand"><img className="account-portal-logo" src="/favicon.svg" alt="" /> Nightjar</a>
+      <a href="/discover" className="account-portal-brand"><img className="account-portal-logo" src={logoUrl ?? "/favicon.svg"} alt="" /> Nightjar</a>
       <span>Secure account access</span>
     </header>
 
