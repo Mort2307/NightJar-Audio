@@ -56,7 +56,7 @@ export default function AccountAccess({
   onAuthenticated: (identity: NightjarIdentity) => void;
   onSignedOut?: () => void;
 }) {
-  const [mode, setMode] = useState<Mode>(identity ? (identity.emailVerified ? 'security' : 'verify') : 'signin');
+  const [mode, setMode] = useState<Mode>(identity && !identity.emailVerified ? 'verify' : 'signin');
   const [email, setEmail] = useState(identity?.email ?? '');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
