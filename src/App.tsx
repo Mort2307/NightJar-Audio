@@ -62,6 +62,7 @@ import CreatorCompensationCard from './components/CreatorCompensationCard';
 import TransparencyPanel from './components/TransparencyPanel';
 import ScriptMarketplace from './components/ScriptMarketplace';
 import ReleaseReviews from './components/ReleaseReviews';
+import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoTransparency } from './demo/nightjarDemo';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -363,6 +364,8 @@ function App() {
   const [accountLoading, setAccountLoading] = useState(false);
   const [rolePicker, setRolePicker] = useState(false);
   const [previewRole, setPreviewRole] = useState<PreviewRole | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
+  const [simulationMode, setSimulationMode] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [identityEmail, setIdentityEmail] = useState<string | null>(null);
