@@ -1060,6 +1060,18 @@ function App() {
     if (!user) return;
     setProfileLoading(true);
     try {
+      if (demoMode) {
+        const demoProfiles: Record<PreviewRole | 'admin', any> = {
+          listener: { displayName:'Jamie', handle:'jamielistens', headline:'Late-night story listener', bio:'Fictional listener profile for Nightjar Simulation Mode.', welcomeMessage:'Here for stories, atmosphere and independent creators.', pronouns:'', avatarInitials:'JL', avatarTone:'plum', avatarUrl:null, favouriteTags:['Atmospheric','Gentle'], favouriteTropes:['Slow burn','Comfort & reassurance'], favouriteCategories:['Romantic story','Audio drama'], roleFocus:['Discovery','Supporting creators'], publicProfile:true },
+          creator: { displayName:'Aria Vale', handle:'ariavale', headline:'Cinematic character-led audio', bio:'Fictional Creator profile for Nightjar Simulation Mode.', welcomeMessage:'Welcome — start with After Midnight.', pronouns:'', avatarInitials:'AV', avatarTone:'plum', avatarUrl:null, favouriteTags:['Cinematic','Atmospheric'], favouriteTropes:['Slow burn','Mutual pining'], favouriteCategories:['Audio drama','Romantic story'], roleFocus:['Voice performance','Narration','Audio production'], publicProfile:true },
+          writer: { displayName:'Mara Bell', handle:'marabell', headline:'Character-led scripts and collaborative productions', bio:'Fictional Writer profile for Nightjar Simulation Mode.', welcomeMessage:'Scripts, licensing and collaboration live here.', pronouns:'', avatarInitials:'MB', avatarTone:'plum', avatarUrl:null, favouriteTags:['Story-led','Dialogue-heavy'], favouriteTropes:['Forbidden attraction','Second chance'], favouriteCategories:['Romantic story','Sci-fi'], roleFocus:['Script writing','Dialogue writing','Character development'], publicProfile:true },
+          editor: { displayName:'Sam Reed', handle:'samreed', headline:'Dialogue editing, mixing and production polish', bio:'Fictional Audio Editor profile for Nightjar Simulation Mode.', welcomeMessage:'Clean edits, clear handoffs, properly credited work.', pronouns:'', avatarInitials:'SR', avatarTone:'plum', avatarUrl:null, favouriteTags:['Sound-rich','Cinematic'], favouriteTropes:[], favouriteCategories:['Audio drama'], roleFocus:['Audio editing','Mixing','Mastering'], publicProfile:true },
+          admin: { displayName:'Nightjar Admin Demo', handle:'nightjardemo', headline:'Administrator demo profile', bio:'Fictional admin-facing profile while Demo Data is enabled.', welcomeMessage:'', pronouns:'', avatarInitials:'NJ', avatarTone:'plum', avatarUrl:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:['Platform operations'], publicProfile:false },
+        };
+        setProfile((current:any) => ({ ...current, ...demoProfiles[previewRole ?? 'admin'] }));
+        setTasteVector([{label:'Atmospheric',weight:0.92},{label:'Slow burn',weight:0.81},{label:'Story-led',weight:0.76},{label:'Cinematic',weight:0.69}]);
+        return;
+      }
       const [profileData, tasteData] = await Promise.all([
         nightjarCommunity.getMyProfile(),
         nightjarListening.taste(),
@@ -1688,6 +1700,7 @@ function App() {
 
   const selectPreviewRole = (next: PreviewRole) => {
     if (!canAdmin) return;
+    if (demoMode) setSimulationMode(true);
     setPreviewRole(next);
     setRolePicker(false);
     if (next === 'creator') navigate('creator');
