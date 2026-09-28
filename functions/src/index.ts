@@ -880,19 +880,8 @@ export const listPendingImages = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('imageAssets').where('status', '==', 'pending').limit(100).get();
 
-  const assets = await Promise.all(snapshot.docs.map(async (doc) => {
+  const assets = snapshot.docs.map((doc) => {
     const data = doc.data();
-    let previewUrl: string | null = null;
-    const storagePath = cleanText(data.storagePath, 500);
-    if (storagePath) {
-      try {
-        const [url] = await getStorage().bucket().file(storagePath).getSignedUrl({
-          action: 'read',
-          expires: Date.now() + 15 * 60 * 1000,
-        });
-        previewUrl = url;
-      } catch { previewUrl = null; }
-    }
     return {
       id: doc.id,
       ownerUserId: data.ownerUserId ?? null,
@@ -903,9 +892,8 @@ export const listPendingImages = onCall({ region: REGION }, async (request) => {
       contentType: data.contentType ?? null,
       byteSize: data.byteSize ?? 0,
       status: data.status,
-      previewUrl,
     };
-  }));
+  });
 
   return { assets };
 });
