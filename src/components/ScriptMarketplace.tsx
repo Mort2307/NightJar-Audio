@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, Filter, Search } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
+import { demoMarketplaceScripts } from '../demo/nightjarDemo';
 
 type Props = {
   notify: (message: string) => void;
   onOpenWriter?: (userId: string) => void;
+  demoMode?: boolean;
+  simulationMode?: boolean;
 };
 
-export default function ScriptMarketplace({ notify, onOpenWriter }: Props) {
+export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = false, simulationMode = false }: Props) {
   const [scripts, setScripts] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -16,8 +19,11 @@ export default function ScriptMarketplace({ notify, onOpenWriter }: Props) {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await nightjarScripts.marketplace();
-      setScripts(data.scripts ?? []);
+      if (demoMode) setScripts(structuredClone(demoMarketplaceScripts));
+      else {
+        const data = await nightjarScripts.marketplace();
+        setScripts(data.scripts ?? []);
+      }
     } catch {
       notify('Script marketplace could not be loaded.');
     } finally {
@@ -25,7 +31,7 @@ export default function ScriptMarketplace({ notify, onOpenWriter }: Props) {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [demoMode]);
 
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
@@ -43,8 +49,8 @@ export default function ScriptMarketplace({ notify, onOpenWriter }: Props) {
   const expressInterest = async (script: any) => {
     const message = window.prompt('Optional message to the Writer about why this script interests you.') ?? '';
     try {
-      await nightjarCollaboration.expressInterest(script.id, message);
-      notify('Interest sent to the Writer. The proposal is now visible in your Collaboration Workspace.');
+      if (!simulationMode) await nightjarCollaboration.expressInterest(script.id, message);
+      notify(simulationMode ? 'Simulation: interest recorded locally for this demo session.' : 'Interest sent to the Writer. The proposal is now visible in your Collaboration Workspace.');
     } catch {
       notify('Interest could not be sent.');
     }
