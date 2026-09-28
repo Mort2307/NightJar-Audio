@@ -53,17 +53,32 @@ export default function AccountPortal() {
   };
 
   useEffect(() => {
-    void nightjarMedia.getBranding().then((data) => {
-      const nextLogo = data.logoUrl ?? null;
-      setLogoUrl(nextLogo);
-      const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
-      if (favicon) favicon.href = nextLogo ?? '/favicon.svg';
-    }).catch(() => { /* static fallback remains available */ });
+    const refreshBranding = () => {
+      void nightjarMedia.getBranding().then((data) => {
+        const nextLogo = data.logoUrl ?? null;
+        setLogoUrl(nextLogo);
+        const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+        if (favicon) favicon.href = nextLogo ?? '/favicon.svg';
+      }).catch(() => { /* static fallback remains available */ });
+    };
 
-    return nightjarAuth.observe((next) => {
+    refreshBranding();
+    const unsubscribe = nightjarAuth.observe((next) => {
       setIdentity(next);
       void loadAccount(next, Boolean(next?.emailVerified));
     });
+    const onFocus = () => refreshBranding();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'nightjar.branding.version') refreshBranding();
+    };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   const chooseRole = async (role: 'listener' | 'creator' | 'writer') => {
