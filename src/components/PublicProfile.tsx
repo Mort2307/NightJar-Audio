@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileCheck2, Headphones, Heart, Share2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
+import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 
 type Props = {
   userId: string;
@@ -8,6 +9,7 @@ type Props = {
   onToggleFollow: (userId: string) => Promise<void>;
   onClose: () => void;
   notify: (message: string) => void;
+  demoMode?: boolean;
 };
 
 const roleLabel = (role: string | null | undefined) => {
@@ -17,13 +19,30 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify }: Props) {
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, demoMode = false }: Props) {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    if (demoMode) {
+      const person = demoDirectory.find((item) => item.userId === userId);
+      const creditedReleases = demoTracks.filter((release:any) => (release.contributors ?? []).some((credit:any) => credit.userId === userId));
+      const writer = demoWriterScripts.find((script:any) => script.id && userId === 'demo-writer-mara');
+      setProfile(person ? {
+        userId:person.userId, displayName:person.name, handle:String(person.name).toLowerCase().replace(/[^a-z0-9]+/g,''),
+        role:person.role, initials:person.name.split(' ').map((part:string)=>part[0]).join('').slice(0,2),
+        headline:person.role === 'writer' ? 'Character-led Writer with protected licensing controls.' : person.role === 'editor' ? 'Audio Editor focused on dialogue, mixing and production polish.' : 'Nightjar creative profile.',
+        bio:'Fictional Nightjar demo profile used for Simulation Mode.', welcomeMessage:'Thanks for exploring this Nightjar demo profile.',
+        publicProfile:true, followerCount:person.role === 'writer' ? 486 : 352,
+        publishedWorkCount:writer ? 3 : 0, creditedReleaseCount:creditedReleases.length, creditedReleases,
+        roleFocus:person.role === 'writer' ? ['Script writing','Dialogue writing'] : person.role === 'editor' ? ['Audio editing','Mixing'] : [],
+        favouriteTags:['Cinematic','Story-led'],
+      } : null);
+      setLoading(false);
+      return;
+    }
     void nightjarCommunity.getPublicProfile(userId).then((data) => {
       if (!cancelled) setProfile(data.profile ?? null);
     }).catch(() => {
@@ -32,7 +51,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, demoMode]);
 
   const share = async () => {
     if (!profile) return;
