@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Bell, Save, ShieldCheck } from 'lucide-react';
 import { nightjarNotifications } from '../platform/firebase-notifications';
 
-type Props = { notify: (message: string) => void };
+type Props = { notify: (message: string) => void; simulationMode?: boolean };
 
 const defaults = {
   displayMode: 'discreet',
@@ -14,20 +14,28 @@ const defaults = {
   announcements: true,
 };
 
-export default function NotificationPreferences({ notify }: Props) {
+export default function NotificationPreferences({ notify, simulationMode = false }: Props) {
   const [preferences, setPreferences] = useState<any>(defaults);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (simulationMode) {
+      setPreferences(defaults);
+      return;
+    }
     void nightjarNotifications.preferences().then((data) => setPreferences({ ...defaults, ...(data.preferences ?? {}) })).catch(() => {});
-  }, []);
+  }, [simulationMode]);
 
   const save = async () => {
     setSaving(true);
     try {
-      const data = await nightjarNotifications.savePreferences(preferences);
-      setPreferences(data.preferences ?? preferences);
-      notify('Notification privacy preferences saved.');
+      if (simulationMode) {
+        notify('Simulation: notification preferences saved locally.');
+      } else {
+        const data = await nightjarNotifications.savePreferences(preferences);
+        setPreferences(data.preferences ?? preferences);
+        notify('Notification privacy preferences saved.');
+      }
     } catch {
       notify('Notification preferences could not be saved.');
     } finally {
