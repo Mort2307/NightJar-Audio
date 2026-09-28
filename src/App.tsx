@@ -549,7 +549,10 @@ function App() {
     if (role === 'creator' || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
     if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
     if (role === 'editor' || (canAdmin && previewRole === 'editor')) void loadEditorQueue();
-    if (canAdmin) void loadAdminOverview();
+    if (canAdmin) {
+      void loadAdminOverview();
+      void loadSecurityAlerts();
+    }
   }, [user, ageVerified, role, currentIntent, previewRole, demoMode]);
 
   const notify = (message: string) => {
