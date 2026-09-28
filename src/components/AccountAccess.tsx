@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, EyeOff, KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 
@@ -66,6 +66,23 @@ export default function AccountAccess({
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const normalEntryMode: Mode = identity && !identity.emailVerified ? 'verify' : 'signin';
+    setMode(normalEntryMode);
+    setMessage('');
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      setMode(identity && !identity.emailVerified ? 'verify' : 'signin');
+      setMessage('');
+      setPassword('');
+      setConfirm('');
+    };
+
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, [identity?.userId, identity?.emailVerified]);
 
 
   const run = async (operation: () => Promise<void>) => {
