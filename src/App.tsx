@@ -362,6 +362,14 @@ const formatMoneyPence = (pence: number | null | undefined) => {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(pence) / 100);
 };
 
+const formatAdminDate = (value: unknown) => {
+  if (!value) return '—';
+  const raw = String(value);
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
 const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(String(reader.result));
@@ -2671,7 +2679,7 @@ function App() {
   </div>
 
   <div className="admin-data-list subscription-ledger-list">
-    {adminSubscriptions.length === 0 ? <div className="people-empty"><WalletCards size={18} /><strong>No live subscription records</strong><span>Billing is not connected yet; no subscription data is being fabricated.</span></div> : adminSubscriptions.map((subscription) => <article className="admin-data-row" key={subscription.id}><div><strong>{subscription.email ?? subscription.userId ?? 'Subscriber'}</strong><span>{subscription.plan ?? ('Nightjar · ' + formatMoneyPence(commercialSettings.planningMonthlyPricePence) + ' monthly')} · {subscription.status ?? 'unknown'}</span><small>{subscription.confirmedMonthlyAmountPence != null ? formatMoneyPence(subscription.confirmedMonthlyAmountPence) + ' / month' : 'Monthly amount not confirmed'}</small></div><span>{subscription.currentPeriodEnd ? 'Period end ' + subscription.currentPeriodEnd : 'Period end —'}</span></article>)}
+    {adminSubscriptions.length === 0 ? <div className="people-empty"><WalletCards size={18} /><strong>No live subscription records</strong><span>Billing is not connected yet; no subscription data is being fabricated.</span></div> : adminSubscriptions.map((subscription) => <article className="admin-data-row" key={subscription.id}><div><strong>{subscription.email ?? subscription.userId ?? 'Subscriber'}</strong><span>{subscription.plan ?? ('Nightjar · ' + formatMoneyPence(commercialSettings.planningMonthlyPricePence) + ' monthly')} · {subscription.status ?? 'unknown'}</span><small>{subscription.confirmedMonthlyAmountPence != null ? formatMoneyPence(subscription.confirmedMonthlyAmountPence) + ' / month' : 'Monthly amount not confirmed'}</small></div><span>{'Period end ' + formatAdminDate(subscription.currentPeriodEnd)}</span></article>)}
   </div>
 </>}</div>}{adminPanel === 'revenue' && <div>
   <div className="admin-modal-grid">
