@@ -695,7 +695,7 @@ function App() {
   const markNotificationRead = async (notification: any) => {
     if (notification?.read === true) return;
     try {
-      await nightjarNotifications.markRead(String(notification.id));
+      if (!demoMode) await nightjarNotifications.markRead(String(notification.id));
       setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, read: true } : item));
       setNotificationUnreadCount((count) => Math.max(0, count - 1));
     } catch { /* notification read state is non-critical */ }
@@ -1188,8 +1188,15 @@ function App() {
     }
     setWriterPermissionsLoading(true);
     try {
-      const data = await nightjarScripts.permissions(targetId);
-      setWriterPermissions(data.permissions ?? []);
+      if (demoMode) {
+        setWriterPermissions([
+          { recipientUserId:'demo-creator-aria', allowCopy:false, allowExport:true, expiresAt:null, revokedAt:null },
+          { recipientUserId:'demo-editor-sam', allowCopy:true, allowExport:false, expiresAt:null, revokedAt:null },
+        ]);
+      } else {
+        const data = await nightjarScripts.permissions(targetId);
+        setWriterPermissions(data.permissions ?? []);
+      }
     } catch {
       setWriterPermissions([]);
     } finally {
@@ -1205,6 +1212,11 @@ function App() {
     const allowExport = window.confirm('Allow this recipient to export/download the full manuscript?');
     const expiry = window.prompt('Optional expiry date/time (ISO format), or leave blank for no expiry') ?? '';
     try {
+      if (simulationMode) {
+        setWriterPermissions((items) => [...items, { recipientUserId:recipientUserId.trim(), allowCopy, allowExport, expiresAt:expiry.trim() || null, revokedAt:null }]);
+        notify('Simulation: full-script access granted locally.');
+        return;
+      }
       await nightjarScripts.setPermission(writerSelected.id, {
         recipientUserId: recipientUserId.trim(),
         allowCopy,
@@ -1220,6 +1232,11 @@ function App() {
     if (!writerSelected?.id || !permission?.recipientUserId) return;
     if (!window.confirm('Revoke this recipient\'s full-script access and active reader sessions?')) return;
     try {
+      if (simulationMode) {
+        setWriterPermissions((items) => items.map((item) => item.recipientUserId === permission.recipientUserId ? { ...item, revokedAt:new Date().toISOString() } : item));
+        notify('Simulation: full-script access revoked locally.');
+        return;
+      }
       await nightjarScripts.setPermission(writerSelected.id, {
         recipientUserId: permission.recipientUserId,
         revoke: true,
@@ -1234,9 +1251,14 @@ function App() {
   const loadProtection = async () => {
     if (!user) return;
     try {
-      const [evidence, reports] = await Promise.all([nightjarProtection.evidence(), nightjarProtection.reports()]);
-      setProtectionEvidence(evidence.evidence ?? []);
-      setProtectionReports(reports.reports ?? []);
+      if (simulationMode) {
+        setProtectionEvidence([{ id:'demo-evidence-1', eventType:'copy_blocked', createdAt:new Date().toISOString() }]);
+        setProtectionReports([{ caseId:'DEMO-1042', category:'Feedback / feature request', status:'Closed' }]);
+      } else {
+        const [evidence, reports] = await Promise.all([nightjarProtection.evidence(), nightjarProtection.reports()]);
+        setProtectionEvidence(evidence.evidence ?? []);
+        setProtectionReports(reports.reports ?? []);
+      }
     } catch { notify('Protection records could not be loaded right now.'); }
   };
 
