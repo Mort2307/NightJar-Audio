@@ -3297,6 +3297,60 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
   return { proposal: collaborationPayload(saved.data() ?? record, ref.id) };
 });
 
+export const expressScriptInterest = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const message = cleanText(input.message, 1800);
+  if (!scriptId) throw new HttpsError('invalid-argument', 'Choose a marketplace script.');
+
+  const [script, creatorProfile] = await Promise.all([
+    scriptRef(scriptId).get(),
+    profileRef(identity.uid).get(),
+  ]);
+  const data = script.data();
+  if (!data) throw new HttpsError('not-found', 'Marketplace script not found.');
+  const listing = normaliseScriptMarketplace(data.marketplace);
+  if (listing.visibility !== 'marketplace' || !['Approved','Published'].includes(String(data.status ?? ''))) {
+    throw new HttpsError('failed-precondition', 'This script is not currently open in the marketplace.');
+  }
+  const writerUserId = cleanText(data.writerUserId, 160);
+  if (!writerUserId) throw new HttpsError('failed-precondition', 'This script has no writer account.');
+
+  const writer = await accountPresentation(writerUserId);
+  const creatorName = creatorProfile.data()?.displayName ?? identity.email.split('@')[0];
+  const ref = db.collection('collaborationProposals').doc();
+  const record = {
+    scriptId,
+    scriptTitle: data.title ?? 'Untitled manuscript',
+    writerUserId,
+    writerName: writer.displayName,
+    recipientUserId: identity.uid,
+    recipientName: creatorName,
+    recipientRole: 'creator',
+    initiatedByUserId: identity.uid,
+    message,
+    paymentProposal: '',
+    licenceSummary: '',
+    status: 'interested' as CollaborationStatus,
+    responseNote: message,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    respondedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+  await createNotification(writerUserId, {
+    type: 'collaboration',
+    subtype: 'marketplace_interest',
+    title: 'A Creator is interested in your script',
+    message: creatorName + ' expressed interest in ' + String(data.title ?? 'your marketplace script') + '.',
+    collaborationId: ref.id,
+    scriptId,
+  });
+  const saved = await ref.get();
+  return { proposal: collaborationPayload(saved.data() ?? record, ref.id) };
+});
+
 export const listMyCollaborations = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const snapshot = await db.collection('collaborationProposals').limit(1000).get();
