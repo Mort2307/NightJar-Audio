@@ -92,7 +92,12 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const updateContributor = (index: number, patch: Partial<{ name: string; role: string; userId?: string | null }>) => {
     if (!current) return;
     const contributors = [...(current.contributors ?? [])];
-    contributors[index] = { name: '', role: 'Voice Actor', ...(contributors[index] ?? {}), ...patch };
+    const existing = contributors[index];
+    contributors[index] = {
+      name: patch.name ?? existing?.name ?? '',
+      role: patch.role ?? existing?.role ?? 'Voice Actor',
+      userId: patch.userId !== undefined ? patch.userId : existing?.userId ?? null,
+    };
     setRelease({ contributors });
   };
 
