@@ -1020,20 +1020,24 @@ function App() {
     try {
       if (demoMode) {
         const demoAccounts = [
-          ...demoCreators.map((item) => ({ userId:item.userId, displayName:item.name, handle:item.handle, role:'creator', status:'active' })),
-          { userId:'demo-writer-mara', displayName:'Mara Bell', handle:'marabell', role:'writer', status:'active' },
-          { userId:'demo-writer-ivy', displayName:'Ivy North', handle:'ivynorth', role:'writer', status:'active' },
-          { userId:'demo-editor-sam', displayName:'Sam Reed', handle:'samreed', role:'editor', status:'active' },
-          { userId:'demo-editor-rin', displayName:'Rin Cole', handle:'rincole', role:'editor', status:'active' },
-          { userId:'demo-listener-jamie', displayName:'Jamie', handle:'jamielistens', role:'listener', status:'active' },
-          { userId:'demo-listener-lex', displayName:'Lex', handle:'lexlistens', role:'listener', status:'active' },
+          ...demoCreators.map((item) => ({ userId:item.userId, name:item.name, email:item.handle + '@demo.invalid', handle:item.handle, role:'creator', status:'active' })),
+          { userId:'demo-writer-mara', name:'Mara Bell', email:'mara@demo.invalid', handle:'marabell', role:'writer', status:'active' },
+          { userId:'demo-writer-ivy', name:'Ivy North', email:'ivy@demo.invalid', handle:'ivynorth', role:'writer', status:'active' },
+          { userId:'demo-editor-sam', name:'Sam Reed', email:'sam@demo.invalid', handle:'samreed', role:'editor', status:'active' },
+          { userId:'demo-editor-rin', name:'Rin Cole', email:'rin@demo.invalid', handle:'rincole', role:'editor', status:'active' },
+          { userId:'demo-listener-jamie', name:'Jamie', email:'jamie@demo.invalid', handle:'jamielistens', role:'listener', status:'active' },
+          { userId:'demo-listener-lex', name:'Lex', email:'lex@demo.invalid', handle:'lexlistens', role:'listener', status:'active' },
         ];
         setCommercialOverview(null);
         setAdminOverview({
           people: {
             counts: { listener:18, creator:5, writer:4, editor:3, admin:3 },
             accounts: demoAccounts,
-            administrators: [],
+            administrators: [
+              { userId:'demo-admin-1', name:'Owner One', email:'owner.one@demo.invalid', role:'admin', status:'active' },
+              { userId:'demo-admin-2', name:'Owner Two', email:'owner.two@demo.invalid', role:'admin', status:'active' },
+              { userId:'demo-admin-3', name:'Owner Three', email:'owner.three@demo.invalid', role:'admin', status:'active' },
+            ],
           },
           subscriptions: { active:12500, trialing:420, pastDue:86 },
         });
@@ -1612,8 +1616,10 @@ function App() {
       if (demoMode) {
         setAdminOverview((current:any) => {
           const accounts = (current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, role:nextRole, status:'active' } : item);
-          const counts = { listener:0, creator:0, writer:0, editor:0, admin:current?.people?.counts?.admin ?? 3 } as any;
-          accounts.forEach((item:any) => { if (counts[item.role] != null) counts[item.role] += 1; });
+          const counts = { ...(current?.people?.counts ?? {}) };
+          const previousRole = account.role;
+          if (previousRole && previousRole !== nextRole && typeof counts[previousRole] === 'number') counts[previousRole] = Math.max(0, counts[previousRole] - 1);
+          if (previousRole !== nextRole && typeof counts[nextRole] === 'number') counts[nextRole] += 1;
           return { ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts, counts } };
         });
         notify(`Demo account role changed to ${roleMeta[nextRole].label} locally.`);
