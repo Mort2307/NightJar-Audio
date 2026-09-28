@@ -52,8 +52,14 @@ import NightjarOnboarding from './components/NightjarOnboarding';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import PublicProfile from './components/PublicProfile';
+import CollaborationHub from './components/CollaborationHub';
+import WriterRightsPanel from './components/WriterRightsPanel';
+import ListenerLibrary from './components/ListenerLibrary';
+import NotificationPreferences from './components/NotificationPreferences';
+import CreatorCompensationCard from './components/CreatorCompensationCard';
+import TransparencyPanel from './components/TransparencyPanel';
 
-type View = 'discover' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor';
@@ -323,7 +329,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 });
 
 function App() {
-  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
+  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','library','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
   const [playing, setPlaying] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
@@ -372,7 +378,20 @@ function App() {
   const [imageModeration, setImageModeration] = useState<any[]>([]);
   const [profileImageBusy, setProfileImageBusy] = useState(false);
   const [commercialOverview, setCommercialOverview] = useState<CommercialOverview | null>(null);
-  const [commercialSettings, setCommercialSettings] = useState<CommercialSettings>({ planningMonthlyPricePence: 500, creatorPoolPercent: null, reservePercent: null, payoutCadence: null, eligibleListeningDefinition: null });
+  const [commercialSettings, setCommercialSettings] = useState<CommercialSettings>({
+    planningMonthlyPricePence: 500,
+    creatorPoolPercent: null,
+    reservePercent: null,
+    payoutCadence: 'Monthly',
+    eligibleListeningDefinition: null,
+    compensationModel: 'capped_equal_rate',
+    creatorMonthlyCapPence: null,
+    creatorRateBands: [],
+    creatorEligibilityDefinition: null,
+    popularityAffectsBaseRate: false,
+    tipsEnabled: false,
+    individualPurchasesEnabled: false,
+  });
   const [commercialSaving, setCommercialSaving] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
@@ -1592,6 +1611,7 @@ function App() {
         <nav className={menuOpen ? 'nav open' : 'nav'}>
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'discover' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('discover')}>Discover</button>}
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Creators</button>}
+          {(effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && <button className={view === 'library' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('library')}>Library</button>}
           {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); }}>Editorial</button>}
@@ -1724,6 +1744,8 @@ function App() {
               </div>
             </section>
 
+            <TransparencyPanel notify={notify} />
+
             <section className="creator-band section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
               <div className="creator-grid">{creators.slice(0, 5).map((creator) => <button className="creator-card" key={creator.userId} onClick={() => navigate('creators')}><span className="avatar-large">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.note || 'Nightjar creator profile.'}</em><small>{creator.releases ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
@@ -1749,7 +1771,7 @@ function App() {
             <div className="page-heading studio-page-heading">
               <div>
                 <p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p>
-                <h1>Your audience. Your catalogue. Your listening revenue.</h1>
+                <h1>Your audience. Your catalogue. Fair, transparent pay.</h1>
                 <p>{accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Your real release pipeline, from upload through moderation to live catalogue.'}</p>
               </div>
               <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: 'smooth' })}>
@@ -1763,7 +1785,18 @@ function App() {
             <div id="creator-pipeline">
               {creatorOnly ? <CreatorAudioPipeline releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} /> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
             </div>
-            <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS</span><h2>Verified listening allocation</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Net subscription revenue</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Creator pool</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Eligible verified listening</strong></div></div><p className="panel-note">Commercial outputs remain empty until real billing records and payout rules are connected.</p></article>
+            {creatorOnly && <CreatorCompensationCard notify={notify} />}
+            {creatorOnly && <CollaborationHub role="creator" notify={notify} />}
+            <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Verified listening remains available as analytics and discovery data. It does not make one Creator’s standard base rate larger than another’s.</p></article>
+          </section>
+        )}
+
+        {view === 'library' && (effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && (
+          <section className="page-wrap">
+            <ListenerLibrary
+              onPlayRelease={(release)=>{const track=releaseToTrack(release); setTracks((items)=>items.some((item)=>item.id===track.id)?items:[...items,track]); setPlaying(track.id);}}
+              notify={notify}
+            />
           </section>
         )}
 
@@ -1800,6 +1833,7 @@ function App() {
             </div>
             <div className="profile-public-preview panel">{profile.avatarUrl && <span className="profile-preview-avatar"><img className="avatar-approved-image" src={profile.avatarUrl} alt="" /></span>}<div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p>{profile.welcomeMessage && <p className="profile-welcome-preview">{profile.welcomeMessage}</p>}<div className="profile-preview-chips">{[...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,6).map((item:string)=><span key={item}>{item}</span>)}</div></div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
             <article className="panel taste-panel"><div><span className="mini-label">TASTE ENGINE</span><h2>What Nightjar is learning</h2><p>Declared taste is kept separate from identity. Listening signals can refine recommendations without trying to infer who you are.</p></div><div className="taste-vector">{tasteVector.length===0 ? <span className="taste-empty">Your taste graph will grow as you save, finish, replay and explore.</span> : tasteVector.slice(0,10).map((item:any)=><div className="taste-chip" key={item.label}><strong>{item.label}</strong><span>{item.weight}</span></div>)}</div></article>
+            <NotificationPreferences notify={notify} />
           </section>
         )}
 
@@ -1824,6 +1858,8 @@ function App() {
             <div className="page-heading"><div><p className="eyebrow"><FileText size={14}/> WRITER STUDIO</p><h1>Write it. Protect it.</h1><p>Live manuscripts, version history and editorial handoff.</p></div></div>
             <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a manuscript</h2><p>Every new script begins private.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title"/><button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button></div></div>
             <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div><textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder="Begin writing…"/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
+            {writerSelected && <WriterRightsPanel script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>items.map((item:any)=>item.id===next.id?next:item));}} notify={notify} />}
+            <CollaborationHub role="writer" notify={notify} />
           </section>
         )}
 
@@ -1854,6 +1890,7 @@ function App() {
                 </div>
               </article>
             )}
+            <CollaborationHub role="editor" notify={notify} />
             <div className="protection-banner"><FileCheck2 size={19} /><div><strong>EDITOR BOUNDARY</strong><span>Editorial decisions are recorded against the assigned manuscript. Administrator authority remains separate.</span></div></div>
           </section>
         )}
