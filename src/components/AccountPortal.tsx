@@ -53,6 +53,11 @@ export default function AccountPortal() {
   };
 
   useEffect(() => {
+    const entry = new URLSearchParams(window.location.search).get('entry');
+    if (entry === 'signin') {
+      window.history.replaceState({}, '', '/account');
+    }
+
     const refreshBranding = () => {
       void nightjarMedia.getBranding().then((data) => {
         const nextLogo = data.logoUrl ?? null;
@@ -73,13 +78,16 @@ export default function AccountPortal() {
     const onStorage = (event: StorageEvent) => {
       if (event.key === 'nightjar.branding.version') refreshBranding();
     };
+    const onBrandingChanged = () => refreshBranding();
     window.addEventListener('focus', onFocus);
     window.addEventListener('storage', onStorage);
+    window.addEventListener('nightjar:branding-changed', onBrandingChanged);
 
     return () => {
       unsubscribe();
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('storage', onStorage);
+      window.removeEventListener('nightjar:branding-changed', onBrandingChanged);
     };
   }, []);
 
