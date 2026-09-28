@@ -2420,3 +2420,30 @@ button:focus-visible {
 @media (max-width: 620px) {
   .public-credit-summary, .public-credit-list article { align-items: flex-start; flex-direction: column; }
 }
+
+
+.track-production-note {
+  margin: 7px 0 !important;
+  padding: 8px 9px;
+  border-left: 2px solid rgba(191,145,177,.32);
+  color: var(--muted-2) !important;
+  background: rgba(255,255,255,.012);
+  font-size: 8px !important;
+  line-height: 1.55 !important;
+}
+.track-production-note strong { color: #d9ccd5; }
+
+.moderation-credit-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+.moderation-credit-list span {
+  padding: 5px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: #d9cdd6;
+  font-size: 8px;
+}
+.moderation-original-check { margin-top: 12px; }
