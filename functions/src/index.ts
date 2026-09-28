@@ -3577,13 +3577,13 @@ const listenerHistoryFor = async (uid: string) => {
   const historyClearedAt = toIso(accountSnapshot.data()?.historyClearedAt);
   const latest = new Map<string, any>();
 
-  const ordered = eventsSnapshot.docs
-    .map((doc) => {
+  const ordered: Array<Record<string, any>> = eventsSnapshot.docs
+    .map((doc): Record<string, any> => {
       const data = doc.data() as Record<string, any>;
       return { ...data, eventId: doc.id, createdAtIso: toIso(data.createdAt) };
     })
-    .filter((event: any) => !historyClearedAt || !event.createdAtIso || String(event.createdAtIso) > historyClearedAt)
-    .sort((a: any, b: any) => String(b.createdAtIso ?? '').localeCompare(String(a.createdAtIso ?? '')));
+    .filter((event) => !historyClearedAt || !event.createdAtIso || String(event.createdAtIso) > historyClearedAt)
+    .sort((a, b) => String(b.createdAtIso ?? '').localeCompare(String(a.createdAtIso ?? '')));
 
   for (const event of ordered) {
     const releaseId = cleanText(event.releaseId, 160);
