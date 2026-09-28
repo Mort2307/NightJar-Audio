@@ -62,7 +62,7 @@ import CreatorCompensationCard from './components/CreatorCompensationCard';
 import TransparencyPanel from './components/TransparencyPanel';
 import ScriptMarketplace from './components/ScriptMarketplace';
 import ReleaseReviews from './components/ReleaseReviews';
-import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications } from './demo/nightjarDemo';
+import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData } from './demo/nightjarDemo';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -1313,6 +1313,10 @@ function App() {
 
   const uploadLogo = async (file: File) => {
     if (!canAdmin) return;
+    if (demoMode) {
+      notify('Demo data is isolated. Branding uploads are disabled until Demo Mode is turned off.');
+      return;
+    }
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       notify('Use PNG, JPG or WebP for the Nightjar logo.');
       return;
@@ -1336,6 +1340,10 @@ function App() {
 
   const removeLogo = async () => {
     if (!canAdmin) return;
+    if (demoMode) {
+      notify('Demo data is isolated. Live branding was not changed.');
+      return;
+    }
     try {
       await nightjarMedia.removeBrandLogo();
       setLogoUrl(null);
@@ -1387,8 +1395,11 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const data = await nightjarMedia.listPending();
-      setImageModeration(data.assets ?? []);
+      if (demoMode) setImageModeration(structuredClone(demoAdminData.imageModeration));
+      else {
+        const data = await nightjarMedia.listPending();
+        setImageModeration(data.assets ?? []);
+      }
     } catch { notify('Pending image moderation could not be loaded.'); }
     finally { setAdminPanelLoading(false); }
   };
@@ -1401,6 +1412,11 @@ function App() {
     }
     const note = decision === 'rejected' ? (window.prompt('Reason for rejecting this image (optional)') ?? '') : '';
     try {
+      if (demoMode) {
+        setImageModeration((items:any[]) => items.filter((item:any) => item.id !== asset.id));
+        notify(decision === 'approved' ? 'Demo image approved locally.' : 'Demo image rejected locally.');
+        return;
+      }
       await nightjarMedia.moderate(asset.id, decision, note, decision === 'approved');
       await loadPendingImages();
       await loadBranding();
@@ -1413,10 +1429,17 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const data = await nightjarCommercial.overview();
-      setCommercialOverview(data);
-      setCommercialSettings(data.settings);
-      setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: data.subscriptions }));
+      if (demoMode) {
+        const data:any = structuredClone(demoAdminData.commercial);
+        setCommercialOverview(data);
+        setCommercialSettings(data.settings);
+        setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: data.subscriptions }));
+      } else {
+        const data = await nightjarCommercial.overview();
+        setCommercialOverview(data);
+        setCommercialSettings(data.settings);
+        setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: data.subscriptions }));
+      }
     } catch { notify('Commercial controls could not be loaded.'); }
     finally { setAdminPanelLoading(false); }
   };
@@ -1425,6 +1448,10 @@ function App() {
     if (!canAdmin) return;
     setCommercialSaving(true);
     try {
+      if (demoMode) {
+        notify('Demo commercial assumptions saved locally for this session only.');
+        return;
+      }
       const data = await nightjarCommercial.save(commercialSettings);
       setCommercialSettings(data.settings);
       await loadCommercialControls();
