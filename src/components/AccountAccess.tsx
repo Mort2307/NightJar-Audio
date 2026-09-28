@@ -114,7 +114,8 @@ export default function AccountAccess({
       if (mode === 'signin') {
         const next = await nightjarAuth.signIn(email, password);
         onAuthenticated(next);
-        setMode(next.emailVerified ? 'security' : 'verify');
+        setMode(next.emailVerified ? 'signin' : 'verify');
+        if (next.emailVerified) setMessage('Signed in. Opening Nightjar…');
         return;
       }
       if (mode === 'reset') {
@@ -135,7 +136,7 @@ export default function AccountAccess({
       <div className="account-access-actions">
         <button className="primary-button" disabled={busy} onClick={() => void run(async () => {
           const next = await nightjarAuth.reloadIdentity();
-          if (next?.emailVerified) { onAuthenticated(next); setMode('security'); setMessage('Email verified.'); }
+          if (next?.emailVerified) { onAuthenticated(next); setMode('signin'); setMessage('Email verified. Opening Nightjar…'); }
           else setMessage('We have not received verification yet. Open the link in your email, then check again.');
         })}>I've verified my email</button>
         <button className="secondary-button" disabled={busy} onClick={() => void run(async () => {
