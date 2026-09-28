@@ -3139,3 +3139,448 @@ const normaliseScriptMarketplace = (value: unknown) => {
     editorWanted: input.editorWanted === true,
   };
 };
+
+
+type CollaborationStatus =
+  | 'sent'
+  | 'interested'
+  | 'discussing'
+  | 'accepted'
+  | 'declined'
+  | 'withdrawn'
+  | 'in_production'
+  | 'completed';
+
+const collaborationPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  scriptId: data.scriptId ?? null,
+  scriptTitle: data.scriptTitle ?? 'Untitled manuscript',
+  writerUserId: data.writerUserId ?? null,
+  writerName: data.writerName ?? 'Nightjar writer',
+  recipientUserId: data.recipientUserId ?? null,
+  recipientName: data.recipientName ?? 'Nightjar collaborator',
+  recipientRole: data.recipientRole ?? null,
+  message: data.message ?? '',
+  paymentProposal: data.paymentProposal ?? '',
+  licenceSummary: data.licenceSummary ?? '',
+  status: data.status ?? 'sent',
+  responseNote: data.responseNote ?? '',
+  createdAt: toIso(data.createdAt),
+  updatedAt: toIso(data.updatedAt),
+  respondedAt: toIso(data.respondedAt),
+});
+
+export const updateScriptRightsAndListing = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const ref = scriptRef(scriptId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+  if (String(data.status ?? '') === 'Published') {
+    throw new HttpsError('failed-precondition', 'Published manuscript rights cannot be changed without a new agreement.');
+  }
+
+  const rights = normaliseScriptRights(input.rights);
+  const marketplace = normaliseScriptMarketplace(input.marketplace);
+  await ref.set({
+    rights,
+    marketplace,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const saved = await ref.get();
+  return { script: scriptPayload(saved.data() ?? {}, scriptId, true) };
+});
+
+export const listScriptMarketplace = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('scripts').limit(1000).get();
+  const scripts = (await Promise.all(snapshot.docs
+    .filter((doc) => {
+      const listing = normaliseScriptMarketplace(doc.data().marketplace);
+      return listing.visibility === 'marketplace' && ['Approved','Published'].includes(String(doc.data().status ?? ''));
+    })
+    .map(async (doc) => {
+      const data = doc.data();
+      const writer = await accountPresentation(String(data.writerUserId ?? ''));
+      return {
+        id: doc.id,
+        title: data.title ?? 'Untitled manuscript',
+        writerUserId: data.writerUserId ?? null,
+        writerName: writer.displayName,
+        writerHandle: writer.handle,
+        rights: normaliseScriptRights(data.rights),
+        marketplace: normaliseScriptMarketplace(data.marketplace),
+        updatedAt: toIso(data.updatedAt),
+      };
+    })));
+  return { scripts };
+});
+
+export const collaborationDirectory = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('accounts').limit(1000).get();
+  const allowedRoles = new Set(['creator','writer','editor']);
+  const people = (await Promise.all(snapshot.docs
+    .filter((doc) => doc.id !== identity.uid && doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
+    .map(async (doc) => {
+      const profile = await profileRef(doc.id).get();
+      const data = profile.data();
+      if (!data || data.publicProfile === false) return null;
+      return {
+        userId: doc.id,
+        role: doc.data().role,
+        name: data.displayName ?? 'Nightjar member',
+        handle: data.handle ?? null,
+        headline: data.headline ?? null,
+        avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+      };
+    }))).filter(Boolean);
+  return { people };
+});
+
+export const sendCollaborationProposal = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const recipientUserId = cleanText(input.recipientUserId, 160);
+  if (!scriptId || !recipientUserId || recipientUserId === identity.uid) {
+    throw new HttpsError('invalid-argument', 'Choose a manuscript and another Nightjar collaborator.');
+  }
+
+  const [script, recipient, recipientProfile, writerProfile] = await Promise.all([
+    scriptRef(scriptId).get(),
+    accountRef(recipientUserId).get(),
+    profileRef(recipientUserId).get(),
+    profileRef(identity.uid).get(),
+  ]);
+  const scriptData = script.data();
+  const recipientData = recipient.data();
+  if (!scriptData || scriptData.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+  if (!recipient.exists || recipientData?.status !== 'active' || !['creator','editor'].includes(String(recipientData?.role ?? ''))) {
+    throw new HttpsError('not-found', 'Eligible collaborator not found.');
+  }
+
+  const ref = db.collection('collaborationProposals').doc();
+  const record = {
+    scriptId,
+    scriptTitle: scriptData.title ?? 'Untitled manuscript',
+    writerUserId: identity.uid,
+    writerName: writerProfile.data()?.displayName ?? identity.email.split('@')[0],
+    recipientUserId,
+    recipientName: recipientProfile.data()?.displayName ?? 'Nightjar collaborator',
+    recipientRole: recipientData?.role ?? null,
+    message: cleanText(input.message, 2400),
+    paymentProposal: cleanText(input.paymentProposal, 800),
+    licenceSummary: cleanText(input.licenceSummary, 1200),
+    status: 'sent' as CollaborationStatus,
+    responseNote: '',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+
+  await createNotification(recipientUserId, {
+    type: 'collaboration',
+    subtype: 'proposal',
+    title: 'New collaboration proposal',
+    message: `${record.writerName} sent ${record.scriptTitle} for your consideration.`,
+    collaborationId: ref.id,
+    scriptId,
+  });
+
+  const saved = await ref.get();
+  return { proposal: collaborationPayload(saved.data() ?? record, ref.id) };
+});
+
+export const listMyCollaborations = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await db.collection('collaborationProposals').limit(1000).get();
+  const proposals = snapshot.docs
+    .filter((doc) => doc.data().writerUserId === identity.uid || doc.data().recipientUserId === identity.uid)
+    .map((doc) => collaborationPayload(doc.data(), doc.id))
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  return { proposals };
+});
+
+export const respondCollaborationProposal = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const collaborationId = cleanText(input.collaborationId, 160);
+  const status = cleanText(input.status, 40) as CollaborationStatus;
+  if (!['interested','discussing','accepted','declined'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid collaboration response.');
+  }
+
+  const ref = db.collection('collaborationProposals').doc(collaborationId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || data.recipientUserId !== identity.uid) throw new HttpsError('not-found', 'Collaboration proposal not found.');
+  if (['declined','withdrawn','completed'].includes(String(data.status ?? ''))) {
+    throw new HttpsError('failed-precondition', 'This collaboration is already closed.');
+  }
+
+  const responseNote = cleanText(input.responseNote, 1600);
+  await ref.set({
+    status,
+    responseNote,
+    respondedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  if (data.writerUserId) {
+    await createNotification(String(data.writerUserId), {
+      type: 'collaboration',
+      subtype: 'response',
+      title: status === 'declined' ? 'Collaboration proposal declined' : 'Collaboration proposal updated',
+      message: `${data.recipientName ?? 'A collaborator'} marked ${data.scriptTitle ?? 'your proposal'} as ${status.replace('_', ' ')}.`,
+      collaborationId,
+      scriptId: data.scriptId ?? null,
+    });
+  }
+
+  const saved = await ref.get();
+  return { proposal: collaborationPayload(saved.data() ?? {}, collaborationId) };
+});
+
+export const updateCollaborationStatus = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const collaborationId = cleanText(input.collaborationId, 160);
+  const status = cleanText(input.status, 40) as CollaborationStatus;
+  if (!['discussing','accepted','withdrawn','in_production','completed'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid collaboration state.');
+  }
+
+  const ref = db.collection('collaborationProposals').doc(collaborationId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || (data.writerUserId !== identity.uid && data.recipientUserId !== identity.uid)) {
+    throw new HttpsError('not-found', 'Collaboration proposal not found.');
+  }
+  if (status === 'withdrawn' && data.writerUserId !== identity.uid) {
+    throw new HttpsError('permission-denied', 'Only the writer can withdraw this proposal.');
+  }
+
+  await ref.set({
+    status,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const otherUserId = data.writerUserId === identity.uid ? data.recipientUserId : data.writerUserId;
+  if (otherUserId) {
+    await createNotification(String(otherUserId), {
+      type: 'collaboration',
+      subtype: 'status',
+      title: 'Collaboration status changed',
+      message: `${data.scriptTitle ?? 'A collaboration'} is now ${status.replace('_', ' ')}.`,
+      collaborationId,
+      scriptId: data.scriptId ?? null,
+    });
+  }
+
+  const saved = await ref.get();
+  return { proposal: collaborationPayload(saved.data() ?? {}, collaborationId) };
+});
+
+const calculateCreatorRate = (settings: CommercialSettings, activePaidSubscribers: number) => {
+  let rate = 0;
+  for (const band of settings.creatorRateBands) {
+    if (activePaidSubscribers >= band.minPaidSubscribers) rate = band.monthlyRatePence;
+  }
+  if (settings.creatorMonthlyCapPence != null) rate = Math.min(rate, settings.creatorMonthlyCapPence);
+  return Math.max(0, Math.round(rate));
+};
+
+export const creatorCompensationStatus = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator','admin']);
+  const [settings, subscriptions] = await Promise.all([
+    readCommercialSettings(),
+    db.collection('subscriptions').where('status', '==', 'active').limit(5000).get(),
+  ]);
+  const activePaidSubscribers = subscriptions.docs.filter((doc) => typeof doc.data().confirmedMonthlyAmountPence === 'number' && Number(doc.data().confirmedMonthlyAmountPence) > 0).length;
+  return {
+    model: settings.compensationModel,
+    activePaidSubscribers,
+    standardMonthlyRatePence: calculateCreatorRate(settings, activePaidSubscribers),
+    monthlyCapPence: settings.creatorMonthlyCapPence,
+    rateBands: settings.creatorRateBands,
+    eligibilityDefinition: settings.creatorEligibilityDefinition,
+    popularityAffectsBaseRate: false,
+    verifiedListeningIsAnalyticsOnly: true,
+    payoutCadence: settings.payoutCadence,
+    viewerRole: identity.role,
+  };
+});
+
+export const getNotificationPreferences = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await accountRef(identity.uid).get();
+  const stored = snapshot.data()?.notificationPreferences ?? {};
+  return {
+    preferences: {
+      displayMode: ['full','discreet','minimal'].includes(String(stored.displayMode ?? '')) ? stored.displayMode : 'discreet',
+      newReleases: stored.newReleases !== false,
+      followedProfiles: stored.followedProfiles !== false,
+      collaborations: stored.collaborations !== false,
+      payments: stored.payments !== false,
+      comments: stored.comments !== false,
+      announcements: stored.announcements !== false,
+    },
+  };
+});
+
+export const saveNotificationPreferences = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const displayMode = cleanText(input.displayMode, 20);
+  const preferences = {
+    displayMode: ['full','discreet','minimal'].includes(displayMode) ? displayMode : 'discreet',
+    newReleases: input.newReleases !== false,
+    followedProfiles: input.followedProfiles !== false,
+    collaborations: input.collaborations !== false,
+    payments: input.payments !== false,
+    comments: input.comments !== false,
+    announcements: input.announcements !== false,
+  };
+  await accountRef(identity.uid).set({
+    notificationPreferences: preferences,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { preferences };
+});
+
+const listenerHistoryFor = async (uid: string) => {
+  const [eventsSnapshot, favouritesSnapshot, hiddenSnapshot, releasesSnapshot] = await Promise.all([
+    db.collection('listeningEvents').where('userId', '==', uid).limit(3000).get(),
+    accountRef(uid).collection('favourites').limit(500).get(),
+    accountRef(uid).collection('hiddenContinue').limit(500).get(),
+    db.collection('releases').where('status', '==', 'released').limit(500).get(),
+  ]);
+  const releases = new Map(releasesSnapshot.docs.map((doc) => [doc.id, releasePayload(doc.data(), doc.id)]));
+  const favouriteIds = new Set(favouritesSnapshot.docs.map((doc) => doc.id));
+  const hiddenIds = new Set(hiddenSnapshot.docs.map((doc) => doc.id));
+  const latest = new Map<string, any>();
+
+  const ordered = eventsSnapshot.docs
+    .map((doc) => ({ ...doc.data(), eventId: doc.id, createdAtIso: toIso(doc.data().createdAt) }))
+    .sort((a: any, b: any) => String(b.createdAtIso ?? '').localeCompare(String(a.createdAtIso ?? '')));
+
+  for (const event of ordered) {
+    const releaseId = cleanText(event.releaseId, 160);
+    if (releaseId && !latest.has(releaseId)) latest.set(releaseId, event);
+  }
+
+  const history = Array.from(latest.entries()).map(([releaseId, event]) => {
+    const release = releases.get(releaseId);
+    if (!release) return null;
+    const positionSeconds = Math.max(0, Number(event.positionSeconds ?? 0));
+    const durationSeconds = Math.max(0, Number(event.durationSeconds ?? 0));
+    const completed = event.eventType === 'complete' || event.completed === true;
+    return {
+      ...release,
+      lastListenedAt: event.createdAtIso ?? null,
+      positionSeconds,
+      durationSeconds,
+      completed,
+      favourite: favouriteIds.has(releaseId),
+    };
+  }).filter(Boolean);
+
+  return {
+    history,
+    continueListening: history.filter((item: any) => !item.completed && item.positionSeconds > 0 && !hiddenIds.has(String(item.id))),
+    favourites: history.filter((item: any) => item.favourite),
+  };
+};
+
+export const listenerLibrary = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const library = await listenerHistoryFor(identity.uid);
+  const playlistsSnapshot = await accountRef(identity.uid).collection('playlists').limit(100).get();
+  const playlists = playlistsSnapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      title: doc.data().title ?? 'Untitled playlist',
+      releaseIds: Array.isArray(doc.data().releaseIds) ? doc.data().releaseIds : [],
+      createdAt: toIso(doc.data().createdAt),
+      updatedAt: toIso(doc.data().updatedAt),
+    }))
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  return { ...library, playlists };
+});
+
+export const dismissContinueListening = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  await accountRef(identity.uid).collection('hiddenContinue').doc(releaseId).set({
+    hiddenAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { releaseId, hidden: true };
+});
+
+export const savePlaylist = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const playlistId = cleanText(input.playlistId, 160);
+  const title = cleanText(input.title, 100) || 'Untitled playlist';
+  const releaseIds = cleanStringList(input.releaseIds, 200);
+  const ref = playlistId
+    ? accountRef(identity.uid).collection('playlists').doc(playlistId)
+    : accountRef(identity.uid).collection('playlists').doc();
+
+  const current = await ref.get();
+  await ref.set({
+    title,
+    releaseIds,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(current.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge: true });
+
+  return { playlist: { id: ref.id, title, releaseIds } };
+});
+
+export const deletePlaylist = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const playlistId = cleanText((request.data as { playlistId?: unknown } | undefined)?.playlistId, 160);
+  if (!playlistId) throw new HttpsError('invalid-argument', 'Playlist is required.');
+  await accountRef(identity.uid).collection('playlists').doc(playlistId).delete();
+  return { deleted: true, playlistId };
+});
+
+export const transparencySnapshot = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const [settings, accounts] = await Promise.all([
+    readCommercialSettings(),
+    db.collection('accounts').limit(2000).get(),
+  ]);
+  const counts = { creators: 0, writers: 0, editors: 0 };
+  for (const doc of accounts.docs) {
+    if (doc.data().status !== 'active') continue;
+    if (doc.data().role === 'creator') counts.creators += 1;
+    if (doc.data().role === 'writer') counts.writers += 1;
+    if (doc.data().role === 'editor') counts.editors += 1;
+  }
+  return {
+    planningMonthlyPricePence: settings.planningMonthlyPricePence,
+    compensationModel: settings.compensationModel,
+    creatorMonthlyCapPence: settings.creatorMonthlyCapPence,
+    popularityAffectsBaseRate: false,
+    tipsEnabled: settings.tipsEnabled,
+    individualPurchasesEnabled: settings.individualPurchasesEnabled,
+    activeCreativeAccounts: counts,
+    principles: [
+      'Creators are paid against a published capped standard rate rather than popularity.',
+      'Verified listening remains an analytics and discovery signal, not the standard-rate formula.',
+      'Writers retain copyright unless an explicit agreement says otherwise.',
+      'Nightjar does not permit AI training on protected manuscripts by default.',
+    ],
+  };
+});
