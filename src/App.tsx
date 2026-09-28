@@ -1123,8 +1123,11 @@ function App() {
     if (!canAdmin) return;
     setSecurityAlertsLoading(true);
     try {
-      const data = await nightjarProtection.alerts();
-      setSecurityAlerts(data.alerts ?? []);
+      if (demoMode) setSecurityAlerts(structuredClone(demoAdminData.securityAlerts));
+      else {
+        const data = await nightjarProtection.alerts();
+        setSecurityAlerts(data.alerts ?? []);
+      }
     } catch { notify('Security alerts could not be loaded.'); }
     finally { setSecurityAlertsLoading(false); }
   };
@@ -1133,8 +1136,11 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const data = await nightjarProtection.adminReports();
-      setAdminReports(data.reports ?? []);
+      if (demoMode) setAdminReports(structuredClone(demoAdminData.reports));
+      else {
+        const data = await nightjarProtection.adminReports();
+        setAdminReports(data.reports ?? []);
+      }
     } catch { notify('Reports and feedback could not be loaded.'); }
     finally { setAdminPanelLoading(false); }
   };
@@ -1143,8 +1149,11 @@ function App() {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
     try {
-      const data = await nightjarReviews.adminQueue();
-      setAdminReviewQueue(data.reviews ?? []);
+      if (demoMode) setAdminReviewQueue(structuredClone(demoAdminData.reviews));
+      else {
+        const data = await nightjarReviews.adminQueue();
+        setAdminReviewQueue(data.reviews ?? []);
+      }
     } catch {
       notify('Review moderation queue could not be loaded.');
     } finally {
@@ -1155,6 +1164,11 @@ function App() {
   const moderateReleaseReview = async (review: any, decision: 'approved' | 'rejected') => {
     if (!canAdmin || !review?.id) return;
     try {
+      if (demoMode) {
+        setAdminReviewQueue((items:any[]) => items.filter((item:any) => item.id !== review.id));
+        notify(decision === 'approved' ? 'Demo review approved locally.' : 'Demo review rejected locally.');
+        return;
+      }
       await nightjarReviews.moderate(review.id, decision);
       await loadAdminReviews();
       notify(decision === 'approved' ? 'Review approved.' : 'Review rejected.');
@@ -1166,6 +1180,11 @@ function App() {
   const suspendFromSecurityAlert = async (alert: any) => {
     if (!canAdmin || !alert?.id) return;
     try {
+      if (demoMode) {
+        setSecurityAlerts((items:any[]) => items.map((item:any) => item.id === alert.id ? { ...item, status:'actioned' } : item));
+        notify('Demo account suspended locally; no live account was changed.');
+        return;
+      }
       await nightjarProtection.suspend(alert.id);
       await loadSecurityAlerts();
       await loadAdminOverview();
@@ -1176,6 +1195,11 @@ function App() {
   const revokeSessionsFromSecurityAlert = async (alert: any) => {
     if (!canAdmin || !alert?.id) return;
     try {
+      if (demoMode) {
+        setSecurityAlerts((items:any[]) => items.map((item:any) => item.id === alert.id ? { ...item, sessionsRevoked:true } : item));
+        notify('Demo reader sessions revoked locally.');
+        return;
+      }
       await nightjarProtection.revokeSessions(alert.id);
       await loadSecurityAlerts();
       notify('Protected-reader sessions revoked. The account itself remains active pending review.');
@@ -1186,6 +1210,11 @@ function App() {
     if (!canAdmin || !alert?.id) return;
     const note = window.prompt('Optional review note — why is this activity considered benign?') ?? '';
     try {
+      if (demoMode) {
+        setSecurityAlerts((items:any[]) => items.map((item:any) => item.id === alert.id ? { ...item, status:'closed', reviewNote:note } : item));
+        notify('Demo security alert closed as benign locally.');
+        return;
+      }
       await nightjarProtection.closeBenign(alert.id, note);
       await loadSecurityAlerts();
       notify('Security alert closed as benign. Evidence remains retained.');
