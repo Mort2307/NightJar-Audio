@@ -3,6 +3,7 @@ import { ArrowRight, Check, FileText, Handshake, MessageCircle, X } from 'lucide
 import { nightjarCollaboration, type CollaborationStatus } from '../platform/firebase-collaboration';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import { demoCollaborations, demoDirectory, demoWriterScripts } from '../demo/nightjarDemo';
+import { readDemo, writeDemo } from '../demo/demoSession';
 
 type Props = {
   role: 'writer' | 'creator' | 'editor';
@@ -29,10 +30,10 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
     setLoading(true);
     try {
       if (demoMode) {
-        setProposals(structuredClone(demoCollaborations));
+        setProposals(readDemo('collaborations', demoCollaborations));
         setDirectory(structuredClone(demoDirectory));
         if (role === 'writer') {
-          const nextScripts = structuredClone(demoWriterScripts);
+          const nextScripts = readDemo('writerScripts', demoWriterScripts);
           setScripts(nextScripts);
           setScriptId((value) => value || nextScripts[0]?.id || '');
         }
@@ -56,6 +57,7 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
   };
 
   useEffect(() => { void load(); }, [role, demoMode]);
+  useEffect(() => { if (simulationMode && !loading) writeDemo('collaborations', proposals); }, [proposals, loading, simulationMode]);
 
   const relevant = useMemo(() => proposals.filter((proposal) => role === 'writer'
     ? Boolean(proposal.writerUserId)
