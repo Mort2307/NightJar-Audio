@@ -6,9 +6,7 @@ const money = (pence: number | null | undefined) => pence == null
   ? 'Not set'
   : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(pence / 100);
 
-type Props = { notify: (message: string) => void };
-
-export default function TransparencyPanel({ notify }: Props) {
+export default function TransparencyPanel() {
   const [data, setData] = useState<any | null>(null);
 
   useEffect(() => {
