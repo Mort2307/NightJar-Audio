@@ -3,6 +3,7 @@ import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarMedia } from '../platform/firebase-media';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
+import { demoDirectory } from '../demo/nightjarDemo';
 
 type Release = {
   id: string;
@@ -37,6 +38,7 @@ type Props = {
   canPublish: boolean;
   onRefresh: () => Promise<void>;
   notify: (message: string) => void;
+  simulationMode?: boolean;
 };
 
 const readDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
@@ -62,7 +64,7 @@ const readAudioDurationMinutes = (file: File) => new Promise<number | null>((res
   audio.src = objectUrl;
 });
 
-export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify }: Props) {
+export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify, simulationMode = false }: Props) {
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
   const [audioBusy, setAudioBusy] = useState(false);
@@ -72,10 +74,14 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const current = selectedRelease ?? null;
 
   useEffect(() => {
+    if (simulationMode) {
+      setCreditDirectory(structuredClone(demoDirectory));
+      return;
+    }
     void nightjarCollaboration.directory()
       .then((data) => setCreditDirectory(data.people ?? []))
       .catch(() => setCreditDirectory([]));
-  }, []);
+  }, [simulationMode]);
   const statusLabel = current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
   const statusHint = current?.status === 'pending_review'
     ? 'Your submission is with Nightjar moderation.'
@@ -152,6 +158,25 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const createDraft = async () => {
     if (!draft.title.trim()) return notify('Give the release a title first.');
     try {
+      if (simulationMode) {
+        setSelectedRelease({
+          id: 'demo-release-draft-' + Date.now(),
+          title: draft.title,
+          description: draft.description,
+          category: draft.category,
+          genre: draft.genre,
+          mood: draft.mood,
+          tags: draft.tags.split(',').map((item) => item.trim()).filter(Boolean),
+          tropes: draft.tropes.split(',').map((item) => item.trim()).filter(Boolean),
+          contentRating: 'adult',
+          contributors: [],
+          status: 'draft',
+          audioAvailable: false,
+        });
+        setDraft({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
+        notify('Simulation: release draft created locally.');
+        return;
+      }
       const data = await nightjarCatalogue.create({
         title: draft.title,
         description: draft.description,
@@ -182,6 +207,17 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     if (kind === 'audio') setAudioBusy(true); else setArtBusy(true);
     try {
+      if (simulationMode) {
+        if (kind === 'audio') {
+          const durationMinutes = await readAudioDurationMinutes(file);
+          setSelectedRelease({ ...current, audioAvailable: true, ...(durationMinutes ? { durationMinutes } : {}) });
+          notify('Simulation: audio attached locally; nothing was uploaded.');
+        } else {
+          setSelectedRelease({ ...current, pendingArtworkAssetId: 'demo-art-' + Date.now(), pendingArtworkStatus: 'pending' });
+          notify('Simulation: artwork placed in a local pending-moderation state.');
+        }
+        return;
+      }
       if (kind === 'artwork') {
         const dataUrl = await readDataUrl(file);
         const image = await nightjarMedia.submitImage({
@@ -216,6 +252,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!current?.id) return;
     setArtBusy(true);
     try {
+      if (simulationMode) {
+        setSelectedRelease({ ...current, artworkAssetId: null, artworkUrl: null, artworkStatus: null, pendingArtworkAssetId: null, pendingArtworkStatus: null });
+        notify('Simulation: artwork removed locally.');
+        return;
+      }
       if (current.pendingArtworkAssetId) await nightjarMedia.removeOwnedImage(current.pendingArtworkAssetId);
       if (current.artworkAssetId) await nightjarMedia.removeOwnedImage(current.artworkAssetId);
       setSelectedRelease({
@@ -236,6 +277,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!current?.id) return;
     setAudioBusy(true);
     try {
+      if (simulationMode) {
+        setSelectedRelease({ ...current, audioAvailable: false, audioUrl: null, durationMinutes: 0 });
+        notify('Simulation: audio removed locally.');
+        return;
+      }
       await nightjarCatalogue.removeAudio(current.id);
       setSelectedRelease({ ...current, audioAvailable: false, audioUrl: null, durationMinutes: 0 });
       await onRefresh();
@@ -248,6 +294,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!current?.id || current.status === 'released') return;
     if (!window.confirm('Delete this release draft and its private audio?')) return;
     try {
+      if (simulationMode) {
+        setSelectedRelease(null);
+        notify('Simulation: release draft removed locally.');
+        return;
+      }
       await nightjarCatalogue.remove(current.id);
       setSelectedRelease(null);
       await onRefresh();
@@ -258,6 +309,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const saveMetadata = async () => {
     if (!current?.id) return;
     try {
+      if (simulationMode) {
+        notify('Simulation: release metadata saved locally.');
+        return;
+      }
       const data = await nightjarCatalogue.update(current.id, {
         ...current,
         tags: current.tags ?? [],
@@ -274,6 +329,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!complete) return notify('Add a title, description, category and audio before submitting.');
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator publishing stays locked until your account is approved.');
     try {
+      if (simulationMode) {
+        setSelectedRelease({ ...current, status: 'pending_review' });
+        notify('Simulation: release moved to pending moderation locally.');
+        return;
+      }
       await nightjarCatalogue.submit(current.id);
       await onRefresh();
       const refreshed = releases.find((item) => item.id === current.id);
