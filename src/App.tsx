@@ -2043,6 +2043,16 @@ function App() {
     setSimulationMode(true);
     setPreviewRole(next);
     setRolePicker(false);
+    setModerationOpen(false);
+    setAdminPanel(null);
+    setAdminPeopleRole(null);
+    setProtectedReaderOpen(false);
+    setProtectedReaderScript(null);
+    setPlaying(null);
+    setReviewTrack(null);
+    setCreatorProfileUserId(null);
+    setPublicProfileUserId(null);
+    setNotificationsOpen(false);
     if (next === 'creator') navigate('creator');
     else if (next === 'listener') navigate('discover');
     else if (next === 'writer') navigate('writer');
@@ -2648,7 +2658,7 @@ function App() {
       {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={demoMode} />}
       {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} demoMode={demoMode} />}
       {publicProfileUserId && <PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={() => setPublicProfileUserId(null)} notify={notify} demoMode={demoMode} />}
-      <ContentModeration open={moderationOpen} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} />
+      <ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} />
       {reviewTrack && <ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} />}
       {showOnboarding && user && role !== 'admin' && <NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} />}
       {toast && <div className="toast">{toast}</div>}
