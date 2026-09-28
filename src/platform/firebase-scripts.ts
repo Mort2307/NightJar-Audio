@@ -18,6 +18,8 @@ const protectedCatalogueCall = httpsCallable<void, { scripts: any[] }>(functions
 const openProtectedCall = httpsCallable<{ scriptId: string }, any>(functions, 'openProtectedScript');
 const permissionsCall = httpsCallable<{ scriptId: string }, { permissions: any[] }>(functions, 'listScriptPermissions');
 const setPermissionCall = httpsCallable<Record<string, unknown>, any>(functions, 'setScriptPermission');
+const rightsCall = httpsCallable<Record<string, unknown>, { script: any }>(functions, 'updateScriptRightsAndListing');
+const marketplaceCall = httpsCallable<void, { scripts: any[] }>(functions, 'listScriptMarketplace');
 
 export const nightjarScripts = {
   async writerScripts() {
@@ -78,5 +80,13 @@ export const nightjarScripts = {
 
   async setPermission(scriptId: string, input: Record<string, unknown>) {
     return (await setPermissionCall({ ...input, scriptId })).data;
+  },
+
+  async updateRights(scriptId: string, rights: Record<string, unknown>, marketplace: Record<string, unknown>) {
+    return (await rightsCall({ scriptId, rights, marketplace })).data;
+  },
+
+  async marketplace() {
+    return (await marketplaceCall()).data;
   },
 };
