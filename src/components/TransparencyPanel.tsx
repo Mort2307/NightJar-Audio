@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Scale, ShieldCheck, Users } from 'lucide-react';
 import { nightjarCommercial } from '../platform/firebase-commercial';
+import { demoTransparency } from '../demo/nightjarDemo';
 
 const money = (pence: number | null | undefined) => pence == null
   ? 'Not set'
   : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(pence / 100);
 
-export default function TransparencyPanel() {
+export default function TransparencyPanel({ demoMode = false }: { demoMode?: boolean }) {
   const [data, setData] = useState<any | null>(null);
 
   useEffect(() => {
+    if (demoMode) {
+      setData(demoTransparency);
+      return;
+    }
     void nightjarCommercial.transparency().then(setData).catch(() => {});
-  }, []);
+  }, [demoMode]);
 
   if (!data) return null;
 
