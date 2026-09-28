@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarMedia } from '../platform/firebase-media';
+import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
 
 type Release = {
@@ -66,8 +67,15 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
   const [audioBusy, setAudioBusy] = useState(false);
   const [artBusy, setArtBusy] = useState(false);
+  const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
 
   const current = selectedRelease ?? null;
+
+  useEffect(() => {
+    void nightjarCollaboration.directory()
+      .then((data) => setCreditDirectory(data.people ?? []))
+      .catch(() => setCreditDirectory([]));
+  }, []);
   const statusLabel = current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
   const statusHint = current?.status === 'pending_review'
     ? 'Your submission is with Nightjar moderation.'
@@ -312,6 +320,14 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               {(current.contributors ?? []).map((contributor, index) => <div className="release-credit-row" key={index}>
                 <select value={contributor.role} onChange={(event) => updateContributor(index, { role: event.target.value })}>
                   <option>Voice Actor</option><option>Writer</option><option>Audio Editor</option><option>Producer</option><option>Director</option><option>Sound Designer</option><option>Cover Artist</option><option>Composer</option><option>Other</option>
+                </select>
+                <select value={contributor.userId ?? ''} onChange={(event) => {
+                  const person = creditDirectory.find((item) => item.userId === event.target.value);
+                  if (person) updateContributor(index, { userId: person.userId, name: person.name, role: person.role === 'writer' ? 'Writer' : person.role === 'editor' ? 'Audio Editor' : contributor.role });
+                  else updateContributor(index, { userId: null });
+                }}>
+                  <option value="">Unlinked / external credit</option>
+                  {creditDirectory.map((person) => <option key={person.userId} value={person.userId}>{person.name} · {person.role === 'editor' ? 'Audio Editor' : person.role === 'writer' ? 'Writer' : 'Creator'}</option>)}
                 </select>
                 <input value={contributor.name} onChange={(event) => updateContributor(index, { name: event.target.value })} placeholder="Credited name"/>
                 <button className="ghost-button" type="button" onClick={() => removeContributor(index)}>Remove</button>
