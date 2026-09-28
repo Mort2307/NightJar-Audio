@@ -22,6 +22,12 @@ type Release = {
   pendingArtworkStatus?: 'pending' | 'rejected' | null;
   status?: string;
   moderationNote?: string | null;
+  contributors?: { userId?: string | null; name: string; role: string }[];
+  contentRating?: 'sfw' | 'suggestive' | 'adult' | 'explicit';
+  seriesTitle?: string | null;
+  episodeNumber?: number | null;
+  nightjarOriginal?: boolean;
+  productionNote?: string | null;
 };
 
 type Props = {
@@ -75,6 +81,23 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const setRelease = (patch: Partial<Release>) => setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
 
+  const updateContributor = (index: number, patch: Partial<{ name: string; role: string; userId?: string | null }>) => {
+    if (!current) return;
+    const contributors = [...(current.contributors ?? [])];
+    contributors[index] = { name: '', role: 'Voice Actor', ...(contributors[index] ?? {}), ...patch };
+    setRelease({ contributors });
+  };
+
+  const addContributor = () => {
+    if (!current || (current.contributors?.length ?? 0) >= 24) return;
+    setRelease({ contributors: [...(current.contributors ?? []), { name: '', role: 'Voice Actor', userId: null }] });
+  };
+
+  const removeContributor = (index: number) => {
+    if (!current) return;
+    setRelease({ contributors: (current.contributors ?? []).filter((_, itemIndex) => itemIndex !== index) });
+  };
+
   useEffect(() => {
     if (!current?.id || !current.pendingArtworkAssetId || current.pendingArtworkStatus !== 'pending') return;
     let cancelled = false;
@@ -124,6 +147,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         mood: draft.mood,
         tags: draft.tags.split(',').map((item) => item.trim()).filter(Boolean),
         tropes: draft.tropes.split(',').map((item) => item.trim()).filter(Boolean),
+        contentRating: 'adult',
+        contributors: [],
       });
       const next = data.release as Release | undefined;
       setDraft({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
@@ -275,7 +300,25 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <label className="pipeline-span-two">Description<textarea value={current.description ?? ''} onChange={(event) => setRelease({ description: event.target.value })} placeholder="What should a listener know before pressing play?" /></label>
             <label>Tags<input value={(current.tags ?? []).join(', ')} onChange={(event) => setRelease({ tags: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Whisper, cinematic, character-led…" /></label>
             <label>Tropes<input value={(current.tropes ?? []).join(', ')} onChange={(event) => setRelease({ tropes: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Slow burn, suspense…" /></label>
+            <label>Content level<select value={current.contentRating ?? 'adult'} onChange={(event) => setRelease({ contentRating: event.target.value as Release['contentRating'] })}><option value="sfw">SFW</option><option value="suggestive">Suggestive</option><option value="adult">Adult</option><option value="explicit">Explicit</option></select></label>
+            <label>Series title<input value={current.seriesTitle ?? ''} onChange={(event) => setRelease({ seriesTitle: event.target.value || null })} placeholder="Optional series"/></label>
+            <label>Episode number<input type="number" min="0" step="1" value={current.episodeNumber ?? ''} onChange={(event) => setRelease({ episodeNumber: event.target.value === '' ? null : Number(event.target.value) })} placeholder="Optional"/></label>
+            <label className="pipeline-span-two">Production / behind-the-scenes note<textarea value={current.productionNote ?? ''} onChange={(event) => setRelease({ productionNote: event.target.value || null })} placeholder="Optional context about the people or process behind this release."/></label>
           </div>
+
+          <section className="release-credits-editor">
+            <div className="release-credits-head"><div><span className="mini-label">PRODUCTION CREDITS</span><strong>Credit everyone involved.</strong><p>Voice Actors, Writers, Audio Editors and other collaborators stay attached to the release.</p></div><button className="secondary-button" type="button" onClick={addContributor}>Add credit</button></div>
+            <div className="release-credit-list">
+              {(current.contributors ?? []).map((contributor, index) => <div className="release-credit-row" key={index}>
+                <select value={contributor.role} onChange={(event) => updateContributor(index, { role: event.target.value })}>
+                  <option>Voice Actor</option><option>Writer</option><option>Audio Editor</option><option>Producer</option><option>Director</option><option>Sound Designer</option><option>Cover Artist</option><option>Composer</option><option>Other</option>
+                </select>
+                <input value={contributor.name} onChange={(event) => updateContributor(index, { name: event.target.value })} placeholder="Credited name"/>
+                <button className="ghost-button" type="button" onClick={() => removeContributor(index)}>Remove</button>
+              </div>)}
+              {!(current.contributors ?? []).length && <div className="people-empty"><strong>No additional credits yet.</strong><span>The primary Creator remains credited automatically. Add every other contributor here.</span></div>}
+            </div>
+          </section>
 
           <div className="pipeline-assets">
             <div className="asset-drop asset-drop-moderated"><Music2 size={18} /><strong>{audioBusy ? 'Working…' : current.audioAvailable ? 'Replace private audio' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · direct public reads blocked</span><label className="secondary-button upload-label">{current.audioAvailable ? 'Replace audio' : 'Choose audio'}<input type="file" accept="audio/*" hidden disabled={audioBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>{current.audioAvailable && <button className="ghost-button" disabled={audioBusy} onClick={()=>void removeAudio()}>Remove audio</button>}</div>
