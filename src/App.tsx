@@ -62,7 +62,7 @@ import CreatorCompensationCard from './components/CreatorCompensationCard';
 import TransparencyPanel from './components/TransparencyPanel';
 import ScriptMarketplace from './components/ScriptMarketplace';
 import ReleaseReviews from './components/ReleaseReviews';
-import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoTransparency } from './demo/nightjarDemo';
+import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications } from './demo/nightjarDemo';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -970,6 +970,10 @@ function App() {
 
   const toggleFavouriteRelease = async (releaseId: string) => {
     try {
+      if (demoMode && !simulationMode) {
+        notify('Demo data is read-only. Start Listener Simulation to change favourites.');
+        return;
+      }
       const next = !favouriteReleaseIds.includes(releaseId);
       if (!simulationMode) await nightjarCommunity.setFavouriteRelease(releaseId, next);
       setFavouriteReleaseIds((items) => next ? Array.from(new Set([...items, releaseId])) : items.filter((id) => id !== releaseId));
@@ -982,6 +986,10 @@ function App() {
   const toggleProfileFollow = async (targetUserId: string) => {
     if (!targetUserId || targetUserId === user?.userId) return;
     try {
+      if (demoMode && !simulationMode) {
+        notify('Demo data is read-only. Start Listener Simulation to change follows.');
+        return;
+      }
       const next = !followingProfileIds.includes(targetUserId);
       if (!simulationMode) await nightjarCommunity.setProfileFollow(targetUserId, next);
       setFollowingProfileIds((items) => next ? Array.from(new Set([...items, targetUserId])) : items.filter((id) => id !== targetUserId));
@@ -2197,11 +2205,11 @@ function App() {
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src="/favicon.svg" alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id)} notify={notify} />}
-      {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={simulationMode} />}
+      {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={demoMode} />}
       {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} demoMode={demoMode} />}
       {publicProfileUserId && <PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={() => setPublicProfileUserId(null)} notify={notify} demoMode={demoMode} />}
       <ContentModeration open={moderationOpen} onClose={() => setModerationOpen(false)} notify={notify} />
-      {reviewTrack && <ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} simulationMode={simulationMode} />}
+      {reviewTrack && <ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} />}
       {showOnboarding && user && role !== 'admin' && <NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} />}
       {toast && <div className="toast">{toast}</div>}
 
