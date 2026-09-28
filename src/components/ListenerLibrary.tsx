@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bookmark, Clock3, Heart, ListMusic, Play, Plus, Trash2, X } from 'lucide-react';
 import { nightjarLibrary } from '../platform/firebase-library';
 import { demoLibrary } from '../demo/nightjarDemo';
+import { readDemo, writeDemo } from '../demo/demoSession';
 
 type Props = {
   onPlayRelease: (release: any) => void;
@@ -21,7 +22,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
     setLoading(true);
     try {
       if (demoMode) {
-        setLibrary(structuredClone(demoLibrary));
+        setLibrary(readDemo('library', demoLibrary));
       } else {
         const data = await nightjarLibrary.load();
         setLibrary(data);
@@ -34,6 +35,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
   };
 
   useEffect(() => { void load(); }, [demoMode]);
+  useEffect(() => { if (simulationMode && !loading) writeDemo('library', library); }, [library, loading, simulationMode]);
 
   const available = useMemo(() => {
     const map = new Map<string, any>();
@@ -44,6 +46,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
   }, [library]);
 
   const dismiss = async (releaseId: string) => {
+    if (demoMode && !simulationMode) return notify('Start Listener Simulation to change the demo library.');
     try {
       if (simulationMode) {
         setLibrary((current: any) => ({ ...current, continueListening: (current.continueListening ?? []).filter((item: any) => String(item.id) !== releaseId) }));
@@ -58,6 +61,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
   };
 
   const hideHistory = async (releaseId: string) => {
+    if (demoMode && !simulationMode) return notify('Start Listener Simulation to change the demo library.');
     try {
       if (simulationMode) {
         setLibrary((current: any) => ({
@@ -76,6 +80,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
   };
 
   const clearHistory = async () => {
+    if (demoMode && !simulationMode) return notify('Start Listener Simulation to change the demo library.');
     if (!window.confirm('Clear your visible Nightjar listening history? This does not remove favourites or playlists.')) return;
     try {
       if (simulationMode) {
@@ -91,6 +96,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
   };
 
   const createPlaylist = async () => {
+    if (demoMode && !simulationMode) return notify('Start Listener Simulation to change the demo library.');
     if (!playlistTitle.trim()) return notify('Give the playlist a name first.');
     try {
       if (simulationMode) {
@@ -108,6 +114,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
   };
 
   const removePlaylist = async (playlistId: string) => {
+    if (demoMode && !simulationMode) return notify('Start Listener Simulation to change the demo library.');
     if (!window.confirm('Delete this playlist?')) return;
     try {
       if (simulationMode) {
