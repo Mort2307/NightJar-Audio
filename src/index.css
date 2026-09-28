@@ -1622,7 +1622,7 @@ button:focus-visible {
 
 .image-moderation-row {
   display: grid;
-  grid-template-columns: 118px minmax(0,1fr) auto;
+  grid-template-columns: 220px minmax(0,1fr) auto;
   gap: 14px;
   align-items: center;
   padding: 13px;
@@ -1649,8 +1649,8 @@ button:focus-visible {
 }
 
 .image-moderation-preview {
-  width: 118px;
-  height: 92px;
+  width: 220px;
+  height: 170px;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -1662,7 +1662,21 @@ button:focus-visible {
 .image-moderation-preview img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+}
+
+.image-preview-unavailable {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.image-preview-unavailable span {
+  font-size: 8px;
+  line-height: 1.4;
+  color: var(--muted-2);
 }
 
 .commercial-edit-grid {

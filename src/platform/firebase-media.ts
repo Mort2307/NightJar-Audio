@@ -14,6 +14,7 @@ const submitImageCall = httpsCallable<{
 }, { assetId: string; status: string }>(functions, 'submitImageAsset');
 
 const listPendingCall = httpsCallable<void, { assets: any[] }>(functions, 'listPendingImages');
+const pendingPreviewCall = httpsCallable<{ assetId: string }, { assetId: string; contentType: string; dataUrl: string }>(functions, 'getPendingImagePreview');
 const moderateCall = httpsCallable<{ assetId: string; decision: 'approved' | 'rejected'; note?: string; safetyConfirmed?: boolean }, { assetId: string; status: string; publicUrl?: string | null }>(functions, 'moderateImageAsset');
 const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status: string; publicUrl: string | null; moderationNote: string | null }>(functions, 'getImageAssetStatus');
 const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string }>(functions, 'removeOwnedImageAsset');
@@ -28,6 +29,10 @@ export const nightjarMedia = {
 
   async listPending() {
     return (await listPendingCall()).data;
+  },
+
+  async pendingPreview(assetId: string) {
+    return (await pendingPreviewCall({ assetId })).data;
   },
 
   async moderate(assetId: string, decision: 'approved' | 'rejected', note?: string, safetyConfirmed = false) {
