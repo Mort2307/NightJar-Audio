@@ -760,8 +760,18 @@ function App() {
   const loadProtectedScripts = async () => {
     if (!user) return;
     try {
-      const data = await nightjarScripts.protectedCatalogue();
-      setProtectedScripts(data.scripts ?? []);
+      if (demoMode) {
+        setProtectedScripts(structuredClone(demoWriterScripts).map((script:any) => ({
+          id:script.id,
+          title:script.title,
+          status:script.status,
+          writerName:'Mara Bell',
+          accessLevel:'demo',
+        })));
+      } else {
+        const data = await nightjarScripts.protectedCatalogue();
+        setProtectedScripts(data.scripts ?? []);
+      }
     } catch {
       setProtectedScripts([]);
     }
@@ -943,6 +953,10 @@ function App() {
   const recordProtectionEvent = async (eventType: string, relatedId = 'protected-script') => {
     if (!user) return;
     try {
+      if (demoMode) {
+        setProtectionEvidence((items:any[]) => [{ id:'demo-evidence-' + Date.now(), eventType, relatedId, createdAt:new Date().toISOString() }, ...items]);
+        return;
+      }
       await nightjarProtection.record({
         eventType,
         relatedType: 'script',
@@ -955,6 +969,17 @@ function App() {
 
   const openProtectedReader = async (scriptId: string) => {
     try {
+      if (demoMode) {
+        const script = demoWriterScripts.find((item:any) => item.id === scriptId);
+        if (!script) {
+          notify('Demo manuscript could not be found.');
+          return;
+        }
+        setProtectedReaderScript({ script, canReadFull:true, allowCopy:false, allowExport:false, demo:true });
+        setProtectedReaderOpen(true);
+        void recordProtectionEvent('script_view', scriptId);
+        return;
+      }
       const data = await nightjarScripts.openProtected(scriptId);
       if (data?.canReadFull === false) {
         notify('This manuscript has not been granted for full reading by the writer.');
