@@ -31,6 +31,16 @@ export type CommercialOverview = {
     pastDue: number;
   };
   confirmedGrossMrrPence: number;
+  activePaidSubscribers: number;
+  unpricedActiveSubscriptions: number;
+  trialPotentialPence: number;
+  pastDueAtRiskPence: number;
+  potentialGrossWithTrialsPence: number;
+  activeCreatorCount: number;
+  standardMonthlyCreatorRatePence: number;
+  plannedCreatorPayoutPence: number;
+  reservePence: number;
+  planningBalanceBeforeFeesTaxPence: number;
 };
 
 const overviewCall = httpsCallable<void, CommercialOverview>(functions, 'commercialOverview');
