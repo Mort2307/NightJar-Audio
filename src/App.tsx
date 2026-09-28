@@ -1495,6 +1495,19 @@ function App() {
     const title = writerDraftTitle.trim();
     if (!title) return notify('Give the script a working title first.');
     try {
+      if (simulationMode) {
+        const next = {
+          id:'demo-script-' + Date.now(), title, status:'Draft', version:1, content:'',
+          lastEditorialComment:null,
+          rights:{ copyrightOwner:'Demo Writer', writerRetainsCopyright:true, licenceType:'none', licenceLength:'', adaptationApprovalRequired:true, significantEditsApprovalRequired:true, castingApprovalRequired:false, finalAudioApprovalRequired:false, aiTrainingAllowed:false, commercialUse:false, withdrawalTerms:'' },
+          marketplace:{ visibility:'private', synopsis:'', genres:[], tropes:[], commissionPricePence:null, collaborationWanted:false, editorWanted:false },
+        };
+        setWriterScripts((items) => [next, ...items]);
+        setWriterSelected(next);
+        setWriterDraftTitle('');
+        notify('Simulation: draft created locally.');
+        return;
+      }
       const data = await nightjarScripts.create(title, '');
       setWriterDraftTitle('');
       await loadWriterScripts();
@@ -1509,6 +1522,11 @@ function App() {
   const saveWriterScript = async () => {
     if (!writerSelected) return;
     try {
+      if (simulationMode) {
+        setWriterScripts((items) => items.map((item) => item.id === writerSelected.id ? writerSelected : item));
+        notify('Simulation: script saved locally.');
+        return;
+      }
       const data = await nightjarScripts.update(writerSelected.id, writerSelected);
       setWriterSelected(data.script ?? writerSelected);
       await loadWriterScripts();
@@ -1521,6 +1539,13 @@ function App() {
   const createWriterVersion = async () => {
     if (!writerSelected) return;
     try {
+      if (simulationMode) {
+        const next = { ...writerSelected, version: Number(writerSelected.version ?? 1) + 1 };
+        setWriterSelected(next);
+        setWriterScripts((items) => items.map((item) => item.id === next.id ? next : item));
+        notify('Simulation: manuscript version recorded locally.');
+        return;
+      }
       const data = await nightjarScripts.createVersion(writerSelected.id);
       setWriterSelected(data.script ?? writerSelected);
       await loadWriterScripts();
@@ -1538,6 +1563,13 @@ function App() {
     }
     if (!window.confirm('Delete this manuscript and its saved versions? This cannot be undone.')) return;
     try {
+      if (simulationMode) {
+        setWriterScripts((items) => items.filter((item) => item.id !== writerSelected.id));
+        setWriterSelected(null);
+        setWriterPermissions([]);
+        notify('Simulation: manuscript deleted locally.');
+        return;
+      }
       await nightjarScripts.remove(writerSelected.id);
       setWriterSelected(null);
       setWriterPermissions([]);
@@ -1551,6 +1583,13 @@ function App() {
   const submitWriterScript = async () => {
     if (!writerSelected) return;
     try {
+      if (simulationMode) {
+        const next = { ...writerSelected, status:'Submitted' };
+        setWriterSelected(next);
+        setWriterScripts((items) => items.map((item) => item.id === next.id ? next : item));
+        notify('Simulation: script submitted to editorial locally.');
+        return;
+      }
       const data = await nightjarScripts.submit(writerSelected.id);
       setWriterSelected(data.script ?? writerSelected);
       await loadWriterScripts();
