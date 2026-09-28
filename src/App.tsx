@@ -970,8 +970,9 @@ function App() {
   const toggleFavouriteRelease = async (releaseId: string) => {
     try {
       const next = !favouriteReleaseIds.includes(releaseId);
-      await nightjarCommunity.setFavouriteRelease(releaseId, next);
+      if (!simulationMode) await nightjarCommunity.setFavouriteRelease(releaseId, next);
       setFavouriteReleaseIds((items) => next ? Array.from(new Set([...items, releaseId])) : items.filter((id) => id !== releaseId));
+      if (simulationMode) notify(next ? 'Simulation: added to favourites.' : 'Simulation: removed from favourites.');
     } catch {
       notify('Favourite could not be updated.');
     }
@@ -981,8 +982,9 @@ function App() {
     if (!targetUserId || targetUserId === user?.userId) return;
     try {
       const next = !followingProfileIds.includes(targetUserId);
-      await nightjarCommunity.setProfileFollow(targetUserId, next);
+      if (!simulationMode) await nightjarCommunity.setProfileFollow(targetUserId, next);
       setFollowingProfileIds((items) => next ? Array.from(new Set([...items, targetUserId])) : items.filter((id) => id !== targetUserId));
+      if (simulationMode) notify(next ? 'Simulation: profile followed.' : 'Simulation: profile unfollowed.');
     } catch {
       notify('Follow could not be updated.');
     }
@@ -1007,16 +1009,37 @@ function App() {
     if (!canAdmin) return;
     setAdminOverviewLoading(true);
     try {
-      const [people, commercial] = await Promise.all([
-        nightjarAdministration.overview(),
-        nightjarCommercial.overview(),
-      ]);
-      setCommercialOverview(commercial);
-      setCommercialSettings(commercial.settings);
-      setAdminOverview({
-        ...people,
-        subscriptions: commercial.subscriptions,
-      });
+      if (demoMode) {
+        const demoAccounts = [
+          ...demoCreators.map((item) => ({ userId:item.userId, displayName:item.name, handle:item.handle, role:'creator', status:'active' })),
+          { userId:'demo-writer-mara', displayName:'Mara Bell', handle:'marabell', role:'writer', status:'active' },
+          { userId:'demo-writer-ivy', displayName:'Ivy North', handle:'ivynorth', role:'writer', status:'active' },
+          { userId:'demo-editor-sam', displayName:'Sam Reed', handle:'samreed', role:'editor', status:'active' },
+          { userId:'demo-editor-rin', displayName:'Rin Cole', handle:'rincole', role:'editor', status:'active' },
+          { userId:'demo-listener-jamie', displayName:'Jamie', handle:'jamielistens', role:'listener', status:'active' },
+          { userId:'demo-listener-lex', displayName:'Lex', handle:'lexlistens', role:'listener', status:'active' },
+        ];
+        setCommercialOverview(null);
+        setAdminOverview({
+          people: {
+            counts: { listener:18, creator:5, writer:4, editor:3, admin:3 },
+            accounts: demoAccounts,
+            administrators: [],
+          },
+          subscriptions: { active:12500, trialing:420, pastDue:86 },
+        });
+      } else {
+        const [people, commercial] = await Promise.all([
+          nightjarAdministration.overview(),
+          nightjarCommercial.overview(),
+        ]);
+        setCommercialOverview(commercial);
+        setCommercialSettings(commercial.settings);
+        setAdminOverview({
+          ...people,
+          subscriptions: commercial.subscriptions,
+        });
+      }
     } catch {
       notify('Administrator overview could not be loaded right now.');
     } finally {
@@ -1042,10 +1065,17 @@ function App() {
     if (!editorSelected) return;
     const comment = window.prompt('Editorial note (optional)') ?? '';
     try {
-      const data = await nightjarScripts.review(editorSelected.id, status, comment);
-      setEditorSelected(data.script ?? editorSelected);
-      await loadEditorQueue();
-      notify('Editorial decision recorded.');
+      if (simulationMode) {
+        const next = { ...editorSelected, status, lastEditorialComment: comment || editorSelected.lastEditorialComment };
+        setEditorSelected(next);
+        setEditorQueue((items) => items.map((item) => item.id === next.id ? next : item));
+        notify('Simulation: editorial decision recorded locally.');
+      } else {
+        const data = await nightjarScripts.review(editorSelected.id, status, comment);
+        setEditorSelected(data.script ?? editorSelected);
+        await loadEditorQueue();
+        notify('Editorial decision recorded.');
+      }
     } catch {
       notify('Editorial decision could not be recorded.');
     }
