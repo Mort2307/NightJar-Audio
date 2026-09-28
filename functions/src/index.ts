@@ -3691,3 +3691,100 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
     ],
   };
 });
+
+
+const reviewPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  releaseId: data.releaseId ?? null,
+  releaseTitle: data.releaseTitle ?? 'Nightjar release',
+  userId: data.userId ?? null,
+  reviewerName: data.reviewerName ?? 'Nightjar listener',
+  reviewerHandle: data.reviewerHandle ?? null,
+  rating: Math.max(1, Math.min(5, Math.round(Number(data.rating ?? 0)))),
+  review: cleanText(data.review, 1600),
+  status: data.status ?? 'pending',
+  createdAt: toIso(data.createdAt),
+  updatedAt: toIso(data.updatedAt),
+  moderatedAt: toIso(data.moderatedAt),
+});
+
+export const submitReleaseReview = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const rating = Math.round(Number(input.rating ?? 0));
+  const review = cleanText(input.review, 1600);
+  if (!releaseId || rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Choose a rating from 1 to 5.');
+  const release = await releaseRef(releaseId).get();
+  const releaseData = release.data();
+  if (!releaseData || releaseData.status !== 'released') throw new HttpsError('not-found', 'Release not found.');
+  const profile = await accountPresentation(identity.uid);
+  const ref = db.collection('releaseReviews').doc(identity.uid + '_' + releaseId);
+  const existing = await ref.get();
+  await ref.set({
+    releaseId,
+    releaseTitle: releaseData.title ?? 'Nightjar release',
+    userId: identity.uid,
+    reviewerName: profile.displayName,
+    reviewerHandle: profile.handle,
+    rating,
+    review,
+    status: 'pending',
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge: true });
+  const saved = await ref.get();
+  return { review: reviewPayload(saved.data() ?? {}, ref.id) };
+});
+
+export const listReleaseReviews = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  const snapshot = await db.collection('releaseReviews').where('releaseId', '==', releaseId).limit(500).get();
+  const reviews = snapshot.docs
+    .filter((doc) => doc.data().status === 'approved')
+    .map((doc) => reviewPayload(doc.data(), doc.id))
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  const averageRating = reviews.length
+    ? Number((reviews.reduce((sum, item) => sum + item.rating, 0) / reviews.length).toFixed(1))
+    : null;
+  const own = snapshot.docs.find((doc) => doc.data().userId === identity.uid);
+  return {
+    reviews,
+    averageRating,
+    ratingCount: reviews.length,
+    myReview: own ? reviewPayload(own.data(), own.id) : null,
+  };
+});
+
+export const adminListReviewQueue = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('releaseReviews').limit(500).get();
+  const reviews = snapshot.docs
+    .filter((doc) => doc.data().status === 'pending')
+    .map((doc) => reviewPayload(doc.data(), doc.id))
+    .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+  return { reviews };
+});
+
+export const adminModerateReview = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const reviewId = cleanText(input.reviewId, 320);
+  const decision = cleanText(input.decision, 20);
+  if (!['approved','rejected'].includes(decision)) throw new HttpsError('invalid-argument', 'Invalid review decision.');
+  const ref = db.collection('releaseReviews').doc(reviewId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Review not found.');
+  await ref.set({
+    status: decision,
+    moderatedBy: admin.uid,
+    moderatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  const saved = await ref.get();
+  return { review: reviewPayload(saved.data() ?? {}, reviewId) };
+});
