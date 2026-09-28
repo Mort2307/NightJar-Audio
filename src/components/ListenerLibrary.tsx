@@ -46,6 +46,27 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
     }
   };
 
+  const hideHistory = async (releaseId: string) => {
+    try {
+      await nightjarLibrary.hideHistory(releaseId);
+      await load();
+      notify('Removed from your visible listening history.');
+    } catch {
+      notify('Listening history could not be updated.');
+    }
+  };
+
+  const clearHistory = async () => {
+    if (!window.confirm('Clear your visible Nightjar listening history? This does not remove favourites or playlists.')) return;
+    try {
+      await nightjarLibrary.clearHistory();
+      await load();
+      notify('Visible listening history cleared.');
+    } catch {
+      notify('Listening history could not be cleared.');
+    }
+  };
+
   const createPlaylist = async () => {
     if (!playlistTitle.trim()) return notify('Give the playlist a name first.');
     try {
@@ -88,6 +109,7 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
       <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}><ListMusic size={14}/> History</button>
       <button className={tab === 'favourites' ? 'active' : ''} onClick={() => setTab('favourites')}><Heart size={14}/> Favourites</button>
       <button className={tab === 'playlists' ? 'active' : ''} onClick={() => setTab('playlists')}><Bookmark size={14}/> Playlists</button>
+      {tab === 'history' && (library.history ?? []).length > 0 && <button className="library-clear-history" onClick={() => void clearHistory()}><Trash2 size={13}/> Clear visible history</button>}
     </div>
 
     {loading ? <div className="people-empty">Loading your library…</div> : tab !== 'playlists' ? <div className="library-list">
@@ -95,6 +117,7 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
         <button className="library-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><Play size={15} fill="currentColor"/></button>
         <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'} · {release.category ?? 'Audio'}</span>{release.positionSeconds > 0 && <small>{Math.floor(release.positionSeconds / 60)} min listened</small>}</div>
         {tab === 'continue' && <button className="ghost-button" onClick={() => void dismiss(String(release.id))}><X size={13}/> Remove</button>}
+        {tab === 'history' && <button className="ghost-button" onClick={() => void hideHistory(String(release.id))}><Trash2 size={13}/> Hide</button>}
       </article>)}
     </div> : <div className="playlist-workspace">
       <article className="research-panel">
