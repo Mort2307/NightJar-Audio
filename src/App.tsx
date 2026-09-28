@@ -46,6 +46,7 @@ import {
   Coins,
   WalletCards,
   ImagePlus,
+  RefreshCw,
 } from 'lucide-react';
 import CreatorAudioPipeline from './components/CreatorAudioPipeline';
 import CreatorProfile from './components/CreatorProfile';
