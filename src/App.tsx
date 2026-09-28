@@ -58,6 +58,7 @@ import ListenerLibrary from './components/ListenerLibrary';
 import NotificationPreferences from './components/NotificationPreferences';
 import CreatorCompensationCard from './components/CreatorCompensationCard';
 import TransparencyPanel from './components/TransparencyPanel';
+import ScriptMarketplace from './components/ScriptMarketplace';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
@@ -1834,6 +1835,7 @@ function App() {
               {creatorOnly ? <CreatorAudioPipeline releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} /> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
             </div>
             {creatorOnly && <CreatorCompensationCard notify={notify} />}
+            {creatorOnly && <ScriptMarketplace notify={notify} onOpenWriter={(userId)=>setPublicProfileUserId(userId)} />}
             {creatorOnly && <CollaborationHub role="creator" notify={notify} />}
             <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Verified listening remains available as analytics and discovery data. It does not make one Creator’s standard base rate larger than another’s.</p></article>
           </section>
