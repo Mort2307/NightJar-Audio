@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
+import { demoDirectory } from '../demo/nightjarDemo';
 import { FileText, Heart, Share2, X } from 'lucide-react';
 
 type Writer = {
@@ -20,24 +21,37 @@ type Props = {
   followingIds: string[];
   onToggleFollow: (userId: string) => Promise<void>;
   notify: (message: string) => void;
+  demoMode?: boolean;
 };
 
-export default function WriterDiscovery({ followingIds, onToggleFollow, notify }: Props) {
+export default function WriterDiscovery({ followingIds, onToggleFollow, notify, demoMode = false }: Props) {
   const [writers, setWriters] = useState<Writer[]>([]);
   const [selected, setSelected] = useState<Writer | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    if (demoMode) {
+      setWriters(demoDirectory.filter((person) => person.role === 'writer').map((person) => ({
+        userId: person.userId, name: person.name, handle: person.name.toLowerCase().replaceAll(' ', ''),
+        initials: person.name.split(' ').map((part) => part[0]).join(''),
+        headline: 'Fictional Nightjar writer profile', publishedWorkCount: person.userId === 'demo-writer-mara' ? 3 : 1,
+        bio: 'A sample profile for testing writer discovery and follows.',
+      })));
+      setLoading(false);
+      return () => { cancelled = true; };
+    }
+    setLoading(true);
     void nightjarCommunity.listWriters().then((data) => {
       if (!cancelled) setWriters(data?.writers ?? []);
     }).catch(() => {
       if (!cancelled) notify('Writer discovery could not be loaded.');
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [demoMode]);
 
   const share = async (writer: Writer) => {
+    if (demoMode) return notify('Fictional demo profiles cannot be shared outside Nightjar.');
     const url = window.location.origin + '/discover#writer-discovery-title';
     const text = 'Meet ' + writer.name + ' on Nightjar — a writer creating work for immersive audio.';
     try {
