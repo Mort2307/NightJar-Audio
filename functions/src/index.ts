@@ -1242,32 +1242,69 @@ const readCommercialSettings = async (): Promise<CommercialSettings> => {
 
 export const commercialOverview = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const [settings, subscriptions] = await Promise.all([
+  const [settings, subscriptions, creators] = await Promise.all([
     readCommercialSettings(),
     db.collection('subscriptions').limit(5000).get(),
+    db.collection('accounts').where('role', '==', 'creator').limit(1000).get(),
   ]);
 
   let active = 0;
   let trialing = 0;
   let pastDue = 0;
+  let activePaidSubscribers = 0;
   let confirmedGrossMrrPence = 0;
+  let trialPotentialPence = 0;
+  let pastDueAtRiskPence = 0;
+  const fallbackMonthlyPricePence = Math.max(0, Math.round(settings.planningMonthlyPricePence ?? 0));
 
   for (const doc of subscriptions.docs) {
     const data = doc.data();
     const status = String(data.status ?? '');
+    const confirmedAmount = typeof data.confirmedMonthlyAmountPence === 'number'
+      ? Math.max(0, Math.round(data.confirmedMonthlyAmountPence))
+      : null;
+    const planningAmount = confirmedAmount ?? fallbackMonthlyPricePence;
+
     if (status === 'active') {
       active += 1;
-      if (typeof data.confirmedMonthlyAmountPence === 'number') {
-        confirmedGrossMrrPence += Math.max(0, Math.round(data.confirmedMonthlyAmountPence));
+      if (confirmedAmount != null && confirmedAmount > 0) {
+        activePaidSubscribers += 1;
+        confirmedGrossMrrPence += confirmedAmount;
       }
-    } else if (status === 'trialing') trialing += 1;
-    else if (status === 'past_due') pastDue += 1;
+    } else if (status === 'trialing') {
+      trialing += 1;
+      trialPotentialPence += planningAmount;
+    } else if (status === 'past_due') {
+      pastDue += 1;
+      pastDueAtRiskPence += planningAmount;
+    }
   }
+
+  const activeCreatorCount = creators.docs.filter((doc) => doc.data().status === 'active').length;
+  const standardMonthlyCreatorRatePence = calculateCreatorRate(settings, activePaidSubscribers);
+  const plannedCreatorPayoutPence = standardMonthlyCreatorRatePence * activeCreatorCount;
+  const reservePence = settings.reservePercent == null
+    ? 0
+    : Math.max(0, Math.round(confirmedGrossMrrPence * (settings.reservePercent / 100)));
+  const planningBalanceBeforeFeesTaxPence = Math.max(
+    0,
+    confirmedGrossMrrPence - plannedCreatorPayoutPence - reservePence,
+  );
 
   return {
     settings,
     subscriptions: { active, trialing, pastDue },
     confirmedGrossMrrPence,
+    activePaidSubscribers,
+    unpricedActiveSubscriptions: Math.max(0, active - activePaidSubscribers),
+    trialPotentialPence,
+    pastDueAtRiskPence,
+    potentialGrossWithTrialsPence: confirmedGrossMrrPence + trialPotentialPence,
+    activeCreatorCount,
+    standardMonthlyCreatorRatePence,
+    plannedCreatorPayoutPence,
+    reservePence,
+    planningBalanceBeforeFeesTaxPence,
   };
 });
 
