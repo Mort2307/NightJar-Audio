@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarListening } from '../platform/firebase-listening';
-import { ChevronLeft, ChevronRight, Moon, Pause, Play, Volume2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock3, Moon, Pause, Play, Volume2, X } from 'lucide-react';
 
 export type NightjarPlayerTrack = {
   id: string;
@@ -35,6 +35,8 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const [volume, setVolume] = useState(1);
   const [rememberedPosition, setRememberedPosition] = useState(0);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(track?.audioUrl ?? null);
+  const [sleepTimer, setSleepTimer] = useState<'off' | '10' | '15' | '30' | '45' | '60' | 'end'>('off');
+  const sleepTimerTimeout = useRef<number | null>(null);
 
   const currentIndex = track ? queue.findIndex((item) => item.id === track.id) : -1;
   const previousTrack = currentIndex > 0 ? queue[currentIndex - 1] : null;
@@ -97,6 +99,25 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
 
   useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
 
+  useEffect(() => {
+    if (sleepTimerTimeout.current != null) {
+      window.clearTimeout(sleepTimerTimeout.current);
+      sleepTimerTimeout.current = null;
+    }
+    if (sleepTimer === 'off' || sleepTimer === 'end') return;
+    const minutes = Number(sleepTimer);
+    if (!Number.isFinite(minutes) || minutes <= 0) return;
+    sleepTimerTimeout.current = window.setTimeout(() => {
+      audioRef.current?.pause();
+      setSleepTimer('off');
+      notify('Sleep timer finished. Playback paused.');
+    }, minutes * 60 * 1000);
+    return () => {
+      if (sleepTimerTimeout.current != null) window.clearTimeout(sleepTimerTimeout.current);
+      sleepTimerTimeout.current = null;
+    };
+  }, [sleepTimer]);
+
   if (!track || (!track.audioAvailable && !track.audioUrl)) return null;
 
   const choose = (next: NightjarPlayerTrack | null) => {
@@ -124,6 +145,10 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         setIsPlaying(false);
         setPosition(duration);
         void nightjarListening.record({ releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
+        if (sleepTimer === 'end') {
+          setSleepTimer('off');
+          return;
+        }
         if (nextTrack && onSelectTrack) window.setTimeout(() => onSelectTrack(nextTrack), 350);
       }}
       onError={() => notify('Nightjar could not play this audio file.')}
@@ -138,6 +163,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
       <button className="dock-nav-button" disabled={!nextTrack || !onSelectTrack} onClick={() => choose(nextTrack)} aria-label="Next release"><ChevronRight size={15} /></button>
     </div>
     <div className="dock-volume"><Volume2 size={15} /><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume" /></div>
+    <label className="dock-sleep"><Clock3 size={14}/><select value={sleepTimer} onChange={(event) => setSleepTimer(event.target.value as typeof sleepTimer)} aria-label="Sleep timer"><option value="off">Sleep off</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="end">End of audio</option></select></label>
     <button className="dock-close" onClick={onClose} aria-label="Close player"><X size={15} /></button>
   </div>;
 }
