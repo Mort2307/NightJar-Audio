@@ -10,7 +10,6 @@ export type CreatorRateBand = {
 
 export type CommercialSettings = {
   planningMonthlyPricePence: number | null;
-  creatorPoolPercent: number | null;
   reservePercent: number | null;
   payoutCadence: string | null;
   eligibleListeningDefinition: string | null;
@@ -80,3 +79,4 @@ export const nightjarCommercial = {
     return (await transparencyCall()).data;
   },
 };
+

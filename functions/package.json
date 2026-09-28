@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
+    "test": "npm run build && node --test lib/entitlements.test.js",
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "deploy": "firebase deploy --only functions"
   },

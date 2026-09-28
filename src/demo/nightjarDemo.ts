@@ -219,7 +219,6 @@ export const demoAdminData = {
     planningBalanceBeforeFeesTaxPence:4562500,
     settings:{
       planningMonthlyPricePence:500,
-      creatorPoolPercent:null,
       reservePercent:15,
       payoutCadence:'Monthly',
       eligibleListeningDefinition:'Verified listening is used for analytics and discovery only in this demo.',
@@ -267,3 +266,4 @@ export const demoAdminData = {
     { id:'demo-image-2', kind:'release_artwork', ownerEmail:'rowan.demo@example.invalid', fileName:'window-seat-cover.webp', contentType:'image/webp', previewUrl:demoModerationArtworkImage },
   ],
 };
+

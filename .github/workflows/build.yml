@@ -40,3 +40,7 @@ jobs:
       - name: Build Firebase Functions
         working-directory: functions
         run: npm run build
+
+      - name: Verify access policy
+        working-directory: functions
+        run: npm test

@@ -3,12 +3,16 @@ import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-a
 import { getStorage } from 'firebase-admin/storage';
 import { randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
+import { hasPaidEntitlement, mayUseTemporaryAccess } from './entitlements.js';
 
 initializeApp();
 
 const db = getFirestore();
 const REGION = 'europe-west2';
 const AGE_ASSURANCE_CONFIGURED = false;
+// Public access remains locked until the provider, verified billing webhooks and
+// the launch review are complete. An environment toggle cannot override a missing provider.
+const PUBLIC_ACCESS_ENABLED = process.env.NIGHTJAR_PUBLIC_ACCESS === 'enabled' && AGE_ASSURANCE_CONFIGURED;
 
 const ADMIN_EMAILS = new Set([
   'mike.owen230792@gmail.com',
@@ -1195,7 +1199,6 @@ type CreatorRateBand = {
 
 type CommercialSettings = {
   planningMonthlyPricePence: number | null;
-  creatorPoolPercent: number | null;
   reservePercent: number | null;
   payoutCadence: string | null;
   eligibleListeningDefinition: string | null;
@@ -1217,7 +1220,6 @@ const readCommercialSettings = async (): Promise<CommercialSettings> => {
       : snapshot.exists && Object.prototype.hasOwnProperty.call(data, 'planningMonthlyPricePence')
         ? null
         : 500,
-    creatorPoolPercent: typeof data.creatorPoolPercent === 'number' ? data.creatorPoolPercent : null,
     reservePercent: typeof data.reservePercent === 'number' ? data.reservePercent : null,
     payoutCadence: data.payoutCadence ? String(data.payoutCadence) : null,
     eligibleListeningDefinition: data.eligibleListeningDefinition ? String(data.eligibleListeningDefinition) : null,
@@ -1260,7 +1262,7 @@ export const commercialOverview = onCall({ region: REGION }, async (request) => 
   for (const doc of subscriptions.docs) {
     const data = doc.data();
     const status = String(data.status ?? '');
-    const confirmedAmount = typeof data.confirmedMonthlyAmountPence === 'number'
+    const confirmedAmount = hasPaidEntitlement(data, doc.id) && typeof data.confirmedMonthlyAmountPence === 'number'
       ? Math.max(0, Math.round(data.confirmedMonthlyAmountPence))
       : null;
     const planningAmount = confirmedAmount ?? fallbackMonthlyPricePence;
@@ -1331,7 +1333,6 @@ export const saveCommercialSettings = onCall({ region: REGION }, async (request)
 
   const settings: CommercialSettings = {
     planningMonthlyPricePence: nullableNumber(input.planningMonthlyPricePence, 0, 100000, true),
-    creatorPoolPercent: null,
     reservePercent: nullableNumber(input.reservePercent, 0, 100),
     payoutCadence: cleanText(input.payoutCadence, 80) || null,
     eligibleListeningDefinition: cleanText(input.eligibleListeningDefinition, 1200) || null,
@@ -1523,7 +1524,7 @@ const materializeSpotlightNotification = async (item: any, date: string) => {
 
 export const spotlightState = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const date = londonDateKey();
   const [creator, writer, editor, listenerState] = await Promise.all([
     spotlightForRole('creator', date),
@@ -1584,6 +1585,19 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
   };
 });
 
+export const adminLaunchReadiness = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const testers = await db.collection('accounts').where('testAccess', '==', true).limit(1001).get();
+  return {
+    publicAccessEnabled: PUBLIC_ACCESS_ENABLED,
+    ageAssuranceConfigured: AGE_ASSURANCE_CONFIGURED,
+    paymentProviderConnected: false,
+    subscriptionEntitlementEnforced: true,
+    temporaryTesterCount: testers.size,
+    testerCountTruncated: testers.size === 1001,
+  };
+});
+
 export const adminSetTestAccess = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -1599,6 +1613,13 @@ export const adminSetTestAccess = onCall({ region: REGION }, async (request) => 
   if (ADMIN_EMAILS.has(email)) {
     throw new HttpsError('failed-precondition', 'Administrator accounts already have temporary test access.');
   }
+  if (userId === admin.uid) throw new HttpsError('permission-denied', 'Tester access cannot be self-granted.');
+  if (enabled && snapshot.data()?.status !== 'active') {
+    throw new HttpsError('failed-precondition', 'Only active accounts can receive temporary test access.');
+  }
+  if (enabled && (AGE_ASSURANCE_CONFIGURED || PUBLIC_ACCESS_ENABLED)) {
+    throw new HttpsError('failed-precondition', 'Temporary tester access is unavailable after production age assurance is enabled.');
+  }
 
   await ref.set({
     testAccess: enabled,
@@ -1606,6 +1627,13 @@ export const adminSetTestAccess = onCall({ region: REGION }, async (request) => 
     testAccessUpdatedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+
+  await db.collection('adminAudit').add({
+    actorUid: admin.uid, action: enabled ? 'tester.grant' : 'tester.revoke',
+    targetUid: userId, previousState: snapshot.data()?.testAccess === true,
+    newState: enabled, reason: 'prelaunch age and billing test access',
+    createdAt: FieldValue.serverTimestamp(),
+  });
 
   return { userId, testAccess: enabled };
 });
@@ -1708,6 +1736,7 @@ export const listBillingSubscriptions = onCall({ region: REGION }, async (reques
       plan: data.plan ?? null,
       status: data.status ?? 'unknown',
       confirmedMonthlyAmountPence: typeof data.confirmedMonthlyAmountPence === 'number' ? data.confirmedMonthlyAmountPence : null,
+      paymentVerified: hasPaidEntitlement(data, doc.id),
       currentPeriodEnd: toIso(data.currentPeriodEnd),
     };
   });
@@ -1780,7 +1809,7 @@ const releaseSearchText = (data: Record<string, unknown>) => [
 
 export const listCatalogue = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const input = (request.data ?? {}) as { q?: unknown; category?: unknown };
   const query = cleanText(input.q, 120).toLowerCase();
   const category = cleanText(input.category, 80).toLowerCase();
@@ -2022,20 +2051,21 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
-  if (AGE_ASSURANCE_CONFIGURED) return { allowed: false, reason: null as string | null };
   const snapshot = await accountRef(uid).get();
   const data = snapshot.data() ?? {};
   const email = cleanEmail(data.email);
-  if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' };
-  if (data.testAccess === true) return { allowed: true, reason: 'tester' };
-  return { allowed: false, reason: null as string | null };
+  const administrator = ADMIN_EMAILS.has(email);
+  const allowed = mayUseTemporaryAccess({
+    publicAccessEnabled: PUBLIC_ACCESS_ENABLED,
+    ageAssuranceConfigured: AGE_ASSURANCE_CONFIGURED,
+    administrator,
+    explicitTester: data.testAccess === true,
+    accountActive: administrator || data.status === 'active',
+  });
+  return { allowed, reason: allowed ? (administrator ? 'administrator' : 'tester') : null };
 };
 
 const requireAgeVerified = async (uid: string) => {
-  const snapshot = await db.collection('ageAssurance').doc(uid).get();
-  const data = snapshot.data();
-  if (data?.verified) return data;
-
   const bypass = await temporaryAgeBypassFor(uid);
   if (bypass.allowed) {
     return {
@@ -2048,12 +2078,32 @@ const requireAgeVerified = async (uid: string) => {
     };
   }
 
+  const snapshot = await db.collection('ageAssurance').doc(uid).get();
+  const data = snapshot.data();
+  if (AGE_ASSURANCE_CONFIGURED && data?.verified === true
+    && data.provider === 'yoti' && data.environment === 'production'
+    && data.reverifyRequired !== true && data.testMode !== true) return data;
+
   throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
+};
+
+const requireEntitlement = async (uid: string) => {
+  await requireAgeVerified(uid);
+  const bypass = await temporaryAgeBypassFor(uid);
+  if (bypass.allowed) return { temporaryAccess: true, reason: bypass.reason };
+  if (!PUBLIC_ACCESS_ENABLED) throw new HttpsError('failed-precondition', 'Nightjar public subscriptions are not open yet.');
+  // Billing webhooks must write a UID-keyed, provider-verified subscription.
+  // Client-side success redirects and Admin planning settings are never entitlements.
+  const snapshot = await db.collection('subscriptions').doc(uid).get();
+  if (!hasPaidEntitlement(snapshot.data(), uid)) {
+    throw new HttpsError('permission-denied', 'An active Nightjar subscription is required for this content.');
+  }
+  return { temporaryAccess: false, reason: null };
 };
 
 export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
@@ -2132,7 +2182,7 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
 
 export const recordListeningEvent = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const release = await releaseRef(releaseId).get();
@@ -2212,7 +2262,7 @@ export const tasteProfile = onCall({ region: REGION }, async (request) => {
 
 export const recommendations = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const input = (request.data ?? {}) as { intent?: unknown };
   const intent = cleanText(input.intent, 120).toLowerCase();
 
@@ -2272,7 +2322,7 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
 
 export const trendingReleases = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const [releasesSnapshot, listeningSnapshot] = await Promise.all([
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
     db.collection('listeningEvents').limit(5000).get(),
@@ -2353,18 +2403,21 @@ export const ageStatus = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
   const data = snapshot.data() ?? {};
-  const bypass = data.verified === true ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
-  const verified = data.verified === true || bypass.allowed;
+  const bypass = await temporaryAgeBypassFor(identity.uid);
+  const providerVerified = AGE_ASSURANCE_CONFIGURED && data.verified === true
+    && data.provider === 'yoti' && data.environment === 'production'
+    && data.testMode !== true && data.reverifyRequired !== true;
+  const verified = providerVerified || bypass.allowed;
   return {
     verified,
     status: verified ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
     ageThreshold: 18,
     configured: AGE_ASSURANCE_CONFIGURED,
-    provider: data.provider ?? (bypass.allowed ? 'temporary-test-access' : 'not-configured'),
-    environment: data.environment ?? (bypass.allowed ? 'development' : 'production'),
+    provider: bypass.allowed ? 'temporary-test-access' : providerVerified ? data.provider : 'not-configured',
+    environment: bypass.allowed ? 'development' : 'production',
     verifiedAt: data.verifiedAt ?? null,
     reverifyRequired: data.reverifyRequired === true,
-    testAvailable: identity.admin,
+    testAvailable: identity.admin && !AGE_ASSURANCE_CONFIGURED,
     temporaryBypass: bypass.allowed,
     temporaryBypassReason: bypass.reason,
   };
@@ -2389,6 +2442,9 @@ export const startAgeAssurance = onCall({ region: REGION }, async (request) => {
 
 export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
   const identity = requireAdminIdentity(request);
+  if (AGE_ASSURANCE_CONFIGURED || PUBLIC_ACCESS_ENABLED) {
+    throw new HttpsError('failed-precondition', 'Test age passes are unavailable when production age assurance is enabled.');
+  }
   await db.collection('ageAssurance').doc(identity.uid).set({
     verified: true,
     status: 'COMPLETE',
@@ -3565,7 +3621,7 @@ export const creatorCompensationStatus = onCall({ region: REGION }, async (reque
     readCommercialSettings(),
     db.collection('subscriptions').where('status', '==', 'active').limit(5000).get(),
   ]);
-  const activePaidSubscribers = subscriptions.docs.filter((doc) => typeof doc.data().confirmedMonthlyAmountPence === 'number' && Number(doc.data().confirmedMonthlyAmountPence) > 0).length;
+  const activePaidSubscribers = subscriptions.docs.filter((doc) => hasPaidEntitlement(doc.data(), doc.id) && Number(doc.data().confirmedMonthlyAmountPence) > 0).length;
   return {
     model: settings.compensationModel,
     activePaidSubscribers,
@@ -3671,7 +3727,7 @@ const listenerHistoryFor = async (uid: string) => {
 
 export const listenerLibrary = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const library = await listenerHistoryFor(identity.uid);
   const playlistsSnapshot = await accountRef(identity.uid).collection('playlists').limit(100).get();
   const playlists = playlistsSnapshot.docs
@@ -3793,7 +3849,7 @@ const reviewPayload = (data: Record<string, any>, id: string) => ({
 
 export const submitReleaseReview = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const rating = Math.round(Number(input.rating ?? 0));
@@ -3823,7 +3879,7 @@ export const submitReleaseReview = onCall({ region: REGION }, async (request) =>
 
 export const listReleaseReviews = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireEntitlement(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
   const snapshot = await db.collection('releaseReviews').where('releaseId', '==', releaseId).limit(500).get();

@@ -420,6 +420,7 @@ function App() {
   const [reportSummary, setReportSummary] = useState('');
   const [adminOverview, setAdminOverview] = useState<any | null>(null);
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
+  const [launchStatus, setLaunchStatus] = useState<Awaited<ReturnType<typeof nightjarAdministration.launchReadiness>> | null>(null);
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'admin' | null>(null);
   const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], publicProfile: true });
   const [profileLoading, setProfileLoading] = useState(false);
@@ -438,7 +439,6 @@ function App() {
   const [commercialOverview, setCommercialOverview] = useState<CommercialOverview | null>(null);
   const [commercialSettings, setCommercialSettings] = useState<CommercialSettings>({
     planningMonthlyPricePence: 500,
-    creatorPoolPercent: null,
     reservePercent: null,
     payoutCadence: 'Monthly',
     eligibleListeningDefinition: null,
@@ -980,7 +980,7 @@ function App() {
         setAgeReverifyRequired(false);
         setAgeSessionActive(false);
         setAgeStage('app');
-        notify('Age verification is now stored on this Nightjar account; future logins will not repeat the check.');
+        notify('Temporary administrator test access is active. Production age verification is still required before launch.');
       }
     } catch {
       notify('Sandbox test could not be completed.');
@@ -998,7 +998,7 @@ function App() {
       }
       const alreadyVerified = await refreshAgeStatus();
       if (alreadyVerified) {
-        notify('Your Nightjar account is already age verified. No new check is needed.');
+        notify(ageProvider === 'temporary-test-access' ? 'Temporary test access is active for this account.' : 'Your Nightjar account is age verified.');
         return;
       }
       const data = await nightjarAge.start();
@@ -1013,7 +1013,7 @@ function App() {
         setAgeReverifyRequired(false);
         setAgeSessionActive(false);
         setAgeStage('app');
-        notify('Your Nightjar account is already age verified. No new check was required.');
+        notify(data.temporaryBypass === true ? 'Temporary test access is active for this account.' : 'Your Nightjar account is age verified.');
       } else if (data.launchUrl) {
         setAgeStatus('PENDING');
         window.open(String(data.launchUrl), '_blank', 'noopener,noreferrer');
@@ -1194,6 +1194,7 @@ function App() {
   const loadAdminOverview = async () => {
     if (!canAdmin) return;
     setAdminOverviewLoading(true);
+    void nightjarAdministration.launchReadiness().then(setLaunchStatus).catch(() => setLaunchStatus(null));
     try {
       if (demoMode) {
         const demoAccounts = [
@@ -2172,10 +2173,10 @@ function App() {
           <div className="verification-panel">
             <div className="verification-icon"><ShieldCheck size={23} /></div>
             <div>
-              <strong>{ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'}</strong>
+              <strong>{ageProvider === 'temporary-test-access' || ageProvider === 'nightjar-sandbox-test' ? 'Temporary Nightjar test access' : 'Yoti Age Verification'}</strong>
               <span>
                 {ageVerified
-                  ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins use this stored verification state.`
+                  ? ageProvider === 'temporary-test-access' || ageProvider === 'nightjar-sandbox-test' ? 'Approved pre-launch access for this account. This is not a production age check.' : `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}.`
                   : ageSessionActive
                     ? 'A verification session is in progress. Finish it and return to Nightjar; the account state will update automatically.'
                     : ageConfigured
@@ -2183,7 +2184,7 @@ function App() {
                       : 'Verification integration is ready; provider credentials still need to be added.'}
               </span>
             </div>
-            <span className="status-pill">{ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
+            <span className="status-pill">{ageVerified ? ageProvider === 'temporary-test-access' || ageProvider === 'nightjar-sandbox-test' ? 'TEST ACCESS' : 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
           </div>
           <div className="verification-list">
             <div><Check size={16} /><span>Adult access is checked before the catalogue is released.</span></div>
@@ -2293,7 +2294,7 @@ function App() {
           {logoUrl ? <img className="brand-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo" src="/favicon.svg" alt="Nightjar" />}<span>NIGHTJAR</span>
         </button>
 
-        <nav className={menuOpen ? 'nav open' : 'nav'}>
+        <nav id="nightjar-navigation" aria-label="Main navigation" className={menuOpen ? 'nav open' : 'nav'}>
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'discover' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('discover')}>Discover</button>}
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Creators</button>}
           {(effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && <button className={view === 'library' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('library')}>Library</button>}
@@ -2331,9 +2332,11 @@ function App() {
               <button className="ghost-button desktop-only" onClick={() => void signOut()}><LogOut size={15} /></button>
             </>
           )}
-          <button className="menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Open navigation menu">{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+          <button className="menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} aria-controls="nightjar-navigation">{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </header>
+
+      {user && (ageProvider === 'temporary-test-access' || ageProvider === 'nightjar-sandbox-test') && !simulationMode && <div className="test-access-banner" role="status"><ShieldCheck size={16} /><span>PRE-LAUNCH TEST ACCESS · Your age check is a temporary bypass. Public access remains locked.</span></div>}
 
       {demoMode && <div className={simulationMode ? 'simulation-banner active' : 'simulation-banner'}>
         <div><strong>{simulationMode ? 'SIMULATION MODE' : 'DEMO DATA'}</strong><span>{simulationMode ? `Viewing Nightjar as ${previewRole ? roleMeta[previewRole].label : 'Administrator'} · no simulated actions write to production` : 'Populated fictional records · live production data is not being changed'}</span></div>
@@ -2601,6 +2604,7 @@ function App() {
         {view === 'admin' && canAdmin && !simulationMode && (
           <section className="page-wrap admin-page">
             <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, Creator, Writer and Audio Editor accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAdminApplications(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
+            <section className="launch-lock" aria-label="Public launch readiness"><div><span className="mini-label">PUBLIC LAUNCH</span><h2>{launchStatus?.publicAccessEnabled ? 'Access enabled' : 'Launch lock active'}</h2><p>Only approved administrators and explicitly granted active testers can use the adult catalogue during development. The figures below are live checks, not demo subscriptions.</p></div><ul><li><span>{launchStatus?.ageAssuranceConfigured ? '✓' : '○'}</span> Production age assurance {launchStatus?.ageAssuranceConfigured ? 'connected' : 'pending'}</li><li><span>{launchStatus?.paymentProviderConnected ? '✓' : '○'}</span> Adult-compatible billing provider {launchStatus?.paymentProviderConnected ? 'connected' : 'pending'}</li><li><span>{launchStatus?.subscriptionEntitlementEnforced ? '✓' : '○'}</span> Backend subscription gate {launchStatus?.subscriptionEntitlementEnforced ? 'active' : 'pending'}</li><li><span>{launchStatus?.temporaryTesterCount === 0 ? '✓' : '○'}</span> Temporary tester grants: {launchStatus?.temporaryTesterCount ?? 'unavailable'}</li></ul>{demoMode && <small>Demo records are displayed elsewhere; launch checks always refer to the live platform.</small>}</section>
             <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">TESTING</span><strong>Demo & Simulation</strong><small>Safe fictional data and role-perspective testing · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
             <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">DEMO / SIMULATION</span><strong>See Nightjar populated, then step into every role.</strong><p>Demo records are fictional and isolated. Simulation actions stay local to this browser session and never become live subscriptions, payouts, manuscripts, reviews or user accounts.</p><div className="demo-state-line"><span className={demoMode ? 'status-pill' : 'status-pill muted'}>Demo data {demoMode ? 'ON' : 'OFF'}</span><span className={simulationMode ? 'status-pill' : 'status-pill muted'}>Simulation {simulationMode ? 'ON' : 'OFF'}</span></div></div><div className="admin-preview-buttons">{!demoMode && <button onClick={enableDemoMode}>Enable demo data</button>}{demoMode && !simulationMode && <button onClick={disableDemoMode}>Disable demo data</button>}<button onClick={() => startSimulation('listener')}>Simulate Listener</button><button onClick={() => startSimulation('creator')}>Simulate Creator</button><button onClick={() => startSimulation('writer')}>Simulate Writer</button><button onClick={() => startSimulation('editor')}>Simulate Audio Editor</button>{simulationMode && <button onClick={stopSimulation}>End simulation</button>}<button onClick={clearAdminPreview}>Return to Admin</button></div></div>
             <div className="admin-grid">

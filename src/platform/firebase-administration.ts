@@ -4,6 +4,7 @@ import { firebaseApp } from './firebase-auth';
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
 const overviewCall = httpsCallable<void, { people: any }>(functions, 'adminAccountOverview');
+const launchReadinessCall = httpsCallable<void, { publicAccessEnabled: boolean; ageAssuranceConfigured: boolean; paymentProviderConnected: boolean; subscriptionEntitlementEnforced: boolean; temporaryTesterCount: number; testerCountTruncated: boolean }>(functions, 'adminLaunchReadiness');
 const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator' | 'writer' | 'editor'; status: 'active' | 'pending_review' | 'suspended' }, { userId: string; role: string; status: string }>(functions, 'adminSetAccountRole');
 const setTestAccessCall = httpsCallable<{ userId: string; enabled: boolean }, { userId: string; testAccess: boolean }>(functions, 'adminSetTestAccess');
 const applicationsCall = httpsCallable<void, { applications: any[] }>(functions, 'listCreatorApplications');
@@ -12,6 +13,10 @@ const decideCall = httpsCallable<{ applicationId: string; decision: 'approved' |
 export const nightjarAdministration = {
   async overview() {
     return (await overviewCall()).data;
+  },
+
+  async launchReadiness() {
+    return (await launchReadinessCall()).data;
   },
 
   async setAccountRole(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor', status: 'active' | 'pending_review' | 'suspended' = 'active') {

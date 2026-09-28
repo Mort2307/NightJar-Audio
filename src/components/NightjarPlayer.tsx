@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarListening } from '../platform/firebase-listening';
-import { ChevronLeft, ChevronRight, Clock3, Moon, Pause, Play, Volume2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock3, Moon, Pause, Play, RotateCcw, RotateCw, Volume2, X } from 'lucide-react';
 
 export type NightjarPlayerTrack = {
   id: string;
@@ -33,7 +33,12 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(1);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(() => Math.max(0, Math.min(1, Number(window.localStorage.getItem('nightjar.player.volume') ?? 1) || 0)));
+  const [speed, setSpeed] = useState(() => {
+    const saved = Number(window.localStorage.getItem('nightjar.player.speed'));
+    return [0.75, 1, 1.25, 1.5, 2].includes(saved) ? saved : 1;
+  });
+  const [buffering, setBuffering] = useState(false);
   const [rememberedPosition, setRememberedPosition] = useState(0);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(track?.audioUrl ?? null);
   const [sleepTimer, setSleepTimer] = useState<'off' | '10' | '15' | '30' | '45' | '60' | 'end'>('off');
@@ -115,6 +120,32 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   }, [rememberedPosition, track?.id, simulationMode]);
 
   useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
+  useEffect(() => { window.localStorage.setItem('nightjar.player.volume', String(volume)); }, [volume]);
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = speed;
+    window.localStorage.setItem('nightjar.player.speed', String(speed));
+  }, [speed, playbackUrl]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !track) return;
+    const session = navigator.mediaSession;
+    session.metadata = new MediaMetadata({ title: track.title, artist: track.creator, album: 'Nightjar', artwork: track.artworkUrl ? [{ src: track.artworkUrl }] : [] });
+    session.playbackState = isPlaying ? 'playing' : 'paused';
+    const seek = (offset: number) => {
+      const node = audioRef.current;
+      if (simulationMode) setPosition((value) => Math.max(0, Math.min(duration, value + offset)));
+      else if (node) node.currentTime = Math.max(0, Math.min(node.duration || duration, node.currentTime + offset));
+    };
+    session.setActionHandler('play', () => { if (simulationMode) setIsPlaying(true); else void audioRef.current?.play(); });
+    session.setActionHandler('pause', () => { if (simulationMode) setIsPlaying(false); else audioRef.current?.pause(); });
+    session.setActionHandler('seekbackward', (details) => seek(-(details.seekOffset ?? 15)));
+    session.setActionHandler('seekforward', (details) => seek(details.seekOffset ?? 15));
+    session.setActionHandler('previoustrack', previousTrack && onSelectTrack ? () => onSelectTrack(previousTrack) : null);
+    session.setActionHandler('nexttrack', nextTrack && onSelectTrack ? () => onSelectTrack(nextTrack) : null);
+    return () => {
+      for (const action of ['play', 'pause', 'seekbackward', 'seekforward', 'previoustrack', 'nexttrack'] as MediaSessionAction[]) session.setActionHandler(action, null);
+    };
+  }, [track?.id, track?.title, track?.creator, track?.artworkUrl, isPlaying, duration, simulationMode, previousTrack?.id, nextTrack?.id, onSelectTrack]);
 
   useEffect(() => {
     if (!simulationMode || !isPlaying) return;
@@ -158,6 +189,10 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     if (next && onSelectTrack) onSelectTrack(next);
     else if (!next) onClose();
   };
+  const skip = (offset: number) => {
+    if (simulationMode) setPosition((value) => Math.max(0, Math.min(duration, value + offset)));
+    else if (audioRef.current) audioRef.current.currentTime = Math.max(0, Math.min(audioRef.current.duration || duration, audioRef.current.currentTime + offset));
+  };
 
   return <div className="player-dock" role="region" aria-label="Nightjar audio player">
     {!simulationMode && <audio
@@ -167,6 +202,8 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
       onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 1)}
       onPlay={() => setIsPlaying(true)}
       onPause={() => setIsPlaying(false)}
+      onWaiting={() => setBuffering(true)}
+      onCanPlay={() => setBuffering(false)}
       onTimeUpdate={(event) => {
         const node = event.currentTarget;
         setPosition(node.currentTime);
@@ -185,18 +222,21 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         }
         if (nextTrack && onSelectTrack) window.setTimeout(() => onSelectTrack(nextTrack), 350);
       }}
-      onError={() => notify('Nightjar could not play this audio file.')}
+      onError={() => { setBuffering(false); notify('Nightjar could not play this audio file. Try reopening the release.'); }}
     />}
     <div className="dock-art">{track.artworkUrl ? <img src={track.artworkUrl} alt="" /> : <Moon size={16} />}</div>
-    <div className="dock-copy"><span>{track.category || 'Audio'}</span><strong>{track.title}</strong><small>{track.creator}</small></div>
+    <div className="dock-copy"><span>{buffering ? 'BUFFERING…' : track.category || 'Audio'}</span><strong>{track.title}</strong><small>{track.creator}</small></div>
     <div className="dock-time">{formatTime(position)} / {formatTime(duration)}</div>
     <input className="dock-progress" type="range" min="0" max={duration} step="0.1" value={Math.min(position, duration)} onChange={(event) => { const value = Number(event.target.value); setPosition(value); if (!simulationMode && audioRef.current) audioRef.current.currentTime = value; }} aria-label="Playback position" />
     <div className="dock-nav">
       <button className="dock-nav-button" disabled={!previousTrack || !onSelectTrack} onClick={() => choose(previousTrack)} aria-label="Previous release"><ChevronLeft size={15} /></button>
+      <button className="dock-nav-button" onClick={() => skip(-15)} aria-label="Back 15 seconds"><RotateCcw size={17} /><span>15</span></button>
       <button className="dock-play" onClick={() => { if (simulationMode) { setIsPlaying((value) => !value); return; } const node = audioRef.current; if (!node) return; if (node.paused) void node.play(); else node.pause(); }} aria-label={isPlaying ? 'Pause' : 'Play'}>{isPlaying ? <Pause size={17} /> : <Play size={17} fill="currentColor" />}</button>
+      <button className="dock-nav-button" onClick={() => skip(15)} aria-label="Forward 15 seconds"><RotateCw size={17} /><span>15</span></button>
       <button className="dock-nav-button" disabled={!nextTrack || !onSelectTrack} onClick={() => choose(nextTrack)} aria-label="Next release"><ChevronRight size={15} /></button>
     </div>
     <div className="dock-volume"><Volume2 size={15} /><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume" /></div>
+    <label className="dock-speed"><span>Speed</span><select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="Playback speed"><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
     <label className="dock-sleep"><Clock3 size={14}/><select value={sleepTimer} onChange={(event) => setSleepTimer(event.target.value as typeof sleepTimer)} aria-label="Sleep timer"><option value="off">Sleep off</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="end">End of audio</option></select></label>
     <button className="dock-close" onClick={onClose} aria-label="Close player"><X size={15} /></button>
   </div>;

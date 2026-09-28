@@ -67,17 +67,9 @@ Age-assurance callback/cancel URLs must resolve to the Firebase/custom-domain de
 
 Nightjar uses **account-level 18+ age assurance**. A successful provider result is stored against the authenticated Nightjar account and reused on later logins and devices. A new provider session is created only when the account has no verified result or an explicit re-verification requirement is recorded.
 
-The backend is provider-ready for Yoti sandbox and production:
+Production Yoti integration is **not connected**. `AGE_ASSURANCE_CONFIGURED` remains false and ordinary accounts fail closed. Administrators and active accounts explicitly granted tester access can use a clearly labelled temporary bypass while public access is locked. Test records are never treated as Yoti results, and the bypass stops working when production assurance is configured. No public launch is allowed before provider callbacks are authenticated and verified end to end.
 
-- `NIGHTJAR_AGE_ENV=sandbox` (default) uses Yoti's sandbox API and `YOTI_ACCESS_TOKEN`.
-- `NIGHTJAR_AGE_ENV=production` uses Yoti's production Age API and `YOTI_API_KEY`.
-- Both environments require `YOTI_SDK_ID`.
-- `NIGHTJAR_APP_URL` controls the post-verification callback/cancel URL.
-
-Nightjar stores verification state and an opaque provider reference. Raw identity documents are not stored in the Nightjar content database.
-
-The adult catalogue, recommendations, trending releases and protected manuscript access are also checked server-side against the stored verified state, so the client cannot bypass the age gate.
-
+The catalogue, listening and playback endpoints enforce age assurance and the server-side entitlement gate. A browser-side payment-success redirect cannot grant access.
 
 ## Inclusive spotlights
 
@@ -153,9 +145,9 @@ Approved profile, logo and release artwork remains live while a replacement is p
 
 ## Commercial controls
 
-Commercial planning values live in the Firebase `settings/commercial` record and can be edited or cleared by an administrator. This includes planning monthly price, creator-pool percentage, operating reserve, payout cadence and eligible-listening definition.
+Commercial planning values live in the Firebase `settings/commercial` record and can be edited or cleared by an administrator. This includes planning monthly price, operating reserve, payout cadence, capped equal creator-rate bands and creator eligibility.
 
-Confirmed subscription counts and confirmed gross MRR are read from Firebase billing records. Confirmed MRR is the sum of explicit `confirmedMonthlyAmountPence` values on active subscriptions; Nightjar does not infer confirmed revenue by multiplying a planning price.
+Confirmed subscription counts and confirmed gross MRR are read from Firebase billing records. Confirmed MRR counts only current, provider-verified active subscriptions with an explicit positive `confirmedMonthlyAmountPence`. Planning price and demo records do not grant entitlements.
 
 ## Audio Editor role
 
@@ -165,7 +157,7 @@ The internal role key remains `editor` for permission compatibility, while the u
 
 Creator release drafts, metadata and catalogue state are stored in Firestore. Release audio is stored privately in Firebase Storage under the verified Creator UID. Storage rules deny all direct reads. A Creator may upload or replace only their own supported audio objects, with a 25 MB limit, and the trusted backend validates the final Storage path, MIME type and object size.
 
-Listeners never receive a permanent public audio URL. Playback requires an active Firebase account plus recorded age assurance, then Nightjar issues a short-lived signed playback URL. Administrator moderation uses a separate short-lived preview URL.
+Listeners never receive a permanent public audio URL. Playback requires an active Firebase account, production age assurance and a current provider-verified paid subscription. While public access is locked, explicitly approved testers can use a temporary test entitlement. Nightjar then issues a short-lived signed playback URL. Administrator moderation uses a separate short-lived preview URL.
 
 Draft audio, approved/pending release artwork and other owned media are deleted when the associated removable draft is deleted so Nightjar does not intentionally leave orphaned user media behind.
 
@@ -179,7 +171,7 @@ Protected-content signals remain evidence rather than guilt. Nightjar's graduate
 
 ## Age assurance
 
-Age-assurance state is stored in Firebase and protected catalogue/playback endpoints verify it server-side. The production provider is not configured by this repository yet, so normal age-assurance initiation fails closed rather than simulating a production pass. Allowlisted administrators retain a controlled test-pass path for development only.
+Age-assurance state is stored in Firebase and protected catalogue/playback endpoints verify it server-side. The production provider is not configured by this repository yet, so normal age-assurance initiation fails closed rather than simulating a production pass. Allowlisted administrators and explicitly granted active testers retain controlled, audited temporary access for development only. The Admin launch panel shows current tester grants and the missing production gates.
 
 ## Social follows and verified listening
 
@@ -191,7 +183,7 @@ Nightjar uses one bounded verified-listening calculation for Creator Studio metr
 
 Creator audio is stored privately under `release-audio/{firebaseUid}/{releaseId}/...`. Browser reads are denied. Storage rules allow creation only when the authenticated account is an active Creator, the referenced Firestore release exists, belongs to that Creator, is still editable, the MIME type is supported and the file is no larger than 25 MB. The backend re-validates path ownership, MIME type and size before attaching the upload to the release.
 
-Released audio is played through short-lived signed URLs issued by a callable Function only after server-side age assurance succeeds. Administrator moderation previews use separate short-lived signed URLs.
+Released audio is played through short-lived signed URLs issued by a callable Function only after server-side age assurance and subscription entitlement succeed (or the pre-launch temporary test path applies). Administrator moderation previews use separate short-lived signed URLs.
 
 ### Public profiles
 
@@ -202,3 +194,14 @@ Profiles marked private are not returned by the public profile endpoint and cann
 ### Adult-content boundary
 
 Catalogue discovery, recommendations, trending, creator/writer discovery, spotlight state, audio playback and protected manuscript listing/opening all enforce age assurance in Firebase Functions. UI gating is not treated as the security boundary.
+
+
+## Production architecture status
+
+Nightjar is a web-first mobile and desktop product. The current PWA manifest and responsive app are the primary experience. The player supports lock-screen Media Session controls where the browser supports them, 15-second seeking, saved volume and speed, and touch-friendly mobile controls. Protected audio is not added to an offline service-worker cache.
+
+The payment provider is **not selected or connected**. There is no Stripe integration in the active source. Before billing is enabled, an adult-compatible processor must be underwritten for Nightjar's audio-only model and its fees, refunds, chargebacks, international creator payouts and tax responsibilities agreed in writing. Provider-authenticated webhooks will create UID-keyed `subscriptions/{uid}` records with `userId`, `status`, `providerVerified`, `billingProvider`, `providerSubscriptionId`, `confirmedMonthlyAmountPence` and `currentPeriodEnd`. The backend entitlement gate ignores client redirects and planning settings.
+
+Creator compensation remains a capped equal standard rate. Listening activity informs analytics and discovery but does not change an individual's base rate. Payout accruals need a versioned accounting ledger before any real creator payments are approved. Independent creators normally manage their own personal taxes, subject to applicable withholding/reporting obligations and a professional review of the final agreements.
+
+Public launch is locked. Outstanding gates include live age assurance and callback verification, processor webhook integration and reconciliation, cleared tester grants, admin MFA/capabilities, App Check and rate limits, privacy/export/deletion flows, community reporting/appeals, image re-encoding, a resumable/transcoded audio pipeline, and emulator-backed role/security tests. CI currently verifies frontend and Functions builds plus the entitlement policy tests; this list is not a claim that those remaining controls are complete.
