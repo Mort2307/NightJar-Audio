@@ -843,6 +843,39 @@ export const approvedImage = onRequest({ region: REGION }, async (request, respo
   stream.pipe(response);
 });
 
+export const getPendingImagePreview = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const assetId = cleanText((request.data as { assetId?: unknown } | undefined)?.assetId, 160);
+  if (!assetId) throw new HttpsError('invalid-argument', 'Image asset is required.');
+
+  const snapshot = await db.collection('imageAssets').doc(assetId).get();
+  const asset = snapshot.data();
+  if (!asset || asset.status !== 'pending') {
+    throw new HttpsError('failed-precondition', 'This image is no longer awaiting moderation.');
+  }
+
+  const storagePath = cleanText(asset.storagePath, 500);
+  const contentType = cleanText(asset.contentType, 80);
+  if (!storagePath || !contentType.startsWith('image/')) {
+    throw new HttpsError('not-found', 'Pending image preview is unavailable.');
+  }
+
+  try {
+    const [buffer] = await getStorage().bucket().file(storagePath).download();
+    if (!buffer.length || buffer.length > 5 * 1024 * 1024) {
+      throw new HttpsError('failed-precondition', 'Pending image is outside the allowed preview size.');
+    }
+    return {
+      assetId,
+      contentType,
+      dataUrl: `data:${contentType};base64,${buffer.toString('base64')}`,
+    };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('not-found', 'Pending image preview could not be loaded.');
+  }
+});
+
 export const listPendingImages = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('imageAssets').where('status', '==', 'pending').limit(100).get();
