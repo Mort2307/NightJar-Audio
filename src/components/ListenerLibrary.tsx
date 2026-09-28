@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bookmark, Clock3, Heart, ListMusic, Play, Plus, Trash2, X } from 'lucide-react';
 import { nightjarLibrary } from '../platform/firebase-library';
+import { demoLibrary } from '../demo/nightjarDemo';
 
 type Props = {
   onPlayRelease: (release: any) => void;
   notify: (message: string) => void;
+  demoMode?: boolean;
+  simulationMode?: boolean;
 };
 
-export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
+export default function ListenerLibrary({ onPlayRelease, notify, demoMode = false, simulationMode = false }: Props) {
   const [library, setLibrary] = useState<any>({ history: [], continueListening: [], favourites: [], playlists: [] });
   const [tab, setTab] = useState<'continue' | 'history' | 'favourites' | 'playlists'>('continue');
   const [loading, setLoading] = useState(true);
@@ -17,8 +20,12 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await nightjarLibrary.load();
-      setLibrary(data);
+      if (demoMode) {
+        setLibrary(structuredClone(demoLibrary));
+      } else {
+        const data = await nightjarLibrary.load();
+        setLibrary(data);
+      }
     } catch {
       notify('Your listener library could not be loaded.');
     } finally {
@@ -26,7 +33,7 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [demoMode]);
 
   const available = useMemo(() => {
     const map = new Map<string, any>();
@@ -38,8 +45,12 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
 
   const dismiss = async (releaseId: string) => {
     try {
-      await nightjarLibrary.dismissContinue(releaseId);
-      await load();
+      if (simulationMode) {
+        setLibrary((current: any) => ({ ...current, continueListening: (current.continueListening ?? []).filter((item: any) => String(item.id) !== releaseId) }));
+      } else {
+        await nightjarLibrary.dismissContinue(releaseId);
+        await load();
+      }
       notify('Removed from Continue Listening.');
     } catch {
       notify('Continue Listening could not be updated.');
@@ -48,8 +59,16 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
 
   const hideHistory = async (releaseId: string) => {
     try {
-      await nightjarLibrary.hideHistory(releaseId);
-      await load();
+      if (simulationMode) {
+        setLibrary((current: any) => ({
+          ...current,
+          history: (current.history ?? []).filter((item: any) => String(item.id) !== releaseId),
+          continueListening: (current.continueListening ?? []).filter((item: any) => String(item.id) !== releaseId),
+        }));
+      } else {
+        await nightjarLibrary.hideHistory(releaseId);
+        await load();
+      }
       notify('Removed from your visible listening history.');
     } catch {
       notify('Listening history could not be updated.');
@@ -59,8 +78,12 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
   const clearHistory = async () => {
     if (!window.confirm('Clear your visible Nightjar listening history? This does not remove favourites or playlists.')) return;
     try {
-      await nightjarLibrary.clearHistory();
-      await load();
+      if (simulationMode) {
+        setLibrary((current: any) => ({ ...current, history: [], continueListening: [] }));
+      } else {
+        await nightjarLibrary.clearHistory();
+        await load();
+      }
       notify('Visible listening history cleared.');
     } catch {
       notify('Listening history could not be cleared.');
@@ -70,10 +93,14 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
   const createPlaylist = async () => {
     if (!playlistTitle.trim()) return notify('Give the playlist a name first.');
     try {
-      await nightjarLibrary.savePlaylist(playlistTitle.trim(), selectedReleaseIds);
+      if (simulationMode) {
+        setLibrary((current: any) => ({ ...current, playlists: [...(current.playlists ?? []), { id: 'demo-playlist-' + Date.now(), title: playlistTitle.trim(), releaseIds: selectedReleaseIds }] }));
+      } else {
+        await nightjarLibrary.savePlaylist(playlistTitle.trim(), selectedReleaseIds);
+        await load();
+      }
       setPlaylistTitle('');
       setSelectedReleaseIds([]);
-      await load();
       notify('Playlist saved.');
     } catch {
       notify('Playlist could not be saved.');
@@ -83,8 +110,12 @@ export default function ListenerLibrary({ onPlayRelease, notify }: Props) {
   const removePlaylist = async (playlistId: string) => {
     if (!window.confirm('Delete this playlist?')) return;
     try {
-      await nightjarLibrary.deletePlaylist(playlistId);
-      await load();
+      if (simulationMode) {
+        setLibrary((current: any) => ({ ...current, playlists: (current.playlists ?? []).filter((item: any) => item.id !== playlistId) }));
+      } else {
+        await nightjarLibrary.deletePlaylist(playlistId);
+        await load();
+      }
       notify('Playlist deleted.');
     } catch {
       notify('Playlist could not be deleted.');
