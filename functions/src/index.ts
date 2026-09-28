@@ -2233,11 +2233,51 @@ export const trendingReleases = onCall({ region: REGION }, async (request) => {
 
 export const listNotifications = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  const snapshot = await accountRef(identity.uid).collection('notifications').limit(100).get();
+  const [snapshot, account] = await Promise.all([
+    accountRef(identity.uid).collection('notifications').limit(100).get(),
+    accountRef(identity.uid).get(),
+  ]);
+  const stored = account.data()?.notificationPreferences ?? {};
+  const preferences = {
+    displayMode: ['full','discreet','minimal'].includes(String(stored.displayMode ?? '')) ? String(stored.displayMode) : 'discreet',
+    newReleases: stored.newReleases !== false,
+    followedProfiles: stored.followedProfiles !== false,
+    collaborations: stored.collaborations !== false,
+    payments: stored.payments !== false,
+    comments: stored.comments !== false,
+    announcements: stored.announcements !== false,
+  };
+
+  const enabled = (item: Record<string, any>) => {
+    const type = String(item.type ?? '');
+    const subtype = String(item.subtype ?? '');
+    if (type === 'collaboration') return preferences.collaborations;
+    if (type === 'payment' || subtype === 'payment') return preferences.payments;
+    if (type === 'comment' || subtype === 'comment') return preferences.comments;
+    if (type === 'announcement') return preferences.announcements;
+    if (type === 'content' && subtype === 'release') return preferences.newReleases;
+    if (type === 'spotlight' || type === 'follow' || subtype === 'follow') return preferences.followedProfiles;
+    return true;
+  };
+
+  const present = (item: Record<string, any>) => {
+    if (preferences.displayMode === 'full') return item;
+    if (preferences.displayMode === 'minimal') {
+      return { ...item, title: 'Nightjar', message: 'You have a new Nightjar notification.' };
+    }
+    return {
+      ...item,
+      title: String(item.type ?? '') === 'payment' ? 'Nightjar account update' : 'Nightjar update',
+      message: 'There is a new update waiting for you in Nightjar.',
+    };
+  };
+
   const notifications = snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
+    .filter((item: any) => enabled(item))
     .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
-    .slice(0, 30);
+    .slice(0, 30)
+    .map((item: any) => present(item));
   return { notifications, unreadCount: notifications.filter((item: any) => item.read !== true).length };
 });
 
