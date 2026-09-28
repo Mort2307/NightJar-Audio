@@ -189,3 +189,68 @@ export const demoNotifications = [
   { id:'demo-notification-2', type:'collaboration', title:'Collaboration updated', message:'Room 47 moved to discussion.', read:false },
   { id:'demo-notification-3', type:'spotlight', title:'Writer Spotlight', message:'Mara Bell is today’s Writer Spotlight.', read:true },
 ];
+
+
+export const demoAdminData = {
+  applications: [
+    { id:'demo-application-1', creatorName:'Nia Stone', email:'nia.demo@example.invalid', status:'pending' },
+    { id:'demo-application-2', creatorName:'Theo March', email:'theo.demo@example.invalid', status:'waitlist' },
+  ],
+  subscriptions: [
+    { id:'demo-sub-1', email:'listener.one@example.invalid', plan:'Nightjar · £5 monthly', status:'active', currentPeriodEnd:'30 Oct 2026' },
+    { id:'demo-sub-2', email:'listener.two@example.invalid', plan:'Nightjar · £5 monthly', status:'trialing', currentPeriodEnd:'04 Oct 2026' },
+    { id:'demo-sub-3', email:'listener.three@example.invalid', plan:'Nightjar · £5 monthly', status:'past_due', currentPeriodEnd:'27 Sep 2026' },
+  ],
+  commercial: {
+    subscriptions:{ active:12500, trialing:420, pastDue:86 },
+    confirmedGrossMrrPence:6250000,
+    settings:{
+      planningMonthlyPricePence:500,
+      creatorPoolPercent:null,
+      reservePercent:15,
+      payoutCadence:'Monthly',
+      eligibleListeningDefinition:'Verified listening is used for analytics and discovery only in this demo.',
+      compensationModel:'capped_equal_rate',
+      creatorMonthlyCapPence:300000,
+      creatorRateBands:[
+        { minPaidSubscribers:0, monthlyRatePence:25000 },
+        { minPaidSubscribers:1000, monthlyRatePence:50000 },
+        { minPaidSubscribers:2500, monthlyRatePence:75000 },
+        { minPaidSubscribers:5000, monthlyRatePence:100000 },
+        { minPaidSubscribers:10000, monthlyRatePence:150000 },
+        { minPaidSubscribers:20000, monthlyRatePence:200000 },
+        { minPaidSubscribers:40000, monthlyRatePence:250000 },
+        { minPaidSubscribers:75000, monthlyRatePence:300000 },
+      ],
+      creatorEligibilityDefinition:'Illustrative demo: contracted Creators who complete their agreed deliverables and remain in good standing.',
+      popularityAffectsBaseRate:false,
+      tipsEnabled:false,
+      individualPurchasesEnabled:false,
+    },
+  },
+  scripts: [
+    { id:'demo-admin-script-1', title:'Room 47', status:'Submitted', version:2, editorUserId:'demo-editor-sam' },
+    { id:'demo-admin-script-2', title:'Signal Lost', status:'Under review', version:3, editorUserId:'demo-editor-rin' },
+    { id:'demo-admin-script-3', title:'Rain Check', status:'Submitted', version:1, editorUserId:null },
+  ],
+  editors: [
+    { userId:'demo-editor-sam', name:'Sam Reed', email:'sam.demo@example.invalid' },
+    { userId:'demo-editor-rin', name:'Rin Cole', email:'rin.demo@example.invalid' },
+  ],
+  reports: [
+    { id:'demo-report-1', caseId:'DEMO-2041', category:'Feedback / feature request', status:'New', reporterName:'Jamie', reporterHandle:'jamielistens', reporterEmail:'jamie.demo@example.invalid', createdAt:'2026-09-28T12:20:00.000Z', summary:'Would like a quicker way to jump back into a followed series.' },
+    { id:'demo-report-2', caseId:'DEMO-2036', category:'Technical issue', status:'Reviewing', reporterName:'Lex', reporterHandle:'lexlistens', reporterEmail:'lex.demo@example.invalid', createdAt:'2026-09-27T19:10:00.000Z', summary:'Playlist order did not look right after moving between devices.' },
+  ],
+  reviews: [
+    { id:'demo-review-admin-1', releaseTitle:'After Midnight', reviewerName:'Jamie', reviewerHandle:'jamielistens', rating:5, review:'Loved the pacing and the way the full production team was credited.' },
+    { id:'demo-review-admin-2', releaseTitle:'Window Seat', reviewerName:'Lex', reviewerHandle:'lexlistens', rating:4, review:'Really clean performance and audio.' },
+  ],
+  securityAlerts: [
+    { id:'demo-alert-1', severity:'medium', riskScore:58, reason:'Repeated protected-reader screenshot signal', userName:'Demo Collaborator', userHandle:'democollab', relatedId:'demo-script-1', createdAt:'2026-09-28T11:42:00.000Z', status:'open' },
+    { id:'demo-alert-2', severity:'low', riskScore:31, reason:'Rapid protected-reader selection attempts', userName:'Sample User', userHandle:'sampleuser', relatedId:'demo-script-2', createdAt:'2026-09-27T21:05:00.000Z', status:'open' },
+  ],
+  imageModeration: [
+    { id:'demo-image-1', kind:'profile_avatar', ownerEmail:'aria.demo@example.invalid', fileName:'aria-profile.webp', contentType:'image/webp', previewUrl:null },
+    { id:'demo-image-2', kind:'release_artwork', ownerEmail:'rowan.demo@example.invalid', fileName:'window-seat-cover.webp', contentType:'image/webp', previewUrl:null },
+  ],
+};
