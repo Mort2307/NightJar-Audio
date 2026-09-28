@@ -1839,3 +1839,46 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Listening intent selector */
+.mood-select {
+  min-width: 190px;
+  padding: 10px 34px 10px 12px;
+  border: 1px solid rgba(226, 208, 223, .2);
+  border-radius: 11px;
+  background: rgba(18, 14, 19, .96);
+  color: #f3edf2;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  outline: none;
+  cursor: pointer;
+  color-scheme: dark;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.mood-select:hover {
+  border-color: rgba(226, 208, 223, .34);
+  background: rgba(27, 20, 28, .98);
+}
+
+.mood-select:focus-visible {
+  border-color: rgba(201, 151, 190, .58);
+  box-shadow: 0 0 0 3px rgba(167, 116, 151, .12);
+}
+
+.mood-select option {
+  background: #171218;
+  color: #f7f1f6;
+  font-weight: 500;
+}
+
+@media (max-width: 760px) {
+  .mood-select {
+    width: 100%;
+    min-width: 0;
+    margin-top: 10px;
+  }
+}
