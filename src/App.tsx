@@ -1094,6 +1094,10 @@ function App() {
     if (!user) return;
     setProfileLoading(true);
     try {
+      if (simulationMode) {
+        notify('Simulation: profile changes saved locally for this session.');
+        return;
+      }
       const data = await nightjarCommunity.saveMyProfile(profile);
       if (data?.profile) setProfile((current: any) => ({ ...current, ...data.profile }));
       notify('Your Nightjar profile has been saved.');
@@ -1239,6 +1243,12 @@ function App() {
   const submitProtectionReport = async () => {
     if (!reportSummary.trim()) return notify('Please describe what happened.');
     try {
+      if (simulationMode) {
+        setProtectionReports((items) => [{ caseId:'DEMO-' + String(Date.now()).slice(-6), category:reportCategory, status:'New', summary:reportSummary }, ...items]);
+        setReportSummary('');
+        notify('Simulation: report added locally. Nothing was submitted to Nightjar.');
+        return;
+      }
       const data = await nightjarProtection.submitReport(reportCategory, reportSummary);
       setReportSummary('');
       await loadProtection();
@@ -1292,6 +1302,11 @@ function App() {
 
   const uploadProfileAvatar = async (file: File) => {
     if (!user) return;
+    if (simulationMode) {
+      setProfile((current: any) => ({ ...current, pendingAvatarStatus:'pending', pendingAvatarAssetId:'demo-avatar' }));
+      notify('Simulation: profile image placed into local moderation state; nothing was uploaded.');
+      return;
+    }
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       notify('Use PNG, JPG or WebP for profile images.');
       return;
@@ -1313,6 +1328,11 @@ function App() {
   const removeProfileImage = async () => {
     setProfileImageBusy(true);
     try {
+      if (simulationMode) {
+        setProfile((current: any) => ({ ...current, avatarUrl:null, avatarAssetId:null, avatarStatus:null, pendingAvatarAssetId:null, pendingAvatarStatus:null }));
+        notify('Simulation: profile image removed locally.');
+        return;
+      }
       await nightjarMedia.removeProfileAvatar();
       setProfile((current: any) => ({ ...current, avatarUrl: null, avatarAssetId: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null }));
       notify('Profile image removed.');
@@ -2061,7 +2081,7 @@ function App() {
             </div>
             <div className="profile-public-preview panel">{profile.avatarUrl && <span className="profile-preview-avatar"><img className="avatar-approved-image" src={profile.avatarUrl} alt="" /></span>}<div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p>{profile.welcomeMessage && <p className="profile-welcome-preview">{profile.welcomeMessage}</p>}<div className="profile-preview-chips">{[...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,6).map((item:string)=><span key={item}>{item}</span>)}</div></div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
             <article className="panel taste-panel"><div><span className="mini-label">TASTE ENGINE</span><h2>What Nightjar is learning</h2><p>Declared taste is kept separate from identity. Listening signals can refine recommendations without trying to infer who you are.</p></div><div className="taste-vector">{tasteVector.length===0 ? <span className="taste-empty">Your taste graph will grow as you save, finish, replay and explore.</span> : tasteVector.slice(0,10).map((item:any)=><div className="taste-chip" key={item.label}><strong>{item.label}</strong><span>{item.weight}</span></div>)}</div></article>
-            <NotificationPreferences notify={notify} />
+            <NotificationPreferences notify={notify} simulationMode={simulationMode} />
           </section>
         )}
 
