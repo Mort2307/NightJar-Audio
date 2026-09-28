@@ -2333,3 +2333,59 @@ button:focus-visible {
   .rate-band-row { grid-template-columns: 1fr; }
   .research-span-two { grid-column: auto; }
 }
+
+
+/* Script marketplace and linked production credits */
+.marketplace-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 0 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: rgba(0,0,0,.24);
+  color: var(--muted-2);
+}
+.marketplace-search input {
+  width: 100%;
+  border: 0;
+  padding: 11px 0;
+  background: transparent;
+  color: #f1e9ef;
+  font: inherit;
+  font-size: 10px;
+  outline: none;
+}
+.marketplace-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.marketplace-card {
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: rgba(255,255,255,.018);
+}
+.marketplace-card-head { display: flex; justify-content: space-between; gap: 10px; color: var(--plum-soft); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; }
+.marketplace-card h3 { margin: 8px 0 4px; font-family: Georgia,serif; font-size: 21px; font-weight: 400; }
+.marketplace-writer {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--plum-soft);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+.marketplace-card > p { min-height: 42px; margin: 10px 0; color: var(--muted-2); font-size: 9px; line-height: 1.55; }
+.marketplace-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 11px; }
+.marketplace-tags span { padding: 5px 7px; border: 1px solid var(--line-soft); border-radius: 999px; color: #d8ccd5; font-size: 7px; }
+.marketplace-rights { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; margin: 0 0 13px; }
+.marketplace-rights div { padding: 8px; border: 1px solid var(--line-soft); border-radius: 9px; }
+.marketplace-rights dt { color: var(--muted-2); font-size: 7px; text-transform: uppercase; letter-spacing: .07em; }
+.marketplace-rights dd { margin: 3px 0 0; color: #e2d7df; font-size: 8px; }
+.release-credit-row { grid-template-columns: minmax(120px,.55fr) minmax(160px,.9fr) minmax(150px,1fr) auto; }
+
+@media (max-width: 860px) {
+  .marketplace-grid { grid-template-columns: 1fr; }
+  .marketplace-rights { grid-template-columns: 1fr; }
+  .release-credit-row { grid-template-columns: 1fr; }
+}
