@@ -3562,24 +3562,29 @@ export const saveNotificationPreferences = onCall({ region: REGION }, async (req
 });
 
 const listenerHistoryFor = async (uid: string) => {
-  const [eventsSnapshot, favouritesSnapshot, hiddenSnapshot, releasesSnapshot] = await Promise.all([
+  const [eventsSnapshot, favouritesSnapshot, hiddenContinueSnapshot, hiddenHistorySnapshot, accountSnapshot, releasesSnapshot] = await Promise.all([
     db.collection('listeningEvents').where('userId', '==', uid).limit(3000).get(),
     accountRef(uid).collection('favourites').limit(500).get(),
     accountRef(uid).collection('hiddenContinue').limit(500).get(),
+    accountRef(uid).collection('hiddenHistory').limit(500).get(),
+    accountRef(uid).get(),
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
   ]);
   const releases = new Map(releasesSnapshot.docs.map((doc) => [doc.id, releasePayload(doc.data(), doc.id)]));
   const favouriteIds = new Set(favouritesSnapshot.docs.map((doc) => doc.id));
-  const hiddenIds = new Set(hiddenSnapshot.docs.map((doc) => doc.id));
+  const hiddenContinueIds = new Set(hiddenContinueSnapshot.docs.map((doc) => doc.id));
+  const hiddenHistoryIds = new Set(hiddenHistorySnapshot.docs.map((doc) => doc.id));
+  const historyClearedAt = toIso(accountSnapshot.data()?.historyClearedAt);
   const latest = new Map<string, any>();
 
   const ordered = eventsSnapshot.docs
     .map((doc) => ({ ...doc.data(), eventId: doc.id, createdAtIso: toIso(doc.data().createdAt) }))
+    .filter((event: any) => !historyClearedAt || !event.createdAtIso || String(event.createdAtIso) > historyClearedAt)
     .sort((a: any, b: any) => String(b.createdAtIso ?? '').localeCompare(String(a.createdAtIso ?? '')));
 
   for (const event of ordered) {
     const releaseId = cleanText(event.releaseId, 160);
-    if (releaseId && !latest.has(releaseId)) latest.set(releaseId, event);
+    if (releaseId && !hiddenHistoryIds.has(releaseId) && !latest.has(releaseId)) latest.set(releaseId, event);
   }
 
   const history = Array.from(latest.entries()).map(([releaseId, event]) => {
@@ -3600,7 +3605,7 @@ const listenerHistoryFor = async (uid: string) => {
 
   return {
     history,
-    continueListening: history.filter((item: any) => !item.completed && item.positionSeconds > 0 && !hiddenIds.has(String(item.id))),
+    continueListening: history.filter((item: any) => !item.completed && item.positionSeconds > 0 && !hiddenContinueIds.has(String(item.id))),
     favourites: history.filter((item: any) => item.favourite),
   };
 };
@@ -3630,6 +3635,25 @@ export const dismissContinueListening = onCall({ region: REGION }, async (reques
     hiddenAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   return { releaseId, hidden: true };
+});
+
+export const hideHistoryItem = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  await accountRef(identity.uid).collection('hiddenHistory').doc(releaseId).set({
+    hiddenAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { releaseId, hidden: true };
+});
+
+export const clearListenerHistory = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await accountRef(identity.uid).set({
+    historyClearedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { cleared: true };
 });
 
 export const savePlaylist = onCall({ region: REGION }, async (request) => {
