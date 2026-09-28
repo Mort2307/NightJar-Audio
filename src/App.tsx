@@ -92,6 +92,8 @@ type Track = {
   contentRating?: string;
   seriesTitle?: string | null;
   episodeNumber?: number | null;
+  nightjarOriginal?: boolean;
+  productionNote?: string | null;
 };
 
 type CreatorSummary = {
@@ -581,6 +583,8 @@ function App() {
         contentRating: release.contentRating ?? 'adult',
         seriesTitle: release.seriesTitle ?? null,
         episodeNumber: release.episodeNumber ?? null,
+        nightjarOriginal: release.nightjarOriginal === true,
+        productionNote: release.productionNote ?? null,
       })) as Track[];
       setTracks(liveTracks);
       setCreatorDirectory((creatorsResponse.creators ?? []).map((creator: any) => ({
@@ -1504,7 +1508,7 @@ function App() {
         <div className="access-glow access-glow-two" />
         <section className="access-card" aria-labelledby="nightjar-access-title">
           <div className="access-topline">
-            <span className="brand-lockup"><span className="nightjar-mark"><Moon size={17} /></span><span>NIGHTJAR</span></span>
+            <span className="brand-lockup"><img className="brand-logo" src="/favicon.svg" alt="Nightjar"/><span>NIGHTJAR</span></span>
             <span className="access-label">18+ ONLY</span>
           </div>
           <div className="access-symbol"><Moon size={22} /></div>
@@ -2061,6 +2065,8 @@ function releaseToTrack(release: any): Track {
     contentRating: release.contentRating ?? 'adult',
     seriesTitle: release.seriesTitle ?? null,
     episodeNumber: release.episodeNumber ?? null,
+    nightjarOriginal: release.nightjarOriginal === true,
+    productionNote: release.productionNote ?? null,
   };
 }
 
@@ -2076,8 +2082,9 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason 
     <div className="track-body">
       <div className="track-type"><span>{track.creator}</span><span>{track.duration}</span></div>
       <h3>{track.title}</h3>
-      {(track.seriesTitle || track.contentRating) && <div className="track-meta-line">{track.seriesTitle && <span>{track.seriesTitle}{track.episodeNumber != null ? ' · Episode ' + track.episodeNumber : ''}</span>}<span>{String(track.contentRating ?? 'adult').toUpperCase()}</span></div>}
+      {(track.seriesTitle || track.contentRating || track.nightjarOriginal) && <div className="track-meta-line">{track.nightjarOriginal && <span>NIGHTJAR ORIGINAL</span>}{track.seriesTitle && <span>{track.seriesTitle}{track.episodeNumber != null ? ' · Episode ' + track.episodeNumber : ''}</span>}<span>{String(track.contentRating ?? 'adult').toUpperCase()}</span></div>}
       <p>{track.descriptor}</p>
+      {track.productionNote && <p className="track-production-note"><strong>Behind the scenes:</strong> {track.productionNote}</p>}
       {!!track.contributors?.length && <div className="track-credit-line">{track.contributors.slice(0,4).map((credit)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}
       <div className="track-footer"><span className="creator-link">{track.audioAvailable || track.audioUrl ? 'Age-gated audio ready' : 'Audio not connected'}</span><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove favourite' : 'Add favourite'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div>
       {reason && <p className="recommendation-reason"><Sparkles size={12} />{reason}</p>}
