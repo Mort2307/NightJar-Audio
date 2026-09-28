@@ -558,6 +558,12 @@ function App() {
     if (canAdmin) {
       void loadAdminOverview();
       void loadSecurityAlerts();
+      void loadAdminApplications();
+      void loadAdminReports();
+      void loadAdminReviews();
+      void loadAdminEditorial();
+      void loadPendingImages();
+      void loadCommercialControls();
     }
   }, [user, ageVerified, role, currentIntent, previewRole, demoMode]);
 
@@ -1514,7 +1520,10 @@ function App() {
       if (demoMode) setImageModeration(structuredClone(demoAdminData.imageModeration));
       else {
         const data = await nightjarMedia.listPending();
-        setImageModeration(data.assets ?? []);
+        const assets = data.assets ?? [];
+        setImageModeration(assets);
+        const pendingBrand = assets.find((asset:any) => asset.kind === 'brand_logo' && asset.previewUrl);
+        setPendingLogoPreviewUrl(pendingBrand?.previewUrl ?? null);
       }
     } catch { notify('Pending image moderation could not be loaded.'); }
     finally { setAdminPanelLoading(false); }
