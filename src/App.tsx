@@ -586,6 +586,11 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  useEffect(() => {
+    if (view !== 'admin' || accountLoading || !role || role === 'admin') return;
+    navigate(role === 'creator' ? 'creator' : role === 'writer' ? 'writer' : role === 'editor' ? 'editor' : 'discover');
+  }, [view, role, accountLoading]);
+
   const loadLiveProductData = async () => {
     try {
       if (demoMode) {
