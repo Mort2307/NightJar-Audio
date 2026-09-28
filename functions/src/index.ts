@@ -1286,10 +1286,8 @@ export const commercialOverview = onCall({ region: REGION }, async (request) => 
   const reservePence = settings.reservePercent == null
     ? 0
     : Math.max(0, Math.round(confirmedGrossMrrPence * (settings.reservePercent / 100)));
-  const planningBalanceBeforeFeesTaxPence = Math.max(
-    0,
-    confirmedGrossMrrPence - plannedCreatorPayoutPence - reservePence,
-  );
+  const planningBalanceBeforeFeesTaxPence =
+    confirmedGrossMrrPence - plannedCreatorPayoutPence - reservePence;
 
   return {
     settings,
