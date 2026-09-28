@@ -616,7 +616,7 @@ function App() {
   }, [user, ageVerified, role]);
 
   useEffect(() => {
-    if (!user || !ageVerified) return;
+    if (!user || !ageVerified || (role === 'admin' && !testingSessionHydrated)) return;
     void loadLiveProductData();
     if (role === 'creator' || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
     if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
@@ -631,7 +631,7 @@ function App() {
       void loadPendingImages();
       void loadCommercialControls();
     }
-  }, [user, ageVerified, role, currentIntent, previewRole, demoMode]);
+  }, [user, ageVerified, role, currentIntent, previewRole, demoMode, testingSessionHydrated]);
 
   const notify = (message: string) => {
     setToast(message);
