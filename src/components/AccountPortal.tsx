@@ -103,7 +103,7 @@ export default function AccountPortal() {
       <span>Secure account access</span>
     </header>
 
-    <AccountAccess
+    {!identity?.emailVerified && <AccountAccess
       key={(identity?.userId ?? 'guest') + ':' + String(identity?.emailVerified ?? false)}
       identity={identity}
       onAuthenticated={(next) => {
@@ -114,7 +114,7 @@ export default function AccountPortal() {
         setIdentity(null);
         setAccount(null);
       }}
-    />
+    />}
 
     {identity?.emailVerified && <section className="account-backend-card">
       <div className="account-backend-heading">
@@ -123,6 +123,7 @@ export default function AccountPortal() {
           <strong>Verified Nightjar identity</strong>
           <span>Firebase Authentication → trusted Nightjar backend</span>
         </div>
+        <button className="ghost-button" onClick={() => void nightjarAuth.signOut().then(() => { setIdentity(null); setAccount(null); setMessage(''); })}>Sign out</button>
       </div>
 
       {loadingAccount && <p>Checking protected account state…</p>}
