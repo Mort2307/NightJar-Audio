@@ -39,6 +39,7 @@ type Props = {
   onRefresh: () => Promise<void>;
   notify: (message: string) => void;
   simulationMode?: boolean;
+  onSimulationChange?: (release: Release | null, deletedId?: string) => void;
 };
 
 const readDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
@@ -64,7 +65,7 @@ const readAudioDurationMinutes = (file: File) => new Promise<number | null>((res
   audio.src = objectUrl;
 });
 
-export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify, simulationMode = false }: Props) {
+export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify, simulationMode = false, onSimulationChange }: Props) {
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
   const [audioBusy, setAudioBusy] = useState(false);
@@ -72,6 +73,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
 
   const current = selectedRelease ?? null;
+
+  useEffect(() => {
+    if (simulationMode && selectedRelease) onSimulationChange?.(selectedRelease);
+  }, [simulationMode, selectedRelease]);
 
   useEffect(() => {
     if (simulationMode) {
@@ -118,7 +123,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   };
 
   useEffect(() => {
-    if (!current?.id || !current.pendingArtworkAssetId || current.pendingArtworkStatus !== 'pending') return;
+    if (simulationMode || !current?.id || !current.pendingArtworkAssetId || current.pendingArtworkStatus !== 'pending') return;
     let cancelled = false;
     const pendingAssetId = current.pendingArtworkAssetId;
     const releaseId = current.id;
@@ -153,7 +158,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [current?.id, current?.pendingArtworkAssetId, current?.pendingArtworkStatus]);
+  }, [simulationMode, current?.id, current?.pendingArtworkAssetId, current?.pendingArtworkStatus]);
 
   const createDraft = async () => {
     if (!draft.title.trim()) return notify('Give the release a title first.');
@@ -295,6 +300,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!window.confirm('Delete this release draft and its private audio?')) return;
     try {
       if (simulationMode) {
+        onSimulationChange?.(null, current.id);
         setSelectedRelease(null);
         notify('Simulation: release draft removed locally.');
         return;
