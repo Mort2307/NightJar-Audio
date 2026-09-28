@@ -3578,7 +3578,10 @@ const listenerHistoryFor = async (uid: string) => {
   const latest = new Map<string, any>();
 
   const ordered = eventsSnapshot.docs
-    .map((doc) => ({ ...doc.data(), eventId: doc.id, createdAtIso: toIso(doc.data().createdAt) }))
+    .map((doc) => {
+      const data = doc.data() as Record<string, any>;
+      return { ...data, eventId: doc.id, createdAtIso: toIso(data.createdAt) };
+    })
     .filter((event: any) => !historyClearedAt || !event.createdAtIso || String(event.createdAtIso) > historyClearedAt)
     .sort((a: any, b: any) => String(b.createdAtIso ?? '').localeCompare(String(a.createdAtIso ?? '')));
 
