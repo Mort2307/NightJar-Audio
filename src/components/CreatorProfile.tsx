@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { ArrowRight, Heart, Mic2, Share2 } from 'lucide-react';
+import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 
 type CreatorProfileData = {
   userId: string;
@@ -24,9 +25,10 @@ type Props = {
   onPlayRelease: (release: any) => void;
   onClose: () => void;
   notify: (message: string) => void;
+  demoMode?: boolean;
 };
 
-export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onPlayRelease, onClose, notify }: Props) {
+export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onPlayRelease, onClose, notify, demoMode = false }: Props) {
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -34,13 +36,30 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
     if (!creatorUserId) return;
     let cancelled = false;
     setLoading(true);
+    if (demoMode) {
+      const creator = demoCreators.find((item) => item.userId === creatorUserId);
+      const releases = demoTracks.filter((item) => item.creatorUserId === creatorUserId).map((item:any) => ({
+        ...item,
+        creatorName:item.creator,
+        durationMinutes:Number.parseFloat(item.duration),
+        description:item.descriptor,
+      }));
+      setProfile(creator ? {
+        userId:creator.userId, name:creator.name, handle:creator.handle, headline:creator.note,
+        bio:'Fictional Nightjar demo profile used to preview a populated creator experience.',
+        initials:creator.initials, avatarUrl:null, welcomeMessage:'Welcome to my Nightjar demo profile.',
+        followers:creator.followers, releases, favouriteTags:['Atmospheric','Story-led'],
+      } : null);
+      setLoading(false);
+      return;
+    }
     void nightjarCommunity.getCreatorProfile(creatorUserId).then((data) => {
       if (!cancelled) setProfile(data?.creator ?? null);
     }).catch(() => {
       if (!cancelled) notify('Creator profile could not be loaded.');
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [creatorUserId]);
+  }, [creatorUserId, demoMode]);
 
   if (!creatorUserId) return null;
   const following = followingIds.includes(creatorUserId);
