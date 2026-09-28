@@ -4,13 +4,22 @@ import AccountAccess from './AccountAccess';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount, type NightjarAccountIdentity } from '../platform/firebase-account';
 
+const accountDestination = (account: NightjarAccountIdentity) => {
+  if (account.admin || account.role === 'admin') return '/admin';
+  if (account.role === 'creator') return '/creator';
+  if (account.role === 'writer') return '/writer';
+  if (account.role === 'editor') return '/editor';
+  if (account.role === 'listener') return '/discover';
+  return null;
+};
+
 export default function AccountPortal() {
   const [identity, setIdentity] = useState<NightjarIdentity | null>(() => nightjarAuth.current());
   const [account, setAccount] = useState<NightjarAccountIdentity | null>(null);
   const [loadingAccount, setLoadingAccount] = useState(false);
   const [message, setMessage] = useState('');
 
-  const loadAccount = async (nextIdentity: NightjarIdentity | null) => {
+  const loadAccount = async (nextIdentity: NightjarIdentity | null, enterApp = false) => {
     if (!nextIdentity?.emailVerified) {
       setAccount(null);
       return;
@@ -18,10 +27,24 @@ export default function AccountPortal() {
     setLoadingAccount(true);
     setMessage('');
     try {
-      setAccount(await nightjarAccount.identity());
+      const nextAccount = await nightjarAccount.identity();
+      setAccount(nextAccount);
+
+      if (nextAccount.status === 'suspended') {
+        setMessage('This Nightjar account is suspended. Contact Nightjar support if you believe this needs review.');
+        return;
+      }
+
+      if (enterApp) {
+        const destination = accountDestination(nextAccount);
+        if (destination) {
+          window.location.replace(destination);
+          return;
+        }
+      }
     } catch {
       setAccount(null);
-      setMessage('Your Firebase identity is valid, but the Nightjar backend account service is not available yet.');
+      setMessage('Nightjar could not reach the protected account service. Try again in a moment.');
     } finally {
       setLoadingAccount(false);
     }
@@ -37,7 +60,10 @@ export default function AccountPortal() {
     setMessage('');
     try {
       await nightjarAccount.chooseRole(role);
-      setAccount(await nightjarAccount.identity());
+      const nextAccount = await nightjarAccount.identity();
+      setAccount(nextAccount);
+      const destination = accountDestination(nextAccount);
+      if (destination) window.location.replace(destination);
     } catch {
       setMessage('Nightjar could not save that account role.');
     } finally {
@@ -56,7 +82,7 @@ export default function AccountPortal() {
       identity={identity}
       onAuthenticated={(next) => {
         setIdentity(next);
-        void loadAccount(next);
+        void loadAccount(next, true);
       }}
       onSignedOut={() => {
         setIdentity(null);
