@@ -1621,19 +1621,21 @@ export const adminSetTestAccess = onCall({ region: REGION }, async (request) => 
     throw new HttpsError('failed-precondition', 'Temporary tester access is unavailable after production age assurance is enabled.');
   }
 
-  await ref.set({
+  const auditBatch = db.batch();
+  auditBatch.set(ref, {
     testAccess: enabled,
     testAccessUpdatedBy: admin.uid,
     testAccessUpdatedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  await db.collection('adminAudit').add({
+  auditBatch.set(db.collection('adminAudit').doc(), {
     actorUid: admin.uid, action: enabled ? 'tester.grant' : 'tester.revoke',
     targetUid: userId, previousState: snapshot.data()?.testAccess === true,
     newState: enabled, reason: 'prelaunch age and billing test access',
     createdAt: FieldValue.serverTimestamp(),
   });
+  await auditBatch.commit();
 
   return { userId, testAccess: enabled };
 });
