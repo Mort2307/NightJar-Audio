@@ -141,7 +141,8 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     const minutes = Number(sleepTimer);
     if (!Number.isFinite(minutes) || minutes <= 0) return;
     sleepTimerTimeout.current = window.setTimeout(() => {
-      audioRef.current?.pause();
+      if (simulationMode) setIsPlaying(false);
+      else audioRef.current?.pause();
       setSleepTimer('off');
       notify('Sleep timer finished. Playback paused.');
     }, minutes * 60 * 1000);
@@ -149,7 +150,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
       if (sleepTimerTimeout.current != null) window.clearTimeout(sleepTimerTimeout.current);
       sleepTimerTimeout.current = null;
     };
-  }, [sleepTimer]);
+  }, [sleepTimer, simulationMode]);
 
   if (!track || (!track.audioAvailable && !track.audioUrl)) return null;
 
