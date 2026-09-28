@@ -549,7 +549,7 @@ function App() {
     if (role === 'creator' || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
     if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
     if (role === 'editor' || (canAdmin && previewRole === 'editor')) void loadEditorQueue();
-  }, [user, ageVerified, role, currentIntent, previewRole]);
+  }, [user, ageVerified, role, currentIntent, previewRole, demoMode]);
 
   const notify = (message: string) => {
     setToast(message);
@@ -566,6 +566,22 @@ function App() {
 
   const loadLiveProductData = async () => {
     try {
+      if (demoMode) {
+        setTracks(structuredClone(demoTracks) as Track[]);
+        setCreatorDirectory(structuredClone(demoCreators));
+        setCreatorSpotlightList(structuredClone(demoSpotlights.creators) as Spotlight[]);
+        setWriterSpotlightList(structuredClone(demoSpotlights.writers) as Spotlight[]);
+        setEditorSpotlightList(structuredClone(demoSpotlights.editors) as Spotlight[]);
+        setListenerSpotlight(structuredClone(demoSpotlights.listener) as Spotlight);
+        setSpotlightMeta({ listenerTopSevenCount: 2, listenerSpotlightDay: 3, listenerWeek: 'Demo week' });
+        setNotifications(structuredClone(demoNotifications));
+        setNotificationUnreadCount(demoNotifications.filter((item) => !item.read).length);
+        setLiveRecommendations(structuredClone(demoTracks.slice(0, 4)).map((item: any, index: number) => ({ ...item, reason: index === 0 ? 'Because you like cinematic slow-burn stories' : 'Demo recommendation based on your selected preferences' })));
+        setLiveTrending(structuredClone(demoTracks.slice(1, 5)));
+        setFavouriteReleaseIds(['demo-release-1','demo-release-2']);
+        setFollowingProfileIds(['demo-creator-aria','demo-creator-rowan']);
+        return;
+      }
       const [catalogueResponse, creatorsResponse, firebaseSpotlightResponse] = await Promise.all([
         nightjarCatalogue.list(),
         nightjarCommunity.listCreators(),
@@ -705,8 +721,11 @@ function App() {
     if (!user || (role !== 'creator' && !canAdmin)) return;
     setCreatorDashboardLoading(true);
     try {
-      const data = await nightjarCatalogue.dashboard();
-      setCreatorDashboard({ metrics: data.metrics ?? {}, releases: data.releases ?? [] });
+      if (demoMode) setCreatorDashboard(structuredClone(demoCreatorDashboard));
+      else {
+        const data = await nightjarCatalogue.dashboard();
+        setCreatorDashboard({ metrics: data.metrics ?? {}, releases: data.releases ?? [] });
+      }
     } catch {
       setCreatorDashboard({ metrics: {}, releases: [] });
     } finally {
@@ -717,8 +736,7 @@ function App() {
   const loadWriterScripts = async () => {
     if (!user) return;
     try {
-      const data = await nightjarScripts.writerScripts();
-      const items = data.scripts ?? [];
+      const items = demoMode ? structuredClone(demoWriterScripts) : (await nightjarScripts.writerScripts()).scripts ?? [];
       setWriterScripts(items);
       setWriterSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
     } catch {
@@ -729,8 +747,7 @@ function App() {
   const loadEditorQueue = async () => {
     if (!user) return;
     try {
-      const data = await nightjarScripts.editorQueue();
-      const items = data.queue ?? [];
+      const items = demoMode ? structuredClone(demoEditorQueue) : (await nightjarScripts.editorQueue()).queue ?? [];
       setEditorQueue(items);
       setEditorSelected((current: any) => current && items.some((item: any) => item.id === current.id) ? current : items[0] ?? null);
     } catch {
