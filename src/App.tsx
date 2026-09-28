@@ -1707,6 +1707,24 @@ function App() {
     notify('Simulation ended. Demo data remains enabled until you switch it off.');
   };
 
+  const resetSimulation = () => {
+    if (!canAdmin || !demoMode) return;
+    setPlaying(null);
+    setReviewTrack(null);
+    setCreatorProfileUserId(null);
+    setPublicProfileUserId(null);
+    setWriterPermissions([]);
+    setWriterSelected(null);
+    setEditorSelected(null);
+    setProfile((current:any) => ({ ...current, displayName:'', handle:'', headline:'', bio:'', welcomeMessage:'', avatarUrl:null, pendingAvatarAssetId:null, pendingAvatarStatus:null }));
+    void loadLiveProductData();
+    void loadCreatorDashboard();
+    void loadWriterScripts();
+    void loadEditorQueue();
+    void loadAdminOverview();
+    notify('Demo / simulation state reset to the original fictional dataset.');
+  };
+
   const selectPreviewRole = (next: PreviewRole) => {
     if (!canAdmin) return;
     if (demoMode) setSimulationMode(true);
@@ -1929,7 +1947,8 @@ function App() {
       {demoMode && <div className={simulationMode ? 'simulation-banner active' : 'simulation-banner'}>
         <div><strong>{simulationMode ? 'SIMULATION MODE' : 'DEMO DATA'}</strong><span>{simulationMode ? `Viewing Nightjar as ${previewRole ? roleMeta[previewRole].label : 'Administrator'} · no simulated actions write to production` : 'Populated fictional records · live production data is not being changed'}</span></div>
         <div className="simulation-banner-actions">
-          {simulationMode && <><button onClick={() => startSimulation('listener')}>Listener</button><button onClick={() => startSimulation('creator')}>Creator</button><button onClick={() => startSimulation('writer')}>Writer</button><button onClick={() => startSimulation('editor')}>Audio Editor</button><button onClick={stopSimulation}>Return to Admin</button></>}
+          {simulationMode && <><button onClick={() => startSimulation('listener')}>Listener</button><button onClick={() => startSimulation('creator')}>Creator</button><button onClick={() => startSimulation('writer')}>Writer</button><button onClick={() => startSimulation('editor')}>Audio Editor</button><button onClick={resetSimulation}>Reset simulation</button><button onClick={stopSimulation}>Return to Admin</button></>}
+          {!simulationMode && <button onClick={resetSimulation}>Reset demo data</button>}
           <button onClick={disableDemoMode}>Turn demo off</button>
         </div>
       </div>}
