@@ -5,6 +5,8 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 
 const libraryCall = httpsCallable<void, { history: any[]; continueListening: any[]; favourites: any[]; playlists: any[] }>(functions, 'listenerLibrary');
 const dismissCall = httpsCallable<{ releaseId: string }, { releaseId: string; hidden: boolean }>(functions, 'dismissContinueListening');
+const hideHistoryCall = httpsCallable<{ releaseId: string }, { releaseId: string; hidden: boolean }>(functions, 'hideHistoryItem');
+const clearHistoryCall = httpsCallable<void, { cleared: boolean }>(functions, 'clearListenerHistory');
 const savePlaylistCall = httpsCallable<{ playlistId?: string; title: string; releaseIds: string[] }, { playlist: any }>(functions, 'savePlaylist');
 const deletePlaylistCall = httpsCallable<{ playlistId: string }, { deleted: boolean; playlistId: string }>(functions, 'deletePlaylist');
 
@@ -15,6 +17,14 @@ export const nightjarLibrary = {
 
   async dismissContinue(releaseId: string) {
     return (await dismissCall({ releaseId })).data;
+  },
+
+  async hideHistory(releaseId: string) {
+    return (await hideHistoryCall({ releaseId })).data;
+  },
+
+  async clearHistory() {
+    return (await clearHistoryCall()).data;
   },
 
   async savePlaylist(title: string, releaseIds: string[], playlistId?: string) {
