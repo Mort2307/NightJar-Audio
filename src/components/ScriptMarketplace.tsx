@@ -49,8 +49,16 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
   const expressInterest = async (script: any) => {
     const message = window.prompt('Optional message to the Writer about why this script interests you.') ?? '';
     try {
-      if (!simulationMode) await nightjarCollaboration.expressInterest(script.id, message);
-      notify(simulationMode ? 'Simulation: interest recorded locally for this demo session.' : 'Interest sent to the Writer. The proposal is now visible in your Collaboration Workspace.');
+      if (demoMode && !simulationMode) {
+        notify('Demo data is read-only. Start Creator Simulation to express interest.');
+        return;
+      }
+      if (simulationMode) {
+        notify('Simulation: interest recorded locally for this demo session.');
+        return;
+      }
+      await nightjarCollaboration.expressInterest(script.id, message);
+      notify('Interest sent to the Writer. The proposal is now visible in your Collaboration Workspace.');
     } catch {
       notify('Interest could not be sent.');
     }
