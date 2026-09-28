@@ -368,6 +368,7 @@ function App() {
   const [simulationMode, setSimulationMode] = useState(false);
   const [demoSessionKey, setDemoSessionKey] = useState(0);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [demoLogoPreviewUrl, setDemoLogoPreviewUrl] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [identityEmail, setIdentityEmail] = useState<string | null>(null);
   const [identityAdmin, setIdentityAdmin] = useState(false);
@@ -1366,19 +1367,25 @@ function App() {
           ? { name: 'Sam Reed', initials: 'SR', label: 'Audio Editor' }
           : { name: 'Nightjar Admin', initials: 'NJ', label: 'Administrator' };
 
+  const applyRuntimeLogo = (nextLogo: string | null) => {
+    setLogoUrl(nextLogo);
+    const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+    if (favicon) favicon.href = nextLogo ?? '/favicon.svg';
+  };
+
   const loadBranding = async () => {
     try {
+      if (demoMode && demoLogoPreviewUrl) {
+        applyRuntimeLogo(demoLogoPreviewUrl);
+        return;
+      }
       const data = await nightjarMedia.getBranding();
-      setLogoUrl(data.logoUrl ?? null);
+      applyRuntimeLogo(data.logoUrl ?? null);
     } catch { /* wordmark fallback remains available */ }
   };
 
   const uploadLogo = async (file: File) => {
     if (!canAdmin) return;
-    if (demoMode) {
-      notify('Demo data is isolated. Branding uploads are disabled until Demo Mode is turned off.');
-      return;
-    }
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       notify('Use PNG, JPG or WebP for the Nightjar logo.');
       return;
@@ -1387,12 +1394,21 @@ function App() {
       notify('Logo must be 5 MB or smaller.');
       return;
     }
+    if (demoMode) {
+      if (demoLogoPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(demoLogoPreviewUrl);
+      const previewUrl = URL.createObjectURL(file);
+      setDemoLogoPreviewUrl(previewUrl);
+      applyRuntimeLogo(previewUrl);
+      notify('Demo logo preview applied locally. Nothing was uploaded or changed in production.');
+      return;
+    }
     setLogoUploading(true);
     try {
       const dataUrl = await readFileDataUrl(file);
       await nightjarMedia.submitImage({ kind: 'brand_logo', dataUrl, contentType: file.type, fileName: file.name });
-      notify('Logo submitted for image moderation. It will not appear publicly until an administrator approves it.');
-      void loadPendingImages();
+      await loadPendingImages();
+      setAdminPanel('images');
+      notify('Replacement logo uploaded. Approve it in Image Moderation before the live Nightjar logo changes.');
     } catch {
       notify('Logo upload failed.');
     } finally {
@@ -1403,12 +1419,21 @@ function App() {
   const removeLogo = async () => {
     if (!canAdmin) return;
     if (demoMode) {
-      notify('Demo data is isolated. Live branding was not changed.');
+      if (demoLogoPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(demoLogoPreviewUrl);
+      setDemoLogoPreviewUrl(null);
+      try {
+        const data = await nightjarMedia.getBranding();
+        applyRuntimeLogo(data.logoUrl ?? null);
+      } catch {
+        applyRuntimeLogo(null);
+      }
+      notify('Demo logo preview cleared. Live branding was not changed.');
       return;
     }
     try {
       await nightjarMedia.removeBrandLogo();
-      setLogoUrl(null);
+      applyRuntimeLogo(null);
+      window.localStorage.setItem('nightjar.branding.version', String(Date.now()));
       notify('Nightjar logo removed.');
     } catch { notify('Logo could not be removed.'); }
   };
@@ -1483,7 +1508,14 @@ function App() {
       await loadPendingImages();
       await loadBranding();
       await loadProfile();
-      notify(decision === 'approved' ? 'Image approved for public use.' : 'Image rejected and its stored image bytes removed.');
+      if (asset.kind === 'brand_logo') {
+        window.localStorage.setItem('nightjar.branding.version', String(Date.now()));
+      }
+      notify(asset.kind === 'brand_logo' && decision === 'approved'
+        ? 'Nightjar logo approved and applied across the live app.'
+        : decision === 'approved'
+          ? 'Image approved for public use.'
+          : 'Image rejected and its stored image bytes removed.');
     } catch { notify('Image moderation action could not be completed.'); }
   };
 
@@ -1816,10 +1848,13 @@ function App() {
 
   const disableDemoMode = () => {
     if (!canAdmin) return;
+    if (demoLogoPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(demoLogoPreviewUrl);
+    setDemoLogoPreviewUrl(null);
     setSimulationMode(false);
     setDemoMode(false);
     setPreviewRole(null);
     navigate('admin');
+    void nightjarMedia.getBranding().then((data) => applyRuntimeLogo(data.logoUrl ?? null)).catch(() => applyRuntimeLogo(null));
     notify('Demo and simulation data disabled. Nightjar is showing live records again.');
   };
 
@@ -2366,7 +2401,7 @@ function App() {
               <button className="admin-panel admin-tile" onClick={() => navigate('protection')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">SAFETY</span><h2>Access & moderation</h2><p>Review protection signals and age-assurance boundaries.</p><strong>Open Protection Centre <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile subscription-tile" onClick={() => openAdminPanel('subscriptions')}><span className="admin-icon"><WalletCards size={19} /></span><span className="mini-label">SUBSCRIPTIONS</span><h2>{adminOverviewLoading ? '…' : commercialOverview?.subscriptions.active ?? adminOverview?.subscriptions?.active ?? 0}</h2><p>Active paid subscriptions tracked by the confirmed Nightjar billing ledger.</p><strong>{commercialOverview?.subscriptions.trialing ?? adminOverview?.subscriptions?.trialing ?? 0} trial · {commercialOverview?.subscriptions.pastDue ?? adminOverview?.subscriptions?.pastDue ?? 0} past due <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">CREATOR ECONOMICS</span><h2>{formatMoneyPence(commercialSettings.planningMonthlyPricePence)} / month</h2><p>Configure the capped equal creator rate without tying standard pay to popularity.</p><strong>Open creator economics <ArrowRight size={13} /></strong></button>
-              <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>Upload or replace the logo used across Nightjar. New images enter the same administrator moderation queue and never become public automatically.</p><div className="logo-editor"><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt="Current approved Nightjar logo" /> : <img src="/favicon.svg" alt="Default Nightjar logo" />}</div><div className="admin-data-actions"><label className="secondary-button upload-label"><Upload size={15} /> {logoUploading ? 'Uploading…' : 'Submit logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label>{logoUrl && <button className="ghost-button" onClick={()=>void removeLogo()}>Remove logo</button>}</div></div><strong>PNG / JPG / WebP · max 5 MB · admin approval required</strong></div>
+              <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>{demoMode ? 'Preview a replacement logo locally while Demo Mode is active. Nothing is uploaded or changed in production.' : 'Upload or replace the logo used across Nightjar. A replacement stays pending until an administrator approves it in Image Moderation.'}</p><div className="logo-editor"><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt={demoMode ? 'Nightjar demo logo preview' : 'Current approved Nightjar logo'} /> : <img src="/favicon.svg" alt="Default Nightjar logo" />}</div><div className="admin-data-actions"><label className="secondary-button upload-label"><Upload size={15} /> {demoMode ? 'Preview logo' : logoUploading ? 'Uploading…' : 'Replace logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label>{logoUrl && <button className="ghost-button" onClick={()=>void removeLogo()}>{demoMode ? 'Clear preview' : 'Remove logo'}</button>}</div></div><strong>{demoMode ? 'Local preview only · PNG / JPG / WebP · max 5 MB' : 'PNG / JPG / WebP · max 5 MB · administrator approval required before the replacement goes live'}</strong></div>
             </div>
             <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>
             {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">SECURITY / OWNER ALERTS</span><h2>Suspicious activity</h2><p>Every qualifying alert is addressed to all three Nightjar owners and retained in the audit trail.</p></div><button className="secondary-button" onClick={() => void loadSecurityAlerts()}>{securityAlertsLoading ? 'Refreshing…' : 'Refresh alerts'}</button><div className="security-alert-list">{securityAlerts.length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No open security alerts</strong><span>Signals remain evidence, not accusations. Alerts are retained for review.</span></div> : securityAlerts.map((alert:any) => <article className="security-alert-row" key={alert.id}><div><strong>{alert.severity?.toUpperCase() ?? 'MEDIUM'} · Risk {alert.riskScore ?? '—'} · {alert.reason ?? 'Suspicious protected-content activity'}</strong><span>User: {alert.userName ?? 'Nightjar account'}{alert.userHandle ? ' · @' + String(alert.userHandle).replace(/^@/, '') : ''} · Script: {alert.relatedId ?? '—'} · {new Date(alert.createdAt).toLocaleString('en-GB')}</span><em>Delivered to all three owners · no automatic freeze</em></div><div className="security-alert-actions"><button className="ghost-button" disabled={alert.status !== 'open'} onClick={() => void closeSecurityAlertBenign(alert)}>Benign</button><button className="secondary-button" disabled={alert.status !== 'open'} onClick={() => void revokeSessionsFromSecurityAlert(alert)}>Revoke reader sessions</button><button className="secondary-button" disabled={alert.status === 'actioned'} onClick={() => void suspendFromSecurityAlert(alert)}>{alert.status === 'actioned' ? 'Account suspended' : 'Suspend account'}</button></div></article>)}</div></section>}
