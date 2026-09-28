@@ -2657,13 +2657,26 @@ button:focus-visible {
   gap: 12px;
   margin: 0 0 16px;
 }
-.admin-owner-summary > div {
+.admin-owner-summary > div,
+.admin-owner-summary > button {
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   background: rgba(255,255,255,.018);
 }
+.admin-owner-test {
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-owner-test:hover,
+.admin-owner-test:focus-visible {
+  border-color: rgba(225, 184, 102, .55);
+  background: rgba(225, 184, 102, .06);
+}
+#demo-simulation-controls { scroll-margin-top: 160px; }
 .admin-owner-summary strong,
 .admin-owner-summary small {
   display: block;
