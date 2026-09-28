@@ -2022,3 +2022,13 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Nightjar approved brand mark */
+.account-portal-logo {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 7px;
+  flex: 0 0 auto;
+}
