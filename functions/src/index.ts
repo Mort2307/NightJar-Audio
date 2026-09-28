@@ -2031,6 +2031,7 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
   const releaseId = cleanText(input.releaseId, 160);
   const decision = cleanText(input.decision, 30);
   const note = cleanText(input.note, 1200);
+  const nightjarOriginal = input.nightjarOriginal === true;
   if (!['approved','changes','rejected'].includes(decision)) throw new HttpsError('invalid-argument', 'Invalid release moderation decision.');
 
   const ref = releaseRef(releaseId);
@@ -2046,6 +2047,7 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
     moderatedBy: admin.uid,
     moderatedAt: FieldValue.serverTimestamp(),
     releaseDate: decision === 'approved' ? FieldValue.serverTimestamp() : data.releaseDate ?? null,
+    nightjarOriginal: decision === 'approved' ? nightjarOriginal : data.nightjarOriginal === true,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
