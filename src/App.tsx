@@ -84,6 +84,13 @@ type Track = {
   audioUrl?: string | null;
   artworkUrl?: string | null;
   creatorUserId?: string;
+  genre?: string;
+  tags?: string[];
+  tropes?: string[];
+  contributors?: { userId?: string | null; name: string; role: string }[];
+  contentRating?: string;
+  seriesTitle?: string | null;
+  episodeNumber?: number | null;
 };
 
 type CreatorSummary = {
@@ -394,6 +401,10 @@ function App() {
   });
   const [commercialSaving, setCommercialSaving] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [catalogueQuery, setCatalogueQuery] = useState('');
+  const [catalogueRating, setCatalogueRating] = useState('all');
+  const [catalogueDuration, setCatalogueDuration] = useState('all');
+  const [creatorQuery, setCreatorQuery] = useState('');
   const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
@@ -428,6 +439,31 @@ function App() {
   const writerSpotlight = writerSpotlightList[0] ?? null;
   const editorSpotlight = editorSpotlightList[0] ?? null;
   const creators = creatorDirectory;
+  const filteredCreators = useMemo(() => {
+    const query = creatorQuery.trim().toLowerCase();
+    if (!query) return creatorDirectory;
+    return creatorDirectory.filter((creator) => [creator.name, creator.handle, creator.note].filter(Boolean).join(' ').toLowerCase().includes(query));
+  }, [creatorDirectory, creatorQuery]);
+  const filteredTracks = useMemo(() => {
+    const query = catalogueQuery.trim().toLowerCase();
+    return tracks.filter((track) => {
+      const haystack = [
+        track.title, track.creator, track.category, track.genre, track.descriptor, track.seriesTitle,
+        ...(track.tags ?? []), ...(track.tropes ?? []),
+        ...(track.contributors ?? []).flatMap((item) => [item.name, item.role]),
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (query && !haystack.includes(query)) return false;
+      if (catalogueRating !== 'all' && track.contentRating !== catalogueRating) return false;
+      if (catalogueDuration !== 'all') {
+        const minutes = Number.parseFloat(track.duration);
+        if (catalogueDuration === 'short' && !(minutes > 0 && minutes < 10)) return false;
+        if (catalogueDuration === 'medium' && !(minutes >= 10 && minutes < 25)) return false;
+        if (catalogueDuration === 'full' && !(minutes >= 25 && minutes < 45)) return false;
+        if (catalogueDuration === 'long' && !(minutes >= 45)) return false;
+      }
+      return true;
+    });
+  }, [tracks, catalogueQuery, catalogueRating, catalogueDuration]);
   const studioMetrics = [
     ['Published releases', String(creatorDashboard.metrics?.released ?? 0)],
     ['Draft releases', String(creatorDashboard.metrics?.drafts ?? 0)],
@@ -438,7 +474,7 @@ function App() {
   useEffect(() => {
     const onPop = () => {
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
-      setView((['discover','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View);
+      setView((['discover','library','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View);
     };
     window.addEventListener('popstate', onPop);
     void (async () => {
@@ -537,6 +573,13 @@ function App() {
         audioUrl: null,
         artworkUrl: release.artworkUrl ?? null,
         creatorUserId: release.creatorUserId,
+        genre: release.genre ?? '',
+        tags: release.tags ?? [],
+        tropes: release.tropes ?? [],
+        contributors: release.contributors ?? [],
+        contentRating: release.contentRating ?? 'adult',
+        seriesTitle: release.seriesTitle ?? null,
+        episodeNumber: release.episodeNumber ?? null,
       })) as Track[];
       setTracks(liveTracks);
       setCreatorDirectory((creatorsResponse.creators ?? []).map((creator: any) => ({
@@ -1721,9 +1764,14 @@ function App() {
 
             <section id="catalogue" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
+              <div className="catalogue-filter-bar">
+                <label className="catalogue-search"><Search size={15}/><input value={catalogueQuery} onChange={(event)=>setCatalogueQuery(event.target.value)} placeholder="Search title, VA, Writer, Audio Editor, trope or genre"/></label>
+                <select value={catalogueRating} onChange={(event)=>setCatalogueRating(event.target.value)} aria-label="Content level"><option value="all">All content levels</option><option value="sfw">SFW</option><option value="suggestive">Suggestive</option><option value="adult">Adult</option><option value="explicit">Explicit</option></select>
+                <select value={catalogueDuration} onChange={(event)=>setCatalogueDuration(event.target.value)} aria-label="Audio duration"><option value="all">Any length</option><option value="short">Under 10 min</option><option value="medium">10–24 min</option><option value="full">25–44 min</option><option value="long">45+ min</option></select>
+              </div>
               <div className="track-grid">
-                {tracks.slice(0, 6).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} />)}
-                {!tracks.length && <div className="people-empty"><Headphones size={18}/><strong>No published releases yet.</strong><span>The listening room will populate from real creator releases once audio is published.</span></div>}
+                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} />)}
+                {!filteredTracks.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
               </div>
             </section>
 
@@ -1753,16 +1801,16 @@ function App() {
             </section>
 
             <section className="studio-feature section-wrap">
-              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>The catalogue earns with real listening.</h2><p>Creator economics are based on verified listening and live commercial records. Nightjar does not fabricate listeners, earnings or payouts.</p><button className="primary-button" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
-              <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>NET SUBSCRIPTION REVENUE</span><ChevronRight size={12}/><span>CREATOR POOL</span><ChevronRight size={12}/><span>VERIFIED LISTENING</span></div></div>
+              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>Clear work. Clear rates. Real analytics.</h2><p>Nightjar separates the equal capped standard creator rate from listening analytics. Commercial records stay grounded in confirmed billing rather than fabricated earnings.</p><button className="primary-button" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
+              <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>PAID SUBSCRIPTIONS</span><ChevronRight size={12}/><span>PUBLISHED RATE BAND</span><ChevronRight size={12}/><span>CAPPED EQUAL RATE</span></div></div>
             </section>
           </section>
         )}
 
         {view === 'creators' && (
           <section className="page-wrap">
-            <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators building original catalogues for the Nightjar audience.</p></div><button className="secondary-button with-icon" onClick={() => notify('Creator search is part of the next catalogue pass.')}><Search size={16} /> Search creators</button></div>
-            <div className="creator-directory">{creators.map((creator, index) => <article className="creator-profile" key={creator.userId}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => void toggleProfileFollow(creator.userId)} aria-label={followingProfileIds.includes(creator.userId) ? 'Unfollow creator' : 'Follow creator'}><Heart size={17} fill={followingProfileIds.includes(creator.userId) ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span><strong>{creator.share}</strong> listening share</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
+            <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators building original catalogues for the Nightjar audience.</p></div><label className="creator-directory-search"><Search size={16}/><input value={creatorQuery} onChange={(event)=>setCreatorQuery(event.target.value)} placeholder="Search creator or handle"/></label></div>
+            <div className="creator-directory">{filteredCreators.map((creator, index) => <article className="creator-profile" key={creator.userId}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => void toggleProfileFollow(creator.userId)} aria-label={followingProfileIds.includes(creator.userId) ? 'Unfollow creator' : 'Follow creator'}><Heart size={17} fill={followingProfileIds.includes(creator.userId) ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span><strong>{creator.share}</strong> listening share</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
           </section>
         )}
 
@@ -1956,6 +2004,13 @@ function releaseToTrack(release: any): Track {
     audioUrl: null,
     artworkUrl: release.artworkUrl ?? null,
     creatorUserId: release.creatorUserId,
+    genre: release.genre ?? '',
+    tags: release.tags ?? [],
+    tropes: release.tropes ?? [],
+    contributors: release.contributors ?? [],
+    contentRating: release.contentRating ?? 'adult',
+    seriesTitle: release.seriesTitle ?? null,
+    episodeNumber: release.episodeNumber ?? null,
   };
 }
 
@@ -1971,7 +2026,9 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, reason 
     <div className="track-body">
       <div className="track-type"><span>{track.creator}</span><span>{track.duration}</span></div>
       <h3>{track.title}</h3>
+      {(track.seriesTitle || track.contentRating) && <div className="track-meta-line">{track.seriesTitle && <span>{track.seriesTitle}{track.episodeNumber != null ? ' · Episode ' + track.episodeNumber : ''}</span>}<span>{String(track.contentRating ?? 'adult').toUpperCase()}</span></div>}
       <p>{track.descriptor}</p>
+      {!!track.contributors?.length && <div className="track-credit-line">{track.contributors.slice(0,4).map((credit)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}
       <div className="track-footer"><span className="creator-link">{track.audioAvailable || track.audioUrl ? 'Age-gated audio ready' : 'Audio not connected'}</span><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove favourite' : 'Add favourite'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div>
       {reason && <p className="recommendation-reason"><Sparkles size={12} />{reason}</p>}
     </div>
