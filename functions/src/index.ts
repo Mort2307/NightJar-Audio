@@ -417,6 +417,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const role = String(accountData?.role ?? '');
   let publishedWorkCount = 0;
   let releaseCount = 0;
+  let creditedReleases: ReturnType<typeof releasePayload>[] = [];
 
   if (role === 'creator') {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
@@ -424,6 +425,14 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   } else if (role === 'writer') {
     const scripts = await db.collection('scripts').where('writerUserId', '==', userId).limit(500).get();
     publishedWorkCount = scripts.docs.filter((doc) => ['Approved','Published'].includes(String(doc.data().status))).length;
+  }
+
+  if (role === 'writer' || role === 'editor') {
+    const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
+    creditedReleases = releases.docs
+      .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
+      .map((doc) => releasePayload(doc.data(), doc.id))
+      .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
   return {
@@ -447,6 +456,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
       releaseCount,
       publishedWorkCount,
+      creditedReleaseCount: creditedReleases.length,
+      creditedReleases,
       publicProfile: true,
     },
   };
