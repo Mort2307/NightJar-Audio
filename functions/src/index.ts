@@ -10,9 +10,9 @@ initializeApp();
 const db = getFirestore();
 const REGION = 'europe-west2';
 const AGE_ASSURANCE_CONFIGURED = false;
-// Public access remains locked until the provider, verified billing webhooks and
-// the launch review are complete. An environment toggle cannot override a missing provider.
-const PUBLIC_ACCESS_ENABLED = process.env.NIGHTJAR_PUBLIC_ACCESS === 'enabled' && AGE_ASSURANCE_CONFIGURED;
+// Remove this code-level launch lock only in a reviewed release after age assurance,
+// authenticated billing webhooks and the launch checks are complete.
+const PUBLIC_ACCESS_ENABLED = false;
 
 const ADMIN_EMAILS = new Set([
   'mike.owen230792@gmail.com',

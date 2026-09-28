@@ -79,7 +79,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     }).catch(() => {
       if (!cancelled) {
         setPlaybackUrl(null);
-        notify('Age-verified playback could not be opened for this release.');
+        notify('Playback is unavailable. Check your age verification and subscription or tester access.');
       }
     });
     return () => { cancelled = true; };

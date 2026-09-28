@@ -2678,7 +2678,7 @@ function App() {
         <div className="subscription-payout-balance"><span>Planning balance before fees & tax</span><strong>{formatMoneyPence(commercialOverview?.planningBalanceBeforeFeesTaxPence ?? 0)}</strong><small>Confirmed gross less the Creator payout planning figure and configured reserve.</small></div>
       </div>
       <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>PLANNING, NOT SETTLEMENT</strong><span>This balance does not yet deduct payment-processor fees, refunds, chargebacks, VAT, corporation/personal tax or other operating costs. Past-due and trial amounts are shown separately and are not treated as confirmed cash.</span></div></div>
-      {(commercialOverview?.unpricedActiveSubscriptions ?? 0) > 0 && <div className="demo-warning admin-note"><ShieldAlert size={17}/><div><strong>INCOMPLETE BILLING AMOUNTS</strong><span>{commercialOverview?.unpricedActiveSubscriptions} active subscription records do not yet have a confirmed monthly amount, so confirmed gross is deliberately understated rather than guessed.</span></div></div>}
+      {(commercialOverview?.unpricedActiveSubscriptions ?? 0) > 0 && <div className="demo-warning admin-note"><ShieldAlert size={17}/><div><strong>UNVERIFIED OR UNPRICED BILLING</strong><span>{commercialOverview?.unpricedActiveSubscriptions} active subscription records do not have both a current provider-verified entitlement and a confirmed monthly amount. Confirmed gross is deliberately understated.</span></div></div>}
     </div>
   </div>
 
