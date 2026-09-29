@@ -535,7 +535,7 @@ function App() {
   useEffect(() => {
     const onPop = () => {
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
-      if (value === 'admin' && role === 'admin') {
+      if (value === 'admin') {
         setSimulationMode(false);
         setPreviewRole(null);
       }
