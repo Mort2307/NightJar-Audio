@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileCheck2, Headphones, Heart, Share2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
+import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
 
 type Props = {
   userId: string;
@@ -38,6 +39,11 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         publicProfile:true, followerCount:person.role === 'writer' ? 486 : 352,
         publishedWorkCount:writer ? 3 : 0, creditedReleaseCount:creditedReleases.length, creditedReleases,
         roleFocus:person.role === 'writer' ? ['Script writing','Dialogue writing'] : person.role === 'editor' ? ['Audio editing','Mixing'] : [],
+        roleSpecialties:person.role === 'writer' ? ['Dialogue','Character development'] : person.role === 'editor' ? ['Dialogue editing','Mixing'] : ['Story-first','Atmospheric'],
+        roleSecondary:person.role === 'writer' ? ['Single-voice script','Series / episodic'] : person.role === 'editor' ? ['Series consistency','Remote handoff'] : ['Hidden gems','Series'],
+        roleAvailability:person.role === 'writer' ? 'Open to commissions' : person.role === 'editor' ? 'Open for bookings' : '',
+        roleDetailOne:person.role === 'writer' ? 'Dialogue-first work with strong character progression.' : person.role === 'editor' ? 'Organised remote handoff with clear revision passes.' : 'Late-night stories, atmosphere and independent creators.',
+        roleDetailTwo:person.role === 'writer' ? 'Collaboration and licensing stay inside protected Nightjar workflows.' : person.role === 'editor' ? 'Best suited to dialogue-heavy and series work.' : 'Always happy to discover smaller creators.',
         favouriteTags:['Cinematic','Story-led'],
       } : null);
       setLoading(false);
@@ -69,6 +75,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   };
 
   const following = Boolean(profile?.userId && followingIds.includes(profile.userId));
+  const profileRole = (profile?.role && ['creator','listener','writer','editor'].includes(profile.role) ? profile.role : 'listener') as ProfileRoleKey;
+  const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
 
   return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
     <section className="creator-profile-modal">
@@ -100,6 +108,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
         {!!profile.roleFocus?.length && <div className="creator-profile-tags">{profile.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
+
+        <section className="public-role-profile">
+          <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profile.role).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{profile.roleAvailability && <strong>{profile.roleAvailability}</strong>}</div>
+          <p>{roleConfig.description}</p>
+          {!!profile.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{profile.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!profile.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{profile.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {(profile.roleDetailOne || profile.roleDetailTwo) && <div className="public-role-copy">{profile.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{profile.roleDetailOne}</p></div>}{profile.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{profile.roleDetailTwo}</p></div>}</div>}
+        </section>
 
         <div className="writer-public-note">
           {profile.role === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
