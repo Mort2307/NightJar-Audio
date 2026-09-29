@@ -1843,6 +1843,7 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
+  await syncCreatorCustomTagUsage(userId);
   return { userId, role, status };
 });
 
@@ -1896,6 +1897,7 @@ export const decideCreatorApplication = onCall({ region: REGION }, async (reques
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
+  await syncCreatorCustomTagUsage(userId);
   return { applicationId, userId, decision, accountStatus: decision === 'approved' ? 'active' : 'pending_review' };
 });
 
