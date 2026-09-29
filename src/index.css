@@ -3268,3 +3268,83 @@ select:disabled {
   .profile-custom-tag-create { grid-template-columns: 1fr; }
   .profile-custom-tag-create > button { width: 100%; }
 }
+
+
+/* Role-profile integration pass */
+.onboarding-fields .profile-multi-field,
+.pipeline-taxonomy-field {
+  min-width: 0;
+}
+.onboarding-fields textarea,
+.onboarding-fields select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  padding: 11px 12px;
+  background: rgba(0,0,0,.2);
+  color: var(--ivory);
+  outline: none;
+  font: inherit;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.onboarding-fields textarea {
+  min-height: 105px;
+  resize: vertical;
+  line-height: 1.55;
+}
+.pipeline-taxonomy-field .profile-multi-field {
+  height: 100%;
+}
+.pipeline-taxonomy-field .profile-multi-helper {
+  min-height: 22px;
+}
+.public-profile-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.public-profile-metrics > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: rgba(255,255,255,.018);
+}
+.public-profile-metrics span,
+.public-profile-metrics strong {
+  display: block;
+}
+.public-profile-metrics span {
+  color: var(--muted-2);
+  font-size: 7px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.public-profile-metrics strong {
+  margin-top: 5px;
+  color: var(--ivory);
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+}
+.admin-data-row small {
+  color: var(--muted-2);
+  font-size: 8px;
+  line-height: 1.45;
+}
+@media (max-width: 760px) {
+  .public-profile-metrics {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+  .pipeline-taxonomy-field {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 430px) {
+  .public-profile-metrics {
+    grid-template-columns: 1fr;
+  }
+}
