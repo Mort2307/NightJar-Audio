@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory } from '../demo/nightjarDemo';
 import { FileText, Heart, Share2, X } from 'lucide-react';
+import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 
 type Writer = {
   userId: string;
@@ -14,7 +15,19 @@ type Writer = {
   welcomeMessage?: string | null;
   pronouns?: string | null;
   roleFocus?: string[];
+  favouriteTags?: string[];
+  favouriteTropes?: string[];
+  favouriteCategories?: string[];
+  roleSpecialties?: string[];
+  roleSecondary?: string[];
+  roleAvailability?: string | null;
+  roleDetailOne?: string | null;
+  roleDetailTwo?: string | null;
+  followerCount?: number;
+  followingCount?: number;
   publishedWorkCount?: number;
+  creditedReleaseCount?: number;
+  creditedReleases?: any[];
 };
 
 type Props = {
@@ -37,6 +50,17 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
         initials: person.name.split(' ').map((part) => part[0]).join(''),
         headline: 'Fictional Nightjar writer profile', publishedWorkCount: person.userId === 'demo-writer-mara' ? 3 : 1,
         bio: 'A sample profile for testing writer discovery and follows.',
+        favouriteTags: ['Dialogue-heavy','Story-led'],
+        favouriteTropes: ['Slow burn','Mutual pining'],
+        favouriteCategories: ['Erotic romance','Audio drama'],
+        roleFocus: ['Script writing','Dialogue writing'],
+        roleSpecialties: ['Dialogue','Character development','Romance'],
+        roleSecondary: ['Single-voice script','Series / episodic'],
+        roleAvailability: 'Open to commissions',
+        roleDetailOne: 'Dialogue-first writing with strong character progression.',
+        roleDetailTwo: 'Licensing and collaboration stay inside protected Nightjar workflows.',
+        followerCount: 486,
+        followingCount: 76,
       })));
       setLoading(false);
       return () => { cancelled = true; };
@@ -62,11 +86,29 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
     }
   };
 
+  const openWriter = async (writer: Writer) => {
+    if (demoMode) {
+      setSelected(writer);
+      return;
+    }
+    try {
+      const data = await nightjarCommunity.getPublicProfile(writer.userId);
+      const profile = data?.profile ?? {};
+      setSelected({
+        ...writer,
+        ...profile,
+        name: profile.displayName ?? writer.name,
+      });
+    } catch {
+      notify('Writer profile could not be loaded.');
+    }
+  };
+
   return <>
     <section className="writer-discovery-section section-wrap" aria-labelledby="writer-discovery-title">
       <div className="section-head"><div><p className="eyebrow"><FileText size={14}/> WRITERS</p><h2 id="writer-discovery-title">Meet the people behind the words.</h2></div><span className="mini-label">{writers.length} PUBLIC WRITERS</span></div>
       <p className="section-copy">Writers can be discovered without exposing protected manuscript text. Public identity, creative focus and public-facing work counts stay separate from private production material.</p>
-      {loading ? <div className="people-empty">Loading writers…</div> : <div className="writer-discovery-grid">{writers.map((writer) => <article className="writer-discovery-card" key={writer.userId}><span className="writer-discovery-avatar">{writer.avatarUrl ? <img className="avatar-approved-image" src={writer.avatarUrl} alt="" /> : writer.initials || 'NJ'}</span><div><h3>{writer.name}</h3><span>{writer.handle ? '@' + writer.handle.replace(/^@/, '') : 'Writer'}</span><p>{writer.headline || writer.bio || 'An independent Nightjar writer.'}</p>{!!writer.roleFocus?.length && <div className="writer-focus-list">{writer.roleFocus.slice(0,4).map((item) => <span key={item}>{item}</span>)}</div>}<small>{writer.publishedWorkCount ?? 0} public-facing works</small></div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => setSelected(writer)}>Explore writer</button><button className="ghost-button" onClick={() => void onToggleFollow(writer.userId)}><Heart size={14} fill={followingIds.includes(writer.userId) ? 'currentColor' : 'none'}/> {followingIds.includes(writer.userId) ? 'Following' : 'Follow'}</button><button className="ghost-button" onClick={() => void share(writer)}><Share2 size={14}/> Share</button></div></article>)}</div>}
+      {loading ? <div className="people-empty">Loading writers…</div> : <div className="writer-discovery-grid">{writers.map((writer) => <article className="writer-discovery-card" key={writer.userId}><span className="writer-discovery-avatar">{writer.avatarUrl ? <img className="avatar-approved-image" src={writer.avatarUrl} alt="" /> : writer.initials || 'NJ'}</span><div><h3>{writer.name}</h3><span>{writer.handle ? '@' + writer.handle.replace(/^@/, '') : 'Writer'}</span><p>{writer.headline || writer.bio || 'An independent Nightjar writer.'}</p>{!!writer.roleFocus?.length && <div className="writer-focus-list">{writer.roleFocus.slice(0,4).map((item) => <span key={item}>{item}</span>)}</div>}<small>{writer.publishedWorkCount ?? 0} public-facing works</small></div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => void openWriter(writer)}>Explore writer</button><button className="ghost-button" onClick={() => void onToggleFollow(writer.userId)}><Heart size={14} fill={followingIds.includes(writer.userId) ? 'currentColor' : 'none'}/> {followingIds.includes(writer.userId) ? 'Following' : 'Follow'}</button><button className="ghost-button" onClick={() => void share(writer)}><Share2 size={14}/> Share</button></div></article>)}</div>}
       {!loading && !writers.length && <div className="people-empty"><FileText size={18}/><strong>No public writers yet.</strong><span>Writer profiles will appear here as they choose to be discoverable.</span></div>}
     </section>
 
@@ -76,9 +118,29 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
         <div className="creator-profile-body">
           <div className="creator-profile-hero"><span className="creator-profile-avatar">{selected.avatarUrl ? <img className="avatar-approved-image" src={selected.avatarUrl} alt="" /> : selected.initials || 'NJ'}</span><div><h3>{selected.name}</h3><p>{selected.headline || 'Writer for immersive audio.'}</p>{selected.pronouns && <small>{selected.pronouns}</small>}</div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => void onToggleFollow(selected.userId)}><Heart size={14} fill={followingIds.includes(selected.userId) ? 'currentColor' : 'none'}/> {followingIds.includes(selected.userId) ? 'Following' : 'Follow writer'}</button><button className="ghost-button" onClick={() => void share(selected)}><Share2 size={14}/> Share</button></div></div>
           {selected.welcomeMessage && <p className="creator-profile-welcome">{selected.welcomeMessage}</p>}{selected.bio && <p className="creator-profile-bio">{selected.bio}</p>}
+          <div className="public-profile-metrics">
+            <div><span>Followers</span><strong>{selected.followerCount ?? 0}</strong></div>
+            <div><span>Following</span><strong>{selected.followingCount ?? 0}</strong></div>
+            <div><span>Published scripts</span><strong>{selected.publishedWorkCount ?? 0}</strong></div>
+            <div><span>Release credits</span><strong>{selected.creditedReleaseCount ?? 0}</strong></div>
+          </div>
           {!!selected.roleFocus?.length && <div className="creator-profile-tags">{selected.roleFocus.map((item) => <span key={item}>{item}</span>)}</div>}
-          <div className="writer-public-note"><FileText size={16}/><div><strong>Public writing, protected manuscripts.</strong><p>Nightjar can promote this writer's profile without exposing private manuscript text, collaboration permissions or protected drafts.</p></div></div>
-          <div className="creator-profile-releases"><div className="section-head"><div><span className="mini-label">DISCOVERY</span><h3>{selected.publishedWorkCount ?? 0} public-facing works</h3></div></div></div>
+          {!!selected.favouriteTags?.length && <div className="creator-profile-tags">{selected.favouriteTags.map((item) => <span key={item}>{item}</span>)}</div>}
+          <section className="public-role-profile">
+            <div className="public-role-profile-head"><div><span className="mini-label">WRITER IDENTITY</span><h3>{ROLE_PROFILE_CONFIG.writer.title}</h3></div>{selected.roleAvailability && <strong>{selected.roleAvailability}</strong>}</div>
+            <p>{ROLE_PROFILE_CONFIG.writer.description}</p>
+            {!!selected.roleSpecialties?.length && <div className="public-role-group"><span>{ROLE_PROFILE_CONFIG.writer.specialtiesLabel}</span><div className="creator-profile-tags">{selected.roleSpecialties.map((item)=><span key={item}>{item}</span>)}</div></div>}
+            {!!selected.roleSecondary?.length && <div className="public-role-group"><span>{ROLE_PROFILE_CONFIG.writer.secondaryLabel}</span><div className="creator-profile-tags">{selected.roleSecondary.map((item)=><span key={item}>{item}</span>)}</div></div>}
+            {!!selected.favouriteCategories?.length && <div className="public-role-group"><span>Relevant categories</span><div className="creator-profile-tags">{selected.favouriteCategories.map((item)=><span key={item}>{item}</span>)}</div></div>}
+            {!!selected.favouriteTropes?.length && <div className="public-role-group"><span>Tropes & themes</span><div className="creator-profile-tags">{selected.favouriteTropes.map((item)=><span key={item}>{item}</span>)}</div></div>}
+            {(selected.roleDetailOne || selected.roleDetailTwo) && <div className="public-role-copy">{selected.roleDetailOne && <div><strong>{ROLE_PROFILE_CONFIG.writer.detailOneLabel}</strong><p>{selected.roleDetailOne}</p></div>}{selected.roleDetailTwo && <div><strong>{ROLE_PROFILE_CONFIG.writer.detailTwoLabel}</strong><p>{selected.roleDetailTwo}</p></div>}</div>}
+          </section>
+          <div className="writer-public-note"><FileText size={16}/><div><strong>Public writing identity, protected manuscripts.</strong><p>Nightjar shows public profile metadata and credits without exposing private manuscript text, collaboration permissions, protected drafts or private deal terms.</p></div></div>
+          <div className="creator-profile-releases">
+            <div className="section-head"><div><span className="mini-label">PUBLIC WORK</span><h3>Writing portfolio</h3></div></div>
+            {!!selected.creditedReleases?.length && <div className="public-credit-list">{selected.creditedReleases.slice(0,12).map((release:any)=><article key={release.id}><div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div><div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===selected.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div></article>)}</div>}
+            {!selected.creditedReleases?.length && <div className="people-empty"><FileText size={18}/><strong>{selected.publishedWorkCount ?? 0} published script{selected.publishedWorkCount === 1 ? '' : 's'}.</strong><span>Protected script text is never exposed here. Release credits will appear when published work is linked to a Nightjar release.</span></div>}
+          </div>
         </div>
       </section>
     </div>}
