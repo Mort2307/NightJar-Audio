@@ -11,6 +11,8 @@ const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'li
 const getCreatorProfileCall = httpsCallable<{ userId: string }, { creator: any }>(functions, 'getCreatorProfile');
 const getPublicProfileCall = httpsCallable<{ userId: string }, { profile: any }>(functions, 'getPublicProfile');
 const profileTagCatalogueCall = httpsCallable<void, { tags: string[] }>(functions, 'profileTagCatalogue');
+const adminProfileTagCatalogueCall = httpsCallable<void, { tags: any[]; promotionThreshold: number }>(functions, 'adminProfileTagCatalogue');
+const adminSetProfileTagStatusCall = httpsCallable<{ tagId: string; status: 'candidate' | 'promoted' | 'hidden' }, { tagId: string; status: string }>(functions, 'adminSetProfileTagStatus');
 const listWritersCall = httpsCallable<void, { writers: any[] }>(functions, 'listWriters');
 const spotlightStateCall = httpsCallable<void, { date: string; spotlights: any[]; listenerTopSevenCount: number; listenerSpotlightDay: number | null; listenerWeek: string | null }>(functions, 'spotlightState');
 const communityStateCall = httpsCallable<void, { follows: { targetUserId?: string; creatorUserId?: string; targetRole?: string | null }[]; favourites: { releaseId: string }[] }>(functions, 'communityState');
@@ -41,6 +43,12 @@ export const nightjarCommunity = {
 
   async profileTagCatalogue() {
     return (await profileTagCatalogueCall()).data;
+  },
+  async adminProfileTagCatalogue() {
+    return (await adminProfileTagCatalogueCall()).data;
+  },
+  async adminSetProfileTagStatus(tagId: string, status: 'candidate' | 'promoted' | 'hidden') {
+    return (await adminSetProfileTagStatusCall({ tagId, status })).data;
   },
 
   async listWriters() {
