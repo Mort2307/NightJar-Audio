@@ -535,6 +535,10 @@ function App() {
   useEffect(() => {
     const onPop = () => {
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      if (value === 'admin' && role === 'admin') {
+        setSimulationMode(false);
+        setPreviewRole(null);
+      }
       setView((['discover','library','creators','creator','writer','editor','admin','protection','profile'].includes(value) ? value : 'discover') as View);
     };
     window.addEventListener('popstate', onPop);
@@ -592,7 +596,15 @@ function App() {
     }
 
     const testing = readTestingSession();
-    if (testing.mode === 'simulation' && testing.role) {
+    const ownerConsoleRequested = window.location.pathname.replace(/\/+$/, '') === '/admin';
+
+    if (ownerConsoleRequested) {
+      setDemoMode(testing.mode === 'demo' || testing.mode === 'simulation');
+      setSimulationMode(false);
+      setPreviewRole(null);
+      setView('admin');
+      writeTestingSession(testing.mode === 'off' ? 'off' : 'demo', null);
+    } else if (testing.mode === 'simulation' && testing.role) {
       setDemoMode(true);
       setSimulationMode(true);
       setPreviewRole(testing.role);
