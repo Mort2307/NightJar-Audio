@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { ArrowRight, Heart, Mic2, Share2 } from 'lucide-react';
 import { demoCreators, demoTracks } from '../demo/nightjarDemo';
+import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 
 type CreatorProfileData = {
   userId: string;
@@ -16,6 +17,14 @@ type CreatorProfileData = {
   followers?: number;
   releases?: any[];
   favouriteTags?: string[];
+  favouriteTropes?: string[];
+  favouriteCategories?: string[];
+  roleFocus?: string[];
+  roleSpecialties?: string[];
+  roleSecondary?: string[];
+  roleAvailability?: string | null;
+  roleDetailOne?: string | null;
+  roleDetailTwo?: string | null;
 };
 
 type Props = {
@@ -48,7 +57,13 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
         userId:creator.userId, name:creator.name, handle:creator.handle, headline:creator.note,
         bio:'Fictional Nightjar demo profile used to preview a populated creator experience.',
         initials:creator.initials, avatarUrl:null, welcomeMessage:'Welcome to my Nightjar demo profile.',
-        followers:creator.followers, releases, favouriteTags:['Atmospheric','Story-led'],
+        followers:creator.followers, releases, favouriteTags:['Atmospheric','Story-led','After-hours tension'],
+        roleFocus:['Voice performance','Narration','Audio production'],
+        roleSpecialties:['Character roleplay','Narration','Dramatic performance'],
+        roleSecondary:['Close-mic performance','Series work','Remote collaboration'],
+        roleAvailability:'Open to collaborations',
+        roleDetailOne:'Character-led performance with restrained, intimate delivery and cinematic pacing.',
+        roleDetailTwo:'Broadcast-quality home setup with remote direction available.',
       } : null);
       setLoading(false);
       return;
@@ -84,6 +99,13 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
         <div className="creator-profile-hero"><span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" /> : profile.initials || 'NJ'}</span><div><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button></div>
         {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}{profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+        <section className="public-role-profile">
+          <div className="public-role-profile-head"><div><span className="mini-label">CREATOR IDENTITY</span><h3>{ROLE_PROFILE_CONFIG.creator.title}</h3></div>{profile.roleAvailability && <strong>{profile.roleAvailability}</strong>}</div>
+          {!!profile.roleFocus?.length && <div className="creator-profile-tags">{profile.roleFocus.map((item)=><span key={item}>{item}</span>)}</div>}
+          {!!profile.roleSpecialties?.length && <div className="public-role-group"><span>{ROLE_PROFILE_CONFIG.creator.specialtiesLabel}</span><div className="creator-profile-tags">{profile.roleSpecialties.map((item)=><span key={item}>{item}</span>)}</div></div>}
+          {!!profile.roleSecondary?.length && <div className="public-role-group"><span>{ROLE_PROFILE_CONFIG.creator.secondaryLabel}</span><div className="creator-profile-tags">{profile.roleSecondary.map((item)=><span key={item}>{item}</span>)}</div></div>}
+          {(profile.roleDetailOne || profile.roleDetailTwo) && <div className="public-role-copy">{profile.roleDetailOne && <div><strong>{ROLE_PROFILE_CONFIG.creator.detailOneLabel}</strong><p>{profile.roleDetailOne}</p></div>}{profile.roleDetailTwo && <div><strong>{ROLE_PROFILE_CONFIG.creator.detailTwoLabel}</strong><p>{profile.roleDetailTwo}</p></div>}</div>}
+        </section>
         <div className="creator-profile-releases"><div className="section-head"><div><span className="mini-label">CATALOGUE</span><h3>Released work</h3></div><button className="ghost-button" onClick={() => void share()}><Share2 size={14} /> Share</button></div>{profile.releases?.length ? profile.releases.map((release: any) => <article key={release.id} className="creator-profile-release"><div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p></div><button className="round-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15} /></button></article>) : <div className="people-empty"><Mic2 size={18} /><strong>No public releases yet.</strong><span>Check back as this creator publishes.</span></div>}</div>
       </div>}
     </section>
