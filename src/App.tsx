@@ -64,6 +64,8 @@ import CreatorCompensationCard from './components/CreatorCompensationCard';
 import TransparencyPanel from './components/TransparencyPanel';
 import ScriptMarketplace from './components/ScriptMarketplace';
 import ReleaseReviews from './components/ReleaseReviews';
+import SearchableMultiSelect from './components/SearchableMultiSelect';
+import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS, PROFILE_CATEGORY_OPTIONS, ROLE_FOCUS_OPTIONS, ROLE_PROFILE_CONFIG } from './data/nightjarTaxonomy';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
@@ -190,173 +192,6 @@ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
 };
 
 
-const PROFILE_TAG_OPTIONS = [
-  'Atmospheric',
-  'ASMR',
-  'Binaural',
-  'Cinematic',
-  'Conversational',
-  'Dialogue-heavy',
-  'Gentle',
-  'Immersive',
-  'Intimate',
-  'Playful',
-  'Romantic',
-  'Slow-paced',
-  'Story-led',
-  'Voice-led',
-  'Whispered',
-  'Sound-rich',
-] as const;
-
-const PROFILE_TROPE_OPTIONS = [
-  'Slow burn',
-  'Friends to lovers',
-  'Enemies to lovers',
-  'Forbidden attraction',
-  'Second chance',
-  'Strangers to lovers',
-  'Secret relationship',
-  'Workplace romance',
-  'Neighbours',
-  'Roommates',
-  'Meet-cute',
-  'Reunion',
-  'Mutual pining',
-  'Protective partner',
-  'Praise',
-  'Teasing',
-  'Comfort & reassurance',
-  'Aftercare',
-  'Power exchange',
-  'Jealousy',
-  'Possessive romance',
-  'Fantasy romance',
-  'Sci-fi romance',
-  'Supernatural romance',
-] as const;
-
-const PROFILE_CATEGORY_OPTIONS = [
-  'Erotic romance',
-  'Romantic story',
-  'Audio roleplay',
-  'Audio drama',
-  'Guided fantasy',
-  'ASMR / whisper',
-  'Sleep / wind-down',
-  'Character performance',
-  'Fantasy',
-  'Sci-fi',
-  'Paranormal / supernatural',
-  'Thriller / suspense',
-  'Dark romance',
-  'Comedy / playful',
-  'Contemporary romance',
-  'Historical romance',
-] as const;
-
-const ROLE_FOCUS_OPTIONS: Record<AccountRole, readonly string[]> = {
-  admin: [
-    'Platform operations',
-    'Community safety',
-    'Content moderation',
-    'Creator support',
-    'Editorial oversight',
-    'Commercial operations',
-  ],
-  creator: [
-    'Voice performance',
-    'Character acting',
-    'Narration',
-    'Audio roleplay',
-    'Performance direction',
-    'Audio production',
-    'Sound design',
-    'Creator collaboration',
-  ],
-  listener: [
-    'Discovery',
-    'Following creators',
-    'Community participation',
-    'Supporting creators',
-    'Curating favourites',
-    'Exploring new genres',
-  ],
-  writer: [
-    'Script writing',
-    'Story development',
-    'Dialogue writing',
-    'Character development',
-    'Romance writing',
-    'Worldbuilding',
-    'Script collaboration',
-    'Editorial revisions',
-  ],
-  editor: [
-    'Audio editing',
-    'Dialogue editing',
-    'Sound design',
-    'Mixing',
-    'Mastering',
-    'Noise cleanup',
-    'Production polish',
-    'Editorial collaboration',
-  ],
-};
-
-function MultiSelectField({
-  label,
-  options,
-  values,
-  onChange,
-}: {
-  label: string;
-  options: readonly string[];
-  values: string[];
-  onChange: (values: string[]) => void;
-}) {
-  const selected = Array.isArray(values) ? values : [];
-  const allOptions = Array.from(new Set([...options, ...selected]));
-
-  const toggle = (option: string) => {
-    if (selected.includes(option)) {
-      onChange(selected.filter((value) => value !== option));
-      return;
-    }
-    if (selected.length >= 16) return;
-    onChange([...selected, option]);
-  };
-
-  return <div className="profile-multi-field">
-    <span className="profile-multi-label">{label}</span>
-    <details className="profile-multi-select">
-      <summary>
-        <span>{selected.length ? `${selected.length} selected` : 'Choose options'}</span>
-        <small>{selected.length}/16</small>
-      </summary>
-      <div className="profile-multi-options">
-        {allOptions.map((option) => {
-          const checked = selected.includes(option);
-          return <label className="profile-multi-option" key={option}>
-            <input
-              type="checkbox"
-              checked={checked}
-              disabled={!checked && selected.length >= 16}
-              onChange={() => toggle(option)}
-            />
-            <span>{option}</span>
-          </label>;
-        })}
-      </div>
-    </details>
-    {selected.length > 0 && <div className="profile-multi-chips" aria-label={`${label} selections`}>
-      {selected.map((item) => <button type="button" key={item} onClick={() => toggle(item)} title={`Remove ${item}`}>
-        {item} <span aria-hidden="true">×</span>
-      </button>)}
-    </div>}
-  </div>;
-}
-
 const formatMoneyPence = (pence: number | null | undefined) => {
   if (pence == null || !Number.isFinite(Number(pence))) return 'Not set';
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(pence) / 100);
@@ -421,7 +256,8 @@ function App() {
   const [adminOverview, setAdminOverview] = useState<any | null>(null);
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'admin' | null>(null);
-  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], publicProfile: true });
+  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleDetailOne: '', roleDetailTwo: '', publicProfile: true });
+  const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [tasteVector, setTasteVector] = useState<any[]>([]);
   const [securityAlerts, setSecurityAlerts] = useState<any[]>([]);
@@ -1255,22 +1091,24 @@ function App() {
     try {
       if (demoMode) {
         const demoProfiles: Record<PreviewRole | 'admin', any> = {
-          listener: { displayName:'Jamie', handle:'jamielistens', headline:'Late-night story listener', bio:'Fictional listener profile for Nightjar Simulation Mode.', welcomeMessage:'Here for stories, atmosphere and independent creators.', pronouns:'', avatarInitials:'JL', avatarTone:'plum', avatarUrl:null, favouriteTags:['Atmospheric','Gentle'], favouriteTropes:['Slow burn','Comfort & reassurance'], favouriteCategories:['Romantic story','Audio drama'], roleFocus:['Discovery','Supporting creators'], publicProfile:true },
-          creator: { displayName:'Aria Vale', handle:'ariavale', headline:'Cinematic character-led audio', bio:'Fictional Creator profile for Nightjar Simulation Mode.', welcomeMessage:'Welcome — start with After Midnight.', pronouns:'', avatarInitials:'AV', avatarTone:'plum', avatarUrl:null, favouriteTags:['Cinematic','Atmospheric'], favouriteTropes:['Slow burn','Mutual pining'], favouriteCategories:['Audio drama','Romantic story'], roleFocus:['Voice performance','Narration','Audio production'], publicProfile:true },
-          writer: { displayName:'Mara Bell', handle:'marabell', headline:'Character-led scripts and collaborative productions', bio:'Fictional Writer profile for Nightjar Simulation Mode.', welcomeMessage:'Scripts, licensing and collaboration live here.', pronouns:'', avatarInitials:'MB', avatarTone:'plum', avatarUrl:null, favouriteTags:['Story-led','Dialogue-heavy'], favouriteTropes:['Forbidden attraction','Second chance'], favouriteCategories:['Romantic story','Sci-fi'], roleFocus:['Script writing','Dialogue writing','Character development'], publicProfile:true },
-          editor: { displayName:'Sam Reed', handle:'samreed', headline:'Dialogue editing, mixing and production polish', bio:'Fictional Audio Editor profile for Nightjar Simulation Mode.', welcomeMessage:'Clean edits, clear handoffs, properly credited work.', pronouns:'', avatarInitials:'SR', avatarTone:'plum', avatarUrl:null, favouriteTags:['Sound-rich','Cinematic'], favouriteTropes:[], favouriteCategories:['Audio drama'], roleFocus:['Audio editing','Mixing','Mastering'], publicProfile:true },
-          admin: { displayName:'Nightjar Admin Demo', handle:'nightjardemo', headline:'Administrator demo profile', bio:'Fictional admin-facing profile while Demo Data is enabled.', welcomeMessage:'', pronouns:'', avatarInitials:'NJ', avatarTone:'plum', avatarUrl:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:['Platform operations'], publicProfile:false },
+          listener: { displayName:'Jamie', handle:'jamielistens', headline:'Late-night story listener', bio:'Fictional listener profile for Nightjar Simulation Mode.', welcomeMessage:'Here for stories, atmosphere and independent creators.', pronouns:'', avatarInitials:'JL', avatarTone:'plum', avatarUrl:null, favouriteTags:['Atmospheric','Gentle'], favouriteTropes:['Slow burn','Comfort & reassurance'], favouriteCategories:['Romantic story','Audio drama'], roleFocus:['Discovery','Supporting creators'], roleSpecialties:['Late-night','Story-first','Atmospheric'], roleSecondary:['Hidden gems','Series'], roleAvailability:'', roleDetailOne:'Long-form character stories, atmosphere and a slow build.', roleDetailTwo:'Always happy to discover smaller independent creators.', publicProfile:true },
+          creator: { displayName:'Aria Vale', handle:'ariavale', headline:'Cinematic character-led audio', bio:'Fictional Creator profile for Nightjar Simulation Mode.', welcomeMessage:'Welcome — start with After Midnight.', pronouns:'', avatarInitials:'AV', avatarTone:'plum', avatarUrl:null, favouriteTags:['Cinematic','Atmospheric','After-hours tension'], favouriteTropes:['Slow burn','Mutual pining'], favouriteCategories:['Audio drama','Romantic story'], roleFocus:['Voice performance','Narration','Audio production'], roleSpecialties:['Character roleplay','Narration','Dramatic performance'], roleSecondary:['Close-mic performance','Series work','Remote collaboration'], roleAvailability:'Open to collaborations', roleDetailOne:'Character-led performance with restrained, intimate delivery and cinematic pacing.', roleDetailTwo:'Broadcast-quality home setup with remote direction available.', publicProfile:true },
+          writer: { displayName:'Mara Bell', handle:'marabell', headline:'Character-led scripts and collaborative productions', bio:'Fictional Writer profile for Nightjar Simulation Mode.', welcomeMessage:'Scripts, licensing and collaboration live here.', pronouns:'', avatarInitials:'MB', avatarTone:'plum', avatarUrl:null, favouriteTags:['Story-led','Dialogue-heavy'], favouriteTropes:['Forbidden attraction','Second chance'], favouriteCategories:['Romantic story','Sci-fi'], roleFocus:['Script writing','Dialogue writing','Character development'], roleSpecialties:['Dialogue','Character development','Romance'], roleSecondary:['Single-voice script','Series / episodic','Collaborative rewrite'], roleAvailability:'Open to commissions', roleDetailOne:'Dialogue-first scripts with strong character progression and room for performer interpretation.', roleDetailTwo:'Open to licensed catalogue work and creator commissions through protected Nightjar workflows.', publicProfile:true },
+          editor: { displayName:'Sam Reed', handle:'samreed', headline:'Dialogue editing, mixing and production polish', bio:'Fictional Audio Editor profile for Nightjar Simulation Mode.', welcomeMessage:'Clean edits, clear handoffs, properly credited work.', pronouns:'', avatarInitials:'SR', avatarTone:'plum', avatarUrl:null, favouriteTags:['Sound-rich','Cinematic'], favouriteTropes:[], favouriteCategories:['Audio drama'], roleFocus:['Audio editing','Mixing','Mastering'], roleSpecialties:['Dialogue editing','Mixing','Mastering'], roleSecondary:['Series consistency','Detailed notes','Remote handoff'], roleAvailability:'Open for bookings', roleDetailOne:'Organised remote handoff, labelled revisions and non-destructive project delivery.', roleDetailTwo:'Typical demo turnaround: 3–5 working days depending on project length.', publicProfile:true },
+          admin: { displayName:'Nightjar Admin Demo', handle:'nightjardemo', headline:'Administrator demo profile', bio:'Fictional admin-facing profile while Demo Data is enabled.', welcomeMessage:'', pronouns:'', avatarInitials:'NJ', avatarTone:'plum', avatarUrl:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:['Platform operations'], roleSpecialties:['Platform operations','Community safety'], roleSecondary:['Testing','Reports'], roleAvailability:'', roleDetailOne:'Owner-console simulation profile.', roleDetailTwo:'', publicProfile:false },
         };
         setProfile(readDemo('profile:' + (previewRole ?? 'admin'), demoProfiles[previewRole ?? 'admin']));
         setTasteVector([{label:'Atmospheric',weight:0.92},{label:'Slow burn',weight:0.81},{label:'Story-led',weight:0.76},{label:'Cinematic',weight:0.69}]);
         return;
       }
-      const [profileData, tasteData] = await Promise.all([
+      const [profileData, tasteData, tagData] = await Promise.all([
         nightjarCommunity.getMyProfile(),
         nightjarListening.taste(),
+        nightjarCommunity.profileTagCatalogue().catch(() => ({ tags: [] })),
       ]);
       if (profileData?.profile) setProfile((current: any) => ({ ...current, ...profileData.profile }));
       setTasteVector(tasteData.vector ?? []);
+      setProfileTagCatalogue(Array.isArray(tagData?.tags) ? tagData.tags : []);
     } catch { notify('Profile could not be loaded right now.'); }
     finally { setProfileLoading(false); }
   };
@@ -1521,6 +1359,8 @@ function App() {
 
   const accountLabel = role ? roleMeta[role].label : 'Signed out';
   const effectiveRole: AccountRole | null = role === 'admin' ? (previewRole ?? 'admin') : role;
+  const profileRoleConfig = ROLE_PROFILE_CONFIG[effectiveRole ?? 'listener'];
+  const combinedProfileTagOptions = Array.from(new Set([...PROFILE_TAG_OPTIONS, ...profileTagCatalogue]));
   const canAdmin = role === 'admin';
   const canProtection = Boolean(user);
   const simulationIdentity = previewRole === 'listener'
@@ -2117,7 +1957,8 @@ function App() {
     setWriterPermissions([]);
     setWriterSelected(null);
     setEditorSelected(null);
-    setProfile((current:any) => ({ ...current, displayName:'', handle:'', headline:'', bio:'', welcomeMessage:'', avatarUrl:null, pendingAvatarAssetId:null, pendingAvatarStatus:null }));
+    setProfile((current:any) => ({ ...current, displayName:'', handle:'', headline:'', bio:'', welcomeMessage:'', avatarUrl:null, pendingAvatarAssetId:null, pendingAvatarStatus:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:[], roleSpecialties:[], roleSecondary:[], roleAvailability:'', roleDetailOne:'', roleDetailTwo:'' }));
+    setProfileTagCatalogue([]);
     void loadLiveProductData();
     void loadCreatorDashboard();
     void loadWriterScripts();
@@ -2535,18 +2376,32 @@ function App() {
                 <label>Welcome message <span className="optional-label">optional</span><textarea value={profile.welcomeMessage ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,welcomeMessage:e.target.value}))} placeholder="A message visitors see when they open your profile"/></label>
               </article>
               <article className="panel profile-editor-card">
-                <span className="mini-label">TASTE & ROLE</span>
-                <h2>What you love</h2>
-                <p className="panel-note">Declared preferences are yours to choose. Nightjar keeps them separate from identity and uses them to refine recommendations.</p>
-                <MultiSelectField label="Favourite tags" options={PROFILE_TAG_OPTIONS} values={profile.favouriteTags ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTags:values}))}/>
-                <MultiSelectField label="Favourite tropes" options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTropes:values}))}/>
-                <MultiSelectField label="Favourite categories" options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteCategories:values}))}/>
-                <MultiSelectField label="Role focus" options={ROLE_FOCUS_OPTIONS[effectiveRole ?? 'listener']} values={profile.roleFocus ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleFocus:values}))}/>
-                <label className="profile-toggle"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> Public profile</label>
-                <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my profile'} <Check size={15}/></button>
+                <span className="mini-label">DISCOVERY & TAGS</span>
+                <h2>How Nightjar should describe you</h2>
+                <p className="panel-note">Search the catalogue instead of digging through a wall of options. Creator accounts can also add missing custom tags; frequently reused creator tags are promoted into the shared catalogue automatically.</p>
+                <SearchableMultiSelect label={profileRoleConfig.tagLabel} options={combinedProfileTagOptions} values={profile.favouriteTags ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTags:values}))} allowCreate={effectiveRole === 'creator'} createLabel="Create custom creator tag" helperText={effectiveRole === 'creator' ? 'Custom tags appear on your profile immediately. Shared promotion is based on use by distinct creators.' : undefined}/>
+                <SearchableMultiSelect label={effectiveRole === 'listener' ? 'Favourite tropes' : effectiveRole === 'writer' ? 'Writing tropes' : effectiveRole === 'creator' ? 'Creator tropes' : 'Project tropes'} options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTropes:values}))}/>
+                <SearchableMultiSelect label={effectiveRole === 'listener' ? 'Favourite categories' : 'Relevant categories'} options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteCategories:values}))}/>
+                <SearchableMultiSelect label={profileRoleConfig.focusLabel} options={ROLE_FOCUS_OPTIONS[effectiveRole ?? 'listener']} values={profile.roleFocus ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleFocus:values}))}/>
+                <label className="profile-toggle"><input type="checkbox" checked={effectiveRole === 'admin' ? false : profile.publicProfile !== false} disabled={effectiveRole === 'admin'} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> {effectiveRole === 'admin' ? 'Administrator profiles remain private' : 'Public profile'}</label>
+              </article>
+              <article className="panel profile-editor-card profile-role-card">
+                <span className="mini-label">{(effectiveRole ?? 'listener').toUpperCase()} PROFILE</span>
+                <h2>{profileRoleConfig.title}</h2>
+                <p className="panel-note">{profileRoleConfig.description}</p>
+                <div className="profile-role-fields">
+                  <SearchableMultiSelect label={profileRoleConfig.specialtiesLabel} options={profileRoleConfig.specialtiesOptions} values={profile.roleSpecialties ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleSpecialties:values}))}/>
+                  <SearchableMultiSelect label={profileRoleConfig.secondaryLabel} options={profileRoleConfig.secondaryOptions} values={profile.roleSecondary ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleSecondary:values}))}/>
+                </div>
+                {profileRoleConfig.availabilityLabel && <label>{profileRoleConfig.availabilityLabel}<select value={profile.roleAvailability ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,roleAvailability:e.target.value}))}><option value="">Not specified</option>{profileRoleConfig.availabilityOptions.map((option)=><option value={option} key={option}>{option}</option>)}</select></label>}
+                <div className="profile-role-copy-grid">
+                  <label>{profileRoleConfig.detailOneLabel}<textarea value={profile.roleDetailOne ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,roleDetailOne:e.target.value}))} placeholder={profileRoleConfig.detailOnePlaceholder}/></label>
+                  <label>{profileRoleConfig.detailTwoLabel}<textarea value={profile.roleDetailTwo ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,roleDetailTwo:e.target.value}))} placeholder={profileRoleConfig.detailTwoPlaceholder}/></label>
+                </div>
+                <button className="primary-button profile-save-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my complete profile'} <Check size={15}/></button>
               </article>
             </div>
-            <div className="profile-public-preview panel">{profile.avatarUrl && <span className="profile-preview-avatar"><img className="avatar-approved-image" src={profile.avatarUrl} alt="" /></span>}<div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p>{profile.welcomeMessage && <p className="profile-welcome-preview">{profile.welcomeMessage}</p>}<div className="profile-preview-chips">{[...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,6).map((item:string)=><span key={item}>{item}</span>)}</div></div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
+            <div className="profile-public-preview panel">{profile.avatarUrl && <span className="profile-preview-avatar"><img className="avatar-approved-image" src={profile.avatarUrl} alt="" /></span>}<div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p>{profile.welcomeMessage && <p className="profile-welcome-preview">{profile.welcomeMessage}</p>}<div className="profile-preview-chips">{[...(profile.roleSpecialties??[]),...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div>{profile.roleAvailability && <small className="profile-preview-availability">{profile.roleAvailability}</small>}</div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
             <article className="panel taste-panel"><div><span className="mini-label">TASTE ENGINE</span><h2>What Nightjar is learning</h2><p>Declared taste is kept separate from identity. Listening signals can refine recommendations without trying to infer who you are.</p></div><div className="taste-vector">{tasteVector.length===0 ? <span className="taste-empty">Your taste graph will grow as you save, finish, replay and explore.</span> : tasteVector.slice(0,10).map((item:any)=><div className="taste-chip" key={item.label}><strong>{item.label}</strong><span>{item.weight}</span></div>)}</div></article>
             <NotificationPreferences key={'notification-prefs-' + demoSessionKey} notify={notify} simulationMode={demoMode} />
           </section>
