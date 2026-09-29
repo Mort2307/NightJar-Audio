@@ -3195,3 +3195,76 @@ select:disabled {
   .public-role-profile-head { display: grid; }
   .public-role-profile-head > strong { justify-self: start; }
 }
+
+
+/* Visible custom profile tag creation */
+.profile-custom-tag-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 9px;
+}
+.profile-custom-tag-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(225,207,221,.18);
+  border-radius: 10px;
+  background: rgba(0,0,0,.18);
+  color: var(--muted-2);
+}
+.profile-custom-tag-input-wrap:focus-within {
+  border-color: rgba(201,151,190,.52);
+  box-shadow: 0 0 0 3px rgba(167,116,151,.10);
+}
+.profile-custom-tag-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--ivory) !important;
+  outline: none;
+  font: inherit;
+  font-size: 10px !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+.profile-custom-tag-input-wrap input::placeholder { color: var(--muted-2); }
+.profile-custom-tag-create > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(201,151,190,.28);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: rgba(126,78,113,.14);
+  color: #eadde7;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.profile-custom-tag-create > button:hover:not(:disabled) {
+  border-color: rgba(201,151,190,.5);
+  background: rgba(126,78,113,.22);
+}
+.profile-custom-tag-create > button:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+.profile-custom-tag-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-2);
+  font-size: 8px;
+  line-height: 1.45;
+}
+@media (max-width: 620px) {
+  .profile-custom-tag-create { grid-template-columns: 1fr; }
+  .profile-custom-tag-create > button { width: 100%; }
+}
