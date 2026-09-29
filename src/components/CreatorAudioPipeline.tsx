@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarMedia } from '../platform/firebase-media';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
+import { nightjarCommunity } from '../platform/firebase-community';
 import { Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
 import { demoDirectory } from '../demo/nightjarDemo';
+import SearchableMultiSelect from './SearchableMultiSelect';
+import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type Release = {
   id: string;
@@ -71,12 +74,33 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [audioBusy, setAudioBusy] = useState(false);
   const [artBusy, setArtBusy] = useState(false);
   const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
+  const [promotedTagOptions, setPromotedTagOptions] = useState<string[]>([]);
 
   const current = selectedRelease ?? null;
+  const combinedTagOptions = useMemo(
+    () => Array.from(new Set([...PROFILE_TAG_OPTIONS, ...promotedTagOptions])).sort((a, b) => a.localeCompare(b)),
+    [promotedTagOptions],
+  );
 
   useEffect(() => {
     if (simulationMode && selectedRelease) onSimulationChange?.(selectedRelease);
   }, [simulationMode, selectedRelease]);
+
+  useEffect(() => {
+    if (simulationMode) {
+      setPromotedTagOptions([]);
+      return;
+    }
+    let cancelled = false;
+    void nightjarCommunity.profileTagCatalogue()
+      .then((data) => {
+        if (!cancelled) setPromotedTagOptions(data?.tags ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setPromotedTagOptions([]);
+      });
+    return () => { cancelled = true; };
+  }, [simulationMode]);
 
   useEffect(() => {
     if (simulationMode) {
@@ -377,8 +401,27 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <label>Genre<input value={current.genre ?? ''} onChange={(event) => setRelease({ genre: event.target.value })} /></label>
             <label>Mood<input value={current.mood ?? ''} onChange={(event) => setRelease({ mood: event.target.value })} /></label>
             <label className="pipeline-span-two">Description<textarea value={current.description ?? ''} onChange={(event) => setRelease({ description: event.target.value })} placeholder="What should a listener know before pressing play?" /></label>
-            <label>Tags<input value={(current.tags ?? []).join(', ')} onChange={(event) => setRelease({ tags: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Whisper, cinematic, character-led…" /></label>
-            <label>Tropes<input value={(current.tropes ?? []).join(', ')} onChange={(event) => setRelease({ tropes: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Slow burn, suspense…" /></label>
+            <div className="pipeline-taxonomy-field">
+              <SearchableMultiSelect
+                label="Release tags"
+                options={combinedTagOptions}
+                values={current.tags ?? []}
+                onChange={(tags) => setRelease({ tags })}
+                maxItems={24}
+                allowCreate
+                createLabel="Add custom release tag"
+                helperText="Search Nightjar’s shared tags or add a missing niche / explicit descriptor. Distinct approved Creator usage can promote recurring custom tags into the shared catalogue."
+              />
+            </div>
+            <div className="pipeline-taxonomy-field">
+              <SearchableMultiSelect
+                label="Release tropes"
+                options={PROFILE_TROPE_OPTIONS}
+                values={current.tropes ?? []}
+                onChange={(tropes) => setRelease({ tropes })}
+                maxItems={24}
+              />
+            </div>
             <label>Content level<select value={current.contentRating ?? 'adult'} onChange={(event) => setRelease({ contentRating: event.target.value as Release['contentRating'] })}><option value="sfw">SFW</option><option value="suggestive">Suggestive</option><option value="adult">Adult</option><option value="explicit">Explicit</option></select></label>
             <label>Series title<input value={current.seriesTitle ?? ''} onChange={(event) => setRelease({ seriesTitle: event.target.value || null })} placeholder="Optional series"/></label>
             <label>Episode number<input type="number" min="0" step="1" value={current.episodeNumber ?? ''} onChange={(event) => setRelease({ episodeNumber: event.target.value === '' ? null : Number(event.target.value) })} placeholder="Optional"/></label>
