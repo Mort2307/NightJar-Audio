@@ -236,6 +236,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   if (handle) validateHandle(handle);
   const accountSnapshot = await accountRef(identity.uid).get();
   const profileRole = identity.admin ? 'admin' : String(accountSnapshot.data()?.role ?? '');
+  const profileStatus = identity.admin ? 'active' : String(accountSnapshot.data()?.status ?? '');
 
   const nextProfile = {
     displayName: cleanText(input.displayName, 80) || identity.email.split('@')[0],
@@ -296,7 +297,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     }, { merge: true });
   });
 
-  if (profileRole === 'creator') {
+  if (profileRole === 'creator' && profileStatus === 'active') {
     const before = customProfileTagMap(previousFavouriteTags);
     const after = customProfileTagMap(nextProfile.favouriteTags);
     const added = [...after.entries()].filter(([key]) => !before.has(key));
