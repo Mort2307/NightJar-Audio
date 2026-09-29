@@ -255,7 +255,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     roleAvailability: cleanText(input.roleAvailability, 100),
     roleDetailOne: cleanText(input.roleDetailOne, 600),
     roleDetailTwo: cleanText(input.roleDetailTwo, 600),
-    publicProfile: input.publicProfile !== false,
+    publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
     updatedAt: FieldValue.serverTimestamp(),
