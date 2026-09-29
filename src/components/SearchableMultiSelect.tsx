@@ -144,7 +144,7 @@ export default function SearchableMultiSelect({
             }
           }}
           placeholder="Type a custom tag…"
-          aria-label={\`Add custom \${label}\`}
+          aria-label={`Add custom ${label}`}
           maxLength={48}
         />
       </div>
