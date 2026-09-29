@@ -25,6 +25,7 @@ export default function SearchableMultiSelect({
   helperText,
 }: Props) {
   const [query, setQuery] = useState('');
+  const [customValue, setCustomValue] = useState('');
   const selected = Array.isArray(values) ? values : [];
 
   const allOptions = useMemo(
@@ -52,11 +53,35 @@ export default function SearchableMultiSelect({
     onChange([...selected, option]);
   };
 
+  const addCustomValue = (rawValue: string, clear: () => void) => {
+    if (!allowCreate || selected.length >= maxItems) return;
+    const cleaned = tidy(rawValue);
+    if (!cleaned) return;
+
+    const existing = allOptions.find(
+      (option) => option.toLocaleLowerCase() === cleaned.toLocaleLowerCase(),
+    );
+    const valueToAdd = existing ?? cleaned;
+    const alreadySelected = selected.some(
+      (value) => value.toLocaleLowerCase() === valueToAdd.toLocaleLowerCase(),
+    );
+
+    if (!alreadySelected) onChange([...selected, valueToAdd]);
+    clear();
+  };
+
   const createCustom = () => {
     if (!allowCreate || !normalizedQuery || exactMatch || selected.length >= maxItems) return;
-    onChange([...selected, normalizedQuery]);
-    setQuery('');
+    addCustomValue(normalizedQuery, () => setQuery(''));
   };
+
+  const normalizedCustomValue = tidy(customValue);
+  const customMatchesExisting = normalizedCustomValue
+    ? allOptions.some((option) => option.toLocaleLowerCase() === normalizedCustomValue.toLocaleLowerCase())
+    : false;
+  const customAlreadySelected = normalizedCustomValue
+    ? selected.some((option) => option.toLocaleLowerCase() === normalizedCustomValue.toLocaleLowerCase())
+    : false;
 
   return <div className="profile-multi-field">
     <span className="profile-multi-label">{label}</span>
@@ -106,6 +131,33 @@ export default function SearchableMultiSelect({
         <Plus size={13} /> {createLabel}: “{normalizedQuery}”
       </button>}
     </details>
+    {allowCreate && <div className="profile-custom-tag-create">
+      <div className="profile-custom-tag-input-wrap">
+        <Plus size={14} aria-hidden="true" />
+        <input
+          value={customValue}
+          onChange={(event) => setCustomValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && normalizedCustomValue && !customAlreadySelected) {
+              event.preventDefault();
+              addCustomValue(customValue, () => setCustomValue(''));
+            }
+          }}
+          placeholder="Type a custom tag…"
+          aria-label={\`Add custom \${label}\`}
+          maxLength={48}
+        />
+      </div>
+      <button
+        type="button"
+        disabled={!normalizedCustomValue || customAlreadySelected || selected.length >= maxItems}
+        onClick={() => addCustomValue(customValue, () => setCustomValue(''))}
+      >
+        <Plus size={13} aria-hidden="true" />
+        {customMatchesExisting ? 'Add tag' : createLabel}
+      </button>
+    </div>}
+    {allowCreate && <small className="profile-custom-tag-note">Custom tags can be up to 48 characters. Add anything useful that is missing from the standard list.</small>}
     {selected.length > 0 && <div className="profile-multi-chips" aria-label={`${label} selections`}>
       {selected.map((item) => <button type="button" key={item} onClick={() => toggle(item)} title={`Remove ${item}`}>
         {item} <span aria-hidden="true">×</span>
