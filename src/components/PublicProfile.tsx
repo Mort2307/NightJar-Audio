@@ -77,6 +77,33 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const following = Boolean(profile?.userId && followingIds.includes(profile.userId));
   const profileRole = (profile?.role && ['creator','listener','writer','editor'].includes(profile.role) ? profile.role : 'listener') as ProfileRoleKey;
   const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
+  const profileMetrics = profile ? (
+    profileRole === 'creator'
+      ? [
+          ['Followers', profile.followerCount ?? 0],
+          ['Following', profile.followingCount ?? 0],
+          ['Released work', profile.releaseCount ?? 0],
+        ]
+      : profileRole === 'writer'
+        ? [
+            ['Followers', profile.followerCount ?? 0],
+            ['Following', profile.followingCount ?? 0],
+            ['Published scripts', profile.publishedWorkCount ?? 0],
+            ['Release credits', profile.creditedReleaseCount ?? 0],
+          ]
+        : profileRole === 'editor'
+          ? [
+              ['Followers', profile.followerCount ?? 0],
+              ['Following', profile.followingCount ?? 0],
+              ['Release credits', profile.creditedReleaseCount ?? 0],
+            ]
+          : [
+              ['Followers', profile.followerCount ?? 0],
+              ['Following', profile.followingCount ?? 0],
+              ['Profile tags', profile.favouriteTags?.length ?? 0],
+            ]
+  ) : [];
+
 
   return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
     <section className="creator-profile-modal">
@@ -106,6 +133,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}
         {profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
 
+        <div className="public-profile-metrics">
+          {profileMetrics.map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}
+        </div>
+
         {!!profile.roleFocus?.length && <div className="creator-profile-tags">{profile.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
 
@@ -114,24 +145,42 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           <p>{roleConfig.description}</p>
           {!!profile.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{profile.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!profile.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{profile.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!profile.favouriteCategories?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite categories' : 'Relevant categories'}</span><div className="creator-profile-tags">{profile.favouriteCategories.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite tropes' : 'Tropes & themes'}</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {(profile.roleDetailOne || profile.roleDetailTwo) && <div className="public-role-copy">{profile.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{profile.roleDetailOne}</p></div>}{profile.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{profile.roleDetailTwo}</p></div>}</div>}
         </section>
 
         <div className="writer-public-note">
           {profile.role === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
           <div>
-            <strong>{profile.role === 'editor' ? 'Public profile, private editorial work.' : 'Public profile.'}</strong>
+            <strong>{profile.role === 'editor'
+              ? 'Public production identity, private client work.'
+              : profile.role === 'writer'
+                ? 'Public writing identity, protected manuscripts.'
+                : profile.role === 'listener'
+                  ? 'Community identity without listening-history exposure.'
+                  : 'Public Creator identity.'}</strong>
             <p>{profile.role === 'editor'
-              ? 'Nightjar can recognise this Audio Editor publicly without exposing assigned manuscripts, private notes or protected production work.'
-              : 'This member chose to make their Nightjar profile visible to the community.'}</p>
+              ? 'Nightjar shows skills, availability and credited public releases without exposing assigned manuscripts, private notes or client files.'
+              : profile.role === 'writer'
+                ? 'Writing focus, availability and public credits can be discovered without exposing protected script text or private licensing discussions.'
+                : profile.role === 'listener'
+                  ? 'Only the profile details this listener deliberately chose to publish are shown here. Private listening history and library activity stay private.'
+                  : 'Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
           </div>
         </div>
 
         <div className="creator-profile-releases">
           <div className="section-head">
             <div>
-              <span className="mini-label">PROFILE</span>
-              <h3>{profile.followerCount ?? 0} followers</h3>
+              <span className="mini-label">{profileRole === 'listener' ? 'COMMUNITY' : 'PUBLIC WORK'}</span>
+              <h3>{profileRole === 'writer'
+                ? 'Writing portfolio'
+                : profileRole === 'editor'
+                  ? 'Production credits'
+                  : profileRole === 'creator'
+                    ? 'Creator catalogue'
+                    : 'Listener profile'}</h3>
             </div>
           </div>
           {(profile.role === 'writer' || profile.role === 'editor') && <div className="public-credit-summary">
