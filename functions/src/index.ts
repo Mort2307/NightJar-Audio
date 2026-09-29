@@ -174,7 +174,7 @@ const profileTagKey = (value: unknown) => cleanProfileTag(value).toLocaleLowerCa
 const profileTagDocId = (value: unknown) => encodeURIComponent(profileTagKey(value)).slice(0, 220);
 const customProfileTagMap = (value: unknown) => {
   const result = new Map<string, string>();
-  for (const label of cleanStringList(value)) {
+  for (const label of cleanStringList(value, 200)) {
     const key = profileTagKey(label);
     if (!key || PROFILE_TAG_SEED.has(key)) continue;
     if (!result.has(key)) result.set(key, cleanProfileTag(label));
@@ -195,6 +195,97 @@ const validateHandle = (value: string) => {
 };
 
 const profileRef = (uid: string) => db.collection('profiles').doc(uid);
+
+const profileTagUsageCollection = () => db.collection('profileTagCreatorUsage');
+
+const syncCreatorCustomTagUsage = async (creatorUserId: string) => {
+  const [accountSnapshot, profileSnapshot, releasesSnapshot, existingUsageSnapshot] = await Promise.all([
+    accountRef(creatorUserId).get(),
+    profileRef(creatorUserId).get(),
+    db.collection('releases').where('creatorUserId', '==', creatorUserId).limit(500).get(),
+    profileTagUsageCollection().where('creatorUserId', '==', creatorUserId).limit(500).get(),
+  ]);
+
+  const accountData = accountSnapshot.data() ?? {};
+  const activeCreator = accountSnapshot.exists
+    && accountData.role === 'creator'
+    && String(accountData.status ?? '') === 'active';
+
+  const desiredTags = activeCreator
+    ? customProfileTagMap([
+      ...(Array.isArray(profileSnapshot.data()?.favouriteTags) ? profileSnapshot.data()?.favouriteTags : []),
+      ...releasesSnapshot.docs.flatMap((doc) => Array.isArray(doc.data()?.tags) ? doc.data().tags : []),
+    ])
+    : new Map<string, string>();
+
+  const desiredByTagId = new Map(
+    [...desiredTags.entries()].map(([key, label]) => [profileTagDocId(label), { key, label }]),
+  );
+  const existingByTagId = new Map(
+    existingUsageSnapshot.docs.map((doc) => [
+      cleanText(doc.data()?.tagId, 220),
+      { doc, label: cleanProfileTag(doc.data()?.label), key: profileTagKey(doc.data()?.label) },
+    ]),
+  );
+
+  const affected = new Map<string, { label: string; key: string }>();
+  const batch = db.batch();
+
+  for (const [tagId, value] of desiredByTagId.entries()) {
+    affected.set(tagId, value);
+    if (existingByTagId.has(tagId)) continue;
+    const usageRef = profileTagUsageCollection().doc(tagId + '__' + creatorUserId);
+    batch.set(usageRef, {
+      tagId,
+      label: value.label,
+      normalizedKey: value.key,
+      creatorUserId,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
+  for (const [tagId, value] of existingByTagId.entries()) {
+    if (desiredByTagId.has(tagId)) continue;
+    affected.set(tagId, {
+      label: value.label || cleanProfileTag(tagId),
+      key: value.key || profileTagKey(value.label),
+    });
+    batch.delete(value.doc.ref);
+  }
+
+  if (affected.size) await batch.commit();
+
+  for (const [tagId, value] of affected.entries()) {
+    const usageSnapshot = await profileTagUsageCollection().where('tagId', '==', tagId).limit(1000).get();
+    const tagRef = db.collection('profileTagCatalogue').doc(tagId);
+    const tagSnapshot = await tagRef.get();
+    const existing = tagSnapshot.data() ?? {};
+    const uniqueCreatorCount = usageSnapshot.size;
+    if (!tagSnapshot.exists && uniqueCreatorCount === 0) continue;
+
+    const wasPromoted = existing.status === 'promoted';
+    const isHidden = existing.status === 'hidden';
+    const nextStatus = isHidden
+      ? 'hidden'
+      : wasPromoted || uniqueCreatorCount >= PROFILE_TAG_PROMOTION_THRESHOLD
+        ? 'promoted'
+        : 'candidate';
+
+    await tagRef.set({
+      label: cleanProfileTag(existing.label) || value.label,
+      normalizedKey: profileTagKey(existing.label) || value.key,
+      source: 'creator_custom',
+      uniqueCreatorCount,
+      status: nextStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(!tagSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+      ...(!wasPromoted && !isHidden && uniqueCreatorCount >= PROFILE_TAG_PROMOTION_THRESHOLD
+        ? { promotedAt: FieldValue.serverTimestamp() }
+        : {}),
+    }, { merge: true });
+  }
+};
 
 const accountPresentation = async (uid: string) => {
   const [profileSnapshot, accountSnapshot] = await Promise.all([
@@ -227,6 +318,55 @@ export const profileTagCatalogue = onCall({ region: REGION }, async (request) =>
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
   return { tags };
+});
+
+export const adminProfileTagCatalogue = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('profileTagCatalogue').limit(500).get();
+  const tags = snapshot.docs
+    .map((doc) => {
+      const data = doc.data() ?? {};
+      const stamp = (value: any) => value?.toDate?.().toISOString?.() ?? null;
+      return {
+        id: doc.id,
+        label: cleanProfileTag(data.label),
+        normalizedKey: profileTagKey(data.label),
+        source: cleanText(data.source, 40) || 'creator_custom',
+        uniqueCreatorCount: Math.max(0, Number(data.uniqueCreatorCount ?? 0)),
+        status: ['candidate', 'promoted', 'hidden'].includes(String(data.status)) ? String(data.status) : 'candidate',
+        createdAt: stamp(data.createdAt),
+        updatedAt: stamp(data.updatedAt),
+        promotedAt: stamp(data.promotedAt),
+      };
+    })
+    .filter((tag) => tag.label)
+    .sort((a, b) => b.uniqueCreatorCount - a.uniqueCreatorCount || a.label.localeCompare(b.label));
+  return { tags, promotionThreshold: PROFILE_TAG_PROMOTION_THRESHOLD };
+});
+
+export const adminSetProfileTagStatus = onCall({ region: REGION }, async (request) => {
+  const identity = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as { tagId?: unknown; status?: unknown };
+  const tagId = cleanText(input.tagId, 220);
+  const status = cleanText(input.status, 20);
+  if (!tagId) throw new HttpsError('invalid-argument', 'Tag is required.');
+  if (!['candidate', 'promoted', 'hidden'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Tag status is invalid.');
+  }
+
+  const ref = db.collection('profileTagCatalogue').doc(tagId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Tag candidate not found.');
+
+  await ref.set({
+    status,
+    reviewedBy: identity.uid,
+    reviewedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(status === 'promoted' ? { promotedAt: FieldValue.serverTimestamp() } : {}),
+  }, { merge: true });
+
+  return { tagId, status };
 });
 
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
@@ -263,11 +403,8 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   };
 
   const targetProfileRef = profileRef(identity.uid);
-  let previousFavouriteTags: string[] = [];
-
   await db.runTransaction(async (transaction) => {
     const currentProfile = await transaction.get(targetProfileRef);
-    previousFavouriteTags = cleanStringList(currentProfile.data()?.favouriteTags);
     const currentHandle = cleanHandle(currentProfile.data()?.handle);
     const targetHandleRef = handle ? db.collection('handles').doc(handle) : null;
     const targetHandle = targetHandleRef ? await transaction.get(targetHandleRef) : null;
@@ -298,39 +435,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   });
 
   if (profileRole === 'creator' && profileStatus === 'active') {
-    const before = customProfileTagMap(previousFavouriteTags);
-    const after = customProfileTagMap(nextProfile.favouriteTags);
-    const added = [...after.entries()].filter(([key]) => !before.has(key));
-    const removed = [...before.entries()].filter(([key]) => !after.has(key));
-
-    for (const [key, label] of added) {
-      const ref = db.collection('profileTagCatalogue').doc(profileTagDocId(label));
-      const snapshot = await ref.get();
-      const currentCount = Math.max(0, Number(snapshot.data()?.uniqueCreatorCount ?? 0));
-      const nextCount = currentCount + 1;
-      const alreadyPromoted = snapshot.data()?.status === 'promoted';
-      await ref.set({
-        label,
-        normalizedKey: key,
-        source: 'creator_custom',
-        uniqueCreatorCount: nextCount,
-        status: alreadyPromoted || nextCount >= PROFILE_TAG_PROMOTION_THRESHOLD ? 'promoted' : 'candidate',
-        updatedAt: FieldValue.serverTimestamp(),
-        ...(!snapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
-        ...(!alreadyPromoted && nextCount >= PROFILE_TAG_PROMOTION_THRESHOLD ? { promotedAt: FieldValue.serverTimestamp() } : {}),
-      }, { merge: true });
-    }
-
-    for (const [, label] of removed) {
-      const ref = db.collection('profileTagCatalogue').doc(profileTagDocId(label));
-      const snapshot = await ref.get();
-      if (!snapshot.exists) continue;
-      const nextCount = Math.max(0, Number(snapshot.data()?.uniqueCreatorCount ?? 0) - 1);
-      await ref.set({
-        uniqueCreatorCount: nextCount,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-    }
+    await syncCreatorCustomTagUsage(identity.uid);
   }
 
   const releases = await db.collection('releases').where('creatorUserId', '==', identity.uid).limit(450).get();
@@ -371,6 +476,8 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
     avatarTone: data.avatarTone ?? 'plum',
     followerCount: Math.max(0, Number(data.followerCount ?? 0)),
     favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
+    favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
+    favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
     roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
     roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
     roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
@@ -495,6 +602,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   }
 
   const role = String(accountData?.role ?? '');
+  const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
   let releaseCount = 0;
   let creditedReleases: ReturnType<typeof releasePayload>[] = [];
@@ -530,6 +638,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       initials: data.avatarInitials ?? null,
       avatarTone: data.avatarTone ?? 'plum',
       followerCount: Math.max(0, Number(data.followerCount ?? 0)),
+      followingCount: followingSnapshot.size,
       favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
       favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
       favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
@@ -582,6 +691,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       avatarStatus: data.avatarStatus ?? null,
       initials: data.avatarInitials ?? null,
       followers: Math.max(0, Number(data.followerCount ?? 0)),
+      followingCount: (await accountRef(creatorUserId).collection('follows').limit(500).get()).size,
       favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
       favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
       favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
@@ -1927,6 +2037,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     updatedAt: FieldValue.serverTimestamp(),
   };
   await ref.set(record);
+  await syncCreatorCustomTagUsage(identity.uid);
   const saved = await ref.get();
   return { release: releasePayload(saved.data() ?? record, ref.id) };
 });
@@ -1962,6 +2073,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     updatedAt: FieldValue.serverTimestamp(),
   };
   await ref.set(update, { merge: true });
+  await syncCreatorCustomTagUsage(identity.uid);
   const saved = await ref.get();
   return { release: releasePayload(saved.data() ?? {}, releaseId) };
 });
@@ -1995,6 +2107,7 @@ export const deleteRelease = onCall({ region: REGION }, async (request) => {
   }
 
   await ref.delete();
+  await syncCreatorCustomTagUsage(identity.uid);
   return { deleted: true };
 });
 
