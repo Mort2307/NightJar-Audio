@@ -164,6 +164,24 @@ const cleanStringList = (value: unknown, maxItems = 16) => {
   )).slice(0, maxItems);
 };
 
+const PROFILE_TAG_SEED = new Set([
+  'Atmospheric','ASMR','Binaural','Cinematic','Conversational','Dialogue-heavy','Gentle','Immersive','Intimate','Playful','Romantic','Slow-paced','Story-led','Voice-led','Whispered','Sound-rich',
+].map((item) => item.toLocaleLowerCase()));
+const PROFILE_TAG_PROMOTION_THRESHOLD = 5;
+
+const cleanProfileTag = (value: unknown) => cleanText(value, 48).replace(/\s+/g, ' ');
+const profileTagKey = (value: unknown) => cleanProfileTag(value).toLocaleLowerCase();
+const profileTagDocId = (value: unknown) => encodeURIComponent(profileTagKey(value)).slice(0, 220);
+const customProfileTagMap = (value: unknown) => {
+  const result = new Map<string, string>();
+  for (const label of cleanStringList(value)) {
+    const key = profileTagKey(label);
+    if (!key || PROFILE_TAG_SEED.has(key)) continue;
+    if (!result.has(key)) result.set(key, cleanProfileTag(label));
+  }
+  return result;
+};
+
 const cleanHandle = (value: unknown) =>
   cleanText(value, 30).replace(/^@+/, '').toLowerCase();
 
@@ -200,11 +218,24 @@ export const getMyProfile = onCall({ region: REGION }, async (request) => {
   return { profile: snapshot.exists ? snapshot.data() : null };
 });
 
+export const profileTagCatalogue = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('profileTagCatalogue').where('status', '==', 'promoted').limit(200).get();
+  const tags = snapshot.docs
+    .map((doc) => cleanProfileTag(doc.data()?.label))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  return { tags };
+});
+
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const handle = cleanHandle(input.handle);
   if (handle) validateHandle(handle);
+  const accountSnapshot = await accountRef(identity.uid).get();
+  const profileRole = identity.admin ? 'admin' : String(accountSnapshot.data()?.role ?? '');
 
   const nextProfile = {
     displayName: cleanText(input.displayName, 80) || identity.email.split('@')[0],
@@ -219,6 +250,11 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     favouriteTropes: cleanStringList(input.favouriteTropes),
     favouriteCategories: cleanStringList(input.favouriteCategories),
     roleFocus: cleanStringList(input.roleFocus),
+    roleSpecialties: cleanStringList(input.roleSpecialties),
+    roleSecondary: cleanStringList(input.roleSecondary),
+    roleAvailability: cleanText(input.roleAvailability, 100),
+    roleDetailOne: cleanText(input.roleDetailOne, 600),
+    roleDetailTwo: cleanText(input.roleDetailTwo, 600),
     publicProfile: input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
@@ -226,9 +262,11 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   };
 
   const targetProfileRef = profileRef(identity.uid);
+  let previousFavouriteTags: string[] = [];
 
   await db.runTransaction(async (transaction) => {
     const currentProfile = await transaction.get(targetProfileRef);
+    previousFavouriteTags = cleanStringList(currentProfile.data()?.favouriteTags);
     const currentHandle = cleanHandle(currentProfile.data()?.handle);
     const targetHandleRef = handle ? db.collection('handles').doc(handle) : null;
     const targetHandle = targetHandleRef ? await transaction.get(targetHandleRef) : null;
@@ -257,6 +295,42 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
       ...(currentProfile.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
   });
+
+  if (profileRole === 'creator') {
+    const before = customProfileTagMap(previousFavouriteTags);
+    const after = customProfileTagMap(nextProfile.favouriteTags);
+    const added = [...after.entries()].filter(([key]) => !before.has(key));
+    const removed = [...before.entries()].filter(([key]) => !after.has(key));
+
+    for (const [key, label] of added) {
+      const ref = db.collection('profileTagCatalogue').doc(profileTagDocId(label));
+      const snapshot = await ref.get();
+      const currentCount = Math.max(0, Number(snapshot.data()?.uniqueCreatorCount ?? 0));
+      const nextCount = currentCount + 1;
+      const alreadyPromoted = snapshot.data()?.status === 'promoted';
+      await ref.set({
+        label,
+        normalizedKey: key,
+        source: 'creator_custom',
+        uniqueCreatorCount: nextCount,
+        status: alreadyPromoted || nextCount >= PROFILE_TAG_PROMOTION_THRESHOLD ? 'promoted' : 'candidate',
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(!snapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+        ...(!alreadyPromoted && nextCount >= PROFILE_TAG_PROMOTION_THRESHOLD ? { promotedAt: FieldValue.serverTimestamp() } : {}),
+      }, { merge: true });
+    }
+
+    for (const [, label] of removed) {
+      const ref = db.collection('profileTagCatalogue').doc(profileTagDocId(label));
+      const snapshot = await ref.get();
+      if (!snapshot.exists) continue;
+      const nextCount = Math.max(0, Number(snapshot.data()?.uniqueCreatorCount ?? 0) - 1);
+      await ref.set({
+        uniqueCreatorCount: nextCount,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  }
 
   const releases = await db.collection('releases').where('creatorUserId', '==', identity.uid).limit(450).get();
   if (!releases.empty) {
@@ -297,6 +371,11 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
     followerCount: Math.max(0, Number(data.followerCount ?? 0)),
     favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
     roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
+    roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
+    roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
+    roleAvailability: data.roleAvailability ?? null,
+    roleDetailOne: data.roleDetailOne ?? null,
+    roleDetailTwo: data.roleDetailTwo ?? null,
   };
 };
 
@@ -454,6 +533,11 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
       favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
       roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
+      roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
+      roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
+      roleAvailability: data.roleAvailability ?? null,
+      roleDetailOne: data.roleDetailOne ?? null,
+      roleDetailTwo: data.roleDetailTwo ?? null,
       releaseCount,
       publishedWorkCount,
       creditedReleaseCount: creditedReleases.length,
@@ -498,6 +582,14 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       initials: data.avatarInitials ?? null,
       followers: Math.max(0, Number(data.followerCount ?? 0)),
       favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
+      favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
+      favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
+      roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
+      roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
+      roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
+      roleAvailability: data.roleAvailability ?? null,
+      roleDetailOne: data.roleDetailOne ?? null,
+      roleDetailTwo: data.roleDetailTwo ?? null,
       releases,
     },
   };
