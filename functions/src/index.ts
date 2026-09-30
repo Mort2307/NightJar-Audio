@@ -4896,9 +4896,12 @@ export const releaseReactionState = onCall({ region: REGION }, async (request) =
   if (viewerRole !== 'listener') return { reactions: [] };
   const snapshot = await db.collection('releaseReactions').where('userId', '==', identity.uid).limit(1000).get();
   const reactions = snapshot.docs
-    .map((doc) => releaseReactionPayload(doc.data(), doc.id))
-    .filter((item) => item.releaseId && item.reaction)
-    .map((item) => ({ releaseId:item.releaseId, reaction:item.reaction }));
+    .map((doc) => ({
+      releaseId:cleanText(doc.data().releaseId, 160),
+      reaction:cleanText(doc.data().reaction, 20),
+    }))
+    .filter((item) => item.releaseId && ['like','love'].includes(item.reaction))
+    .map((item) => ({ releaseId:item.releaseId, reaction:item.reaction as 'like' | 'love' }));
   return { reactions };
 });
 
