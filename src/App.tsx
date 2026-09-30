@@ -373,6 +373,7 @@ function App() {
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [messageRecipientUserId, setMessageRecipientUserId] = useState<string | null>(null);
+  const [messageCollaborationId, setMessageCollaborationId] = useState<string | null>(null);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const [creatorProfileUserId, setCreatorProfileUserId] = useState<string | null>(null);
   const [publicProfileUserId, setPublicProfileUserId] = useState<string | null>(() => {
@@ -2343,6 +2344,7 @@ function App() {
     setPlaying(null);
     setReviewTrack(null);
     setMessageRecipientUserId(null);
+    setMessageCollaborationId(null);
     setCreatorProfileUserId(null);
     setPublicProfileUserId(null);
     setNotificationsOpen(false);
@@ -2939,7 +2941,7 @@ function App() {
                     </div>
                   </div>
                   <div className="profile-directory-actions">
-                    {['creator','writer','editor'].includes(String(effectiveRole)) && ['creator','writer','editor'].includes(String(person.role)) && person.userId !== user?.userId && <button className="ghost-button" onClick={() => { setMessageRecipientUserId(person.userId); navigate('messages'); }}><MessageCircle size={13}/> Message</button>}
+                    {['creator','writer','editor'].includes(String(effectiveRole)) && ['creator','writer','editor'].includes(String(person.role)) && person.userId !== user?.userId && <button className="ghost-button" onClick={() => { setMessageRecipientUserId(person.userId); setMessageCollaborationId(null); navigate('messages'); }}><MessageCircle size={13}/> Message</button>}
                     <button className="round-arrow" onClick={() => openPublicProfile(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
                   </div>
                 </article>;
@@ -2952,7 +2954,7 @@ function App() {
         {view === 'messages' && ['creator','writer','editor'].includes(String(effectiveRole)) && (
           <section className="page-wrap messages-page">
             <div className="page-heading"><div><p className="eyebrow"><MessageCircle size={14}/> PRIVATE MESSAGING</p><h1>Keep creative conversations moving.</h1><p>Creators, Writers and Audio Editors can communicate directly inside Nightjar without changing manuscript rights or access permissions.</p></div></div>
-            <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading private messages" />}><MessagingHub role={effectiveRole as 'creator'|'writer'|'editor'} currentUserId={user?.userId} initialRecipientUserId={messageRecipientUserId} onRecipientHandled={()=>setMessageRecipientUserId(null)} onUnreadChange={setMessageUnreadCount} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
+            <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading private messages" />}><MessagingHub role={effectiveRole as 'creator'|'writer'|'editor'} currentUserId={user?.userId} initialRecipientUserId={messageRecipientUserId} initialCollaborationId={messageCollaborationId} onRecipientHandled={()=>{setMessageRecipientUserId(null);setMessageCollaborationId(null);}} onUnreadChange={setMessageUnreadCount} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
           </section>
         )}
 
@@ -2991,7 +2993,7 @@ function App() {
             </div>
             {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator compensation" />}><CreatorCompensationCard key={'creator-pay-' + demoSessionKey} notify={notify} demoMode={demoMode} /></Suspense>}
             {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading script marketplace" />}><ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={openPublicProfile} demoMode={demoMode} simulationMode={simulationMode} /></Suspense>}
-            {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId)=>{ setMessageRecipientUserId(userId); navigate('messages'); }} /></Suspense>}
+            {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>}
             <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Verified listening remains available as analytics and discovery data. It does not make one Creator’s standard base rate larger than another’s.</p></article>
           </section>
         )}
@@ -3161,7 +3163,7 @@ function App() {
             <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a manuscript</h2><p>Every new script begins private.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title"/><button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button></div></div>
             <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div><textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder="Begin writing…"/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
             {writerSelected && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights controls" />}><WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} /></Suspense>}
-            <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer collaborations" />}><CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId)=>{ setMessageRecipientUserId(userId); navigate('messages'); }} /></Suspense>
+            <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer collaborations" />}><CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>
           </section>
         )}
 
@@ -3204,7 +3206,7 @@ function App() {
                 </div>
               </article>
             )}
-            <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Audio Editor collaborations" />}><CollaborationHub key={'editor-collab-' + demoSessionKey} role="editor" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId)=>{ setMessageRecipientUserId(userId); navigate('messages'); }} /></Suspense>
+            <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Audio Editor collaborations" />}><CollaborationHub key={'editor-collab-' + demoSessionKey} role="editor" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>
             <div className="protection-banner"><FileCheck2 size={19} /><div><strong>EDITOR BOUNDARY</strong><span>Editorial decisions are recorded against the assigned manuscript. Administrator authority remains separate.</span></div></div>
           </section>
         )}
