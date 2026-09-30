@@ -898,6 +898,8 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
     .map((doc) => releasePayload(doc.data(), doc.id))
     .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
+  const completedCollaborations = await completedCollaborationCountFor(creatorUserId);
+
   return {
     creator: {
       userId: creatorUserId,
@@ -927,10 +929,10 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
         const selected = new Set(cleanStringList(data.featuredPortfolioIds, 6));
         return selected.size ? releases.filter((release) => selected.has(String(release.id))) : releases.slice(0, 3);
       })(),
-      completedCollaborations: await completedCollaborationCountFor(creatorUserId),
+      completedCollaborations,
       activityBadges: publicActivityBadges('creator', {
         releases: releases.length,
-        completedCollaborations: await completedCollaborationCountFor(creatorUserId),
+        completedCollaborations,
       }),
       releases,
     },
@@ -3855,6 +3857,9 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
         roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
         roleAvailability: data.roleAvailability ?? null,
         completedCollaborations: completedByUser.get(doc.id) ?? 0,
+        activityBadges: publicActivityBadges(String(doc.data().role ?? ''), {
+          completedCollaborations: completedByUser.get(doc.id) ?? 0,
+        }),
       };
     }))).filter(Boolean);
   return { people };
