@@ -14,7 +14,7 @@ const reactionCall = httpsCallable<{ releaseId: string; reaction: ReleaseReactio
   comments: any[];
   reactions: { likes: number; loves: number; total: number; myReaction: ReleaseReaction };
 }>(functions, 'setReleaseReaction');
-const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any }>(functions, 'postReleaseComment');
+const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any; reactions?: { likes:number; loves:number; total:number; myReaction:ReleaseReaction }; commentCount?: number }>(functions, 'postReleaseComment');
 const deleteCommentCall = httpsCallable<{ commentId: string }, { deleted: boolean; commentId: string }>(functions, 'deleteOwnReleaseComment');
 const reportCommentCall = httpsCallable<{ commentId: string; reason?: string }, { reported: boolean; commentId: string }>(functions, 'reportReleaseComment');
 const adminReportsCall = httpsCallable<void, { reports: any[] }>(functions, 'adminListCommunityReports');
