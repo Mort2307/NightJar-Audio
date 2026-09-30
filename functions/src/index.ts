@@ -683,12 +683,14 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
 
-  const [accounts, releases, scripts, collaborations] = await Promise.all([
+  const [accounts, profilesSnapshot, releases, scripts, collaborations] = await Promise.all([
     db.collection('accounts').limit(1000).get(),
+    db.collection('profiles').limit(1000).get(),
     db.collection('releases').where('status', '==', 'released').limit(1000).get(),
     db.collection('scripts').limit(1000).get(),
     db.collection('collaborationProposals').limit(1000).get(),
   ]);
+  const profileByUser = new Map(profilesSnapshot.docs.map((doc) => [doc.id, doc.data() ?? {}]));
 
   const releaseCountByCreator = new Map<string, number>();
   const creditCountByUser = new Map<string, number>();
@@ -721,16 +723,40 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
   const profiles = (await Promise.all(accounts.docs
     .filter((doc) => doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
     .map(async (doc) => {
-      const base = await publicProfileForAccount(doc);
-      if (!base) return null;
+      const data = profileByUser.get(doc.id);
+      if (!data || data.publicProfile === false) return null;
       const role = String(doc.data().role ?? '');
       const releaseCount = releaseCountByCreator.get(doc.id) ?? 0;
       const publishedWorkCount = publishedScriptsByWriter.get(doc.id) ?? 0;
       const creditedReleaseCount = creditCountByUser.get(doc.id) ?? 0;
       const completedCollaborations = collaborationCountByUser.get(doc.id) ?? 0;
       return {
-        ...base,
+        userId: doc.id,
         role,
+        displayName: data.displayName ?? 'Nightjar member',
+        name: data.displayName ?? 'Nightjar member',
+        handle: data.handle ?? null,
+        headline: data.headline ?? null,
+        bio: data.bio ?? null,
+        welcomeMessage: data.welcomeMessage ?? null,
+        pronouns: data.pronouns ?? null,
+        avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+        avatarStatus: data.avatarStatus ?? null,
+        avatarInitials: data.avatarInitials ?? null,
+        initials: data.avatarInitials ?? null,
+        avatarTone: data.avatarTone ?? 'plum',
+        followerCount: Math.max(0, Number(data.followerCount ?? 0)),
+        favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
+        favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
+        favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
+        roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
+        roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
+        roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
+        roleAvailability: data.roleAvailability ?? null,
+        roleDetailOne: data.roleDetailOne ?? null,
+        roleDetailTwo: data.roleDetailTwo ?? null,
+        portfolioNote: data.portfolioNote ?? null,
+        featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
         releaseCount,
         publishedWorkCount,
         creditedReleaseCount,
