@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Flag, Heart, MessageSquare, Star, ThumbsUp, Trash2, X } from 'lucide-react';
 import { nightjarReviews } from '../platform/firebase-reviews';
-import { nightjarCommunityEngagement } from '../platform/firebase-community-engagement';
+import { nightjarEngagement } from '../platform/firebase-engagement';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 
 type Props = {
@@ -10,7 +10,7 @@ type Props = {
   notify: (message: string) => void;
   demoMode?: boolean;
   simulationMode?: boolean;
-  canCommunityInteract?: boolean;
+  viewerRole?: string | null;
   currentUserId?: string | null;
 };
 
@@ -20,9 +20,10 @@ export default function ReleaseReviews({
   notify,
   demoMode = false,
   simulationMode = false,
-  canCommunityInteract = false,
+  viewerRole = null,
   currentUserId = null,
 }: Props) {
+  const canCommunityInteract = viewerRole === 'listener';
   const dialogRef = useRef<HTMLElement | null>(null);
   const [tab, setTab] = useState<'comments' | 'reviews'>('comments');
   const [reviews, setReviews] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
@@ -61,7 +62,7 @@ export default function ReleaseReviews({
       } else {
         const [reviewData, communityData] = await Promise.all([
           nightjarReviews.list(release.id),
-          nightjarCommunityEngagement.release(release.id),
+          nightjarEngagement.community(release.id),
         ]);
         setReviews(reviewData);
         setCommunity(communityData);
@@ -111,7 +112,7 @@ export default function ReleaseReviews({
         const next={ id:'demo-comment-'+Date.now(), userId:currentUserId ?? 'demo-listener', commenterName:'You', commenterHandle:'you', body, createdAt:new Date().toISOString() };
         setCommunity((current:any)=>({ ...current, comments:[...(current.comments??[]),next] }));
       } else {
-        const next=await nightjarCommunityEngagement.comment(release.id,body);
+        const next=await nightjarEngagement.comment(release.id,body);
         setCommunity((current:any)=>({ ...current, comments:[...(current.comments??[]),next.comment] }));
       }
       setComment('');
@@ -128,7 +129,7 @@ export default function ReleaseReviews({
     if (reacting) return;
     setReacting(true);
     try {
-      const nextReaction = community.reactions?.myReaction === reaction ? '' : reaction;
+      const nextReaction = community.reactions?.myReaction === reaction ? null : reaction;
       if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to react.');
       if (simulationMode) {
         setCommunity((current:any)=>{
@@ -142,7 +143,7 @@ export default function ReleaseReviews({
           return {...current,reactions:{likes,loves,total:likes+loves,myReaction:nextReaction||null}};
         });
       } else {
-        const next=await nightjarCommunityEngagement.react(release.id,nextReaction);
+        const next=await nightjarEngagement.setReaction(release.id,nextReaction);
         setCommunity((current:any)=>({ ...current, ...next }));
       }
     } catch {
@@ -155,7 +156,7 @@ export default function ReleaseReviews({
   const deleteComment = async (item:any) => {
     if (!window.confirm('Delete this comment?')) return;
     try {
-      if (!simulationMode) await nightjarCommunityEngagement.deleteComment(item.id);
+      if (!simulationMode) await nightjarEngagement.deleteComment(item.id);
       setCommunity((current:any)=>({ ...current, comments:(current.comments??[]).filter((entry:any)=>entry.id!==item.id) }));
       notify('Comment deleted.');
     } catch {
@@ -167,7 +168,7 @@ export default function ReleaseReviews({
     const reason=window.prompt('Why are you reporting this comment?') ?? '';
     if (!reason.trim()) return;
     try {
-      if (!simulationMode) await nightjarCommunityEngagement.reportComment(item.id,reason);
+      if (!simulationMode) await nightjarEngagement.reportComment(item.id,reason);
       notify('Comment reported for administrator review.');
     } catch {
       notify('Comment could not be reported.');
