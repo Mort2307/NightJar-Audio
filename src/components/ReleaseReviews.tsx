@@ -119,22 +119,19 @@ export default function ReleaseReviews({
       if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to comment.');
       if (simulationMode) {
         const next={ id:'demo-comment-'+Date.now(), userId:currentUserId ?? 'demo-listener', commenterName:'You', commenterHandle:'you', body, createdAt:new Date().toISOString() };
-        setCommunity((current:any)=>{
-          const updated={ ...current, comments:[...(current.comments??[]),next] };
-          onCommunityChanged?.({ likes:Number(updated.reactions?.likes??0), loves:Number(updated.reactions?.loves??0), total:Number(updated.reactions?.total??0), comments:updated.comments.length });
-          return updated;
-        });
+        const nextComments=[...(community.comments??[]),next];
+        setCommunity((current:any)=>({ ...current, comments:nextComments }));
+        onCommunityChanged?.({ likes:Number(community.reactions?.likes??0), loves:Number(community.reactions?.loves??0), total:Number(community.reactions?.total??0), comments:nextComments.length });
       } else {
         const next=await nightjarEngagement.comment(release.id,body);
-        setCommunity((current:any)=>{
-          const updated={ ...current, comments:[...(current.comments??[]),next.comment], ...(next.reactions ? { reactions:next.reactions } : {}) };
-          onCommunityChanged?.({
-            likes:Number(updated.reactions?.likes??0),
-            loves:Number(updated.reactions?.loves??0),
-            total:Number(updated.reactions?.total??0),
-            comments:Number(next.commentCount ?? updated.comments.length),
-          });
-          return updated;
+        const nextComments=[...(community.comments??[]),next.comment];
+        const nextReactions=next.reactions ?? community.reactions;
+        setCommunity((current:any)=>({ ...current, comments:nextComments, reactions:nextReactions }));
+        onCommunityChanged?.({
+          likes:Number(nextReactions?.likes??0),
+          loves:Number(nextReactions?.loves??0),
+          total:Number(nextReactions?.total??0),
+          comments:Number(next.commentCount ?? nextComments.length),
         });
       }
       setComment('');
@@ -154,25 +151,19 @@ export default function ReleaseReviews({
       const nextReaction = community.reactions?.myReaction === reaction ? null : reaction;
       if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to react.');
       if (simulationMode) {
-        setCommunity((current:any)=>{
-          const previous=current.reactions?.myReaction;
-          let likes=Number(current.reactions?.likes??0);
-          let loves=Number(current.reactions?.loves??0);
-          if(previous==='like') likes=Math.max(0,likes-1);
-          if(previous==='love') loves=Math.max(0,loves-1);
-          if(nextReaction==='like') likes+=1;
-          if(nextReaction==='love') loves+=1;
-          const updated={...current,reactions:{likes,loves,total:likes+loves,myReaction:nextReaction||null}};
-          onCommunityChanged?.({ likes, loves, total:likes+loves, comments:Number(current.comments?.length??0) });
-          return updated;
-        });
+        const previous=community.reactions?.myReaction;
+        let likes=Number(community.reactions?.likes??0);
+        let loves=Number(community.reactions?.loves??0);
+        if(previous==='like') likes=Math.max(0,likes-1);
+        if(previous==='love') loves=Math.max(0,loves-1);
+        if(nextReaction==='like') likes+=1;
+        if(nextReaction==='love') loves+=1;
+        setCommunity((current:any)=>({...current,reactions:{likes,loves,total:likes+loves,myReaction:nextReaction||null}}));
+        onCommunityChanged?.({ likes, loves, total:likes+loves, comments:Number(community.comments?.length??0) });
       } else {
         const next=await nightjarEngagement.setReaction(release.id,nextReaction);
-        setCommunity((current:any)=>{
-          const updated={ ...current, ...next };
-          onCommunityChanged?.({ likes:Number(updated.reactions?.likes??0), loves:Number(updated.reactions?.loves??0), total:Number(updated.reactions?.total??0), comments:Number(updated.comments?.length??0) });
-          return updated;
-        });
+        setCommunity((current:any)=>({ ...current, ...next }));
+        onCommunityChanged?.({ likes:Number(next.reactions?.likes??0), loves:Number(next.reactions?.loves??0), total:Number(next.reactions?.total??0), comments:Number(next.comments?.length??community.comments?.length??0) });
       }
     } catch {
       notify('Reaction could not be updated.');
@@ -185,11 +176,9 @@ export default function ReleaseReviews({
     if (!window.confirm('Delete this comment?')) return;
     try {
       if (!simulationMode) await nightjarEngagement.deleteComment(item.id);
-      setCommunity((current:any)=>{
-        const updated={ ...current, comments:(current.comments??[]).filter((entry:any)=>entry.id!==item.id) };
-        onCommunityChanged?.({ likes:Number(updated.reactions?.likes??0), loves:Number(updated.reactions?.loves??0), total:Number(updated.reactions?.total??0), comments:updated.comments.length });
-        return updated;
-      });
+      const nextComments=(community.comments??[]).filter((entry:any)=>entry.id!==item.id);
+      setCommunity((current:any)=>({ ...current, comments:nextComments }));
+      onCommunityChanged?.({ likes:Number(community.reactions?.likes??0), loves:Number(community.reactions?.loves??0), total:Number(community.reactions?.total??0), comments:nextComments.length });
       notify('Comment deleted.');
     } catch {
       notify('Comment could not be deleted.');
