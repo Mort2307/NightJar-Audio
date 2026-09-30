@@ -84,12 +84,12 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         setBlockedByOther(false);
         setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,unreadCount:0}:item));
       }else{
-        const data=await nightjarMessaging.messages(conversationId);
+        const data=await nightjarMessaging.open(conversationId);
         setMessages(data.messages??[]);
         setBlocked(data.blocked===true);
         setBlockedByMe(data.blockedByMe===true);
         setBlockedByOther(data.blockedByOther===true);
-        setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,unreadCount:0}:item));
+        setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,...(data.conversation??{}),unreadCount:0}:item));
         await loadConversations(true);
       }
     }catch{notify('Conversation could not be loaded.');}
@@ -106,8 +106,8 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         setSelectedId(id);
         await loadMessages(id);
       }else{
-        const data=await nightjarMessaging.start(targetUserId,collaborationId??undefined);
-        const id=data.conversationId;
+        const data=await nightjarMessaging.start(targetUserId,'',collaborationId??undefined);
+        const id=data.conversation?.id;
         if(!id)throw new Error('Conversation id missing');
         setSelectedId(id);
         await Promise.all([loadConversations(true),loadMessages(id)]);
@@ -153,7 +153,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         setMessages((items)=>[...items,message]);
         setConversations((items)=>items.map((item)=>item.id===selectedId?{...item,lastMessage:text,lastMessageAt:message.createdAt}:item));
       }else{
-        const result=await nightjarMessaging.send(selectedId,text);
+        const result=await nightjarMessaging.send(selectedId,text,activeCollaborationId);
         setMessages((items)=>[...items,result.message]);
         await loadConversations(true);
       }
@@ -179,7 +179,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     if(!selected?.otherUserId)return;
     const next=!blockedByMe;
     try{
-      if(!demoMode)await nightjarMessaging.block(selected.otherUserId,next);
+      if(!demoMode)await nightjarMessaging.setBlocked(selected.otherUserId,next);
       setBlockedByMe(next);
       setBlocked(next||blockedByOther);
       notify(next?'You blocked private messages from this account.':'Your messaging block was removed.');
