@@ -3348,3 +3348,24 @@ select:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Protected-reader print hardening */
+@media print {
+  body.nightjar-protected-reader-open * {
+    visibility: hidden !important;
+  }
+  body.nightjar-protected-reader-open::before {
+    content: 'Nightjar protected manuscript — printing is disabled for this reader session.';
+    visibility: visible !important;
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 40px;
+    background: #fff;
+    color: #111;
+    font: 700 16px/1.5 system-ui, sans-serif;
+    text-align: center;
+  }
+}
