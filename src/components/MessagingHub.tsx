@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Ban, Flag, MessageCircle, RefreshCw, Search, Send, ShieldCheck } from 'lucide-react';
+import { Ban, Check, CheckCheck, Flag, MessageCircle, RefreshCw, Search, Send, ShieldCheck } from 'lucide-react';
 import { nightjarMessaging } from '../platform/firebase-messaging';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 
@@ -80,10 +80,10 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         setBlocked(false);
         setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,unreadCount:0}:item));
       }else{
-        const data=await nightjarMessaging.open(conversationId);
+        const data=await nightjarMessaging.messages(conversationId);
         setMessages(data.messages??[]);
         setBlocked(data.blocked===true);
-        if(data.conversation)setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,...data.conversation,unreadCount:0}:item));
+        setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,unreadCount:0}:item));
         await loadConversations(true);
       }
     }catch{notify('Conversation could not be loaded.');}
@@ -100,8 +100,8 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         setSelectedId(id);
         await loadMessages(id);
       }else{
-        const data=await nightjarMessaging.start(targetUserId,'',collaborationId);
-        const id=data.conversation?.id;
+        const data=await nightjarMessaging.start(targetUserId,collaborationId??undefined);
+        const id=data.conversationId;
         if(!id)throw new Error('Conversation id missing');
         setSelectedId(id);
         await Promise.all([loadConversations(true),loadMessages(id)]);
@@ -147,7 +147,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         setMessages((items)=>[...items,message]);
         setConversations((items)=>items.map((item)=>item.id===selectedId?{...item,lastMessage:text,lastMessageAt:message.createdAt}:item));
       }else{
-        const result=await nightjarMessaging.send(selectedId,text,activeCollaborationId);
+        const result=await nightjarMessaging.send(selectedId,text);
         setMessages((items)=>[...items,result.message]);
         await loadConversations(true);
       }
@@ -173,7 +173,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     if(!selected?.otherUserId)return;
     const next=!blocked;
     try{
-      if(!demoMode)await nightjarMessaging.setBlocked(selected.otherUserId,next);
+      if(!demoMode)await nightjarMessaging.block(selected.otherUserId,next);
       setBlocked(next);
       notify(next?'Messages from this account are blocked.':'Messaging block removed.');
     }catch{notify('Messaging block could not be changed.');}
@@ -194,15 +194,16 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         {!!query.trim()&&<div className="messaging-directory">{filteredPeople.map((person:any)=><button key={person.userId} onClick={()=>void startWith(person.userId)}><span>{String(person.name??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{person.name}</strong><small>{roleLabel(person.role)}{person.handle?' · @'+String(person.handle).replace(/^@/,''):''}</small></div></button>)}{!filteredPeople.length&&<div className="people-empty">No matching professional accounts.</div>}</div>}
         <div className="messaging-conversations">
           <span className="mini-label">CONVERSATIONS</span>
-          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>setSelectedId(conversation.id)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt=""/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessage||'Conversation ready'}</small></div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em>}</button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
+          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>setSelectedId(conversation.id)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt=""/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small></div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em>}</button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
         </div>
       </aside>
 
       <div className="messaging-thread">
-        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{selected.collaborationIds?.length?' · linked collaboration':''}</p></div><button className="ghost-button" onClick={()=>void toggleBlock()}><Ban size={12}/>{blocked?'Unblock':'Block messages'}</button></header>
+        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{selected.collaborationId?' · linked collaboration':''}</p></div><button className="ghost-button" onClick={()=>void toggleBlock()}><Ban size={12}/>{blocked?'Unblock':'Block messages'}</button></header>
           <div className="message-list">{messages.length?messages.map((message:any)=>{
             const mine=message.senderUserId===viewerId;
-            return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}</time></div><p>{message.body||'Message unavailable.'}</p>{!mine&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
+            const readByOther=mine&&selected.otherUserId&&(message.readBy??[]).includes(selected.otherUserId);
+            return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}{mine&&<em className="message-read-state">{readByOther?<><CheckCheck size={11}/> Read</>:<><Check size={11}/> Sent</>}</em>}</time></div><p>{message.status==='removed_by_admin'?'Message removed by Nightjar moderation.':message.body||'Message unavailable.'}</p>{!mine&&message.status!=='removed_by_admin'&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
           }):<div className="people-empty"><MessageCircle size={17}/><strong>Conversation ready.</strong><span>Start with the work, expectations or next step. Protected material should stay in Nightjar’s controlled script tools.</span></div>}</div>
           <div className="message-compose">{blocked&&<div className="messaging-blocked-note"><Ban size={13}/><span>This conversation is blocked. Unblock it before sending.</span></div>}<textarea value={body} maxLength={4000} disabled={blocked} onChange={(event)=>setBody(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey&&!blocked){event.preventDefault();void send();}}} placeholder="Write a private message…"/><div><small>{body.length}/4000 · Enter to send · Shift+Enter for a new line · do not paste full protected scripts</small><button className="primary-button" disabled={sending||blocked||!body.trim()} onClick={()=>void send()}><Send size={13}/>{sending?'Sending…':'Send'}</button></div></div>
         </>:<div className="messaging-thread-empty"><MessageCircle size={22}/><strong>Select a conversation.</strong><span>Messages keep creative communication visible without changing rights, licences or manuscript permissions.</span></div>}
