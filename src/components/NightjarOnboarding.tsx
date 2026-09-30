@@ -153,6 +153,8 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     roleAvailability: initialProfile?.roleAvailability || '',
     roleDetailOne: initialProfile?.roleDetailOne || '',
     roleDetailTwo: initialProfile?.roleDetailTwo || '',
+    portfolioNote: initialProfile?.portfolioNote || '',
+    featuredPortfolioIds: Array.isArray(initialProfile?.featuredPortfolioIds) ? initialProfile.featuredPortfolioIds : [],
     publicProfile: initialProfile?.publicProfile !== false,
     onboardingComplete: initialProfile?.onboardingComplete === true,
   });
