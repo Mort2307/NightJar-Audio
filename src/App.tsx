@@ -1156,8 +1156,21 @@ function App() {
           editor: { displayName:'Sam Reed', handle:'samreed', headline:'Dialogue editing, mixing and production polish', bio:'Fictional Audio Editor profile for Nightjar Simulation Mode.', welcomeMessage:'Clean edits, clear handoffs, properly credited work.', pronouns:'', avatarInitials:'SR', avatarTone:'plum', avatarUrl:null, favouriteTags:['Sound-rich','Cinematic'], favouriteTropes:[], favouriteCategories:['Audio drama'], roleFocus:['Audio editing','Mixing','Mastering'], roleSpecialties:['Dialogue editing','Mixing','Mastering'], roleSecondary:['Series consistency','Detailed notes','Remote handoff'], roleAvailability:'Open for bookings', roleDetailOne:'Organised remote handoff, labelled revisions and non-destructive project delivery.', roleDetailTwo:'Typical demo turnaround: 3–5 working days depending on project length.', publicProfile:true },
           admin: { displayName:'Nightjar Admin Demo', handle:'nightjardemo', headline:'Administrator demo profile', bio:'Fictional admin-facing profile while Demo Data is enabled.', welcomeMessage:'', pronouns:'', avatarInitials:'NJ', avatarTone:'plum', avatarUrl:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:['Platform operations'], roleSpecialties:['Platform operations','Community safety'], roleSecondary:['Testing','Reports'], roleAvailability:'', roleDetailOne:'Owner-console simulation profile.', roleDetailTwo:'', publicProfile:false },
         };
-        setProfile(readDemo('profile:' + (previewRole ?? 'admin'), demoProfiles[previewRole ?? 'admin']));
+        const demoRole = previewRole ?? 'admin';
+        const demoProfile = readDemo('profile:' + demoRole, demoProfiles[demoRole]);
+        setProfile(demoProfile);
         setTasteVector([{label:'Atmospheric',weight:0.92},{label:'Slow burn',weight:0.81},{label:'Story-led',weight:0.76},{label:'Cinematic',weight:0.69}]);
+        const demoPortfolioOptions = demoRole === 'creator'
+          ? demoTracks.filter((item:any)=>item.creatorUserId === 'demo-creator-aria').map((item:any)=>({ id:item.id, type:'release', title:item.title, subtitle:item.category }))
+          : demoRole === 'listener'
+            ? (readDemo('library', demoLibrary).playlists ?? []).map((item:any)=>({ id:item.id, type:'playlist', title:item.title, subtitle:(item.releaseIds?.length ?? 0) + ' releases' }))
+            : demoRole === 'writer'
+              ? demoTracks.filter((item:any)=>(item.contributors ?? []).some((credit:any)=>credit.userId === 'demo-writer-mara')).map((item:any)=>({ id:item.id, type:'credit', title:item.title, subtitle:'Writer credit' }))
+              : demoRole === 'editor'
+                ? demoTracks.filter((item:any)=>(item.contributors ?? []).some((credit:any)=>credit.userId === 'demo-editor-sam')).map((item:any)=>({ id:item.id, type:'credit', title:item.title, subtitle:'Audio Editor credit' }))
+                : [];
+        setProfilePortfolioOptions(demoPortfolioOptions);
+        setProfileCompletedCollaborations(demoRole === 'creator' ? 4 : demoRole === 'writer' ? 3 : demoRole === 'editor' ? 5 : 0);
         return;
       }
       const [profileData, tasteData, tagData, portfolioData] = await Promise.all([
@@ -2419,8 +2432,8 @@ function App() {
 
         {view === 'creators' && (
           <section className="page-wrap">
-            <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators building original catalogues for the Nightjar audience.</p></div><label className="creator-directory-search"><Search size={16}/><input value={creatorQuery} onChange={(event)=>setCreatorQuery(event.target.value)} placeholder="Search creator or handle"/></label></div>
-            <div className="creator-directory">{filteredCreators.map((creator, index) => <article className="creator-profile" key={creator.userId}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => void toggleProfileFollow(creator.userId)} aria-label={followingProfileIds.includes(creator.userId) ? 'Unfollow creator' : 'Follow creator'}><Heart size={17} fill={followingProfileIds.includes(creator.userId) ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span>Fair discovery rotation</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
+            <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators by name, handle, tags, specialties, categories or collaboration availability.</p></div><div className="creator-directory-tools"><label className="creator-directory-search"><Search size={16}/><input value={creatorQuery} onChange={(event)=>setCreatorQuery(event.target.value)} placeholder="Search creator, tag, specialty…"/></label><select value={creatorTagFilter} onChange={(event)=>setCreatorTagFilter(event.target.value)}><option value="all">All tags & specialties</option>{creatorTagFilterOptions.map((option)=><option key={option} value={option}>{option}</option>)}</select><select value={creatorAvailabilityFilter} onChange={(event)=>setCreatorAvailabilityFilter(event.target.value)}><option value="all">Any availability</option>{creatorAvailabilityOptions.map((option)=><option key={option} value={option}>{option}</option>)}</select></div></div>
+            <div className="creator-directory">{filteredCreators.map((creator, index) => <article className="creator-profile" key={creator.userId}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => void toggleProfileFollow(creator.userId)} aria-label={followingProfileIds.includes(creator.userId) ? 'Unfollow creator' : 'Follow creator'}><Heart size={17} fill={followingProfileIds.includes(creator.userId) ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p>{creator.availability && <span className="creator-availability-pill">{creator.availability}</span>}<div className="creator-directory-tags">{[...(creator.specialties??[]),...(creator.tags??[])].slice(0,4).map((item)=><span key={item}>{item}</span>)}</div><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span>Fair discovery rotation</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
           </section>
         )}
 
@@ -2504,6 +2517,33 @@ function App() {
                   <label>{profileRoleConfig.detailOneLabel}<textarea value={profile.roleDetailOne ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,roleDetailOne:e.target.value}))} placeholder={profileRoleConfig.detailOnePlaceholder}/></label>
                   <label>{profileRoleConfig.detailTwoLabel}<textarea value={profile.roleDetailTwo ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,roleDetailTwo:e.target.value}))} placeholder={profileRoleConfig.detailTwoPlaceholder}/></label>
                 </div>
+                {effectiveRole !== 'admin' && <section className="profile-portfolio-editor">
+                  <div className="profile-portfolio-head">
+                    <div>
+                      <span className="mini-label">PUBLIC SHOWCASE</span>
+                      <h3>{effectiveRole === 'creator' ? 'Featured releases' : effectiveRole === 'writer' ? 'Featured writing credits' : effectiveRole === 'editor' ? 'Featured production credits' : 'Public playlists'}</h3>
+                      <p>{effectiveRole === 'listener'
+                        ? 'Choose playlists to publish on your profile. Your listening history, favourites and private library remain private.'
+                        : 'Choose up to six verified pieces of public work to lead your profile. Nightjar validates every selection against your real credits.'}</p>
+                    </div>
+                    {['creator','writer','editor'].includes(String(effectiveRole)) && <span className="profile-collaboration-badge"><Handshake size={14}/>{profileCompletedCollaborations} completed collaboration{profileCompletedCollaborations === 1 ? '' : 's'}</span>}
+                  </div>
+                  <label>Portfolio note <span className="optional-label">optional</span><textarea value={profile.portfolioNote ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,portfolioNote:e.target.value}))} placeholder={effectiveRole === 'listener' ? 'Optional note about the playlists you choose to share.' : 'Optional introduction to the work you have chosen to feature.'}/></label>
+                  <div className="profile-portfolio-options">
+                    {profilePortfolioOptions.length ? profilePortfolioOptions.map((item:any)=>{
+                      const selected = (profile.featuredPortfolioIds ?? []).includes(item.id);
+                      const atLimit = !selected && (profile.featuredPortfolioIds ?? []).length >= 6;
+                      return <label className={selected ? 'profile-portfolio-option selected' : 'profile-portfolio-option'} key={item.id}>
+                        <input type="checkbox" checked={selected} disabled={atLimit} onChange={(event)=>setProfile((current:any)=>{
+                          const ids = Array.isArray(current.featuredPortfolioIds) ? current.featuredPortfolioIds : [];
+                          return { ...current, featuredPortfolioIds:event.target.checked ? [...ids,item.id].slice(0,6) : ids.filter((id:string)=>id!==item.id) };
+                        })}/>
+                        <span><strong>{item.title}</strong><small>{item.subtitle || (item.type === 'playlist' ? 'Playlist' : 'Nightjar public work')}</small></span>
+                      </label>;
+                    }) : <div className="people-empty"><strong>No eligible showcase items yet.</strong><span>{effectiveRole === 'listener' ? 'Create a playlist in your Library first.' : 'Published and credited work will appear here automatically.'}</span></div>}
+                  </div>
+                  <small className="profile-portfolio-limit">{(profile.featuredPortfolioIds ?? []).length}/6 selected</small>
+                </section>}
                 <button className="primary-button profile-save-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my complete profile'} <Check size={15}/></button>
               </article>
             </div>
