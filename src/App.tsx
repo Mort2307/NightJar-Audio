@@ -68,6 +68,11 @@ import ReleaseReviews from './components/ReleaseReviews';
 import SearchableMultiSelect from './components/SearchableMultiSelect';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS, PROFILE_CATEGORY_OPTIONS, ROLE_FOCUS_OPTIONS, ROLE_PROFILE_CONFIG } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
+import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
+import MobileNavigation from './components/MobileNavigation';
+import ProductExperience from './components/ProductExperience';
+import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
+import NightjarSkeleton from './components/NightjarSkeleton';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
@@ -361,6 +366,8 @@ function App() {
   const [publicProfileUserId, setPublicProfileUserId] = useState<string | null>(null);
   const [moderationOpen, setModerationOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [profileBaseline, setProfileBaseline] = useState<any | null>(null);
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
@@ -382,6 +389,32 @@ function App() {
   }, [moderationPreviewAsset]);
 
   useEffect(() => installNativeProtectionBridge(), []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const profileDirty = useMemo(() => {
+    if (!profileBaseline) return false;
+    return JSON.stringify(profile) !== JSON.stringify(profileBaseline);
+  }, [profile, profileBaseline]);
+
+  useEffect(() => {
+    if (!profileDirty) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [profileDirty]);
 
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
   const creatorSpotlight = creatorSpotlightList[0] ?? null;
@@ -562,6 +595,7 @@ function App() {
       const nextProfile = data?.profile;
       if (nextProfile) {
         setProfile((current: any) => ({ ...current, ...nextProfile }));
+        setProfileBaseline((current:any) => ({ ...(current ?? {}), ...nextProfile }));
         setShowOnboarding(nextProfile.onboardingComplete !== true);
       } else {
         setShowOnboarding(true);
@@ -1256,7 +1290,10 @@ function App() {
         nightjarCommunity.profileTagCatalogue().catch(() => ({ tags: [] })),
         nightjarCommunity.getMyProfilePortfolioOptions().catch(() => ({ options: [], completedCollaborations: 0 })),
       ]);
-      if (profileData?.profile) setProfile((current: any) => ({ ...current, ...profileData.profile }));
+      if (profileData?.profile) {
+        setProfile((current: any) => ({ ...current, ...profileData.profile }));
+        setProfileBaseline((current:any) => ({ ...(current ?? {}), ...profileData.profile }));
+      }
       setTasteVector(tasteData.vector ?? []);
       setProfileTagCatalogue(Array.isArray(tagData?.tags) ? tagData.tags : []);
       setProfilePortfolioOptions(Array.isArray(portfolioData?.options) ? portfolioData.options : []);
@@ -1301,7 +1338,12 @@ function App() {
         return;
       }
       const data = await nightjarCommunity.saveMyProfile(profile);
-      if (data?.profile) setProfile((current: any) => ({ ...current, ...data.profile }));
+      if (data?.profile) {
+        setProfile((current: any) => ({ ...current, ...data.profile }));
+        setProfileBaseline((current:any) => ({ ...(current ?? {}), ...data.profile }));
+      } else {
+        setProfileBaseline(structuredClone(profile));
+      }
       notify('Your Nightjar profile has been saved.');
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -2360,6 +2402,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      <ProductExperience />
       <header className="topbar">
         <button className="brand-button" onClick={() => navigate('discover')} aria-label="Nightjar home">
           {logoUrl ? <img className="brand-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo" src="/favicon.svg" alt="Nightjar" />}<span>NIGHTJAR</span>
@@ -2379,6 +2422,7 @@ function App() {
         </nav>
 
         <div className="top-actions">
+          {user && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
           {user && <div className="notification-wrap">
             <button className="ghost-button notification-button" onClick={() => setNotificationsOpen((open) => !open)} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
               <Bell size={17} />
@@ -2416,7 +2460,7 @@ function App() {
         </div>
       </div>}
 
-      <main>
+      <main className="nightjar-main">
         {view === 'discover' && (
           <section className="page-wrap nj-animate">
             <section className="hero-section">
@@ -2944,6 +2988,8 @@ function App() {
         )}
       </main>
 
+      {user && ageVerified && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} />}
+
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src="/favicon.svg" alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
       {securityEvidenceReview && <div className="security-evidence-backdrop" role="dialog" aria-modal="true" aria-label="Security alert evidence review" onClick={()=>setSecurityEvidenceReview(null)}>
@@ -2992,7 +3038,7 @@ function App() {
       <ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} />
       {reviewTrack && <ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} />}
       {showOnboarding && user && role !== 'admin' && <NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} />}
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
 
       {user && !rolePicker && (
         <button className="floating-account" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)} aria-label="Open account information">
