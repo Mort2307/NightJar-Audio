@@ -60,13 +60,5 @@ export const nightjarMessaging = {
 
   async report(conversationId:string, messageId:string, reason='') {
     return (await reportCall({ conversationId, messageId, reason })).data;
-  },
-
-  async adminReports() {
-    return (await adminReportsCall()).data;
-  },
-
-  async adminResolve(reportId:string, decision:'dismissed'|'actioned'|'removed') {
-    return (await adminResolveCall({ reportId, decision })).data;
-  },
+  }
 };
