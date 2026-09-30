@@ -133,21 +133,6 @@ type Track = {
   productionNote?: string | null;
 };
 
-type CreatorSummary = {
-  userId: string;
-  name: string;
-  handle?: string | null;
-  followers?: number;
-  releases?: number;
-  initials?: string;
-  note?: string;
-  imageUrl?: string | null;
-  tags?: string[];
-  categories?: string[];
-  specialties?: string[];
-  availability?: string | null;
-};
-
 type PublicDirectoryProfile = {
   userId: string;
   role: Exclude<AccountRole, 'admin'>;
@@ -324,7 +309,6 @@ function App() {
   const [catalogueQuery, setCatalogueQuery] = useState('');
   const [catalogueRating, setCatalogueRating] = useState('all');
   const [catalogueDuration, setCatalogueDuration] = useState('all');
-  const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
   const [profileDirectory, setProfileDirectory] = useState<PublicDirectoryProfile[]>([]);
   const [directoryQuery, setDirectoryQuery] = useState('');
   const [directoryRoleFilter, setDirectoryRoleFilter] = useState<'all' | 'creator' | 'writer' | 'editor' | 'listener'>('all');
@@ -373,7 +357,6 @@ function App() {
   const creatorSpotlight = creatorSpotlightList[0] ?? null;
   const writerSpotlight = writerSpotlightList[0] ?? null;
   const editorSpotlight = editorSpotlightList[0] ?? null;
-  const creators = creatorDirectory;
   const directoryTagOptions = useMemo(() => Array.from(new Set(
     profileDirectory.flatMap((profile) => [
       ...(profile.favouriteTags ?? []),
@@ -605,7 +588,6 @@ function App() {
     try {
       if (demoMode) {
         setTracks(readDemo('tracks', demoTracks) as Track[]);
-        setCreatorDirectory(structuredClone(demoCreators));
         setProfileDirectory([
           ...structuredClone(demoCreators).map((item:any) => ({
             userId:item.userId, role:'creator' as const, name:item.name, handle:item.handle, headline:item.note,
@@ -632,9 +614,8 @@ function App() {
         setFollowingProfileIds(readDemo('following', ['demo-creator-aria','demo-creator-rowan']));
         return;
       }
-      const [catalogueResponse, creatorsResponse, directoryResponse, firebaseSpotlightResponse] = await Promise.all([
+      const [catalogueResponse, directoryResponse, firebaseSpotlightResponse] = await Promise.all([
         nightjarCatalogue.list(),
-        nightjarCommunity.listCreators(),
         nightjarCommunity.listPublicProfiles(),
         nightjarCommunity.spotlightState(),
       ]);
@@ -662,20 +643,6 @@ function App() {
         productionNote: release.productionNote ?? null,
       })) as Track[];
       setTracks(liveTracks);
-      setCreatorDirectory((creatorsResponse.creators ?? []).map((creator: any) => ({
-        userId: String(creator.userId),
-        name: creator.displayName ?? 'Nightjar creator',
-        handle: creator.handle ?? null,
-        initials: creator.avatarInitials ?? undefined,
-        note: creator.headline ?? creator.bio ?? undefined,
-        followers: creator.followerCount ?? 0,
-        releases: creator.releaseCount ?? 0,
-        imageUrl: creator.avatarUrl ?? null,
-        tags: creator.favouriteTags ?? [],
-        categories: creator.favouriteCategories ?? [],
-        specialties: creator.roleSpecialties ?? [],
-        availability: creator.roleAvailability ?? null,
-      })));
       setProfileDirectory((directoryResponse.profiles ?? []).map((item:any) => ({
         userId:String(item.userId),
         role:item.role,
@@ -739,7 +706,6 @@ function App() {
     } catch {
       if (epoch !== productLoadEpoch.current) return;
       setTracks([]);
-      setCreatorDirectory([]);
       setProfileDirectory([]);
       setCreatorSpotlightList([]);
       setWriterSpotlightList([]);
