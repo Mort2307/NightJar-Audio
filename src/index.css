@@ -1031,12 +1031,33 @@ button:focus-visible {
 .protected-reader > header h2 { margin: 3px 0; font-family: Georgia, serif; font-size: 27px; font-weight: 400; }
 .protected-reader > header p { margin: 0; color: var(--muted-2); font-size: 8px; }
 .reader-notice { display: flex; gap: 9px; padding: 12px 20px; color: #cfc0cc; background: rgba(92,58,84,.13); border-bottom: 1px solid var(--line-soft); font-size: 9px; line-height: 1.55; }
-.reader-body {
-  overflow: auto;
-  padding: 28px 30px 42px;
+.reader-protection-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 9px 20px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(255,255,255,.012);
+}
+.reader-protection-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(203,181,204,.12);
+  border-radius: 999px;
+  padding: 6px 8px;
+  color: var(--muted-2);
+  background: rgba(255,255,255,.018);
+  font-size: 8px;
+}
+.protected-reader.copy-locked .reader-body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+.reader-body {
+  overflow: auto;
+  padding: 28px 30px 42px;
   cursor: default;
   color: #ded4dc;
   font-family: Georgia, serif;
@@ -1052,6 +1073,8 @@ button:focus-visible {
   .protected-reader-backdrop { padding: 8px; }
   .protected-reader { max-height: 94vh; border-radius: 17px; }
   .protected-reader > header { padding: 14px; }
+  .reader-notice,.reader-protection-status { padding-left: 14px; padding-right: 14px; }
+  .reader-protection-status { display: grid; }
   .reader-body { padding: 22px 18px 34px; font-size: 15px; line-height: 1.8; }
   .protected-reader > footer { flex-wrap: wrap; }
   .protection-footnote { display: grid; }
