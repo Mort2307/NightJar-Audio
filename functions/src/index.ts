@@ -820,12 +820,13 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       }));
   }
 
+  const hasPortfolioCuration = Array.isArray(data.featuredPortfolioIds);
   const selectedPortfolioIds = cleanStringList(data.featuredPortfolioIds, 6);
   const selectedPortfolioSet = new Set(selectedPortfolioIds);
   const featuredWork = role === 'creator'
-    ? (selectedPortfolioIds.length ? creatorReleases.filter((release) => selectedPortfolioSet.has(String(release.id))) : creatorReleases.slice(0, 3))
+    ? (hasPortfolioCuration ? creatorReleases.filter((release) => selectedPortfolioSet.has(String(release.id))) : creatorReleases.slice(0, 3))
     : (role === 'writer' || role === 'editor')
-      ? (selectedPortfolioIds.length ? creditedReleases.filter((release) => selectedPortfolioSet.has(String(release.id))) : creditedReleases.slice(0, 3))
+      ? (hasPortfolioCuration ? creditedReleases.filter((release) => selectedPortfolioSet.has(String(release.id))) : creditedReleases.slice(0, 3))
       : [];
   const completedCollaborations = ['creator','writer','editor'].includes(role)
     ? await completedCollaborationCountFor(userId)
@@ -926,8 +927,9 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       portfolioNote: data.portfolioNote ?? null,
       featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
       featuredReleases: (() => {
+        const hasPortfolioCuration = Array.isArray(data.featuredPortfolioIds);
         const selected = new Set(cleanStringList(data.featuredPortfolioIds, 6));
-        return selected.size ? releases.filter((release) => selected.has(String(release.id))) : releases.slice(0, 3);
+        return hasPortfolioCuration ? releases.filter((release) => selected.has(String(release.id))) : releases.slice(0, 3);
       })(),
       completedCollaborations,
       activityBadges: publicActivityBadges('creator', {
