@@ -13,11 +13,12 @@ type Props={
   notify:(message:string)=>void;
   demoMode?:boolean;
   simulationMode?:boolean;
+  onUnreadChange?:(count:number)=>void;
 };
 
 const roleLabel=(role:string)=>role==='editor'?'Audio Editor':role.charAt(0).toUpperCase()+role.slice(1);
 
-export default function MessagingHub({role,currentUserId,initialRecipientUserId,onRecipientHandled,notify,demoMode=false,simulationMode=false}:Props){
+export default function MessagingHub({role,currentUserId,initialRecipientUserId,onRecipientHandled,notify,demoMode=false,simulationMode=false,onUnreadChange}:Props){
   const [conversations,setConversations]=useState<any[]>([]);
   const [directory,setDirectory]=useState<any[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(null);
@@ -31,13 +32,16 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     if(!silent) setLoading(true);
     try{
       if(demoMode){
-        setConversations([
+        const demoConversations=[
           {id:'demo-conversation-1',otherUserId:'demo-writer-mara',otherName:'Mara Bell',otherHandle:'marabell',lastMessagePreview:'I have updated the rights note — happy to talk through the changes.',lastMessageAt:new Date(Date.now()-1200000).toISOString(),unreadCount:1},
           {id:'demo-conversation-2',otherUserId:'demo-editor-sam',otherName:'Sam Reed',otherHandle:'samreed',lastMessagePreview:'The dialogue edit is ready for your review.',lastMessageAt:new Date(Date.now()-7200000).toISOString(),unreadCount:0},
-        ]);
+        ];
+        setConversations(demoConversations);
+        onUnreadChange?.(demoConversations.reduce((sum,item)=>sum+item.unreadCount,0));
       }else{
         const data=await nightjarMessaging.conversations();
         setConversations(data.conversations??[]);
+        onUnreadChange?.(data.unreadCount??0);
       }
     }catch{if(!silent) notify('Messages could not be loaded.');}
     finally{if(!silent)setLoading(false);}
