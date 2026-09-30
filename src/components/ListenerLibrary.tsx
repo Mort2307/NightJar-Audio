@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bookmark, Clock3, Heart, ListMusic, Play, Plus, Trash2, X } from 'lucide-react';
+import { Bookmark, Clock3, Eye, EyeOff, Heart, ListMusic, Play, Plus, Trash2, X } from 'lucide-react';
 import { nightjarLibrary } from '../platform/firebase-library';
 import { demoLibrary } from '../demo/nightjarDemo';
 import { readDemo, writeDemo } from '../demo/demoSession';
@@ -129,6 +129,28 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
     }
   };
 
+  const togglePlaylistProfileVisibility = async (playlist: any) => {
+    if (demoMode && !simulationMode) return notify('Start Listener Simulation to change the demo library.');
+    const next = playlist.publicOnProfile !== true;
+    try {
+      if (simulationMode) {
+        const publicCount = (library.playlists ?? []).filter((item: any) => item.publicOnProfile).length;
+        if (next && publicCount >= 6) return notify('You can share up to six playlists on your public profile.');
+        setLibrary((current: any) => ({
+          ...current,
+          playlists: (current.playlists ?? []).map((item: any) => item.id === playlist.id ? { ...item, publicOnProfile: next } : item),
+        }));
+      } else {
+        await nightjarLibrary.setPlaylistProfileVisibility(String(playlist.id), next);
+        await load();
+      }
+      notify(next ? 'Playlist added to your public profile.' : 'Playlist removed from your public profile.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      notify(message.includes('six playlists') ? 'You can share up to six playlists on your public profile.' : 'Playlist visibility could not be updated.');
+    }
+  };
+
   const items = tab === 'continue'
     ? library.continueListening ?? []
     : tab === 'history'
@@ -164,7 +186,8 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
         <div className="playlist-picker">{available.length === 0 ? <span className="taste-empty">Favourite or listen to releases first.</span> : available.map((release: any) => <label key={release.id}><input type="checkbox" checked={selectedReleaseIds.includes(String(release.id))} onChange={(e) => setSelectedReleaseIds((ids) => e.target.checked ? Array.from(new Set([...ids, String(release.id)])) : ids.filter((id) => id !== String(release.id)))}/><span>{release.title}</span></label>)}</div>
         <button className="primary-button" onClick={() => void createPlaylist()}><Plus size={14}/> Save playlist</button>
       </article>
-      <div className="playlist-list">{(library.playlists ?? []).map((playlist: any) => <article className="playlist-card" key={playlist.id}><div><span>{playlist.releaseIds?.length ?? 0} releases</span><strong>{playlist.title}</strong></div><button className="ghost-button" onClick={() => void removePlaylist(playlist.id)}><Trash2 size={13}/> Delete</button></article>)}</div>
+      <div className="playlist-privacy-note"><Eye size={15}/><div><strong>Playlists are private by default.</strong><span>Only playlists you explicitly share appear on your public Listener profile. Listening history and favourites remain private.</span></div></div>
+      <div className="playlist-list">{(library.playlists ?? []).map((playlist: any) => <article className={playlist.publicOnProfile ? 'playlist-card public' : 'playlist-card'} key={playlist.id}><div><span>{playlist.releaseIds?.length ?? 0} releases · {playlist.publicOnProfile ? 'PUBLIC PROFILE' : 'PRIVATE'}</span><strong>{playlist.title}</strong></div><div className="playlist-card-actions"><button className={playlist.publicOnProfile ? 'secondary-button' : 'ghost-button'} onClick={() => void togglePlaylistProfileVisibility(playlist)}>{playlist.publicOnProfile ? <><EyeOff size={13}/> Remove from profile</> : <><Eye size={13}/> Share on profile</>}</button><button className="ghost-button" onClick={() => void removePlaylist(playlist.id)}><Trash2 size={13}/> Delete</button></div></article>)}</div>
     </div>}
   </section>;
 }
