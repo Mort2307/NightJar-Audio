@@ -21,9 +21,8 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, demoMode = false }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
- userId, followingIds, onToggleFollow, onClose, notify, demoMode = false }: Props) {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
