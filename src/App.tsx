@@ -383,6 +383,7 @@ function App() {
   const [messageCollaborationId, setMessageCollaborationId] = useState<string | null>(null);
   const [messageConversationId, setMessageConversationId] = useState<string | null>(null);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
+  const [messageAwaitingReplyCount, setMessageAwaitingReplyCount] = useState(0);
   const [creatorProfileUserId, setCreatorProfileUserId] = useState<string | null>(null);
   const [publicProfileUserId, setPublicProfileUserId] = useState<string | null>(() => {
     const match = window.location.pathname.match(/^\/people\/([^/]+)$/);
@@ -669,19 +670,35 @@ function App() {
     const professional = ['creator','writer','editor'].includes(String(effectiveRole));
     if (!user || !ageVerified || !professional) {
       setMessageUnreadCount(0);
+      setMessageAwaitingReplyCount(0);
       return;
     }
     let cancelled = false;
     const refresh = async () => {
       try {
         if (demoMode) {
-          if (!cancelled) setMessageUnreadCount(1);
+          if (!cancelled) {
+            setMessageUnreadCount(1);
+            setMessageAwaitingReplyCount(1);
+          }
           return;
         }
         const data = await nightjarMessaging.conversations();
-        if (!cancelled) setMessageUnreadCount(Number(data.unreadCount ?? 0));
+        if (!cancelled) {
+          const now = Date.now();
+          const awaiting = (data.conversations ?? []).filter((item:any) => {
+            if (String(item.lastSenderUserId ?? '') !== String(user.userId)) return false;
+            const sentAt = item.lastMessageAt ? new Date(item.lastMessageAt).getTime() : 0;
+            return sentAt > 0 && now - sentAt >= 48 * 60 * 60 * 1000;
+          }).length;
+          setMessageUnreadCount(Number(data.unreadCount ?? 0));
+          setMessageAwaitingReplyCount(awaiting);
+        }
       } catch {
-        if (!cancelled) setMessageUnreadCount(0);
+        if (!cancelled) {
+          setMessageUnreadCount(0);
+          setMessageAwaitingReplyCount(0);
+        }
       }
     };
     void refresh();
@@ -2726,6 +2743,7 @@ function App() {
   const commandItems: NightjarCommand[] = [
     ...(effectiveRole === 'listener' || effectiveRole === 'admin' ? [{ id:'nav-discover', group:'Navigate', label:'Discover', detail:'Recommendations, catalogue and spotlights', keywords:['home','listen'], icon:<Headphones size={15}/>, action:()=>navigate('discover') }] : []),
     { id:'nav-directory', group:'Navigate', label:'Directory', detail:'Find Creators, Writers, Audio Editors and Listeners', keywords:['people','profiles','community'], icon:<Users size={15}/>, action:()=>navigate('creators') },
+    ...(['creator','writer','editor'].includes(String(effectiveRole)) ? [{ id:'nav-messages', group:'Work', label:'Messages', detail:messageUnreadCount ? messageUnreadCount + ' unread · ' + messageAwaitingReplyCount + ' awaiting reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Private professional Inbox', keywords:['inbox','dm','conversation','collaboration'], icon:<MessageCircle size={15}/>, action:()=>navigate('messages') }] : []),
     ...(effectiveRole === 'listener' ? [{ id:'nav-library', group:'Navigate', label:'Library', detail:'Favourites, history and playlists', keywords:['saved','playlist'], icon:<Headphones size={15}/>, action:()=>navigate('library') }] : []),
     ...(effectiveRole === 'creator' || adminOnly ? [{ id:'nav-creator', group:'Studio', label:'Creator Studio', detail:'Releases, catalogue and creator operations', keywords:['publish','audio'], icon:<Mic2 size={15}/>, action:()=>{ navigate('creator'); void loadCreatorDashboard(); } }] : []),
     ...(effectiveRole === 'writer' ? [{ id:'nav-writer', group:'Studio', label:'Writer Studio', detail:'Manuscripts, rights and collaborations', keywords:['script','write'], icon:<FileText size={15}/>, action:()=>{ navigate('writer'); void loadWriterScripts(); } }] : []),
@@ -2763,6 +2781,7 @@ function App() {
   const baseActions: RoleDashboardAction[] = [
     ...(profileCompletion < 70 ? [{ id:'complete-profile', title:'Strengthen your public profile', reason:`Your profile is ${profileCompletion}% complete. Richer profiles are easier to understand and discover.`, label:'Open profile', priority:'high' as const, onClick:openProfileEditor }] : []),
     ...(messageUnreadCount > 0 && ['creator','writer','editor'].includes(String(effectiveRole)) ? [{ id:'messages', title:`Reply to ${messageUnreadCount} unread private message${messageUnreadCount === 1 ? '' : 's'}`, reason:'A professional Nightjar conversation is waiting. Keeping replies inside the work context reduces missed handoffs and uncertainty.', label:'Open Inbox', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
+    ...(messageAwaitingReplyCount > 0 && ['creator','writer','editor'].includes(String(effectiveRole)) ? [{ id:'awaiting-reply', title:`${messageAwaitingReplyCount} conversation${messageAwaitingReplyCount === 1 ? '' : 's'} awaiting a reply`, reason:'Your most recent message in these threads has been unanswered for at least 48 hours. Nightjar surfaces this only as a workflow reminder; it does not contact the other person automatically.', label:'Review threads', onClick:()=>navigate('messages') }] : []),
     ...(notificationUnreadCount > 0 ? [{ id:'notifications', title:`Review ${notificationUnreadCount} unread update${notificationUnreadCount === 1 ? '' : 's'}`, reason:'These are recent account or community changes you have not reviewed yet.', label:'Open updates', onClick:()=>setNotificationsOpen(true) }] : []),
   ];
   const listenerActions: RoleDashboardAction[] = [
@@ -3091,7 +3110,7 @@ function App() {
                 {label:'Releases',value:creatorDashboard.releases.length,detail:'Current catalogue records'},
                 {label:'Featured',value:(profile.featuredPortfolioIds ?? []).length,detail:'Profile showcase'},
                 {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Messages',value:messageUnreadCount,detail:'Unread private threads'},
+                {label:'Messages',value:messageUnreadCount,detail:messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads'},
               ]}
               actions={creatorActions}
               loading={creatorDashboardLoading}
@@ -3269,7 +3288,7 @@ function App() {
                 {label:'Manuscripts',value:writerScripts.length,detail:'Your current library'},
                 {label:'Revisions',value:writerScripts.filter((item:any)=>String(item.status).toLowerCase().includes('revision')).length,detail:'Needs attention'},
                 {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Messages',value:messageUnreadCount,detail:'Unread private threads'},
+                {label:'Messages',value:messageUnreadCount,detail:messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads'},
               ]}
               actions={writerActions}
             />
@@ -3293,7 +3312,7 @@ function App() {
                 {label:'Assigned',value:editorQueue.length,detail:'Current queue'},
                 {label:'In review',value:editorQueue.filter((item:any)=>String(item.status).toLowerCase().includes('review')).length,detail:'Active decisions'},
                 {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Messages',value:messageUnreadCount,detail:'Unread private threads'},
+                {label:'Messages',value:messageUnreadCount,detail:messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads'},
               ]}
               actions={editorActions}
             />
