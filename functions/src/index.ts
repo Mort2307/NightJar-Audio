@@ -4515,6 +4515,18 @@ const releaseCommunityState = async (releaseId: string, viewerUserId: string) =>
   };
 };
 
+export const releaseReactionState = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  if (identity.role !== 'listener') return { reactions: [] };
+  const snapshot = await db.collection('releaseReactions').where('userId', '==', identity.uid).limit(1000).get();
+  const reactions = snapshot.docs
+    .map((doc) => releaseReactionPayload(doc.data(), doc.id))
+    .filter((item) => item.releaseId && item.reaction)
+    .map((item) => ({ releaseId:item.releaseId, reaction:item.reaction }));
+  return { reactions };
+});
+
 export const releaseCommunity = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
