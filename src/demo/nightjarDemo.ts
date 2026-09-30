@@ -18,7 +18,7 @@ export const demoTracks = [
       { userId: 'demo-editor-sam', name: 'Sam Reed', role: 'Audio Editor' },
     ],
     contentRating: 'adult', seriesTitle: 'City After Dark', episodeNumber: 1, nightjarOriginal: true,
-    productionNote: 'Demo production showing linked Voice Actor, Writer and Audio Editor credits.',
+    productionNote: 'Demo production showing linked Voice Actor, Writer and Audio Editor credits.', communityLikeCount:18, communityLoveCount:37, communityReactionCount:55, communityCommentCount:2,
   },
   {
     id: 'demo-release-2', title: 'Window Seat', creator: 'Rowan Ash', duration: '18 min', category: 'Audio roleplay',
@@ -26,7 +26,7 @@ export const demoTracks = [
     audioAvailable: true, audioUrl: null, artworkUrl: null, creatorUserId: 'demo-creator-rowan',
     genre: 'Romantic story', tags: ['Gentle','Conversational'], tropes: ['Strangers to lovers','Meet-cute'],
     contributors: [{ userId: 'demo-writer-ivy', name: 'Ivy North', role: 'Writer' }, { userId: 'demo-editor-sam', name: 'Sam Reed', role: 'Audio Editor' }],
-    contentRating: 'suggestive', seriesTitle: null, episodeNumber: null, nightjarOriginal: false, productionNote: null,
+    contentRating: 'suggestive', seriesTitle: null, episodeNumber: null, nightjarOriginal: false, productionNote: null, communityLikeCount:9, communityLoveCount:18, communityReactionCount:27, communityCommentCount:3, communityLikeCount:11, communityLoveCount:24, communityReactionCount:35, communityCommentCount:4,
   },
   {
     id: 'demo-release-3', title: 'The Long Way Home', creator: 'Luca Grey', duration: '44 min', category: 'Audio drama',
@@ -35,7 +35,7 @@ export const demoTracks = [
     genre: 'Drama', tags: ['Cinematic','Dialogue-heavy','Sound-rich'], tropes: ['Second chance','Reunion'],
     contributors: [{ userId: 'demo-writer-mara', name: 'Mara Bell', role: 'Writer' }, { userId: 'demo-editor-rin', name: 'Rin Cole', role: 'Audio Editor' }, { userId: 'demo-creator-nova', name: 'Nova Quinn', role: 'Voice Actor' }],
     contentRating: 'adult', seriesTitle: 'The Long Way Home', episodeNumber: 2, nightjarOriginal: true,
-    productionNote: 'Ensemble demo with multiple credited performers.',
+    productionNote: 'Ensemble demo with multiple credited performers.', communityLikeCount:29, communityLoveCount:51, communityReactionCount:80, communityCommentCount:7,
   },
   {
     id: 'demo-release-4', title: 'Static Between Us', creator: 'Nova Quinn', duration: '12 min', category: 'Performance',
@@ -51,7 +51,7 @@ export const demoTracks = [
     audioAvailable: true, audioUrl: null, artworkUrl: null, creatorUserId: 'demo-creator-eden',
     genre: 'Sleep / wind-down', tags: ['Gentle','Slow-paced','Voice-led'], tropes: ['Comfort & reassurance','Aftercare'],
     contributors: [{ userId: 'demo-editor-rin', name: 'Rin Cole', role: 'Audio Editor' }],
-    contentRating: 'sfw', seriesTitle: null, episodeNumber: null, nightjarOriginal: false, productionNote: null,
+    contentRating: 'sfw', seriesTitle: null, episodeNumber: null, nightjarOriginal: false, productionNote: null, communityLikeCount:15, communityLoveCount:31, communityReactionCount:46, communityCommentCount:5,
   },
   {
     id: 'demo-release-6', title: 'The Observatory', creator: 'Aria Vale', duration: '52 min', category: 'Story',
@@ -60,7 +60,7 @@ export const demoTracks = [
     genre: 'Sci-fi romance', tags: ['Immersive','Cinematic','Sound-rich'], tropes: ['Forbidden attraction','Sci-fi romance'],
     contributors: [{ userId: 'demo-writer-mara', name: 'Mara Bell', role: 'Writer' }, { userId: 'demo-editor-sam', name: 'Sam Reed', role: 'Audio Editor' }, { userId: 'demo-creator-luca', name: 'Luca Grey', role: 'Voice Actor' }],
     contentRating: 'adult', seriesTitle: 'Orbit', episodeNumber: 1, nightjarOriginal: true,
-    productionNote: 'Demo Nightjar Original showing a larger collaborative production.',
+    productionNote: 'Demo Nightjar Original showing a larger collaborative production.', communityLikeCount:34, communityLoveCount:62, communityReactionCount:96, communityCommentCount:9,
   },
 ];
 
