@@ -1,40 +1,47 @@
 import { useEffect, useRef, useState } from 'react';
-import { Heart, MessageCircle, MessageSquare, Star, ThumbsUp, Trash2, X, Flag } from 'lucide-react';
+import { Flag, Heart, MessageSquare, Star, ThumbsUp, Trash2, X } from 'lucide-react';
 import { nightjarReviews } from '../platform/firebase-reviews';
-import { nightjarEngagement, type ReleaseReaction } from '../platform/firebase-engagement';
+import { nightjarCommunityEngagement } from '../platform/firebase-community-engagement';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 
 type Props = {
   release: { id: string; title: string; creator?: string };
   onClose: () => void;
   notify: (message: string) => void;
-  viewerRole?: string | null;
-  currentUserId?: string | null;
   demoMode?: boolean;
   simulationMode?: boolean;
+  canCommunityInteract?: boolean;
+  currentUserId?: string | null;
 };
 
-export default function ReleaseReviews({ release, onClose, notify, viewerRole = null, currentUserId = null, demoMode = false, simulationMode = false }: Props) {
+export default function ReleaseReviews({
+  release,
+  onClose,
+  notify,
+  demoMode = false,
+  simulationMode = false,
+  canCommunityInteract = false,
+  currentUserId = null,
+}: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
-  const [data, setData] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
-  const [community, setCommunity] = useState<any>({ comments: [], reactions: { likes: 0, loves: 0, total: 0, myReaction: null } });
+  const [tab, setTab] = useState<'comments' | 'reviews'>('comments');
+  const [reviews, setReviews] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
+  const [community, setCommunity] = useState<any>({ comments: [], reactions: { likes:0, loves:0, total:0, myReaction:null }, canInteract:canCommunityInteract });
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState('');
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [commentSaving, setCommentSaving] = useState(false);
-  const [reactionSaving, setReactionSaving] = useState(false);
+  const [savingReview, setSavingReview] = useState(false);
+  const [savingComment, setSavingComment] = useState(false);
+  const [reacting, setReacting] = useState(false);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
-
-  const canInteract = viewerRole === 'listener';
 
   const load = async () => {
     setLoading(true);
     try {
       if (demoMode) {
-        setData({
+        setReviews({
           reviews: [
             { id:'demo-review-1', reviewerName:'Jamie', rating:5, review:'Loved the pacing and the production detail.' },
             { id:'demo-review-2', reviewerName:'Lex', rating:4, review:'Strong performance and really clean audio.' },
@@ -44,22 +51,23 @@ export default function ReleaseReviews({ release, onClose, notify, viewerRole = 
           myReview:null,
         });
         setCommunity({
-          reactions:{ likes:18, loves:31, total:49, myReaction:null },
           comments:[
-            { id:'demo-comment-1', userId:'demo-listener-jamie', commenterName:'Jamie', commenterHandle:'jamielistens', body:'That final scene landed perfectly. The pacing gave it room to breathe.', createdAt:new Date(Date.now()-4800000).toISOString() },
-            { id:'demo-comment-2', userId:'demo-listener-lex', commenterName:'Lex', commenterHandle:'lexlistens', body:'The sound design on headphones is brilliant.', createdAt:new Date(Date.now()-2600000).toISOString() },
+            { id:'demo-comment-1', userId:'demo-listener-jamie', commenterName:'Jamie', commenterHandle:'jamielistens', body:'The final few minutes landed really well.', createdAt:new Date(Date.now()-3600000).toISOString() },
+            { id:'demo-comment-2', userId:'demo-listener-lex', commenterName:'Lex', commenterHandle:'lexlistens', body:'Would absolutely listen to another episode in this series.', createdAt:new Date(Date.now()-1800000).toISOString() },
           ],
+          reactions:{ likes:18, loves:37, total:55, myReaction:null },
+          canInteract:canCommunityInteract,
         });
       } else {
-        const [reviews, engagement] = await Promise.all([
+        const [reviewData, communityData] = await Promise.all([
           nightjarReviews.list(release.id),
-          nightjarEngagement.community(release.id),
+          nightjarCommunityEngagement.release(release.id),
         ]);
-        setData(reviews);
-        setCommunity(engagement);
-        if (reviews.myReview) {
-          setRating(reviews.myReview.rating ?? 5);
-          setReview(reviews.myReview.review ?? '');
+        setReviews(reviewData);
+        setCommunity(communityData);
+        if (reviewData.myReview) {
+          setRating(reviewData.myReview.rating ?? 5);
+          setReview(reviewData.myReview.review ?? '');
         }
       }
     } catch {
@@ -71,61 +79,84 @@ export default function ReleaseReviews({ release, onClose, notify, viewerRole = 
 
   useEffect(() => { void load(); }, [release.id, demoMode]);
 
-  const react = async (reaction: Exclude<ReleaseReaction, null>) => {
-    if (!canInteract) return notify('Listener accounts can Like or Love published releases.');
-    if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to react.');
-    const next: ReleaseReaction = community.reactions?.myReaction === reaction ? null : reaction;
-    setReactionSaving(true);
+  const submitReview = async () => {
+    if (!canCommunityInteract) return notify('Listener accounts can submit public reviews.');
+    setSavingReview(true);
     try {
+      if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to submit a review.');
       if (simulationMode) {
-        setCommunity((current:any) => {
-          const previous=current.reactions?.myReaction as ReleaseReaction;
+        const next = { id:'demo-own-review', reviewerName:'You', rating, review, status:'pending' };
+        setReviews((current:any)=>({ ...current, myReview:next }));
+        notify('Simulation: review submitted locally for moderation.');
+      } else {
+        const next = await nightjarReviews.submit(release.id, rating, review);
+        setReviews((current:any)=>({ ...current, myReview:next.review }));
+        notify('Review submitted for moderation.');
+      }
+    } catch {
+      notify('Review could not be submitted.');
+    } finally {
+      setSavingReview(false);
+    }
+  };
+
+  const submitComment = async () => {
+    const body = comment.trim();
+    if (!canCommunityInteract) return notify('Listener accounts can comment on published work.');
+    if (!body) return;
+    setSavingComment(true);
+    try {
+      if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to comment.');
+      if (simulationMode) {
+        const next={ id:'demo-comment-'+Date.now(), userId:currentUserId ?? 'demo-listener', commenterName:'You', commenterHandle:'you', body, createdAt:new Date().toISOString() };
+        setCommunity((current:any)=>({ ...current, comments:[...(current.comments??[]),next] }));
+      } else {
+        const next=await nightjarCommunityEngagement.comment(release.id,body);
+        setCommunity((current:any)=>({ ...current, comments:[...(current.comments??[]),next.comment] }));
+      }
+      setComment('');
+      notify('Comment posted.');
+    } catch {
+      notify('Comment could not be posted.');
+    } finally {
+      setSavingComment(false);
+    }
+  };
+
+  const react = async (reaction:'like'|'love') => {
+    if (!canCommunityInteract) return notify('Listener accounts can react to published work.');
+    if (reacting) return;
+    setReacting(true);
+    try {
+      const nextReaction = community.reactions?.myReaction === reaction ? '' : reaction;
+      if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to react.');
+      if (simulationMode) {
+        setCommunity((current:any)=>{
+          const previous=current.reactions?.myReaction;
           let likes=Number(current.reactions?.likes??0);
           let loves=Number(current.reactions?.loves??0);
-          if(previous==='like')likes=Math.max(0,likes-1);
-          if(previous==='love')loves=Math.max(0,loves-1);
-          if(next==='like')likes+=1;
-          if(next==='love')loves+=1;
-          return { ...current, reactions:{ likes,loves,total:likes+loves,myReaction:next } };
+          if(previous==='like') likes=Math.max(0,likes-1);
+          if(previous==='love') loves=Math.max(0,loves-1);
+          if(nextReaction==='like') likes+=1;
+          if(nextReaction==='love') loves+=1;
+          return {...current,reactions:{likes,loves,total:likes+loves,myReaction:nextReaction||null}};
         });
       } else {
-        const nextData = await nightjarEngagement.setReaction(release.id, next);
-        setCommunity(nextData);
+        const next=await nightjarCommunityEngagement.react(release.id,nextReaction);
+        setCommunity((current:any)=>({ ...current, ...next }));
       }
     } catch {
       notify('Reaction could not be updated.');
     } finally {
-      setReactionSaving(false);
-    }
-  };
-
-  const postComment = async () => {
-    const body=comment.trim();
-    if(!body)return;
-    if (!canInteract) return notify('Listener accounts can comment on published releases.');
-    if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to comment.');
-    setCommentSaving(true);
-    try {
-      if (simulationMode) {
-        const next={ id:'demo-comment-'+Date.now(), userId:currentUserId??'demo-self', commenterName:'You', commenterHandle:null, body, createdAt:new Date().toISOString() };
-        setCommunity((current:any)=>({...current,comments:[...(current.comments??[]),next]}));
-      } else {
-        const result=await nightjarEngagement.comment(release.id,body);
-        setCommunity((current:any)=>({...current,comments:[...(current.comments??[]),result.comment]}));
-      }
-      setComment('');
-      notify('Comment published.');
-    } catch {
-      notify('Comment could not be published. You may need to wait before posting again.');
-    } finally {
-      setCommentSaving(false);
+      setReacting(false);
     }
   };
 
   const deleteComment = async (item:any) => {
+    if (!window.confirm('Delete this comment?')) return;
     try {
-      if(!demoMode)await nightjarEngagement.deleteComment(item.id);
-      setCommunity((current:any)=>({...current,comments:(current.comments??[]).filter((commentItem:any)=>commentItem.id!==item.id)}));
+      if (!simulationMode) await nightjarCommunityEngagement.deleteComment(item.id);
+      setCommunity((current:any)=>({ ...current, comments:(current.comments??[]).filter((entry:any)=>entry.id!==item.id) }));
       notify('Comment deleted.');
     } catch {
       notify('Comment could not be deleted.');
@@ -133,37 +164,13 @@ export default function ReleaseReviews({ release, onClose, notify, viewerRole = 
   };
 
   const reportComment = async (item:any) => {
-    const reason=window.prompt('What should Nightjar moderation review about this comment?')?.trim();
-    if(reason==null)return;
+    const reason=window.prompt('Why are you reporting this comment?') ?? '';
+    if (!reason.trim()) return;
     try {
-      if(!demoMode)await nightjarEngagement.reportComment(item.id,reason);
-      notify('Comment reported for Administrator review.');
+      if (!simulationMode) await nightjarCommunityEngagement.reportComment(item.id,reason);
+      notify('Comment reported for administrator review.');
     } catch {
       notify('Comment could not be reported.');
-    }
-  };
-
-  const submitReview = async () => {
-    if (!canInteract) return notify('Listener accounts can submit release reviews.');
-    setSaving(true);
-    try {
-      if (demoMode && !simulationMode) {
-        notify('Demo data is read-only. Start Listener Simulation to submit a review.');
-        return;
-      }
-      if (simulationMode) {
-        const next = { id:'demo-own-review', reviewerName:'You', rating, review, status:'pending' };
-        setData((current: any) => ({ ...current, myReview: next }));
-        notify('Simulation: review submitted locally for moderation.');
-      } else {
-        const next = await nightjarReviews.submit(release.id, rating, review);
-        setData((current: any) => ({ ...current, myReview: next.review }));
-        notify('Review submitted for moderation.');
-      }
-    } catch {
-      notify('Review could not be submitted.');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -174,48 +181,53 @@ export default function ReleaseReviews({ release, onClose, notify, viewerRole = 
         <button className="icon-button" onClick={onClose} aria-label="Close release community"><X size={18}/></button>
       </header>
 
-      <div className="release-community-summary">
-        <button className={community.reactions?.myReaction==='like'?'active':''} disabled={reactionSaving||!canInteract} onClick={()=>void react('like')} aria-pressed={community.reactions?.myReaction==='like'}><ThumbsUp size={17} fill={community.reactions?.myReaction==='like'?'currentColor':'none'}/><span><strong>{community.reactions?.likes??0}</strong> Like{community.reactions?.likes===1?'':'s'}</span></button>
-        <button className={community.reactions?.myReaction==='love'?'active':''} disabled={reactionSaving||!canInteract} onClick={()=>void react('love')} aria-pressed={community.reactions?.myReaction==='love'}><Heart size={17} fill={community.reactions?.myReaction==='love'?'currentColor':'none'}/><span><strong>{community.reactions?.loves??0}</strong> Love{community.reactions?.loves===1?'':'s'}</span></button>
-        <div><MessageCircle size={17}/><span><strong>{community.comments?.length??0}</strong> comment{community.comments?.length===1?'':'s'}</span></div>
-        <div><Star size={17} fill="currentColor"/><span><strong>{data.averageRating == null ? '—' : data.averageRating}</strong> / 5 · {data.ratingCount??0} review{data.ratingCount===1?'':'s'}</span></div>
+      <div className="release-community-reactions">
+        <div><span className="mini-label">LISTENER REACTIONS</span><strong>{community.reactions?.total ?? 0} reaction{community.reactions?.total === 1 ? '' : 's'}</strong></div>
+        <button type="button" className={community.reactions?.myReaction==='like'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('like')}><ThumbsUp size={16} fill={community.reactions?.myReaction==='like'?'currentColor':'none'}/> Like <span>{community.reactions?.likes ?? 0}</span></button>
+        <button type="button" className={community.reactions?.myReaction==='love'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('love')}><Heart size={16} fill={community.reactions?.myReaction==='love'?'currentColor':'none'}/> Love <span>{community.reactions?.loves ?? 0}</span></button>
       </div>
 
-      <section className="release-comments-section">
-        <div className="panel-title"><div><span className="mini-label">LISTENER COMMENTS</span><h3>Talk about the work.</h3></div><MessageCircle size={17}/></div>
-        <p className="panel-note">Comments publish immediately under your Nightjar identity. They can be deleted by you and reported for Administrator review.</p>
-        {canInteract && <div className="release-comment-compose">
-          <textarea value={comment} maxLength={1200} onChange={(event)=>setComment(event.target.value)} placeholder="Leave a comment about the story, performance, writing, edit or production…"/>
-          <div><small>{comment.length}/1200</small><button className="primary-button" disabled={commentSaving||!comment.trim()} onClick={()=>void postComment()}>{commentSaving?'Publishing…':'Publish comment'}</button></div>
-        </div>}
-        {!canInteract && <div className="release-community-readonly"><ShieldCheck size={14}/><span>Comments are visible to creative accounts, but only Listener accounts can post reactions or comments.</span></div>}
-        <div className="release-comment-list">
-          {loading ? <div className="people-empty">Loading comments…</div> : (community.comments??[]).length ? (community.comments??[]).map((item:any)=>{
-            const mine=item.userId===currentUserId || (simulationMode&&item.commenterName==='You');
-            return <article className="release-comment" key={item.id}><div className="release-comment-head"><div><strong>{item.commenterName??'Nightjar listener'}</strong><span>{item.commenterHandle?'@'+String(item.commenterHandle).replace(/^@/,''):''}{item.createdAt?' · '+new Date(item.createdAt).toLocaleString('en-GB'):''}</span></div><div>{mine?<button className="text-button" onClick={()=>void deleteComment(item)}><Trash2 size={11}/> Delete</button>:<button className="text-button" onClick={()=>void reportComment(item)}><Flag size={11}/> Report</button>}</div></div><p>{item.body}</p></article>;
-          }) : <div className="people-empty"><MessageCircle size={17}/><strong>No comments yet.</strong><span>Listeners can start the conversation directly on this published work.</span></div>}
-        </div>
-      </section>
+      <div className="release-community-tabs" role="tablist" aria-label="Release community sections">
+        <button role="tab" aria-selected={tab==='comments'} className={tab==='comments'?'active':''} onClick={()=>setTab('comments')}><MessageSquare size={14}/> Comments <span>{community.comments?.length ?? 0}</span></button>
+        <button role="tab" aria-selected={tab==='reviews'} className={tab==='reviews'?'active':''} onClick={()=>setTab('reviews')}><Star size={14}/> Reviews <span>{reviews.ratingCount ?? 0}</span></button>
+      </div>
 
-      <section className="release-reviews-section">
-        <div className="panel-title"><div><span className="mini-label">FORMAL REVIEWS</span><h3>Ratings with moderation.</h3></div><Star size={17}/></div>
-        {canInteract && <article className="research-panel review-compose">
-          <p>Reviews are separate from comments: ratings and written reviews are moderated before public display.</p>
-          <div className="review-stars" aria-label="Rating out of five">
-            {[1,2,3,4,5].map((value) => <button key={value} type="button" className={value <= rating ? 'active' : ''} onClick={() => setRating(value)} aria-label={value + ' stars'}><Star size={20} fill={value <= rating ? 'currentColor' : 'none'}/></button>)}
-          </div>
-          <textarea value={review} onChange={(event) => setReview(event.target.value)} maxLength={1600} placeholder="Optional formal review of the story, performance, writing, edit and production."/>
-          {data.myReview && <p className="review-own-status">Current submission: <strong>{data.myReview.status}</strong>{data.myReview.status === 'pending' ? ' · awaiting moderation' : ''}</p>}
-          <button className="primary-button" disabled={saving} onClick={() => void submitReview()}>{saving ? 'Submitting…' : data.myReview ? 'Update review' : 'Submit review'}</button>
+      {tab==='comments' && <>
+        {canCommunityInteract && <article className="research-panel release-comment-compose">
+          <span className="mini-label">JOIN THE CONVERSATION</span>
+          <p>Comments publish directly. Keep discussion about the work itself and use Report if something crosses a line.</p>
+          <textarea value={comment} onChange={(event)=>setComment(event.target.value)} maxLength={1200} placeholder="Comment on this published work…"/>
+          <div><small>{comment.length}/1200</small><button className="primary-button" disabled={savingComment||!comment.trim()} onClick={()=>void submitComment()}>{savingComment?'Posting…':'Post comment'}</button></div>
         </article>}
-
-        <div className="review-list">
-          {loading ? <div className="people-empty">Loading reviews…</div> : (data.reviews ?? []).length === 0 ? <div className="people-empty"><MessageSquare size={18}/><strong>No approved reviews yet.</strong><span>Approved Listener reviews will appear here.</span></div> : (data.reviews ?? []).map((item: any) => <article className="review-card" key={item.id}>
-            <div><strong>{item.reviewerName ?? 'Nightjar listener'}</strong><span>{'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}</span></div>
-            {item.review && <p>{item.review}</p>}
+        <div className="release-comment-list">
+          {loading ? <div className="people-empty">Loading comments…</div> : !(community.comments??[]).length ? <div className="people-empty"><MessageSquare size={18}/><strong>No comments yet.</strong><span>Listener discussion will appear here without affecting creator compensation.</span></div> : (community.comments??[]).map((item:any)=><article className="release-comment-card" key={item.id}>
+            <div className="release-comment-head"><div><strong>{item.commenterName ?? 'Nightjar listener'}</strong><span>{item.commenterHandle ? '@'+String(item.commenterHandle).replace(/^@/,'') : 'Listener'}{item.createdAt ? ' · '+new Date(item.createdAt).toLocaleString('en-GB') : ''}</span></div><div>{currentUserId && item.userId===currentUserId ? <button className="icon-button" onClick={()=>void deleteComment(item)} aria-label="Delete your comment"><Trash2 size={13}/></button> : <button className="icon-button" onClick={()=>void reportComment(item)} aria-label="Report comment"><Flag size={13}/></button>}</div></div>
+            <p>{item.body}</p>
           </article>)}
         </div>
-      </section>
+      </>}
+
+      {tab==='reviews' && <>
+        <div className="review-summary">
+          <Star size={19} fill="currentColor"/>
+          <strong>{reviews.averageRating == null ? 'No public rating yet' : reviews.averageRating + ' / 5'}</strong>
+          <span>{reviews.ratingCount ?? 0} approved review{reviews.ratingCount === 1 ? '' : 's'}</span>
+        </div>
+        {canCommunityInteract && <article className="research-panel review-compose">
+          <span className="mini-label">YOUR REVIEW</span>
+          <p>Formal reviews are moderated before publication. Ratings apply to this release, not to a person's worth.</p>
+          <div className="review-stars" aria-label="Rating out of five">
+            {[1,2,3,4,5].map((value)=><button key={value} type="button" className={value<=rating?'active':''} onClick={()=>setRating(value)} aria-label={value+' stars'}><Star size={20} fill={value<=rating?'currentColor':'none'}/></button>)}
+          </div>
+          <textarea value={review} onChange={(event)=>setReview(event.target.value)} maxLength={1600} placeholder="Optional review of the story, performance, audio and production."/>
+          <small>{review.length}/1600</small>
+          {reviews.myReview && <p className="review-own-status">Current submission: <strong>{reviews.myReview.status}</strong>{reviews.myReview.status==='pending'?' · awaiting moderation':''}</p>}
+          <button className="primary-button" disabled={savingReview} onClick={()=>void submitReview()}>{savingReview?'Submitting…':reviews.myReview?'Update review':'Submit review'}</button>
+        </article>}
+        <div className="review-list">
+          {loading ? <div className="people-empty">Loading reviews…</div> : !(reviews.reviews??[]).length ? <div className="people-empty"><MessageSquare size={18}/><strong>No approved reviews yet.</strong><span>Formal Listener reviews will appear here after moderation.</span></div> : (reviews.reviews??[]).map((item:any)=><article className="review-card" key={item.id}><div><strong>{item.reviewerName ?? 'Nightjar listener'}</strong><span>{'★'.repeat(item.rating)}{'☆'.repeat(5-item.rating)}</span></div>{item.review&&<p>{item.review}</p>}</article>)}
+        </div>
+      </>}
     </section>
   </div>;
 }
