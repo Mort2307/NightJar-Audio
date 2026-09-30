@@ -46,6 +46,9 @@ requireText(app,'communityLikeCount','Release cards do not expose Like counts');
 requireText(app,'communityLoveCount','Release cards do not expose Love counts');
 const appInboxPolls=(app.match(/nightjarMessaging\.conversations\(\)/g)??[]).length;
 if(appInboxPolls!==1) failures.push('App shell must have exactly one background Inbox polling path; found '+appInboxPolls);
+requireText(app,'messageAwaitingReplyCount','Professional awaiting-reply workflow is missing from role dashboards');
+requireText(inbox,'Awaiting reply · 48h+','Inbox awaiting-reply indicator is missing');
+requireText(app,'nav-messages','Universal search does not expose the professional Inbox');
 requireText(functions,'directMessagingBlockedBetween','Professional message block enforcement is missing');
 requireText(functions,'readBy:[identity.uid]','Direct-message read state is missing');
 ['listProfessionalConversations','startProfessionalConversation','openProfessionalConversation','sendProfessionalMessage','setProfessionalMessageBlock','reportProfessionalMessage'].forEach((legacy)=>{
