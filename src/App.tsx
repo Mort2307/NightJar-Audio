@@ -764,7 +764,7 @@ function App() {
     window.history.replaceState({}, '', returnPath);
     setPublicProfileUserId(null);
     const value = returnPath.replace(/^\/+|\/+$/g, '');
-    if (['discover','library','creators','creator','writer','editor','admin','protection','profile'].includes(value)) setView(value as View);
+    if (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value)) setView(value as View);
   };
 
   useEffect(() => {
