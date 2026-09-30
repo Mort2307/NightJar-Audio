@@ -31,6 +31,8 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   const [loading,setLoading]=useState(true);
   const [sending,setSending]=useState(false);
   const [blocked,setBlocked]=useState(false);
+  const [blockedByMe,setBlockedByMe]=useState(false);
+  const [blockedByOther,setBlockedByOther]=useState(false);
   const [activeCollaborationId,setActiveCollaborationId]=useState<string|null>(null);
 
   const viewerId=demoMode?(currentUserId??'demo-self'):(currentUserId??'');
@@ -74,15 +76,19 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
       if(demoMode){
         const selected=conversations.find((item)=>item.id===conversationId);
         setMessages([
-          {id:'demo-message-1',conversationId,senderUserId:selected?.otherUserId??'demo-writer-mara',body:'I wanted to keep this conversation attached to Nightjar so the collaboration does not disappear into another inbox.',createdAt:new Date(Date.now()-3600000).toISOString(),collaborationId:'demo-collab-1'},
-          {id:'demo-message-2',conversationId,senderUserId:viewerId,body:'Perfect. I can see the proposal state and message history together now.',createdAt:new Date(Date.now()-3000000).toISOString(),collaborationId:'demo-collab-1'},
+          {id:'demo-message-1',conversationId,senderUserId:selected?.otherUserId??'demo-writer-mara',body:'I wanted to keep this conversation attached to Nightjar so the collaboration does not disappear into another inbox.',readBy:[selected?.otherUserId??'demo-writer-mara',viewerId],createdAt:new Date(Date.now()-3600000).toISOString(),collaborationId:'demo-collab-1'},
+          {id:'demo-message-2',conversationId,senderUserId:viewerId,body:'Perfect. I can see the proposal state and message history together now.',readBy:[viewerId,selected?.otherUserId??'demo-writer-mara'],createdAt:new Date(Date.now()-3000000).toISOString(),collaborationId:'demo-collab-1'},
         ]);
         setBlocked(false);
+        setBlockedByMe(false);
+        setBlockedByOther(false);
         setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,unreadCount:0}:item));
       }else{
         const data=await nightjarMessaging.messages(conversationId);
         setMessages(data.messages??[]);
         setBlocked(data.blocked===true);
+        setBlockedByMe(data.blockedByMe===true);
+        setBlockedByOther(data.blockedByOther===true);
         setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,unreadCount:0}:item));
         await loadConversations(true);
       }
@@ -171,11 +177,12 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
 
   const toggleBlock=async()=>{
     if(!selected?.otherUserId)return;
-    const next=!blocked;
+    const next=!blockedByMe;
     try{
       if(!demoMode)await nightjarMessaging.block(selected.otherUserId,next);
-      setBlocked(next);
-      notify(next?'Messages from this account are blocked.':'Messaging block removed.');
+      setBlockedByMe(next);
+      setBlocked(next||blockedByOther);
+      notify(next?'You blocked private messages from this account.':'Your messaging block was removed.');
     }catch{notify('Messaging block could not be changed.');}
   };
 
@@ -199,13 +206,13 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
       </aside>
 
       <div className="messaging-thread">
-        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{selected.collaborationId?' · linked collaboration':''}</p></div><button className="ghost-button" onClick={()=>void toggleBlock()}><Ban size={12}/>{blocked?'Unblock':'Block messages'}</button></header>
+        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{selected.collaborationId?' · linked collaboration':''}</p></div><button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></header>
           <div className="message-list">{messages.length?messages.map((message:any)=>{
             const mine=message.senderUserId===viewerId;
             const readByOther=mine&&selected.otherUserId&&(message.readBy??[]).includes(selected.otherUserId);
             return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}{mine&&<em className="message-read-state">{readByOther?<><CheckCheck size={11}/> Read</>:<><Check size={11}/> Sent</>}</em>}</time></div><p>{message.status==='removed_by_admin'?'Message removed by Nightjar moderation.':message.body||'Message unavailable.'}</p>{!mine&&message.status!=='removed_by_admin'&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
           }):<div className="people-empty"><MessageCircle size={17}/><strong>Conversation ready.</strong><span>Start with the work, expectations or next step. Protected material should stay in Nightjar’s controlled script tools.</span></div>}</div>
-          <div className="message-compose">{blocked&&<div className="messaging-blocked-note"><Ban size={13}/><span>This conversation is blocked. Unblock it before sending.</span></div>}<textarea value={body} maxLength={4000} disabled={blocked} onChange={(event)=>setBody(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey&&!blocked){event.preventDefault();void send();}}} placeholder="Write a private message…"/><div><small>{body.length}/4000 · Enter to send · Shift+Enter for a new line · do not paste full protected scripts</small><button className="primary-button" disabled={sending||blocked||!body.trim()} onClick={()=>void send()}><Send size={13}/>{sending?'Sending…':'Send'}</button></div></div>
+          <div className="message-compose">{blocked&&<div className="messaging-blocked-note"><Ban size={13}/><span>{blockedByMe?'You blocked messages from this account. You can unblock them here when ready.':blockedByOther?'This account is not currently accepting private messages from you. Existing collaboration records remain intact.':'Private messaging is blocked for this conversation.'}</span></div>}<textarea value={body} maxLength={4000} disabled={blocked} onChange={(event)=>setBody(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey&&!blocked){event.preventDefault();void send();}}} placeholder="Write a private message…"/><div><small>{body.length}/4000 · Enter to send · Shift+Enter for a new line · do not paste full protected scripts</small><button className="primary-button" disabled={sending||blocked||!body.trim()} onClick={()=>void send()}><Send size={13}/>{sending?'Sending…':'Send'}</button></div></div>
         </>:<div className="messaging-thread-empty"><MessageCircle size={22}/><strong>Select a conversation.</strong><span>Messages keep creative communication visible without changing rights, licences or manuscript permissions.</span></div>}
       </div>
     </div>
