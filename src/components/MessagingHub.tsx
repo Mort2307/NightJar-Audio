@@ -188,6 +188,11 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   };
 
   const selected=conversations.find((item)=>item.id===selectedId)??null;
+  const awaitingReply=(conversation:any)=>{
+    if(String(conversation?.lastSenderUserId??'')!==String(viewerId))return false;
+    const sentAt=conversation?.lastMessageAt?new Date(conversation.lastMessageAt).getTime():0;
+    return sentAt>0&&Date.now()-sentAt>=48*60*60*1000;
+  };
 
   const toggleBlock=async()=>{
     if(!selected?.otherUserId)return;
@@ -217,12 +222,12 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         {!!query.trim()&&<div className="messaging-directory">{filteredPeople.map((person:any)=><button key={person.userId} onClick={()=>void startWith(person.userId)}><span>{String(person.name??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{person.name}</strong><small>{roleLabel(person.role)}{person.handle?' · @'+String(person.handle).replace(/^@/,''):''}</small></div></button>)}{!filteredPeople.length&&<div className="people-empty">No matching professional accounts.</div>}</div>}
         <div className="messaging-conversations">
           <span className="mini-label">CONVERSATIONS</span>
-          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>setSelectedId(conversation.id)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt="" loading="lazy" decoding="async"/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small></div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em>}</button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
+          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>setSelectedId(conversation.id)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt="" loading="lazy" decoding="async"/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small>{awaitingReply(conversation)&&<span className="messaging-awaiting-reply">Awaiting reply · 48h+</span>}</div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em>}</button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
         </div>
       </aside>
 
       <div className="messaging-thread">
-        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}</p></div><button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></header>
+        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{awaitingReply(selected)?' · awaiting reply for 48h+':''}</p></div><button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></header>
           {selected.collaborationId && <div className="messaging-collaboration-context"><Handshake size={15}/><div><span className="mini-label">LINKED COLLABORATION</span><strong>{selected.collaborationTitle || 'Nightjar collaboration'}</strong><small>{selected.collaborationStatus ? String(selected.collaborationStatus).replaceAll('_',' ') : 'Collaboration status available in the workspace'} · Messaging does not change script rights, permissions or collaboration state.</small></div></div>}
           <div className="message-list" ref={messageListRef}>{messages.length?messages.map((message:any)=>{
             const mine=message.senderUserId===viewerId;
