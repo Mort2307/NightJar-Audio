@@ -9,6 +9,7 @@ const hideHistoryCall = httpsCallable<{ releaseId: string }, { releaseId: string
 const clearHistoryCall = httpsCallable<void, { cleared: boolean }>(functions, 'clearListenerHistory');
 const savePlaylistCall = httpsCallable<{ playlistId?: string; title: string; releaseIds: string[] }, { playlist: any }>(functions, 'savePlaylist');
 const deletePlaylistCall = httpsCallable<{ playlistId: string }, { deleted: boolean; playlistId: string }>(functions, 'deletePlaylist');
+const setPlaylistProfileVisibilityCall = httpsCallable<{ playlistId: string; visible: boolean }, { playlistId: string; visible: boolean; featuredPortfolioIds: string[] }>(functions, 'setPlaylistProfileVisibility');
 
 export const nightjarLibrary = {
   async load() {
@@ -29,6 +30,10 @@ export const nightjarLibrary = {
 
   async savePlaylist(title: string, releaseIds: string[], playlistId?: string) {
     return (await savePlaylistCall({ ...(playlistId ? { playlistId } : {}), title, releaseIds })).data;
+  },
+
+  async setPlaylistProfileVisibility(playlistId: string, visible: boolean) {
+    return (await setPlaylistProfileVisibilityCall({ playlistId, visible })).data;
   },
 
   async deletePlaylist(playlistId: string) {
