@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory } from '../demo/nightjarDemo';
-import { FileText, Handshake, Heart, Search, Share2, X } from 'lucide-react';
+import { FileText, Handshake, Heart, Search, Share2, ShieldCheck, X } from 'lucide-react';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 
 type Writer = {
@@ -31,6 +31,7 @@ type Writer = {
   completedCollaborations?: number;
   portfolioNote?: string | null;
   featuredWork?: any[];
+  activityBadges?: { id: string; label: string; detail: string }[];
 };
 
 type Props = {
@@ -70,6 +71,10 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
         completedCollaborations: person.userId === 'demo-writer-mara' ? 3 : 1,
         portfolioNote: 'A few credited productions that show the kind of writing I most enjoy.',
         featuredWork: [],
+        activityBadges: [
+          { id:'published-writer', label:'Published Writer', detail:'Has published writing recorded by Nightjar.' },
+          { id:'completed-collaborator', label:'Completed Collaborator', detail:'Has completed Nightjar collaborations.' },
+        ],
       })));
       setLoading(false);
       return () => { cancelled = true; };
@@ -169,6 +174,7 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
             <div><span>Release credits</span><strong>{selected.creditedReleaseCount ?? 0}</strong></div>
             <div><span>Collaborations</span><strong>{selected.completedCollaborations ?? 0}</strong></div>
           </div>
+          {!!selected.activityBadges?.length && <div className="profile-activity-badges public-profile-badges">{selected.activityBadges.map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}</div>}
           {!!selected.roleFocus?.length && <div className="creator-profile-tags">{selected.roleFocus.map((item) => <span key={item}>{item}</span>)}</div>}
           {!!selected.favouriteTags?.length && <div className="creator-profile-tags">{selected.favouriteTags.map((item) => <span key={item}>{item}</span>)}</div>}
           <section className="public-role-profile">
