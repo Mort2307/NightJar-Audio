@@ -78,7 +78,6 @@ const ListenerLibrary = lazy(() => import('./components/ListenerLibrary'));
 const CreatorCompensationCard = lazy(() => import('./components/CreatorCompensationCard'));
 const ScriptMarketplace = lazy(() => import('./components/ScriptMarketplace'));
 const ReleaseReviews = lazy(() => import('./components/ReleaseReviews'));
-const ReleaseCommunity = lazy(() => import('./components/ReleaseCommunity'));
 const MessagingHub = lazy(() => import('./components/MessagingHub'));
 
 
@@ -373,7 +372,6 @@ function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [communityTrack, setCommunityTrack] = useState<Track | null>(null);
   const [messageRecipientUserId, setMessageRecipientUserId] = useState<string | null>(null);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const [creatorProfileUserId, setCreatorProfileUserId] = useState<string | null>(null);
@@ -2344,7 +2342,6 @@ function App() {
     setProtectedReaderScript(null);
     setPlaying(null);
     setReviewTrack(null);
-    setCommunityTrack(null);
     setMessageRecipientUserId(null);
     setCreatorProfileUserId(null);
     setPublicProfileUserId(null);
@@ -2829,7 +2826,7 @@ function App() {
                 <select value={catalogueDuration} onChange={(event)=>setCatalogueDuration(event.target.value)} aria-label="Audio duration"><option value="all">Any length</option><option value="short">Under 10 min</option><option value="medium">10–24 min</option><option value="full">25–44 min</option><option value="long">45+ min</option></select>
               </div>
               <div className="track-grid">
-                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onReviews={() => setReviewTrack(track)} onCommunity={() => setCommunityTrack(track)} />)}
+                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onCommunity={() => setReviewTrack(track)} />)}
                 {!filteredTracks.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
               </div>
             </section>
@@ -2845,7 +2842,7 @@ function App() {
 ].map(([value,label])=><button type="button" key={value || 'open'} className={currentIntent===value?'active':''} aria-pressed={currentIntent===value} onClick={()=>setCurrentIntent(value)}>{label}</button>)}</div></div>
               <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
               <div className="track-grid">
-                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onReviews={() => setReviewTrack(track)} onCommunity={() => setCommunityTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
+                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onCommunity={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
                 {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
               </div>
             </section>
@@ -2853,7 +2850,7 @@ function App() {
             <section className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
               <div className="track-grid">
-                {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onReviews={() => setReviewTrack(track)} onCommunity={() => setCommunityTrack(track)} />; })}
+                {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onCommunity={() => setReviewTrack(track)} />; })}
                 {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
               </div>
             </section>
@@ -3425,8 +3422,7 @@ function App() {
       {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} demoMode={demoMode} /></Suspense>}
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={closePublicProfile} notify={notify} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
-      {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release reviews" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} /></Suspense>}
-      {communityTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseCommunity release={{id:communityTrack.id,title:communityTrack.title,creator:communityTrack.creator}} role={effectiveRole} currentUserId={user?.userId} onClose={()=>setCommunityTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>}
+      {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} canCommunityInteract={effectiveRole === 'listener'} currentUserId={user?.userId ?? null} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
@@ -3463,7 +3459,7 @@ function releaseToTrack(release: any): Track {
   };
 }
 
-function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, onReviews, onCommunity, reason }: { track: Track; playing: boolean; favourite: boolean; onPlay: (track: Track) => void; onFavourite: () => void; onReviews: () => void; onCommunity: () => void; reason?: string }) {
+function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, onCommunity, reason }: { track: Track; playing: boolean; favourite: boolean; onPlay: (track: Track) => void; onFavourite: () => void; onCommunity: () => void; reason?: string }) {
   return <article className="track-card">
     <div className="track-cover" style={track.artworkUrl ? { backgroundImage: 'url("' + track.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       <span className="track-index">{track.category}</span>
@@ -3479,7 +3475,7 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, onRevie
       <p>{track.descriptor}</p>
       {track.productionNote && <p className="track-production-note"><strong>Behind the scenes:</strong> {track.productionNote}</p>}
       {!!track.contributors?.length && <div className="track-credit-line">{track.contributors.slice(0,4).map((credit)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}
-      <div className="track-footer"><span className="creator-link">{track.audioAvailable || track.audioUrl ? 'Age-gated audio ready' : 'Audio not connected'}</span><div className="track-footer-actions"><button className="text-button track-community-button" onClick={onCommunity}><MessageCircle size={14}/> Community</button><button className="text-button track-review-button" onClick={onReviews}><Star size={14}/> Reviews</button><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove favourite' : 'Add favourite'} title={favourite ? 'Private favourite saved' : 'Save privately to favourites'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div></div>
+      <div className="track-footer"><span className="creator-link">{track.audioAvailable || track.audioUrl ? 'Age-gated audio ready' : 'Audio not connected'}</span><div className="track-footer-actions"><button className="text-button track-community-button" onClick={onCommunity}><MessageCircle size={14}/> Community</button><button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove private favourite' : 'Save privately to favourites'} title={favourite ? 'Private favourite saved' : 'Save privately to favourites'}><Heart size={16} fill={favourite ? 'currentColor' : 'none'} /></button></div></div>
       {reason && <p className="recommendation-reason"><Sparkles size={12} />{reason}</p>}
     </div>
   </article>;
