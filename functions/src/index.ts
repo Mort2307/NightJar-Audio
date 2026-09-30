@@ -5369,7 +5369,7 @@ const reviewPayload = (data: Record<string, any>, id: string) => ({
 });
 
 export const submitReleaseReview = onCall({ region: REGION }, async (request) => {
-  const identity = await requireActiveIdentity(request);
+  const identity = await requireAccountRole(request, ['listener']);
   await requireAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
