@@ -17,6 +17,8 @@ const reactionCall = httpsCallable<{ releaseId: string; reaction: ReleaseReactio
 const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any }>(functions, 'postReleaseComment');
 const deleteCommentCall = httpsCallable<{ commentId: string }, { deleted: boolean; commentId: string }>(functions, 'deleteOwnReleaseComment');
 const reportCommentCall = httpsCallable<{ commentId: string; reason?: string }, { reported: boolean; commentId: string }>(functions, 'reportReleaseComment');
+const adminReportsCall = httpsCallable<void, { reports: any[] }>(functions, 'adminListCommunityReports');
+const adminModerateCall = httpsCallable<{ reportId: string; decision: 'dismiss' | 'remove' }, { reportId: string; decision: string }>(functions, 'adminResolveCommunityReport');
 
 export const nightjarEngagement = {
   async state() {
@@ -36,5 +38,12 @@ export const nightjarEngagement = {
   },
   async reportComment(commentId: string, reason = '') {
     return (await reportCommentCall({ commentId, reason })).data;
+  },
+  async adminReports() {
+    const data = (await adminReportsCall()).data;
+    return { reports:(data.reports ?? []).filter((item:any) => item.type === 'release_comment') };
+  },
+  async moderateCommentReport(reportId: string, decision: 'dismiss' | 'remove') {
+    return (await adminModerateCall({ reportId, decision })).data;
   },
 };
