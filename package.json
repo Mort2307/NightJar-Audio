@@ -10,7 +10,7 @@
     "build:firebase": "vite build",
     "typecheck": "tsc --noEmit --pretty false",
     "validate": "npm run typecheck && npm run build && npm run validate:contracts && npm run validate:bundle",
-    "validate:contracts": "node scripts/product-contracts.mjs && node scripts/accessibility-contracts.mjs && node scripts/security-contracts.mjs && npm run validate:community",
+    "validate:contracts": "node scripts/product-contracts.mjs && node scripts/accessibility-contracts.mjs && node scripts/security-contracts.mjs && node scripts/firebase-contracts.mjs",
     "validate:bundle": "node scripts/bundle-budget.mjs",
     "validate:community": "node scripts/community-contracts.mjs"
   },
