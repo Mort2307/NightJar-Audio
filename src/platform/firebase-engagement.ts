@@ -17,8 +17,6 @@ const reactionCall = httpsCallable<{ releaseId: string; reaction: ReleaseReactio
 const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any }>(functions, 'postReleaseComment');
 const deleteCommentCall = httpsCallable<{ commentId: string }, { deleted: boolean; commentId: string }>(functions, 'deleteOwnReleaseComment');
 const reportCommentCall = httpsCallable<{ commentId: string; reason?: string }, { reported: boolean; commentId: string }>(functions, 'reportReleaseComment');
-const adminReportsCall = httpsCallable<void, { reports: any[] }>(functions, 'adminListCommunityReports');
-const adminModerateCall = httpsCallable<{ reportId: string; decision: 'dismiss' | 'remove' }, { reportId: string; decision: string }>(functions, 'adminResolveCommunityReport');
 
 export const nightjarEngagement = {
   async state() {
