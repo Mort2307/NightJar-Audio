@@ -378,6 +378,32 @@ const completedCollaborationCountFor = async (userId: string) => {
   }).length;
 };
 
+const publicActivityBadges = (
+  role: string,
+  counts: { releases?: number; publishedScripts?: number; creditedReleases?: number; completedCollaborations?: number },
+) => {
+  const badges: Array<{ id: string; label: string; detail: string }> = [];
+  const collaborations = Math.max(0, Number(counts.completedCollaborations ?? 0));
+
+  if (role === 'creator' && Number(counts.releases ?? 0) > 0) {
+    badges.push({ id: 'published-creator', label: 'Published Creator', detail: 'Has released work in the Nightjar catalogue.' });
+  }
+  if (role === 'writer' && Number(counts.publishedScripts ?? 0) > 0) {
+    badges.push({ id: 'published-writer', label: 'Published Writer', detail: 'Has approved or published writing recorded by Nightjar.' });
+  }
+  if (role === 'editor' && Number(counts.creditedReleases ?? 0) > 0) {
+    badges.push({ id: 'credited-editor', label: 'Credited Audio Editor', detail: 'Has public Nightjar release credits as an Audio Editor.' });
+  }
+  if (collaborations >= 5) {
+    badges.push({ id: 'frequent-collaborator', label: 'Frequent Collaborator', detail: 'Five or more completed Nightjar collaborations.' });
+  } else if (collaborations >= 1) {
+    badges.push({ id: 'completed-collaborator', label: 'Completed Collaborator', detail: 'Has at least one completed Nightjar collaboration.' });
+  }
+
+  return badges;
+};
+
+
 const profilePortfolioOptionsFor = async (userId: string, role: string) => {
   if (role === 'creator') {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
@@ -653,6 +679,74 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
   return { creators };
 });
 
+export const listPublicProfiles = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+
+  const [accounts, releases, scripts, collaborations] = await Promise.all([
+    db.collection('accounts').limit(1000).get(),
+    db.collection('releases').where('status', '==', 'released').limit(1000).get(),
+    db.collection('scripts').limit(1000).get(),
+    db.collection('collaborationProposals').limit(1000).get(),
+  ]);
+
+  const releaseCountByCreator = new Map<string, number>();
+  const creditCountByUser = new Map<string, number>();
+  for (const release of releases.docs) {
+    const creatorUserId = cleanText(release.data().creatorUserId, 160);
+    if (creatorUserId) releaseCountByCreator.set(creatorUserId, (releaseCountByCreator.get(creatorUserId) ?? 0) + 1);
+    for (const credit of normaliseReleaseContributors(release.data().contributors)) {
+      if (credit.userId) creditCountByUser.set(credit.userId, (creditCountByUser.get(credit.userId) ?? 0) + 1);
+    }
+  }
+
+  const publishedScriptsByWriter = new Map<string, number>();
+  for (const script of scripts.docs) {
+    if (!['Approved','Published'].includes(String(script.data().status))) continue;
+    const writerUserId = cleanText(script.data().writerUserId, 160);
+    if (writerUserId) publishedScriptsByWriter.set(writerUserId, (publishedScriptsByWriter.get(writerUserId) ?? 0) + 1);
+  }
+
+  const collaborationCountByUser = new Map<string, number>();
+  for (const collaboration of collaborations.docs) {
+    const data = collaboration.data() ?? {};
+    if (data.status !== 'completed') continue;
+    const writerUserId = cleanText(data.writerUserId, 160);
+    const recipientUserId = cleanText(data.recipientUserId, 160);
+    if (writerUserId) collaborationCountByUser.set(writerUserId, (collaborationCountByUser.get(writerUserId) ?? 0) + 1);
+    if (recipientUserId) collaborationCountByUser.set(recipientUserId, (collaborationCountByUser.get(recipientUserId) ?? 0) + 1);
+  }
+
+  const allowedRoles = new Set(['creator','writer','editor','listener']);
+  const profiles = (await Promise.all(accounts.docs
+    .filter((doc) => doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
+    .map(async (doc) => {
+      const base = await publicProfileForAccount(doc);
+      if (!base) return null;
+      const role = String(doc.data().role ?? '');
+      const releaseCount = releaseCountByCreator.get(doc.id) ?? 0;
+      const publishedWorkCount = publishedScriptsByWriter.get(doc.id) ?? 0;
+      const creditedReleaseCount = creditCountByUser.get(doc.id) ?? 0;
+      const completedCollaborations = collaborationCountByUser.get(doc.id) ?? 0;
+      return {
+        ...base,
+        role,
+        releaseCount,
+        publishedWorkCount,
+        creditedReleaseCount,
+        completedCollaborations,
+        activityBadges: publicActivityBadges(role, {
+          releases: releaseCount,
+          publishedScripts: publishedWorkCount,
+          creditedReleases: creditedReleaseCount,
+          completedCollaborations,
+        }),
+      };
+    }))).filter(Boolean);
+
+  return { profiles };
+});
+
 export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -736,6 +830,12 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const completedCollaborations = ['creator','writer','editor'].includes(role)
     ? await completedCollaborationCountFor(userId)
     : 0;
+  const activityBadges = publicActivityBadges(role, {
+    releases: releaseCount,
+    publishedScripts: publishedWorkCount,
+    creditedReleases: creditedReleases.length,
+    completedCollaborations,
+  });
 
   return {
     profile: {
@@ -767,6 +867,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       featuredWork,
       publicPlaylists,
       completedCollaborations,
+      activityBadges,
       releaseCount,
       publishedWorkCount,
       creditedReleaseCount: creditedReleases.length,
@@ -827,6 +928,10 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
         return selected.size ? releases.filter((release) => selected.has(String(release.id))) : releases.slice(0, 3);
       })(),
       completedCollaborations: await completedCollaborationCountFor(creatorUserId),
+      activityBadges: publicActivityBadges('creator', {
+        releases: releases.length,
+        completedCollaborations: await completedCollaborationCountFor(creatorUserId),
+      }),
       releases,
     },
   };
@@ -4077,11 +4182,14 @@ export const listenerLibrary = onCall({ region: REGION }, async (request) => {
   await requireAgeVerified(identity.uid);
   const library = await listenerHistoryFor(identity.uid);
   const playlistsSnapshot = await accountRef(identity.uid).collection('playlists').limit(100).get();
+  const profile = await profileRef(identity.uid).get();
+  const publicPlaylistIds = new Set(cleanStringList(profile.data()?.featuredPortfolioIds, 6));
   const playlists = playlistsSnapshot.docs
     .map((doc) => ({
       id: doc.id,
       title: doc.data().title ?? 'Untitled playlist',
       releaseIds: Array.isArray(doc.data().releaseIds) ? doc.data().releaseIds : [],
+      publicOnProfile: publicPlaylistIds.has(doc.id),
       createdAt: toIso(doc.data().createdAt),
       updatedAt: toIso(doc.data().updatedAt),
     }))
@@ -4139,11 +4247,44 @@ export const savePlaylist = onCall({ region: REGION }, async (request) => {
   return { playlist: { id: ref.id, title, releaseIds } };
 });
 
+export const setPlaylistProfileVisibility = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const playlistId = cleanText(input.playlistId, 160);
+  const visible = input.visible === true;
+  if (!playlistId) throw new HttpsError('invalid-argument', 'Playlist is required.');
+
+  const playlist = await accountRef(identity.uid).collection('playlists').doc(playlistId).get();
+  if (!playlist.exists) throw new HttpsError('not-found', 'Playlist not found.');
+
+  const profile = await profileRef(identity.uid).get();
+  const current = cleanStringList(profile.data()?.featuredPortfolioIds, 6);
+  const has = current.includes(playlistId);
+  let next = current;
+
+  if (visible && !has) {
+    if (current.length >= 6) throw new HttpsError('failed-precondition', 'You can share up to six playlists on your public profile.');
+    next = [...current, playlistId];
+  } else if (!visible && has) {
+    next = current.filter((id) => id !== playlistId);
+  }
+
+  await profileRef(identity.uid).set({
+    featuredPortfolioIds: next,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { playlistId, visible: next.includes(playlistId), featuredPortfolioIds: next };
+});
+
 export const deletePlaylist = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const playlistId = cleanText((request.data as { playlistId?: unknown } | undefined)?.playlistId, 160);
   if (!playlistId) throw new HttpsError('invalid-argument', 'Playlist is required.');
   await accountRef(identity.uid).collection('playlists').doc(playlistId).delete();
+  const profile = await profileRef(identity.uid).get();
+  const featuredPortfolioIds = cleanStringList(profile.data()?.featuredPortfolioIds, 6).filter((id) => id !== playlistId);
+  await profileRef(identity.uid).set({ featuredPortfolioIds, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { deleted: true, playlistId };
 });
 
