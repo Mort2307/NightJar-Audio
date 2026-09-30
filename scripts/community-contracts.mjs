@@ -37,6 +37,15 @@ requireText(functions,'Please wait before posting more comments.','Comment rate-
 requireText(functions,'Please slow down before sending more messages.','Message rate-limit contract is missing');
 requireText(functions,"type:'direct_message'",'Reported direct-message moderation path is missing');
 requireText(functions,"type:'release_comment'",'Reported comment moderation path is missing');
+requireText(functions,'communityLikeCount','Published-work Like summary field is missing');
+requireText(functions,'communityLoveCount','Published-work Love summary field is missing');
+requireText(functions,'communityCommentCount','Published-work comment summary field is missing');
+requireText(functions,'syncReleaseCommunitySummary','Published-work summary synchronisation is missing');
+requireText(app,'communityCommentCount','Release cards do not expose comment counts');
+requireText(app,'communityLikeCount','Release cards do not expose Like counts');
+requireText(app,'communityLoveCount','Release cards do not expose Love counts');
+const appInboxPolls=(app.match(/nightjarMessaging\.conversations\(\)/g)??[]).length;
+if(appInboxPolls!==1) failures.push('App shell must have exactly one background Inbox polling path; found '+appInboxPolls);
 requireText(functions,'directMessagingBlockedBetween','Professional message block enforcement is missing');
 requireText(functions,'readBy:[identity.uid]','Direct-message read state is missing');
 ['listProfessionalConversations','startProfessionalConversation','openProfessionalConversation','sendProfessionalMessage','setProfessionalMessageBlock','reportProfessionalMessage'].forEach((legacy)=>{
