@@ -143,6 +143,10 @@ type Track = {
   episodeNumber?: number | null;
   nightjarOriginal?: boolean;
   productionNote?: string | null;
+  communityLikeCount?: number;
+  communityLoveCount?: number;
+  communityReactionCount?: number;
+  communityCommentCount?: number;
 };
 
 type PublicDirectoryProfile = {
@@ -688,31 +692,6 @@ function App() {
     };
   }, [user?.userId, ageVerified, effectiveRole, demoMode]);
 
-
-
-  useEffect(() => {
-    const messageRole = role === 'admin' ? previewRole : role;
-    if (!user || !ageVerified || !['creator','writer','editor'].includes(String(messageRole))) {
-      setMessageUnreadCount(0);
-      return;
-    }
-    let cancelled = false;
-    const loadUnread = async () => {
-      try {
-        if (demoMode) {
-          if (!cancelled) setMessageUnreadCount(1);
-          return;
-        }
-        const data = await nightjarMessaging.conversations();
-        if (!cancelled) setMessageUnreadCount(data.unreadCount ?? 0);
-      } catch {
-        if (!cancelled) setMessageUnreadCount(0);
-      }
-    };
-    void loadUnread();
-    const timer = window.setInterval(() => void loadUnread(), 30000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [user, ageVerified, role, previewRole, demoMode]);
 
   const clearToastTimer = () => {
     if (toastTimer.current != null) window.clearTimeout(toastTimer.current);
@@ -1350,6 +1329,19 @@ function App() {
     }
   };
 
+  const applyReleaseCommunityCounts = (releaseId: string, summary: { likes?: number; loves?: number; total?: number; comments?: number }) => {
+    const patch = (item:any) => item.id === releaseId ? {
+      ...item,
+      communityLikeCount: Math.max(0, Number(summary.likes ?? item.communityLikeCount ?? 0)),
+      communityLoveCount: Math.max(0, Number(summary.loves ?? item.communityLoveCount ?? 0)),
+      communityReactionCount: Math.max(0, Number(summary.total ?? item.communityReactionCount ?? 0)),
+      communityCommentCount: Math.max(0, Number(summary.comments ?? item.communityCommentCount ?? 0)),
+    } : item;
+    setTracks((items) => items.map(patch));
+    setLiveRecommendations((items) => items.map(patch));
+    setLiveTrending((items) => items.map(patch));
+  };
+
   const toggleReleaseReaction = async (releaseId: string, reaction: Exclude<ReleaseReaction, null>) => {
     const listenerPerspective = role === 'listener' || (role === 'admin' && simulationMode && previewRole === 'listener');
     if (!listenerPerspective) return notify('Like and Love reactions are available to Listener accounts.');
@@ -1357,6 +1349,12 @@ function App() {
 
     const previous = releaseReactions[releaseId] ?? null;
     const next: ReleaseReaction = previous === reaction ? null : reaction;
+    const current = tracks.find((item) => item.id === releaseId)
+      ?? liveRecommendations.find((item:any) => item.id === releaseId)
+      ?? liveTrending.find((item:any) => item.id === releaseId);
+    const previousLikes = Number(current?.communityLikeCount ?? 0);
+    const previousLoves = Number(current?.communityLoveCount ?? 0);
+
     setReleaseReactions((items) => {
       const updated = { ...items };
       if (next) updated[releaseId] = next;
@@ -1364,6 +1362,15 @@ function App() {
       if (simulationMode) writeDemo('releaseReactions', updated);
       return updated;
     });
+
+    const optimisticLikes = previousLikes - (previous === 'like' ? 1 : 0) + (next === 'like' ? 1 : 0);
+    const optimisticLoves = previousLoves - (previous === 'love' ? 1 : 0) + (next === 'love' ? 1 : 0);
+    applyReleaseCommunityCounts(releaseId, {
+      likes: optimisticLikes,
+      loves: optimisticLoves,
+      total: optimisticLikes + optimisticLoves,
+    });
+
     if (simulationMode) return;
 
     try {
@@ -1375,12 +1382,22 @@ function App() {
         else delete updated[releaseId];
         return updated;
       });
+      applyReleaseCommunityCounts(releaseId, {
+        likes: result.reactions?.likes,
+        loves: result.reactions?.loves,
+        total: result.reactions?.total,
+      });
     } catch {
       setReleaseReactions((items) => {
         const updated = { ...items };
         if (previous) updated[releaseId] = previous;
         else delete updated[releaseId];
         return updated;
+      });
+      applyReleaseCommunityCounts(releaseId, {
+        likes: previousLikes,
+        loves: previousLoves,
+        total: previousLikes + previousLoves,
       });
       notify('Reaction could not be updated.');
     }
@@ -2846,7 +2863,7 @@ function App() {
                 {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness'},
                 {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases'},
                 {label:'Following',value:followingProfileIds.length,detail:'Public profiles'},
-                {label:'Messages',value:messageUnreadCount,detail:'Unread private threads'},
+                {label:'Updates',value:notificationUnreadCount,detail:'Unread activity'},
               ]}
               actions={listenerActions}
             />}
@@ -3520,7 +3537,7 @@ function App() {
       {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={['creator','writer','editor'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} demoMode={demoMode} /></Suspense>}
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={['creator','writer','editor'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
-      {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} /></Suspense>}
+      {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
@@ -3554,6 +3571,10 @@ function releaseToTrack(release: any): Track {
     episodeNumber: release.episodeNumber ?? null,
     nightjarOriginal: release.nightjarOriginal === true,
     productionNote: release.productionNote ?? null,
+    communityLikeCount: Math.max(0, Number(release.communityLikeCount ?? 0)),
+    communityLoveCount: Math.max(0, Number(release.communityLoveCount ?? 0)),
+    communityReactionCount: Math.max(0, Number(release.communityReactionCount ?? 0)),
+    communityCommentCount: Math.max(0, Number(release.communityCommentCount ?? 0)),
   };
 }
 
@@ -3576,9 +3597,9 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
       <div className="track-footer">
         <span className="creator-link">{track.audioAvailable || track.audioUrl ? 'Age-gated audio ready' : 'Audio not connected'}</span>
         <div className="track-footer-actions">
-          {canReact && <button className={reaction === 'like' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('like')} aria-pressed={reaction === 'like'} title="Like this published work"><ThumbsUp size={14} fill={reaction === 'like' ? 'currentColor' : 'none'}/> Like</button>}
-          {canReact && <button className={reaction === 'love' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('love')} aria-pressed={reaction === 'love'} title="Love this published work"><Heart size={14} fill={reaction === 'love' ? 'currentColor' : 'none'}/> Love</button>}
-          <button className="text-button track-community-button" onClick={onCommunity}><MessageCircle size={14}/> Comments</button>
+          {canReact && <button className={reaction === 'like' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('like')} aria-pressed={reaction === 'like'} title="Like this published work"><ThumbsUp size={14} fill={reaction === 'like' ? 'currentColor' : 'none'}/> Like <span>{track.communityLikeCount ?? 0}</span></button>}
+          {canReact && <button className={reaction === 'love' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('love')} aria-pressed={reaction === 'love'} title="Love this published work"><Heart size={14} fill={reaction === 'love' ? 'currentColor' : 'none'}/> Love <span>{track.communityLoveCount ?? 0}</span></button>}
+          <button className="text-button track-community-button" onClick={onCommunity}><MessageCircle size={14}/> Comments <span>{track.communityCommentCount ?? 0}</span></button>
           <button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove private favourite' : 'Save privately to favourites'} title={favourite ? 'Private favourite saved' : 'Save privately to favourites'}><Bookmark size={16} fill={favourite ? 'currentColor' : 'none'} /></button>
         </div>
       </div>
