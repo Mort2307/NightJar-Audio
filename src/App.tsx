@@ -13,14 +13,16 @@ import { nightjarAge } from './platform/firebase-age';
 import { nightjarScripts } from './platform/firebase-scripts';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarReviews } from './platform/firebase-reviews';
-import { nightjarSocial } from './platform/firebase-social';
 import { nightjarMessaging } from './platform/firebase-messaging';
+import { nightjarEngagement, type ReleaseReaction } from './platform/firebase-engagement';
 import {
   ArrowRight,
   BarChart3,
   Check,
   ChevronRight,
   Heart,
+  Bookmark,
+  ThumbsUp,
   Headphones,
   LockKeyhole,
   LogOut,
@@ -372,6 +374,7 @@ function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [releaseReactions, setReleaseReactions] = useState<Record<string, Exclude<ReleaseReaction, null>>>({});
   const [messageRecipientUserId, setMessageRecipientUserId] = useState<string | null>(null);
   const [messageCollaborationId, setMessageCollaborationId] = useState<string | null>(null);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
@@ -777,6 +780,7 @@ function App() {
         setLiveTrending(structuredClone(demoTracks.slice(1, 5)));
         setFavouriteReleaseIds(readDemo('favourites', ['demo-release-1','demo-release-2']));
         setFollowingProfileIds(readDemo('following', ['demo-creator-aria','demo-creator-rowan']));
+        setReleaseReactions(readDemo('releaseReactions', { 'demo-release-1':'love' }) as Record<string, Exclude<ReleaseReaction,null>>);
         return;
       }
       const [catalogueResponse, directoryResponse, firebaseSpotlightResponse] = await Promise.all([
@@ -857,16 +861,18 @@ function App() {
       });
       await loadNotifications(epoch);
       if (user) {
-        const [recommendationsResponse, trendingResponse, communityState] = await Promise.all([
+        const [recommendationsResponse, trendingResponse, communityState, reactionState] = await Promise.all([
           nightjarCatalogue.recommendations(currentIntent),
           nightjarCatalogue.trending(),
           nightjarCommunity.state(),
+          nightjarEngagement.state(),
         ]);
         if (epoch !== productLoadEpoch.current) return;
         setLiveRecommendations(recommendationsResponse.recommendations ?? []);
         setLiveTrending(trendingResponse.trending ?? []);
         setFavouriteReleaseIds((communityState.favourites ?? []).map((item: any) => String(item.releaseId)));
         setFollowingProfileIds((communityState.follows ?? []).map((item: any) => String(item.targetUserId ?? item.creatorUserId)).filter(Boolean));
+        setReleaseReactions(Object.fromEntries((reactionState.reactions ?? []).map((item) => [String(item.releaseId), item.reaction])) as Record<string, Exclude<ReleaseReaction,null>>);
       }
     } catch {
       if (epoch !== productLoadEpoch.current) return;
@@ -1294,6 +1300,42 @@ function App() {
       });
     } catch {
       notify('Favourite could not be updated.');
+    }
+  };
+
+  const toggleReleaseReaction = async (releaseId: string, reaction: Exclude<ReleaseReaction, null>) => {
+    const listenerPerspective = role === 'listener' || (role === 'admin' && simulationMode && previewRole === 'listener');
+    if (!listenerPerspective) return notify('Like and Love reactions are available to Listener accounts.');
+    if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to react.');
+
+    const previous = releaseReactions[releaseId] ?? null;
+    const next: ReleaseReaction = previous === reaction ? null : reaction;
+    setReleaseReactions((items) => {
+      const updated = { ...items };
+      if (next) updated[releaseId] = next;
+      else delete updated[releaseId];
+      if (simulationMode) writeDemo('releaseReactions', updated);
+      return updated;
+    });
+    if (simulationMode) return;
+
+    try {
+      const result = await nightjarEngagement.setReaction(releaseId, next);
+      setReleaseReactions((items) => {
+        const updated = { ...items };
+        const confirmed = result.reactions?.myReaction ?? null;
+        if (confirmed) updated[releaseId] = confirmed;
+        else delete updated[releaseId];
+        return updated;
+      });
+    } catch {
+      setReleaseReactions((items) => {
+        const updated = { ...items };
+        if (previous) updated[releaseId] = previous;
+        else delete updated[releaseId];
+        return updated;
+      });
+      notify('Reaction could not be updated.');
     }
   };
 
@@ -3421,10 +3463,10 @@ function App() {
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType, context) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, context)} notify={notify} />}
       {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={demoMode} />}
-      {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={['creator','writer','editor'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); navigate('messages'); }} demoMode={demoMode} /></Suspense>}
-      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={['creator','writer','editor'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); navigate('messages'); }} demoMode={demoMode} /></Suspense>}
+      {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={['creator','writer','editor'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} demoMode={demoMode} /></Suspense>}
+      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={['creator','writer','editor'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
-      {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} canCommunityInteract={effectiveRole === 'listener'} currentUserId={user?.userId ?? null} /></Suspense>}
+      {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
