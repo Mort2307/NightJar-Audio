@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Check, FileText, Handshake, MessageCircle, X } from 'lucide-react';
+import { ArrowRight, Check, FileText, Handshake, MessageCircle, Search, X } from 'lucide-react';
 import { nightjarCollaboration, type CollaborationStatus } from '../platform/firebase-collaboration';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import { demoCollaborations, demoDirectory, demoWriterScripts } from '../demo/nightjarDemo';
@@ -25,6 +25,8 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
   const [paymentProposal, setPaymentProposal] = useState('');
   const [licenceSummary, setLicenceSummary] = useState('');
   const [sending, setSending] = useState(false);
+  const [collaboratorQuery, setCollaboratorQuery] = useState('');
+  const [collaboratorRole, setCollaboratorRole] = useState<'all' | 'creator' | 'editor'>('all');
 
   const load = async () => {
     setLoading(true);
@@ -62,6 +64,29 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
   const relevant = useMemo(() => proposals.filter((proposal) => role === 'writer'
     ? Boolean(proposal.writerUserId)
     : proposal.recipientRole === role), [proposals, role]);
+
+  const eligibleCollaborators = useMemo(() => {
+    const needle = collaboratorQuery.trim().toLowerCase();
+    return directory
+      .filter((person) => person.role === 'creator' || person.role === 'editor')
+      .filter((person) => collaboratorRole === 'all' || person.role === collaboratorRole)
+      .filter((person) => {
+        if (!needle) return true;
+        const searchable = [
+          person.name,
+          person.handle,
+          person.headline,
+          person.roleAvailability,
+          ...(person.favouriteTags ?? []),
+          ...(person.favouriteCategories ?? []),
+          ...(person.roleFocus ?? []),
+          ...(person.roleSpecialties ?? []),
+          ...(person.roleSecondary ?? []),
+        ].filter(Boolean).join(' ').toLowerCase();
+        return searchable.includes(needle);
+      })
+      .sort((a, b) => (b.completedCollaborations ?? 0) - (a.completedCollaborations ?? 0) || String(a.name).localeCompare(String(b.name)));
+  }, [directory, collaboratorQuery, collaboratorRole]);
 
   const send = async () => {
     if (!scriptId || !recipientUserId) return notify('Choose a script and collaborator first.');
@@ -128,9 +153,28 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
       <Handshake size={22}/>
     </div>
 
+    {role === 'writer' && <div className="collaborator-directory">
+      <div className="collaborator-directory-head">
+        <div><span className="mini-label">COLLABORATOR DIRECTORY</span><h3>Find the right production partner.</h3><p>Search public Creator and Audio Editor profiles by name, specialty, tag or availability. Completed-collaboration counts come from finished Nightjar workflows.</p></div>
+        <Handshake size={18}/>
+      </div>
+      <div className="role-directory-tools">
+        <label className="creator-directory-search"><Search size={15}/><input value={collaboratorQuery} onChange={(event)=>setCollaboratorQuery(event.target.value)} placeholder="Search name, tag, specialty…"/></label>
+        <select value={collaboratorRole} onChange={(event)=>setCollaboratorRole(event.target.value as 'all'|'creator'|'editor')}><option value="all">Creators & Audio Editors</option><option value="creator">Creators only</option><option value="editor">Audio Editors only</option></select>
+      </div>
+      <div className="collaborator-directory-grid">
+        {eligibleCollaborators.slice(0,12).map((person)=><button type="button" className={recipientUserId === person.userId ? 'collaborator-directory-card selected' : 'collaborator-directory-card'} key={person.userId} onClick={()=>setRecipientUserId(person.userId)}>
+          <span className="collaborator-directory-avatar">{person.avatarUrl ? <img className="avatar-approved-image" src={person.avatarUrl} alt="" /> : String(person.name ?? 'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span>
+          <span className="collaborator-directory-copy"><strong>{person.name}</strong><small>{person.role === 'editor' ? 'Audio Editor' : 'Creator'}{person.roleAvailability ? ' · ' + person.roleAvailability : ''}</small><em>{person.headline || [...(person.roleSpecialties??[]),...(person.favouriteTags??[])].slice(0,2).join(' · ') || 'Nightjar collaborator'}</em></span>
+          <span className="collaborator-directory-reputation"><Handshake size={12}/>{person.completedCollaborations ?? 0}</span>
+        </button>)}
+        {!eligibleCollaborators.length && <div className="people-empty"><Search size={17}/><strong>No collaborators match.</strong><span>Try another name, tag, specialty or role.</span></div>}
+      </div>
+    </div>}
+
     {role === 'writer' && <div className="collaboration-compose">
       <label>Manuscript<select value={scriptId} onChange={(event) => setScriptId(event.target.value)}><option value="">Choose a manuscript</option>{scripts.map((script) => <option key={script.id} value={script.id}>{script.title}</option>)}</select></label>
-      <label>Send to<select value={recipientUserId} onChange={(event) => setRecipientUserId(event.target.value)}><option value="">Choose a Creator or Audio Editor</option>{directory.filter((person) => person.role === 'creator' || person.role === 'editor').map((person) => <option key={person.userId} value={person.userId}>{person.name} · {person.role === 'editor' ? 'Audio Editor' : 'Creator'}</option>)}</select></label>
+      <label>Selected collaborator<select value={recipientUserId} onChange={(event) => setRecipientUserId(event.target.value)}><option value="">Choose a Creator or Audio Editor</option>{directory.filter((person) => person.role === 'creator' || person.role === 'editor').map((person) => <option key={person.userId} value={person.userId}>{person.name} · {person.role === 'editor' ? 'Audio Editor' : 'Creator'} · {person.completedCollaborations ?? 0} completed</option>)}</select></label>
       <label className="research-span-two">Proposal message<textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Why you think this script and collaborator fit together."/></label>
       <label>Payment proposal<input value={paymentProposal} onChange={(event) => setPaymentProposal(event.target.value)} placeholder="e.g. £150 flat fee / discuss"/></label>
       <label>Licence summary<input value={licenceSummary} onChange={(event) => setLicenceSummary(event.target.value)} placeholder="e.g. 12-month non-exclusive licence"/></label>
