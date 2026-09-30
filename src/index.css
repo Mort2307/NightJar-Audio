@@ -3392,3 +3392,340 @@ select:disabled {
     text-align: center;
   }
 }
+
+
+/* Role-specific portfolio, reputation and directory pass */
+.creator-directory-tools,
+.role-directory-tools {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(160px, .8fr) minmax(160px, .8fr);
+  gap: 8px;
+  align-items: center;
+}
+.role-directory-tools {
+  grid-template-columns: minmax(220px, 1.4fr) minmax(180px, .7fr);
+  margin: 14px 0 18px;
+}
+.creator-directory-tools select,
+.role-directory-tools select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  padding: 0 11px;
+  background: rgba(0,0,0,.2);
+  color: var(--ivory);
+  outline: none;
+  font: inherit;
+  font-size: 9px;
+}
+.creator-directory-tags,
+.writer-focus-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.creator-directory-tags {
+  margin-top: 10px;
+}
+.creator-directory-tags span,
+.writer-focus-list span {
+  border: 1px solid rgba(203,181,204,.14);
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(255,255,255,.018);
+  color: #cfc3cc;
+  font-size: 8px;
+}
+.creator-availability-pill,
+.profile-collaboration-badge,
+.public-showcase-intro > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  border: 1px solid rgba(203,181,204,.18);
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: rgba(126,78,113,.12);
+  color: #ded0da;
+  font-size: 8px;
+  font-weight: 700;
+}
+.profile-portfolio-editor {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.profile-portfolio-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.profile-portfolio-head h3 {
+  margin: 4px 0 5px;
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+}
+.profile-portfolio-head p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+.profile-portfolio-editor > label {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+}
+.profile-portfolio-editor textarea {
+  width: 100%;
+  min-height: 82px;
+  resize: vertical;
+}
+.profile-portfolio-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.profile-portfolio-option {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: rgba(255,255,255,.012);
+  cursor: pointer;
+}
+.profile-portfolio-option.selected {
+  border-color: rgba(203,181,204,.3);
+  background: rgba(126,78,113,.12);
+}
+.profile-portfolio-option input {
+  margin-top: 2px;
+}
+.profile-portfolio-option span {
+  min-width: 0;
+}
+.profile-portfolio-option strong,
+.profile-portfolio-option small {
+  display: block;
+}
+.profile-portfolio-option strong {
+  color: var(--ivory);
+  font-size: 9px;
+}
+.profile-portfolio-option small {
+  margin-top: 4px;
+  color: var(--muted-2);
+  font-size: 8px;
+  line-height: 1.4;
+}
+.profile-portfolio-limit {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted-2);
+  font-size: 8px;
+  text-align: right;
+}
+.public-showcase-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 13px;
+  background: rgba(255,255,255,.016);
+}
+.public-showcase-intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.public-featured-work,
+.public-playlist-list,
+.creator-featured-releases {
+  display: grid;
+  gap: 8px;
+}
+.public-featured-work > article,
+.public-playlist-list > article {
+  display: grid;
+  gap: 8px;
+  padding: 12px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: rgba(255,255,255,.014);
+}
+.public-featured-work > article {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.public-featured-work strong,
+.public-featured-work span,
+.public-playlist-head strong,
+.public-playlist-head span {
+  display: block;
+}
+.public-featured-work strong,
+.public-playlist-head strong {
+  color: var(--ivory);
+  font-size: 10px;
+}
+.public-featured-work span,
+.public-playlist-head span {
+  margin-top: 3px;
+  color: var(--muted-2);
+  font-size: 8px;
+}
+.public-playlist-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.public-playlist-preview {
+  display: grid;
+  gap: 4px;
+  padding-left: 25px;
+}
+.public-playlist-preview span {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.4;
+}
+.creator-featured-releases {
+  padding: 14px;
+  border: 1px solid rgba(203,181,204,.15);
+  border-radius: 15px;
+  background: rgba(126,78,113,.06);
+}
+.creator-profile-release.featured {
+  border-color: rgba(203,181,204,.2);
+  background: rgba(255,255,255,.018);
+}
+.collaborator-directory {
+  margin: 14px 0 18px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: rgba(255,255,255,.012);
+}
+.collaborator-directory-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+.collaborator-directory-head h3 {
+  margin: 4px 0 5px;
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+}
+.collaborator-directory-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+.collaborator-directory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+}
+.collaborator-directory-card {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: rgba(0,0,0,.14);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.collaborator-directory-card:hover,
+.collaborator-directory-card.selected {
+  border-color: rgba(203,181,204,.3);
+  background: rgba(126,78,113,.11);
+}
+.collaborator-directory-avatar {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgba(203,181,204,.08);
+  color: #d8cad4;
+  font-size: 9px;
+  font-weight: 700;
+}
+.collaborator-directory-copy {
+  min-width: 0;
+}
+.collaborator-directory-copy strong,
+.collaborator-directory-copy small,
+.collaborator-directory-copy em {
+  display: block;
+}
+.collaborator-directory-copy strong {
+  color: var(--ivory);
+  font-size: 9px;
+}
+.collaborator-directory-copy small {
+  margin-top: 2px;
+  color: var(--muted-2);
+  font-size: 7px;
+}
+.collaborator-directory-copy em {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collaborator-directory-reputation {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(203,181,204,.13);
+  border-radius: 999px;
+  padding: 5px 7px;
+  color: #d8cad4;
+  font-size: 8px;
+}
+@media (max-width: 840px) {
+  .creator-directory-tools,
+  .role-directory-tools {
+    grid-template-columns: 1fr;
+  }
+  .profile-portfolio-options,
+  .collaborator-directory-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 620px) {
+  .profile-portfolio-head,
+  .public-showcase-intro,
+  .collaborator-directory-head {
+    display: grid;
+  }
+  .profile-collaboration-badge {
+    width: 100%;
+    justify-content: center;
+  }
+}
