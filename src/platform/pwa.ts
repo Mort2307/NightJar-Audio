@@ -2,7 +2,7 @@ export const registerNightjarServiceWorker = () => {
   if (!('serviceWorker' in navigator) || import.meta.env.DEV) return;
 
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').then((registration) => {
+    void navigator.serviceWorker.register('/service-worker.js').then((registration) => {
       const announceWaiting = () => {
         if (registration.waiting) window.dispatchEvent(new CustomEvent('nightjar:update-available'));
       };
