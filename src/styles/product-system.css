@@ -644,3 +644,127 @@ textarea {
   }
   .nj-profile-save-bar button { width:100%; }
 }
+
+
+.nj-directory-viewbar {
+  display:grid;
+  gap:9px;
+  margin:0 0 14px;
+  padding:10px 12px;
+  border:1px solid var(--nj-line-subtle);
+  border-radius:12px;
+  background:rgba(255,255,255,.01);
+}
+.nj-directory-view-actions {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:7px;
+}
+.nj-directory-view-actions > span {
+  margin-left:auto;
+  color:var(--nj-text-tertiary);
+  font-size:7.5px;
+  line-height:1.45;
+}
+.nj-directory-saved-views {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  padding-top:9px;
+  border-top:1px solid var(--nj-line-subtle);
+}
+.nj-directory-saved-views > span {
+  display:inline-flex;
+  overflow:hidden;
+  border:1px solid rgba(203,181,204,.14);
+  border-radius:999px;
+  background:rgba(126,78,113,.08);
+}
+.nj-directory-saved-views > span > button {
+  border:0;
+  padding:6px 9px;
+  background:transparent;
+  color:#d7cad4;
+  font-size:7.5px;
+}
+.nj-directory-saved-views > span > button:first-child:hover {
+  background:rgba(255,255,255,.035);
+}
+.nj-directory-saved-views > span > button:last-child {
+  padding-left:6px;
+  border-left:1px solid var(--nj-line-subtle);
+  color:var(--nj-text-tertiary);
+}
+.nj-account-activity {
+  margin-top:16px;
+}
+.nj-account-activity-list {
+  display:grid;
+  gap:6px;
+  margin-top:13px;
+}
+.nj-account-activity-list > button {
+  width:100%;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:9px;
+  align-items:center;
+  padding:10px;
+  border:1px solid var(--nj-line-subtle);
+  border-radius:10px;
+  background:rgba(255,255,255,.012);
+  color:inherit;
+  text-align:left;
+}
+.nj-account-activity-list > button:hover {
+  border-color:var(--nj-line-default);
+  background:rgba(255,255,255,.025);
+}
+.nj-account-activity-list > button.unread {
+  border-color:rgba(203,181,204,.2);
+  background:rgba(126,78,113,.07);
+}
+.nj-account-activity-list > button > span:first-child {
+  width:30px;
+  height:30px;
+  display:grid;
+  place-items:center;
+  border:1px solid var(--nj-line-subtle);
+  border-radius:9px;
+  color:var(--nj-accent);
+}
+.nj-account-activity-list strong,
+.nj-account-activity-list small {
+  display:block;
+}
+.nj-account-activity-list strong {
+  color:var(--nj-text-primary);
+  font-size:9px;
+}
+.nj-account-activity-list small {
+  margin-top:3px;
+  color:var(--nj-text-tertiary);
+  font-size:7.5px;
+  line-height:1.45;
+}
+.nj-account-activity-list em {
+  padding:4px 6px;
+  border-radius:999px;
+  background:var(--nj-accent-soft);
+  color:var(--nj-accent);
+  font-size:6px;
+  font-style:normal;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+@media (max-width:700px) {
+  .nj-directory-view-actions {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  .nj-directory-view-actions > span {
+    grid-column:1 / -1;
+    margin-left:0;
+  }
+}
