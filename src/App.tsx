@@ -936,11 +936,28 @@ function App() {
     }
   };
 
-  const recordProtectionEvent = async (eventType: string, relatedId = 'protected-script') => {
+  const recordProtectionEvent = async (
+    eventType: string,
+    relatedId = 'protected-script',
+    context: Record<string, unknown> = {},
+  ) => {
     if (!user) return;
+    const summaryByType: Record<string, string> = {
+      copy_blocked: 'Protected copy interaction blocked; no clipboard contents were captured.',
+      print_blocked: 'Keyboard print command blocked while protected manuscript content was open.',
+      print_dialog_attempt: 'Browser print flow was invoked while protected manuscript content was open.',
+      possible_screenshot_key: 'Possible screenshot key signal observed while protected manuscript content was open. This does not prove that a screenshot was captured.',
+      native_screenshot_detected: 'Native screenshot callback reported a screenshot while protected manuscript content was open.',
+    };
     try {
       if (demoMode) {
-        setProtectionEvidence((items:any[]) => [{ id:'demo-evidence-' + Date.now(), eventType, relatedId, createdAt:new Date().toISOString() }, ...items]);
+        setProtectionEvidence((items:any[]) => [{
+          id:'demo-evidence-' + Date.now(),
+          eventType,
+          relatedId,
+          ...context,
+          createdAt:new Date().toISOString(),
+        }, ...items]);
         return;
       }
       await nightjarProtection.record({
@@ -948,7 +965,11 @@ function App() {
         relatedType: 'script',
         relatedId,
         deviceId: getProtectionDeviceToken(),
-        summary: eventType === 'copy_blocked' ? 'Protected copy interaction blocked; no clipboard contents were captured.' : 'Protected interaction recorded by Nightjar.',
+        clientPlatform: navigator.userAgentData?.platform ?? navigator.platform ?? 'browser',
+        visibilityState: document.visibilityState,
+        viewport: window.innerWidth + 'x' + window.innerHeight,
+        summary: summaryByType[eventType] ?? 'Protected interaction recorded by Nightjar.',
+        ...context,
       });
     } catch { }
   };
@@ -2676,7 +2697,7 @@ function App() {
         </div>
       </div>}
 
-      {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id)} notify={notify} />}
+      {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType, context) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, context)} notify={notify} />}
       {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={demoMode} />}
       {creatorProfileUserId && <CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} demoMode={demoMode} />}
       {publicProfileUserId && <PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={() => setPublicProfileUserId(null)} notify={notify} demoMode={demoMode} />}
@@ -2740,7 +2761,7 @@ function LiveTrackCard({ track, playing, favourite, onPlay, onFavourite, onRevie
   </article>;
 }
 
-function ProtectedReader({ data, close, record, notify }: { data: any; close: () => void; record: (eventType: string) => void; notify: (message: string) => void }) {
+function ProtectedReader({ data, close, record, notify }: { data: any; close: () => void; record: (eventType: string, context?: Record<string, unknown>) => void; notify: (message: string) => void }) {
   const script = data.script ?? {};
   const content = String(script.content ?? '');
   const sessionId = String(data.readerSession?.sessionId ?? 'authorised');
@@ -2750,16 +2771,43 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
   useEffect(() => {
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const blockPrint = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
+    document.body.classList.add('nightjar-protected-reader-open');
+
+    const eventContext = () => ({
+      readerSessionId: sessionId,
+      visibilityState: document.visibilityState,
+    });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = String(event.key ?? '').toLowerCase();
+      const code = String(event.code ?? '').toLowerCase();
+
+      if ((event.ctrlKey || event.metaKey) && key === 'p') {
         event.preventDefault();
-        record('print_blocked');
+        record('print_blocked', eventContext());
         notify('Printing is disabled inside the protected reader.');
+        return;
+      }
+
+      if (key === 'printscreen' || code === 'printscreen') {
+        record('possible_screenshot_key', eventContext());
+        notify('Nightjar recorded a possible screenshot-key signal for this protected reader session.');
       }
     };
-    window.addEventListener('keydown', blockPrint);
-    return () => { document.body.style.overflow = original; window.removeEventListener('keydown', blockPrint); };
-  }, []);
+
+    const handleBeforePrint = () => {
+      record('print_dialog_attempt', eventContext());
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('beforeprint', handleBeforePrint);
+    return () => {
+      document.body.style.overflow = original;
+      document.body.classList.remove('nightjar-protected-reader-open');
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('beforeprint', handleBeforePrint);
+    };
+  }, [sessionId, record, notify]);
 
   const exportScript = () => {
     if (!data.exportAllowed) {
@@ -2786,7 +2834,7 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
       onContextMenu={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('contextmenu_blocked'); } }}
       onDragStart={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('drag_blocked'); } }}>
       <header><div><span className="mini-label">NIGHTJAR / PROTECTED SCRIPT</span><h2>{script.title ?? 'Protected manuscript'}</h2><p>Reader session {sessionId} · expires {data.readerSession?.expiresAt ? new Date(data.readerSession.expiresAt).toLocaleTimeString('en-GB') : 'soon'}</p></div><button className="icon-button" onClick={close} aria-label="Close protected manuscript"><X size={18} /></button></header>
-      <div className="reader-notice"><ShieldCheck size={15} /><span>This view is session-attributed. Screenshots cannot be reliably detected by a browser, so Nightjar uses visible session provenance and retained access evidence instead.</span></div>
+      <div className="reader-notice"><ShieldCheck size={15} /><span>This view is session-attributed. Nightjar can record some browser screenshot-key and print signals, but web browsers cannot prove every screenshot or screen recording. Visible session watermarking and retained access evidence remain the primary protection.</span></div>
       <article className="reader-body">
         <div className="reader-watermark-field" aria-hidden="true">{Array.from({length: 12}).map((_, index) => <span key={index}>{watermark}</span>)}</div>
         <p className="reader-watermark">{watermark}</p>
