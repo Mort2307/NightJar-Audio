@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Check, FileText, Handshake, MessageCircle, Search, X } from 'lucide-react';
+import { ArrowRight, Check, FileText, Handshake, MessageCircle, Search, ShieldCheck, X } from 'lucide-react';
 import { nightjarCollaboration, type CollaborationStatus } from '../platform/firebase-collaboration';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import { demoCollaborations, demoDirectory, demoWriterScripts } from '../demo/nightjarDemo';
@@ -165,8 +165,8 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
       <div className="collaborator-directory-grid">
         {eligibleCollaborators.slice(0,12).map((person)=><button type="button" className={recipientUserId === person.userId ? 'collaborator-directory-card selected' : 'collaborator-directory-card'} key={person.userId} onClick={()=>setRecipientUserId(person.userId)}>
           <span className="collaborator-directory-avatar">{person.avatarUrl ? <img className="avatar-approved-image" src={person.avatarUrl} alt="" /> : String(person.name ?? 'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span>
-          <span className="collaborator-directory-copy"><strong>{person.name}</strong><small>{person.role === 'editor' ? 'Audio Editor' : 'Creator'}{person.roleAvailability ? ' · ' + person.roleAvailability : ''}</small><em>{person.headline || [...(person.roleSpecialties??[]),...(person.favouriteTags??[])].slice(0,2).join(' · ') || 'Nightjar collaborator'}</em></span>
-          <span className="collaborator-directory-reputation"><Handshake size={12}/>{person.completedCollaborations ?? 0}</span>
+          <span className="collaborator-directory-copy"><strong>{person.name}</strong><small>{person.role === 'editor' ? 'Audio Editor' : 'Creator'}{person.roleAvailability ? ' · ' + person.roleAvailability : ''}</small><em>{person.headline || [...(person.roleSpecialties??[]),...(person.favouriteTags??[])].slice(0,2).join(' · ') || 'Nightjar collaborator'}</em>{!!person.activityBadges?.length && <span className="collaborator-activity-badges">{person.activityBadges.slice(0,2).map((badge:any)=><span key={badge.id} title={badge.detail}><ShieldCheck size={10}/>{badge.label}</span>)}</span>}</span>
+          <span className="collaborator-directory-reputation" title="Completed Nightjar collaborations"><Handshake size={12}/>{person.completedCollaborations ?? 0}</span>
         </button>)}
         {!eligibleCollaborators.length && <div className="people-empty"><Search size={17}/><strong>No collaborators match.</strong><span>Try another name, tag, specialty or role.</span></div>}
       </div>
