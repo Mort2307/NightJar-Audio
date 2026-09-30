@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "build:firebase": "vite build",
     "typecheck": "tsc --noEmit --pretty false",
-    "validate": "npm run typecheck && npm run build && npm run build:firebase"
+    "validate": "npm run typecheck && npm run build && npm run validate:contracts && npm run validate:bundle",
+    "validate:contracts": "node scripts/product-contracts.mjs && node scripts/accessibility-contracts.mjs && node scripts/security-contracts.mjs",
+    "validate:bundle": "node scripts/bundle-budget.mjs"
   },
   "dependencies": {
     "firebase": "^12.4.0",
