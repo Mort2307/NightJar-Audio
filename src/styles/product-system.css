@@ -1497,3 +1497,34 @@ textarea {
   line-height:1.4;
   text-align:right;
 }
+
+
+.messaging-collaboration-context {
+  display:flex;
+  gap:9px;
+  align-items:flex-start;
+  padding:10px 16px;
+  border-bottom:1px solid var(--nj-line-subtle);
+  background:rgba(126,78,113,.06);
+}
+.messaging-collaboration-context > svg {
+  flex:0 0 auto;
+  margin-top:2px;
+  color:var(--nj-accent);
+}
+.messaging-collaboration-context strong,
+.messaging-collaboration-context small {
+  display:block;
+}
+.messaging-collaboration-context strong {
+  margin-top:3px;
+  color:var(--nj-text-primary);
+  font-size:9px;
+}
+.messaging-collaboration-context small {
+  margin-top:3px;
+  color:var(--nj-text-tertiary);
+  font-size:7.5px;
+  line-height:1.5;
+  text-transform:capitalize;
+}
