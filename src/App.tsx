@@ -299,6 +299,7 @@ function App() {
   const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], publicProfile: true });
   const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
   const [profilePortfolioOptions, setProfilePortfolioOptions] = useState<any[]>([]);
+  const [profilePortfolioQuery, setProfilePortfolioQuery] = useState('');
   const [profileCompletedCollaborations, setProfileCompletedCollaborations] = useState(0);
   const [profileLoading, setProfileLoading] = useState(false);
   const [tasteVector, setTasteVector] = useState<any[]>([]);
@@ -423,6 +424,12 @@ function App() {
       return true;
     });
   }, [profileDirectory, directoryQuery, directoryRoleFilter, directoryTagFilter, directoryAvailabilityFilter]);
+  const filteredProfilePortfolioOptions = useMemo(() => {
+    const query = profilePortfolioQuery.trim().toLowerCase();
+    if (!query) return profilePortfolioOptions;
+    return profilePortfolioOptions.filter((item:any) => [item.title, item.subtitle, item.type].filter(Boolean).join(' ').toLowerCase().includes(query));
+  }, [profilePortfolioOptions, profilePortfolioQuery]);
+
   const filteredTracks = useMemo(() => {
     const query = catalogueQuery.trim().toLowerCase();
     return tracks.filter((track) => {
@@ -2683,8 +2690,9 @@ function App() {
                     {['creator','writer','editor'].includes(String(effectiveRole)) && <span className="profile-collaboration-badge"><Handshake size={14}/>{profileCompletedCollaborations} completed collaboration{profileCompletedCollaborations === 1 ? '' : 's'}</span>}
                   </div>
                   <label>Portfolio note <span className="optional-label">optional</span><textarea value={profile.portfolioNote ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,portfolioNote:e.target.value}))} placeholder={effectiveRole === 'listener' ? 'Optional note about the playlists you choose to share.' : 'Optional introduction to the work you have chosen to feature.'}/></label>
+                  {profilePortfolioOptions.length > 6 && <label className="profile-portfolio-search"><Search size={14}/><input value={profilePortfolioQuery} onChange={(event)=>setProfilePortfolioQuery(event.target.value)} placeholder="Search eligible showcase work…"/></label>}
                   <div className="profile-portfolio-options">
-                    {profilePortfolioOptions.length ? profilePortfolioOptions.map((item:any)=>{
+                    {profilePortfolioOptions.length ? filteredProfilePortfolioOptions.map((item:any)=>{
                       const selected = (profile.featuredPortfolioIds ?? []).includes(item.id);
                       const atLimit = !selected && (profile.featuredPortfolioIds ?? []).length >= 6;
                       return <label className={selected ? 'profile-portfolio-option selected' : 'profile-portfolio-option'} key={item.id}>
@@ -2695,7 +2703,28 @@ function App() {
                         <span><strong>{item.title}</strong><small>{item.subtitle || (item.type === 'playlist' ? 'Playlist' : 'Nightjar public work')}</small></span>
                       </label>;
                     }) : <div className="people-empty"><strong>No eligible showcase items yet.</strong><span>{effectiveRole === 'listener' ? 'Create a playlist in your Library first.' : 'Published and credited work will appear here automatically.'}</span></div>}
+                    {profilePortfolioOptions.length > 0 && filteredProfilePortfolioOptions.length === 0 && <div className="people-empty"><Search size={16}/><strong>No showcase items match.</strong><span>Try a different title or credit search.</span></div>}
                   </div>
+                  {!!(profile.featuredPortfolioIds ?? []).length && <div className="profile-featured-order">
+                    <span className="mini-label">FEATURED ORDER</span>
+                    {(profile.featuredPortfolioIds ?? []).map((id:string,index:number)=>{
+                      const item = profilePortfolioOptions.find((option:any)=>option.id===id);
+                      if (!item) return null;
+                      return <div className="profile-featured-order-row" key={id}>
+                        <span className="profile-featured-order-index">{index + 1}</span>
+                        <div><strong>{item.title}</strong><small>{item.subtitle || 'Nightjar public work'}</small></div>
+                        <div className="profile-featured-order-actions">
+                          <button type="button" className="ghost-button" disabled={index===0} onClick={()=>setProfile((current:any)=>{
+                            const ids=[...(current.featuredPortfolioIds??[])]; [ids[index-1],ids[index]]=[ids[index],ids[index-1]]; return {...current,featuredPortfolioIds:ids};
+                          })}>Up</button>
+                          <button type="button" className="ghost-button" disabled={index===(profile.featuredPortfolioIds??[]).length-1} onClick={()=>setProfile((current:any)=>{
+                            const ids=[...(current.featuredPortfolioIds??[])]; [ids[index+1],ids[index]]=[ids[index],ids[index+1]]; return {...current,featuredPortfolioIds:ids};
+                          })}>Down</button>
+                          <button type="button" className="ghost-button" onClick={()=>setProfile((current:any)=>({...current,featuredPortfolioIds:(current.featuredPortfolioIds??[]).filter((value:string)=>value!==id)}))}>Remove</button>
+                        </div>
+                      </div>;
+                    })}
+                  </div>}
                   <small className="profile-portfolio-limit">{(profile.featuredPortfolioIds ?? []).length}/6 selected</small>
                 </section>}
                 <button className="primary-button profile-save-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my complete profile'} <Check size={15}/></button>
