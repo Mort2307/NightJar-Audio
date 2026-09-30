@@ -683,7 +683,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   let releaseCount = 0;
   let creatorReleases: ReturnType<typeof releasePayload>[] = [];
   let creditedReleases: ReturnType<typeof releasePayload>[] = [];
-  let publicPlaylists: Array<{ id: string; title: string; releaseCount: number }> = [];
+  let publicPlaylists: Array<{ id: string; title: string; releaseCount: number; releases: ReturnType<typeof releasePayload>[] }> = [];
 
   if (role === 'creator') {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
@@ -709,12 +709,20 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const playlistDocs = await Promise.all(
       cleanStringList(data.featuredPortfolioIds, 6).map((playlistId) => accountRef(userId).collection('playlists').doc(playlistId).get()),
     );
-    publicPlaylists = playlistDocs
+    publicPlaylists = await Promise.all(playlistDocs
       .filter((playlist) => playlist.exists)
-      .map((playlist) => ({
-        id: playlist.id,
-        title: cleanText(playlist.data()?.title, 100) || 'Untitled playlist',
-        releaseCount: Array.isArray(playlist.data()?.releaseIds) ? playlist.data()?.releaseIds.length : 0,
+      .map(async (playlist) => {
+        const releaseIds = cleanStringList(playlist.data()?.releaseIds, 50);
+        const releaseDocs = await Promise.all(releaseIds.slice(0, 12).map((releaseId) => releaseRef(releaseId).get()));
+        const releases = releaseDocs
+          .filter((release) => release.exists && release.data()?.status === 'released')
+          .map((release) => releasePayload(release.data() ?? {}, release.id));
+        return {
+          id: playlist.id,
+          title: cleanText(playlist.data()?.title, 100) || 'Untitled playlist',
+          releaseCount: releaseIds.length,
+          releases,
+        };
       }));
   }
 
@@ -3708,7 +3716,19 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
 export const collaborationDirectory = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const snapshot = await db.collection('accounts').limit(1000).get();
+  const [snapshot, collaborations] = await Promise.all([
+    db.collection('accounts').limit(1000).get(),
+    db.collection('collaborationProposals').limit(1000).get(),
+  ]);
+  const completedByUser = new Map<string, number>();
+  for (const collaboration of collaborations.docs) {
+    const data = collaboration.data() ?? {};
+    if (data.status !== 'completed') continue;
+    for (const userId of [cleanText(data.writerUserId, 160), cleanText(data.recipientUserId, 160)].filter(Boolean)) {
+      completedByUser.set(userId, (completedByUser.get(userId) ?? 0) + 1);
+    }
+  }
+
   const allowedRoles = new Set(['creator','writer','editor']);
   const people = (await Promise.all(snapshot.docs
     .filter((doc) => doc.id !== identity.uid && doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
@@ -3723,6 +3743,13 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
         handle: data.handle ?? null,
         headline: data.headline ?? null,
         avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+        favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
+        favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
+        roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
+        roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
+        roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
+        roleAvailability: data.roleAvailability ?? null,
+        completedCollaborations: completedByUser.get(doc.id) ?? 0,
       };
     }))).filter(Boolean);
   return { people };
