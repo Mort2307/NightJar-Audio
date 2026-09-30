@@ -139,6 +139,10 @@ type CreatorSummary = {
   initials?: string;
   note?: string;
   imageUrl?: string | null;
+  tags?: string[];
+  categories?: string[];
+  specialties?: string[];
+  availability?: string | null;
 };
 
 type Spotlight = {
@@ -256,8 +260,10 @@ function App() {
   const [adminOverview, setAdminOverview] = useState<any | null>(null);
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'admin' | null>(null);
-  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleDetailOne: '', roleDetailTwo: '', publicProfile: true });
+  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], publicProfile: true });
   const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
+  const [profilePortfolioOptions, setProfilePortfolioOptions] = useState<any[]>([]);
+  const [profileCompletedCollaborations, setProfileCompletedCollaborations] = useState(0);
   const [profileLoading, setProfileLoading] = useState(false);
   const [tasteVector, setTasteVector] = useState<any[]>([]);
   const [securityAlerts, setSecurityAlerts] = useState<any[]>([]);
@@ -295,6 +301,8 @@ function App() {
   const [catalogueRating, setCatalogueRating] = useState('all');
   const [catalogueDuration, setCatalogueDuration] = useState('all');
   const [creatorQuery, setCreatorQuery] = useState('');
+  const [creatorTagFilter, setCreatorTagFilter] = useState('all');
+  const [creatorAvailabilityFilter, setCreatorAvailabilityFilter] = useState('all');
   const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
@@ -338,11 +346,30 @@ function App() {
   const writerSpotlight = writerSpotlightList[0] ?? null;
   const editorSpotlight = editorSpotlightList[0] ?? null;
   const creators = creatorDirectory;
+  const creatorTagFilterOptions = useMemo(() => Array.from(new Set(
+    creatorDirectory.flatMap((creator) => [...(creator.tags ?? []), ...(creator.specialties ?? []), ...(creator.categories ?? [])]),
+  )).sort((a, b) => a.localeCompare(b)), [creatorDirectory]);
+  const creatorAvailabilityOptions = useMemo(() => Array.from(new Set(
+    creatorDirectory.map((creator) => creator.availability).filter((value): value is string => Boolean(value)),
+  )).sort((a, b) => a.localeCompare(b)), [creatorDirectory]);
   const filteredCreators = useMemo(() => {
     const query = creatorQuery.trim().toLowerCase();
-    if (!query) return creatorDirectory;
-    return creatorDirectory.filter((creator) => [creator.name, creator.handle, creator.note].filter(Boolean).join(' ').toLowerCase().includes(query));
-  }, [creatorDirectory, creatorQuery]);
+    return creatorDirectory.filter((creator) => {
+      const metadata = [
+        creator.name,
+        creator.handle,
+        creator.note,
+        creator.availability,
+        ...(creator.tags ?? []),
+        ...(creator.specialties ?? []),
+        ...(creator.categories ?? []),
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (query && !metadata.includes(query)) return false;
+      if (creatorTagFilter !== 'all' && ![...(creator.tags ?? []), ...(creator.specialties ?? []), ...(creator.categories ?? [])].includes(creatorTagFilter)) return false;
+      if (creatorAvailabilityFilter !== 'all' && creator.availability !== creatorAvailabilityFilter) return false;
+      return true;
+    });
+  }, [creatorDirectory, creatorQuery, creatorTagFilter, creatorAvailabilityFilter]);
   const filteredTracks = useMemo(() => {
     const query = catalogueQuery.trim().toLowerCase();
     return tracks.filter((track) => {
@@ -590,6 +617,10 @@ function App() {
         followers: creator.followerCount ?? 0,
         releases: creator.releaseCount ?? 0,
         imageUrl: creator.avatarUrl ?? null,
+        tags: creator.favouriteTags ?? [],
+        categories: creator.favouriteCategories ?? [],
+        specialties: creator.roleSpecialties ?? [],
+        availability: creator.roleAvailability ?? null,
       })));
       const spotlights = firebaseSpotlightResponse.spotlights ?? [];
       const mapSpotlight = (item: any): Spotlight => ({
@@ -1124,14 +1155,17 @@ function App() {
         setTasteVector([{label:'Atmospheric',weight:0.92},{label:'Slow burn',weight:0.81},{label:'Story-led',weight:0.76},{label:'Cinematic',weight:0.69}]);
         return;
       }
-      const [profileData, tasteData, tagData] = await Promise.all([
+      const [profileData, tasteData, tagData, portfolioData] = await Promise.all([
         nightjarCommunity.getMyProfile(),
         nightjarListening.taste(),
         nightjarCommunity.profileTagCatalogue().catch(() => ({ tags: [] })),
+        nightjarCommunity.getMyProfilePortfolioOptions().catch(() => ({ options: [], completedCollaborations: 0 })),
       ]);
       if (profileData?.profile) setProfile((current: any) => ({ ...current, ...profileData.profile }));
       setTasteVector(tasteData.vector ?? []);
       setProfileTagCatalogue(Array.isArray(tagData?.tags) ? tagData.tags : []);
+      setProfilePortfolioOptions(Array.isArray(portfolioData?.options) ? portfolioData.options : []);
+      setProfileCompletedCollaborations(Number(portfolioData?.completedCollaborations ?? 0));
     } catch { notify('Profile could not be loaded right now.'); }
     finally { setProfileLoading(false); }
   };
