@@ -9,7 +9,9 @@ type Props={
   role:Role;
   currentUserId?:string|null;
   initialRecipientUserId?:string|null;
+  initialCollaborationId?:string|null;
   onRecipientHandled?:()=>void;
+  onUnreadChange?:(count:number)=>void;
   notify:(message:string)=>void;
   demoMode?:boolean;
   simulationMode?:boolean;
@@ -19,7 +21,7 @@ type MessageTargetEvent=CustomEvent<{userId?:string;collaborationId?:string|null
 
 const roleLabel=(role:string)=>role==='editor'?'Audio Editor':role==='writer'?'Writer':'Creator';
 
-export default function MessagingHub({role,currentUserId,initialRecipientUserId,onRecipientHandled,notify,demoMode=false,simulationMode=false}:Props){
+export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialCollaborationId,onRecipientHandled,onUnreadChange,notify,demoMode=false,simulationMode=false}:Props){
   const [conversations,setConversations]=useState<any[]>([]);
   const [directory,setDirectory]=useState<any[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(null);
@@ -37,13 +39,16 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     if(!silent)setLoading(true);
     try{
       if(demoMode){
-        setConversations([
+        const demoConversations=[
           {id:'demo-professional-1',otherUserId:'demo-writer-mara',otherName:'Mara Bell',otherHandle:'marabell',otherRole:'writer',lastMessage:'I updated the rights note — happy to talk through the changes.',lastMessageAt:new Date(Date.now()-1200000).toISOString(),unreadCount:1,collaborationIds:['demo-collab-1']},
           {id:'demo-professional-2',otherUserId:'demo-editor-sam',otherName:'Sam Reed',otherHandle:'samreed',otherRole:'editor',lastMessage:'The dialogue edit is ready for your review.',lastMessageAt:new Date(Date.now()-7200000).toISOString(),unreadCount:0,collaborationIds:[]},
-        ]);
+        ];
+        setConversations(demoConversations);
+        onUnreadChange?.(demoConversations.reduce((sum,item)=>sum+Number(item.unreadCount??0),0));
       }else{
         const data=await nightjarMessaging.conversations();
         setConversations(data.conversations??[]);
+        onUnreadChange?.(Number(data.unreadCount??0));
       }
     }catch{if(!silent)notify('Messages could not be loaded.');}
     finally{if(!silent)setLoading(false);}
@@ -106,7 +111,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   };
 
   useEffect(()=>{void loadConversations();void loadDirectory();},[role,demoMode]);
-  useEffect(()=>{if(initialRecipientUserId)void startWith(initialRecipientUserId);},[initialRecipientUserId]);
+  useEffect(()=>{if(initialRecipientUserId)void startWith(initialRecipientUserId,initialCollaborationId??null);},[initialRecipientUserId,initialCollaborationId]);
   useEffect(()=>{
     const onMessageUser=(event:Event)=>{
       const detail=(event as MessageTargetEvent).detail??{};
