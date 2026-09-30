@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileCheck2, Handshake, Headphones, Heart, ListMusic, Share2, ShieldCheck, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
+import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 
 type Props = {
   userId: string;
@@ -20,9 +21,13 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, demoMode = false }: Props) {
+export default function PublicProfile({
+  const dialogRef = useRef<HTMLElement | null>(null);
+ userId, followingIds, onToggleFollow, onClose, notify, demoMode = false }: Props) {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +125,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
 
   return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
-    <section className="creator-profile-modal">
+    <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal">
       <header className="creator-profile-head">
         <div>
           <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profile.role).toUpperCase() : 'PROFILE'}</span>
