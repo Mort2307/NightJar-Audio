@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { ArrowRight, Handshake, Heart, Mic2, Share2, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, Handshake, Heart, MessageCircle, Mic2, Share2, ShieldCheck, Sparkles } from 'lucide-react';
 import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
@@ -40,10 +40,12 @@ type Props = {
   onPlayRelease: (release: any) => void;
   onClose: () => void;
   notify: (message: string) => void;
+  canMessage?: boolean;
+  onMessage?: (userId: string) => void;
   demoMode?: boolean;
 };
 
-export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onPlayRelease, onClose, notify, demoMode = false }: Props) {
+export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onPlayRelease, onClose, notify, canMessage = false, onMessage, demoMode = false }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -105,7 +107,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
     <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal">
       <header className="creator-profile-head"><div><span className="mini-label">NIGHTJAR / CREATOR</span><h2>{loading ? 'Loading creator…' : profile?.name ?? 'Creator profile'}</h2><p>{profile?.handle ? '@' + profile.handle.replace(/^@/, '') : 'Independent Nightjar creator'}</p></div><button className="icon-button" onClick={onClose}>×</button></header>
       {profile && <div className="creator-profile-body">
-        <div className="creator-profile-hero"><span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" /> : profile.initials || 'NJ'}</span><div><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button></div>
+        <div className="creator-profile-hero"><span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" /> : profile.initials || 'NJ'}</span><div><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button>{canMessage && onMessage && <button className="secondary-button" onClick={()=>onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}</div></div>
         <div className="public-profile-metrics">
           <div><span>Followers</span><strong>{profile.followers ?? 0}</strong></div>
           <div><span>Following</span><strong>{profile.followingCount ?? 0}</strong></div>
