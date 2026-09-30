@@ -222,7 +222,8 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
       </aside>
 
       <div className="messaging-thread">
-        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{selected.collaborationId?' · linked collaboration':''}</p></div><button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></header>
+        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}</p></div><button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></header>
+          {selected.collaborationId && <div className="messaging-collaboration-context"><Handshake size={15}/><div><span className="mini-label">LINKED COLLABORATION</span><strong>{selected.collaborationTitle || 'Nightjar collaboration'}</strong><small>{selected.collaborationStatus ? String(selected.collaborationStatus).replaceAll('_',' ') : 'Collaboration status available in the workspace'} · Messaging does not change script rights, permissions or collaboration state.</small></div></div>}
           <div className="message-list" ref={messageListRef}>{messages.length?messages.map((message:any)=>{
             const mine=message.senderUserId===viewerId;
             const readByOther=mine&&selected.otherUserId&&(message.readBy??[]).includes(selected.otherUserId);
