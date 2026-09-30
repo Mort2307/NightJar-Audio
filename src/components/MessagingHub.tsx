@@ -45,7 +45,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
       if(demoMode){
         const demoConversations=[
           {id:'demo-professional-1',otherUserId:'demo-writer-mara',otherName:'Mara Bell',otherHandle:'marabell',otherRole:'writer',lastMessage:'I updated the rights note — happy to talk through the changes.',lastMessageAt:new Date(Date.now()-1200000).toISOString(),unreadCount:1,collaborationIds:['demo-collab-1']},
-          {id:'demo-professional-2',otherUserId:'demo-editor-sam',otherName:'Sam Reed',otherHandle:'samreed',otherRole:'editor',lastMessage:'The dialogue edit is ready for your review.',lastMessageAt:new Date(Date.now()-7200000).toISOString(),unreadCount:0,collaborationIds:[]},
+          {id:'demo-professional-2',otherUserId:'demo-editor-sam',otherName:'Sam Reed',otherHandle:'samreed',otherRole:'editor',lastMessage:'Just checking whether the latest production handoff reached you.',lastMessagePreview:'Just checking whether the latest production handoff reached you.',lastMessageAt:new Date(Date.now()-72*60*60*1000).toISOString(),lastSenderUserId:viewerId,unreadCount:0,collaborationIds:[]},
         ];
         setConversations(demoConversations);
         onUnreadChange?.(demoConversations.reduce((sum,item)=>sum+Number(item.unreadCount??0),0));
