@@ -2709,6 +2709,7 @@ function App() {
 
   const baseActions: RoleDashboardAction[] = [
     ...(profileCompletion < 70 ? [{ id:'complete-profile', title:'Strengthen your public profile', reason:`Your profile is ${profileCompletion}% complete. Richer profiles are easier to understand and discover.`, label:'Open profile', priority:'high' as const, onClick:openProfileEditor }] : []),
+    ...(messageUnreadCount > 0 && ['creator','writer','editor'].includes(String(effectiveRole)) ? [{ id:'messages', title:`Reply to ${messageUnreadCount} unread private message${messageUnreadCount === 1 ? '' : 's'}`, reason:'A professional Nightjar conversation is waiting. Keeping replies inside the work context reduces missed handoffs and uncertainty.', label:'Open Inbox', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
     ...(notificationUnreadCount > 0 ? [{ id:'notifications', title:`Review ${notificationUnreadCount} unread update${notificationUnreadCount === 1 ? '' : 's'}`, reason:'These are recent account or community changes you have not reviewed yet.', label:'Open updates', onClick:()=>setNotificationsOpen(true) }] : []),
   ];
   const listenerActions: RoleDashboardAction[] = [
@@ -2809,7 +2810,7 @@ function App() {
                 {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness'},
                 {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases'},
                 {label:'Following',value:followingProfileIds.length,detail:'Public profiles'},
-                {label:'Unread',value:notificationUnreadCount,detail:'Recent updates'},
+                {label:'Messages',value:messageUnreadCount,detail:'Unread private threads'},
               ]}
               actions={listenerActions}
             />}
@@ -3037,7 +3038,7 @@ function App() {
                 {label:'Releases',value:creatorDashboard.releases.length,detail:'Current catalogue records'},
                 {label:'Featured',value:(profile.featuredPortfolioIds ?? []).length,detail:'Profile showcase'},
                 {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Unread',value:notificationUnreadCount,detail:'Recent updates'},
+                {label:'Messages',value:messageUnreadCount,detail:'Unread private threads'},
               ]}
               actions={creatorActions}
               loading={creatorDashboardLoading}
@@ -3215,7 +3216,7 @@ function App() {
                 {label:'Manuscripts',value:writerScripts.length,detail:'Your current library'},
                 {label:'Revisions',value:writerScripts.filter((item:any)=>String(item.status).toLowerCase().includes('revision')).length,detail:'Needs attention'},
                 {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Unread',value:notificationUnreadCount,detail:'Recent updates'},
+                {label:'Messages',value:messageUnreadCount,detail:'Unread private threads'},
               ]}
               actions={writerActions}
             />
@@ -3239,7 +3240,7 @@ function App() {
                 {label:'Assigned',value:editorQueue.length,detail:'Current queue'},
                 {label:'In review',value:editorQueue.filter((item:any)=>String(item.status).toLowerCase().includes('review')).length,detail:'Active decisions'},
                 {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Unread',value:notificationUnreadCount,detail:'Recent updates'},
+                {label:'Messages',value:messageUnreadCount,detail:'Unread private threads'},
               ]}
               actions={editorActions}
             />
