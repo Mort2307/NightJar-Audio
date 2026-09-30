@@ -10,11 +10,12 @@ type Props = {
   notify: (message: string) => void;
   demoMode?: boolean;
   simulationMode?: boolean;
+  onMessageUser?: (userId:string) => void;
 };
 
 const statusLabel = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-export default function CollaborationHub({ role, notify, demoMode = false, simulationMode = false }: Props) {
+export default function CollaborationHub({ role, notify, demoMode = false, simulationMode = false, onMessageUser }: Props) {
   const [proposals, setProposals] = useState<any[]>([]);
   const [directory, setDirectory] = useState<any[]>([]);
   const [scripts, setScripts] = useState<any[]>([]);
@@ -207,6 +208,7 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
           </dl>
           {proposal.responseNote && <p className="collaboration-response"><strong>Response:</strong> {proposal.responseNote}</p>}
           <div className="collaboration-actions">
+            {onMessageUser && <button className="secondary-button" onClick={()=>onMessageUser(role === 'writer' ? proposal.recipientUserId : proposal.writerUserId)}><MessageCircle size={13}/> Message {role === 'writer' ? proposal.recipientName : proposal.writerName}</button>}
             {role !== 'writer' && !['declined','withdrawn','completed'].includes(proposal.status) && <>
               <button className="secondary-button" onClick={() => void respond(proposal, 'interested')}><Check size={13}/> Interested</button>
               <button className="secondary-button" onClick={() => void respond(proposal, 'discussing')}>Discuss</button>
