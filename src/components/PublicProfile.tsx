@@ -138,7 +138,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero">
-          <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" /> : profile.initials || 'NJ'}</span>
+          <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
           <div>
             <h3>{profile.displayName}</h3>
             <p>{profile.headline || (profile.role === 'editor' ? 'Audio Editor on Nightjar.' : profile.role === 'listener' ? 'Part of the Nightjar listening community.' : 'Nightjar member.')}</p>
