@@ -37,11 +37,4 @@ export const nightjarEngagement = {
   async reportComment(commentId: string, reason = '') {
     return (await reportCommentCall({ commentId, reason })).data;
   },
-  async adminReports() {
-    const data = (await adminReportsCall()).data;
-    return { reports:(data.reports ?? []).filter((item:any) => item.type === 'release_comment') };
-  },
-  async moderateCommentReport(reportId: string, decision: 'dismiss' | 'remove') {
-    return (await adminModerateCall({ reportId, decision })).data;
-  },
 };
