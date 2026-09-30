@@ -47,8 +47,15 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         favouriteTags:['Cinematic','Story-led'],
         portfolioNote:person.role === 'listener' ? 'A few playlists I chose to share publicly.' : 'A small selection of work that represents what I do on Nightjar.',
         completedCollaborations:['writer','editor','creator'].includes(person.role) ? 4 : 0,
+        activityBadges:person.role === 'creator'
+          ? [{id:'published-creator',label:'Published Creator',detail:'Has released work in the Nightjar catalogue.'},{id:'completed-collaborator',label:'Completed Collaborator',detail:'Has completed Nightjar collaborations.'}]
+          : person.role === 'writer'
+            ? [{id:'published-writer',label:'Published Writer',detail:'Has published writing recorded by Nightjar.'},{id:'completed-collaborator',label:'Completed Collaborator',detail:'Has completed Nightjar collaborations.'}]
+            : person.role === 'editor'
+              ? [{id:'credited-editor',label:'Credited Audio Editor',detail:'Has public Nightjar release credits.'},{id:'completed-collaborator',label:'Completed Collaborator',detail:'Has completed Nightjar collaborations.'}]
+              : [],
         featuredWork:person.role === 'writer' || person.role === 'editor' ? creditedReleases.slice(0,2) : person.role === 'creator' ? demoTracks.filter((release:any)=>release.creatorUserId===person.userId).slice(0,2) : [],
-        publicPlaylists:person.role === 'listener' ? [{id:'demo-public-playlist',title:'Late-night slow burns',releaseCount:4}] : [],
+        publicPlaylists:person.role === 'listener' ? [{id:'demo-public-playlist',title:'Late-night slow burns',releaseCount:Math.min(4,demoTracks.length),releases:demoTracks.slice(0,4).map((release:any)=>({...release,creatorName:release.creator}))}] : [],
       } : null);
       setLoading(false);
       return;
