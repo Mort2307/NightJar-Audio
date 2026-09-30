@@ -49,7 +49,6 @@ import {
   WalletCards,
   ImagePlus,
   RefreshCw,
-  Handshake,
 } from 'lucide-react';
 import CreatorAudioPipeline from './components/CreatorAudioPipeline';
 import CreatorProfile from './components/CreatorProfile';
