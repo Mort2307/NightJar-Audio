@@ -14,6 +14,7 @@ import { nightjarScripts } from './platform/firebase-scripts';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarReviews } from './platform/firebase-reviews';
 import { nightjarSocial } from './platform/firebase-social';
+import { nightjarMessaging } from './platform/firebase-messaging';
 import {
   ArrowRight,
   BarChart3,
@@ -374,6 +375,7 @@ function App() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [communityTrack, setCommunityTrack] = useState<Track | null>(null);
   const [messageRecipientUserId, setMessageRecipientUserId] = useState<string | null>(null);
+  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const [creatorProfileUserId, setCreatorProfileUserId] = useState<string | null>(null);
   const [publicProfileUserId, setPublicProfileUserId] = useState<string | null>(() => {
     const match = window.location.pathname.match(/^\/people\/([^/]+)$/);
@@ -655,6 +657,29 @@ function App() {
       void loadCommercialControls();
     }
   }, [user, ageVerified, role, currentIntent, previewRole, demoMode, testingSessionHydrated]);
+
+  useEffect(() => {
+    if (!user || !ageVerified || !['creator','writer','editor'].includes(String(effectiveRole))) {
+      setMessageUnreadCount(0);
+      return;
+    }
+    let cancelled = false;
+    const loadUnread = async () => {
+      try {
+        if (demoMode) {
+          if (!cancelled) setMessageUnreadCount(1);
+          return;
+        }
+        const data = await nightjarMessaging.conversations();
+        if (!cancelled) setMessageUnreadCount(data.unreadCount ?? 0);
+      } catch {
+        if (!cancelled) setMessageUnreadCount(0);
+      }
+    };
+    void loadUnread();
+    const timer = window.setInterval(() => void loadUnread(), 30000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [user, ageVerified, effectiveRole, demoMode]);
 
   const clearToastTimer = () => {
     if (toastTimer.current != null) window.clearTimeout(toastTimer.current);
@@ -2618,7 +2643,7 @@ function App() {
   ];
 
   const notificationGroups = Object.entries(notifications.slice(0,20).reduce((groups:Record<string,any[]>, item:any) => {
-    const key = item.type === 'spotlight' ? 'Spotlights' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
+    const key = item.type === 'spotlight' ? 'Spotlights' : item.type === 'message' ? 'Messages' : item.type === 'comment' ? 'Comments' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
     (groups[key] ??= []).push(item);
     return groups;
   }, {}));
@@ -2668,7 +2693,7 @@ function App() {
           {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); }}>Editorial</button>}
-          {['creator','writer','editor'].includes(String(effectiveRole)) && <button className={view === 'messages' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('messages')}>Messages</button>}
+          {['creator','writer','editor'].includes(String(effectiveRole)) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
@@ -2685,7 +2710,7 @@ function App() {
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
               <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void markNotificationRead(item)}>
-                <span className="notification-row-icon">{item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
+                <span className="notification-row-icon">{item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small></span>
               </button>)}</div>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new activity. You’re caught up.</span></div>}
             </section>}
@@ -2929,7 +2954,7 @@ function App() {
         {view === 'messages' && ['creator','writer','editor'].includes(String(effectiveRole)) && (
           <section className="page-wrap messages-page">
             <div className="page-heading"><div><p className="eyebrow"><MessageCircle size={14}/> PRIVATE MESSAGING</p><h1>Keep creative conversations moving.</h1><p>Creators, Writers and Audio Editors can communicate directly inside Nightjar without changing manuscript rights or access permissions.</p></div></div>
-            <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading private messages" />}><MessagingHub role={effectiveRole as 'creator'|'writer'|'editor'} currentUserId={user?.userId} initialRecipientUserId={messageRecipientUserId} onRecipientHandled={()=>setMessageRecipientUserId(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
+            <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading private messages" />}><MessagingHub role={effectiveRole as 'creator'|'writer'|'editor'} currentUserId={user?.userId} initialRecipientUserId={messageRecipientUserId} onRecipientHandled={()=>setMessageRecipientUserId(null)} onUnreadChange={setMessageUnreadCount} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
           </section>
         )}
 
@@ -3349,7 +3374,7 @@ function App() {
         )}
       </main>
 
-      {user && ageVerified && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} />}
+      {user && ageVerified && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} messageUnreadCount={messageUnreadCount} />}
 
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src="/favicon.svg" alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
