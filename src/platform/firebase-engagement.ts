@@ -3,34 +3,42 @@ import { firebaseApp } from './firebase-auth';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
-const stateCall = httpsCallable<void, { lovedReleaseIds: string[] }>(functions, 'releaseEngagementState');
-const detailCall = httpsCallable<{ releaseId: string }, { releaseId: string; loveCount: number; commentCount: number; loved: boolean; viewerRole: string | null; comments: any[] }>(functions, 'listReleaseEngagement');
-const loveCall = httpsCallable<{ releaseId: string; loved: boolean }, { releaseId: string; loved: boolean; loveCount: number }>(functions, 'setReleaseLove');
-const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any; commentCount: number }>(functions, 'addReleaseComment');
-const deleteCommentCall = httpsCallable<{ releaseId: string; commentId: string }, { deleted: boolean; commentCount: number }>(functions, 'deleteReleaseComment');
-const adminCommentsCall = httpsCallable<void, { comments: any[] }>(functions, 'adminListReleaseComments');
-const adminStatusCall = httpsCallable<{ releaseId: string; commentId: string; status: 'visible' | 'hidden' }, { status: string; commentCount: number }>(functions, 'adminSetReleaseCommentStatus');
+export type ReleaseReaction = 'like' | 'love' | null;
+
+const communityCall = httpsCallable<{ releaseId: string }, {
+  comments: any[];
+  reactions: { likes: number; loves: number; total: number; myReaction: ReleaseReaction };
+}>(functions, 'releaseCommunity');
+const reactionCall = httpsCallable<{ releaseId: string; reaction: ReleaseReaction }, {
+  comments: any[];
+  reactions: { likes: number; loves: number; total: number; myReaction: ReleaseReaction };
+}>(functions, 'setReleaseReaction');
+const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any }>(functions, 'submitReleaseComment');
+const deleteCommentCall = httpsCallable<{ commentId: string }, { deleted: boolean; commentId: string }>(functions, 'deleteMyReleaseComment');
+const reportCommentCall = httpsCallable<{ commentId: string; reason?: string }, { reported: boolean; commentId: string }>(functions, 'reportReleaseComment');
+const adminReportsCall = httpsCallable<void, { comments: any[] }>(functions, 'adminListCommentReports');
+const adminModerateCall = httpsCallable<{ commentId: string; decision: 'keep' | 'remove' }, { comment: any }>(functions, 'adminModerateReleaseComment');
 
 export const nightjarEngagement = {
-  async state() {
-    return (await stateCall()).data;
+  async community(releaseId: string) {
+    return (await communityCall({ releaseId })).data;
   },
-  async detail(releaseId: string) {
-    return (await detailCall({ releaseId })).data;
+  async setReaction(releaseId: string, reaction: ReleaseReaction) {
+    return (await reactionCall({ releaseId, reaction })).data;
   },
-  async setLove(releaseId: string, loved: boolean) {
-    return (await loveCall({ releaseId, loved })).data;
-  },
-  async addComment(releaseId: string, body: string) {
+  async comment(releaseId: string, body: string) {
     return (await commentCall({ releaseId, body })).data;
   },
-  async deleteComment(releaseId: string, commentId: string) {
-    return (await deleteCommentCall({ releaseId, commentId })).data;
+  async deleteComment(commentId: string) {
+    return (await deleteCommentCall({ commentId })).data;
   },
-  async adminComments() {
-    return (await adminCommentsCall()).data;
+  async reportComment(commentId: string, reason = '') {
+    return (await reportCommentCall({ commentId, reason })).data;
   },
-  async adminSetCommentStatus(releaseId: string, commentId: string, status: 'visible' | 'hidden') {
-    return (await adminStatusCall({ releaseId, commentId, status })).data;
+  async adminReports() {
+    return (await adminReportsCall()).data;
+  },
+  async moderateComment(commentId: string, decision: 'keep' | 'remove') {
+    return (await adminModerateCall({ commentId, decision })).data;
   },
 };
