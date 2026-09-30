@@ -3878,3 +3878,47 @@ select:disabled {
     justify-content: center;
   }
 }
+
+
+/* Protection evidence clarity */
+.protection-evidence-preview {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+.protection-evidence-preview > div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: rgba(255,255,255,.014);
+}
+.protection-evidence-preview span {
+  color: var(--ivory);
+  font-size: 8px;
+  font-weight: 700;
+}
+.protection-evidence-preview small {
+  color: var(--muted-2);
+  font-size: 7px;
+  line-height: 1.4;
+}
+.security-signal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+.security-signal-meta > span {
+  border: 1px solid rgba(203,181,204,.12);
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: rgba(255,255,255,.015);
+  color: var(--muted);
+  font-size: 7px;
+}
+.security-signal-meta strong {
+  color: #ddd0da;
+  font-size: inherit;
+}
