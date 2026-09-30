@@ -2232,6 +2232,10 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   episodeNumber: typeof data.episodeNumber === 'number' ? Math.max(0, Math.round(data.episodeNumber)) : null,
   nightjarOriginal: data.nightjarOriginal === true,
   productionNote: cleanText(data.productionNote, 1800) || null,
+  communityLikeCount: Math.max(0, Number(data.communityLikeCount ?? 0)),
+  communityLoveCount: Math.max(0, Number(data.communityLoveCount ?? 0)),
+  communityReactionCount: Math.max(0, Number(data.communityReactionCount ?? 0)),
+  communityCommentCount: Math.max(0, Number(data.communityCommentCount ?? 0)),
   releaseDate: toIso(data.releaseDate),
   createdAt: toIso(data.createdAt),
   updatedAt: toIso(data.updatedAt),
@@ -4551,6 +4555,19 @@ const releaseCommunityState = async (releaseId: string, viewerUserId: string) =>
   };
 };
 
+const syncReleaseCommunitySummary = async (releaseId: string, viewerUserId = '') => {
+  const state = await releaseCommunityState(releaseId, viewerUserId);
+  await releaseRef(releaseId).set({
+    communityLikeCount: state.reactions.likes,
+    communityLoveCount: state.reactions.loves,
+    communityReactionCount: state.reactions.total,
+    communityCommentCount: state.comments.length,
+    communitySummaryUpdatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return state;
+};
+
+
 export const releaseReactionState = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -4626,7 +4643,7 @@ export const setReleaseReaction = onCall({ region: REGION }, async (request) => 
     })));
   }
 
-  return releaseCommunityState(releaseId, identity.uid);
+  return syncReleaseCommunitySummary(releaseId, identity.uid);
 });
 
 export const setReleaseLove = onCall({ region: REGION }, async (request) => {
@@ -4649,7 +4666,7 @@ export const setReleaseLove = onCall({ region: REGION }, async (request) => {
   } else {
     await Promise.all([reactionRef.delete().catch(()=>undefined), legacyLoveRef.delete().catch(()=>undefined)]);
   }
-  const state = await releaseCommunityState(releaseId, identity.uid);
+  const state = await syncReleaseCommunitySummary(releaseId, identity.uid);
   return { releaseId, loved, loveCount:state.reactions.loves };
 });
 
@@ -4701,7 +4718,8 @@ export const postReleaseComment = onCall({ region: REGION }, async (request) => 
   })));
 
   const saved = await ref.get();
-  return { comment:commentPayload(saved.data() ?? record, ref.id) };
+  const community = await syncReleaseCommunitySummary(releaseId, identity.uid);
+  return { comment:commentPayload(saved.data() ?? record, ref.id), reactions:community.reactions, commentCount:community.comments.length };
 });
 
 export const deleteOwnReleaseComment = onCall({ region: REGION }, async (request) => {
@@ -4710,7 +4728,9 @@ export const deleteOwnReleaseComment = onCall({ region: REGION }, async (request
   const ref = db.collection('releaseComments').doc(commentId);
   const snapshot = await ref.get();
   if (!snapshot.exists || snapshot.data()?.userId !== identity.uid) throw new HttpsError('not-found', 'Comment not found.');
+  const releaseId = cleanText(snapshot.data()?.releaseId, 160);
   await ref.set({ status:'deleted_by_user', body:'', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  if (releaseId) await syncReleaseCommunitySummary(releaseId, identity.uid);
   return { deleted:true, commentId };
 });
 
@@ -4999,6 +5019,8 @@ export const adminResolveCommunityReport = onCall({ region: REGION }, async (req
     await db.collection('releaseComments').doc(String(data.commentId)).set({
       status:'removed_by_admin', body:'', moderatedBy:admin.uid, moderatedAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp(),
     }, { merge:true });
+    const releaseId = cleanText(data.releaseId, 160);
+    if (releaseId) await syncReleaseCommunitySummary(releaseId, admin.uid);
   }
   if (decision === 'remove' && data.type === 'direct_message' && data.conversationId && data.messageId) {
     const conversationRef = db.collection('directConversations').doc(String(data.conversationId));
