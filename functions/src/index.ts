@@ -2988,7 +2988,8 @@ const assessProtectedActivityFirebase = async (userId: string, signal: Record<st
   const scriptId = cleanText(signal.relatedId, 160);
   const sameScriptRecent = recent.filter((item) => cleanText(item.relatedId, 160) === scriptId);
   const sameDeviceTenMinute = signal.deviceId ? tenMinute.filter((item) => item.deviceId === signal.deviceId) : [];
-  const blocked = recent.filter((item) => ['blocked_interaction','copy_blocked','cut_blocked','selection_blocked','print_blocked','repeated_protected_interaction'].includes(String(item.eventType)));
+  const blocked = recent.filter((item) => ['blocked_interaction','copy_blocked','cut_blocked','selection_blocked','print_blocked','print_dialog_attempt','repeated_protected_interaction'].includes(String(item.eventType)));
+  const screenshotSignals = tenMinute.filter((item) => ['possible_screenshot_key','native_screenshot_detected'].includes(String(item.eventType)));
   const rapidViews = sameScriptRecent.filter((item) => item.eventType === 'script_view' || item.eventType === 'reader_chunk_view');
   const distinctScripts = new Set(tenMinute.map((item) => cleanText(item.relatedId, 160)).filter(Boolean)).size;
 
@@ -3001,6 +3002,8 @@ const assessProtectedActivityFirebase = async (userId: string, signal: Record<st
   if (rapidViews.length >= 20) { score += 25; reasons.push('rapid manuscript traversal'); }
   if (blocked.length >= 8) { score += 20; reasons.push('repeated blocked extraction interactions'); }
   else if (blocked.length >= 3) { score += 8; reasons.push('multiple blocked interactions'); }
+  if (screenshotSignals.length >= 5) { score += 20; reasons.push('repeated screenshot-related signals while protected content was open'); }
+  else if (screenshotSignals.length >= 2) { score += 8; reasons.push('multiple screenshot-related signals while protected content was open'); }
   if (distinctScripts >= 6) { score += 15; reasons.push('unusually broad manuscript access'); }
   if (sameDeviceTenMinute.length >= 80) { score += 10; reasons.push('high-volume activity from the same device token'); }
   if (signal.eventType === 'automation_pattern') { score += 35; reasons.push('automation-like access pattern'); }
@@ -3026,6 +3029,7 @@ const assessProtectedActivityFirebase = async (userId: string, signal: Record<st
       recentEvents: recent.length,
       relatedEvents: sameScriptRecent.length,
       blockedEvents: blocked.length,
+      screenshotSignals: screenshotSignals.length,
       rapidViews: rapidViews.length,
       distinctScripts,
       deviceId: signal.deviceId ?? null,
@@ -3049,6 +3053,10 @@ export const recordProtectionEvent = onCall({ region: REGION }, async (request) 
     relatedType: cleanText(input.relatedType, 80) || 'script',
     relatedId: cleanText(input.relatedId, 160) || null,
     deviceId: cleanText(input.deviceId, 180) || null,
+    readerSessionId: cleanText(input.readerSessionId, 180) || null,
+    clientPlatform: cleanText(input.clientPlatform, 120) || null,
+    visibilityState: cleanText(input.visibilityState, 40) || null,
+    viewport: cleanText(input.viewport, 80) || null,
     summary: cleanText(input.summary, 800) || null,
     createdAt: FieldValue.serverTimestamp(),
   };
