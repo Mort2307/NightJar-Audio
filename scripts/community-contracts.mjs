@@ -45,8 +45,8 @@ requireText(app,"canCommunityInteract={effectiveRole === 'listener'}",'Community
 requireText(app,'messageUnreadCount','Unread Inbox state is missing');
 requireText(app,'setMessageCollaborationId','Collaboration-to-message context is missing');
 
-requireText(inbox,'nightjarMessaging.messages','Inbox is not using canonical message thread API');
-requireText(inbox,'nightjarMessaging.block','Inbox block control is missing');
+requireText(inbox,'nightjarMessaging.open','Inbox is not using canonical message thread API');
+requireText(inbox,'nightjarMessaging.setBlocked','Inbox block control is missing');
 requireText(inbox,'nightjarMessaging.report','Inbox report control is missing');
 requireText(inbox,'message-read-state','Inbox read-receipt UI is missing');
 
