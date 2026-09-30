@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileCheck2, Headphones, Heart, Share2, X } from 'lucide-react';
+import { FileCheck2, Handshake, Headphones, Heart, ListMusic, Share2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -45,6 +45,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         roleDetailOne:person.role === 'writer' ? 'Dialogue-first work with strong character progression.' : person.role === 'editor' ? 'Organised remote handoff with clear revision passes.' : 'Late-night stories, atmosphere and independent creators.',
         roleDetailTwo:person.role === 'writer' ? 'Collaboration and licensing stay inside protected Nightjar workflows.' : person.role === 'editor' ? 'Best suited to dialogue-heavy and series work.' : 'Always happy to discover smaller creators.',
         favouriteTags:['Cinematic','Story-led'],
+        portfolioNote:person.role === 'listener' ? 'A few playlists I chose to share publicly.' : 'A small selection of work that represents what I do on Nightjar.',
+        completedCollaborations:['writer','editor','creator'].includes(person.role) ? 4 : 0,
+        featuredWork:person.role === 'writer' || person.role === 'editor' ? creditedReleases.slice(0,2) : person.role === 'creator' ? demoTracks.filter((release:any)=>release.creatorUserId===person.userId).slice(0,2) : [],
+        publicPlaylists:person.role === 'listener' ? [{id:'demo-public-playlist',title:'Late-night slow burns',releaseCount:4}] : [],
       } : null);
       setLoading(false);
       return;
@@ -83,6 +87,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           ['Followers', profile.followerCount ?? 0],
           ['Following', profile.followingCount ?? 0],
           ['Released work', profile.releaseCount ?? 0],
+          ['Collaborations', profile.completedCollaborations ?? 0],
         ]
       : profileRole === 'writer'
         ? [
@@ -90,12 +95,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             ['Following', profile.followingCount ?? 0],
             ['Published scripts', profile.publishedWorkCount ?? 0],
             ['Release credits', profile.creditedReleaseCount ?? 0],
+            ['Collaborations', profile.completedCollaborations ?? 0],
           ]
         : profileRole === 'editor'
           ? [
               ['Followers', profile.followerCount ?? 0],
               ['Following', profile.followingCount ?? 0],
               ['Release credits', profile.creditedReleaseCount ?? 0],
+              ['Collaborations', profile.completedCollaborations ?? 0],
             ]
           : [
               ['Followers', profile.followerCount ?? 0],
@@ -150,6 +157,11 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {(profile.roleDetailOne || profile.roleDetailTwo) && <div className="public-role-copy">{profile.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{profile.roleDetailOne}</p></div>}{profile.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{profile.roleDetailTwo}</p></div>}</div>}
         </section>
 
+        {(profile.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
+          {profile.portfolioNote && <p>{profile.portfolioNote}</p>}
+          {(profile.completedCollaborations ?? 0) > 0 && <span><Handshake size={14}/>{profile.completedCollaborations} completed Nightjar collaboration{profile.completedCollaborations === 1 ? '' : 's'}</span>}
+        </section>}
+
         <div className="writer-public-note">
           {profile.role === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
           <div>
@@ -183,6 +195,17 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                     : 'Listener profile'}</h3>
             </div>
           </div>
+          {profile.role !== 'listener' && !!profile.featuredWork?.length && <div className="public-featured-work">
+            <span className="mini-label">FEATURED</span>
+            {profile.featuredWork.map((release:any)=><article key={release.id}>
+              <div><strong>{release.title}</strong><span>{release.creatorName ?? profile.displayName}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
+              <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
+            </article>)}
+          </div>}
+          {profile.role === 'listener' && !!profile.publicPlaylists?.length && <div className="public-playlist-list">
+            <span className="mini-label">SHARED PLAYLISTS</span>
+            {profile.publicPlaylists.map((playlist:any)=><article key={playlist.id}><ListMusic size={16}/><div><strong>{playlist.title}</strong><span>{playlist.releaseCount ?? 0} release{playlist.releaseCount === 1 ? '' : 's'}</span></div></article>)}
+          </div>}
           {(profile.role === 'writer' || profile.role === 'editor') && <div className="public-credit-summary">
             <span>{profile.role === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
             <strong>{profile.creditedReleaseCount ?? 0} credited release{profile.creditedReleaseCount === 1 ? '' : 's'}</strong>
