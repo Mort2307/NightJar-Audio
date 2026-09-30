@@ -43,6 +43,7 @@ import {
   Bell,
   Download,
   FileCheck2,
+  Handshake,
   Share2,
   Coins,
   WalletCards,
@@ -2434,6 +2435,7 @@ function App() {
           <section className="page-wrap">
             <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators by name, handle, tags, specialties, categories or collaboration availability.</p></div><div className="creator-directory-tools"><label className="creator-directory-search"><Search size={16}/><input value={creatorQuery} onChange={(event)=>setCreatorQuery(event.target.value)} placeholder="Search creator, tag, specialty…"/></label><select value={creatorTagFilter} onChange={(event)=>setCreatorTagFilter(event.target.value)}><option value="all">All tags & specialties</option>{creatorTagFilterOptions.map((option)=><option key={option} value={option}>{option}</option>)}</select><select value={creatorAvailabilityFilter} onChange={(event)=>setCreatorAvailabilityFilter(event.target.value)}><option value="all">Any availability</option>{creatorAvailabilityOptions.map((option)=><option key={option} value={option}>{option}</option>)}</select></div></div>
             <div className="creator-directory">{filteredCreators.map((creator, index) => <article className="creator-profile" key={creator.userId}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => void toggleProfileFollow(creator.userId)} aria-label={followingProfileIds.includes(creator.userId) ? 'Unfollow creator' : 'Follow creator'}><Heart size={17} fill={followingProfileIds.includes(creator.userId) ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p>{creator.availability && <span className="creator-availability-pill">{creator.availability}</span>}<div className="creator-directory-tags">{[...(creator.specialties??[]),...(creator.tags??[])].slice(0,4).map((item)=><span key={item}>{item}</span>)}</div><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span>Fair discovery rotation</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
+            {!filteredCreators.length && <div className="people-empty"><Search size={18}/><strong>No Creators match those filters.</strong><span>Try another tag, specialty, availability state or search term.</span></div>}
           </section>
         )}
 
