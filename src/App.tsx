@@ -324,9 +324,6 @@ function App() {
   const [catalogueQuery, setCatalogueQuery] = useState('');
   const [catalogueRating, setCatalogueRating] = useState('all');
   const [catalogueDuration, setCatalogueDuration] = useState('all');
-  const [creatorQuery, setCreatorQuery] = useState('');
-  const [creatorTagFilter, setCreatorTagFilter] = useState('all');
-  const [creatorAvailabilityFilter, setCreatorAvailabilityFilter] = useState('all');
   const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
   const [profileDirectory, setProfileDirectory] = useState<PublicDirectoryProfile[]>([]);
   const [directoryQuery, setDirectoryQuery] = useState('');
@@ -377,30 +374,6 @@ function App() {
   const writerSpotlight = writerSpotlightList[0] ?? null;
   const editorSpotlight = editorSpotlightList[0] ?? null;
   const creators = creatorDirectory;
-  const creatorTagFilterOptions = useMemo(() => Array.from(new Set(
-    creatorDirectory.flatMap((creator) => [...(creator.tags ?? []), ...(creator.specialties ?? []), ...(creator.categories ?? [])]),
-  )).sort((a, b) => a.localeCompare(b)), [creatorDirectory]);
-  const creatorAvailabilityOptions = useMemo(() => Array.from(new Set(
-    creatorDirectory.map((creator) => creator.availability).filter((value): value is string => Boolean(value)),
-  )).sort((a, b) => a.localeCompare(b)), [creatorDirectory]);
-  const filteredCreators = useMemo(() => {
-    const query = creatorQuery.trim().toLowerCase();
-    return creatorDirectory.filter((creator) => {
-      const metadata = [
-        creator.name,
-        creator.handle,
-        creator.note,
-        creator.availability,
-        ...(creator.tags ?? []),
-        ...(creator.specialties ?? []),
-        ...(creator.categories ?? []),
-      ].filter(Boolean).join(' ').toLowerCase();
-      if (query && !metadata.includes(query)) return false;
-      if (creatorTagFilter !== 'all' && ![...(creator.tags ?? []), ...(creator.specialties ?? []), ...(creator.categories ?? [])].includes(creatorTagFilter)) return false;
-      if (creatorAvailabilityFilter !== 'all' && creator.availability !== creatorAvailabilityFilter) return false;
-      return true;
-    });
-  }, [creatorDirectory, creatorQuery, creatorTagFilter, creatorAvailabilityFilter]);
   const directoryTagOptions = useMemo(() => Array.from(new Set(
     profileDirectory.flatMap((profile) => [
       ...(profile.favouriteTags ?? []),
@@ -2369,7 +2342,7 @@ function App() {
 
         <nav className={menuOpen ? 'nav open' : 'nav'}>
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'discover' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('discover')}>Discover</button>}
-          {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Creators</button>}
+          {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Directory</button>}
           {(effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && <button className={view === 'library' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('library')}>Library</button>}
           {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
@@ -2533,10 +2506,70 @@ function App() {
         )}
 
         {view === 'creators' && (
-          <section className="page-wrap">
-            <div className="page-heading"><div><p className="eyebrow">THE CREATOR NETWORK</p><h1>Voices with a world behind them.</h1><p>Discover independent creators by name, handle, tags, specialties, categories or collaboration availability.</p></div><div className="creator-directory-tools"><label className="creator-directory-search"><Search size={16}/><input value={creatorQuery} onChange={(event)=>setCreatorQuery(event.target.value)} placeholder="Search creator, tag, specialty…"/></label><select value={creatorTagFilter} onChange={(event)=>setCreatorTagFilter(event.target.value)}><option value="all">All tags & specialties</option>{creatorTagFilterOptions.map((option)=><option key={option} value={option}>{option}</option>)}</select><select value={creatorAvailabilityFilter} onChange={(event)=>setCreatorAvailabilityFilter(event.target.value)}><option value="all">Any availability</option>{creatorAvailabilityOptions.map((option)=><option key={option} value={option}>{option}</option>)}</select></div></div>
-            <div className="creator-directory">{filteredCreators.map((creator, index) => <article className="creator-profile" key={creator.userId}><div className="profile-number">0{index + 1}</div><span className="avatar-xl">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" /> : creator.initials}</span><div className="profile-main"><div className="profile-heading"><div><h2>{creator.name}</h2><span>{creator.handle}</span></div><button className="icon-button" onClick={() => void toggleProfileFollow(creator.userId)} aria-label={followingProfileIds.includes(creator.userId) ? 'Unfollow creator' : 'Follow creator'}><Heart size={17} fill={followingProfileIds.includes(creator.userId) ? 'currentColor' : 'none'} /></button></div><p>{creator.note}</p>{creator.availability && <span className="creator-availability-pill">{creator.availability}</span>}<div className="creator-directory-tags">{[...(creator.specialties??[]),...(creator.tags??[])].slice(0,4).map((item)=><span key={item}>{item}</span>)}</div><div className="profile-stats"><span><strong>{creator.followers}</strong> followers</span><span><strong>{creator.releases}</strong> releases</span><span>Fair discovery rotation</span></div></div><button className="round-arrow" onClick={() => setCreatorProfileUserId(creator.userId)}><ArrowRight size={18} /></button></article>)}</div>
-            {!filteredCreators.length && <div className="people-empty"><Search size={18}/><strong>No Creators match those filters.</strong><span>Try another tag, specialty, availability state or search term.</span></div>}
+          <section className="page-wrap profile-directory-page">
+            <div className="page-heading profile-directory-heading">
+              <div>
+                <p className="eyebrow">NIGHTJAR COMMUNITY DIRECTORY</p>
+                <h1>Find the people behind Nightjar.</h1>
+                <p>Search public Creator, Writer, Audio Editor and Listener profiles by name, handle, role, tags, specialties, categories or availability. Private profiles never appear here.</p>
+              </div>
+              <div className="creator-directory-tools profile-directory-tools">
+                <label className="creator-directory-search"><Search size={16}/><input value={directoryQuery} onChange={(event)=>setDirectoryQuery(event.target.value)} placeholder="Search name, tag, specialty, badge…"/></label>
+                <select value={directoryRoleFilter} onChange={(event)=>setDirectoryRoleFilter(event.target.value as 'all' | 'creator' | 'writer' | 'editor' | 'listener')}>
+                  <option value="all">All public roles</option>
+                  <option value="creator">Creators</option>
+                  <option value="writer">Writers</option>
+                  <option value="editor">Audio Editors</option>
+                  <option value="listener">Listeners</option>
+                </select>
+                <select value={directoryTagFilter} onChange={(event)=>setDirectoryTagFilter(event.target.value)}>
+                  <option value="all">All tags & specialties</option>
+                  {directoryTagOptions.map((option)=><option key={option} value={option}>{option}</option>)}
+                </select>
+                <select value={directoryAvailabilityFilter} onChange={(event)=>setDirectoryAvailabilityFilter(event.target.value)}>
+                  <option value="all">Any availability</option>
+                  {directoryAvailabilityOptions.map((option)=><option key={option} value={option}>{option}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="profile-directory-summary">
+              <span><strong>{filteredDirectoryProfiles.length}</strong> matching profile{filteredDirectoryProfiles.length === 1 ? '' : 's'}</span>
+              <span>Public profiles only · protected work and private listening remain excluded</span>
+            </div>
+
+            <div className="creator-directory profile-directory-grid">
+              {filteredDirectoryProfiles.map((person, index) => {
+                const workMetric = person.role === 'creator'
+                  ? (person.releaseCount ?? 0) + ' releases'
+                  : person.role === 'writer'
+                    ? (person.publishedWorkCount ?? 0) + ' published scripts'
+                    : person.role === 'editor'
+                      ? (person.creditedReleaseCount ?? 0) + ' release credits'
+                      : 'Community profile';
+                return <article className="creator-profile profile-directory-card" key={person.userId}>
+                  <div className="profile-number">{String(index + 1).padStart(2,'0')}</div>
+                  <span className="avatar-xl">{person.avatarUrl ? <img className="avatar-approved-image" src={person.avatarUrl} alt="" /> : person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>
+                  <div className="profile-main">
+                    <div className="profile-heading">
+                      <div><span className="directory-role-label">{roleMeta[person.role].label}</span><h2>{person.name}</h2><span>{person.handle ? '@' + person.handle.replace(/^@/,'') : 'Handle not set'}</span></div>
+                      <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>
+                    </div>
+                    <p>{person.headline || person.bio || roleMeta[person.role].description}</p>
+                    {person.roleAvailability && <span className="creator-availability-pill">{person.roleAvailability}</span>}
+                    {!!person.activityBadges?.length && <div className="profile-activity-badges">{person.activityBadges.slice(0,3).map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={11}/>{badge.label}</span>)}</div>}
+                    <div className="creator-directory-tags">{[...(person.roleSpecialties??[]),...(person.favouriteTags??[])].slice(0,5).map((item)=><span key={item}>{item}</span>)}</div>
+                    <div className="profile-stats">
+                      <span><strong>{person.followerCount ?? 0}</strong> followers</span>
+                      <span><strong>{workMetric}</strong></span>
+                      {person.role !== 'listener' && <span><strong>{person.completedCollaborations ?? 0}</strong> completed collaborations</span>}
+                    </div>
+                  </div>
+                  <button className="round-arrow" onClick={() => setPublicProfileUserId(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
+                </article>;
+              })}
+            </div>
+            {!filteredDirectoryProfiles.length && <div className="people-empty"><Users size={18}/><strong>No public profiles match those filters.</strong><span>Try a different role, tag, availability setting or search term.</span></div>}
           </section>
         )}
 
