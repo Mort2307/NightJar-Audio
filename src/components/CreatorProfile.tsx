@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { ArrowRight, Heart, Mic2, Share2 } from 'lucide-react';
+import { ArrowRight, Handshake, Heart, Mic2, Share2, Sparkles } from 'lucide-react';
 import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 
@@ -16,6 +16,9 @@ type CreatorProfileData = {
   welcomeMessage?: string | null;
   followers?: number;
   followingCount?: number;
+  completedCollaborations?: number;
+  portfolioNote?: string | null;
+  featuredReleases?: any[];
   releases?: any[];
   favouriteTags?: string[];
   favouriteTropes?: string[];
@@ -58,7 +61,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
         userId:creator.userId, name:creator.name, handle:creator.handle, headline:creator.note,
         bio:'Fictional Nightjar demo profile used to preview a populated creator experience.',
         initials:creator.initials, avatarUrl:null, welcomeMessage:'Welcome to my Nightjar demo profile.',
-        followers:creator.followers, followingCount:42, releases, favouriteTags:['Atmospheric','Story-led','After-hours tension'],
+        followers:creator.followers, followingCount:42, completedCollaborations:4, portfolioNote:'A few releases that best represent my current Nightjar work.', featuredReleases:releases.slice(0,2), releases, favouriteTags:['Atmospheric','Story-led','After-hours tension'],
         roleFocus:['Voice performance','Narration','Audio production'],
         roleSpecialties:['Character roleplay','Narration','Dramatic performance'],
         roleSecondary:['Close-mic performance','Series work','Remote collaboration'],
@@ -102,6 +105,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
           <div><span>Followers</span><strong>{profile.followers ?? 0}</strong></div>
           <div><span>Following</span><strong>{profile.followingCount ?? 0}</strong></div>
           <div><span>Released work</span><strong>{profile.releases?.length ?? 0}</strong></div>
+          <div><span>Collaborations</span><strong>{profile.completedCollaborations ?? 0}</strong></div>
         </div>
         {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}{profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
@@ -114,7 +118,18 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
           {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>Tropes & themes</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item)=><span key={item}>{item}</span>)}</div></div>}
           {(profile.roleDetailOne || profile.roleDetailTwo) && <div className="public-role-copy">{profile.roleDetailOne && <div><strong>{ROLE_PROFILE_CONFIG.creator.detailOneLabel}</strong><p>{profile.roleDetailOne}</p></div>}{profile.roleDetailTwo && <div><strong>{ROLE_PROFILE_CONFIG.creator.detailTwoLabel}</strong><p>{profile.roleDetailTwo}</p></div>}</div>}
         </section>
-        <div className="creator-profile-releases"><div className="section-head"><div><span className="mini-label">CATALOGUE</span><h3>Released work</h3></div><button className="ghost-button" onClick={() => void share()}><Share2 size={14} /> Share</button></div>{profile.releases?.length ? profile.releases.map((release: any) => <article key={release.id} className="creator-profile-release"><div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p></div><button className="round-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15} /></button></article>) : <div className="people-empty"><Mic2 size={18} /><strong>No public releases yet.</strong><span>Check back as this creator publishes.</span></div>}</div>
+        {(profile.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
+          {profile.portfolioNote && <p>{profile.portfolioNote}</p>}
+          {(profile.completedCollaborations ?? 0) > 0 && <span><Handshake size={14}/>{profile.completedCollaborations} completed Nightjar collaboration{profile.completedCollaborations === 1 ? '' : 's'}</span>}
+        </section>}
+        {!!profile.featuredReleases?.length && <section className="creator-featured-releases">
+          <div className="section-head"><div><span className="mini-label">FEATURED BY CREATOR</span><h3>Start here</h3></div><Sparkles size={17}/></div>
+          {profile.featuredReleases.map((release:any)=><article key={release.id} className="creator-profile-release featured">
+            <div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p></div>
+            <button className="round-play" onClick={()=>onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15}/></button>
+          </article>)}
+        </section>}
+        <div className="creator-profile-releases"><div className="section-head"><div><span className="mini-label">FULL CATALOGUE</span><h3>Released work</h3></div><button className="ghost-button" onClick={() => void share()}><Share2 size={14} /> Share</button></div>{profile.releases?.length ? profile.releases.map((release: any) => <article key={release.id} className="creator-profile-release"><div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p></div><button className="round-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15} /></button></article>) : <div className="people-empty"><Mic2 size={18} /><strong>No public releases yet.</strong><span>Check back as this creator publishes.</span></div>}</div>
       </div>}
     </section>
   </div>;
