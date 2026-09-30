@@ -15,7 +15,9 @@ const adminResolveCall = httpsCallable<{ reportId:string; decision:'dismiss'|'re
 const normaliseConversation = (item:any) => ({
   ...item,
   lastMessage:item.lastMessage ?? item.lastMessagePreview ?? '',
-  collaborationIds:item.collaborationIds ?? (item.collaborationId ? [item.collaborationId] : []),
+  lastMessagePreview:item.lastMessagePreview ?? item.lastMessage ?? '',
+  collaborationIds:Array.isArray(item.collaborationIds) ? item.collaborationIds : (item.collaborationId ? [item.collaborationId] : []),
+  collaborationId:item.collaborationId ?? (Array.isArray(item.collaborationIds) && item.collaborationIds.length ? item.collaborationIds[item.collaborationIds.length - 1] : null),
 });
 
 export const nightjarMessaging = {
@@ -40,10 +42,10 @@ export const nightjarMessaging = {
       openCall({ conversationId }),
       listCall(),
     ]);
-    const conversation=(list.data.conversations ?? []).find((item:any)=>item.id===conversationId);
+    const raw=(list.data.conversations ?? []).find((item:any)=>item.id===conversationId);
     return {
       ...thread.data,
-      conversation:conversation ? normaliseConversation(conversation) : { id:conversationId },
+      conversation:normaliseConversation(raw ?? { id:conversationId }),
     };
   },
 
@@ -61,10 +63,19 @@ export const nightjarMessaging = {
 
   async adminReports() {
     const data=(await adminReportsCall()).data;
-    return { reports:(data.reports ?? []).filter((item:any)=>item.type === 'direct_message') };
+    return {
+      reports:(data.reports ?? [])
+        .filter((item:any)=>item.type === 'direct_message')
+        .map((item:any)=>({
+          ...item,
+          type:'professional_message',
+          messageBodySnapshot:item.snapshotText ?? '',
+        })),
+    };
   },
 
-  async adminResolve(reportId:string, decision:'dismissed'|'removed') {
-    return (await adminResolveCall({ reportId, decision:decision === 'removed' ? 'remove' : 'dismiss' })).data;
+  async adminResolve(reportId:string, decision:'dismissed'|'actioned'|'removed') {
+    const mapped:'dismiss'|'remove'=decision === 'dismissed' ? 'dismiss' : 'remove';
+    return (await adminResolveCall({ reportId, decision:mapped })).data;
   },
 };
