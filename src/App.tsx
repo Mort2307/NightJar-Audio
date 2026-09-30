@@ -3578,7 +3578,7 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
         <div className="track-footer-actions">
           {canReact && <button className={reaction === 'like' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('like')} aria-pressed={reaction === 'like'} title="Like this published work"><ThumbsUp size={14} fill={reaction === 'like' ? 'currentColor' : 'none'}/> Like</button>}
           {canReact && <button className={reaction === 'love' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('love')} aria-pressed={reaction === 'love'} title="Love this published work"><Heart size={14} fill={reaction === 'love' ? 'currentColor' : 'none'}/> Love</button>}
-          <button className="text-button track-community-button" onClick={onCommunity}><MessageCircle size={14}/> Community</button>
+          <button className="text-button track-community-button" onClick={onCommunity}><MessageCircle size={14}/> Comments</button>
           <button className="icon-button" onClick={onFavourite} aria-label={favourite ? 'Remove private favourite' : 'Save privately to favourites'} title={favourite ? 'Private favourite saved' : 'Save privately to favourites'}><Bookmark size={16} fill={favourite ? 'currentColor' : 'none'} /></button>
         </div>
       </div>
