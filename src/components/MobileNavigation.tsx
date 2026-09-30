@@ -1,6 +1,6 @@
-import { Headphones, Home, Library, Mic2, Search, Settings2, ShieldCheck, UserCircle2, FileText, type LucideIcon } from 'lucide-react';
+import { Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, UserCircle2, FileText, type LucideIcon } from 'lucide-react';
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
 type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | null;
 
 type Props = {
@@ -33,13 +33,21 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch }: P
         { view:'creators', label:'Directory', icon:Headphones },
         { view:'profile', label:'Profile', icon:UserCircle2 },
       ]
-    : [
-        roleHome,
-        { view:'creators', label:'Directory', icon:Headphones },
-        { label:'Search', icon:Search, search:true },
-        { view:'profile', label:'Profile', icon:UserCircle2 },
-        { view:'protection', label:'Safety', icon:ShieldCheck },
-      ];
+    : role === 'admin'
+      ? [
+          roleHome,
+          { view:'creators', label:'Directory', icon:Headphones },
+          { label:'Search', icon:Search, search:true },
+          { view:'profile', label:'Profile', icon:UserCircle2 },
+          { view:'admin', label:'Admin', icon:Settings2 },
+        ]
+      : [
+          roleHome,
+          { view:'creators', label:'Directory', icon:Headphones },
+          { label:'Search', icon:Search, search:true },
+          { view:'messages', label:'Messages', icon:MessageCircle },
+          { view:'profile', label:'Profile', icon:UserCircle2 },
+        ];
 
   return <nav className="nj-mobile-nav" aria-label="Nightjar mobile navigation">
     {items.map((item) => {
