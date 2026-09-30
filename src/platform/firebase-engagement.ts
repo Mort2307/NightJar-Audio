@@ -40,8 +40,10 @@ export const nightjarEngagement = {
     return (await reportCommentCall({ commentId, reason })).data;
   },
   async adminReports() {
-    const data = (await adminReportsCall()).data;
-    return { reports:(data.reports ?? []).filter((item:any) => item.type === 'release_comment') };
+    return (await adminReportsCall()).data;
+  },
+  async moderateCommunityReport(reportId: string, decision: 'dismiss' | 'remove') {
+    return (await adminModerateCall({ reportId, decision })).data;
   },
   async moderateCommentReport(reportId: string, decision: 'dismiss' | 'remove') {
     return (await adminModerateCall({ reportId, decision })).data;
