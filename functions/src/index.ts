@@ -369,6 +369,77 @@ export const adminSetProfileTagStatus = onCall({ region: REGION }, async (reques
   return { tagId, status };
 });
 
+const completedCollaborationCountFor = async (userId: string) => {
+  const snapshot = await db.collection('collaborationProposals').limit(1000).get();
+  return snapshot.docs.filter((doc) => {
+    const data = doc.data() ?? {};
+    return data.status === 'completed'
+      && (data.writerUserId === userId || data.recipientUserId === userId);
+  }).length;
+};
+
+const profilePortfolioOptionsFor = async (userId: string, role: string) => {
+  if (role === 'creator') {
+    const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
+    return releases.docs
+      .filter((doc) => doc.data().status === 'released')
+      .map((doc) => ({
+        id: doc.id,
+        type: 'release',
+        title: cleanText(doc.data().title, 160) || 'Untitled release',
+        subtitle: [cleanText(doc.data().category, 80), cleanText(doc.data().seriesTitle, 160)].filter(Boolean).join(' · '),
+      }))
+      .slice(0, 100);
+  }
+
+  if (role === 'writer' || role === 'editor') {
+    const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
+    return releases.docs
+      .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
+      .map((doc) => {
+        const credit = normaliseReleaseContributors(doc.data().contributors).find((item) => item.userId === userId);
+        return {
+          id: doc.id,
+          type: 'credit',
+          title: cleanText(doc.data().title, 160) || 'Nightjar release',
+          subtitle: [cleanText(credit?.role, 80), cleanText(doc.data().creatorName, 120)].filter(Boolean).join(' · '),
+        };
+      })
+      .slice(0, 100);
+  }
+
+  if (role === 'listener') {
+    const playlists = await accountRef(userId).collection('playlists').limit(100).get();
+    return playlists.docs.map((doc) => ({
+      id: doc.id,
+      type: 'playlist',
+      title: cleanText(doc.data().title, 100) || 'Untitled playlist',
+      subtitle: (Array.isArray(doc.data().releaseIds) ? doc.data().releaseIds.length : 0) + ' releases',
+    }));
+  }
+
+  return [];
+};
+
+const validatedPortfolioIdsFor = async (userId: string, role: string, value: unknown) => {
+  const requested = cleanStringList(value, 6);
+  if (!requested.length || role === 'admin') return [];
+  const eligible = new Set((await profilePortfolioOptionsFor(userId, role)).map((item) => item.id));
+  return requested.filter((id) => eligible.has(id)).slice(0, 6);
+};
+
+export const getMyProfilePortfolioOptions = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const account = await accountRef(identity.uid).get();
+  const role = identity.admin ? 'admin' : cleanText(account.data()?.role, 30);
+  const [options, completedCollaborations] = await Promise.all([
+    profilePortfolioOptionsFor(identity.uid, role),
+    role === 'admin' ? Promise.resolve(0) : completedCollaborationCountFor(identity.uid),
+  ]);
+  return { role, options, completedCollaborations };
+});
+
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -377,6 +448,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const accountSnapshot = await accountRef(identity.uid).get();
   const profileRole = identity.admin ? 'admin' : String(accountSnapshot.data()?.role ?? '');
   const profileStatus = identity.admin ? 'active' : String(accountSnapshot.data()?.status ?? '');
+  const featuredPortfolioIds = await validatedPortfolioIdsFor(identity.uid, profileRole, input.featuredPortfolioIds);
 
   const nextProfile = {
     displayName: cleanText(input.displayName, 80) || identity.email.split('@')[0],
@@ -396,6 +468,8 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     roleAvailability: cleanText(input.roleAvailability, 100),
     roleDetailOne: cleanText(input.roleDetailOne, 600),
     roleDetailTwo: cleanText(input.roleDetailTwo, 600),
+    portfolioNote: cleanText(input.portfolioNote, 400),
+    featuredPortfolioIds,
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
@@ -484,6 +558,8 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
     roleAvailability: data.roleAvailability ?? null,
     roleDetailOne: data.roleDetailOne ?? null,
     roleDetailTwo: data.roleDetailTwo ?? null,
+    portfolioNote: data.portfolioNote ?? null,
+    featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
   };
 };
 
@@ -605,11 +681,17 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
   let releaseCount = 0;
+  let creatorReleases: ReturnType<typeof releasePayload>[] = [];
   let creditedReleases: ReturnType<typeof releasePayload>[] = [];
+  let publicPlaylists: Array<{ id: string; title: string; releaseCount: number }> = [];
 
   if (role === 'creator') {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
-    releaseCount = releases.docs.filter((doc) => doc.data().status === 'released').length;
+    creatorReleases = releases.docs
+      .filter((doc) => doc.data().status === 'released')
+      .map((doc) => releasePayload(doc.data(), doc.id))
+      .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
+    releaseCount = creatorReleases.length;
   } else if (role === 'writer') {
     const scripts = await db.collection('scripts').where('writerUserId', '==', userId).limit(500).get();
     publishedWorkCount = scripts.docs.filter((doc) => ['Approved','Published'].includes(String(doc.data().status))).length;
@@ -622,6 +704,30 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       .map((doc) => releasePayload(doc.data(), doc.id))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
+
+  if (role === 'listener' && Array.isArray(data.featuredPortfolioIds) && data.featuredPortfolioIds.length) {
+    const playlistDocs = await Promise.all(
+      cleanStringList(data.featuredPortfolioIds, 6).map((playlistId) => accountRef(userId).collection('playlists').doc(playlistId).get()),
+    );
+    publicPlaylists = playlistDocs
+      .filter((playlist) => playlist.exists)
+      .map((playlist) => ({
+        id: playlist.id,
+        title: cleanText(playlist.data()?.title, 100) || 'Untitled playlist',
+        releaseCount: Array.isArray(playlist.data()?.releaseIds) ? playlist.data()?.releaseIds.length : 0,
+      }));
+  }
+
+  const selectedPortfolioIds = cleanStringList(data.featuredPortfolioIds, 6);
+  const selectedPortfolioSet = new Set(selectedPortfolioIds);
+  const featuredWork = role === 'creator'
+    ? (selectedPortfolioIds.length ? creatorReleases.filter((release) => selectedPortfolioSet.has(String(release.id))) : creatorReleases.slice(0, 3))
+    : (role === 'writer' || role === 'editor')
+      ? (selectedPortfolioIds.length ? creditedReleases.filter((release) => selectedPortfolioSet.has(String(release.id))) : creditedReleases.slice(0, 3))
+      : [];
+  const completedCollaborations = ['creator','writer','editor'].includes(role)
+    ? await completedCollaborationCountFor(userId)
+    : 0;
 
   return {
     profile: {
@@ -648,6 +754,11 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       roleAvailability: data.roleAvailability ?? null,
       roleDetailOne: data.roleDetailOne ?? null,
       roleDetailTwo: data.roleDetailTwo ?? null,
+      portfolioNote: data.portfolioNote ?? null,
+      featuredPortfolioIds: selectedPortfolioIds,
+      featuredWork,
+      publicPlaylists,
+      completedCollaborations,
       releaseCount,
       publishedWorkCount,
       creditedReleaseCount: creditedReleases.length,
@@ -701,6 +812,13 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       roleAvailability: data.roleAvailability ?? null,
       roleDetailOne: data.roleDetailOne ?? null,
       roleDetailTwo: data.roleDetailTwo ?? null,
+      portfolioNote: data.portfolioNote ?? null,
+      featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
+      featuredReleases: (() => {
+        const selected = new Set(cleanStringList(data.featuredPortfolioIds, 6));
+        return selected.size ? releases.filter((release) => selected.has(String(release.id))) : releases.slice(0, 3);
+      })(),
+      completedCollaborations: await completedCollaborationCountFor(creatorUserId),
       releases,
     },
   };
