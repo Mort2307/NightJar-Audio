@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileCheck2, Handshake, Headphones, Heart, ListMusic, Share2, X } from 'lucide-react';
+import { FileCheck2, Handshake, Headphones, Heart, ListMusic, Share2, ShieldCheck, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -143,6 +143,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         <div className="public-profile-metrics">
           {profileMetrics.map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}
         </div>
+
+        {!!profile.activityBadges?.length && <div className="profile-activity-badges public-profile-badges">
+          {profile.activityBadges.map((badge:any)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}
+        </div>}
 
         {!!profile.roleFocus?.length && <div className="creator-profile-tags">{profile.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
