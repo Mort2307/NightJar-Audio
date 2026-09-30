@@ -204,7 +204,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           </div>}
           {profile.role === 'listener' && !!profile.publicPlaylists?.length && <div className="public-playlist-list">
             <span className="mini-label">SHARED PLAYLISTS</span>
-            {profile.publicPlaylists.map((playlist:any)=><article key={playlist.id}><ListMusic size={16}/><div><strong>{playlist.title}</strong><span>{playlist.releaseCount ?? 0} release{playlist.releaseCount === 1 ? '' : 's'}</span></div></article>)}
+            {profile.publicPlaylists.map((playlist:any)=><article key={playlist.id}>
+              <div className="public-playlist-head"><ListMusic size={16}/><div><strong>{playlist.title}</strong><span>{playlist.releaseCount ?? 0} release{playlist.releaseCount === 1 ? '' : 's'}</span></div></div>
+              {!!playlist.releases?.length && <div className="public-playlist-preview">{playlist.releases.slice(0,4).map((release:any)=><span key={release.id}>{release.title} · {release.creatorName ?? 'Nightjar creator'}</span>)}</div>}
+            </article>)}
           </div>}
           {(profile.role === 'writer' || profile.role === 'editor') && <div className="public-credit-summary">
             <span>{profile.role === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
