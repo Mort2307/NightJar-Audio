@@ -820,6 +820,23 @@ function App() {
     } catch { /* notification read state is non-critical */ }
   };
 
+  const markAllNotificationsRead = async () => {
+    const unread = notifications.filter((item:any) => item.read !== true);
+    if (!unread.length) return;
+    try {
+      if (!demoMode) await Promise.all(unread.map((item:any) => nightjarNotifications.markRead(String(item.id))));
+      setNotifications((items) => {
+        const next = items.map((item:any) => ({ ...item, read:true }));
+        if (demoMode) writeDemo('notifications', next);
+        return next;
+      });
+      setNotificationUnreadCount(0);
+      notify('Notifications marked as read.');
+    } catch {
+      notify('Some notifications could not be updated.');
+    }
+  };
+
   const shareSpotlight = async (spotlight: Spotlight) => {
     const kindLabel = spotlight.kind === 'creator' ? 'Creator' : spotlight.kind === 'editor' ? 'Audio Editor' : 'Writer';
     const text = spotlight.kind === 'listener'
@@ -2400,6 +2417,88 @@ function App() {
   };
   const adminOnly = canAdmin && !simulationMode;
 
+  const profileCompletionSignals = [
+    Boolean(profile.displayName),
+    Boolean(profile.headline),
+    Boolean(profile.bio),
+    Array.isArray(profile.favouriteTags) && profile.favouriteTags.length > 0,
+    Array.isArray(profile.roleSpecialties) && profile.roleSpecialties.length > 0,
+    profile.avatarStatus === 'approved' || Boolean(profile.avatarUrl),
+    Boolean(profile.portfolioNote),
+    Array.isArray(profile.featuredPortfolioIds) && profile.featuredPortfolioIds.length > 0,
+  ];
+  const profileCompletion = Math.round((profileCompletionSignals.filter(Boolean).length / profileCompletionSignals.length) * 100);
+
+  const openProfileEditor = () => {
+    navigate('profile');
+    void loadProfile();
+  };
+  const commandItems: NightjarCommand[] = [
+    ...(effectiveRole === 'listener' || effectiveRole === 'admin' ? [{ id:'nav-discover', group:'Navigate', label:'Discover', detail:'Recommendations, catalogue and spotlights', keywords:['home','listen'], icon:<Headphones size={15}/>, action:()=>navigate('discover') }] : []),
+    { id:'nav-directory', group:'Navigate', label:'Directory', detail:'Find Creators, Writers, Audio Editors and Listeners', keywords:['people','profiles','community'], icon:<Users size={15}/>, action:()=>navigate('creators') },
+    ...(effectiveRole === 'listener' ? [{ id:'nav-library', group:'Navigate', label:'Library', detail:'Favourites, history and playlists', keywords:['saved','playlist'], icon:<Headphones size={15}/>, action:()=>navigate('library') }] : []),
+    ...(effectiveRole === 'creator' || adminOnly ? [{ id:'nav-creator', group:'Studio', label:'Creator Studio', detail:'Releases, catalogue and creator operations', keywords:['publish','audio'], icon:<Mic2 size={15}/>, action:()=>{ navigate('creator'); void loadCreatorDashboard(); } }] : []),
+    ...(effectiveRole === 'writer' ? [{ id:'nav-writer', group:'Studio', label:'Writer Studio', detail:'Manuscripts, rights and collaborations', keywords:['script','write'], icon:<FileText size={15}/>, action:()=>{ navigate('writer'); void loadWriterScripts(); } }] : []),
+    ...(effectiveRole === 'editor' ? [{ id:'nav-editor', group:'Studio', label:'Editorial', detail:'Assigned manuscripts and production review', keywords:['edit','review'], icon:<FileCheck2 size={15}/>, action:()=>{ navigate('editor'); void loadEditorQueue(); } }] : []),
+    { id:'nav-profile', group:'Account', label:'Profile', detail:'Identity, public showcase and preferences', keywords:['settings','bio'], icon:<UserCircle2 size={15}/>, action:openProfileEditor },
+    { id:'nav-protection', group:'Account', label:'Protection Centre', detail:'Reports, evidence and account safety', keywords:['security','safety'], icon:<ShieldCheck size={15}/>, action:()=>{ navigate('protection'); void loadProtection(); } },
+    ...(canAdmin && !simulationMode ? [{ id:'nav-admin', group:'Administration', label:'Owner Console', detail:'People, content, security and commercial operations', keywords:['admin','moderation'], icon:<Settings2 size={15}/>, action:()=>{ navigate('admin'); void loadAdminOverview(); } }] : []),
+    ...profileDirectory.slice(0,80).map((person) => ({
+      id:'profile-' + person.userId,
+      group:roleMeta[person.role].label,
+      label:person.name,
+      detail:[person.handle ? '@' + person.handle.replace(/^@/,'') : '', person.headline ?? '', person.roleAvailability ?? ''].filter(Boolean).join(' · '),
+      keywords:[person.role,...(person.favouriteTags??[]),...(person.roleSpecialties??[])],
+      icon:<UserCircle2 size={15}/>,
+      action:()=>setPublicProfileUserId(person.userId),
+    })),
+    ...tracks.slice(0,100).map((track) => ({
+      id:'release-' + track.id,
+      group:'Release',
+      label:track.title,
+      detail:[track.creator,track.category,track.duration].filter(Boolean).join(' · '),
+      keywords:[track.creator,track.genre??'',...(track.tags??[]),...(track.tropes??[])],
+      icon:<Headphones size={15}/>,
+      action:()=>togglePlayback(track),
+    })),
+  ];
+
+  const notificationGroups = Object.entries(notifications.slice(0,20).reduce((groups:Record<string,any[]>, item:any) => {
+    const key = item.type === 'spotlight' ? 'Spotlights' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
+    (groups[key] ??= []).push(item);
+    return groups;
+  }, {}));
+
+  const baseActions: RoleDashboardAction[] = [
+    ...(profileCompletion < 70 ? [{ id:'complete-profile', title:'Strengthen your public profile', reason:`Your profile is ${profileCompletion}% complete. Richer profiles are easier to understand and discover.`, label:'Open profile', priority:'high' as const, onClick:openProfileEditor }] : []),
+    ...(notificationUnreadCount > 0 ? [{ id:'notifications', title:`Review ${notificationUnreadCount} unread update${notificationUnreadCount === 1 ? '' : 's'}`, reason:'These are recent account or community changes you have not reviewed yet.', label:'Open updates', onClick:()=>setNotificationsOpen(true) }] : []),
+  ];
+  const listenerActions: RoleDashboardAction[] = [
+    ...baseActions,
+    ...(!currentIntent ? [{ id:'intent', title:'Tell Nightjar what fits tonight', reason:'Session intent changes recommendations for this session without redefining your long-term taste.', label:'Choose intent', onClick:()=>document.getElementById('for-you')?.scrollIntoView({behavior:'smooth',block:'start'}) }] : []),
+    ...(!favouriteReleaseIds.length ? [{ id:'save-first', title:'Save a first favourite', reason:'Favourites give your library useful anchors while your recommendation graph develops.', label:'Browse releases', onClick:()=>document.getElementById('catalogue')?.scrollIntoView({behavior:'smooth'}) }] : []),
+  ];
+  const creatorActions: RoleDashboardAction[] = [
+    ...baseActions,
+    ...(creatorDashboard.releases.length === 0 ? [{ id:'publish', title:'Create your first release', reason:'Your public catalogue is empty, so Listener discovery has nothing to surface yet.', label:'Start release', priority:'high' as const, onClick:()=>document.querySelector('.creator-audio-pipeline')?.scrollIntoView({behavior:'smooth'}) }] : []),
+    ...((profile.featuredPortfolioIds ?? []).length === 0 && creatorDashboard.releases.length > 0 ? [{ id:'feature-work', title:'Choose featured releases', reason:'Featured work gives profile visitors a deliberate starting point instead of making them scan the full catalogue.', label:'Curate profile', onClick:openProfileEditor }] : []),
+  ];
+  const writerActions: RoleDashboardAction[] = [
+    ...baseActions,
+    ...(writerScripts.length === 0 ? [{ id:'first-script', title:'Start your first manuscript', reason:'Writer discovery can describe your identity, but your production workspace has no manuscript yet.', label:'Create script', priority:'high' as const, onClick:()=>document.querySelector('.writer-create-card')?.scrollIntoView({behavior:'smooth'}) }] : []),
+    ...(writerScripts.some((script:any)=>String(script.status).toLowerCase().includes('revision')) ? [{ id:'revision', title:'A manuscript needs revision', reason:'Editorial feedback is waiting on at least one manuscript.', label:'Review feedback', priority:'high' as const, onClick:()=>document.querySelector('.writer-layout')?.scrollIntoView({behavior:'smooth'}) }] : []),
+  ];
+  const editorActions: RoleDashboardAction[] = [
+    ...baseActions,
+    ...(editorQueue.length > 0 ? [{ id:'editor-queue', title:`${editorQueue.length} manuscript${editorQueue.length === 1 ? '' : 's'} in your queue`, reason:'Assigned production work is ready for an editorial decision or handoff.', label:'Open queue', priority:'high' as const, onClick:()=>document.querySelector('.editorial-queue')?.scrollIntoView({behavior:'smooth'}) }] : []),
+  ];
+  const adminActions: RoleDashboardAction[] = [
+    ...(securityAlerts.filter((item:any)=>item.status === 'open').length ? [{ id:'security', title:'Review open security alerts', reason:'Protection signals require human review before any account action is taken.', label:'Review alerts', priority:'high' as const, onClick:()=>document.querySelector('.security-alert-panel')?.scrollIntoView({behavior:'smooth'}) }] : []),
+    ...(imageModeration.length ? [{ id:'images', title:`${imageModeration.length} image${imageModeration.length === 1 ? '' : 's'} awaiting moderation`, reason:'Images remain private until an Administrator explicitly approves them.', label:'Moderate images', priority:'high' as const, onClick:()=>openAdminPanel('images') }] : []),
+    ...(adminApplications.length ? [{ id:'applications', title:`${adminApplications.length} Creator application${adminApplications.length === 1 ? '' : 's'} to review`, reason:'Creator access stays pending until an explicit Administrator decision.', label:'Review applications', onClick:()=>openAdminPanel('approvals') }] : []),
+    ...((commercialOverview?.subscriptions.pastDue ?? 0) > 0 ? [{ id:'past-due', title:'Past-due subscriptions need visibility', reason:'Past-due revenue is kept out of confirmed cash planning until payment succeeds.', label:'Open subscriptions', onClick:()=>openAdminPanel('subscriptions') }] : []),
+  ];
+
   return (
     <div className="app-shell">
       <ProductExperience />
@@ -2429,11 +2528,11 @@ function App() {
               {notificationUnreadCount > 0 && <span className="notification-badge">{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</span>}
             </button>
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
-              <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR NOTIFICATIONS</span><strong>Community updates</strong></div><button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div>
-              {notifications.length ? <div className="notification-list">{notifications.slice(0, 8).map((item) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void markNotificationRead(item)}>
-                <span className="notification-row-icon">{item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : <Headphones size={15} />}</span>
+              <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
+              {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void markNotificationRead(item)}>
+                <span className="notification-row-icon">{item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small></span>
-              </button>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new community notifications.</span></div>}
+              </button>)}</div>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new activity. You’re caught up.</span></div>}
             </section>}
           </div>}
           {!user ? (
@@ -2543,7 +2642,14 @@ function App() {
             </section>
 
             <section id="for-you" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><select className="mood-select" value={currentIntent} onChange={(event) => setCurrentIntent(event.target.value)} aria-label="Current listening intent"><option value="">Open to anything</option><option value="wind">Wind down</option><option value="story">A story</option><option value="quiet">Something quiet</option><option value="focus">Focus</option><option value="discover">Discover something new</option></select></div>
+              <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><div className="nj-intent-control" aria-label="Current listening intent">{[
+  ['','Open'],
+  ['wind','Wind down'],
+  ['story','Story'],
+  ['quiet','Quiet'],
+  ['focus','Focus'],
+  ['discover','Surprise me'],
+].map(([value,label])=><button type="button" key={value || 'open'} className={currentIntent===value?'active':''} aria-pressed={currentIntent===value} onClick={()=>setCurrentIntent(value)}>{label}</button>)}</div></div>
               <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
               <div className="track-grid">
                 {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onReviews={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
