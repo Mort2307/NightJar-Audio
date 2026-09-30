@@ -351,6 +351,7 @@ function App() {
   const [directoryRoleFilter, setDirectoryRoleFilter] = useState<'all' | 'creator' | 'writer' | 'editor' | 'listener'>('all');
   const [directoryTagFilter, setDirectoryTagFilter] = useState('all');
   const [directoryAvailabilityFilter, setDirectoryAvailabilityFilter] = useState('all');
+  const [savedDirectoryViews, setSavedDirectoryViews] = useState<any[]>([]);
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
   const [editorSpotlightList, setEditorSpotlightList] = useState<Spotlight[]>([]);
@@ -365,7 +366,10 @@ function App() {
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [creatorProfileUserId, setCreatorProfileUserId] = useState<string | null>(null);
-  const [publicProfileUserId, setPublicProfileUserId] = useState<string | null>(null);
+  const [publicProfileUserId, setPublicProfileUserId] = useState<string | null>(() => {
+    const match = window.location.pathname.match(/^\/people\/([^/]+)$/);
+    return match ? decodeURIComponent(match[1]) : null;
+  });
   const [moderationOpen, setModerationOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -417,6 +421,19 @@ function App() {
     window.addEventListener('beforeunload', beforeUnload);
     return () => window.removeEventListener('beforeunload', beforeUnload);
   }, [profileDirty]);
+
+  useEffect(() => {
+    if (!user?.userId) {
+      setSavedDirectoryViews([]);
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem('nightjar.directory.views:' + user.userId);
+      setSavedDirectoryViews(stored ? JSON.parse(stored) : []);
+    } catch {
+      setSavedDirectoryViews([]);
+    }
+  }, [user?.userId]);
 
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
   const creatorSpotlight = creatorSpotlightList[0] ?? null;
@@ -494,6 +511,12 @@ function App() {
 
   useEffect(() => {
     const onPop = () => {
+      const profileMatch = window.location.pathname.match(/^\/people\/([^/]+)$/);
+      if (profileMatch) {
+        setPublicProfileUserId(decodeURIComponent(profileMatch[1]));
+        return;
+      }
+      setPublicProfileUserId(null);
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
       if (value === 'admin') {
         setSimulationMode(false);
@@ -640,6 +663,21 @@ function App() {
     setView(nextView);
     setMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const openPublicProfile = (userId: string) => {
+    if (!userId) return;
+    const returnPath = window.location.pathname.startsWith('/people/') ? '/creators' : window.location.pathname;
+    window.history.pushState({ nightjarOverlay:'public-profile', returnPath }, '', '/people/' + encodeURIComponent(userId));
+    setPublicProfileUserId(userId);
+  };
+
+  const closePublicProfile = () => {
+    const returnPath = typeof window.history.state?.returnPath === 'string' ? window.history.state.returnPath : '/creators';
+    window.history.replaceState({}, '', returnPath);
+    setPublicProfileUserId(null);
+    const value = returnPath.replace(/^\/+|\/+$/g, '');
+    if (['discover','library','creators','creator','writer','editor','admin','protection','profile'].includes(value)) setView(value as View);
   };
 
   useEffect(() => {
@@ -2419,6 +2457,45 @@ function App() {
   };
   const adminOnly = canAdmin && !simulationMode;
 
+  const persistDirectoryViews = (views:any[]) => {
+    setSavedDirectoryViews(views);
+    if (!user?.userId) return;
+    try { window.localStorage.setItem('nightjar.directory.views:' + user.userId, JSON.stringify(views)); } catch { /* local preference storage is optional */ }
+  };
+  const saveDirectoryView = () => {
+    const parts = [
+      directoryRoleFilter !== 'all' ? roleMeta[directoryRoleFilter].label : 'All roles',
+      directoryTagFilter !== 'all' ? directoryTagFilter : '',
+      directoryAvailabilityFilter !== 'all' ? directoryAvailabilityFilter : '',
+      directoryQuery.trim() ? '“' + directoryQuery.trim() + '”' : '',
+    ].filter(Boolean);
+    const next = {
+      id:'view-' + Date.now().toString(36),
+      name:parts.join(' · '),
+      query:directoryQuery,
+      role:directoryRoleFilter,
+      tag:directoryTagFilter,
+      availability:directoryAvailabilityFilter,
+    };
+    persistDirectoryViews([next,...savedDirectoryViews].slice(0,8));
+    notify('Directory view saved on this device.');
+  };
+  const applyDirectoryView = (saved:any) => {
+    setDirectoryQuery(saved.query ?? '');
+    setDirectoryRoleFilter(saved.role ?? 'all');
+    setDirectoryTagFilter(saved.tag ?? 'all');
+    setDirectoryAvailabilityFilter(saved.availability ?? 'all');
+  };
+  const deleteDirectoryView = (id:string) => {
+    persistDirectoryViews(savedDirectoryViews.filter((item:any)=>item.id !== id));
+  };
+  const clearDirectoryFilters = () => {
+    setDirectoryQuery('');
+    setDirectoryRoleFilter('all');
+    setDirectoryTagFilter('all');
+    setDirectoryAvailabilityFilter('all');
+  };
+
   const profileCompletionSignals = [
     Boolean(profile.displayName),
     Boolean(profile.headline),
@@ -2452,7 +2529,7 @@ function App() {
       detail:[person.handle ? '@' + person.handle.replace(/^@/,'') : '', person.headline ?? '', person.roleAvailability ?? ''].filter(Boolean).join(' · '),
       keywords:[person.role,...(person.favouriteTags??[]),...(person.roleSpecialties??[])],
       icon:<UserCircle2 size={15}/>,
-      action:()=>setPublicProfileUserId(person.userId),
+      action:()=>openPublicProfile(person.userId),
     })),
     ...tracks.slice(0,100).map((track) => ({
       id:'release-' + track.id,
@@ -2630,11 +2707,11 @@ function App() {
                 </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">WRITER SPOTLIGHT</span><h3>Awaiting writers</h3><p className="spotlight-handle">Every active Writer joins the daily rotation automatically.</p></div></div>}
                 {editorSpotlight ? <article className="spotlight-tile editor-spotlight-tile">
                   <div className="spotlight-art">{editorSpotlight.imageUrl ? <img className="spotlight-profile-image" src={editorSpotlight.imageUrl} alt="" /> : <span className="spotlight-initials">{editorSpotlight.initials || 'NJ'}</span>}<span className="spotlight-art-mark"><FileCheck2 size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">AUDIO EDITOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{editorSpotlight.name}</h3><p className="spotlight-handle">{editorSpotlight.handle ? '@' + editorSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{editorSpotlight.edition || 'Audio Editor Spotlight'}</span><strong>{editorSpotlight.title || 'Audio Editor profile'}</strong><p>{editorSpotlight.detail || 'A full day of recognition for an Audio Editor shaping Nightjar productions.'}</p></div><div className="spotlight-actions">{editorSpotlight.publicProfile !== false && editorSpotlight.targetId && <button className="secondary-button" onClick={() => setPublicProfileUserId(editorSpotlight.targetId!)}>View Audio Editor profile <ArrowRight size={14}/></button>}{editorSpotlight.publicProfile !== false && editorSpotlight.targetId && editorSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(editorSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(editorSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(editorSpotlight.targetId) ? 'Following' : 'Follow Audio Editor'}</button>}{editorSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(editorSpotlight)} aria-label={`Share ${editorSpotlight.name}'s Audio Editor spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">AUDIO EDITOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{editorSpotlight.name}</h3><p className="spotlight-handle">{editorSpotlight.handle ? '@' + editorSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{editorSpotlight.edition || 'Audio Editor Spotlight'}</span><strong>{editorSpotlight.title || 'Audio Editor profile'}</strong><p>{editorSpotlight.detail || 'A full day of recognition for an Audio Editor shaping Nightjar productions.'}</p></div><div className="spotlight-actions">{editorSpotlight.publicProfile !== false && editorSpotlight.targetId && <button className="secondary-button" onClick={() => openPublicProfile(editorSpotlight.targetId!)}>View Audio Editor profile <ArrowRight size={14}/></button>}{editorSpotlight.publicProfile !== false && editorSpotlight.targetId && editorSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(editorSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(editorSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(editorSpotlight.targetId) ? 'Following' : 'Follow Audio Editor'}</button>}{editorSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(editorSpotlight)} aria-label={`Share ${editorSpotlight.name}'s Audio Editor spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
                 </article> : <div className="spotlight-tile editor-spotlight-tile"><div className="spotlight-copy"><span className="mini-label">AUDIO EDITOR SPOTLIGHT</span><h3>Awaiting Audio Editors</h3><p className="spotlight-handle">Every active public Audio Editor joins the daily rotation automatically.</p></div></div>}
                 {listenerSpotlight ? <article className="spotlight-tile listener-spotlight-tile">
                   <div className="spotlight-art"><span className="spotlight-initials">{listenerSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><Headphones size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">LISTENER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{listenerSpotlight.name}</h3><p className="spotlight-handle">{listenerSpotlight.handle ? '@' + listenerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{listenerSpotlight.edition || 'WEEKLY TOP 7'}</span><strong>{listenerSpotlight.title || 'Community listener'}</strong><p>{listenerSpotlight.detail || 'Recognised for the most tracked listening activity in the previous completed week.'}</p></div><div className="spotlight-listener-meta"><span>TOP {spotlightMeta.listenerTopSevenCount || 0}</span><span>DAY {spotlightMeta.listenerSpotlightDay || 1} / 7</span></div><div className="spotlight-thanks"><Headphones size={14} /><span>Thank you for helping make Nightjar’s listening community what it is.</span></div>{listenerSpotlight.publicProfile !== false && listenerSpotlight.targetId && <div className="spotlight-actions"><button className="secondary-button" onClick={() => setPublicProfileUserId(listenerSpotlight.targetId!)}>View listener profile <ArrowRight size={14}/></button>{listenerSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(listenerSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(listenerSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(listenerSpotlight.targetId) ? 'Following' : 'Follow listener'}</button>}</div>}</div>
+                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">LISTENER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{listenerSpotlight.name}</h3><p className="spotlight-handle">{listenerSpotlight.handle ? '@' + listenerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{listenerSpotlight.edition || 'WEEKLY TOP 7'}</span><strong>{listenerSpotlight.title || 'Community listener'}</strong><p>{listenerSpotlight.detail || 'Recognised for the most tracked listening activity in the previous completed week.'}</p></div><div className="spotlight-listener-meta"><span>TOP {spotlightMeta.listenerTopSevenCount || 0}</span><span>DAY {spotlightMeta.listenerSpotlightDay || 1} / 7</span></div><div className="spotlight-thanks"><Headphones size={14} /><span>Thank you for helping make Nightjar’s listening community what it is.</span></div>{listenerSpotlight.publicProfile !== false && listenerSpotlight.targetId && <div className="spotlight-actions"><button className="secondary-button" onClick={() => openPublicProfile(listenerSpotlight.targetId!)}>View listener profile <ArrowRight size={14}/></button>{listenerSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(listenerSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(listenerSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(listenerSpotlight.targetId) ? 'Following' : 'Follow listener'}</button>}</div>}</div>
                 </article> : <div className="spotlight-tile listener-spotlight-tile"><div className="spotlight-copy"><span className="mini-label">LISTENER SPOTLIGHT</span><h3>Weekly listener recognition</h3><p className="spotlight-handle">The previous completed week’s top seven tracked Listeners rotate one per day. The seven refresh together when the new week begins.</p></div></div>}
               </div>
               <p className="spotlight-note">Every active Creator, Writer and public Audio Editor receives a full day in deterministic rotation, with a shareable spotlight to help the community naturally discover the people shaping Nightjar. Listener Spotlight recognises the previous completed week’s top seven Listeners, one per day, and thanks them for helping Nightjar thrive.</p>
@@ -2721,6 +2798,14 @@ function App() {
                 </select>
               </div>
             </div>
+            <div className="nj-directory-viewbar">
+              <div className="nj-directory-view-actions">
+                <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>
+                <button className="ghost-button" onClick={clearDirectoryFilters}>Clear filters</button>
+                <span>Saved views stay on this signed-in account’s browser only.</span>
+              </div>
+              {!!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
+            </div>
 
             <div className="profile-directory-summary">
               <span><strong>{filteredDirectoryProfiles.length}</strong> matching profile{filteredDirectoryProfiles.length === 1 ? '' : 's'}</span>
@@ -2754,7 +2839,7 @@ function App() {
                       {person.role !== 'listener' && <span><strong>{person.completedCollaborations ?? 0}</strong> completed collaborations</span>}
                     </div>
                   </div>
-                  <button className="round-arrow" onClick={() => setPublicProfileUserId(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
+                  <button className="round-arrow" onClick={() => openPublicProfile(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
                 </article>;
               })}
             </div>
@@ -2796,7 +2881,7 @@ function App() {
               {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
             </div>
             {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator compensation" />}><CreatorCompensationCard key={'creator-pay-' + demoSessionKey} notify={notify} demoMode={demoMode} /></Suspense>}
-            {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading script marketplace" />}><ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={(userId)=>setPublicProfileUserId(userId)} demoMode={demoMode} simulationMode={simulationMode} /></Suspense>}
+            {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading script marketplace" />}><ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={openPublicProfile} demoMode={demoMode} simulationMode={simulationMode} /></Suspense>}
             {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} /></Suspense>}
             <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Verified listening remains available as analytics and discovery data. It does not make one Creator’s standard base rate larger than another’s.</p></article>
           </section>
@@ -2820,7 +2905,7 @@ function App() {
             <div className="nj-profile-progress">
               <div><span className="mini-label">PROFILE READINESS</span><strong>{profileCompletion}% complete</strong><small>{profileDirty ? 'Unsaved changes' : 'All current changes saved'}</small></div>
               <div className="nj-profile-progress-track" aria-label={profileCompletion + '% profile complete'}><span style={{width:profileCompletion + '%'}}/></div>
-              <button className="secondary-button" onClick={() => setPublicProfileUserId(user?.userId ?? '')} disabled={!user?.userId}>Preview public profile</button>
+              <button className="secondary-button" onClick={() => document.getElementById('profile-public-preview')?.scrollIntoView({behavior:'smooth',block:'center'})}>Preview public profile</button>
             </div>
             <div className="profile-editor-grid">
               <article className="panel profile-editor-card">
@@ -2919,8 +3004,16 @@ function App() {
                 </div>
               </article>
             </div>
-            <div className="profile-public-preview panel">{profile.avatarUrl && <span className="profile-preview-avatar"><img className="avatar-approved-image" src={profile.avatarUrl} alt="" /></span>}<div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p>{profile.welcomeMessage && <p className="profile-welcome-preview">{profile.welcomeMessage}</p>}<div className="profile-preview-chips">{[...(profile.roleSpecialties??[]),...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div>{profile.roleAvailability && <small className="profile-preview-availability">{profile.roleAvailability}</small>}</div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
+            <div className="profile-public-preview panel" id="profile-public-preview">{profile.avatarUrl && <span className="profile-preview-avatar"><img className="avatar-approved-image" src={profile.avatarUrl} alt="" /></span>}<div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p>{profile.welcomeMessage && <p className="profile-welcome-preview">{profile.welcomeMessage}</p>}<div className="profile-preview-chips">{[...(profile.roleSpecialties??[]),...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div>{profile.roleAvailability && <small className="profile-preview-availability">{profile.roleAvailability}</small>}</div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
             <article className="panel taste-panel"><div><span className="mini-label">TASTE ENGINE</span><h2>What Nightjar is learning</h2><p>Declared taste is kept separate from identity. Listening signals can refine recommendations without trying to infer who you are.</p></div><div className="taste-vector">{tasteVector.length===0 ? <span className="taste-empty">Your taste graph will grow as you save, finish, replay and explore.</span> : tasteVector.slice(0,10).map((item:any)=><div className="taste-chip" key={item.label}><strong>{item.label}</strong><span>{item.weight}</span></div>)}</div></article>
+            <article className="panel nj-account-activity">
+              <div className="panel-title"><div><span className="mini-label">ACCOUNT ACTIVITY</span><h2>What changed recently</h2></div><Bell size={17}/></div>
+              <p className="panel-note">A useful account-level view of Nightjar updates. Protected audit events remain in the Protection Centre rather than being mixed into normal activity.</p>
+              <div className="nj-account-activity-list">
+                {notifications.slice(0,8).map((item:any)=><button key={item.id} className={item.read ? '' : 'unread'} onClick={()=>void markNotificationRead(item)}><span>{item.subtype === 'creator' ? <Mic2 size={14}/> : item.subtype === 'writer' ? <FileText size={14}/> : item.subtype === 'editor' ? <FileCheck2 size={14}/> : <Bell size={14}/>}</span><div><strong>{item.title}</strong><small>{item.message}</small></div>{item.read !== true && <em>NEW</em>}</button>)}
+                {!notifications.length && <div className="people-empty"><Bell size={17}/><strong>No recent activity.</strong><span>Account and community updates will appear here when something changes.</span></div>}
+              </div>
+            </article>
             <NotificationPreferences key={'notification-prefs-' + demoSessionKey} notify={notify} simulationMode={demoMode} />
           </section>
         )}
@@ -3218,7 +3311,7 @@ function App() {
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType, context) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, context)} notify={notify} />}
       {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={demoMode} />}
       {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} demoMode={demoMode} /></Suspense>}
-      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={() => setPublicProfileUserId(null)} notify={notify} demoMode={demoMode} /></Suspense>}
+      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={closePublicProfile} notify={notify} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release reviews" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
