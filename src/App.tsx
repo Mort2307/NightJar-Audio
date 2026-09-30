@@ -274,6 +274,8 @@ function App() {
   const [ageSessionActive, setAgeSessionActive] = useState(false);
   const [ageLoading, setAgeLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; run: () => void | Promise<void> } | null>(null);
+  const toastTimer = useRef<number | null>(null);
   const [favouriteReleaseIds, setFavouriteReleaseIds] = useState<string[]>([]);
   const [followingProfileIds, setFollowingProfileIds] = useState<string[]>([]);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
@@ -647,9 +649,29 @@ function App() {
     }
   }, [user, ageVerified, role, currentIntent, previewRole, demoMode, testingSessionHydrated]);
 
+  const clearToastTimer = () => {
+    if (toastTimer.current != null) window.clearTimeout(toastTimer.current);
+    toastTimer.current = null;
+  };
+
   const notify = (message: string) => {
+    clearToastTimer();
+    setToastAction(null);
     setToast(message);
-    window.setTimeout(() => setToast(null), 2800);
+    toastTimer.current = window.setTimeout(() => {
+      setToast(null);
+      setToastAction(null);
+    }, 2800);
+  };
+
+  const notifyWithAction = (message: string, label: string, run: () => void | Promise<void>) => {
+    clearToastTimer();
+    setToast(message);
+    setToastAction({ label, run });
+    toastTimer.current = window.setTimeout(() => {
+      setToast(null);
+      setToastAction(null);
+    }, 5200);
   };
 
   const navigate = (nextView: View) => {
@@ -1204,6 +1226,23 @@ function App() {
     }
   };
 
+  const applyFavouriteState = async (releaseId: string, favourite: boolean) => {
+    if (!simulationMode) await nightjarCommunity.setFavouriteRelease(releaseId, favourite);
+    setFavouriteReleaseIds((items) => {
+      const updated = favourite ? Array.from(new Set([...items, releaseId])) : items.filter((id) => id !== releaseId);
+      if (simulationMode) {
+        writeDemo('favourites', updated);
+        const library = readDemo('library', demoLibrary);
+        const release = readDemo('tracks', demoTracks).find((item) => item.id === releaseId);
+        const favourites = favourite
+          ? [...(library.favourites ?? []).filter((item: any) => item.id !== releaseId), ...(release ? [{ ...release, creatorName: release.creator, favourite: true }] : [])]
+          : (library.favourites ?? []).filter((item: any) => item.id !== releaseId);
+        writeDemo('library', { ...library, favourites });
+      }
+      return updated;
+    });
+  };
+
   const toggleFavouriteRelease = async (releaseId: string) => {
     try {
       if (demoMode && !simulationMode) {
@@ -1211,41 +1250,46 @@ function App() {
         return;
       }
       const next = !favouriteReleaseIds.includes(releaseId);
-      if (!simulationMode) await nightjarCommunity.setFavouriteRelease(releaseId, next);
-      setFavouriteReleaseIds((items) => {
-        const updated = next ? Array.from(new Set([...items, releaseId])) : items.filter((id) => id !== releaseId);
-        if (simulationMode) {
-          writeDemo('favourites', updated);
-          const library = readDemo('library', demoLibrary);
-          const release = readDemo('tracks', demoTracks).find((item) => item.id === releaseId);
-          const favourites = next
-            ? [...(library.favourites ?? []).filter((item: any) => item.id !== releaseId), ...(release ? [{ ...release, creatorName: release.creator, favourite: true }] : [])]
-            : (library.favourites ?? []).filter((item: any) => item.id !== releaseId);
-          writeDemo('library', { ...library, favourites });
+      await applyFavouriteState(releaseId, next);
+      notifyWithAction(next ? 'Added to favourites.' : 'Removed from favourites.', 'Undo', async () => {
+        try {
+          await applyFavouriteState(releaseId, !next);
+          notify(next ? 'Favourite removed again.' : 'Favourite restored.');
+        } catch {
+          notify('Undo could not be completed.');
         }
-        return updated;
       });
-      if (simulationMode) notify(next ? 'Simulation: added to favourites.' : 'Simulation: removed from favourites.');
     } catch {
       notify('Favourite could not be updated.');
     }
+  };
+
+  const applyFollowState = async (targetUserId: string, following: boolean) => {
+    if (!simulationMode) await nightjarCommunity.setProfileFollow(targetUserId, following);
+    setFollowingProfileIds((items) => {
+      const updated = following ? Array.from(new Set([...items, targetUserId])) : items.filter((id) => id !== targetUserId);
+      if (simulationMode) writeDemo('following', updated);
+      return updated;
+    });
   };
 
   const toggleProfileFollow = async (targetUserId: string) => {
     if (!targetUserId || targetUserId === user?.userId) return;
     try {
       if (demoMode && !simulationMode) {
-        notify('Demo data is read-only. Start Listener Simulation to change follows.');
+        notify('Demo data is read-only. Start Simulation to change follows.');
         return;
       }
       const next = !followingProfileIds.includes(targetUserId);
-      if (!simulationMode) await nightjarCommunity.setProfileFollow(targetUserId, next);
-      setFollowingProfileIds((items) => {
-        const updated = next ? Array.from(new Set([...items, targetUserId])) : items.filter((id) => id !== targetUserId);
-        if (simulationMode) writeDemo('following', updated);
-        return updated;
+      await applyFollowState(targetUserId, next);
+      notifyWithAction(next ? 'Profile followed.' : 'Profile unfollowed.', 'Undo', async () => {
+        try {
+          await applyFollowState(targetUserId, !next);
+          notify(next ? 'Follow removed.' : 'Follow restored.');
+        } catch {
+          notify('Undo could not be completed.');
+        }
       });
-      if (simulationMode) notify(next ? 'Simulation: profile followed.' : 'Simulation: profile unfollowed.');
     } catch {
       notify('Follow could not be updated.');
     }
@@ -3315,7 +3359,7 @@ function App() {
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release reviews" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
-      {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
+      {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
       {user && !rolePicker && (
         <button className="floating-account" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)} aria-label="Open account information">
