@@ -1487,3 +1487,13 @@ textarea {
     max-width:88%;
   }
 }
+
+
+.field-counter {
+  display:block;
+  margin-top:5px;
+  color:var(--nj-text-tertiary);
+  font-size:7px;
+  line-height:1.4;
+  text-align:right;
+}
