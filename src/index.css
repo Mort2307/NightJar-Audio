@@ -4068,3 +4068,88 @@ select:disabled {
   .security-evidence-list { padding: 12px; }
   .security-evidence-row dl { grid-template-columns: 1fr; }
 }
+
+
+/* Searchable, ordered public showcase curation */
+.profile-portfolio-search {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px !important;
+  padding: 0 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: rgba(0,0,0,.18);
+  color: var(--muted-2);
+}
+.profile-portfolio-search input {
+  width: 100%;
+  border: 0 !important;
+  padding-left: 0 !important;
+  background: transparent !important;
+}
+.profile-featured-order {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.profile-featured-order-row {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid rgba(203,181,204,.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,.012);
+}
+.profile-featured-order-index {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(126,78,113,.12);
+  color: #d9cbd5;
+  font-size: 8px;
+  font-weight: 700;
+}
+.profile-featured-order-row > div:nth-child(2) {
+  min-width: 0;
+}
+.profile-featured-order-row strong,
+.profile-featured-order-row small {
+  display: block;
+}
+.profile-featured-order-row strong {
+  color: var(--ivory);
+  font-size: 9px;
+}
+.profile-featured-order-row small {
+  margin-top: 3px;
+  color: var(--muted-2);
+  font-size: 7.5px;
+}
+.profile-featured-order-actions {
+  display: flex;
+  gap: 5px;
+}
+.profile-featured-order-actions button {
+  padding: 6px 8px;
+}
+@media (max-width: 620px) {
+  .profile-featured-order-row {
+    grid-template-columns: auto minmax(0,1fr);
+  }
+  .profile-featured-order-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+  }
+  .profile-featured-order-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
