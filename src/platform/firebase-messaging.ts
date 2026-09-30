@@ -3,38 +3,77 @@ import { firebaseApp } from './firebase-auth';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
-const listCall = httpsCallable<void, { conversations:any[]; unreadCount:number }>(functions, 'listProfessionalConversations');
-const startCall = httpsCallable<{ recipientUserId:string; message?:string; collaborationId?:string|null }, { conversation:any }>(functions, 'startProfessionalConversation');
-const openCall = httpsCallable<{ conversationId:string }, { conversation:any; messages:any[]; blocked:boolean; blockedByMe?:boolean; blockedByOther?:boolean }>(functions, 'openProfessionalConversation');
-const sendCall = httpsCallable<{ conversationId:string; body:string; collaborationId?:string|null }, { message:any }>(functions, 'sendProfessionalMessage');
-const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setProfessionalMessageBlock');
-const reportCall = httpsCallable<{ conversationId:string; messageId:string; reason?:string }, { reported:boolean }>(functions, 'reportProfessionalMessage');
-const adminReportsCall = httpsCallable<void, { reports:any[] }>(functions, 'adminListProfessionalMessageReports');
-const adminResolveCall = httpsCallable<{ reportId:string; decision:'dismissed'|'actioned'|'removed' }, { reportId:string; status:string }>(functions, 'adminResolveProfessionalMessageReport');
+const listCall = httpsCallable<void, { conversations:any[]; unreadCount:number }>(functions, 'listMessageConversations');
+const startCall = httpsCallable<{ targetUserId:string; collaborationId?:string|null }, { conversationId:string }>(functions, 'startDirectConversation');
+const openCall = httpsCallable<{ conversationId:string }, { messages:any[]; blocked:boolean; blockedByMe?:boolean; blockedByOther?:boolean }>(functions, 'listDirectMessages');
+const sendCall = httpsCallable<{ conversationId:string; body:string }, { message:any }>(functions, 'sendDirectMessage');
+const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
+const reportCall = httpsCallable<{ conversationId:string; messageId:string; reason?:string }, { reported:boolean; reportId?:string }>(functions, 'reportDirectMessage');
+const adminReportsCall = httpsCallable<void, { reports:any[] }>(functions, 'adminListCommunityReports');
+const adminResolveCall = httpsCallable<{ reportId:string; decision:'dismiss'|'remove' }, { reportId:string; decision:string }>(functions, 'adminResolveCommunityReport');
+
+const normaliseConversation = (item:any) => ({
+  ...item,
+  lastMessage:item.lastMessage ?? item.lastMessagePreview ?? '',
+  collaborationIds:item.collaborationIds ?? (item.collaborationId ? [item.collaborationId] : []),
+});
 
 export const nightjarMessaging = {
   async conversations() {
-    return (await listCall()).data;
+    const data=(await listCall()).data;
+    return {
+      conversations:(data.conversations ?? []).map(normaliseConversation),
+      unreadCount:Number(data.unreadCount ?? 0),
+    };
   },
-  async start(recipientUserId:string, message='', collaborationId?:string|null) {
-    return (await startCall({ recipientUserId, ...(message ? { message } : {}), ...(collaborationId ? { collaborationId } : {}) })).data;
+
+  async start(recipientUserId:string, _message='', collaborationId?:string|null) {
+    const data=(await startCall({
+      targetUserId:recipientUserId,
+      ...(collaborationId ? { collaborationId } : {}),
+    })).data;
+    return { conversation:{ id:data.conversationId } };
   },
+
   async open(conversationId:string) {
-    return (await openCall({ conversationId })).data;
+    const [thread,list]=await Promise.all([
+      openCall({ conversationId }),
+      listCall(),
+    ]);
+    const conversation=(list.data.conversations ?? []).find((item:any)=>item.id===conversationId);
+    return {
+      ...thread.data,
+      conversation:conversation ? normaliseConversation(conversation) : { id:conversationId },
+    };
   },
-  async send(conversationId:string, body:string, collaborationId?:string|null) {
-    return (await sendCall({ conversationId, body, ...(collaborationId ? { collaborationId } : {}) })).data;
+
+  async send(conversationId:string, body:string, _collaborationId?:string|null) {
+    return (await sendCall({ conversationId, body })).data;
   },
+
   async setBlocked(targetUserId:string, blocked:boolean) {
     return (await blockCall({ targetUserId, blocked })).data;
   },
+
   async report(conversationId:string, messageId:string, reason='') {
     return (await reportCall({ conversationId, messageId, reason })).data;
   },
+
   async adminReports() {
-    return (await adminReportsCall()).data;
+    const data=(await adminReportsCall()).data;
+    return {
+      reports:(data.reports ?? [])
+        .filter((item:any)=>item.type === 'direct_message')
+        .map((item:any)=>({
+          ...item,
+          type:'professional_message',
+          messageBodySnapshot:item.snapshotText ?? '',
+        })),
+    };
   },
+
   async adminResolve(reportId:string, decision:'dismissed'|'actioned'|'removed') {
-    return (await adminResolveCall({ reportId, decision })).data;
+    const mapped:'dismiss'|'remove'=decision === 'dismissed' ? 'dismiss' : 'remove';
+    return (await adminResolveCall({ reportId, decision:mapped })).data;
   },
 };
