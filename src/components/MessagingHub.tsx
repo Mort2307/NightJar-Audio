@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, Check, CheckCheck, Flag, MessageCircle, RefreshCw, Search, Send, ShieldCheck } from 'lucide-react';
+import { Ban, Check, CheckCheck, Flag, Handshake, MessageCircle, RefreshCw, Search, Send, ShieldCheck } from 'lucide-react';
 import { nightjarMessaging } from '../platform/firebase-messaging';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 
