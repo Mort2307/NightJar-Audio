@@ -3610,6 +3610,60 @@ export const listSecurityAlerts = onCall({ region: REGION }, async (request) => 
   return { alerts };
 });
 
+export const securityAlertEvidence = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const alertId = cleanText((request.data as { alertId?: unknown } | undefined)?.alertId, 160);
+  if (!alertId) throw new HttpsError('invalid-argument', 'Security alert is required.');
+
+  const alert = await db.collection('securityAlerts').doc(alertId).get();
+  const alertData = alert.data();
+  if (!alertData) throw new HttpsError('not-found', 'Security alert not found.');
+
+  const userId = cleanText(alertData.userId, 160);
+  const relatedId = cleanText(alertData.relatedId, 160);
+  const snapshot = await db.collection('protectionEvents').where('userId', '==', userId).limit(1000).get();
+  const evidence = snapshot.docs
+    .map((doc) => {
+      const data = doc.data() ?? {};
+      return {
+        id: doc.id,
+        eventType: cleanText(data.eventType, 80),
+        relatedType: cleanText(data.relatedType, 80) || null,
+        relatedId: cleanText(data.relatedId, 160) || null,
+        deviceId: cleanText(data.deviceId, 180) || null,
+        readerSessionId: cleanText(data.readerSessionId, 180) || null,
+        clientPlatform: cleanText(data.clientPlatform, 120) || null,
+        visibilityState: cleanText(data.visibilityState, 40) || null,
+        viewport: cleanText(data.viewport, 80) || null,
+        detectionSource: cleanText(data.detectionSource, 120) || null,
+        detectionConfidence: cleanText(data.detectionConfidence, 32) || null,
+        route: cleanText(data.route, 240) || null,
+        summary: cleanText(data.summary, 800) || null,
+        createdAt: toIso(data.createdAt),
+      };
+    })
+    .sort((a, b) => {
+      const relatedOrder = Number(Boolean(b.relatedId && b.relatedId === relatedId)) - Number(Boolean(a.relatedId && a.relatedId === relatedId));
+      return relatedOrder || String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''));
+    })
+    .slice(0, 100);
+
+  return {
+    alert: {
+      id: alert.id,
+      userId,
+      relatedId: relatedId || null,
+      severity: alertData.severity ?? 'medium',
+      riskScore: Number(alertData.riskScore ?? 0),
+      reason: cleanText(alertData.reason, 1200) || null,
+      signal: alertData.signal ?? null,
+      status: alertData.status ?? 'open',
+      createdAt: toIso(alertData.createdAt),
+    },
+    evidence,
+  };
+});
+
 export const suspendFromSecurityAlert = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const alertId = cleanText((request.data as { alertId?: unknown } | undefined)?.alertId, 160);
