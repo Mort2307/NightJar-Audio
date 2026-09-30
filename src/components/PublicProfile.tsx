@@ -73,7 +73,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const share = async () => {
     if (!profile) return;
     const text = `Discover ${profile.displayName} on Nightjar — ${roleLabel(profile.role)}.`;
-    const url = window.location.origin + '/discover';
+    const url = window.location.origin + '/people/' + encodeURIComponent(userId);
     try {
       if (navigator.share) await navigator.share({ title: 'Nightjar · ' + profile.displayName, text, url });
       else if (navigator.clipboard) {
