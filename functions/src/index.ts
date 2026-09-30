@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 
 initializeApp();
@@ -2548,9 +2548,35 @@ export const releaseModerationQueue = onCall({ region: REGION }, async (request)
 });
 
 const createNotification = async (userId: string, payload: Record<string, unknown>) => {
+  const account = await accountRef(userId).get();
+  const preferences = account.data()?.notificationPreferences ?? {};
+  const type = cleanText(payload.type, 40);
+  const preferenceKey =
+    type === 'message' ? 'messages'
+      : type === 'comment' ? 'comments'
+        : type === 'collaboration' ? 'collaborations'
+          : type === 'payment' ? 'payments'
+            : null;
+  if (preferenceKey && preferences[preferenceKey] === false) return;
+
+  const displayMode = ['full','discreet','minimal'].includes(String(preferences.displayMode ?? ''))
+    ? String(preferences.displayMode)
+    : 'discreet';
+  const safePayload = { ...payload };
+  if (displayMode === 'minimal' && ['message','comment','collaboration'].includes(type)) {
+    safePayload.title = 'Nightjar update';
+    safePayload.message = 'Open Nightjar to view this update.';
+  } else if (displayMode === 'discreet' && type === 'message') {
+    safePayload.title = 'New Nightjar message';
+    safePayload.message = 'A creative collaborator sent you a private message.';
+  } else if (displayMode === 'discreet' && type === 'comment') {
+    safePayload.title = 'New Nightjar comment';
+    safePayload.message = 'Someone commented on published work you are credited on.';
+  }
+
   const ref = accountRef(userId).collection('notifications').doc();
   await ref.set({
-    ...payload,
+    ...safePayload,
     read: false,
     createdAt: FieldValue.serverTimestamp(),
   });
@@ -4440,7 +4466,7 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
 
 
 const CREATIVE_MESSAGE_ROLES = new Set(['creator','writer','editor']);
-const directConversationId = (a: string, b: string) => [a,b].sort().join('__');
+const directConversationId = (a: string, b: string) => createHash('sha256').update([a,b].sort().join('\u0000')).digest('hex');
 
 const directMessagingBlockedBetween = async (a: string, b: string) => {
   const [aBlocksB,bBlocksA] = await Promise.all([
@@ -4691,12 +4717,11 @@ export const reportReleaseComment = onCall({ region: REGION }, async (request) =
   return { reported:true, reportId:ref.id };
 });
 
-const requireCreativeMessagingIdentity = async (request: any) => {
-  const identity = await requireActiveIdentity(request);
+const requireCreativeMessagingIdentity = async (
+  request: { auth?: { uid: string; token: Record<string, unknown> } | null },
+) => {
+  const identity = await requireAccountRole(request, ['creator','writer','editor']);
   await requireAgeVerified(identity.uid);
-  if (!CREATIVE_MESSAGE_ROLES.has(String(identity.role ?? ''))) {
-    throw new HttpsError('permission-denied', 'Private creative messaging is available to Creators, Writers and Audio Editors.');
-  }
   return identity;
 };
 
