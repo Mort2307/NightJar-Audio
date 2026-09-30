@@ -5,6 +5,7 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 
 export type ReleaseReaction = 'like' | 'love' | null;
 
+const stateCall = httpsCallable<void, { reactions: { releaseId: string; reaction: Exclude<ReleaseReaction, null> }[] }>(functions, 'releaseReactionState');
 const communityCall = httpsCallable<{ releaseId: string }, {
   comments: any[];
   reactions: { likes: number; loves: number; total: number; myReaction: ReleaseReaction };
@@ -20,6 +21,9 @@ const adminReportsCall = httpsCallable<void, { comments: any[] }>(functions, 'ad
 const adminModerateCall = httpsCallable<{ commentId: string; decision: 'keep' | 'remove' }, { comment: any }>(functions, 'adminModerateReleaseComment');
 
 export const nightjarEngagement = {
+  async state() {
+    return (await stateCall()).data;
+  },
   async community(releaseId: string) {
     return (await communityCall({ releaseId })).data;
   },
