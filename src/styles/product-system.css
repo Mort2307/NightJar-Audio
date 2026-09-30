@@ -1528,3 +1528,30 @@ textarea {
   line-height:1.5;
   text-transform:capitalize;
 }
+
+
+.track-reaction-button > span,
+.track-community-button > span {
+  min-width:16px;
+  display:inline-grid;
+  place-items:center;
+  padding:2px 5px;
+  border-radius:999px;
+  background:rgba(255,255,255,.045);
+  color:var(--nj-text-primary);
+  font-size:6.5px;
+  font-weight:800;
+}
+.messaging-awaiting-reply {
+  display:inline-flex !important;
+  width:fit-content;
+  margin-top:4px;
+  padding:3px 6px;
+  border:1px solid rgba(215,193,155,.18);
+  border-radius:999px;
+  background:rgba(154,117,74,.08);
+  color:#d7c19b !important;
+  font-size:6.5px !important;
+  font-weight:800;
+  letter-spacing:.02em;
+}
