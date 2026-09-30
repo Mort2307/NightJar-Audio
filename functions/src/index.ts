@@ -4434,6 +4434,382 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
 });
 
 
+
+const CREATIVE_MESSAGE_ROLES = new Set(['creator','writer','editor']);
+const directConversationId = (a: string, b: string) => [a,b].sort().join('__');
+
+const commentPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  releaseId: data.releaseId ?? null,
+  userId: data.userId ?? null,
+  commenterName: data.commenterName ?? 'Nightjar listener',
+  commenterHandle: data.commenterHandle ?? null,
+  body: cleanText(data.body, 800),
+  status: data.status ?? 'visible',
+  createdAt: toIso(data.createdAt),
+  updatedAt: toIso(data.updatedAt),
+});
+
+const directMessagePayload = (data: Record<string, any>, id: string) => ({
+  id,
+  conversationId: data.conversationId ?? null,
+  senderUserId: data.senderUserId ?? null,
+  senderName: data.senderName ?? 'Nightjar member',
+  body: data.status === 'removed_by_admin' ? '' : cleanText(data.body, 4000),
+  status: data.status ?? 'visible',
+  collaborationId: data.collaborationId ?? null,
+  createdAt: toIso(data.createdAt),
+});
+
+export const releaseCommunity = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  const release = await releaseRef(releaseId).get();
+  if (!release.exists || release.data()?.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+
+  const [loveSnapshot, commentsSnapshot] = await Promise.all([
+    db.collection('releaseLoves').where('releaseId', '==', releaseId).limit(5000).get(),
+    db.collection('releaseComments').where('releaseId', '==', releaseId).limit(500).get(),
+  ]);
+  const comments = commentsSnapshot.docs
+    .filter((doc) => doc.data().status === 'visible')
+    .map((doc) => commentPayload(doc.data(), doc.id))
+    .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+  return {
+    loveCount: loveSnapshot.size,
+    lovedByMe: loveSnapshot.docs.some((doc) => doc.data().userId === identity.uid),
+    comments,
+    canInteract: identity.role === 'listener',
+  };
+});
+
+export const setReleaseLove = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  const release = await releaseRef(releaseId).get();
+  if (!release.exists || release.data()?.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+
+  const ref = db.collection('releaseLoves').doc(releaseId + '__' + identity.uid);
+  const loved = input.loved !== false;
+  if (loved) {
+    await ref.set({ releaseId, userId: identity.uid, createdAt: FieldValue.serverTimestamp() }, { merge: true });
+  } else {
+    await ref.delete();
+  }
+  const count = (await db.collection('releaseLoves').where('releaseId', '==', releaseId).limit(5000).get()).size;
+  return { releaseId, loved, loveCount: count };
+});
+
+export const postReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const body = cleanText(input.body, 800);
+  if (!releaseId || !body) throw new HttpsError('invalid-argument', 'Write a comment first.');
+
+  const release = await releaseRef(releaseId).get();
+  const releaseData = release.data();
+  if (!releaseData || releaseData.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+
+  const recent = await db.collection('releaseComments').where('userId', '==', identity.uid).limit(100).get();
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  const recentCount = recent.docs.filter((doc) => (doc.data().createdAt?.toMillis?.() ?? 0) >= fiveMinutesAgo).length;
+  if (recentCount >= 5) throw new HttpsError('resource-exhausted', 'Please wait before posting more comments.');
+
+  const presenter = await accountPresentation(identity.uid);
+  const ref = db.collection('releaseComments').doc();
+  const record = {
+    releaseId,
+    userId: identity.uid,
+    commenterName: presenter.displayName,
+    commenterHandle: presenter.handle,
+    body,
+    status: 'visible',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+
+  const recipients = new Set<string>();
+  const creatorUserId = cleanText(releaseData.creatorUserId, 160);
+  if (creatorUserId) recipients.add(creatorUserId);
+  for (const credit of normaliseReleaseContributors(releaseData.contributors)) {
+    if (credit.userId) recipients.add(credit.userId);
+  }
+  recipients.delete(identity.uid);
+  await Promise.all([...recipients].map((userId) => createNotification(userId, {
+    type: 'comment',
+    subtype: 'release_comment',
+    title: 'New comment on published work',
+    message: presenter.displayName + ' commented on ' + String(releaseData.title ?? 'a Nightjar release') + '.',
+    releaseId,
+    commentId: ref.id,
+  })));
+
+  const saved = await ref.get();
+  return { comment: commentPayload(saved.data() ?? record, ref.id) };
+});
+
+export const deleteReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const commentId = cleanText((request.data as { commentId?: unknown } | undefined)?.commentId, 160);
+  const ref = db.collection('releaseComments').doc(commentId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists || snapshot.data()?.userId !== identity.uid) throw new HttpsError('not-found', 'Comment not found.');
+  await ref.set({ status:'deleted_by_user', body:'', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  return { deleted:true, commentId };
+});
+
+export const reportReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const commentId = cleanText(input.commentId, 160);
+  const reason = cleanText(input.reason, 600);
+  const comment = await db.collection('releaseComments').doc(commentId).get();
+  if (!comment.exists || comment.data()?.status !== 'visible') throw new HttpsError('not-found', 'Comment not found.');
+  if (comment.data()?.userId === identity.uid) throw new HttpsError('failed-precondition', 'You can delete your own comment instead.');
+  const ref = db.collection('communityReports').doc();
+  await ref.set({
+    type:'release_comment',
+    reporterUserId:identity.uid,
+    subjectUserId:comment.data()?.userId ?? null,
+    commentId,
+    releaseId:comment.data()?.releaseId ?? null,
+    snapshotText:cleanText(comment.data()?.body, 800),
+    reason:reason || 'Reported by a Nightjar member.',
+    status:'open',
+    createdAt:FieldValue.serverTimestamp(),
+  });
+  return { reported:true, reportId:ref.id };
+});
+
+const requireCreativeMessagingIdentity = async (request: any) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  if (!CREATIVE_MESSAGE_ROLES.has(String(identity.role ?? ''))) {
+    throw new HttpsError('permission-denied', 'Private creative messaging is available to Creators, Writers and Audio Editors.');
+  }
+  return identity;
+};
+
+export const listMessageConversations = onCall({ region: REGION }, async (request) => {
+  const identity = await requireCreativeMessagingIdentity(request);
+  const snapshot = await db.collection('directConversations').limit(1000).get();
+  const conversations = (await Promise.all(snapshot.docs
+    .filter((doc) => Array.isArray(doc.data().participantUserIds) && doc.data().participantUserIds.includes(identity.uid))
+    .map(async (doc) => {
+      const data = doc.data() ?? {};
+      const otherUserId = (data.participantUserIds ?? []).find((id: string) => id !== identity.uid) ?? null;
+      const other = otherUserId ? await accountPresentation(otherUserId) : { displayName:'Nightjar collaborator', handle:null };
+      const unreadCounts = data.unreadCounts && typeof data.unreadCounts === 'object' ? data.unreadCounts : {};
+      return {
+        id:doc.id,
+        otherUserId,
+        otherName:other.displayName,
+        otherHandle:other.handle,
+        lastMessagePreview:cleanText(data.lastMessagePreview, 180),
+        lastMessageAt:toIso(data.lastMessageAt),
+        lastSenderUserId:data.lastSenderUserId ?? null,
+        unreadCount:Math.max(0, Number(unreadCounts[identity.uid] ?? 0)),
+        collaborationId:data.collaborationId ?? null,
+      };
+    }))).sort((a,b)=>String(b.lastMessageAt ?? '').localeCompare(String(a.lastMessageAt ?? '')));
+  return { conversations, unreadCount:conversations.reduce((sum,item)=>sum+item.unreadCount,0) };
+});
+
+export const startDirectConversation = onCall({ region: REGION }, async (request) => {
+  const identity = await requireCreativeMessagingIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const targetUserId = cleanText(input.targetUserId, 160);
+  const collaborationId = cleanText(input.collaborationId, 160) || null;
+  if (!targetUserId || targetUserId === identity.uid) throw new HttpsError('invalid-argument', 'Choose another creative account.');
+
+  const target = await accountRef(targetUserId).get();
+  if (!target.exists || target.data()?.status !== 'active' || !CREATIVE_MESSAGE_ROLES.has(String(target.data()?.role ?? ''))) {
+    throw new HttpsError('not-found', 'Eligible creative account not found.');
+  }
+  const id = directConversationId(identity.uid, targetUserId);
+  const ref = db.collection('directConversations').doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) {
+    await ref.set({
+      participantUserIds:[identity.uid,targetUserId].sort(),
+      participantRoles:{ [identity.uid]:identity.role, [targetUserId]:target.data()?.role ?? null },
+      collaborationId,
+      unreadCounts:{ [identity.uid]:0, [targetUserId]:0 },
+      createdAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp(),
+      lastMessageAt:null,
+      lastMessagePreview:'',
+      lastSenderUserId:null,
+    });
+  } else if (collaborationId && !existing.data()?.collaborationId) {
+    await ref.set({ collaborationId, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  }
+  return { conversationId:id };
+});
+
+export const listDirectMessages = onCall({ region: REGION }, async (request) => {
+  const identity = await requireCreativeMessagingIdentity(request);
+  const conversationId = cleanText((request.data as { conversationId?: unknown } | undefined)?.conversationId, 320);
+  const ref = db.collection('directConversations').doc(conversationId);
+  const conversation = await ref.get();
+  const data = conversation.data();
+  if (!data || !Array.isArray(data.participantUserIds) || !data.participantUserIds.includes(identity.uid)) {
+    throw new HttpsError('not-found', 'Conversation not found.');
+  }
+  const snapshot = await ref.collection('messages').limit(500).get();
+  const messages = snapshot.docs
+    .map((doc) => directMessagePayload(doc.data(), doc.id))
+    .sort((a,b)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+
+  const unreadCounts = data.unreadCounts && typeof data.unreadCounts === 'object' ? { ...data.unreadCounts } : {};
+  unreadCounts[identity.uid] = 0;
+  await ref.set({ unreadCounts, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  return { messages };
+});
+
+export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
+  const identity = await requireCreativeMessagingIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const conversationId = cleanText(input.conversationId, 320);
+  const body = cleanText(input.body, 4000);
+  if (!conversationId || !body) throw new HttpsError('invalid-argument', 'Write a message first.');
+
+  const ref = db.collection('directConversations').doc(conversationId);
+  const conversation = await ref.get();
+  const data = conversation.data();
+  if (!data || !Array.isArray(data.participantUserIds) || !data.participantUserIds.includes(identity.uid)) {
+    throw new HttpsError('not-found', 'Conversation not found.');
+  }
+  const recipientUserId = data.participantUserIds.find((id: string) => id !== identity.uid);
+  const recipient = recipientUserId ? await accountRef(recipientUserId).get() : null;
+  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !CREATIVE_MESSAGE_ROLES.has(String(recipient.data()?.role ?? ''))) {
+    throw new HttpsError('failed-precondition', 'The recipient account is no longer available for creative messaging.');
+  }
+
+  const recent = await ref.collection('messages').where('senderUserId', '==', identity.uid).limit(100).get();
+  const oneMinuteAgo = Date.now() - 60_000;
+  if (recent.docs.filter((doc) => (doc.data().createdAt?.toMillis?.() ?? 0) >= oneMinuteAgo).length >= 12) {
+    throw new HttpsError('resource-exhausted', 'Please slow down before sending more messages.');
+  }
+
+  const presenter = await accountPresentation(identity.uid);
+  const messageRef = ref.collection('messages').doc();
+  const message = {
+    conversationId,
+    senderUserId:identity.uid,
+    senderName:presenter.displayName,
+    body,
+    status:'visible',
+    collaborationId:data.collaborationId ?? null,
+    createdAt:FieldValue.serverTimestamp(),
+  };
+  await messageRef.set(message);
+
+  const unreadCounts = data.unreadCounts && typeof data.unreadCounts === 'object' ? { ...data.unreadCounts } : {};
+  unreadCounts[recipientUserId] = Math.max(0, Number(unreadCounts[recipientUserId] ?? 0)) + 1;
+  unreadCounts[identity.uid] = 0;
+  await ref.set({
+    unreadCounts,
+    lastMessagePreview:body.slice(0,180),
+    lastMessageAt:FieldValue.serverTimestamp(),
+    lastSenderUserId:identity.uid,
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  await createNotification(recipientUserId, {
+    type:'message',
+    subtype:'direct_message',
+    title:'New private message',
+    message:presenter.displayName + ' sent you a private Nightjar message.',
+    conversationId,
+    senderUserId:identity.uid,
+  });
+
+  const saved = await messageRef.get();
+  return { message:directMessagePayload(saved.data() ?? message, messageRef.id) };
+});
+
+export const reportDirectMessage = onCall({ region: REGION }, async (request) => {
+  const identity = await requireCreativeMessagingIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const conversationId = cleanText(input.conversationId, 320);
+  const messageId = cleanText(input.messageId, 160);
+  const reason = cleanText(input.reason, 600);
+  const conversation = await db.collection('directConversations').doc(conversationId).get();
+  if (!conversation.exists || !conversation.data()?.participantUserIds?.includes(identity.uid)) throw new HttpsError('not-found', 'Conversation not found.');
+  const message = await conversation.ref.collection('messages').doc(messageId).get();
+  if (!message.exists || message.data()?.senderUserId === identity.uid) throw new HttpsError('not-found', 'Reportable message not found.');
+
+  const ref = db.collection('communityReports').doc();
+  await ref.set({
+    type:'direct_message',
+    reporterUserId:identity.uid,
+    subjectUserId:message.data()?.senderUserId ?? null,
+    conversationId,
+    messageId,
+    snapshotText:cleanText(message.data()?.body, 1200),
+    reason:reason || 'Reported by a Nightjar member.',
+    status:'open',
+    createdAt:FieldValue.serverTimestamp(),
+  });
+  return { reported:true, reportId:ref.id };
+});
+
+export const adminListCommunityReports = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('communityReports').limit(1000).get();
+  const reports = snapshot.docs
+    .filter((doc) => doc.data().status === 'open')
+    .map((doc) => ({ id:doc.id, ...doc.data(), createdAt:toIso(doc.data().createdAt) }))
+    .sort((a:any,b:any)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+  return { reports };
+});
+
+export const adminResolveCommunityReport = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const reportId = cleanText(input.reportId, 160);
+  const decision = cleanText(input.decision, 20);
+  if (!['dismiss','remove'].includes(decision)) throw new HttpsError('invalid-argument', 'Choose a valid moderation decision.');
+  const reportRef = db.collection('communityReports').doc(reportId);
+  const report = await reportRef.get();
+  const data = report.data();
+  if (!data || data.status !== 'open') throw new HttpsError('not-found', 'Open report not found.');
+
+  if (decision === 'remove' && data.type === 'release_comment' && data.commentId) {
+    await db.collection('releaseComments').doc(String(data.commentId)).set({
+      status:'removed_by_admin', body:'', moderatedBy:admin.uid, moderatedAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+  }
+  if (decision === 'remove' && data.type === 'direct_message' && data.conversationId && data.messageId) {
+    const conversationRef = db.collection('directConversations').doc(String(data.conversationId));
+    const messageRef = conversationRef.collection('messages').doc(String(data.messageId));
+    await messageRef.set({
+      status:'removed_by_admin', body:'', moderatedBy:admin.uid, moderatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+    const conversation = await conversationRef.get();
+    if (conversation.data()?.lastMessagePreview === data.snapshotText) {
+      await conversationRef.set({ lastMessagePreview:'Message removed by Nightjar moderation.', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+    }
+  }
+  await reportRef.set({
+    status:decision === 'dismiss' ? 'dismissed' : 'actioned',
+    decision,
+    resolvedBy:admin.uid,
+    resolvedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { reportId, decision };
+});
+
 const reviewPayload = (data: Record<string, any>, id: string) => ({
   id,
   releaseId: data.releaseId ?? null,
