@@ -9,6 +9,8 @@ const openCall = httpsCallable<{ conversationId:string }, { messages:any[]; bloc
 const sendCall = httpsCallable<{ conversationId:string; body:string }, { message:any }>(functions, 'sendDirectMessage');
 const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
 const reportCall = httpsCallable<{ conversationId:string; messageId:string; reason?:string }, { reported:boolean; reportId?:string }>(functions, 'reportDirectMessage');
+const adminReportsCall = httpsCallable<void, { reports:any[] }>(functions, 'adminListCommunityReports');
+const adminResolveCall = httpsCallable<{ reportId:string; decision:'dismiss'|'remove' }, { reportId:string; decision:string }>(functions, 'adminResolveCommunityReport');
 
 const normaliseConversation = (item:any) => ({
   ...item,
@@ -55,5 +57,14 @@ export const nightjarMessaging = {
 
   async report(conversationId:string, messageId:string, reason='') {
     return (await reportCall({ conversationId, messageId, reason })).data;
+  },
+
+  async adminReports() {
+    const data=(await adminReportsCall()).data;
+    return { reports:(data.reports ?? []).filter((item:any)=>item.type === 'direct_message') };
+  },
+
+  async adminResolve(reportId:string, decision:'dismissed'|'removed') {
+    return (await adminResolveCall({ reportId, decision:decision === 'removed' ? 'remove' : 'dismiss' })).data;
   },
 };
