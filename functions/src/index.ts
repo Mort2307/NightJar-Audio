@@ -4809,13 +4809,19 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
 const CREATIVE_MESSAGE_ROLES = new Set(['creator','writer','editor']);
 const directConversationId = (a: string, b: string) => createHash('sha256').update([a,b].sort().join('\u0000')).digest('hex');
 
-const directMessagingBlockedBetween = async (a: string, b: string) => {
+const directMessagingBlockState = async (a: string, b: string) => {
   const [aBlocksB,bBlocksA] = await Promise.all([
     accountRef(a).collection('messageBlocks').doc(b).get(),
     accountRef(b).collection('messageBlocks').doc(a).get(),
   ]);
-  return aBlocksB.exists || bBlocksA.exists;
+  return {
+    blockedByMe:aBlocksB.exists,
+    blockedByOther:bBlocksA.exists,
+    blocked:aBlocksB.exists || bBlocksA.exists,
+  };
 };
+
+const directMessagingBlockedBetween = async (a: string, b: string) => (await directMessagingBlockState(a,b)).blocked;
 
 const commentPayload = (data: Record<string, any>, id: string) => ({
   id,
@@ -5161,7 +5167,10 @@ export const listDirectMessages = onCall({ region: REGION }, async (request) => 
   batch.set(ref, { unreadCounts, readAt:{ ...(data.readAt ?? {}), [identity.uid]:new Date().toISOString() }, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
   await batch.commit();
   const otherUserId = data.participantUserIds.find((id:string)=>id !== identity.uid) ?? null;
-  return { messages, blocked:otherUserId ? await directMessagingBlockedBetween(identity.uid, otherUserId) : false };
+  const blockState = otherUserId
+    ? await directMessagingBlockState(identity.uid, otherUserId)
+    : { blocked:false, blockedByMe:false, blockedByOther:false };
+  return { messages, ...blockState };
 });
 
 export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
