@@ -23,8 +23,8 @@ const missing=callableNames.filter((item)=>!exported.has(item.name));
 
 const required=[
   'releaseReactionState','releaseCommunity','setReleaseReaction','postReleaseComment','deleteOwnReleaseComment','reportReleaseComment',
-  'listProfessionalConversations','startProfessionalConversation','openProfessionalConversation','sendProfessionalMessage',
-  'setProfessionalMessageBlock','reportProfessionalMessage','adminListProfessionalMessageReports','adminResolveProfessionalMessageReport',
+  'listMessageConversations','startDirectConversation','listDirectMessages','sendDirectMessage',
+  'setDirectMessageBlock','reportDirectMessage','adminListCommunityReports','adminResolveCommunityReport',
 ];
 const absentRequired=required.filter((name)=>!exported.has(name));
 
