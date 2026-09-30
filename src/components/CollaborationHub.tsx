@@ -208,6 +208,10 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
           </dl>
           {proposal.responseNote && <p className="collaboration-response"><strong>Response:</strong> {proposal.responseNote}</p>}
           <div className="collaboration-actions">
+            <button className="secondary-button" onClick={() => {
+              const targetUserId = role === 'writer' ? proposal.recipientUserId : proposal.writerUserId;
+              if (targetUserId) window.dispatchEvent(new CustomEvent('nightjar:message-user', { detail: { userId: targetUserId, collaborationId: proposal.id } }));
+            }}><MessageCircle size={13}/> Message collaborator</button>
             {onMessageUser && <button className="secondary-button" onClick={()=>onMessageUser(role === 'writer' ? proposal.recipientUserId : proposal.writerUserId)}><MessageCircle size={13}/> Message {role === 'writer' ? proposal.recipientName : proposal.writerName}</button>}
             {role !== 'writer' && !['declined','withdrawn','completed'].includes(proposal.status) && <>
               <button className="secondary-button" onClick={() => void respond(proposal, 'interested')}><Check size={13}/> Interested</button>
