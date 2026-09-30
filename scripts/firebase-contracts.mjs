@@ -10,7 +10,7 @@ const callableNames=[];
 for(const name of fs.readdirSync(platformDir)){
   if(!name.endsWith('.ts')) continue;
   const source=fs.readFileSync(path.join(platformDir,name),'utf8');
-  for(const match of source.matchAll(/httpsCallable(?:<[^;]+?>)?\s*\(functions,\s*['"]([A-Za-z0-9_]+)['"]\)/gs)){
+  for(const match of source.matchAll(/\(functions,\s*['"]([A-Za-z0-9_]+)['"]\)/g)){
     callableNames.push({file:'src/platform/'+name,name:match[1]});
   }
 }
