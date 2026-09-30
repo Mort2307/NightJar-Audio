@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Search, X } from 'lucide-react';
 
 export type NightjarCommand = {
@@ -7,7 +7,7 @@ export type NightjarCommand = {
   label: string;
   detail?: string;
   keywords?: string[];
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   action: () => void;
 };
 
