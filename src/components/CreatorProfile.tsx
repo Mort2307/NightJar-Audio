@@ -43,9 +43,8 @@ type Props = {
   demoMode?: boolean;
 };
 
-export default function CreatorProfile({
+export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onPlayRelease, onClose, notify, demoMode = false }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
- creatorUserId, followingIds, onToggleFollow, onPlayRelease, onClose, notify, demoMode = false }: Props) {
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
   const [loading, setLoading] = useState(false);
 
