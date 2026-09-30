@@ -9,6 +9,7 @@ const messagesCall = httpsCallable<{ conversationId:string }, { messages:any[]; 
 const sendCall = httpsCallable<{ conversationId:string; body:string }, { message:any }>(functions, 'sendDirectMessage');
 const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
 const reportCall = httpsCallable<{ conversationId:string; messageId:string; reason?:string }, { reported:boolean; reportId:string }>(functions, 'reportDirectMessage');
+const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
 const adminReportsCall = httpsCallable<void, { reports:any[] }>(functions, 'adminListCommunityReports');
 const adminResolveCall = httpsCallable<{ reportId:string; decision:'dismiss'|'remove' }, { reportId:string; decision:string }>(functions, 'adminResolveCommunityReport');
 
@@ -30,6 +31,9 @@ export const nightjarMessaging = {
   },
   async report(conversationId:string, messageId:string, reason='') {
     return (await reportCall({ conversationId, messageId, reason })).data;
+  },
+  async setBlock(targetUserId:string, blocked:boolean) {
+    return (await blockCall({ targetUserId, blocked })).data;
   },
   async adminReports() {
     return (await adminReportsCall()).data;
