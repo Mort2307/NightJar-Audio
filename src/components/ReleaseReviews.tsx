@@ -12,6 +12,7 @@ type Props = {
   simulationMode?: boolean;
   viewerRole?: string | null;
   currentUserId?: string | null;
+  onCommunityChanged?: (summary: { likes:number; loves:number; total:number; comments:number }) => void;
 };
 
 export default function ReleaseReviews({
@@ -22,6 +23,7 @@ export default function ReleaseReviews({
   simulationMode = false,
   viewerRole = null,
   currentUserId = null,
+  onCommunityChanged,
 }: Props) {
   const canCommunityInteract = viewerRole === 'listener';
   const dialogRef = useRef<HTMLElement | null>(null);
@@ -59,6 +61,7 @@ export default function ReleaseReviews({
           reactions:{ likes:18, loves:37, total:55, myReaction:null },
           canInteract:canCommunityInteract,
         });
+        onCommunityChanged?.({ likes:18, loves:37, total:55, comments:2 });
       } else {
         const [reviewData, communityData] = await Promise.all([
           nightjarReviews.list(release.id),
@@ -66,6 +69,12 @@ export default function ReleaseReviews({
         ]);
         setReviews(reviewData);
         setCommunity(communityData);
+        onCommunityChanged?.({
+          likes:Number(communityData.reactions?.likes ?? 0),
+          loves:Number(communityData.reactions?.loves ?? 0),
+          total:Number(communityData.reactions?.total ?? 0),
+          comments:Number(communityData.comments?.length ?? 0),
+        });
         if (reviewData.myReview) {
           setRating(reviewData.myReview.rating ?? 5);
           setReview(reviewData.myReview.review ?? '');
@@ -110,10 +119,23 @@ export default function ReleaseReviews({
       if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to comment.');
       if (simulationMode) {
         const next={ id:'demo-comment-'+Date.now(), userId:currentUserId ?? 'demo-listener', commenterName:'You', commenterHandle:'you', body, createdAt:new Date().toISOString() };
-        setCommunity((current:any)=>({ ...current, comments:[...(current.comments??[]),next] }));
+        setCommunity((current:any)=>{
+          const updated={ ...current, comments:[...(current.comments??[]),next] };
+          onCommunityChanged?.({ likes:Number(updated.reactions?.likes??0), loves:Number(updated.reactions?.loves??0), total:Number(updated.reactions?.total??0), comments:updated.comments.length });
+          return updated;
+        });
       } else {
         const next=await nightjarEngagement.comment(release.id,body);
-        setCommunity((current:any)=>({ ...current, comments:[...(current.comments??[]),next.comment] }));
+        setCommunity((current:any)=>{
+          const updated={ ...current, comments:[...(current.comments??[]),next.comment], ...(next.reactions ? { reactions:next.reactions } : {}) };
+          onCommunityChanged?.({
+            likes:Number(updated.reactions?.likes??0),
+            loves:Number(updated.reactions?.loves??0),
+            total:Number(updated.reactions?.total??0),
+            comments:Number(next.commentCount ?? updated.comments.length),
+          });
+          return updated;
+        });
       }
       setComment('');
       notify('Comment posted.');
@@ -140,11 +162,17 @@ export default function ReleaseReviews({
           if(previous==='love') loves=Math.max(0,loves-1);
           if(nextReaction==='like') likes+=1;
           if(nextReaction==='love') loves+=1;
-          return {...current,reactions:{likes,loves,total:likes+loves,myReaction:nextReaction||null}};
+          const updated={...current,reactions:{likes,loves,total:likes+loves,myReaction:nextReaction||null}};
+          onCommunityChanged?.({ likes, loves, total:likes+loves, comments:Number(current.comments?.length??0) });
+          return updated;
         });
       } else {
         const next=await nightjarEngagement.setReaction(release.id,nextReaction);
-        setCommunity((current:any)=>({ ...current, ...next }));
+        setCommunity((current:any)=>{
+          const updated={ ...current, ...next };
+          onCommunityChanged?.({ likes:Number(updated.reactions?.likes??0), loves:Number(updated.reactions?.loves??0), total:Number(updated.reactions?.total??0), comments:Number(updated.comments?.length??0) });
+          return updated;
+        });
       }
     } catch {
       notify('Reaction could not be updated.');
@@ -157,7 +185,11 @@ export default function ReleaseReviews({
     if (!window.confirm('Delete this comment?')) return;
     try {
       if (!simulationMode) await nightjarEngagement.deleteComment(item.id);
-      setCommunity((current:any)=>({ ...current, comments:(current.comments??[]).filter((entry:any)=>entry.id!==item.id) }));
+      setCommunity((current:any)=>{
+        const updated={ ...current, comments:(current.comments??[]).filter((entry:any)=>entry.id!==item.id) };
+        onCommunityChanged?.({ likes:Number(updated.reactions?.likes??0), loves:Number(updated.reactions?.loves??0), total:Number(updated.reactions?.total??0), comments:updated.comments.length });
+        return updated;
+      });
       notify('Comment deleted.');
     } catch {
       notify('Comment could not be deleted.');
