@@ -4441,6 +4441,14 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
 const CREATIVE_MESSAGE_ROLES = new Set(['creator','writer','editor']);
 const directConversationId = (a: string, b: string) => [a,b].sort().join('__');
 
+const directMessagingBlockedBetween = async (a: string, b: string) => {
+  const [aBlocksB,bBlocksA] = await Promise.all([
+    accountRef(a).collection('messageBlocks').doc(b).get(),
+    accountRef(b).collection('messageBlocks').doc(a).get(),
+  ]);
+  return aBlocksB.exists || bBlocksA.exists;
+};
+
 const commentPayload = (data: Record<string, any>, id: string) => ({
   id,
   releaseId: data.releaseId ?? null,
@@ -4461,7 +4469,9 @@ const directMessagePayload = (data: Record<string, any>, id: string) => ({
   body: data.status === 'removed_by_admin' ? '' : cleanText(data.body, 4000),
   status: data.status ?? 'visible',
   collaborationId: data.collaborationId ?? null,
+  readBy: Array.isArray(data.readBy) ? data.readBy.map(String) : [],
   createdAt: toIso(data.createdAt),
+  updatedAt: toIso(data.updatedAt),
 });
 
 const releaseCommunityState = async (releaseId: string, viewerUserId: string) => {
@@ -4686,12 +4696,16 @@ export const listMessageConversations = onCall({ region: REGION }, async (reques
       const data = doc.data() ?? {};
       const otherUserId = (data.participantUserIds ?? []).find((id: string) => id !== identity.uid) ?? null;
       const other = otherUserId ? await accountPresentation(otherUserId) : { displayName:'Nightjar collaborator', handle:null };
+      const otherAccount = otherUserId ? await accountRef(otherUserId).get() : null;
+      const otherProfile = otherUserId ? await profileRef(otherUserId).get() : null;
       const unreadCounts = data.unreadCounts && typeof data.unreadCounts === 'object' ? data.unreadCounts : {};
       return {
         id:doc.id,
         otherUserId,
         otherName:other.displayName,
         otherHandle:other.handle,
+        otherRole:otherAccount?.data()?.role ?? null,
+        otherAvatarUrl:otherProfile?.data()?.avatarStatus === 'approved' ? otherProfile?.data()?.avatarUrl ?? null : null,
         lastMessagePreview:cleanText(data.lastMessagePreview, 180),
         lastMessageAt:toIso(data.lastMessageAt),
         lastSenderUserId:data.lastSenderUserId ?? null,
@@ -4712,6 +4726,9 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
   const target = await accountRef(targetUserId).get();
   if (!target.exists || target.data()?.status !== 'active' || !CREATIVE_MESSAGE_ROLES.has(String(target.data()?.role ?? ''))) {
     throw new HttpsError('not-found', 'Eligible creative account not found.');
+  }
+  if (await directMessagingBlockedBetween(identity.uid, targetUserId)) {
+    throw new HttpsError('permission-denied', 'Private messaging is blocked between these accounts.');
   }
   const id = directConversationId(identity.uid, targetUserId);
   const ref = db.collection('directConversations').doc(id);
@@ -4744,14 +4761,24 @@ export const listDirectMessages = onCall({ region: REGION }, async (request) => 
     throw new HttpsError('not-found', 'Conversation not found.');
   }
   const snapshot = await ref.collection('messages').limit(500).get();
+  const batch = db.batch();
   const messages = snapshot.docs
-    .map((doc) => directMessagePayload(doc.data(), doc.id))
+    .map((doc) => {
+      const value = doc.data();
+      const readBy = Array.isArray(value.readBy) ? value.readBy.map(String) : [];
+      if (!readBy.includes(identity.uid)) {
+        batch.set(doc.ref, { readBy:[...readBy,identity.uid], updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      }
+      return directMessagePayload({ ...value, readBy:Array.from(new Set([...readBy,identity.uid])) }, doc.id);
+    })
     .sort((a,b)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
 
   const unreadCounts = data.unreadCounts && typeof data.unreadCounts === 'object' ? { ...data.unreadCounts } : {};
   unreadCounts[identity.uid] = 0;
-  await ref.set({ unreadCounts, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
-  return { messages };
+  batch.set(ref, { unreadCounts, readAt:{ ...(data.readAt ?? {}), [identity.uid]:new Date().toISOString() }, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  await batch.commit();
+  const otherUserId = data.participantUserIds.find((id:string)=>id !== identity.uid) ?? null;
+  return { messages, blocked:otherUserId ? await directMessagingBlockedBetween(identity.uid, otherUserId) : false };
 });
 
 export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
@@ -4772,6 +4799,9 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
   if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !CREATIVE_MESSAGE_ROLES.has(String(recipient.data()?.role ?? ''))) {
     throw new HttpsError('failed-precondition', 'The recipient account is no longer available for creative messaging.');
   }
+  if (await directMessagingBlockedBetween(identity.uid, recipientUserId)) {
+    throw new HttpsError('permission-denied', 'Private messaging is blocked between these accounts.');
+  }
 
   const recent = await ref.collection('messages').where('senderUserId', '==', identity.uid).limit(100).get();
   const oneMinuteAgo = Date.now() - 60_000;
@@ -4788,7 +4818,9 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
     body,
     status:'visible',
     collaborationId:data.collaborationId ?? null,
+    readBy:[identity.uid],
     createdAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
   };
   await messageRef.set(message);
 
@@ -4814,6 +4846,20 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
 
   const saved = await messageRef.get();
   return { message:directMessagePayload(saved.data() ?? message, messageRef.id) };
+});
+
+export const setDirectMessageBlock = onCall({ region: REGION }, async (request) => {
+  const identity = await requireCreativeMessagingIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const targetUserId = cleanText(input.targetUserId, 160);
+  const blocked = input.blocked === true;
+  if (!targetUserId || targetUserId === identity.uid) throw new HttpsError('invalid-argument', 'Choose another creative account.');
+  const target = await accountRef(targetUserId).get();
+  if (!target.exists || !CREATIVE_MESSAGE_ROLES.has(String(target.data()?.role ?? ''))) throw new HttpsError('not-found', 'Creative account not found.');
+  const ref = accountRef(identity.uid).collection('messageBlocks').doc(targetUserId);
+  if (blocked) await ref.set({ targetUserId, createdAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  else await ref.delete().catch(()=>undefined);
+  return { targetUserId, blocked };
 });
 
 export const reportDirectMessage = onCall({ region: REGION }, async (request) => {
