@@ -768,3 +768,26 @@ textarea {
     margin-left:0;
   }
 }
+
+
+.nj-toast {
+  display:flex !important;
+  align-items:center;
+  gap:10px;
+}
+.nj-toast > span {
+  flex:1;
+}
+.nj-toast > button {
+  border:1px solid rgba(203,181,204,.22);
+  border-radius:8px;
+  padding:6px 9px;
+  background:rgba(203,181,204,.08);
+  color:#eadde7;
+  font:inherit;
+  font-size:8px;
+  font-weight:800;
+}
+.nj-toast > button:hover {
+  background:rgba(203,181,204,.14);
+}
