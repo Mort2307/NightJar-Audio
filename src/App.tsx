@@ -49,6 +49,7 @@ import {
   WalletCards,
   ImagePlus,
   RefreshCw,
+  Handshake,
 } from 'lucide-react';
 import CreatorAudioPipeline from './components/CreatorAudioPipeline';
 import CreatorProfile from './components/CreatorProfile';
@@ -67,6 +68,7 @@ import ScriptMarketplace from './components/ScriptMarketplace';
 import ReleaseReviews from './components/ReleaseReviews';
 import SearchableMultiSelect from './components/SearchableMultiSelect';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS, PROFILE_CATEGORY_OPTIONS, ROLE_FOCUS_OPTIONS, ROLE_PROFILE_CONFIG } from './data/nightjarTaxonomy';
+import { installNativeProtectionBridge } from './platform/native-protection';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'admin' | 'protection' | 'profile';
@@ -144,6 +146,27 @@ type CreatorSummary = {
   categories?: string[];
   specialties?: string[];
   availability?: string | null;
+};
+
+type PublicDirectoryProfile = {
+  userId: string;
+  role: Exclude<AccountRole, 'admin'>;
+  name: string;
+  handle?: string | null;
+  headline?: string | null;
+  bio?: string | null;
+  followerCount?: number;
+  avatarUrl?: string | null;
+  avatarInitials?: string | null;
+  favouriteTags?: string[];
+  favouriteCategories?: string[];
+  roleSpecialties?: string[];
+  roleAvailability?: string | null;
+  releaseCount?: number;
+  publishedWorkCount?: number;
+  creditedReleaseCount?: number;
+  completedCollaborations?: number;
+  activityBadges?: { id: string; label: string; detail: string }[];
 };
 
 type Spotlight = {
@@ -305,6 +328,11 @@ function App() {
   const [creatorTagFilter, setCreatorTagFilter] = useState('all');
   const [creatorAvailabilityFilter, setCreatorAvailabilityFilter] = useState('all');
   const [creatorDirectory, setCreatorDirectory] = useState<CreatorSummary[]>([]);
+  const [profileDirectory, setProfileDirectory] = useState<PublicDirectoryProfile[]>([]);
+  const [directoryQuery, setDirectoryQuery] = useState('');
+  const [directoryRoleFilter, setDirectoryRoleFilter] = useState<'all' | 'creator' | 'writer' | 'editor' | 'listener'>('all');
+  const [directoryTagFilter, setDirectoryTagFilter] = useState('all');
+  const [directoryAvailabilityFilter, setDirectoryAvailabilityFilter] = useState('all');
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
   const [editorSpotlightList, setEditorSpotlightList] = useState<Spotlight[]>([]);
@@ -342,6 +370,8 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [moderationPreviewAsset]);
 
+  useEffect(() => installNativeProtectionBridge(), []);
+
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
   const creatorSpotlight = creatorSpotlightList[0] ?? null;
   const writerSpotlight = writerSpotlightList[0] ?? null;
@@ -371,6 +401,43 @@ function App() {
       return true;
     });
   }, [creatorDirectory, creatorQuery, creatorTagFilter, creatorAvailabilityFilter]);
+  const directoryTagOptions = useMemo(() => Array.from(new Set(
+    profileDirectory.flatMap((profile) => [
+      ...(profile.favouriteTags ?? []),
+      ...(profile.roleSpecialties ?? []),
+      ...(profile.favouriteCategories ?? []),
+    ]),
+  )).sort((a, b) => a.localeCompare(b)), [profileDirectory]);
+  const directoryAvailabilityOptions = useMemo(() => Array.from(new Set(
+    profileDirectory.map((profile) => profile.roleAvailability).filter((value): value is string => Boolean(value)),
+  )).sort((a, b) => a.localeCompare(b)), [profileDirectory]);
+  const filteredDirectoryProfiles = useMemo(() => {
+    const query = directoryQuery.trim().toLowerCase();
+    return profileDirectory.filter((profile) => {
+      const searchable = [
+        profile.name,
+        profile.handle,
+        profile.headline,
+        profile.bio,
+        profile.role,
+        profile.roleAvailability,
+        ...(profile.favouriteTags ?? []),
+        ...(profile.roleSpecialties ?? []),
+        ...(profile.favouriteCategories ?? []),
+        ...(profile.activityBadges ?? []).map((badge) => badge.label),
+      ].filter(Boolean).join(' ').toLowerCase();
+      const taxonomy = [
+        ...(profile.favouriteTags ?? []),
+        ...(profile.roleSpecialties ?? []),
+        ...(profile.favouriteCategories ?? []),
+      ];
+      if (query && !searchable.includes(query)) return false;
+      if (directoryRoleFilter !== 'all' && profile.role !== directoryRoleFilter) return false;
+      if (directoryTagFilter !== 'all' && !taxonomy.includes(directoryTagFilter)) return false;
+      if (directoryAvailabilityFilter !== 'all' && profile.roleAvailability !== directoryAvailabilityFilter) return false;
+      return true;
+    });
+  }, [profileDirectory, directoryQuery, directoryRoleFilter, directoryTagFilter, directoryAvailabilityFilter]);
   const filteredTracks = useMemo(() => {
     const query = catalogueQuery.trim().toLowerCase();
     return tracks.filter((track) => {
@@ -566,6 +633,18 @@ function App() {
       if (demoMode) {
         setTracks(readDemo('tracks', demoTracks) as Track[]);
         setCreatorDirectory(structuredClone(demoCreators));
+        setProfileDirectory([
+          ...structuredClone(demoCreators).map((item:any) => ({
+            userId:item.userId, role:'creator' as const, name:item.name, handle:item.handle, headline:item.note,
+            followerCount:item.followers, avatarInitials:item.initials, favouriteTags:['Atmospheric','Story-led'],
+            favouriteCategories:['Audio roleplay'], roleSpecialties:['Character roleplay','Narration'],
+            roleAvailability:'Open to collaborations', releaseCount:item.releases, completedCollaborations:4,
+            activityBadges:[{id:'published-creator',label:'Published Creator',detail:'Has released work in the Nightjar catalogue.'},{id:'completed-collaborator',label:'Completed Collaborator',detail:'Has completed Nightjar collaborations.'}],
+          })),
+          { userId:'demo-writer-mara', role:'writer', name:'Mara Bell', handle:'marabell', headline:'Dialogue-first Writer', followerCount:486, avatarInitials:'MB', favouriteTags:['Dialogue-heavy','Story-led'], favouriteCategories:['Erotic romance'], roleSpecialties:['Dialogue','Character development'], roleAvailability:'Open to commissions', publishedWorkCount:3, creditedReleaseCount:2, completedCollaborations:3, activityBadges:[{id:'published-writer',label:'Published Writer',detail:'Has published writing recorded by Nightjar.'},{id:'completed-collaborator',label:'Completed Collaborator',detail:'Has completed Nightjar collaborations.'}] },
+          { userId:'demo-editor-sam', role:'editor', name:'Sam Reed', handle:'samreed', headline:'Dialogue, mixing and production polish', followerCount:352, avatarInitials:'SR', favouriteTags:['Sound-rich','Cinematic'], favouriteCategories:['Audio drama'], roleSpecialties:['Dialogue editing','Mixing'], roleAvailability:'Open for bookings', creditedReleaseCount:4, completedCollaborations:5, activityBadges:[{id:'credited-editor',label:'Credited Audio Editor',detail:'Has public Nightjar release credits.'},{id:'frequent-collaborator',label:'Frequent Collaborator',detail:'Five or more completed Nightjar collaborations.'}] },
+          { userId:'demo-listener-jamie', role:'listener', name:'Jamie', handle:'jamielistens', headline:'Late-night story listener', followerCount:74, avatarInitials:'JL', favouriteTags:['Atmospheric','Slow-paced'], favouriteCategories:['Romantic story'], roleSpecialties:['Story-first','Atmospheric'], roleAvailability:null, activityBadges:[] },
+        ] as PublicDirectoryProfile[]);
         setCreatorSpotlightList(structuredClone(demoSpotlights.creators) as Spotlight[]);
         setWriterSpotlightList(structuredClone(demoSpotlights.writers) as Spotlight[]);
         setEditorSpotlightList(structuredClone(demoSpotlights.editors) as Spotlight[]);
@@ -580,9 +659,10 @@ function App() {
         setFollowingProfileIds(readDemo('following', ['demo-creator-aria','demo-creator-rowan']));
         return;
       }
-      const [catalogueResponse, creatorsResponse, firebaseSpotlightResponse] = await Promise.all([
+      const [catalogueResponse, creatorsResponse, directoryResponse, firebaseSpotlightResponse] = await Promise.all([
         nightjarCatalogue.list(),
         nightjarCommunity.listCreators(),
+        nightjarCommunity.listPublicProfiles(),
         nightjarCommunity.spotlightState(),
       ]);
       if (epoch !== productLoadEpoch.current) return;
@@ -622,6 +702,26 @@ function App() {
         categories: creator.favouriteCategories ?? [],
         specialties: creator.roleSpecialties ?? [],
         availability: creator.roleAvailability ?? null,
+      })));
+      setProfileDirectory((directoryResponse.profiles ?? []).map((item:any) => ({
+        userId:String(item.userId),
+        role:item.role,
+        name:item.displayName ?? item.name ?? 'Nightjar member',
+        handle:item.handle ?? null,
+        headline:item.headline ?? null,
+        bio:item.bio ?? null,
+        followerCount:Number(item.followerCount ?? 0),
+        avatarUrl:item.avatarUrl ?? null,
+        avatarInitials:item.avatarInitials ?? item.initials ?? null,
+        favouriteTags:item.favouriteTags ?? [],
+        favouriteCategories:item.favouriteCategories ?? [],
+        roleSpecialties:item.roleSpecialties ?? [],
+        roleAvailability:item.roleAvailability ?? null,
+        releaseCount:Number(item.releaseCount ?? 0),
+        publishedWorkCount:Number(item.publishedWorkCount ?? 0),
+        creditedReleaseCount:Number(item.creditedReleaseCount ?? 0),
+        completedCollaborations:Number(item.completedCollaborations ?? 0),
+        activityBadges:item.activityBadges ?? [],
       })));
       const spotlights = firebaseSpotlightResponse.spotlights ?? [];
       const mapSpotlight = (item: any): Spotlight => ({
@@ -667,6 +767,7 @@ function App() {
       if (epoch !== productLoadEpoch.current) return;
       setTracks([]);
       setCreatorDirectory([]);
+      setProfileDirectory([]);
       setCreatorSpotlightList([]);
       setWriterSpotlightList([]);
       setEditorSpotlightList([]);
