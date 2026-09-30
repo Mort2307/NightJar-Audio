@@ -4960,14 +4960,20 @@ export const setReleaseReaction = onCall({ region: REGION }, async (request) => 
     else await legacyLoveRef.delete().catch(()=>undefined);
   }
 
-  if (reaction && releaseData.creatorUserId && releaseData.creatorUserId !== identity.uid) {
-    await createNotification(String(releaseData.creatorUserId), {
+  if (reaction) {
+    const recipients = new Set<string>();
+    const creatorUserId = cleanText(releaseData.creatorUserId, 160);
+    if (creatorUserId && creatorUserId !== identity.uid) recipients.add(creatorUserId);
+    for (const credit of normaliseReleaseContributors(releaseData.contributors)) {
+      if (credit.userId && credit.userId !== identity.uid) recipients.add(credit.userId);
+    }
+    await Promise.all([...recipients].map((recipientUserId) => createNotification(recipientUserId, {
       type:'comment',
       subtype:'release_reaction',
-      title:'New reaction to your published work',
-      message:'A Listener reacted to ' + String(releaseData.title ?? 'your Nightjar release') + '.',
+      title:'New reaction to published work',
+      message:'A Listener reacted to ' + String(releaseData.title ?? 'a Nightjar release') + '.',
       releaseId,
-    });
+    })));
   }
 
   return releaseCommunityState(releaseId, identity.uid);
