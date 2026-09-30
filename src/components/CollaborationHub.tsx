@@ -33,7 +33,18 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
     try {
       if (demoMode) {
         setProposals(readDemo('collaborations', demoCollaborations));
-        setDirectory(structuredClone(demoDirectory));
+        setDirectory(structuredClone(demoDirectory).map((person:any) => ({
+          ...person,
+          roleAvailability: person.role === 'creator' ? 'Open to collaborations' : person.role === 'editor' ? 'Open for bookings' : person.role === 'writer' ? 'Open to commissions' : null,
+          roleSpecialties: person.role === 'creator' ? ['Character roleplay','Narration'] : person.role === 'editor' ? ['Dialogue editing','Mixing'] : person.role === 'writer' ? ['Dialogue','Character development'] : [],
+          favouriteTags: person.role === 'creator' ? ['Atmospheric','Story-led'] : person.role === 'editor' ? ['Sound-rich','Cinematic'] : ['Dialogue-heavy'],
+          completedCollaborations: person.role === 'editor' ? 5 : person.role === 'creator' ? 4 : person.role === 'writer' ? 3 : 0,
+          activityBadges: person.role === 'creator'
+            ? [{id:'published-creator',label:'Published Creator',detail:'Has released work in the Nightjar catalogue.'},{id:'completed-collaborator',label:'Completed Collaborator',detail:'Has completed Nightjar collaborations.'}]
+            : person.role === 'editor'
+              ? [{id:'credited-editor',label:'Credited Audio Editor',detail:'Has public Nightjar release credits.'},{id:'frequent-collaborator',label:'Frequent Collaborator',detail:'Five or more completed Nightjar collaborations.'}]
+              : [],
+        })));
         if (role === 'writer') {
           const nextScripts = readDemo('writerScripts', demoWriterScripts);
           setScripts(nextScripts);
