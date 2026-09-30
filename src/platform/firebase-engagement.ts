@@ -14,11 +14,11 @@ const reactionCall = httpsCallable<{ releaseId: string; reaction: ReleaseReactio
   comments: any[];
   reactions: { likes: number; loves: number; total: number; myReaction: ReleaseReaction };
 }>(functions, 'setReleaseReaction');
-const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any }>(functions, 'submitReleaseComment');
-const deleteCommentCall = httpsCallable<{ commentId: string }, { deleted: boolean; commentId: string }>(functions, 'deleteMyReleaseComment');
+const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any }>(functions, 'postReleaseComment');
+const deleteCommentCall = httpsCallable<{ commentId: string }, { deleted: boolean; commentId: string }>(functions, 'deleteOwnReleaseComment');
 const reportCommentCall = httpsCallable<{ commentId: string; reason?: string }, { reported: boolean; commentId: string }>(functions, 'reportReleaseComment');
-const adminReportsCall = httpsCallable<void, { comments: any[] }>(functions, 'adminListCommentReports');
-const adminModerateCall = httpsCallable<{ commentId: string; decision: 'keep' | 'remove' }, { comment: any }>(functions, 'adminModerateReleaseComment');
+const adminReportsCall = httpsCallable<void, { reports: any[] }>(functions, 'adminListCommunityReports');
+const adminModerateCall = httpsCallable<{ reportId: string; decision: 'dismiss' | 'remove' }, { reportId: string; decision: string }>(functions, 'adminResolveCommunityReport');
 
 export const nightjarEngagement = {
   async state() {
@@ -40,9 +40,10 @@ export const nightjarEngagement = {
     return (await reportCommentCall({ commentId, reason })).data;
   },
   async adminReports() {
-    return (await adminReportsCall()).data;
+    const data = (await adminReportsCall()).data;
+    return { reports:(data.reports ?? []).filter((item:any) => item.type === 'release_comment') };
   },
-  async moderateComment(commentId: string, decision: 'keep' | 'remove') {
-    return (await adminModerateCall({ commentId, decision })).data;
+  async moderateCommentReport(reportId: string, decision: 'dismiss' | 'remove') {
+    return (await adminModerateCall({ reportId, decision })).data;
   },
 };
