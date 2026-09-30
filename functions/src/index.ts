@@ -4529,3 +4529,244 @@ export const adminModerateReview = onCall({ region: REGION }, async (request) =>
   const saved = await ref.get();
   return { review: reviewPayload(saved.data() ?? {}, reviewId) };
 });
+
+
+const releaseCommentPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  releaseId: cleanText(data.releaseId, 160) || null,
+  releaseTitle: cleanText(data.releaseTitle, 240) || 'Nightjar release',
+  userId: cleanText(data.userId, 160) || null,
+  commenterName: cleanText(data.commenterName, 120) || 'Nightjar listener',
+  commenterHandle: cleanText(data.commenterHandle, 80) || null,
+  body: cleanText(data.body, 1200),
+  status: cleanText(data.status, 30) || 'published',
+  reportCount: Math.max(0, Number(data.reportCount ?? 0)),
+  createdAt: toIso(data.createdAt),
+  updatedAt: toIso(data.updatedAt),
+  moderatedAt: toIso(data.moderatedAt),
+});
+
+const releaseReactionPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  releaseId: cleanText(data.releaseId, 160) || null,
+  userId: cleanText(data.userId, 160) || null,
+  reaction: ['like','love'].includes(String(data.reaction ?? '')) ? String(data.reaction) : null,
+  updatedAt: toIso(data.updatedAt),
+});
+
+const releaseCommunitySnapshot = async (releaseId: string, viewerUserId: string) => {
+  const [commentsSnapshot, reactionsSnapshot] = await Promise.all([
+    db.collection('releaseComments').where('releaseId', '==', releaseId).limit(500).get(),
+    db.collection('releaseReactions').where('releaseId', '==', releaseId).limit(2000).get(),
+  ]);
+  const comments = commentsSnapshot.docs
+    .filter((doc) => doc.data().status === 'published')
+    .map((doc) => releaseCommentPayload(doc.data(), doc.id))
+    .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+  let likes = 0;
+  let loves = 0;
+  let myReaction: string | null = null;
+  for (const doc of reactionsSnapshot.docs) {
+    const data = doc.data();
+    if (data.reaction === 'like') likes += 1;
+    if (data.reaction === 'love') loves += 1;
+    if (data.userId === viewerUserId) myReaction = ['like','love'].includes(String(data.reaction)) ? String(data.reaction) : null;
+  }
+  return { comments, reactions: { likes, loves, total: likes + loves, myReaction } };
+};
+
+export const releaseCommunity = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  const release = await releaseRef(releaseId).get();
+  if (!release.exists || release.data()?.status !== 'released') throw new HttpsError('not-found', 'Release not found.');
+  return releaseCommunitySnapshot(releaseId, identity.uid);
+});
+
+export const submitReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const body = cleanText(input.body, 1200);
+  if (!releaseId || !body) throw new HttpsError('invalid-argument', 'Write a comment before posting.');
+
+  const [release, presenter] = await Promise.all([
+    releaseRef(releaseId).get(),
+    accountPresentation(identity.uid),
+  ]);
+  const releaseData = release.data();
+  if (!releaseData || releaseData.status !== 'released') throw new HttpsError('not-found', 'Release not found.');
+
+  const ref = db.collection('releaseComments').doc();
+  const record = {
+    releaseId,
+    releaseTitle: releaseData.title ?? 'Nightjar release',
+    userId: identity.uid,
+    commenterName: presenter.displayName,
+    commenterHandle: presenter.handle,
+    body,
+    status: 'published',
+    reportCount: 0,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+
+  const recipients = new Set<string>();
+  const creatorUserId = cleanText(releaseData.creatorUserId, 160);
+  if (creatorUserId && creatorUserId !== identity.uid) recipients.add(creatorUserId);
+  for (const credit of normaliseReleaseContributors(releaseData.contributors)) {
+    if (credit.userId && credit.userId !== identity.uid) recipients.add(credit.userId);
+  }
+  await Promise.all([...recipients].map((recipientUserId) => createNotification(recipientUserId, {
+    type: 'comment',
+    subtype: 'release_comment',
+    title: 'New comment on published work',
+    message: presenter.displayName + ' commented on ' + String(releaseData.title ?? 'a Nightjar release') + '.',
+    releaseId,
+    commentId: ref.id,
+  })));
+
+  const saved = await ref.get();
+  return { comment: releaseCommentPayload(saved.data() ?? record, ref.id) };
+});
+
+export const deleteMyReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  const commentId = cleanText((request.data as { commentId?: unknown } | undefined)?.commentId, 160);
+  const ref = db.collection('releaseComments').doc(commentId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists || snapshot.data()?.userId !== identity.uid) throw new HttpsError('not-found', 'Comment not found.');
+  await ref.set({ status:'deleted', body:'', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  return { deleted:true, commentId };
+});
+
+export const setReleaseReaction = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const reaction = cleanText(input.reaction, 20);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  if (reaction && !['like','love'].includes(reaction)) throw new HttpsError('invalid-argument', 'Choose Like or Love.');
+
+  const release = await releaseRef(releaseId).get();
+  const releaseData = release.data();
+  if (!releaseData || releaseData.status !== 'released') throw new HttpsError('not-found', 'Release not found.');
+
+  const ref = db.collection('releaseReactions').doc(identity.uid + '_' + releaseId);
+  if (!reaction) {
+    await ref.delete().catch(() => undefined);
+  } else {
+    await ref.set({
+      releaseId,
+      userId: identity.uid,
+      reaction,
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    }, { merge:true });
+  }
+
+  if (reaction && releaseData.creatorUserId && releaseData.creatorUserId !== identity.uid) {
+    await createNotification(String(releaseData.creatorUserId), {
+      type:'comment',
+      subtype:'release_reaction',
+      title:'Someone reacted to your release',
+      message:'A Listener reacted to ' + String(releaseData.title ?? 'your Nightjar release') + '.',
+      releaseId,
+    });
+  }
+
+  return releaseCommunitySnapshot(releaseId, identity.uid);
+});
+
+export const reportReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const commentId = cleanText(input.commentId, 160);
+  const reason = cleanText(input.reason, 800) || 'Community report';
+  const commentRef = db.collection('releaseComments').doc(commentId);
+  const comment = await commentRef.get();
+  if (!comment.exists || comment.data()?.status !== 'published') throw new HttpsError('not-found', 'Comment not found.');
+
+  const reportRef = db.collection('releaseCommentReports').doc(identity.uid + '_' + commentId);
+  const existed = await reportRef.get();
+  if (!existed.exists) {
+    await reportRef.set({
+      commentId,
+      releaseId: comment.data()?.releaseId ?? null,
+      reporterUserId: identity.uid,
+      reason,
+      status:'open',
+      createdAt:FieldValue.serverTimestamp(),
+    });
+    await commentRef.set({ reportCount:FieldValue.increment(1), updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  }
+  return { reported:true, commentId };
+});
+
+export const adminListCommentReports = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const [reportsSnapshot, commentsSnapshot] = await Promise.all([
+    db.collection('releaseCommentReports').limit(1000).get(),
+    db.collection('releaseComments').limit(1000).get(),
+  ]);
+  const openReports = reportsSnapshot.docs.filter((doc) => doc.data().status === 'open');
+  const reportCount = new Map<string, number>();
+  for (const report of openReports) {
+    const commentId = cleanText(report.data().commentId, 160);
+    if (commentId) reportCount.set(commentId, (reportCount.get(commentId) ?? 0) + 1);
+  }
+  const comments = commentsSnapshot.docs
+    .filter((doc) => reportCount.has(doc.id) && doc.data().status === 'published')
+    .map((doc) => ({ ...releaseCommentPayload(doc.data(), doc.id), openReports:reportCount.get(doc.id) ?? 0 }))
+    .sort((a,b) => b.openReports - a.openReports || String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+  return { comments };
+});
+
+export const adminModerateReleaseComment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const commentId = cleanText(input.commentId, 160);
+  const decision = cleanText(input.decision, 20);
+  if (!['keep','remove'].includes(decision)) throw new HttpsError('invalid-argument', 'Choose keep or remove.');
+  const ref = db.collection('releaseComments').doc(commentId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Comment not found.');
+  await ref.set({
+    status:decision === 'remove' ? 'removed' : 'published',
+    moderatedBy:admin.uid,
+    moderatedAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  const reports = await db.collection('releaseCommentReports').limit(1000).get();
+  const batch = db.batch();
+  for (const report of reports.docs) {
+    if (report.data().commentId === commentId && report.data().status === 'open') {
+      batch.set(report.ref, {
+        status:decision === 'remove' ? 'actioned' : 'dismissed',
+        reviewedBy:admin.uid,
+        reviewedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+    }
+  }
+  await batch.commit();
+
+  if (decision === 'remove' && snapshot.data()?.userId) {
+    await createNotification(String(snapshot.data()?.userId), {
+      type:'comment',
+      subtype:'comment_moderation',
+      title:'A Nightjar comment was removed',
+      message:'A comment you posted was removed after administrator review.',
+      commentId,
+      releaseId:snapshot.data()?.releaseId ?? null,
+    });
+  }
+  const saved = await ref.get();
+  return { comment:releaseCommentPayload(saved.data() ?? {}, commentId) };
+});
