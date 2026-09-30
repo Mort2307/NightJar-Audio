@@ -5091,6 +5091,9 @@ export const listMessageConversations = onCall({ region: REGION }, async (reques
       const otherAccount = otherUserId ? await accountRef(otherUserId).get() : null;
       const otherProfile = otherUserId ? await profileRef(otherUserId).get() : null;
       const unreadCounts = data.unreadCounts && typeof data.unreadCounts === 'object' ? data.unreadCounts : {};
+      const collaborationId = cleanText(data.collaborationId, 160) || null;
+      const collaboration = collaborationId ? await db.collection('collaborationProposals').doc(collaborationId).get() : null;
+      const collaborationData = collaboration?.data() ?? null;
       return {
         id:doc.id,
         otherUserId,
@@ -5102,7 +5105,9 @@ export const listMessageConversations = onCall({ region: REGION }, async (reques
         lastMessageAt:toIso(data.lastMessageAt),
         lastSenderUserId:data.lastSenderUserId ?? null,
         unreadCount:Math.max(0, Number(unreadCounts[identity.uid] ?? 0)),
-        collaborationId:data.collaborationId ?? null,
+        collaborationId,
+        collaborationTitle:collaborationData ? cleanText(collaborationData.scriptTitle, 180) || 'Nightjar collaboration' : null,
+        collaborationStatus:collaborationData ? cleanText(collaborationData.status, 40) || null : null,
       };
     }))).sort((a,b)=>String(b.lastMessageAt ?? '').localeCompare(String(a.lastMessageAt ?? '')));
   return { conversations, unreadCount:conversations.reduce((sum,item)=>sum+item.unreadCount,0) };
