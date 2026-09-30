@@ -9,6 +9,7 @@ const reportsCall = httpsCallable<void, { reports: any[] }>(functions, 'listProt
 const adminReportsCall = httpsCallable<void, { reports: any[] }>(functions, 'listAdminProtectionReports');
 const submitReportCall = httpsCallable<{ category: string; summary: string }, { report: any }>(functions, 'submitProtectionReport');
 const alertsCall = httpsCallable<void, { alerts: any[] }>(functions, 'listSecurityAlerts');
+const alertEvidenceCall = httpsCallable<{ alertId: string }, { alert: any; evidence: any[] }>(functions, 'securityAlertEvidence');
 const suspendCall = httpsCallable<{ alertId: string }, { suspended: boolean; revokedReaderSessions: number }>(functions, 'suspendFromSecurityAlert');
 const revokeCall = httpsCallable<{ alertId: string }, { revoked: boolean; userId: string; revokedReaderSessions: number }>(functions, 'revokeSessionsFromSecurityAlert');
 const benignCall = httpsCallable<{ alertId: string; note?: string }, { closed: boolean }>(functions, 'closeSecurityAlertBenign');
@@ -36,6 +37,10 @@ export const nightjarProtection = {
 
   async alerts() {
     return (await alertsCall()).data;
+  },
+
+  async alertEvidence(alertId: string) {
+    return (await alertEvidenceCall({ alertId })).data;
   },
 
   async suspend(alertId: string) {
