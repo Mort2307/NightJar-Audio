@@ -4447,7 +4447,7 @@ const commentPayload = (data: Record<string, any>, id: string) => ({
   userId: data.userId ?? null,
   commenterName: data.commenterName ?? 'Nightjar listener',
   commenterHandle: data.commenterHandle ?? null,
-  body: cleanText(data.body, 800),
+  body: cleanText(data.body, 1200),
   status: data.status ?? 'visible',
   createdAt: toIso(data.createdAt),
   updatedAt: toIso(data.updatedAt),
@@ -4462,6 +4462,210 @@ const directMessagePayload = (data: Record<string, any>, id: string) => ({
   status: data.status ?? 'visible',
   collaborationId: data.collaborationId ?? null,
   createdAt: toIso(data.createdAt),
+});
+
+const releaseCommunityState = async (releaseId: string, viewerUserId: string) => {
+  const [legacyLoves, reactionsSnapshot, commentsSnapshot] = await Promise.all([
+    db.collection('releaseLoves').where('releaseId', '==', releaseId).limit(5000).get(),
+    db.collection('releaseReactions').where('releaseId', '==', releaseId).limit(5000).get(),
+    db.collection('releaseComments').where('releaseId', '==', releaseId).limit(500).get(),
+  ]);
+
+  const reactionByUser = new Map<string,string>();
+  for (const doc of reactionsSnapshot.docs) {
+    const data = doc.data();
+    const userId = cleanText(data.userId, 160);
+    const reaction = cleanText(data.reaction, 20);
+    if (userId && ['like','love'].includes(reaction)) reactionByUser.set(userId, reaction);
+  }
+  for (const doc of legacyLoves.docs) {
+    const userId = cleanText(doc.data().userId, 160);
+    if (userId && !reactionByUser.has(userId)) reactionByUser.set(userId, 'love');
+  }
+
+  let likes = 0;
+  let loves = 0;
+  for (const reaction of reactionByUser.values()) {
+    if (reaction === 'like') likes += 1;
+    if (reaction === 'love') loves += 1;
+  }
+
+  const comments = commentsSnapshot.docs
+    .filter((doc) => doc.data().status === 'visible')
+    .map((doc) => commentPayload(doc.data(), doc.id))
+    .sort((a,b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+
+  const myReaction = reactionByUser.get(viewerUserId) ?? null;
+  return {
+    comments,
+    reactions:{ likes, loves, total:likes + loves, myReaction },
+    loveCount:loves,
+    lovedByMe:myReaction === 'love',
+  };
+};
+
+export const releaseCommunity = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  const release = await releaseRef(releaseId).get();
+  if (!release.exists || release.data()?.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+  const state = await releaseCommunityState(releaseId, identity.uid);
+  return { ...state, canInteract:identity.role === 'listener' };
+});
+
+export const setReleaseReaction = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const reaction = cleanText(input.reaction, 20);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  if (reaction && !['like','love'].includes(reaction)) throw new HttpsError('invalid-argument', 'Choose Like or Love.');
+
+  const release = await releaseRef(releaseId).get();
+  const releaseData = release.data();
+  if (!releaseData || releaseData.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+
+  const reactionRef = db.collection('releaseReactions').doc(releaseId + '__' + identity.uid);
+  const legacyLoveRef = db.collection('releaseLoves').doc(releaseId + '__' + identity.uid);
+  if (!reaction) {
+    await Promise.all([reactionRef.delete().catch(()=>undefined), legacyLoveRef.delete().catch(()=>undefined)]);
+  } else {
+    await reactionRef.set({ releaseId, userId:identity.uid, reaction, updatedAt:FieldValue.serverTimestamp(), createdAt:FieldValue.serverTimestamp() }, { merge:true });
+    if (reaction === 'love') await legacyLoveRef.set({ releaseId, userId:identity.uid, createdAt:FieldValue.serverTimestamp() }, { merge:true });
+    else await legacyLoveRef.delete().catch(()=>undefined);
+  }
+
+  if (reaction && releaseData.creatorUserId && releaseData.creatorUserId !== identity.uid) {
+    await createNotification(String(releaseData.creatorUserId), {
+      type:'comment',
+      subtype:'release_reaction',
+      title:'New reaction to your published work',
+      message:'A Listener reacted to ' + String(releaseData.title ?? 'your Nightjar release') + '.',
+      releaseId,
+    });
+  }
+
+  return releaseCommunityState(releaseId, identity.uid);
+});
+
+export const setReleaseLove = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  const release = await releaseRef(releaseId).get();
+  if (!release.exists || release.data()?.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+
+  const loved = input.loved !== false;
+  const reactionRef = db.collection('releaseReactions').doc(releaseId + '__' + identity.uid);
+  const legacyLoveRef = db.collection('releaseLoves').doc(releaseId + '__' + identity.uid);
+  if (loved) {
+    await Promise.all([
+      reactionRef.set({ releaseId, userId:identity.uid, reaction:'love', updatedAt:FieldValue.serverTimestamp(), createdAt:FieldValue.serverTimestamp() }, { merge:true }),
+      legacyLoveRef.set({ releaseId, userId:identity.uid, createdAt:FieldValue.serverTimestamp() }, { merge:true }),
+    ]);
+  } else {
+    await Promise.all([reactionRef.delete().catch(()=>undefined), legacyLoveRef.delete().catch(()=>undefined)]);
+  }
+  const state = await releaseCommunityState(releaseId, identity.uid);
+  return { releaseId, loved, loveCount:state.reactions.loves };
+});
+
+export const postReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const body = cleanText(input.body, 1200);
+  if (!releaseId || !body) throw new HttpsError('invalid-argument', 'Write a comment first.');
+
+  const release = await releaseRef(releaseId).get();
+  const releaseData = release.data();
+  if (!releaseData || releaseData.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+
+  const recent = await db.collection('releaseComments').where('userId', '==', identity.uid).limit(100).get();
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  if (recent.docs.filter((doc) => (doc.data().createdAt?.toMillis?.() ?? 0) >= fiveMinutesAgo).length >= 5) {
+    throw new HttpsError('resource-exhausted', 'Please wait before posting more comments.');
+  }
+
+  const presenter = await accountPresentation(identity.uid);
+  const ref = db.collection('releaseComments').doc();
+  const record = {
+    releaseId,
+    userId:identity.uid,
+    commenterName:presenter.displayName,
+    commenterHandle:presenter.handle,
+    body,
+    status:'visible',
+    createdAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+
+  const recipients = new Set<string>();
+  const creatorUserId = cleanText(releaseData.creatorUserId, 160);
+  if (creatorUserId && creatorUserId !== identity.uid) recipients.add(creatorUserId);
+  for (const credit of normaliseReleaseContributors(releaseData.contributors)) {
+    if (credit.userId && credit.userId !== identity.uid) recipients.add(credit.userId);
+  }
+  await Promise.all([...recipients].map((recipientUserId) => createNotification(recipientUserId, {
+    type:'comment',
+    subtype:'release_comment',
+    title:'New comment on published work',
+    message:presenter.displayName + ' commented on ' + String(releaseData.title ?? 'a Nightjar release') + '.',
+    releaseId,
+    commentId:ref.id,
+  })));
+
+  const saved = await ref.get();
+  return { comment:commentPayload(saved.data() ?? record, ref.id) };
+});
+
+export const deleteOwnReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['listener']);
+  const commentId = cleanText((request.data as { commentId?: unknown } | undefined)?.commentId, 160);
+  const ref = db.collection('releaseComments').doc(commentId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists || snapshot.data()?.userId !== identity.uid) throw new HttpsError('not-found', 'Comment not found.');
+  await ref.set({ status:'deleted_by_user', body:'', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  return { deleted:true, commentId };
+});
+
+export const reportReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const commentId = cleanText(input.commentId, 160);
+  const reason = cleanText(input.reason, 600);
+  const comment = await db.collection('releaseComments').doc(commentId).get();
+  if (!comment.exists || comment.data()?.status !== 'visible') throw new HttpsError('not-found', 'Comment not found.');
+  if (comment.data()?.userId === identity.uid) throw new HttpsError('failed-precondition', 'You can delete your own comment instead.');
+
+  const existing = await db.collection('communityReports')
+    .where('reporterUserId','==',identity.uid)
+    .limit(100).get();
+  if (existing.docs.some((doc)=>doc.data().type === 'release_comment' && doc.data().commentId === commentId && doc.data().status === 'open')) {
+    return { reported:true, reportId:existing.docs.find((doc)=>doc.data().type === 'release_comment' && doc.data().commentId === commentId)?.id ?? null };
+  }
+
+  const ref = db.collection('communityReports').doc();
+  await ref.set({
+    type:'release_comment',
+    reporterUserId:identity.uid,
+    subjectUserId:comment.data()?.userId ?? null,
+    commentId,
+    releaseId:comment.data()?.releaseId ?? null,
+    snapshotText:cleanText(comment.data()?.body, 1200),
+    reason:reason || 'Reported by a Nightjar member.',
+    status:'open',
+    createdAt:FieldValue.serverTimestamp(),
+  });
+  return { reported:true, reportId:ref.id };
 });
 
 const requireCreativeMessagingIdentity = async (request: any) => {
