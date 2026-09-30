@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Search, X } from 'lucide-react';
+import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 
 export type NightjarCommand = {
   id: string;
@@ -20,22 +21,13 @@ type Props = {
 export default function GlobalCommandPalette({ open, onClose, commands }: Props) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const paletteRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!open) {
-      setQuery('');
-      return;
-    }
-    const timer = window.setTimeout(() => inputRef.current?.focus(), 10);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open, onClose]);
+    if (!open) setQuery('');
+  }, [open]);
+
+  useDialogFocusTrap(paletteRef, { active: open, onEscape: onClose, initialFocus: inputRef });
 
   const results = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -64,7 +56,7 @@ export default function GlobalCommandPalette({ open, onClose, commands }: Props)
   };
 
   return <div className="nj-command-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar search and commands" onMouseDown={onClose}>
-    <section className="nj-command-palette" onMouseDown={(event) => event.stopPropagation()}>
+    <section ref={paletteRef} tabIndex={-1} className="nj-command-palette" onMouseDown={(event) => event.stopPropagation()}>
       <header className="nj-command-head">
         <Search size={17}/>
         <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Nightjar, people, releases or tools…" aria-label="Search Nightjar"/>
