@@ -4948,6 +4948,17 @@ export const reportDirectMessage = onCall({ region: REGION }, async (request) =>
   const message = await conversation.ref.collection('messages').doc(messageId).get();
   if (!message.exists || message.data()?.senderUserId === identity.uid) throw new HttpsError('not-found', 'Reportable message not found.');
 
+  const existing = await db.collection('communityReports')
+    .where('reporterUserId','==',identity.uid)
+    .limit(100).get();
+  const duplicate = existing.docs.find((doc) =>
+    doc.data().type === 'direct_message'
+    && doc.data().conversationId === conversationId
+    && doc.data().messageId === messageId
+    && doc.data().status === 'open'
+  );
+  if (duplicate) return { reported:true, reportId:duplicate.id };
+
   const ref = db.collection('communityReports').doc();
   await ref.set({
     type:'direct_message',
