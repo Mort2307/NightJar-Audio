@@ -2778,6 +2778,7 @@ export const listNotifications = onCall({ region: REGION }, async (request) => {
     collaborations: stored.collaborations !== false,
     payments: stored.payments !== false,
     comments: stored.comments !== false,
+    messages: stored.messages !== false,
     announcements: stored.announcements !== false,
   };
 
