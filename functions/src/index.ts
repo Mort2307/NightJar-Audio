@@ -3825,9 +3825,11 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
 export const collaborationDirectory = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [snapshot, collaborations] = await Promise.all([
+  const [snapshot, collaborations, publicReleases, scripts] = await Promise.all([
     db.collection('accounts').limit(1000).get(),
     db.collection('collaborationProposals').limit(1000).get(),
+    db.collection('releases').where('status', '==', 'released').limit(1000).get(),
+    db.collection('scripts').limit(1000).get(),
   ]);
   const completedByUser = new Map<string, number>();
   for (const collaboration of collaborations.docs) {
@@ -3836,6 +3838,22 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
     for (const userId of [cleanText(data.writerUserId, 160), cleanText(data.recipientUserId, 160)].filter(Boolean)) {
       completedByUser.set(userId, (completedByUser.get(userId) ?? 0) + 1);
     }
+  }
+
+  const releaseCountByCreator = new Map<string, number>();
+  const creditedReleaseCountByUser = new Map<string, number>();
+  for (const release of publicReleases.docs) {
+    const creatorUserId = cleanText(release.data().creatorUserId, 160);
+    if (creatorUserId) releaseCountByCreator.set(creatorUserId, (releaseCountByCreator.get(creatorUserId) ?? 0) + 1);
+    for (const credit of normaliseReleaseContributors(release.data().contributors)) {
+      if (credit.userId) creditedReleaseCountByUser.set(credit.userId, (creditedReleaseCountByUser.get(credit.userId) ?? 0) + 1);
+    }
+  }
+  const publishedScriptsByWriter = new Map<string, number>();
+  for (const script of scripts.docs) {
+    if (!['Approved','Published'].includes(String(script.data().status))) continue;
+    const writerUserId = cleanText(script.data().writerUserId, 160);
+    if (writerUserId) publishedScriptsByWriter.set(writerUserId, (publishedScriptsByWriter.get(writerUserId) ?? 0) + 1);
   }
 
   const allowedRoles = new Set(['creator','writer','editor']);
@@ -3860,6 +3878,9 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
         roleAvailability: data.roleAvailability ?? null,
         completedCollaborations: completedByUser.get(doc.id) ?? 0,
         activityBadges: publicActivityBadges(String(doc.data().role ?? ''), {
+          releases: releaseCountByCreator.get(doc.id) ?? 0,
+          publishedScripts: publishedScriptsByWriter.get(doc.id) ?? 0,
+          creditedReleases: creditedReleaseCountByUser.get(doc.id) ?? 0,
           completedCollaborations: completedByUser.get(doc.id) ?? 0,
         }),
       };
