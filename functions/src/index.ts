@@ -4544,7 +4544,9 @@ const releaseCommunityState = async (releaseId: string, viewerUserId: string) =>
 export const releaseReactionState = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  if (identity.role !== 'listener') return { reactions: [] };
+  const account = identity.admin ? null : await accountRef(identity.uid).get();
+  const viewerRole = identity.admin ? 'admin' : String(account?.data()?.role ?? '');
+  if (viewerRole !== 'listener') return { reactions: [] };
   const snapshot = await db.collection('releaseReactions').where('userId', '==', identity.uid).limit(1000).get();
   const reactions = snapshot.docs
     .map((doc) => releaseReactionPayload(doc.data(), doc.id))
@@ -4560,8 +4562,10 @@ export const releaseCommunity = onCall({ region: REGION }, async (request) => {
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
   const release = await releaseRef(releaseId).get();
   if (!release.exists || release.data()?.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+  const account = identity.admin ? null : await accountRef(identity.uid).get();
+  const viewerRole = identity.admin ? 'admin' : String(account?.data()?.role ?? '');
   const state = await releaseCommunityState(releaseId, identity.uid);
-  return { ...state, canInteract:identity.role === 'listener' };
+  return { ...state, canInteract:viewerRole === 'listener' };
 });
 
 export const setReleaseReaction = onCall({ region: REGION }, async (request) => {
