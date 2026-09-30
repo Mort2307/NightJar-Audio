@@ -4200,6 +4200,347 @@ export const updateCollaborationStatus = onCall({ region: REGION }, async (reque
   return { proposal: collaborationPayload(saved.data() ?? {}, collaborationId) };
 });
 
+const PROFESSIONAL_MESSAGE_ROLES = new Set(['creator','writer','editor']);
+
+const professionalConversationId = (a: string, b: string) => [a,b].sort().join('__');
+
+const professionalMessagePayload = (data: Record<string, any>, id: string) => ({
+  id,
+  conversationId: cleanText(data.conversationId, 360) || null,
+  senderUserId: cleanText(data.senderUserId, 160) || null,
+  body: cleanText(data.body, 4000),
+  collaborationId: cleanText(data.collaborationId, 160) || null,
+  readBy: Array.isArray(data.readBy) ? data.readBy.map((value:any) => cleanText(value,160)).filter(Boolean) : [],
+  createdAt: toIso(data.createdAt),
+  updatedAt: toIso(data.updatedAt),
+});
+
+const professionalMessagingIdentity = async (request: any) => {
+  const identity = await requireAccountRole(request, ['creator','writer','editor']);
+  await requireAgeVerified(identity.uid);
+  return identity;
+};
+
+const messagingBlockedBetween = async (a: string, b: string) => {
+  const [aBlocksB,bBlocksA] = await Promise.all([
+    accountRef(a).collection('messageBlocks').doc(b).get(),
+    accountRef(b).collection('messageBlocks').doc(a).get(),
+  ]);
+  return aBlocksB.exists || bBlocksA.exists;
+};
+
+const assertProfessionalRecipient = async (recipientUserId: string) => {
+  const account = await accountRef(recipientUserId).get();
+  const data = account.data();
+  if (!account.exists || data?.status !== 'active' || !PROFESSIONAL_MESSAGE_ROLES.has(String(data?.role ?? ''))) {
+    throw new HttpsError('not-found', 'Professional Nightjar account not found.');
+  }
+  return { account, role:String(data?.role ?? '') };
+};
+
+const conversationForViewer = async (doc: any, viewerUserId: string) => {
+  const data = doc.data() ?? {};
+  const participants = Array.isArray(data.participantIds) ? data.participantIds.map(String) : [];
+  const otherUserId = participants.find((id:string) => id !== viewerUserId) ?? null;
+  const otherAccount = otherUserId ? await accountRef(otherUserId).get() : null;
+  const otherProfile = otherUserId ? await profileRef(otherUserId).get() : null;
+  const otherData = otherProfile?.data() ?? {};
+  return {
+    id:doc.id,
+    participantIds:participants,
+    otherUserId,
+    otherRole:otherAccount?.data()?.role ?? null,
+    otherName:otherData.displayName ?? 'Nightjar collaborator',
+    otherHandle:otherData.handle ?? null,
+    otherAvatarUrl:otherData.avatarStatus === 'approved' ? otherData.avatarUrl ?? null : null,
+    lastMessage:cleanText(data.lastMessage, 4000) || null,
+    lastSenderUserId:cleanText(data.lastSenderUserId, 160) || null,
+    lastMessageAt:toIso(data.lastMessageAt),
+    unreadCount:Math.max(0, Number(data.unreadBy?.[viewerUserId] ?? 0)),
+    collaborationIds:Array.isArray(data.collaborationIds) ? data.collaborationIds.map(String).filter(Boolean).slice(0,20) : [],
+    createdAt:toIso(data.createdAt),
+    updatedAt:toIso(data.updatedAt),
+  };
+};
+
+const appendProfessionalMessage = async (
+  conversationRef: any,
+  senderUserId: string,
+  recipientUserId: string,
+  body: string,
+  collaborationId: string | null,
+) => {
+  const messageRef = conversationRef.collection('messages').doc();
+  const record = {
+    conversationId:conversationRef.id,
+    senderUserId,
+    body,
+    collaborationId,
+    readBy:[senderUserId],
+    createdAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  };
+  await messageRef.set(record);
+
+  const conversation = await conversationRef.get();
+  const current = conversation.data() ?? {};
+  const unreadBy = { ...(current.unreadBy ?? {}) };
+  unreadBy[recipientUserId] = Math.max(0, Number(unreadBy[recipientUserId] ?? 0)) + 1;
+  unreadBy[senderUserId] = 0;
+  const collaborationIds = Array.from(new Set([
+    ...(Array.isArray(current.collaborationIds) ? current.collaborationIds.map(String) : []),
+    ...(collaborationId ? [collaborationId] : []),
+  ])).slice(-20);
+
+  await conversationRef.set({
+    lastMessage:body,
+    lastSenderUserId:senderUserId,
+    lastMessageAt:FieldValue.serverTimestamp(),
+    unreadBy,
+    collaborationIds,
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  return { ref:messageRef, record };
+};
+
+export const listProfessionalConversations = onCall({ region: REGION }, async (request) => {
+  const identity = await professionalMessagingIdentity(request);
+  const snapshot = await db.collection('professionalConversations').limit(1000).get();
+  const docs = snapshot.docs.filter((doc) => Array.isArray(doc.data().participantIds) && doc.data().participantIds.includes(identity.uid));
+  const conversations = (await Promise.all(docs.map((doc) => conversationForViewer(doc, identity.uid))))
+    .sort((a,b) => String(b.lastMessageAt ?? b.updatedAt ?? '').localeCompare(String(a.lastMessageAt ?? a.updatedAt ?? '')));
+  return { conversations, unreadCount:conversations.reduce((sum,item)=>sum+item.unreadCount,0) };
+});
+
+export const startProfessionalConversation = onCall({ region: REGION }, async (request) => {
+  const identity = await professionalMessagingIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const recipientUserId = cleanText(input.recipientUserId, 160);
+  const body = cleanText(input.message, 4000);
+  const collaborationId = cleanText(input.collaborationId, 160) || null;
+  if (!recipientUserId || recipientUserId === identity.uid) throw new HttpsError('invalid-argument', 'Choose another professional Nightjar account.');
+  const recipient = await assertProfessionalRecipient(recipientUserId);
+  if (await messagingBlockedBetween(identity.uid, recipientUserId)) throw new HttpsError('permission-denied', 'Professional messaging is blocked between these accounts.');
+
+  if (collaborationId) {
+    const collaboration = await db.collection('collaborationProposals').doc(collaborationId).get();
+    const data = collaboration.data();
+    if (!data || ![data.writerUserId,data.recipientUserId].includes(identity.uid) || ![data.writerUserId,data.recipientUserId].includes(recipientUserId)) {
+      throw new HttpsError('permission-denied', 'That collaboration cannot be attached to this conversation.');
+    }
+  }
+
+  const id = professionalConversationId(identity.uid, recipientUserId);
+  const ref = db.collection('professionalConversations').doc(id);
+  const existing = await ref.get();
+  await ref.set({
+    participantIds:[identity.uid,recipientUserId].sort(),
+    participantRoles:{
+      [identity.uid]:identity.role,
+      [recipientUserId]:recipient.role,
+    },
+    unreadBy:existing.data()?.unreadBy ?? { [identity.uid]:0, [recipientUserId]:0 },
+    collaborationIds:Array.from(new Set([
+      ...(Array.isArray(existing.data()?.collaborationIds) ? existing.data()?.collaborationIds : []),
+      ...(collaborationId ? [collaborationId] : []),
+    ])).slice(-20),
+    updatedAt:FieldValue.serverTimestamp(),
+    ...(existing.exists ? {} : { createdAt:FieldValue.serverTimestamp() }),
+  }, { merge:true });
+
+  if (body) {
+    const message = await appendProfessionalMessage(ref, identity.uid, recipientUserId, body, collaborationId);
+    const sender = await accountPresentation(identity.uid);
+    await createNotification(recipientUserId, {
+      type:'message',
+      subtype:'professional_message',
+      title:'New professional message',
+      message:sender.displayName + ' sent you a Nightjar message.',
+      conversationId:id,
+      messageId:message.ref.id,
+      collaborationId,
+    });
+  }
+
+  const saved = await ref.get();
+  return { conversation:await conversationForViewer(saved, identity.uid) };
+});
+
+export const sendProfessionalMessage = onCall({ region: REGION }, async (request) => {
+  const identity = await professionalMessagingIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const conversationId = cleanText(input.conversationId, 360);
+  const body = cleanText(input.body, 4000);
+  const collaborationId = cleanText(input.collaborationId, 160) || null;
+  if (!conversationId || !body) throw new HttpsError('invalid-argument', 'Write a message before sending.');
+
+  const ref = db.collection('professionalConversations').doc(conversationId);
+  const conversation = await ref.get();
+  const data = conversation.data();
+  const participants = Array.isArray(data?.participantIds) ? data?.participantIds.map(String) : [];
+  if (!data || !participants.includes(identity.uid)) throw new HttpsError('not-found', 'Conversation not found.');
+  const recipientUserId = participants.find((id:string)=>id !== identity.uid);
+  if (!recipientUserId) throw new HttpsError('failed-precondition', 'Conversation recipient is unavailable.');
+  await assertProfessionalRecipient(recipientUserId);
+  if (await messagingBlockedBetween(identity.uid, recipientUserId)) throw new HttpsError('permission-denied', 'Professional messaging is blocked between these accounts.');
+
+  if (collaborationId) {
+    const collaboration = await db.collection('collaborationProposals').doc(collaborationId).get();
+    const collaborationData = collaboration.data();
+    if (!collaborationData || !participants.includes(String(collaborationData.writerUserId ?? '')) || !participants.includes(String(collaborationData.recipientUserId ?? ''))) {
+      throw new HttpsError('permission-denied', 'That collaboration cannot be attached to this conversation.');
+    }
+  }
+
+  const message = await appendProfessionalMessage(ref, identity.uid, recipientUserId, body, collaborationId);
+  const sender = await accountPresentation(identity.uid);
+  await createNotification(recipientUserId, {
+    type:'message',
+    subtype:'professional_message',
+    title:'New professional message',
+    message:sender.displayName + ' sent you a Nightjar message.',
+    conversationId,
+    messageId:message.ref.id,
+    collaborationId,
+  });
+
+  const saved = await message.ref.get();
+  return { message:professionalMessagePayload(saved.data() ?? message.record, message.ref.id) };
+});
+
+export const openProfessionalConversation = onCall({ region: REGION }, async (request) => {
+  const identity = await professionalMessagingIdentity(request);
+  const conversationId = cleanText((request.data as { conversationId?: unknown } | undefined)?.conversationId, 360);
+  const ref = db.collection('professionalConversations').doc(conversationId);
+  const conversation = await ref.get();
+  const data = conversation.data();
+  const participants = Array.isArray(data?.participantIds) ? data?.participantIds.map(String) : [];
+  if (!data || !participants.includes(identity.uid)) throw new HttpsError('not-found', 'Conversation not found.');
+
+  const snapshot = await ref.collection('messages').limit(500).get();
+  const batch = db.batch();
+  const messages = snapshot.docs
+    .map((doc) => {
+      const value = doc.data();
+      const readBy = Array.isArray(value.readBy) ? value.readBy.map(String) : [];
+      if (!readBy.includes(identity.uid)) batch.set(doc.ref, { readBy:[...readBy,identity.uid], updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      return professionalMessagePayload({ ...value, readBy:Array.from(new Set([...readBy,identity.uid])) }, doc.id);
+    })
+    .sort((a,b)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+  batch.set(ref, {
+    ['unreadBy.' + identity.uid]:0,
+    ['readAt.' + identity.uid]:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+  await batch.commit();
+
+  const otherUserId = participants.find((id:string)=>id !== identity.uid) ?? null;
+  const blocked = otherUserId ? await messagingBlockedBetween(identity.uid, otherUserId) : false;
+  return {
+    conversation:await conversationForViewer(await ref.get(), identity.uid),
+    messages,
+    blocked,
+  };
+});
+
+export const setProfessionalMessageBlock = onCall({ region: REGION }, async (request) => {
+  const identity = await professionalMessagingIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const targetUserId = cleanText(input.targetUserId, 160);
+  const blocked = input.blocked === true;
+  if (!targetUserId || targetUserId === identity.uid) throw new HttpsError('invalid-argument', 'Choose another account.');
+  await assertProfessionalRecipient(targetUserId);
+  const ref = accountRef(identity.uid).collection('messageBlocks').doc(targetUserId);
+  if (blocked) {
+    await ref.set({ targetUserId, createdAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  } else {
+    await ref.delete().catch(() => undefined);
+  }
+  return { targetUserId, blocked };
+});
+
+export const reportProfessionalMessage = onCall({ region: REGION }, async (request) => {
+  const identity = await professionalMessagingIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const conversationId = cleanText(input.conversationId, 360);
+  const messageId = cleanText(input.messageId, 160);
+  const reason = cleanText(input.reason, 1200) || 'Professional message report';
+  const conversation = await db.collection('professionalConversations').doc(conversationId).get();
+  const participants = Array.isArray(conversation.data()?.participantIds) ? conversation.data()?.participantIds.map(String) : [];
+  if (!conversation.exists || !participants.includes(identity.uid)) throw new HttpsError('not-found', 'Conversation not found.');
+  const message = await conversation.ref.collection('messages').doc(messageId).get();
+  if (!message.exists) throw new HttpsError('not-found', 'Message not found.');
+
+  const reportRef = db.collection('professionalMessageReports').doc(identity.uid + '_' + conversationId + '_' + messageId);
+  await reportRef.set({
+    conversationId,
+    messageId,
+    reporterUserId:identity.uid,
+    reportedUserId:message.data()?.senderUserId ?? null,
+    reason,
+    messageBodySnapshot:cleanText(message.data()?.body, 4000),
+    status:'open',
+    createdAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  return { reported:true };
+});
+
+export const adminListProfessionalMessageReports = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('professionalMessageReports').limit(1000).get();
+  const reports = snapshot.docs
+    .filter((doc)=>doc.data().status === 'open')
+    .map((doc)=>({ id:doc.id, ...doc.data(), createdAt:toIso(doc.data().createdAt) }))
+    .sort((a:any,b:any)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+  return { reports };
+});
+
+export const adminResolveProfessionalMessageReport = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const reportId = cleanText(input.reportId, 520);
+  const decision = cleanText(input.decision, 30);
+  if (!['dismissed','actioned','removed'].includes(decision)) throw new HttpsError('invalid-argument', 'Choose a valid report decision.');
+  const ref = db.collection('professionalMessageReports').doc(reportId);
+  const report = await ref.get();
+  const data = report.data();
+  if (!data) throw new HttpsError('not-found', 'Message report not found.');
+
+  if (decision === 'removed') {
+    const conversationId = cleanText(data.conversationId, 360);
+    const messageId = cleanText(data.messageId, 160);
+    if (!conversationId || !messageId) throw new HttpsError('failed-precondition', 'Reported message reference is incomplete.');
+    const conversationRef = db.collection('professionalConversations').doc(conversationId);
+    const messageRef = conversationRef.collection('messages').doc(messageId);
+    const message = await messageRef.get();
+    if (message.exists) {
+      await messageRef.set({
+        body:'',
+        status:'removed_by_admin',
+        moderatedBy:admin.uid,
+        moderatedAt:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+    }
+    const conversation = await conversationRef.get();
+    if (conversation.exists && cleanText(conversation.data()?.lastMessage, 4000) === cleanText(data.messageBodySnapshot, 4000)) {
+      await conversationRef.set({
+        lastMessage:'Message removed by Nightjar moderation.',
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+    }
+  }
+
+  await ref.set({
+    status:decision,
+    reviewedBy:admin.uid,
+    reviewedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { reportId, status:decision };
+});
+
 const calculateCreatorRate = (settings: CommercialSettings, activePaidSubscribers: number) => {
   let rate = 0;
   for (const band of settings.creatorRateBands) {
