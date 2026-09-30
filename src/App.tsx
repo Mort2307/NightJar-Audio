@@ -965,7 +965,7 @@ function App() {
         relatedType: 'script',
         relatedId,
         deviceId: getProtectionDeviceToken(),
-        clientPlatform: navigator.userAgentData?.platform ?? navigator.platform ?? 'browser',
+        clientPlatform: (navigator as any).userAgentData?.platform ?? navigator.platform ?? 'browser',
         visibilityState: document.visibilityState,
         viewport: window.innerWidth + 'x' + window.innerHeight,
         summary: summaryByType[eventType] ?? 'Protected interaction recorded by Nightjar.',
