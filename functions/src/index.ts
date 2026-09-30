@@ -848,7 +848,6 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
 
   const hasPortfolioCuration = Array.isArray(data.featuredPortfolioIds);
   const selectedPortfolioIds = cleanStringList(data.featuredPortfolioIds, 6);
-  const selectedPortfolioSet = new Set(selectedPortfolioIds);
   const orderedFeatured = (items: ReturnType<typeof releasePayload>[]) => {
     const byId = new Map(items.map((item) => [String(item.id), item]));
     return selectedPortfolioIds.map((id) => byId.get(id)).filter((item): item is ReturnType<typeof releasePayload> => Boolean(item));
