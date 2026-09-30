@@ -975,10 +975,14 @@ function App() {
     if (!user) return;
     const summaryByType: Record<string, string> = {
       copy_blocked: 'Protected copy interaction blocked; no clipboard contents were captured.',
+      selection_blocked: 'Protected text selection shortcut was blocked inside the manuscript reader.',
+      save_page_blocked: 'Browser save-page shortcut was blocked while protected manuscript content was open.',
       print_blocked: 'Keyboard print command blocked while protected manuscript content was open.',
       print_dialog_attempt: 'Browser print flow was invoked while protected manuscript content was open.',
       possible_screenshot_key: 'Possible screenshot key signal observed while protected manuscript content was open. This does not prove that a screenshot was captured.',
-      native_screenshot_detected: 'Native screenshot callback reported a screenshot while protected manuscript content was open.',
+      possible_capture_shortcut: 'Possible operating-system capture shortcut was observed while protected manuscript content was open. Browser delivery is best-effort and does not prove capture.',
+      native_screenshot_detected: 'Native screenshot callback reported an operating-system screenshot while protected manuscript content was open.',
+      native_screen_capture_detected: 'Native screen-capture callback reported active capture while protected manuscript content was open.',
     };
     try {
       if (demoMode) {
@@ -999,6 +1003,7 @@ function App() {
         clientPlatform: (navigator as any).userAgentData?.platform ?? navigator.platform ?? 'browser',
         visibilityState: document.visibilityState,
         viewport: window.innerWidth + 'x' + window.innerHeight,
+        route: window.location.pathname,
         summary: summaryByType[eventType] ?? 'Protected interaction recorded by Nightjar.',
         ...context,
       });
@@ -2801,51 +2806,146 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
   const sessionId = String(data.readerSession?.sessionId ?? 'authorised');
   const accountId = String(data.readerSession?.accountId ?? data.readerSession?.userId ?? '');
   const watermark = ['NIGHTJAR', sessionId, accountId ? 'ACCOUNT ' + accountId.slice(-10) : '', script.id ? 'SCRIPT ' + String(script.id).slice(-10) : ''].filter(Boolean).join(' · ');
+  const lastCaptureSignalAt = useRef(0);
 
   useEffect(() => {
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     document.body.classList.add('nightjar-protected-reader-open');
 
-    const eventContext = () => ({
+    const eventContext = (detectionSource?: string, detectionConfidence?: string) => ({
       readerSessionId: sessionId,
       visibilityState: document.visibilityState,
+      ...(detectionSource ? { detectionSource } : {}),
+      ...(detectionConfidence ? { detectionConfidence } : {}),
     });
+
+    const recordCapture = (eventType: string, detectionSource: string, detectionConfidence: 'possible' | 'strong' | 'native_callback', message?: string) => {
+      const now = Date.now();
+      if (now - lastCaptureSignalAt.current < 700) return;
+      lastCaptureSignalAt.current = now;
+      record(eventType, eventContext(detectionSource, detectionConfidence));
+      if (message) notify(message);
+    };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const key = String(event.key ?? '').toLowerCase();
       const code = String(event.code ?? '').toLowerCase();
+      const command = event.ctrlKey || event.metaKey;
 
-      if ((event.ctrlKey || event.metaKey) && key === 'p') {
+      if (command && key === 'p') {
         event.preventDefault();
-        record('print_blocked', eventContext());
+        record('print_blocked', eventContext('browser_keyboard', 'strong'));
         notify('Printing is disabled inside the protected reader.');
         return;
       }
 
+      if (command && key === 's') {
+        event.preventDefault();
+        record('save_page_blocked', eventContext('browser_keyboard', 'strong'));
+        notify('Saving this protected manuscript as a web page is disabled.');
+        return;
+      }
+
+      if (!data.copyAllowed && command && key === 'a') {
+        event.preventDefault();
+        record('selection_blocked', eventContext('browser_keyboard', 'strong'));
+        notify('Select-all is disabled for this protected manuscript.');
+        return;
+      }
+
+      const windowsSnipShortcut = event.metaKey && event.shiftKey && key === 's';
+      const macCaptureShortcut = event.metaKey && event.shiftKey && ['3','4','5'].includes(key);
+      if (windowsSnipShortcut || macCaptureShortcut) {
+        recordCapture(
+          'possible_capture_shortcut',
+          windowsSnipShortcut ? 'windows_capture_shortcut' : 'macos_capture_shortcut',
+          'possible',
+          'Nightjar recorded a possible operating-system capture shortcut for this protected reader session.',
+        );
+        return;
+      }
+
       if (key === 'printscreen' || code === 'printscreen') {
-        record('possible_screenshot_key', eventContext());
-        notify('Nightjar recorded a possible screenshot-key signal for this protected reader session.');
+        recordCapture(
+          'possible_screenshot_key',
+          'keyboard_printscreen',
+          'possible',
+          'Nightjar recorded a possible screenshot-key signal for this protected reader session.',
+        );
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      const key = String(event.key ?? '').toLowerCase();
+      const code = String(event.code ?? '').toLowerCase();
+      if (key === 'printscreen' || code === 'printscreen') {
+        recordCapture(
+          'possible_screenshot_key',
+          'keyboard_printscreen',
+          'possible',
+          'Nightjar recorded a possible screenshot-key signal for this protected reader session.',
+        );
       }
     };
 
     const handleBeforePrint = () => {
-      record('print_dialog_attempt', eventContext());
+      record('print_dialog_attempt', eventContext('browser_beforeprint', 'strong'));
+    };
+
+    const handleNativeScreenshot = (event: Event) => {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail ?? {};
+      recordCapture(
+        'native_screenshot_detected',
+        String(detail.source ?? 'native_screenshot_bridge'),
+        'native_callback',
+        'Nightjar recorded a native screenshot callback for this protected reader session.',
+      );
+    };
+
+    const handleNativeScreenCapture = (event: Event) => {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail ?? {};
+      recordCapture(
+        'native_screen_capture_detected',
+        String(detail.source ?? 'native_screen_capture_bridge'),
+        'native_callback',
+        'Nightjar recorded a native screen-capture callback for this protected reader session.',
+      );
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
     window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('nightjar:native-screenshot', handleNativeScreenshot as EventListener);
+    window.addEventListener('nightjar:native-screen-capture', handleNativeScreenCapture as EventListener);
+
     return () => {
       document.body.style.overflow = original;
       document.body.classList.remove('nightjar-protected-reader-open');
       window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('nightjar:native-screenshot', handleNativeScreenshot as EventListener);
+      window.removeEventListener('nightjar:native-screen-capture', handleNativeScreenCapture as EventListener);
     };
-  }, [sessionId, record, notify]);
+  }, [data.copyAllowed, sessionId, record, notify]);
+
+  const blockSelectedText = () => {
+    if (data.copyAllowed) return;
+    const selection = window.getSelection();
+    if (!selection || !selection.toString().trim()) return;
+    selection.removeAllRanges();
+    record('selection_blocked', {
+      readerSessionId: sessionId,
+      detectionSource: 'reader_selection',
+      detectionConfidence: 'strong',
+    });
+    notify('Text selection is disabled for this protected manuscript.');
+  };
 
   const exportScript = () => {
     if (!data.exportAllowed) {
-      record('export_blocked');
+      record('export_blocked', { readerSessionId: sessionId });
       notify('Export is not permitted by this writer.');
       return;
     }
@@ -2856,28 +2956,35 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
     anchor.download = String(script.title ?? 'nightjar-script').replace(/[^a-z0-9-_]+/gi, '-').replace(/^-|-$/g, '') + '.txt';
     anchor.click();
     URL.revokeObjectURL(url);
-    record('writer_authorised_export');
+    record('writer_authorised_export', { readerSessionId: sessionId });
     notify('Writer-authorised script export created.');
   };
 
   return <div className="protected-reader-backdrop" role="dialog" aria-modal="true" aria-label="Protected manuscript reader">
-    <section className="protected-reader"
-      onCopy={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('copy_blocked'); notify('Copy is disabled for this protected manuscript.'); } else record('writer_authorised_copy'); }}
-      onCut={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('cut_blocked'); } }}
-      onPaste={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('paste_blocked'); } }}
-      onContextMenu={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('contextmenu_blocked'); } }}
-      onDragStart={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('drag_blocked'); } }}>
+    <section
+      className={data.copyAllowed ? 'protected-reader' : 'protected-reader copy-locked'}
+      onCopy={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('copy_blocked', { readerSessionId: sessionId, detectionSource:'reader_copy', detectionConfidence:'strong' }); notify('Copy is disabled for this protected manuscript.'); } else record('writer_authorised_copy', { readerSessionId: sessionId }); }}
+      onCut={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('cut_blocked', { readerSessionId: sessionId, detectionSource:'reader_cut', detectionConfidence:'strong' }); } }}
+      onPaste={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('paste_blocked', { readerSessionId: sessionId, detectionSource:'reader_paste', detectionConfidence:'strong' }); } }}
+      onContextMenu={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('contextmenu_blocked', { readerSessionId: sessionId, detectionSource:'reader_contextmenu', detectionConfidence:'strong' }); } }}
+      onDragStart={(event) => { if (!data.copyAllowed) { event.preventDefault(); record('drag_blocked', { readerSessionId: sessionId, detectionSource:'reader_drag', detectionConfidence:'strong' }); } }}
+      onPointerUp={blockSelectedText}
+    >
       <header><div><span className="mini-label">NIGHTJAR / PROTECTED SCRIPT</span><h2>{script.title ?? 'Protected manuscript'}</h2><p>Reader session {sessionId} · expires {data.readerSession?.expiresAt ? new Date(data.readerSession.expiresAt).toLocaleTimeString('en-GB') : 'soon'}</p></div><button className="icon-button" onClick={close} aria-label="Close protected manuscript"><X size={18} /></button></header>
-      <div className="reader-notice"><ShieldCheck size={15} /><span>This view is session-attributed. Nightjar can record some browser screenshot-key and print signals, but web browsers cannot prove every screenshot or screen recording. Visible session watermarking and retained access evidence remain the primary protection.</span></div>
+      <div className="reader-notice"><ShieldCheck size={15} /><span>Nightjar records detectable browser capture shortcuts as possible signals, not proof. Native Android/iOS shells can send stronger OS-level screenshot or screen-capture callbacks. Session watermarking remains active in every protected reader.</span></div>
+      <div className="reader-protection-status" aria-label="Protected reader safeguards">
+        <span><ShieldCheck size={13}/> Session watermark active</span>
+        <span><ClipboardX size={13}/> {data.copyAllowed ? 'Writer-authorised copy' : 'Copy / selection restricted'}</span>
+        <span><FileCheck2 size={13}/> Capture signals retained as evidence</span>
+      </div>
       <article className="reader-body">
         <div className="reader-watermark-field" aria-hidden="true">{Array.from({length: 12}).map((_, index) => <span key={index}>{watermark}</span>)}</div>
         <p className="reader-watermark">{watermark}</p>
         {content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : <p>No manuscript content supplied.</p>}
       </article>
-      <footer><span><LockKeyhole size={14} /> Copy {data.copyAllowed ? 'allowed by writer' : 'off'}</span><button className="reader-export-button" onClick={exportScript} disabled={!data.exportAllowed}><Download size={14} /> {data.exportAllowed ? 'Writer-authorised export' : 'Export off'}</button><span>Session attributed · access logged</span></footer>
+      <footer><span><LockKeyhole size={14} /> Copy {data.copyAllowed ? 'allowed by writer' : 'off'}</span><button className="reader-export-button" onClick={exportScript} disabled={!data.exportAllowed}><Download size={14} /> {data.exportAllowed ? 'Writer-authorised export' : 'Export off'}</button><span>Browser capture detection is best-effort · access logged</span></footer>
     </section>
   </div>;
 }
-
 
 export default App;
