@@ -11,6 +11,7 @@ const defaults = {
   collaborations: true,
   payments: true,
   comments: true,
+  messages: true,
   announcements: true,
 };
 
@@ -55,6 +56,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
         ['collaborations','Collaboration updates'],
         ['payments','Payment updates'],
         ['comments','Comments / community'],
+        ['messages','Private messages'],
         ['announcements','Nightjar announcements'],
       ].map(([key,label]) => <label className="rights-check" key={key}><input type="checkbox" checked={preferences[key] !== false} onChange={() => toggle(key)}/>{label}</label>)}
     </div>
