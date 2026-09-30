@@ -39,11 +39,17 @@ requireText(functions,"type:'direct_message'",'Reported direct-message moderatio
 requireText(functions,"type:'release_comment'",'Reported comment moderation path is missing');
 requireText(functions,'directMessagingBlockedBetween','Professional message block enforcement is missing');
 requireText(functions,'readBy:[identity.uid]','Direct-message read state is missing');
+['listProfessionalConversations','startProfessionalConversation','openProfessionalConversation','sendProfessionalMessage','setProfessionalMessageBlock','reportProfessionalMessage'].forEach((legacy)=>{
+  if(functions.includes('export const '+legacy)) failures.push('Legacy parallel messaging callable still exported: '+legacy);
+});
 
 requireText(app,"'messages'",'Messages route is missing');
-requireText(app,"canCommunityInteract={effectiveRole === 'listener'}",'Community UI is not restricted to Listener interaction');
+requireText(app,'viewerRole={effectiveRole}','Release Community does not receive the current role for Listener-only interaction');
 requireText(app,'messageUnreadCount','Unread Inbox state is missing');
 requireText(app,'setMessageCollaborationId','Collaboration-to-message context is missing');
+requireText(app,'initialConversationId={messageConversationId}','Message notifications cannot open an exact private thread');
+requireText(app,'messageUnreadCount','Unread professional message state is missing');
+requireText(app,'<MessageCircle size={14}/> Comments','Published-work comments are not directly discoverable on release cards');
 
 requireText(inbox,'nightjarMessaging.open','Inbox is not using canonical message thread API');
 requireText(inbox,'nightjarMessaging.setBlocked','Inbox block control is missing');
@@ -55,7 +61,12 @@ requireText(community,'Post comment','Direct Listener comment UI is missing');
 requireText(community,'Formal reviews are moderated before publication','Review/comment moderation distinction is missing');
 
 requireText(prefs,"['messages','Private messages']", 'Private-message notification preference is missing');
+requireText(messagingClient,"'listMessageConversations'",'Messaging client canonical conversation callable is missing');
+requireText(messagingClient,"'startDirectConversation'",'Messaging client canonical conversation-start callable is missing');
+requireText(messagingClient,"'listDirectMessages'",'Messaging client canonical thread callable is missing');
+requireText(messagingClient,"'sendDirectMessage'",'Messaging client canonical send callable is missing');
 requireText(messagingClient,"'setDirectMessageBlock'",'Messaging client block callable is missing');
+requireText(messagingClient,"'reportDirectMessage'",'Messaging client report callable is missing');
 requireText(engagementClient,"'setReleaseReaction'",'Engagement client reaction callable is missing');
 
 if (exists('src/components/ReleaseCommunity.tsx')) failures.push('Obsolete duplicate ReleaseCommunity component still exists');
