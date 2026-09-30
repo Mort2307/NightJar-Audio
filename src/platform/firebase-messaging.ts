@@ -5,11 +5,10 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 
 const listCall = httpsCallable<void, { conversations:any[]; unreadCount:number }>(functions, 'listMessageConversations');
 const startCall = httpsCallable<{ targetUserId:string; collaborationId?:string }, { conversationId:string }>(functions, 'startDirectConversation');
-const messagesCall = httpsCallable<{ conversationId:string }, { messages:any[]; blocked?:boolean }>(functions, 'listDirectMessages');
+const messagesCall = httpsCallable<{ conversationId:string }, { messages:any[]; blocked:boolean; blockedByMe?:boolean; blockedByOther?:boolean }>(functions, 'listDirectMessages');
 const sendCall = httpsCallable<{ conversationId:string; body:string }, { message:any }>(functions, 'sendDirectMessage');
 const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
 const reportCall = httpsCallable<{ conversationId:string; messageId:string; reason?:string }, { reported:boolean; reportId:string }>(functions, 'reportDirectMessage');
-const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
 const adminReportsCall = httpsCallable<void, { reports:any[] }>(functions, 'adminListCommunityReports');
 const adminResolveCall = httpsCallable<{ reportId:string; decision:'dismiss'|'remove' }, { reportId:string; decision:string }>(functions, 'adminResolveCommunityReport');
 
