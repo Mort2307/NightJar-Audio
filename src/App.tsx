@@ -659,7 +659,8 @@ function App() {
   }, [user, ageVerified, role, currentIntent, previewRole, demoMode, testingSessionHydrated]);
 
   useEffect(() => {
-    if (!user || !ageVerified || !['creator','writer','editor'].includes(String(effectiveRole))) {
+    const messageRole = role === 'admin' ? previewRole : role;
+    if (!user || !ageVerified || !['creator','writer','editor'].includes(String(messageRole))) {
       setMessageUnreadCount(0);
       return;
     }
@@ -679,7 +680,7 @@ function App() {
     void loadUnread();
     const timer = window.setInterval(() => void loadUnread(), 30000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [user, ageVerified, effectiveRole, demoMode]);
+  }, [user, ageVerified, role, previewRole, demoMode]);
 
   const clearToastTimer = () => {
     if (toastTimer.current != null) window.clearTimeout(toastTimer.current);
