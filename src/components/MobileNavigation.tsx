@@ -8,11 +8,12 @@ type Props = {
   role: Role;
   onNavigate: (view: View) => void;
   onSearch: () => void;
+  messageUnreadCount?: number;
 };
 
 type Item = { view?: View; label: string; icon: LucideIcon; search?: boolean };
 
-export default function MobileNavigation({ view, role, onNavigate, onSearch }: Props) {
+export default function MobileNavigation({ view, role, onNavigate, onSearch, messageUnreadCount = 0 }: Props) {
   if (!role) return null;
 
   const roleHome: Item = role === 'creator'
@@ -54,7 +55,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch }: P
       const Icon = item.icon;
       const active = item.view ? view === item.view : false;
       return <button key={item.label} className={active ? 'active' : ''} onClick={() => item.search ? onSearch() : item.view && onNavigate(item.view)} aria-current={active ? 'page' : undefined}>
-        <Icon size={18}/>
+        <span className="nj-mobile-nav-icon"><Icon size={18}/>{item.view === 'messages' && messageUnreadCount > 0 && <em>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</em>}</span>
         <span>{item.label}</span>
       </button>;
     })}
