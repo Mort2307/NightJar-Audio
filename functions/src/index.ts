@@ -849,10 +849,14 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const hasPortfolioCuration = Array.isArray(data.featuredPortfolioIds);
   const selectedPortfolioIds = cleanStringList(data.featuredPortfolioIds, 6);
   const selectedPortfolioSet = new Set(selectedPortfolioIds);
+  const orderedFeatured = (items: ReturnType<typeof releasePayload>[]) => {
+    const byId = new Map(items.map((item) => [String(item.id), item]));
+    return selectedPortfolioIds.map((id) => byId.get(id)).filter((item): item is ReturnType<typeof releasePayload> => Boolean(item));
+  };
   const featuredWork = role === 'creator'
-    ? (hasPortfolioCuration ? creatorReleases.filter((release) => selectedPortfolioSet.has(String(release.id))) : creatorReleases.slice(0, 3))
+    ? (hasPortfolioCuration ? orderedFeatured(creatorReleases) : creatorReleases.slice(0, 3))
     : (role === 'writer' || role === 'editor')
-      ? (hasPortfolioCuration ? creditedReleases.filter((release) => selectedPortfolioSet.has(String(release.id))) : creditedReleases.slice(0, 3))
+      ? (hasPortfolioCuration ? orderedFeatured(creditedReleases) : creditedReleases.slice(0, 3))
       : [];
   const completedCollaborations = ['creator','writer','editor'].includes(role)
     ? await completedCollaborationCountFor(userId)
@@ -954,8 +958,11 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
       featuredReleases: (() => {
         const hasPortfolioCuration = Array.isArray(data.featuredPortfolioIds);
-        const selected = new Set(cleanStringList(data.featuredPortfolioIds, 6));
-        return hasPortfolioCuration ? releases.filter((release) => selected.has(String(release.id))) : releases.slice(0, 3);
+        const selected = cleanStringList(data.featuredPortfolioIds, 6);
+        const byId = new Map(releases.map((release) => [String(release.id), release]));
+        return hasPortfolioCuration
+          ? selected.map((id) => byId.get(id)).filter((release): release is ReturnType<typeof releasePayload> => Boolean(release))
+          : releases.slice(0, 3);
       })(),
       completedCollaborations,
       activityBadges: publicActivityBadges('creator', {
