@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ban, Check, CheckCheck, Flag, MessageCircle, RefreshCw, Search, Send, ShieldCheck } from 'lucide-react';
 import { nightjarMessaging } from '../platform/firebase-messaging';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
@@ -9,6 +9,7 @@ type Props={
   role:Role;
   currentUserId?:string|null;
   initialRecipientUserId?:string|null;
+  initialConversationId?:string|null;
   initialCollaborationId?:string|null;
   onRecipientHandled?:()=>void;
   onUnreadChange?:(count:number)=>void;
@@ -21,7 +22,7 @@ type MessageTargetEvent=CustomEvent<{userId?:string;collaborationId?:string|null
 
 const roleLabel=(role:string)=>role==='editor'?'Audio Editor':role==='writer'?'Writer':'Creator';
 
-export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialCollaborationId,onRecipientHandled,onUnreadChange,notify,demoMode=false,simulationMode=false}:Props){
+export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialConversationId,initialCollaborationId,onRecipientHandled,onUnreadChange,notify,demoMode=false,simulationMode=false}:Props){
   const [conversations,setConversations]=useState<any[]>([]);
   const [directory,setDirectory]=useState<any[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(null);
@@ -34,6 +35,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   const [blockedByMe,setBlockedByMe]=useState(false);
   const [blockedByOther,setBlockedByOther]=useState(false);
   const [activeCollaborationId,setActiveCollaborationId]=useState<string|null>(null);
+  const messageListRef=useRef<HTMLDivElement|null>(null);
 
   const viewerId=demoMode?(currentUserId??'demo-self'):(currentUserId??'');
 
@@ -119,6 +121,18 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   useEffect(()=>{void loadConversations();void loadDirectory();},[role,demoMode]);
   useEffect(()=>{if(initialRecipientUserId)void startWith(initialRecipientUserId,initialCollaborationId??null);},[initialRecipientUserId,initialCollaborationId]);
   useEffect(()=>{
+    if(!initialConversationId)return;
+    setSelectedId(initialConversationId);
+    void loadMessages(initialConversationId).finally(()=>onRecipientHandled?.());
+  },[initialConversationId]);
+
+  useEffect(()=>{
+    const node=messageListRef.current;
+    if(!node)return;
+    node.scrollTo({top:node.scrollHeight,behavior:'smooth'});
+  },[messages.length,selectedId]);
+
+  useEffect(()=>{
     const onMessageUser=(event:Event)=>{
       const detail=(event as MessageTargetEvent).detail??{};
       if(detail.userId)void startWith(detail.userId,detail.collaborationId??null);
@@ -188,6 +202,8 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
 
   const unreadTotal=conversations.reduce((sum,item)=>sum+Number(item.unreadCount??0),0);
 
+  useEffect(()=>{onUnreadChange?.(unreadTotal);},[unreadTotal]);
+
   return <section className="messaging-hub" id="nightjar-messaging-hub">
     <div className="messaging-hub-head">
       <div><span className="mini-label">PRIVATE PROFESSIONAL MESSAGING</span><h2>Keep the conversation with the work.</h2><p>Creators, Writers and Audio Editors can message each other directly, with unread state, collaboration context, blocking and reporting built in.</p></div>
@@ -207,7 +223,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
 
       <div className="messaging-thread">
         {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{selected.collaborationId?' · linked collaboration':''}</p></div><button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></header>
-          <div className="message-list">{messages.length?messages.map((message:any)=>{
+          <div className="message-list" ref={messageListRef}>{messages.length?messages.map((message:any)=>{
             const mine=message.senderUserId===viewerId;
             const readByOther=mine&&selected.otherUserId&&(message.readBy??[]).includes(selected.otherUserId);
             return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}{mine&&<em className="message-read-state">{readByOther?<><CheckCheck size={11}/> Read</>:<><Check size={11}/> Sent</>}</em>}</time></div><p>{message.status==='removed_by_admin'?'Message removed by Nightjar moderation.':message.body||'Message unavailable.'}</p>{!mine&&message.status!=='removed_by_admin'&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
