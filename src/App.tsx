@@ -2562,6 +2562,18 @@ function App() {
       <main className="nightjar-main">
         {view === 'discover' && (
           <section className="page-wrap nj-animate">
+            {effectiveRole === 'listener' && <RoleDashboard
+              eyebrow="LISTENER HOME"
+              title="Your Nightjar, right now."
+              description="Useful account and discovery actions based on what you have explicitly saved, followed or left unfinished."
+              metrics={[
+                {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness'},
+                {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases'},
+                {label:'Following',value:followingProfileIds.length,detail:'Public profiles'},
+                {label:'Unread',value:notificationUnreadCount,detail:'Recent updates'},
+              ]}
+              actions={listenerActions}
+            />}
             <section className="hero-section">
               <div className="hero-copy">
                 <div className="hero-kicker">
@@ -2760,6 +2772,20 @@ function App() {
                 <Upload size={16} /> New release
               </button>
             </div>
+            <RoleDashboard
+              eyebrow="CREATOR COMMAND CENTRE"
+              title="What needs your attention."
+              description="Publishing, profile and community actions surfaced from your current Nightjar state."
+              metrics={[
+                {label:'Releases',value:creatorDashboard.releases.length,detail:'Current catalogue records'},
+                {label:'Featured',value:(profile.featuredPortfolioIds ?? []).length,detail:'Profile showcase'},
+                {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
+                {label:'Unread',value:notificationUnreadCount,detail:'Recent updates'},
+              ]}
+              actions={creatorActions}
+              loading={creatorDashboardLoading}
+            />
+            {creatorDashboardLoading && <NightjarSkeleton variant="cards" count={4} label="Loading Creator Studio data" />}
             {accountStatus === 'pending_review' && creatorOnly && <div className="admin-note"><Sparkles size={17} /><div><strong>CREATOR ACCOUNT / PENDING REVIEW</strong><span>Your account is created, but publishing stays locked until an administrator approves the application.</span></div></div>}
             <div className="dashboard-metric-grid">
               {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
@@ -2789,6 +2815,11 @@ function App() {
         {view === 'profile' && (
           <section className="page-section profile-page">
             <div className="page-heading"><div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Make Nightjar yours.</h1><p>Every account gets a personal identity and taste profile. Your role controls permissions; your profile controls how you present yourself.</p></div></div>
+            <div className="nj-profile-progress">
+              <div><span className="mini-label">PROFILE READINESS</span><strong>{profileCompletion}% complete</strong><small>{profileDirty ? 'Unsaved changes' : 'All current changes saved'}</small></div>
+              <div className="nj-profile-progress-track" aria-label={profileCompletion + '% profile complete'}><span style={{width:profileCompletion + '%'}}/></div>
+              <button className="secondary-button" onClick={() => setPublicProfileUserId(user?.userId ?? '')} disabled={!user?.userId}>Preview public profile</button>
+            </div>
             <div className="profile-editor-grid">
               <article className="panel profile-editor-card">
                 <span className="mini-label">IDENTITY</span>
@@ -2877,7 +2908,13 @@ function App() {
                   </div>}
                   <small className="profile-portfolio-limit">{(profile.featuredPortfolioIds ?? []).length}/6 selected</small>
                 </section>}
-                <button className="primary-button profile-save-button" disabled={profileLoading} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : 'Save my complete profile'} <Check size={15}/></button>
+                <div className="nj-profile-save-bar">
+                  <div><strong>{profileDirty ? 'You have unsaved profile changes.' : 'Profile is up to date.'}</strong><span>{profileDirty ? 'Save or revert before leaving to avoid losing your edits.' : 'Nightjar will warn you before closing the browser if future edits are unsaved.'}</span></div>
+                  <div>
+                    {profileDirty && profileBaseline && <button type="button" className="ghost-button" disabled={profileLoading} onClick={()=>setProfile(structuredClone(profileBaseline))}>Revert</button>}
+                    <button className="primary-button profile-save-button" disabled={profileLoading || !profileDirty} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : profileDirty ? 'Save profile' : 'Saved'} <Check size={15}/></button>
+                  </div>
+                </div>
               </article>
             </div>
             <div className="profile-public-preview panel">{profile.avatarUrl && <span className="profile-preview-avatar"><img className="avatar-approved-image" src={profile.avatarUrl} alt="" /></span>}<div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p>{profile.welcomeMessage && <p className="profile-welcome-preview">{profile.welcomeMessage}</p>}<div className="profile-preview-chips">{[...(profile.roleSpecialties??[]),...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div>{profile.roleAvailability && <small className="profile-preview-availability">{profile.roleAvailability}</small>}</div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
@@ -2905,6 +2942,18 @@ function App() {
         {view === 'writer' && effectiveRole === 'writer' && (
           <section className="page-wrap role-studio-page">
             <div className="page-heading"><div><p className="eyebrow"><FileText size={14}/> WRITER STUDIO</p><h1>Write it. Protect it.</h1><p>Live manuscripts, version history and editorial handoff.</p></div></div>
+            <RoleDashboard
+              eyebrow="WRITER COMMAND CENTRE"
+              title="Your writing workflow."
+              description="Nightjar prioritises manuscripts, revisions and identity tasks without exposing protected script text."
+              metrics={[
+                {label:'Manuscripts',value:writerScripts.length,detail:'Your current library'},
+                {label:'Revisions',value:writerScripts.filter((item:any)=>String(item.status).toLowerCase().includes('revision')).length,detail:'Needs attention'},
+                {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
+                {label:'Unread',value:notificationUnreadCount,detail:'Recent updates'},
+              ]}
+              actions={writerActions}
+            />
             <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a manuscript</h2><p>Every new script begins private.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title"/><button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button></div></div>
             <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div><textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder="Begin writing…"/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
             {writerSelected && <WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} />}
@@ -2917,7 +2966,19 @@ function App() {
             <div className="page-heading">
               <div><p className="eyebrow"><FileCheck2 size={14} /> EDITORIAL QUEUE</p><h1>Review work professionally.</h1><p>Only manuscripts assigned to your editor account appear here.</p></div>
             </div>
-            <div className="editor-queue-grid">
+            <RoleDashboard
+              eyebrow="EDITOR COMMAND CENTRE"
+              title="Production work at a glance."
+              description="Assigned manuscripts and collaboration activity are surfaced here; private client material stays inside controlled workspaces."
+              metrics={[
+                {label:'Assigned',value:editorQueue.length,detail:'Current queue'},
+                {label:'In review',value:editorQueue.filter((item:any)=>String(item.status).toLowerCase().includes('review')).length,detail:'Active decisions'},
+                {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
+                {label:'Unread',value:notificationUnreadCount,detail:'Recent updates'},
+              ]}
+              actions={editorActions}
+            />
+            <div className="editor-queue-grid editorial-queue">
               {editorQueue.map((script: any) => (
                 <button key={script.id} className={editorSelected?.id === script.id ? 'editor-queue-card active' : 'editor-queue-card'} onClick={() => setEditorSelected(script)}>
                   <div className="editor-status-line"><span>{script.status ?? 'Submitted'}</span><strong>v{script.version ?? 1}</strong></div>
@@ -2947,6 +3008,19 @@ function App() {
         {view === 'admin' && canAdmin && !simulationMode && (
           <section className="page-wrap admin-page">
             <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, Creator, Writer and Audio Editor accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAdminApplications(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
+            <RoleDashboard
+              eyebrow="OWNER ACTION CENTRE"
+              title="Exceptions first."
+              description="Nightjar surfaces items that require an owner decision before routine totals, so operational risk does not get buried in dashboards."
+              metrics={[
+                {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts'},
+                {label:'Images',value:imageModeration.length,detail:'Awaiting moderation'},
+                {label:'Applications',value:adminApplications.length,detail:'Creator decisions'},
+                {label:'Past due',value:commercialOverview?.subscriptions.pastDue ?? 0,detail:'Billing attention'},
+              ]}
+              actions={adminActions}
+              loading={adminOverviewLoading}
+            />
             <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">TESTING</span><strong>Demo & Simulation</strong><small>Safe fictional data and role-perspective testing · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
             <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">DEMO / SIMULATION</span><strong>See Nightjar populated, then step into every role.</strong><p>Demo records are fictional and isolated. Simulation actions stay local to this browser session and never become live subscriptions, payouts, manuscripts, reviews or user accounts.</p><div className="demo-state-line"><span className={demoMode ? 'status-pill' : 'status-pill muted'}>Demo data {demoMode ? 'ON' : 'OFF'}</span><span className={simulationMode ? 'status-pill' : 'status-pill muted'}>Simulation {simulationMode ? 'ON' : 'OFF'}</span></div></div><div className="admin-preview-buttons">{!demoMode && <button onClick={enableDemoMode}>Enable demo data</button>}{demoMode && !simulationMode && <button onClick={disableDemoMode}>Disable demo data</button>}<button onClick={() => startSimulation('listener')}>Simulate Listener</button><button onClick={() => startSimulation('creator')}>Simulate Creator</button><button onClick={() => startSimulation('writer')}>Simulate Writer</button><button onClick={() => startSimulation('editor')}>Simulate Audio Editor</button>{simulationMode && <button onClick={stopSimulation}>End simulation</button>}<button onClick={clearAdminPreview}>Return to Admin</button></div></div>
             <div className="admin-grid">
@@ -3136,6 +3210,8 @@ function App() {
           <div className="image-moderation-fullscreen-foot"><ShieldCheck size={16}/><span>Inspect the complete image before approving it. Press Escape or click outside the image to close.</span></div>
         </div>
       </div>}
+
+      <GlobalCommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} commands={commandItems} />
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType, context) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, context)} notify={notify} />}
       {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => setPlaying(next.id)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={demoMode} />}
