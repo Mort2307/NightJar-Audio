@@ -4208,7 +4208,8 @@ const professionalMessagePayload = (data: Record<string, any>, id: string) => ({
   id,
   conversationId: cleanText(data.conversationId, 360) || null,
   senderUserId: cleanText(data.senderUserId, 160) || null,
-  body: cleanText(data.body, 4000),
+  body: data.status === 'removed_by_admin' ? '' : cleanText(data.body, 4000),
+  status: cleanText(data.status, 40) || 'visible',
   collaborationId: cleanText(data.collaborationId, 160) || null,
   readBy: Array.isArray(data.readBy) ? data.readBy.map((value:any) => cleanText(value,160)).filter(Boolean) : [],
   createdAt: toIso(data.createdAt),
@@ -4275,6 +4276,7 @@ const appendProfessionalMessage = async (
     conversationId:conversationRef.id,
     senderUserId,
     body,
+    status:'visible',
     collaborationId,
     readBy:[senderUserId],
     createdAt:FieldValue.serverTimestamp(),
@@ -4436,11 +4438,22 @@ export const openProfessionalConversation = onCall({ region: REGION }, async (re
   await batch.commit();
 
   const otherUserId = participants.find((id:string)=>id !== identity.uid) ?? null;
-  const blocked = otherUserId ? await messagingBlockedBetween(identity.uid, otherUserId) : false;
+  let blockedByMe = false;
+  let blockedByOther = false;
+  if (otherUserId) {
+    const [mine,theirs] = await Promise.all([
+      accountRef(identity.uid).collection('messageBlocks').doc(otherUserId).get(),
+      accountRef(otherUserId).collection('messageBlocks').doc(identity.uid).get(),
+    ]);
+    blockedByMe = mine.exists;
+    blockedByOther = theirs.exists;
+  }
   return {
     conversation:await conversationForViewer(await ref.get(), identity.uid),
     messages,
-    blocked,
+    blocked:blockedByMe || blockedByOther,
+    blockedByMe,
+    blockedByOther,
   };
 });
 
