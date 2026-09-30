@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileCheck2, Handshake, Headphones, Heart, ListMusic, Share2, ShieldCheck, X } from 'lucide-react';
+import { FileCheck2, Handshake, Headphones, Heart, ListMusic, MessageCircle, Share2, ShieldCheck, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -11,6 +11,8 @@ type Props = {
   onToggleFollow: (userId: string) => Promise<void>;
   onClose: () => void;
   notify: (message: string) => void;
+  canMessage?: boolean;
+  onMessage?: (userId: string) => void;
   demoMode?: boolean;
 };
 
@@ -21,7 +23,7 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, demoMode = false }: Props) {
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, demoMode = false }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,6 +146,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           </div>
           <div className="writer-discovery-actions">
             <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>
+            {canMessage && onMessage && ['creator','writer','editor'].includes(String(profile.role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
             <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>
           </div>
         </div>
