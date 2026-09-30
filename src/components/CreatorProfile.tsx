@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { ArrowRight, Handshake, Heart, Mic2, Share2, Sparkles } from 'lucide-react';
+import { ArrowRight, Handshake, Heart, Mic2, Share2, ShieldCheck, Sparkles } from 'lucide-react';
 import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 
@@ -19,6 +19,7 @@ type CreatorProfileData = {
   completedCollaborations?: number;
   portfolioNote?: string | null;
   featuredReleases?: any[];
+  activityBadges?: { id: string; label: string; detail: string }[];
   releases?: any[];
   favouriteTags?: string[];
   favouriteTropes?: string[];
@@ -61,7 +62,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
         userId:creator.userId, name:creator.name, handle:creator.handle, headline:creator.note,
         bio:'Fictional Nightjar demo profile used to preview a populated creator experience.',
         initials:creator.initials, avatarUrl:null, welcomeMessage:'Welcome to my Nightjar demo profile.',
-        followers:creator.followers, followingCount:42, completedCollaborations:4, portfolioNote:'A few releases that best represent my current Nightjar work.', featuredReleases:releases.slice(0,2), releases, favouriteTags:['Atmospheric','Story-led','After-hours tension'],
+        followers:creator.followers, followingCount:42, completedCollaborations:4, portfolioNote:'A few releases that best represent my current Nightjar work.', featuredReleases:releases.slice(0,2), activityBadges:[{id:'published-creator',label:'Published Creator',detail:'Has released work in the Nightjar catalogue.'},{id:'completed-collaborator',label:'Completed Collaborator',detail:'Has completed Nightjar collaborations.'}], releases, favouriteTags:['Atmospheric','Story-led','After-hours tension'],
         roleFocus:['Voice performance','Narration','Audio production'],
         roleSpecialties:['Character roleplay','Narration','Dramatic performance'],
         roleSecondary:['Close-mic performance','Series work','Remote collaboration'],
@@ -107,6 +108,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
           <div><span>Released work</span><strong>{profile.releases?.length ?? 0}</strong></div>
           <div><span>Collaborations</span><strong>{profile.completedCollaborations ?? 0}</strong></div>
         </div>
+        {!!profile.activityBadges?.length && <div className="profile-activity-badges public-profile-badges">{profile.activityBadges.map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}</div>}
         {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}{profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
         <section className="public-role-profile">
