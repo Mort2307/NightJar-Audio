@@ -10,7 +10,7 @@ type Props = {
   notify: (message: string) => void;
   demoMode?: boolean;
   simulationMode?: boolean;
-  onMessageUser?: (userId:string) => void;
+  onMessageUser?: (userId:string, collaborationId?:string) => void;
 };
 
 const statusLabel = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -210,7 +210,9 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
           <div className="collaboration-actions">
             <button className="secondary-button" onClick={() => {
               const targetUserId = role === 'writer' ? proposal.recipientUserId : proposal.writerUserId;
-              if (targetUserId) window.dispatchEvent(new CustomEvent('nightjar:message-user', { detail: { userId: targetUserId, collaborationId: proposal.id } }));
+              if (!targetUserId) return;
+              if (onMessageUser) onMessageUser(targetUserId, proposal.id);
+              else window.dispatchEvent(new CustomEvent('nightjar:message-user', { detail: { userId: targetUserId, collaborationId: proposal.id } }));
             }}><MessageCircle size={13}/> Message collaborator</button>
             {onMessageUser && <button className="secondary-button" onClick={()=>onMessageUser(role === 'writer' ? proposal.recipientUserId : proposal.writerUserId)}><MessageCircle size={13}/> Message {role === 'writer' ? proposal.recipientName : proposal.writerName}</button>}
             {role !== 'writer' && !['declined','withdrawn','completed'].includes(proposal.status) && <>
