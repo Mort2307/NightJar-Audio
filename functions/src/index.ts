@@ -4794,6 +4794,33 @@ const requireCreativeMessagingIdentity = async (
   return identity;
 };
 
+const conversationWaitingState = (data: Record<string, any>, viewerUserId: string) => {
+  const lastSenderUserId = cleanText(data.lastSenderUserId, 160) || null;
+  const lastMessageAt = toIso(data.lastMessageAt);
+  const sentAt = lastMessageAt ? new Date(lastMessageAt).getTime() : 0;
+  const waitingHours = sentAt > 0 ? Math.max(0, Math.floor((Date.now() - sentAt) / 3_600_000)) : 0;
+  const awaitingReplyFromUserId = lastSenderUserId && Array.isArray(data.participantUserIds)
+    ? data.participantUserIds.find((id:string) => id !== lastSenderUserId) ?? null
+    : null;
+  const waitingState = !lastSenderUserId
+    ? 'none'
+    : awaitingReplyFromUserId === viewerUserId
+      ? 'awaiting_me'
+      : lastSenderUserId === viewerUserId
+        ? 'awaiting_them'
+        : 'none';
+  const reminderForLastMessageAt = cleanText(data.reminderForLastMessageAt, 80) || null;
+  const reminderAlreadySent = Boolean(lastMessageAt && reminderForLastMessageAt === lastMessageAt);
+  return {
+    waitingState,
+    waitingHours,
+    awaitingReplyFromUserId,
+    reminderAlreadySent,
+    reminderEligible: waitingState === 'awaiting_them' && waitingHours >= 48 && !reminderAlreadySent,
+    lastReminderAt: toIso(data.lastReminderAt),
+  };
+};
+
 export const listMessageConversations = onCall({ region: REGION }, async (request) => {
   const identity = await requireCreativeMessagingIdentity(request);
   const snapshot = await db.collection('directConversations')
@@ -4840,6 +4867,7 @@ export const listMessageConversations = onCall({ region: REGION }, async (reques
         collaborationId:latestCollaboration?.id ?? null,
         collaborationTitle:latestCollaboration?.title ?? null,
         collaborationStatus:latestCollaboration?.status ?? null,
+        ...conversationWaitingState(data, identity.uid),
       };
     }))).sort((a,b)=>String(b.lastMessageAt ?? '').localeCompare(String(a.lastMessageAt ?? '')));
   return { conversations, unreadCount:conversations.reduce((sum,item)=>sum+item.unreadCount,0) };
@@ -4877,6 +4905,9 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
       lastMessageAt:null,
       lastMessagePreview:'',
       lastSenderUserId:null,
+      reminderForLastMessageAt:null,
+      lastReminderAt:null,
+      lastReminderByUserId:null,
     });
   } else if (collaborationContext) {
     const existingIds = cleanStringList(
@@ -4930,7 +4961,16 @@ export const listDirectMessages = onCall({ region: REGION }, async (request) => 
   const blockState = otherUserId
     ? await directMessagingBlockState(identity.uid, otherUserId)
     : { blocked:false, blockedByMe:false, blockedByOther:false };
-  return { messages, ...blockState };
+  return {
+    messages,
+    ...blockState,
+    conversation:{
+      id:conversation.id,
+      ...conversationWaitingState(data, identity.uid),
+      collaborationId:cleanText(data.collaborationId, 160) || null,
+      collaborationIds:cleanStringList(data.collaborationIds, 50),
+    },
+  };
 });
 
 export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
@@ -4999,6 +5039,9 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
     lastSenderUserId:identity.uid,
     collaborationId,
     collaborationIds,
+    reminderForLastMessageAt:null,
+    lastReminderAt:null,
+    lastReminderByUserId:null,
     updatedAt:FieldValue.serverTimestamp(),
   }, { merge:true });
 
@@ -5014,6 +5057,61 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
 
   const saved = await messageRef.get();
   return { message:directMessagePayload(saved.data() ?? message, messageRef.id) };
+});
+
+export const sendDirectMessageReminder = onCall({ region: REGION }, async (request) => {
+  const identity = await requireCreativeMessagingIdentity(request);
+  const conversationId = cleanText((request.data as { conversationId?: unknown } | undefined)?.conversationId, 320);
+  if (!conversationId) throw new HttpsError('invalid-argument', 'Conversation is required.');
+
+  const ref = db.collection('directConversations').doc(conversationId);
+  const conversation = await ref.get();
+  const data = conversation.data();
+  if (!data || !Array.isArray(data.participantUserIds) || !data.participantUserIds.includes(identity.uid)) {
+    throw new HttpsError('not-found', 'Conversation not found.');
+  }
+
+  const recipientUserId = data.participantUserIds.find((id:string) => id !== identity.uid);
+  if (!recipientUserId) throw new HttpsError('failed-precondition', 'Conversation recipient is unavailable.');
+  if (await directMessagingBlockedBetween(identity.uid, recipientUserId)) {
+    throw new HttpsError('permission-denied', 'Private messaging is blocked between these accounts.');
+  }
+
+  const waiting = conversationWaitingState(data, identity.uid);
+  if (waiting.waitingState !== 'awaiting_them') {
+    throw new HttpsError('failed-precondition', 'This conversation is not waiting for the other person to reply.');
+  }
+  if (waiting.waitingHours < 48) {
+    throw new HttpsError('failed-precondition', 'A reminder is available after 48 hours without a reply.');
+  }
+  if (waiting.reminderAlreadySent) {
+    throw new HttpsError('already-exists', 'A reminder has already been sent for this unanswered message.');
+  }
+
+  const lastMessageAt = toIso(data.lastMessageAt);
+  const presenter = await accountPresentation(identity.uid);
+  await ref.set({
+    reminderForLastMessageAt:lastMessageAt,
+    lastReminderAt:FieldValue.serverTimestamp(),
+    lastReminderByUserId:identity.uid,
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  await createNotification(recipientUserId, {
+    type:'message',
+    subtype:'direct_message_reminder',
+    title:'A collaborator is waiting for your reply',
+    message:presenter.displayName + ' sent a Nightjar follow-up on a professional conversation.',
+    conversationId,
+    collaborationId:cleanText(data.collaborationId, 160) || null,
+    senderUserId:identity.uid,
+  });
+
+  return {
+    conversationId,
+    reminderSent:true,
+    reminderForLastMessageAt:lastMessageAt,
+  };
 });
 
 export const setDirectMessageBlock = onCall({ region: REGION }, async (request) => {
