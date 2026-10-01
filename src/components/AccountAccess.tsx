@@ -33,6 +33,7 @@ const friendlyError = (error: unknown) => {
   if (detail.includes('user-disabled')) return 'This Nightjar account has been disabled. Contact an administrator for review.';
   if (detail.includes('app-not-authorized') || detail.includes('unauthorized-domain')) return 'This Nightjar domain is not authorised for Firebase Authentication yet.';
   if (detail.includes('invalid-api-key')) return 'Nightjar is using an invalid Firebase web API key. Check the Firebase web app configuration.';
+  if (detail.includes('permission-denied') || value.toLowerCase().includes('private testing')) return 'Nightjar is currently in private testing. This email has not been invited by an administrator.';
   return `Nightjar account request failed (${code || 'unknown Firebase error'}). Please try again.`;
 };
 
@@ -136,6 +137,11 @@ export default function AccountAccess({
 
     void run(async () => {
       if (mode === 'register') {
+        const access = await nightjarAccount.registrationAccess(email);
+        if (access.closedBeta && !access.allowed) {
+          setMessage('Nightjar is currently in private testing. This email has not been invited by an administrator.');
+          return;
+        }
         sessionStorage.setItem('nightjar.registrationRoles', JSON.stringify(registrationRoles));
         sessionStorage.removeItem('nightjar.registrationRole');
         const referralCode = entryParams.get('ref');
@@ -150,6 +156,11 @@ export default function AccountAccess({
         return;
       }
       if (mode === 'signin') {
+        const access = await nightjarAccount.registrationAccess(email);
+        if (access.closedBeta && !access.allowed) {
+          setMessage('Nightjar is currently in private testing. This email has not been invited by an administrator.');
+          return;
+        }
         const next = await nightjarAuth.signIn(email, password);
         onAuthenticated(next);
         setMode(next.emailVerified ? 'signin' : 'verify');
@@ -211,6 +222,7 @@ export default function AccountAccess({
     <span className="mini-label">NIGHTJAR ACCOUNT</span>
     <h2>{mode === 'register' ? 'Choose your Nightjar roles.' : mode === 'reset' ? 'Reset your password' : 'Enter Nightjar'}</h2>
     <p>{mode === 'register' ? 'Listener access is included with every account. Select any professional roles you want to apply for now — one account can combine VA Creator, Writer, Audio Editor and Artist access after approval.' : mode === 'reset' ? 'We will send a secure reset link to your account email.' : 'Sign in with your protected Nightjar account.'}</p>
+    {mode === 'register' && <div className="demo-warning"><ShieldCheck size={17}/><div><strong>PRIVATE TESTING</strong><span>Account creation is restricted to email addresses approved by a Nightjar administrator. Approved testers still verify their email normally before access is granted.</span></div></div>}
     {mode === 'signin' && <div className="account-workspace-overview" aria-label="Nightjar account workspaces">
       <span><Headphones size={14}/><strong>Listener</strong><small>Discovery, subscription, comments, Like/Love and private library.</small></span>
       <span><Mic2 size={14}/><strong>Creator</strong><small>Publishing, credits, professional messaging and Creator Studio.</small></span>
@@ -264,7 +276,7 @@ export default function AccountAccess({
       </>}
     </>}
     {message && <p className="account-access-message" role="status" aria-live="polite">{message}</p>}
-    <button type="button" className="primary-button account-access-submit" disabled={busy} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create protected account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
+    <button type="button" className="primary-button account-access-submit" disabled={busy} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
     <div className="account-access-switches">
       {mode !== 'signin' && <button onClick={() => { setMode('signin'); setMessage(''); }}>Already have an account?</button>}
       {mode !== 'register' && <button onClick={() => { setMode('register'); setMessage(''); }}>Create account</button>}
