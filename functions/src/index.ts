@@ -231,8 +231,12 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
     const applicationRef = professionalApplicationRef(identity.uid);
     const application = await applicationRef.get();
     const approved = professionalRolesForAccount(current);
+    const applicationStatus = cleanText(application.data()?.status, 30);
+    const carriedRequestedRoles = ['banked','waitlist'].includes(applicationStatus)
+      ? cleanProfessionalRoles(application.data()?.requestedRoles)
+      : [];
     const requestedRoles = Array.from(new Set([
-      ...cleanProfessionalRoles(application.data()?.requestedRoles),
+      ...carriedRequestedRoles,
       requestedRole as ProfessionalRole,
     ])).filter((role) => !approved.includes(role));
     await ref.set({
@@ -6261,7 +6265,11 @@ export const submitProfessionalApplication = onCall({ region: REGION }, async (r
   ]);
   const account = accountSnapshot.data() ?? {};
   const approved = professionalRolesForAccount(account).filter((role): role is ProfessionalRole => PROFESSIONAL_ROLE_KEYS.includes(role as ProfessionalRole));
-  const requested = Array.from(new Set([...cleanProfessionalRoles(currentApplication.data()?.requestedRoles), ...requestedRoles]))
+  const currentApplicationStatus = cleanText(currentApplication.data()?.status, 30);
+  const carriedRequestedRoles = ['banked','waitlist'].includes(currentApplicationStatus)
+    ? cleanProfessionalRoles(currentApplication.data()?.requestedRoles)
+    : [];
+  const requested = Array.from(new Set([...carriedRequestedRoles, ...requestedRoles]))
     .filter((role) => !approved.includes(role));
 
   await accountRef(identity.uid).set({
@@ -6402,7 +6410,11 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
 
   const application = applicationSnapshot.data() ?? {};
   const requested = cleanProfessionalRoles(application.requestedRoles);
-  const rolesToApprove = (selectedRoles.length ? selectedRoles : requested).filter((role) => requested.includes(role));
+  const rolesReviewed = (selectedRoles.length ? selectedRoles : requested).filter((role) => requested.includes(role));
+  const rolesToApprove = decision === 'approved' ? rolesReviewed : [];
+  if (decision === 'approved' && !rolesToApprove.length) {
+    throw new HttpsError('failed-precondition', 'There are no pending professional roles selected for approval.');
+  }
   const currentApproved = professionalRolesForAccount(accountSnapshot.data() ?? {}) as ProfessionalRole[];
   const nextApproved = decision === 'approved'
     ? Array.from(new Set([...currentApproved, ...rolesToApprove]))
@@ -6438,6 +6450,19 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
     professionalAccessUpdatedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge:true });
+
+  await professionalApplicationRef(userId).collection('events').doc().set({
+    userId,
+    decision,
+    roles: rolesReviewed,
+    wave: wave || null,
+    previousStatus: cleanText(application.status, 30) || 'banked',
+    resultingStatus: nextStatus,
+    approvedRolesAfter: nextApproved,
+    pendingRolesAfter: accountPendingRoles,
+    reviewedBy: admin.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
 
   await syncCreatorCustomTagUsage(userId);
   return {
