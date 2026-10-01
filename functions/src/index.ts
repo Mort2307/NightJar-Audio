@@ -445,7 +445,7 @@ const syncCreatorCustomTagUsage = async (creatorUserId: string) => {
 
   const accountData = accountSnapshot.data() ?? {};
   const activeCreator = accountSnapshot.exists
-    && accountData.role === 'creator'
+    && professionalRolesForAccount(accountData).includes('creator')
     && String(accountData.status ?? '') === 'active';
 
   const desiredTags = activeCreator
@@ -642,7 +642,7 @@ const publicActivityBadges = (
 
 
 const profilePortfolioOptionsFor = async (userId: string, role: string) => {
-  if (professionalRoles.includes('creator')) {
+  if (role === 'creator') {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
     return releases.docs
       .filter((doc) => doc.data().status === 'released')
@@ -655,7 +655,7 @@ const profilePortfolioOptionsFor = async (userId: string, role: string) => {
       .slice(0, 100);
   }
 
-  if (professionalRoles.includes('writer') || professionalRoles.includes('editor')) {
+  if (role === 'writer' || role === 'editor') {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     return releases.docs
       .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
@@ -771,7 +771,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     }, { merge: true });
   });
 
-  if (profileRole === 'creator' && profileStatus === 'active') {
+  if (profileStatus === 'active' && professionalRolesForAccount(accountSnapshot.data() ?? {}).includes('creator')) {
     await syncCreatorCustomTagUsage(identity.uid);
   }
 
@@ -796,9 +796,11 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
   const profile = await profileRef(account.id).get();
   const data = profile.data();
   if (!data || data.publicProfile === false) return null;
+  const roles = professionalRolesForAccount(account.data() ?? {});
   return {
     userId: account.id,
-    role: account.data().role ?? null,
+    role: roles[0] ?? account.data().role ?? null,
+    roles: roles.length ? roles : ['listener'],
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
     handle: data.handle ?? null,
@@ -881,7 +883,7 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
   const [accounts, releases, listening] = await Promise.all([
-    db.collection('accounts').where('role', '==', 'creator').limit(200).get(),
+    db.collection('accounts').limit(1000).get(),
     db.collection('releases').where('status', '==', 'released').limit(1000).get(),
     db.collection('listeningEvents').limit(5000).get(),
   ]);
@@ -896,7 +898,7 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
 
   const creators = (await Promise.all(
     accounts.docs
-      .filter((doc) => doc.data().status === 'active')
+      .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
         if (!base) return null;
