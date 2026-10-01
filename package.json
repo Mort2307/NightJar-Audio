@@ -15,7 +15,8 @@
     "validate:community": "node scripts/community-contracts.mjs",
     "install-scripts:review": "npm install-scripts ls",
     "audit:prod": "node scripts/audit-production.mjs",
-    "validate:security": "npm run audit:prod"
+    "validate:security": "npm run audit:prod",
+    "validate:launch": "node scripts/launch-readiness.mjs"
   },
   "dependencies": {
     "firebase": "^12.4.0",
