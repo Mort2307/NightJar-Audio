@@ -4510,8 +4510,12 @@ const commentPayload = (data: Record<string, any>, id: string) => ({
   id,
   releaseId: data.releaseId ?? null,
   userId: data.userId ?? null,
-  commenterName: data.commenterName ?? 'Nightjar listener',
+  commenterName: data.commenterName ?? 'Nightjar member',
   commenterHandle: data.commenterHandle ?? null,
+  commenterRole: cleanText(data.commenterRole, 40) || 'listener',
+  teamReply: data.teamReply === true,
+  parentCommentId: cleanText(data.parentCommentId, 160) || null,
+  replyToUserId: cleanText(data.replyToUserId, 160) || null,
   body: cleanText(data.body, 1200),
   status: data.status ?? 'visible',
   createdAt: toIso(data.createdAt),
@@ -4713,6 +4717,10 @@ export const postReleaseComment = onCall({ region: REGION }, async (request) => 
     userId:identity.uid,
     commenterName:presenter.displayName,
     commenterHandle:presenter.handle,
+    commenterRole:'listener',
+    teamReply:false,
+    parentCommentId:null,
+    replyToUserId:null,
     body,
     status:'visible',
     createdAt:FieldValue.serverTimestamp(),
@@ -4742,8 +4750,86 @@ export const postReleaseComment = onCall({ region: REGION }, async (request) => 
   return { comment:commentPayload(saved.data() ?? record, ref.id), reactions:community.reactions, commentCount:community.comments.length };
 });
 
+export const replyToReleaseComment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator','writer','editor']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const parentCommentId = cleanText(input.parentCommentId, 160);
+  const body = cleanText(input.body, 1200);
+  if (!parentCommentId || !body) throw new HttpsError('invalid-argument', 'Write a reply first.');
+
+  const parent = await db.collection('releaseComments').doc(parentCommentId).get();
+  const parentData = parent.data();
+  if (!parentData || parentData.status !== 'visible' || parentData.parentCommentId) {
+    throw new HttpsError('not-found', 'Comment not found.');
+  }
+
+  const releaseId = cleanText(parentData.releaseId, 160);
+  const release = await releaseRef(releaseId).get();
+  const releaseData = release.data();
+  if (!releaseData || releaseData.status !== 'released') throw new HttpsError('not-found', 'Published release not found.');
+
+  const creditedUserIds = new Set<string>();
+  const creatorUserId = cleanText(releaseData.creatorUserId, 160);
+  if (creatorUserId) creditedUserIds.add(creatorUserId);
+  for (const credit of normaliseReleaseContributors(releaseData.contributors)) {
+    if (credit.userId) creditedUserIds.add(credit.userId);
+  }
+  if (!creditedUserIds.has(identity.uid)) {
+    throw new HttpsError('permission-denied', 'Only credited members of this release can reply as the work team.');
+  }
+
+  const recent = await db.collection('releaseComments').where('userId', '==', identity.uid).limit(100).get();
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  if (recent.docs.filter((doc) => (doc.data().createdAt?.toMillis?.() ?? 0) >= fiveMinutesAgo).length >= 8) {
+    throw new HttpsError('resource-exhausted', 'Please wait before posting more replies.');
+  }
+
+  const presenter = await accountPresentation(identity.uid);
+  const ref = db.collection('releaseComments').doc();
+  const record = {
+    releaseId,
+    userId:identity.uid,
+    commenterName:presenter.displayName,
+    commenterHandle:presenter.handle,
+    commenterRole:identity.role,
+    teamReply:true,
+    parentCommentId,
+    replyToUserId:cleanText(parentData.userId, 160) || null,
+    body,
+    status:'visible',
+    createdAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+
+  const parentUserId = cleanText(parentData.userId, 160);
+  if (parentUserId && parentUserId !== identity.uid) {
+    await createNotification(parentUserId, {
+      type:'comment',
+      subtype:'release_comment_reply',
+      title:'The work team replied to your comment',
+      message:presenter.displayName + ' replied to your comment on ' + String(releaseData.title ?? 'a Nightjar release') + '.',
+      releaseId,
+      releaseTitle:String(releaseData.title ?? 'Nightjar release'),
+      creatorName:String(releaseData.creatorName ?? ''),
+      commentId:ref.id,
+      parentCommentId,
+    });
+  }
+
+  const saved = await ref.get();
+  const community = await syncReleaseCommunitySummary(releaseId, identity.uid);
+  return {
+    comment:commentPayload(saved.data() ?? record, ref.id),
+    reactions:community.reactions,
+    commentCount:community.comments.length,
+  };
+});
+
 export const deleteOwnReleaseComment = onCall({ region: REGION }, async (request) => {
-  const identity = await requireAccountRole(request, ['listener']);
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
   const commentId = cleanText((request.data as { commentId?: unknown } | undefined)?.commentId, 160);
   const ref = db.collection('releaseComments').doc(commentId);
   const snapshot = await ref.get();
