@@ -251,7 +251,7 @@ const protectionEventLabel = (eventType: unknown) => {
     drag_blocked: 'Drag blocked',
     script_view: 'Protected manuscript opened',
   };
-  return labels[value] ?? value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Protection signal';
+  return (labels[value] ?? value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())) || 'Protection signal';
 };
 
 const protectionConfidenceLabel = (value: unknown) => {
@@ -667,7 +667,8 @@ function App() {
   }, [user, ageVerified, role, currentIntent, previewRole, demoMode, testingSessionHydrated]);
 
   useEffect(() => {
-    const professional = ['creator','writer','editor'].includes(String(effectiveRole));
+    const messageRole = role === 'admin' ? previewRole : role;
+    const professional = ['creator','writer','editor'].includes(String(messageRole));
     if (!user || !ageVerified || !professional) {
       setMessageUnreadCount(0);
       setMessageAwaitingReplyCount(0);
@@ -707,7 +708,7 @@ function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [user?.userId, ageVerified, effectiveRole, demoMode]);
+  }, [user?.userId, ageVerified, role, previewRole, demoMode]);
 
 
   const clearToastTimer = () => {
@@ -2993,8 +2994,8 @@ function App() {
 
             <section className="creator-band section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
-              <div className="creator-grid">{creators.slice(0, 5).map((creator) => <button className="creator-card" key={creator.userId} onClick={() => navigate('creators')}><span className="avatar-large">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" loading="lazy" decoding="async" /> : creator.initials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.note || 'Nightjar creator profile.'}</em><small>{creator.releases ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
-              {!creators.length && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
+              <div className="creator-grid">{creatorDirectory.slice(0, 5).map((creator) => <button className="creator-card" key={creator.userId} onClick={() => openPublicProfile(creator.userId)}><span className="avatar-large">{creator.imageUrl ? <img className="avatar-approved-image" src={creator.imageUrl} alt="" loading="lazy" decoding="async" /> : creator.initials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.note || 'Nightjar creator profile.'}</em><small>{creator.releases ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
+              {!creatorDirectory.length && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
             </section>
 
             <section className="studio-feature section-wrap">
