@@ -19,12 +19,14 @@ const engagementClient=read('src/platform/firebase-engagement.ts');
   'releaseCommunity',
   'setReleaseReaction',
   'postReleaseComment',
+  'replyToReleaseComment',
   'deleteOwnReleaseComment',
   'reportReleaseComment',
   'listMessageConversations',
   'startDirectConversation',
   'listDirectMessages',
   'sendDirectMessage',
+  'sendDirectMessageReminder',
   'setDirectMessageBlock',
   'reportDirectMessage',
   'adminListCommunityReports',
@@ -33,6 +35,12 @@ const engagementClient=read('src/platform/firebase-engagement.ts');
 
 requireText(functions,"requireAccountRole(request, ['listener'])",'Listener-only community posting contract is missing');
 requireText(functions,"requireAccountRole(request, ['creator','writer','editor'])",'Professional-message role gate is missing');
+requireText(functions,'Only credited members of this release can reply as the work team.','Credited work-team reply boundary is missing');
+requireText(functions,'reminderForLastMessageAt','Per-unanswered-streak reminder state is missing');
+requireText(functions,'A reminder has already been sent for this unanswered message.','One-reminder-per-streak guard is missing');
+requireText(functions,'A reminder is available after 48 hours without a reply.','48-hour reminder threshold is missing');
+requireText(functions,"subtype:'direct_message_reminder'",'Professional follow-up notification is missing');
+requireText(functions,"dedupeKey:'release-reaction:'",'Reaction notification dedupe is missing');
 requireText(functions,'Please wait before posting more comments.','Comment rate-limit contract is missing');
 requireText(functions,'Please slow down before sending more messages.','Message rate-limit contract is missing');
 requireText(functions,"type:'direct_message'",'Reported direct-message moderation path is missing');
@@ -47,7 +55,10 @@ requireText(app,'communityLoveCount','Release cards do not expose Love counts');
 const appInboxPolls=(app.match(/nightjarMessaging\.conversations\(\)/g)??[]).length;
 if(appInboxPolls!==1) failures.push('App shell must have exactly one background Inbox polling path; found '+appInboxPolls);
 requireText(app,'messageAwaitingReplyCount','Professional awaiting-reply workflow is missing from role dashboards');
-requireText(inbox,'Awaiting reply · 48h+','Inbox awaiting-reply indicator is missing');
+requireText(app,'messageNeedsReplyCount','Read-but-unanswered Inbox responsibility state is missing from role dashboards');
+requireText(inbox,'Reply needed','Inbox reply-needed indicator is missing');
+requireText(inbox,'Send one reminder','Inbox safe follow-up action is missing');
+requireText(inbox,'nightjarMessaging.remind','Inbox reminder API integration is missing');
 requireText(app,'nav-messages','Universal search does not expose the professional Inbox');
 requireText(functions,'directMessagingBlockedBetween','Professional message block enforcement is missing');
 requireText(functions,'readBy:[identity.uid]','Direct-message read state is missing');
@@ -79,6 +90,9 @@ requireText(inbox,'activeCollaborationId','Per-message project context state is 
 
 requireText(community,'nightjarEngagement.setReaction','Like/Love Community action is missing');
 requireText(community,'Post comment','Direct Listener comment UI is missing');
+requireText(community,'Reply as work team','Credited work-team reply UI is missing');
+requireText(community,'Work team','Work-team reply attribution is missing');
+requireText(community,'nightjarEngagement.reply','Release comment reply API integration is missing');
 requireText(community,'Formal reviews are moderated before publication','Review/comment moderation distinction is missing');
 
 requireText(prefs,"['messages','Private messages']", 'Private-message notification preference is missing');
@@ -86,10 +100,12 @@ requireText(messagingClient,"'listMessageConversations'",'Messaging client canon
 requireText(messagingClient,"'startDirectConversation'",'Messaging client canonical conversation-start callable is missing');
 requireText(messagingClient,"'listDirectMessages'",'Messaging client canonical thread callable is missing');
 requireText(messagingClient,"'sendDirectMessage'",'Messaging client canonical send callable is missing');
+requireText(messagingClient,"'sendDirectMessageReminder'",'Messaging client follow-up reminder callable is missing');
 requireText(messagingClient,'collaborationId?:string|null','Messaging client no longer carries per-message collaboration context');
 requireText(messagingClient,"'setDirectMessageBlock'",'Messaging client block callable is missing');
 requireText(messagingClient,"'reportDirectMessage'",'Messaging client report callable is missing');
 requireText(engagementClient,"'setReleaseReaction'",'Engagement client reaction callable is missing');
+requireText(engagementClient,"'replyToReleaseComment'",'Engagement client work-team reply callable is missing');
 
 if (exists('src/components/ReleaseCommunity.tsx')) failures.push('Obsolete duplicate ReleaseCommunity component still exists');
 if (exists('src/components/ProfessionalInbox.tsx')) failures.push('Obsolete duplicate ProfessionalInbox component still exists');
