@@ -1165,7 +1165,10 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
         const selected = cleanStringList(data.featuredPortfolioIds, 6);
         const byId = new Map(releases.map((release) => [String(release.id), release]));
         return hasPortfolioCuration
-          ? selected.map((id) => byId.get(id)).filter((release): release is ReturnType<typeof releasePayload> => Boolean(release))
+          ? selected.flatMap((id) => {
+              const release = byId.get(id);
+              return release ? [release] : [];
+            })
           : releases.slice(0, 3);
       })(),
       completedCollaborations,
