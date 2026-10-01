@@ -39,7 +39,7 @@ export default function NightjarWalletPanel({ notify, professional=false, demoMo
       nightjarGifts.config(),
       nightjarGifts.wallet(),
       nightjarGifts.history(),
-      professional ? nightjarGifts.earnings().catch(()=>null) : Promise.resolve(null),
+      nightjarGifts.earnings().catch(()=>null),
     ]).then(([nextConfig,nextWallet,nextHistory,nextEarnings])=>{
       if(cancelled)return;
       setConfig(nextConfig);setWallet(nextWallet);setHistory(nextHistory);setEarnings(nextEarnings);
@@ -47,6 +47,8 @@ export default function NightjarWalletPanel({ notify, professional=false, demoMo
       .finally(()=>{if(!cancelled)setLoading(false);});
     return()=>{cancelled=true;};
   },[professional,demoMode]);
+
+  const showEarnings = professional || Number(earnings?.lifetimePence ?? 0) > 0;
 
   return <article className="panel nightjar-wallet-panel">
     <div className="professional-role-head">
@@ -57,7 +59,7 @@ export default function NightjarWalletPanel({ notify, professional=false, demoMo
     <div className="nightjar-wallet-metrics">
       <div><span>Available</span><strong><Bird size={17}/>{loading?'…':wallet?.balance??0}</strong><small>Never expires</small></div>
       <div><span>Gifted</span><strong>{loading?'…':wallet?.gifted??0}</strong><small>Lifetime sent</small></div>
-      {professional&&<><div><span>Pending support</span><strong>{loading?'…':money(earnings?.pendingPence??0)}</strong><small>7-day clearance</small></div><div><span>Cleared support</span><strong>{loading?'…':money(earnings?.clearedPence??0)}</strong><small>Ready for payout cycle</small></div></>}
+      {showEarnings&&<><div><span>Pending support</span><strong>{loading?'…':money(earnings?.pendingPence??0)}</strong><small>7-day clearance</small></div><div><span>Cleared support</span><strong>{loading?'…':money(earnings?.clearedPence??0)}</strong><small>Ready for payout cycle</small></div></>}
     </div>
 
     <section className="nightjar-pack-section">
@@ -66,14 +68,14 @@ export default function NightjarWalletPanel({ notify, professional=false, demoMo
       {!config?.checkoutConfigured&&<p className="panel-note">The wallet, packs, gifting ledger and creator-credit logic are live in the product code. Real-money pack checkout stays disabled until Nightjar's production payment provider and verified purchase callback are connected.</p>}
     </section>
 
-    {professional&&earnings&&Object.keys(earnings.byRole??{}).length>0&&<section className="nightjar-role-earnings"><span className="mini-label">SUPPORT BY ROLE</span><div>{Object.entries(earnings.byRole).map(([role,value])=><article key={role}><strong>{roleLabel(role)}</strong><span>{money(Number(value.clearedPence??0))} cleared</span><small>{money(Number(value.pendingPence??0))} pending</small></article>)}</div></section>}
+    {showEarnings&&earnings&&Object.keys(earnings.byRole??{}).length>0&&<section className="nightjar-role-earnings"><span className="mini-label">SUPPORT BY ROLE</span><div>{Object.entries(earnings.byRole).map(([role,value])=><article key={role}><strong>{roleLabel(role)}</strong><span>{money(Number(value.clearedPence??0))} cleared</span><small>{money(Number(value.pendingPence??0))} pending</small></article>)}</div></section>}
 
     <section className="nightjar-history">
       <div><span className="mini-label">RECENT SUPPORT</span><h3>Gift history</h3></div>
       <div className="nightjar-history-list">
         {history.sent.slice(0,6).map((item)=><article key={'sent-'+item.id}><Gift size={15}/><div><strong>Sent {item.quantity} Nightjar{item.quantity===1?'':'s'}</strong><small>{item.recipientDisplayName??roleLabel(item.recipientRole)} · {money(item.creatorCreditPence)}</small></div><em>{item.status==='cleared'?'Cleared':'Pending'}</em></article>)}
-        {professional&&history.received.slice(0,6).map((item)=><article key={'received-'+item.id}><Bird size={15}/><div><strong>Received {item.quantity} Nightjar{item.quantity===1?'':'s'}</strong><small>{roleLabel(item.recipientRole)} · {money(item.creatorCreditPence)}</small></div><em>{item.status==='cleared'?<><Clock3 size={12}/> Cleared</>:'Pending'}</em></article>)}
-        {!history.sent.length&&(!professional||!history.received.length)&&<div className="people-empty"><Gift size={18}/><strong>No Nightjar gifts yet</strong><span>Your support activity will appear here.</span></div>}
+        {showEarnings&&history.received.slice(0,6).map((item)=><article key={'received-'+item.id}><Bird size={15}/><div><strong>Received {item.quantity} Nightjar{item.quantity===1?'':'s'}</strong><small>{roleLabel(item.recipientRole)} · {money(item.creatorCreditPence)}</small></div><em>{item.status==='cleared'?<><Clock3 size={12}/> Cleared</>:'Pending'}</em></article>)}
+        {!history.sent.length&&(!showEarnings||!history.received.length)&&<div className="people-empty"><Gift size={18}/><strong>No Nightjar gifts yet</strong><span>Your support activity will appear here.</span></div>}
       </div>
     </section>
   </article>;
