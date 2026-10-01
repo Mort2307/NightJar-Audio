@@ -38,6 +38,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [giftOpen, setGiftOpen] = useState(false);
+  const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(null);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
@@ -107,8 +108,17 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   };
 
   const following = Boolean(profile?.userId && followingIds.includes(profile.userId));
-  const profileRole = (profile?.role && ['creator','listener','writer','editor','artist'].includes(profile.role) ? profile.role : 'listener') as ProfileRoleKey;
+  const availableProfileRoles = Array.from(new Set(
+    (Array.isArray(profile?.roles) && profile.roles.length ? profile.roles : [profile?.role ?? 'listener'])
+      .filter((role:string) => ['creator','listener','writer','editor','artist'].includes(role)),
+  ));
+  const profileRole = ((selectedProfileRole && availableProfileRoles.includes(selectedProfileRole)
+    ? selectedProfileRole
+    : availableProfileRoles[0] ?? 'listener')) as ProfileRoleKey;
   const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
+  const roleDetails = profile?.roleProfiles && typeof profile.roleProfiles === 'object' && profile.roleProfiles[profileRole]
+    ? profile.roleProfiles[profileRole]
+    : profile ?? {};
   const profileMetrics = profile ? (
     profileRole === 'creator'
       ? [
@@ -158,7 +168,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <h3>{profile.displayName}</h3>
             <p>{profile.headline || (profile.role === 'editor' ? 'Audio Editor on Nightjar.' : profile.role === 'listener' ? 'Part of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
-            {!!profile.roles?.length && <div className="profile-role-chips">{profile.roles.map((role:string)=><span key={role}>{roleLabel(role)}</span>)}</div>}
+            {availableProfileRoles.length > 0 && <div className="profile-role-chips" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" className={profileRole===role?'active':''} key={role} onClick={()=>setSelectedProfileRole(role)}>{roleLabel(role)}</button>)}</div>}
           </div>
           <div className="writer-discovery-actions">
             <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>
@@ -179,41 +189,45 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {profile.activityBadges.map((badge:any)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}
         </div>}
 
-        {!!profile.roleFocus?.length && <div className="creator-profile-tags">{profile.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
+        {!!roleDetails.roleFocus?.length && <div className="creator-profile-tags">{roleDetails.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
 
         <section className="public-role-profile">
-          <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profile.role).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{profile.roleAvailability && <strong>{profile.roleAvailability}</strong>}</div>
+          <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profileRole).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{roleDetails.roleAvailability && <strong>{roleDetails.roleAvailability}</strong>}</div>
           <p>{roleConfig.description}</p>
-          {!!profile.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{profile.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          {!!profile.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{profile.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!roleDetails.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{roleDetails.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!roleDetails.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{roleDetails.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!profile.favouriteCategories?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite categories' : 'Relevant categories'}</span><div className="creator-profile-tags">{profile.favouriteCategories.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite tropes' : 'Tropes & themes'}</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          {(profile.roleDetailOne || profile.roleDetailTwo) && <div className="public-role-copy">{profile.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{profile.roleDetailOne}</p></div>}{profile.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{profile.roleDetailTwo}</p></div>}</div>}
+          {(roleDetails.roleDetailOne || roleDetails.roleDetailTwo) && <div className="public-role-copy">{roleDetails.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{roleDetails.roleDetailOne}</p></div>}{roleDetails.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{roleDetails.roleDetailTwo}</p></div>}</div>}
         </section>
 
-        {(profile.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
-          {profile.portfolioNote && <p>{profile.portfolioNote}</p>}
+        {(roleDetails.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
+          {roleDetails.portfolioNote && <p>{roleDetails.portfolioNote}</p>}
           {(profile.completedCollaborations ?? 0) > 0 && <span><Handshake size={14}/>{profile.completedCollaborations} completed Nightjar collaboration{profile.completedCollaborations === 1 ? '' : 's'}</span>}
         </section>}
 
         <div className="writer-public-note">
           {profile.role === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
           <div>
-            <strong>{profile.role === 'editor'
+            <strong>{profileRole === 'editor'
               ? 'Public production identity, private client work.'
-              : profile.role === 'writer'
+              : profileRole === 'writer'
                 ? 'Public writing identity, protected manuscripts.'
-                : profile.role === 'listener'
-                  ? 'Community identity without listening-history exposure.'
-                  : 'Public Creator identity.'}</strong>
-            <p>{profile.role === 'editor'
+                : profileRole === 'artist'
+                  ? 'Public artist identity, private commission details.'
+                  : profileRole === 'listener'
+                    ? 'Community identity without listening-history exposure.'
+                    : 'Public VA Creator identity.'}</strong>
+            <p>{profileRole === 'editor'
               ? 'Nightjar shows skills, availability and credited public releases without exposing assigned manuscripts, private notes or client files.'
-              : profile.role === 'writer'
+              : profileRole === 'writer'
                 ? 'Writing focus, availability and public credits can be discovered without exposing protected script text or private licensing discussions.'
-                : profile.role === 'listener'
-                  ? 'Only the profile details this listener deliberately chose to publish are shown here. Private listening history and library activity stay private.'
-                  : 'Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
+                : profileRole === 'artist'
+                  ? 'Style, portfolio work and commission availability can be discovered without exposing private briefs, source files or client discussions.'
+                  : profileRole === 'listener'
+                    ? 'Only the profile details this listener deliberately chose to publish are shown here. Private listening history and library activity stay private.'
+                    : 'VA Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
           </div>
         </div>
 
@@ -225,9 +239,11 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                 ? 'Writing portfolio'
                 : profileRole === 'editor'
                   ? 'Production credits'
-                  : profileRole === 'creator'
-                    ? 'Creator catalogue'
-                    : 'Listener profile'}</h3>
+                  : profileRole === 'artist'
+                    ? 'Artist portfolio'
+                    : profileRole === 'creator'
+                      ? 'VA Creator catalogue'
+                      : 'Listener profile'}</h3>
             </div>
           </div>
           {profile.role !== 'listener' && !!profile.featuredWork?.length && <div className="public-featured-work">
