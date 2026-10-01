@@ -3360,7 +3360,7 @@ function App() {
               <div className="nj-profile-progress-track" aria-label={profileCompletion + '% profile complete'}><span style={{width:profileCompletion + '%'}}/></div>
               <button className="secondary-button" onClick={() => document.getElementById('profile-public-preview')?.scrollIntoView({behavior:'smooth',block:'center'})}>Preview public profile</button>
             </div>
-            <Suspense fallback={<NightjarSkeleton variant="card" count={2} label="Loading professional roles" />}><ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':'discover'); }} /></Suspense>
+            <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}><ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':'discover'); }} /></Suspense>
             <div className="profile-editor-grid">
               <article className="panel profile-editor-card">
                 <span className="mini-label">IDENTITY</span>
