@@ -2262,3 +2262,37 @@ textarea {
     justify-content:center;
   }
 }
+
+
+.testing-age-bypass-banner,
+.account-testing-notice {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  border:1px solid rgba(215,193,155,.22);
+  background:rgba(132,104,61,.09);
+  color:#d8cab3;
+  font-size:8px;
+  line-height:1.5;
+}
+.testing-age-bypass-banner {
+  position:sticky;
+  top:0;
+  z-index:96;
+  padding:8px 14px;
+}
+.account-testing-notice {
+  margin-bottom:14px;
+  padding:10px 11px;
+  border-radius:10px;
+}
+.testing-age-bypass-banner svg,
+.account-testing-notice svg {
+  flex:0 0 auto;
+  margin-top:1px;
+}
+.testing-age-bypass-banner strong,
+.account-testing-notice strong {
+  color:#efe1c8;
+  letter-spacing:.07em;
+}
