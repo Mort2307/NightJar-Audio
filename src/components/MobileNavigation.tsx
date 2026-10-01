@@ -1,7 +1,7 @@
-import { Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, UserCircle2, FileText, type LucideIcon } from 'lucide-react';
+import { Brush, Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, UserCircle2, FileText, type LucideIcon } from 'lucide-react';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
-type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | null;
+type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | null;
 
 type Props = {
   view: View;
@@ -23,6 +23,8 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
       ? { view:'writer', label:'Write', icon:FileText }
       : role === 'editor'
         ? { view:'editor', label:'Editorial', icon:FileText }
+        : role === 'artist'
+          ? { view:'profile', label:'Artist', icon:Brush }
         : role === 'admin'
           ? { view:'admin', label:'Admin', icon:Settings2 }
           : { view:'discover', label:'Discover', icon:Home };
