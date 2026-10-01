@@ -21,6 +21,7 @@ export type CommercialSettings = {
   popularityAffectsBaseRate: false;
   tipsEnabled: boolean;
   individualPurchasesEnabled: boolean;
+  listenerSubscriptionUrl: string | null;
 };
 
 export type CommercialOverview = {
@@ -58,6 +59,15 @@ const creatorCompensationCall = httpsCallable<void, {
   payoutCadence: string | null;
 }>(functions, 'creatorCompensationStatus');
 const transparencyCall = httpsCallable<void, any>(functions, 'transparencySnapshot');
+const listeningAccessCall = httpsCallable<void, {
+  role: string | null;
+  subscribed: boolean;
+  subscriptionStatus: string | null;
+  planningMonthlyPricePence: number | null;
+  subscriptionUrl: string | null;
+  creditedWorkIncluded: true;
+  rule: string;
+}>(functions, 'myListeningAccess');
 
 export const nightjarCommercial = {
   async overview() {
@@ -78,5 +88,9 @@ export const nightjarCommercial = {
 
   async transparency() {
     return (await transparencyCall()).data;
+  },
+
+  async listeningAccess() {
+    return (await listeningAccessCall()).data;
   },
 };
