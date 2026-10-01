@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileCheck2, Handshake, Headphones, Heart, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
+import { Bird, FileCheck2, Handshake, Headphones, Heart, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 import { nightjarReferrals } from '../platform/firebase-referrals';
+import NightjarGiftPanel from './NightjarGiftPanel';
 
 type Props = {
   userId: string;
@@ -25,7 +26,8 @@ type Props = {
 const roleLabel = (role: string | null | undefined) => {
   if (role === 'editor') return 'Audio Editor';
   if (role === 'writer') return 'Writer';
-  if (role === 'creator') return 'Creator';
+  if (role === 'creator') return 'VA Creator';
+  if (role === 'artist') return 'Artist';
   return 'Listener';
 };
 
@@ -33,6 +35,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [giftOpen, setGiftOpen] = useState(false);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
@@ -102,7 +105,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   };
 
   const following = Boolean(profile?.userId && followingIds.includes(profile.userId));
-  const profileRole = (profile?.role && ['creator','listener','writer','editor'].includes(profile.role) ? profile.role : 'listener') as ProfileRoleKey;
+  const profileRole = (profile?.role && ['creator','listener','writer','editor','artist'].includes(profile.role) ? profile.role : 'listener') as ProfileRoleKey;
   const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
   const profileMetrics = profile ? (
     profileRole === 'creator'
@@ -156,7 +159,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           </div>
           <div className="writer-discovery-actions">
             <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>
-            {canMessage && onMessage && ['creator','writer','editor'].includes(String(profile.role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
+            {canMessage && onMessage && ['creator','writer','editor','artist'].includes(String(profile.role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
+            {['creator','writer','editor','artist'].includes(String(profile.role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Send Nightjars</button>}
             <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>
           </div>
         </div>
@@ -252,5 +256,6 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         </div>
       </div>}
     </section>
+    {giftOpen && profile && <NightjarGiftPanel recipientUserId={profile.userId} recipientName={profile.displayName} recipientRole={String(profile.role)} notify={notify} onClose={() => setGiftOpen(false)} />}
   </div>;
 }
