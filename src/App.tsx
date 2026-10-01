@@ -1318,21 +1318,19 @@ function App() {
     notify('Signed out of Nightjar.');
   };
 
-  const chooseRole = async (nextRole: Exclude<AccountRole, 'admin' | 'editor'>) => {
+  const chooseRole = async (nextRole: Exclude<AccountRole, 'admin'>) => {
     setAccountLoading(true);
     try {
       const data = await nightjarAccount.chooseRole(nextRole);
-      if (data.role === 'creator' || data.role === 'listener' || data.role === 'writer' || data.role === 'artist') {
-        const nextStatus = data.status === 'pending_review' ? 'pending_review' : 'active';
-        setRole(data.role);
-        setAccountStatus(nextStatus);
-        setRolePicker(false);
-        navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : 'discover');
-        notify(data.role === 'creator'
-          ? 'Creator account created. Creator approval and publishing controls can be completed in the production onboarding flow.'
-          : data.role === 'writer'
-            ? 'Writer account created. Welcome to Nightjar.'
-            : 'Listener account created. Welcome to Nightjar.');
+      const requestedProfessionalRole = data.requestedProfessionalRole ?? null;
+      setRole((data.role as AccountRole) ?? 'listener');
+      setAccountStatus('active');
+      setRolePicker(false);
+      navigate('discover');
+      if (requestedProfessionalRole) {
+        notify(`${roleMeta[requestedProfessionalRole].label} application stored. You can keep using Nightjar as a Listener while it waits for a controlled intake wave.`);
+      } else {
+        notify('Listener access is ready. Welcome to Nightjar.');
       }
     } catch {
       notify('We could not create this account type. Please try again.');
@@ -2838,18 +2836,23 @@ function App() {
                 </article>
                 <article className="role-card creator-role-card">
                   <span className="role-icon"><Mic2 size={20} /></span>
-                  <div><span className="role-kicker">CREATOR</span><h2>Creator account</h2><p>Build a catalogue, publish releases and see your verified listening attribution.</p></div>
-                  <button className="primary-button" disabled={accountLoading} onClick={() => void chooseRole('creator')}>Create creator account <ArrowRight size={15} /></button>
+                  <div><span className="role-kicker">VA CREATOR</span><h2>Apply as a VA Creator</h2><p>Your application is banked until Mike and Megs open a controlled intake wave. Listener access remains available immediately.</p></div>
+                  <button className="primary-button" disabled={accountLoading} onClick={() => void chooseRole('creator')}>Store VA application <ArrowRight size={15} /></button>
                 </article>
                 <article className="role-card">
                   <span className="role-icon"><FileText size={20} /></span>
-                  <div><span className="role-kicker">WRITER</span><h2>Writer account</h2><p>Write original scripts and control exactly what collaborators can copy or export.</p></div>
-                  <button className="secondary-button" disabled={accountLoading} onClick={() => void chooseRole('writer')}>Create writer account <ArrowRight size={15} /></button>
+                  <div><span className="role-kicker">WRITER</span><h2>Apply as a Writer</h2><p>Apply for protected writing, commissions and collaboration without creating a second account.</p></div>
+                  <button className="secondary-button" disabled={accountLoading} onClick={() => void chooseRole('writer')}>Store Writer application <ArrowRight size={15} /></button>
                 </article>
-                <article className="role-card locked-role">
-                  <span className="role-icon"><ShieldCheck size={20} /></span>
-                  <div><span className="role-kicker">AUDIO EDITOR / ADMINISTRATOR</span><h2>Controlled roles</h2><p>Audio Editors are assigned to controlled production work. Administrators are restricted to the owner allowlist.</p></div>
-                  <div className="locked-note"><LockKeyhole size={14} /> Controlled access only</div>
+                <article className="role-card">
+                  <span className="role-icon"><FileCheck2 size={20} /></span>
+                  <div><span className="role-kicker">AUDIO EDITOR</span><h2>Apply as an Audio Editor</h2><p>Apply for production and editorial access. Approval is released only when Nightjar has capacity.</p></div>
+                  <button className="secondary-button" disabled={accountLoading} onClick={() => void chooseRole('editor')}>Store Editor application <ArrowRight size={15} /></button>
+                </article>
+                <article className="role-card">
+                  <span className="role-icon"><ImagePlus size={20} /></span>
+                  <div><span className="role-kicker">ARTIST</span><h2>Apply as an Artist</h2><p>Apply to offer real visual artwork, commissions and collaboration to Nightjar creators.</p></div>
+                  <button className="secondary-button" disabled={accountLoading} onClick={() => void chooseRole('artist')}>Store Artist application <ArrowRight size={15} /></button>
                 </article>
               </>
             )}
