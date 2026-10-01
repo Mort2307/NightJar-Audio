@@ -4153,3 +4153,60 @@ select:disabled {
     justify-content: center;
   }
 }
+
+
+/* Community actions on profile-discovered published work */
+.public-work-community-button {
+  justify-self: end;
+  white-space: nowrap;
+}
+.creator-release-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.creator-release-actions .ghost-button {
+  width: fit-content;
+}
+.public-playlist-preview button {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.public-playlist-preview button:hover:not(:disabled) {
+  border-color: var(--line-soft);
+  background: rgba(255,255,255,.02);
+}
+.public-playlist-preview button span,
+.public-playlist-preview button small {
+  display: block;
+}
+.public-playlist-preview button span {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.4;
+}
+.public-playlist-preview button small {
+  color: var(--muted-2);
+  font-size: 7px;
+}
+.public-playlist-preview button:disabled {
+  opacity: .8;
+  cursor: default;
+}
+@media (max-width: 620px) {
+  .public-featured-work > article {
+    grid-template-columns: 1fr;
+  }
+  .public-work-community-button {
+    justify-self: stretch;
+    width: 100%;
+    justify-content: center;
+  }
+}
