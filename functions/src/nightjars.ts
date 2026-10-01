@@ -4,6 +4,12 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 const db = getFirestore();
 const REGION = 'europe-west2';
 const ELIGIBLE_RECIPIENT_ROLES = new Set(['creator', 'writer', 'editor', 'artist']);
+const professionalRolesFor = (data: Record<string, any>) => {
+  const approved = Array.isArray(data.approvedProfessionalRoles) ? data.approvedProfessionalRoles.map((value: unknown) => cleanText(value, 30)) : [];
+  const legacy = cleanText(data.role, 30);
+  if (ELIGIBLE_RECIPIENT_ROLES.has(legacy) && String(data.status ?? 'active') === 'active') approved.push(legacy);
+  return Array.from(new Set(approved.filter((role) => ELIGIBLE_RECIPIENT_ROLES.has(role))));
+};
 const NIGHTJAR_VALUE_PENCE = 100;
 
 export const NIGHTJAR_PACKS = [
@@ -70,6 +76,7 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
   const sender = await requireIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const recipientUserId = cleanText(input.recipientUserId);
+  const requestedRecipientRole = cleanText(input.recipientRole, 30);
   const quantity = Number(input.quantity);
   const note = cleanText(input.note, 280);
   const anonymous = input.anonymous === true;
@@ -110,8 +117,11 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
     }
 
     const recipient = recipientAccount.data() ?? {};
-    const recipientRole = String(recipient.role ?? '');
-    if (!recipientAccount.exists || recipient.status !== 'active' || !ELIGIBLE_RECIPIENT_ROLES.has(recipientRole)) {
+    const recipientRoles = professionalRolesFor(recipient);
+    const recipientRole = requestedRecipientRole && recipientRoles.includes(requestedRecipientRole)
+      ? requestedRecipientRole
+      : recipientRoles[0] ?? '';
+    if (!recipientAccount.exists || recipient.status === 'suspended' || !recipientRole) {
       throw new HttpsError('failed-precondition', 'This profile is not currently eligible to receive Nightjars.');
     }
 
@@ -164,8 +174,8 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
 
 export const myNightjarEarnings = onCall({ region: REGION }, async (request) => {
   const identity = await requireIdentity(request);
-  if (!ELIGIBLE_RECIPIENT_ROLES.has(String(identity.account.role ?? ''))) {
-    throw new HttpsError('permission-denied', 'This Nightjar role does not receive creator gifts.');
+  if (!professionalRolesFor(identity.account).length) {
+    throw new HttpsError('permission-denied', 'This Nightjar account does not have an approved professional role that can receive gifts.');
   }
   const snapshot = await earningsRef(identity.uid).get();
   const data = snapshot.data() ?? {};
