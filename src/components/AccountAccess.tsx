@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AudioLines, Eye, EyeOff, FileText, Headphones, KeyRound, LockKeyhole, Mail, Mic2, ShieldCheck } from 'lucide-react';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
+import { nightjarAccount } from '../platform/firebase-account';
 
 type Mode = 'signin' | 'register' | 'reset' | 'verify' | 'security';
 type RegistrationRole = 'listener' | 'creator' | 'writer' | 'editor';
@@ -135,6 +136,9 @@ export default function AccountAccess({
         const referralCode = entryParams.get('ref');
         if (referralCode) sessionStorage.setItem('nightjar.creatorReferralCode', referralCode);
         const result = await nightjarAuth.register(email, password);
+        if (registrationRole) {
+          await nightjarAccount.stageRegistration(registrationRole, referralCode ?? '');
+        }
         onAuthenticated(result.identity);
         setMode('verify');
         setMessage(result.verificationSent
