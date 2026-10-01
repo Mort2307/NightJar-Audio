@@ -4,6 +4,7 @@ import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
+import { nightjarReferrals } from '../platform/firebase-referrals';
 
 type Props = {
   userId: string;
@@ -80,8 +81,12 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const share = async () => {
     if (!profile) return;
     const text = `Discover ${profile.displayName} on Nightjar — ${roleLabel(profile.role)}.`;
-    const url = window.location.origin + '/people/' + encodeURIComponent(userId);
+    let url = window.location.origin + '/people/' + encodeURIComponent(userId);
     try {
+      if (profile.role === 'creator' && !demoMode) {
+        const recommendation = await nightjarReferrals.recommendCreator(userId);
+        url = window.location.origin + recommendation.path;
+      }
       if (navigator.share) await navigator.share({ title: 'Nightjar · ' + profile.displayName, text, url });
       else if (navigator.clipboard) {
         await navigator.clipboard.writeText(text + ' ' + url);
