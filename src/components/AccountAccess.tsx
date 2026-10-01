@@ -74,13 +74,14 @@ export default function AccountAccess({
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    const normalEntryMode: Mode = identity && !identity.emailVerified ? 'verify' : 'signin';
+    const guestEntryMode: Mode = requestedEntry === 'register' ? 'register' : 'signin';
+    const normalEntryMode: Mode = identity && !identity.emailVerified ? 'verify' : identity ? 'signin' : guestEntryMode;
     setMode(normalEntryMode);
     setMessage('');
 
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
-      setMode(identity && !identity.emailVerified ? 'verify' : 'signin');
+      setMode(identity && !identity.emailVerified ? 'verify' : identity ? 'signin' : guestEntryMode);
       setMessage('');
       setPassword('');
       setConfirm('');
@@ -88,7 +89,7 @@ export default function AccountAccess({
 
     window.addEventListener('pageshow', onPageShow);
     return () => window.removeEventListener('pageshow', onPageShow);
-  }, [identity?.userId, identity?.emailVerified]);
+  }, [identity?.userId, identity?.emailVerified, requestedEntry]);
 
 
   const run = async (operation: () => Promise<void>) => {
