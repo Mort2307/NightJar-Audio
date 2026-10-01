@@ -6176,7 +6176,7 @@ export const adminModerateReview = onCall({ region: REGION }, async (request) =>
 });
 
 
-export { nightjarGiftConfig, myNightjarWallet, sendNightjars, myNightjarEarnings, myNightjarGiftHistory, clearMatureNightjarGifts, adminGrantNightjars } from './nightjars.js';
+export { nightjarGiftConfig, myNightjarWallet, sendNightjars, myNightjarEarnings, myNightjarGiftHistory, clearMatureNightjarGifts, adminNightjarPayoutOverview, adminGrantNightjars } from './nightjars.js';
 
 
 // ---- Multi-role professional application bank --------------------------------
