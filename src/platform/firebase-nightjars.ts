@@ -36,11 +36,31 @@ export type NightjarEarnings = {
   clearedPence: number;
   lifetimeNightjars: number;
   lifetimePence: number;
+  byRole: Record<string, { pendingNightjars?: number; pendingPence?: number; clearedNightjars?: number; clearedPence?: number; lifetimeNightjars?: number; lifetimePence?: number }>;
+};
+
+export type NightjarGiftHistoryItem = {
+  id: string;
+  type: string;
+  senderUserId: string | null;
+  recipientUserId: string | null;
+  recipientRole: string | null;
+  recipientDisplayName: string | null;
+  quantity: number;
+  unitCreatorValuePence: number;
+  creatorCreditPence: number;
+  anonymous: boolean;
+  note: string | null;
+  status: string | null;
+  clearsAtMs: number | null;
+  createdAt: string | null;
+  clearedAt: string | null;
 };
 
 const configCall = httpsCallable<void, NightjarGiftConfig>(functions, 'nightjarGiftConfig');
 const walletCall = httpsCallable<void, NightjarWallet>(functions, 'myNightjarWallet');
 const earningsCall = httpsCallable<void, NightjarEarnings>(functions, 'myNightjarEarnings');
+const historyCall = httpsCallable<void, { sent: NightjarGiftHistoryItem[]; received: NightjarGiftHistoryItem[] }>(functions, 'myNightjarGiftHistory');
 const sendCall = httpsCallable<{
   recipientUserId: string;
   recipientRole?: 'creator' | 'writer' | 'editor' | 'artist';
@@ -75,6 +95,9 @@ export const nightjarGifts = {
   },
   async earnings() {
     return (await earningsCall()).data;
+  },
+  async history() {
+    return (await historyCall()).data;
   },
   async send(recipientUserId: string, quantity: number, options: { recipientRole?: 'creator' | 'writer' | 'editor' | 'artist'; note?: string; anonymous?: boolean; idempotencyKey?: string } = {}) {
     const idempotencyKey = options.idempotencyKey ?? (
