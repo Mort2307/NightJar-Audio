@@ -28,6 +28,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [messages,setMessages]=useState<any[]>([]);
   const [query,setQuery]=useState('');
+  const [inboxFilter,setInboxFilter]=useState<'all'|'unread'|'needs_reply'|'awaiting_reply'>('all');
   const [body,setBody]=useState('');
   const [loading,setLoading]=useState(true);
   const [sending,setSending]=useState(false);
@@ -256,6 +257,14 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   };
 
   const unreadTotal=conversations.reduce((sum,item)=>sum+Number(item.unreadCount??0),0);
+  const needsReplyTotal=conversations.filter((item)=>needsReply(item)).length;
+  const awaitingReplyTotal=conversations.filter((item)=>awaitingReply(item)).length;
+  const visibleConversations=useMemo(()=>conversations.filter((item)=>{
+    if(inboxFilter==='unread')return Number(item.unreadCount??0)>0;
+    if(inboxFilter==='needs_reply')return needsReply(item);
+    if(inboxFilter==='awaiting_reply')return awaitingReply(item);
+    return true;
+  }),[conversations,inboxFilter,viewerId]);
 
   useEffect(()=>{onUnreadChange?.(unreadTotal);},[unreadTotal]);
 
@@ -271,8 +280,14 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         <label className="messaging-search"><Search size={14}/><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Find Creator, Writer or Audio Editor…"/></label>
         {!!query.trim()&&<div className="messaging-directory">{filteredPeople.map((person:any)=><button key={person.userId} onClick={()=>void startWith(person.userId)}><span>{String(person.name??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{person.name}</strong><small>{roleLabel(person.role)}{person.handle?' · @'+String(person.handle).replace(/^@/,''):''}</small></div></button>)}{!filteredPeople.length&&<div className="people-empty">No matching professional accounts.</div>}</div>}
         <div className="messaging-conversations">
-          <span className="mini-label">CONVERSATIONS</span>
-          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>selectConversation(conversation)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt="" loading="lazy" decoding="async"/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small>{needsReply(conversation)?<span className="messaging-needs-reply"><Clock3 size={10}/> Reply needed</span>:awaitingReply(conversation)?<span className={conversation.reminderAlreadySent?'messaging-awaiting-reply reminder-sent':'messaging-awaiting-reply'}><Clock3 size={10}/>{conversation.reminderAlreadySent?'Reminder sent · still awaiting reply':'Awaiting reply · '+waitingHours(conversation)+'h'}</span>:waitingState(conversation)==='awaiting_them'?<span className="messaging-awaiting-reply"><Clock3 size={10}/> Awaiting reply</span>:waitingState(conversation)==='resolved'?<span className="messaging-loop-resolved"><CircleCheckBig size={10}/> Loop closed</span>:null}</div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em></button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
+          <div className="messaging-conversation-head"><span className="mini-label">CONVERSATIONS</span><strong>{visibleConversations.length}</strong></div>
+          <div className="messaging-filter-tabs" role="tablist" aria-label="Message inbox filters">
+            <button type="button" role="tab" aria-selected={inboxFilter==='all'} className={inboxFilter==='all'?'active':''} onClick={()=>setInboxFilter('all')}>All <span>{conversations.length}</span></button>
+            <button type="button" role="tab" aria-selected={inboxFilter==='unread'} className={inboxFilter==='unread'?'active':''} onClick={()=>setInboxFilter('unread')}>Unread <span>{unreadTotal}</span></button>
+            <button type="button" role="tab" aria-selected={inboxFilter==='needs_reply'} className={inboxFilter==='needs_reply'?'active':''} onClick={()=>setInboxFilter('needs_reply')}>Needs reply <span>{needsReplyTotal}</span></button>
+            <button type="button" role="tab" aria-selected={inboxFilter==='awaiting_reply'} className={inboxFilter==='awaiting_reply'?'active':''} onClick={()=>setInboxFilter('awaiting_reply')}>Awaiting <span>{awaitingReplyTotal}</span></button>
+          </div>
+          {loading?<div className="people-empty">Loading messages…</div>:visibleConversations.length?visibleConversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>selectConversation(conversation)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt="" loading="lazy" decoding="async"/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small>{needsReply(conversation)?<span className="messaging-needs-reply"><Clock3 size={10}/> Reply needed</span>:awaitingReply(conversation)?<span className={conversation.reminderAlreadySent?'messaging-awaiting-reply reminder-sent':'messaging-awaiting-reply'}><Clock3 size={10}/>{conversation.reminderAlreadySent?'Reminder sent · still awaiting reply':'Awaiting reply · '+waitingHours(conversation)+'h'}</span>:waitingState(conversation)==='awaiting_them'?<span className="messaging-awaiting-reply"><Clock3 size={10}/> Awaiting reply</span>:waitingState(conversation)==='resolved'?<span className="messaging-loop-resolved"><CircleCheckBig size={10}/> Loop closed</span>:null}</div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em></button>):<div className="people-empty"><MessageCircle size={16}/><strong>{conversations.length?'No conversations match this filter.':'No conversations yet.'}</strong><span>{conversations.length?'Choose another Inbox filter.':'Search for a Creator, Writer or Audio Editor to start one.'}</span></div>}
         </div>
       </aside>
 
