@@ -935,6 +935,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   }
 
   const role = String(accountData?.role ?? '');
+  const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
   let releaseCount = 0;
@@ -946,7 +947,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
     creatorReleases = releases.docs
       .filter((doc) => doc.data().status === 'released')
-      .map((doc) => releasePayload(doc.data(), doc.id))
+      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
     releaseCount = creatorReleases.length;
   } else if (role === 'writer') {
@@ -958,7 +959,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     creditedReleases = releases.docs
       .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
-      .map((doc) => releasePayload(doc.data(), doc.id))
+      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
@@ -973,7 +974,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
         const releaseDocs = await Promise.all(releaseIds.slice(0, 12).map((releaseId) => releaseRef(releaseId).get()));
         const releases = releaseDocs
           .filter((release) => release.exists && release.data()?.status === 'released')
-          .map((release) => releasePayload(release.data() ?? {}, release.id));
+          .map((release) => decorateReleaseAccess(release.data() ?? {}, release.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }));
         return {
           id: playlist.id,
           title: cleanText(playlist.data()?.title, 100) || 'Untitled playlist',
@@ -1058,11 +1059,12 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
   const profile = await profileRef(creatorUserId).get();
   const data = profile.data();
   if (!data || data.publicProfile === false) throw new HttpsError('not-found', 'Creator profile not found.');
+  const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
 
   const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', creatorUserId).limit(500).get();
   const releases = releasesSnapshot.docs
     .filter((doc) => doc.data().status === 'released')
-    .map((doc) => releasePayload(doc.data(), doc.id))
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
     .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
   const completedCollaborations = await completedCollaborationCountFor(creatorUserId);
