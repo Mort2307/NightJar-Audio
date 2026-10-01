@@ -1177,11 +1177,11 @@ function App() {
         return;
       }
 
-      if (data.role === 'creator' || data.role === 'listener' || data.role === 'writer' || data.role === 'artist' || data.role === 'editor' || data.role === 'artist') {
+      if (data.role === 'creator' || data.role === 'listener' || data.role === 'writer' || data.role === 'editor' || data.role === 'artist') {
         setRole(data.role);
         setAccountStatus(nextStatus);
         setRolePicker(false);
-        navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : 'discover');
+        navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'profile' : 'discover');
       } else {
         setRole(null);
         setRolePicker(true);
