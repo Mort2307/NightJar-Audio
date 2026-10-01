@@ -3336,10 +3336,10 @@ function App() {
             <div className="page-heading"><div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Make Nightjar yours.</h1><p>Every account gets a personal identity and taste profile. Your role controls permissions; your profile controls how you present yourself.</p></div></div>
             <div className="nj-profile-progress">
               <div><span className="mini-label">PROFILE READINESS</span><strong>{profileCompletion}% complete</strong><small>{profileDirty ? 'Unsaved changes' : 'All current changes saved'}</small></div>
-            <Suspense fallback={<NightjarSkeleton variant="card" count={2} label="Loading professional roles" />}><ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':'discover'); }} /></Suspense>
               <div className="nj-profile-progress-track" aria-label={profileCompletion + '% profile complete'}><span style={{width:profileCompletion + '%'}}/></div>
               <button className="secondary-button" onClick={() => document.getElementById('profile-public-preview')?.scrollIntoView({behavior:'smooth',block:'center'})}>Preview public profile</button>
             </div>
+            <Suspense fallback={<NightjarSkeleton variant="card" count={2} label="Loading professional roles" />}><ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':'discover'); }} /></Suspense>
             <div className="profile-editor-grid">
               <article className="panel profile-editor-card">
                 <span className="mini-label">IDENTITY</span>
