@@ -46,21 +46,27 @@ const requireRegistrationIdentity = (request: { auth?: { uid: string; token: Rec
 
 export const stageRegistrationIntent = onCall({ region: REGION }, async (request) => {
   const identity = requireRegistrationIdentity(request);
-  const input = (request.data ?? {}) as { role?: unknown; referralCode?: unknown };
-  const role = String(input.role ?? '') as SelectableRole;
-  if (!['creator','listener','writer','editor','artist'].includes(role)) {
-    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer, Audio Editor or Artist.');
-  }
+  const input = (request.data ?? {}) as { role?: unknown; roles?: unknown; referralCode?: unknown };
+  const legacyRole = String(input.role ?? '').trim();
+  const submittedRoles = Array.isArray(input.roles)
+    ? input.roles.map((value) => String(value ?? '').trim())
+    : legacyRole ? [legacyRole] : [];
+  const roles = Array.from(new Set(submittedRoles))
+    .filter((role): role is SelectableRole => ['creator','listener','writer','editor','artist'].includes(role));
+  if (!roles.length) roles.push('listener');
+  const professionalRoles = roles.filter((role): role is ProfessionalRole => ['creator','writer','editor','artist'].includes(role));
   const referralCode = String(input.referralCode ?? '').trim().slice(0,80);
   await db.collection('registrationIntents').doc(identity.uid).set({
     userId: identity.uid,
     email: identity.email,
-    role,
-    referralCode: role === 'creator' && referralCode ? referralCode : null,
+    role: professionalRoles[0] ?? 'listener',
+    roles: ['listener', ...professionalRoles],
+    professionalRoles,
+    referralCode: professionalRoles.includes('creator') && referralCode ? referralCode : null,
     updatedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
   }, { merge:true });
-  return { role, staged:true };
+  return { role: professionalRoles[0] ?? 'listener', roles: ['listener', ...professionalRoles], professionalRoles, staged:true };
 });
 
 const requireAdminIdentity = (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
@@ -115,14 +121,19 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
   }
 
   const current = snapshot.exists ? snapshot.data() ?? {} : {};
-  const rawStagedRole = String(registrationIntent.data()?.role ?? '');
-  const stagedRole = !current.role && ['creator','listener','writer','editor','artist'].includes(rawStagedRole)
-    ? rawStagedRole as SelectableRole
+  const intentData = registrationIntent.data() ?? {};
+  const rawStagedRole = String(intentData.role ?? '');
+  const stagedProfessionalRoles = cleanProfessionalRoles(
+    Array.isArray(intentData.professionalRoles)
+      ? intentData.professionalRoles
+      : Array.isArray(intentData.roles)
+        ? intentData.roles
+        : ['creator','writer','editor','artist'].includes(rawStagedRole) ? [rawStagedRole] : [],
+  );
+  const stagedRole = !current.role && rawStagedRole === 'listener' && !stagedProfessionalRoles.length
+    ? 'listener' as SelectableRole
     : null;
-  const stagedProfessionalRole = stagedRole && ['creator','writer','editor','artist'].includes(stagedRole)
-    ? stagedRole as ProfessionalRole
-    : null;
-  const role = (current.role as AccountRole | null) ?? (stagedProfessionalRole ? 'listener' : stagedRole) ?? null;
+  const role = (current.role as AccountRole | null) ?? (stagedProfessionalRoles.length ? 'listener' : stagedRole) ?? null;
   const status = String(current.status ?? 'active');
 
   await ref.set({
@@ -134,12 +145,12 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge:true });
 
-  if (stagedProfessionalRole) {
+  if (stagedProfessionalRoles.length) {
     const applicationRef = professionalApplicationRef(identity.uid);
     const application = await applicationRef.get();
     const requestedRoles = Array.from(new Set([
       ...cleanProfessionalRoles(application.data()?.requestedRoles),
-      stagedProfessionalRole,
+      ...stagedProfessionalRoles,
     ]));
     await applicationRef.set({
       userId: identity.uid,
@@ -147,6 +158,7 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
       requestedRoles,
       approvedRoles: professionalRolesForAccount(current),
       status: 'banked',
+      source: 'registration',
       bankedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       ...(application.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
@@ -158,7 +170,7 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     }, { merge:true });
   }
 
-  const stagedReferralCode = stagedRole === 'creator'
+  const stagedReferralCode = stagedProfessionalRoles.includes('creator')
     ? String(registrationIntent.data()?.referralCode ?? '').trim().slice(0,80)
     : '';
   if (stagedReferralCode) {
