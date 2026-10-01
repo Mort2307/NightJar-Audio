@@ -28,7 +28,9 @@ jobs:
 
       - name: Refresh patched transitive dependencies
         working-directory: functions
-        run: npm audit fix --package-lock-only --ignore-scripts
+        run: |
+          npm pkg set 'overrides.uuid=11.1.1'
+          npm install --package-lock-only --ignore-scripts
 
       - name: Verify Functions production audit
         working-directory: functions
@@ -49,5 +51,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add functions/package.json functions/package-lock.json
-          git commit -m "Refresh patched Firebase Functions dependencies"
+          git commit -m "Pin patched UUID transport dependency for Functions"
           git push origin HEAD:feature/nightjar-gifts-artists
