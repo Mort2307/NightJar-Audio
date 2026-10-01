@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { AudioLines, Eye, EyeOff, FileText, Headphones, KeyRound, LockKeyhole, Mail, Mic2, ShieldCheck } from 'lucide-react';
+import { AudioLines, Brush, Eye, EyeOff, FileText, Headphones, KeyRound, LockKeyhole, Mail, Mic2, ShieldCheck } from 'lucide-react';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount } from '../platform/firebase-account';
 
 type Mode = 'signin' | 'register' | 'reset' | 'verify' | 'security';
-type RegistrationRole = 'listener' | 'creator' | 'writer' | 'editor';
+type RegistrationRole = 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
 
 const firebaseErrorCode = (error: unknown) => {
   if (error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string') {
@@ -213,6 +213,7 @@ export default function AccountAccess({
       <span><Mic2 size={14}/><strong>Creator</strong><small>Publishing, credits, professional messaging and Creator Studio.</small></span>
       <span><FileText size={14}/><strong>Writer</strong><small>Protected scripts, rights, collaboration and Writer Studio.</small></span>
       <span><AudioLines size={14}/><strong>Audio Editor</strong><small>Assigned work, production credits, messaging and Editorial.</small></span>
+      <span><Brush size={14}/><strong>Artist</strong><small>Portfolio, commissions, visual collaboration and artwork credits.</small></span>
       <em>Your existing Nightjar account opens its own dedicated workspace automatically after sign-in.</em>
     </div>}
     {mode === 'register' && <div className="account-role-cards" aria-label="Choose Nightjar account type">
@@ -221,10 +222,11 @@ export default function AccountAccess({
         { role:'creator' as const, title:'Creator', detail:'Publish audio, manage releases, message Writers and Audio Editors, and build a professional Creator profile. Professional access is reviewed before publishing unlocks.', icon:<Mic2 size={19}/> },
         { role:'writer' as const, title:'Writer', detail:'Protect manuscripts, manage rights, collaborate and message creative professionals from a dedicated Writer workspace.', icon:<FileText size={19}/> },
         { role:'editor' as const, title:'Audio Editor', detail:'Receive assigned work, manage production credits, collaborate and message professional accounts. Professional access is reviewed before editorial tools unlock.', icon:<AudioLines size={19}/> },
+        { role:'artist' as const, title:'Artist', detail:'Show your portfolio, take commissions and collaborate with VAs, Writers and Audio Editors on real visual artwork. Professional access is reviewed before commission tools unlock.', icon:<Brush size={19}/> },
       ].map((item)=><button type="button" key={item.role} className={registrationRole===item.role?'account-role-card selected':'account-role-card'} aria-pressed={registrationRole===item.role} onClick={()=>{setRegistrationRole(item.role);sessionStorage.setItem('nightjar.registrationRole',item.role);}}>
         <span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div>
       </button>)}
-      {registrationRole && <p className="account-role-choice-note"><ShieldCheck size={13}/> You are creating a <strong>{registrationRole === 'editor' ? 'Audio Editor' : registrationRole.charAt(0).toUpperCase()+registrationRole.slice(1)}</strong> account. This role cannot be casually switched later because permissions and public identity depend on it.</p>}
+      {registrationRole && <p className="account-role-choice-note"><ShieldCheck size={13}/> You are creating a <strong>{registrationRole === 'editor' ? 'Audio Editor' : registrationRole === 'artist' ? 'Artist' : registrationRole.charAt(0).toUpperCase()+registrationRole.slice(1)}</strong> account. This role cannot be casually switched later because permissions and public identity depend on it.</p>}
     </div>}
     <div className="account-access-field"><label>Email</label><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
     {mode !== 'reset' && <>
