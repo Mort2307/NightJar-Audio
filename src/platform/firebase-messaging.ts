@@ -8,6 +8,7 @@ const startCall = httpsCallable<{ targetUserId:string; collaborationId?:string|n
 const openCall = httpsCallable<{ conversationId:string }, { messages:any[]; blocked:boolean; blockedByMe?:boolean; blockedByOther?:boolean }>(functions, 'listDirectMessages');
 const sendCall = httpsCallable<{ conversationId:string; body:string; collaborationId?:string|null }, { message:any }>(functions, 'sendDirectMessage');
 const reminderCall = httpsCallable<{ conversationId:string }, { conversationId:string; reminderSent:boolean; reminderForLastMessageAt:string|null }>(functions, 'sendDirectMessageReminder');
+const closeLoopCall = httpsCallable<{ conversationId:string }, { conversationId:string; resolved:boolean; resolvedForLastMessageAt:string }>(functions, 'closeDirectConversationLoop');
 const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
 const reportCall = httpsCallable<{ conversationId:string; messageId:string; reason?:string }, { reported:boolean; reportId?:string }>(functions, 'reportDirectMessage');
 const adminReportsCall = httpsCallable<void, { reports:any[] }>(functions, 'adminListCommunityReports');
@@ -56,6 +57,10 @@ export const nightjarMessaging = {
 
   async remind(conversationId:string) {
     return (await reminderCall({ conversationId })).data;
+  },
+
+  async closeLoop(conversationId:string) {
+    return (await closeLoopCall({ conversationId })).data;
   },
 
   async setBlocked(targetUserId:string, blocked:boolean) {
