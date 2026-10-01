@@ -2438,10 +2438,10 @@ function App() {
     selectedRoles?: ('creator' | 'writer' | 'editor' | 'artist')[],
   ) => {
     if (!canAdmin || !application?.userId) return;
-    const requestedRoles = Array.isArray(application.requestedRoles)
-      ? application.requestedRoles.filter((role:string)=>['creator','writer','editor','artist'].includes(role))
+    const requestedRoles: ('creator' | 'writer' | 'editor' | 'artist')[] = Array.isArray(application.requestedRoles)
+      ? application.requestedRoles.filter((role:unknown): role is 'creator' | 'writer' | 'editor' | 'artist' => ['creator','writer','editor','artist'].includes(String(role)))
       : [];
-    const roles = selectedRoles?.length ? selectedRoles : requestedRoles;
+    const roles: ('creator' | 'writer' | 'editor' | 'artist')[] = selectedRoles?.length ? selectedRoles : requestedRoles;
     try {
       if (demoMode) {
         setAdminApplications((items:any[]) => {
