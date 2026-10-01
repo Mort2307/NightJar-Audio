@@ -9,6 +9,7 @@ initializeApp();
 const db = getFirestore();
 const REGION = 'europe-west2';
 const AGE_ASSURANCE_CONFIGURED = false;
+const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 
 const ADMIN_EMAILS = new Set([
   'mike.owen230792@gmail.com',
@@ -2780,6 +2781,9 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
+  if (TESTING_AGE_ASSURANCE_BYPASS) {
+    return { allowed: true, reason: 'testing-stage-global-bypass' };
+  }
   if (AGE_ASSURANCE_CONFIGURED) return { allowed: false, reason: null as string | null };
   const snapshot = await accountRef(uid).get();
   const data = snapshot.data() ?? {};
@@ -3170,6 +3174,21 @@ export const markNotificationRead = onCall({ region: REGION }, async (request) =
 
 export const ageStatus = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
+  if (TESTING_AGE_ASSURANCE_BYPASS) {
+    return {
+      verified: true,
+      status: 'COMPLETE',
+      ageThreshold: 18,
+      configured: false,
+      provider: 'testing-stage-bypass',
+      environment: 'development',
+      verifiedAt: null,
+      reverifyRequired: false,
+      testAvailable: identity.admin,
+      temporaryBypass: true,
+      temporaryBypassReason: 'testing-stage-global-bypass',
+    };
+  }
   const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
   const data = snapshot.data() ?? {};
   const bypass = data.verified === true ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
@@ -3191,6 +3210,17 @@ export const ageStatus = onCall({ region: REGION }, async (request) => {
 
 export const startAgeAssurance = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
+  if (TESTING_AGE_ASSURANCE_BYPASS) {
+    return {
+      verified: true,
+      status: 'COMPLETE',
+      configured: false,
+      provider: 'testing-stage-bypass',
+      environment: 'development',
+      temporaryBypass: true,
+      temporaryBypassReason: 'testing-stage-global-bypass',
+    };
+  }
   const bypass = await temporaryAgeBypassFor(identity.uid);
   if (bypass.allowed) {
     return {
