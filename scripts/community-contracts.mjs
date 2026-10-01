@@ -37,6 +37,9 @@ const engagementClient=read('src/platform/firebase-engagement.ts');
 requireText(functions,"requireAccountRole(request, ['listener'])",'Listener-only community posting contract is missing');
 requireText(functions,"requireAccountRole(request, ['creator','writer','editor'])",'Professional-message role gate is missing');
 requireText(functions,'Only credited members of this release can reply as the work team.','Credited work-team reply boundary is missing');
+requireText(functions,'hideReleaseCommentReplies','Parent-comment deletion no longer hides orphaned work-team replies');
+requireText(functions,'reporterName:reporter.displayName','Admin community reports no longer expose human-readable reporter context');
+requireText(functions,'subjectName:subject.displayName','Admin community reports no longer expose human-readable subject context');
 requireText(functions,'reminderForLastMessageAt','Per-unanswered-streak reminder state is missing');
 requireText(functions,'A reminder has already been sent for this unanswered message.','One-reminder-per-streak guard is missing');
 requireText(functions,'A reminder is available after 48 hours without a reply.','48-hour reminder threshold is missing');
@@ -58,6 +61,8 @@ const appInboxPolls=(app.match(/nightjarMessaging\.conversations\(\)/g)??[]).len
 if(appInboxPolls!==1) failures.push('App shell must have exactly one background Inbox polling path; found '+appInboxPolls);
 requireText(app,'messageAwaitingReplyCount','Professional awaiting-reply workflow is missing from role dashboards');
 requireText(app,'messageNeedsReplyCount','Read-but-unanswered Inbox responsibility state is missing from role dashboards');
+requireText(app,'creatorUserId: reviewTrack.creatorUserId','Release Community no longer receives Creator credit context');
+requireText(app,'contributors: reviewTrack.contributors','Release Community no longer receives contributor credit context');
 requireText(inbox,'Reply needed','Inbox reply-needed indicator is missing');
 requireText(inbox,'Send one reminder','Inbox safe follow-up action is missing');
 requireText(inbox,'nightjarMessaging.remind','Inbox reminder API integration is missing');
@@ -95,6 +100,7 @@ requireText(inbox,'activeCollaborationId','Per-message project context state is 
 requireText(community,'nightjarEngagement.setReaction','Like/Love Community action is missing');
 requireText(community,'Post comment','Direct Listener comment UI is missing');
 requireText(community,'Reply as work team','Credited work-team reply UI is missing');
+requireText(community,'creditedViewer','Work-team reply control is no longer credit-aware');
 requireText(community,'Work team','Work-team reply attribution is missing');
 requireText(community,'nightjarEngagement.reply','Release comment reply API integration is missing');
 requireText(community,'Formal reviews are moderated before publication','Review/comment moderation distinction is missing');
