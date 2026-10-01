@@ -4796,9 +4796,11 @@ const requireCreativeMessagingIdentity = async (
 
 export const listMessageConversations = onCall({ region: REGION }, async (request) => {
   const identity = await requireCreativeMessagingIdentity(request);
-  const snapshot = await db.collection('directConversations').limit(1000).get();
+  const snapshot = await db.collection('directConversations')
+    .where('participantUserIds', 'array-contains', identity.uid)
+    .limit(250)
+    .get();
   const conversations = (await Promise.all(snapshot.docs
-    .filter((doc) => Array.isArray(doc.data().participantUserIds) && doc.data().participantUserIds.includes(identity.uid))
     .map(async (doc) => {
       const data = doc.data() ?? {};
       const otherUserId = (data.participantUserIds ?? []).find((id: string) => id !== identity.uid) ?? null;
@@ -4904,7 +4906,10 @@ export const listDirectMessages = onCall({ region: REGION }, async (request) => 
   if (!data || !Array.isArray(data.participantUserIds) || !data.participantUserIds.includes(identity.uid)) {
     throw new HttpsError('not-found', 'Conversation not found.');
   }
-  const snapshot = await ref.collection('messages').limit(500).get();
+  const snapshot = await ref.collection('messages')
+    .orderBy('createdAt', 'desc')
+    .limit(250)
+    .get();
   const batch = db.batch();
   const messages = snapshot.docs
     .map((doc) => {
