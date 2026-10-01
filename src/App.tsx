@@ -173,6 +173,12 @@ type PublicDirectoryProfile = {
   favouriteCategories?: string[];
   roleSpecialties?: string[];
   roleAvailability?: string | null;
+  roleProfiles?: Record<string, {
+    roleFocus?: string[];
+    roleSpecialties?: string[];
+    roleSecondary?: string[];
+    roleAvailability?: string | null;
+  }>;
   releaseCount?: number;
   publishedWorkCount?: number;
   creditedReleaseCount?: number;
@@ -493,18 +499,32 @@ function App() {
   const writerSpotlight = writerSpotlightList[0] ?? null;
   const editorSpotlight = editorSpotlightList[0] ?? null;
   const directoryTagOptions = useMemo(() => Array.from(new Set(
-    profileDirectory.flatMap((profile) => [
-      ...(profile.favouriteTags ?? []),
-      ...(profile.roleSpecialties ?? []),
-      ...(profile.favouriteCategories ?? []),
-    ]),
+    profileDirectory.flatMap((profile) => {
+      const roleProfiles = Object.values(profile.roleProfiles ?? {});
+      return [
+        ...(profile.favouriteTags ?? []),
+        ...(profile.roleSpecialties ?? []),
+        ...(profile.favouriteCategories ?? []),
+        ...roleProfiles.flatMap((slice) => [
+          ...(slice.roleFocus ?? []),
+          ...(slice.roleSpecialties ?? []),
+          ...(slice.roleSecondary ?? []),
+        ]),
+      ];
+    }),
   )).sort((a, b) => a.localeCompare(b)), [profileDirectory]);
   const directoryAvailabilityOptions = useMemo(() => Array.from(new Set(
-    profileDirectory.map((profile) => profile.roleAvailability).filter((value): value is string => Boolean(value)),
+    profileDirectory.flatMap((profile) => [
+      profile.roleAvailability,
+      ...Object.values(profile.roleProfiles ?? {}).map((slice) => slice.roleAvailability),
+    ]).filter((value): value is string => Boolean(value)),
   )).sort((a, b) => a.localeCompare(b)), [profileDirectory]);
   const filteredDirectoryProfiles = useMemo(() => {
     const query = directoryQuery.trim().toLowerCase();
     return profileDirectory.filter((profile) => {
+      const roleProfiles = profile.roleProfiles ?? {};
+      const allRoleSlices = Object.values(roleProfiles);
+      const selectedRoleSlice = directoryRoleFilter !== 'all' ? roleProfiles[directoryRoleFilter] : undefined;
       const searchable = [
         profile.name,
         profile.handle,
@@ -516,17 +536,28 @@ function App() {
         ...(profile.favouriteTags ?? []),
         ...(profile.roleSpecialties ?? []),
         ...(profile.favouriteCategories ?? []),
+        ...allRoleSlices.flatMap((slice) => [
+          slice.roleAvailability,
+          ...(slice.roleFocus ?? []),
+          ...(slice.roleSpecialties ?? []),
+          ...(slice.roleSecondary ?? []),
+        ]),
         ...(profile.activityBadges ?? []).map((badge) => badge.label),
       ].filter(Boolean).join(' ').toLowerCase();
       const taxonomy = [
         ...(profile.favouriteTags ?? []),
-        ...(profile.roleSpecialties ?? []),
         ...(profile.favouriteCategories ?? []),
+        ...(selectedRoleSlice?.roleFocus ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.roleFocus ?? []) : [])),
+        ...(selectedRoleSlice?.roleSpecialties ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.roleSpecialties ?? []) : profile.roleSpecialties ?? [])),
+        ...(selectedRoleSlice?.roleSecondary ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.roleSecondary ?? []) : [])),
       ];
+      const availabilityValues = directoryRoleFilter !== 'all'
+        ? [selectedRoleSlice?.roleAvailability, profile.role === directoryRoleFilter ? profile.roleAvailability : null]
+        : [profile.roleAvailability, ...allRoleSlices.map((slice) => slice.roleAvailability)];
       if (query && !searchable.includes(query)) return false;
       if (directoryRoleFilter !== 'all' && profile.role !== directoryRoleFilter && !(profile.roles ?? []).includes(directoryRoleFilter)) return false;
       if (directoryTagFilter !== 'all' && !taxonomy.includes(directoryTagFilter)) return false;
-      if (directoryAvailabilityFilter !== 'all' && profile.roleAvailability !== directoryAvailabilityFilter) return false;
+      if (directoryAvailabilityFilter !== 'all' && !availabilityValues.includes(directoryAvailabilityFilter)) return false;
       return true;
     });
   }, [profileDirectory, directoryQuery, directoryRoleFilter, directoryTagFilter, directoryAvailabilityFilter]);
@@ -3302,7 +3333,7 @@ function App() {
                   <span className="avatar-xl">{person.avatarUrl ? <img className="avatar-approved-image" src={person.avatarUrl} alt="" loading="lazy" decoding="async" /> : person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>
                   <div className="profile-main">
                     <div className="profile-heading">
-                      <div><span className="directory-role-label">{roleMeta[person.role].label}</span><h2>{person.name}</h2><span>{person.handle ? '@' + person.handle.replace(/^@/,'') : 'Handle not set'}</span></div>
+                      <div><div className="profile-role-chips directory-role-chips">{(person.roles?.length ? person.roles : [person.role]).filter((value,index,array)=>array.indexOf(value)===index).map((personRole)=><span className="directory-role-label" key={personRole}>{roleMeta[personRole].label}</span>)}</div><h2>{person.name}</h2><span>{person.handle ? '@' + person.handle.replace(/^@/,'') : 'Handle not set'}</span></div>
                       <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>
                     </div>
                     <p>{person.headline || person.bio || roleMeta[person.role].description}</p>
