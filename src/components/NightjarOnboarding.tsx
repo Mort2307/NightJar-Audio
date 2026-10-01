@@ -13,7 +13,7 @@ import {
 
 type Props = {
   initialProfile?: any;
-  role: 'listener' | 'creator' | 'writer' | 'admin' | 'editor' | null;
+  role: 'listener' | 'creator' | 'writer' | 'admin' | 'editor' | 'artist' | null;
   onComplete: (profile: any) => void;
   onSkip: () => void;
   notify: (message: string) => void;
@@ -70,7 +70,7 @@ const QUESTION_GROUPS: QuestionGroup[] = [
   },
 ];
 
-const ROLE_SETUP: Record<'listener' | 'creator' | 'writer' | 'editor', QuestionGroup> = {
+const ROLE_SETUP: Record<'listener' | 'creator' | 'writer' | 'editor' | 'artist', QuestionGroup> = {
   listener: {
     id: 'role-listener',
     label: 'LISTENER',
@@ -121,7 +121,21 @@ const ROLE_SETUP: Record<'listener' | 'creator' | 'writer' | 'editor', QuestionG
       { key: 'roleDetailOne', label: 'Workflow & handoff', placeholder: 'Optional public-facing workflow note' },
       { key: 'roleDetailTwo', label: 'Turnaround / production note', placeholder: 'Optional public-facing production note' },
     ],
+  },,
+  artist: {
+    id: 'role-artist',
+    label: 'ARTIST',
+    title: 'Build your artist identity.',
+    description: 'Show creators what you make, the briefs you enjoy and whether you are open for commissions.',
+    fields: [
+      { key: 'roleSpecialties', label: 'Art services', placeholder: 'Choose art services' },
+      { key: 'roleSecondary', label: 'Creative strengths', placeholder: 'Choose creative strengths' },
+      { key: 'roleAvailability', label: 'Commission availability', placeholder: 'Choose availability' },
+      { key: 'roleDetailOne', label: 'Style & portfolio note', placeholder: 'Optional public-facing style note' },
+      { key: 'roleDetailTwo', label: 'Commission / licensing note', placeholder: 'Optional public-facing commission note' },
+    ],
   },
+
 };
 
 const listFields = new Set([
