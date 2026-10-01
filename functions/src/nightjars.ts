@@ -1,4 +1,4 @@
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
@@ -210,7 +210,7 @@ export const myNightjarGiftHistory = onCall({ region: REGION }, async (request) 
     giftLedger().where('senderUserId', '==', identity.uid).limit(250).get(),
     giftLedger().where('recipientUserId', '==', identity.uid).limit(250).get(),
   ]);
-  const present = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+  const present = (doc: QueryDocumentSnapshot) => {
     const data = doc.data() ?? {};
     return {
       id: doc.id,
