@@ -1829,3 +1829,28 @@ textarea {
   background:rgba(203,181,204,.12);
   color:var(--nj-accent);
 }
+
+
+.danger-button {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  border:1px solid rgba(216,154,167,.28);
+  border-radius:9px;
+  padding:8px 10px;
+  background:rgba(143,64,79,.10);
+  color:#e3b9c2;
+  font:inherit;
+  font-size:8px;
+  font-weight:700;
+}
+.danger-button:hover:not(:disabled) {
+  border-color:rgba(216,154,167,.48);
+  background:rgba(143,64,79,.18);
+  color:#f0cbd3;
+}
+.danger-button:disabled {
+  opacity:.42;
+  cursor:not-allowed;
+}
