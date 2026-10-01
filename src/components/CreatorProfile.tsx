@@ -42,10 +42,11 @@ type Props = {
   notify: (message: string) => void;
   canMessage?: boolean;
   onMessage?: (userId: string) => void;
+  onCommunityRelease?: (release: any) => void;
   demoMode?: boolean;
 };
 
-export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onPlayRelease, onClose, notify, canMessage = false, onMessage, demoMode = false }: Props) {
+export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onPlayRelease, onClose, notify, canMessage = false, onMessage, onCommunityRelease, demoMode = false }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -133,11 +134,11 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
         {!!profile.featuredReleases?.length && <section className="creator-featured-releases">
           <div className="section-head"><div><span className="mini-label">FEATURED BY CREATOR</span><h3>Start here</h3></div><Sparkles size={17}/></div>
           {profile.featuredReleases.map((release:any)=><article key={release.id} className="creator-profile-release featured">
-            <div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p></div>
+            <div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p><div className="creator-release-actions">{onCommunityRelease && <button className="ghost-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Community</button>}</div></div>
             <button className="round-play" onClick={()=>onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15}/></button>
           </article>)}
         </section>}
-        <div className="creator-profile-releases"><div className="section-head"><div><span className="mini-label">FULL CATALOGUE</span><h3>Released work</h3></div><button className="ghost-button" onClick={() => void share()}><Share2 size={14} /> Share</button></div>{profile.releases?.length ? profile.releases.map((release: any) => <article key={release.id} className="creator-profile-release"><div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p></div><button className="round-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15} /></button></article>) : <div className="people-empty"><Mic2 size={18} /><strong>No public releases yet.</strong><span>Check back as this creator publishes.</span></div>}</div>
+        <div className="creator-profile-releases"><div className="section-head"><div><span className="mini-label">FULL CATALOGUE</span><h3>Released work</h3></div><button className="ghost-button" onClick={() => void share()}><Share2 size={14} /> Share</button></div>{profile.releases?.length ? profile.releases.map((release: any) => <article key={release.id} className="creator-profile-release"><div><strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p><div className="creator-release-actions">{onCommunityRelease && <button className="ghost-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Community</button>}</div></div><button className="round-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15} /></button></article>) : <div className="people-empty"><Mic2 size={18} /><strong>No public releases yet.</strong><span>Check back as this creator publishes.</span></div>}</div>
       </div>}
     </section>
   </div>;
