@@ -66,8 +66,8 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
       setWallet((current) => current ? { ...current, balance: result.balance, gifted: current.gifted + quantity } : current);
       setSent(true);
       notify(quantity === 1
-        ? `1 Nightjar sent to ${recipientName} as ${roleLabel(targetRole)}. £1.00 has been added to their creator earnings.`
-        : `${quantity} Nightjars sent to ${recipientName} as ${roleLabel(targetRole)}. ${money(result.creatorCreditPence)} has been added to their creator earnings.`);
+        ? `1 Nightjar sent to ${recipientName} as ${roleLabel(targetRole)}. £1.00 has been added to their professional earnings.`
+        : `${quantity} Nightjars sent to ${recipientName} as ${roleLabel(targetRole)}. ${money(result.creatorCreditPence)} has been added to their professional earnings.`);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Nightjars could not be sent.');
     } finally {
