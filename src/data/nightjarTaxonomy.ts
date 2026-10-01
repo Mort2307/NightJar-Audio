@@ -1,4 +1,4 @@
-export type ProfileRoleKey = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
+export type ProfileRoleKey = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 
 export const PROFILE_TAG_OPTIONS = [
   'Atmospheric',
@@ -112,6 +112,16 @@ export const ROLE_FOCUS_OPTIONS: Record<ProfileRoleKey, readonly string[]> = {
     'Production polish',
     'Editorial collaboration',
   ],
+  artist: [
+    'Illustration',
+    'Cover artwork',
+    'Character art',
+    'Brand artwork',
+    'Promotional artwork',
+    'Typography',
+    'Digital painting',
+    'Creative collaboration',
+  ],
 };
 
 export type RoleProfileConfig = {
@@ -195,6 +205,22 @@ export const ROLE_PROFILE_CONFIG: Record<ProfileRoleKey, RoleProfileConfig> = {
     detailOnePlaceholder: 'How you prefer to receive files, notes and revisions. Do not expose private project information.',
     detailTwoLabel: 'Typical turnaround / production note',
     detailTwoPlaceholder: 'Optional public estimate or note about the kind of projects you are best suited to.',
+  },
+  artist: {
+    title: 'Artist identity',
+    description: 'Show creators your visual style, services and availability so Nightjar projects can commission real human artwork.',
+    tagLabel: 'Art tags',
+    focusLabel: 'Artist focus',
+    specialtiesLabel: 'Art services',
+    specialtiesOptions: ['Cover artwork', 'Character illustration', 'Portraits', 'Digital painting', 'Graphic design', 'Typography', 'Brand artwork', 'Promotional artwork', 'Social media artwork', 'Series artwork', 'Merchandise artwork'],
+    secondaryLabel: 'Creative strengths',
+    secondaryOptions: ['Romance artwork', 'Atmospheric artwork', 'Dark / moody artwork', 'Fantasy', 'Sci-fi', 'Contemporary', 'Minimal design', 'Detailed illustration', 'Fast turnaround', 'Long-form collaboration'],
+    availabilityLabel: 'Commission availability',
+    availabilityOptions: ['Open for commissions', 'Limited availability', 'Booked but taking enquiries', 'Not currently available'],
+    detailOneLabel: 'Style & portfolio note',
+    detailOnePlaceholder: 'Describe your visual style, preferred briefs and the kind of projects you enjoy. Do not post private contact details.',
+    detailTwoLabel: 'Commission / licensing note',
+    detailTwoPlaceholder: 'Optional public note about commissions, licensing or turnaround. Keep private deal terms inside Nightjar messaging.',
   },
   admin: {
     title: 'Administrator identity',

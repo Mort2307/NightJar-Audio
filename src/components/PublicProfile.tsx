@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileCheck2, Handshake, Headphones, Heart, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
+import { Bird, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 import { nightjarReferrals } from '../platform/firebase-referrals';
+import NightjarGiftPanel from './NightjarGiftPanel';
 
 type Props = {
   userId: string;
@@ -25,7 +26,8 @@ type Props = {
 const roleLabel = (role: string | null | undefined) => {
   if (role === 'editor') return 'Audio Editor';
   if (role === 'writer') return 'Writer';
-  if (role === 'creator') return 'Creator';
+  if (role === 'creator') return 'VA Creator';
+  if (role === 'artist') return 'Artist';
   return 'Listener';
 };
 
@@ -33,6 +35,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [giftOpen, setGiftOpen] = useState(false);
+  const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(null);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
@@ -102,8 +106,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   };
 
   const following = Boolean(profile?.userId && followingIds.includes(profile.userId));
-  const profileRole = (profile?.role && ['creator','listener','writer','editor'].includes(profile.role) ? profile.role : 'listener') as ProfileRoleKey;
+  const availableProfileRoles: string[] = Array.from(new Set<string>(
+    (Array.isArray(profile?.roles) && profile.roles.length ? profile.roles : [profile?.role ?? 'listener'])
+      .map((role: unknown) => String(role))
+      .filter((role: string) => ['creator','listener','writer','editor','artist'].includes(role)),
+  ));
+  const profileRole = ((selectedProfileRole && availableProfileRoles.includes(selectedProfileRole)
+    ? selectedProfileRole
+    : availableProfileRoles[0] ?? 'listener')) as ProfileRoleKey;
   const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
+  const roleDetails = profile?.roleProfiles && typeof profile.roleProfiles === 'object' && profile.roleProfiles[profileRole]
+    ? profile.roleProfiles[profileRole]
+    : profile ?? {};
   const profileMetrics = profile ? (
     profileRole === 'creator'
       ? [
@@ -127,11 +141,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               ['Release credits', profile.creditedReleaseCount ?? 0],
               ['Collaborations', profile.completedCollaborations ?? 0],
             ]
-          : [
-              ['Followers', profile.followerCount ?? 0],
-              ['Following', profile.followingCount ?? 0],
-              ['Profile tags', profile.favouriteTags?.length ?? 0],
-            ]
+          : profileRole === 'artist'
+            ? [
+                ['Followers', profile.followerCount ?? 0],
+                ['Following', profile.followingCount ?? 0],
+                ['Portfolio pieces', profile.artistPortfolio?.length ?? 0],
+                ['Collaborations', profile.completedCollaborations ?? 0],
+              ]
+            : [
+                ['Followers', profile.followerCount ?? 0],
+                ['Following', profile.followingCount ?? 0],
+                ['Profile tags', profile.favouriteTags?.length ?? 0],
+              ]
   ) : [];
 
 
@@ -139,9 +160,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal">
       <header className="creator-profile-head">
         <div>
-          <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profile.role).toUpperCase() : 'PROFILE'}</span>
+          <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
           <h2>{loading ? 'Loading profile…' : profile?.displayName ?? 'Nightjar profile'}</h2>
-          <p>{profile?.handle ? '@' + String(profile.handle).replace(/^@/, '') : roleLabel(profile?.role)}</p>
+          <p>{profile?.handle ? '@' + String(profile.handle).replace(/^@/, '') : roleLabel(profileRole)}</p>
         </div>
         <button className="icon-button" onClick={onClose} aria-label="Close public profile"><X size={18}/></button>
       </header>
@@ -153,10 +174,12 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <h3>{profile.displayName}</h3>
             <p>{profile.headline || (profile.role === 'editor' ? 'Audio Editor on Nightjar.' : profile.role === 'listener' ? 'Part of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
+            {availableProfileRoles.length > 0 && <div className="profile-role-chips" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" className={profileRole===role?'active':''} key={role} onClick={()=>setSelectedProfileRole(role)}>{roleLabel(role)}</button>)}</div>}
           </div>
           <div className="writer-discovery-actions">
             <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>
-            {canMessage && onMessage && ['creator','writer','editor'].includes(String(profile.role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
+            {canMessage && onMessage && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
+            {(profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Send Nightjars</button>}
             <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>
           </div>
         </div>
@@ -172,43 +195,57 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {profile.activityBadges.map((badge:any)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}
         </div>}
 
-        {!!profile.roleFocus?.length && <div className="creator-profile-tags">{profile.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
+        {!!roleDetails.roleFocus?.length && <div className="creator-profile-tags">{roleDetails.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
 
         <section className="public-role-profile">
-          <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profile.role).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{profile.roleAvailability && <strong>{profile.roleAvailability}</strong>}</div>
+          <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profileRole).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{roleDetails.roleAvailability && <strong>{roleDetails.roleAvailability}</strong>}</div>
           <p>{roleConfig.description}</p>
-          {!!profile.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{profile.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          {!!profile.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{profile.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!roleDetails.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{roleDetails.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!roleDetails.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{roleDetails.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!profile.favouriteCategories?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite categories' : 'Relevant categories'}</span><div className="creator-profile-tags">{profile.favouriteCategories.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite tropes' : 'Tropes & themes'}</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          {(profile.roleDetailOne || profile.roleDetailTwo) && <div className="public-role-copy">{profile.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{profile.roleDetailOne}</p></div>}{profile.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{profile.roleDetailTwo}</p></div>}</div>}
+          {(roleDetails.roleDetailOne || roleDetails.roleDetailTwo) && <div className="public-role-copy">{roleDetails.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{roleDetails.roleDetailOne}</p></div>}{roleDetails.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{roleDetails.roleDetailTwo}</p></div>}</div>}
         </section>
 
-        {(profile.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
-          {profile.portfolioNote && <p>{profile.portfolioNote}</p>}
+        {(roleDetails.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
+          {roleDetails.portfolioNote && <p>{roleDetails.portfolioNote}</p>}
           {(profile.completedCollaborations ?? 0) > 0 && <span><Handshake size={14}/>{profile.completedCollaborations} completed Nightjar collaboration{profile.completedCollaborations === 1 ? '' : 's'}</span>}
         </section>}
 
         <div className="writer-public-note">
-          {profile.role === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
+          {profileRole === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
           <div>
-            <strong>{profile.role === 'editor'
+            <strong>{profileRole === 'editor'
               ? 'Public production identity, private client work.'
-              : profile.role === 'writer'
+              : profileRole === 'writer'
                 ? 'Public writing identity, protected manuscripts.'
-                : profile.role === 'listener'
-                  ? 'Community identity without listening-history exposure.'
-                  : 'Public Creator identity.'}</strong>
-            <p>{profile.role === 'editor'
+                : profileRole === 'artist'
+                  ? 'Public artist identity, private commission details.'
+                  : profileRole === 'listener'
+                    ? 'Community identity without listening-history exposure.'
+                    : 'Public VA Creator identity.'}</strong>
+            <p>{profileRole === 'editor'
               ? 'Nightjar shows skills, availability and credited public releases without exposing assigned manuscripts, private notes or client files.'
-              : profile.role === 'writer'
+              : profileRole === 'writer'
                 ? 'Writing focus, availability and public credits can be discovered without exposing protected script text or private licensing discussions.'
-                : profile.role === 'listener'
-                  ? 'Only the profile details this listener deliberately chose to publish are shown here. Private listening history and library activity stay private.'
-                  : 'Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
+                : profileRole === 'artist'
+                  ? 'Style, portfolio work and commission availability can be discovered without exposing private briefs, source files or client discussions.'
+                  : profileRole === 'listener'
+                    ? 'Only the profile details this listener deliberately chose to publish are shown here. Private listening history and library activity stay private.'
+                    : 'VA Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
           </div>
         </div>
+
+        {profileRole === 'artist' && <section className="public-artist-portfolio">
+          <div className="section-head"><div><span className="mini-label">ARTIST PORTFOLIO</span><h3>Approved visual work</h3></div></div>
+          {!!profile.artistPortfolio?.length ? <div className="public-artist-grid">
+            {profile.artistPortfolio.map((item:any)=><article key={item.id}>
+              {item.imageUrl && <button type="button" className="public-artist-image" onClick={()=>window.open(item.imageUrl,'_blank','noopener,noreferrer')} aria-label={'Open '+item.title+' full size'}><img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/></button>}
+              <div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}{item.description&&<p>{item.description}</p>}{!!item.tags?.length&&<div className="creator-profile-tags">{item.tags.map((tag:string)=><span key={tag}>{tag}</span>)}</div>}</div>
+            </article>)}
+          </div> : <div className="people-empty"><ImagePlus size={18}/><strong>No approved portfolio pieces yet</strong><span>This Artist has not published moderated artwork to their Nightjar portfolio yet.</span></div>}
+        </section>}
 
         <div className="creator-profile-releases">
           <div className="section-head">
@@ -218,12 +255,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                 ? 'Writing portfolio'
                 : profileRole === 'editor'
                   ? 'Production credits'
-                  : profileRole === 'creator'
-                    ? 'Creator catalogue'
-                    : 'Listener profile'}</h3>
+                  : profileRole === 'artist'
+                    ? 'Artist portfolio'
+                    : profileRole === 'creator'
+                      ? 'VA Creator catalogue'
+                      : 'Listener profile'}</h3>
             </div>
           </div>
-          {profile.role !== 'listener' && !!profile.featuredWork?.length && <div className="public-featured-work">
+          {profileRole === 'creator' && !!profile.featuredWork?.length && <div className="public-featured-work">
             <span className="mini-label">FEATURED</span>
             {profile.featuredWork.map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? profile.displayName}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
@@ -231,18 +270,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               <div className="public-work-community-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div>
             </article>)}
           </div>}
-          {profile.role === 'listener' && !!profile.publicPlaylists?.length && <div className="public-playlist-list">
+          {profileRole === 'listener' && !!profile.publicPlaylists?.length && <div className="public-playlist-list">
             <span className="mini-label">SHARED PLAYLISTS</span>
             {profile.publicPlaylists.map((playlist:any)=><article key={playlist.id}>
               <div className="public-playlist-head"><ListMusic size={16}/><div><strong>{playlist.title}</strong><span>{playlist.releaseCount ?? 0} release{playlist.releaseCount === 1 ? '' : 's'}</span></div></div>
               {!!playlist.releases?.length && <div className="public-playlist-preview">{playlist.releases.slice(0,4).map((release:any)=><button type="button" key={release.id} onClick={()=>onCommunityRelease?.(release)} disabled={!onCommunityRelease}><span>{release.title}</span><small>{release.creatorName ?? 'Nightjar creator'} · Community</small></button>)}</div>}
             </article>)}
           </div>}
-          {(profile.role === 'writer' || profile.role === 'editor') && <div className="public-credit-summary">
-            <span>{profile.role === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
+          {(profileRole === 'writer' || profileRole === 'editor') && <div className="public-credit-summary">
+            <span>{profileRole === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
             <strong>{profile.creditedReleaseCount ?? 0} credited release{profile.creditedReleaseCount === 1 ? '' : 's'}</strong>
           </div>}
-          {!!profile.creditedReleases?.length && <div className="public-credit-list">
+          {(profileRole === 'writer' || profileRole === 'editor') && !!profile.creditedReleases?.length && <div className="public-credit-list">
             {profile.creditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
@@ -252,5 +291,6 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         </div>
       </div>}
     </section>
+    {giftOpen && profile && <NightjarGiftPanel recipientUserId={profile.userId} recipientName={profile.displayName} recipientRole={String(profileRole)} recipientRoles={Array.isArray(profile.roles)?profile.roles:[]} notify={notify} onClose={() => setGiftOpen(false)} />}
   </div>;
 }

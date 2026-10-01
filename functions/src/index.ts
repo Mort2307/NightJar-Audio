@@ -17,8 +17,8 @@ const ADMIN_EMAILS = new Set([
   'nightjar.audio.app@gmail.com',
 ]);
 
-type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
-type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor';
+type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
+type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 
 const cleanEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
 
@@ -46,21 +46,27 @@ const requireRegistrationIdentity = (request: { auth?: { uid: string; token: Rec
 
 export const stageRegistrationIntent = onCall({ region: REGION }, async (request) => {
   const identity = requireRegistrationIdentity(request);
-  const input = (request.data ?? {}) as { role?: unknown; referralCode?: unknown };
-  const role = String(input.role ?? '') as SelectableRole;
-  if (!['creator','listener','writer','editor'].includes(role)) {
-    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer or Audio Editor.');
-  }
+  const input = (request.data ?? {}) as { role?: unknown; roles?: unknown; referralCode?: unknown };
+  const legacyRole = String(input.role ?? '').trim();
+  const submittedRoles = Array.isArray(input.roles)
+    ? input.roles.map((value) => String(value ?? '').trim())
+    : legacyRole ? [legacyRole] : [];
+  const roles = Array.from(new Set(submittedRoles))
+    .filter((role): role is SelectableRole => ['creator','listener','writer','editor','artist'].includes(role));
+  if (!roles.length) roles.push('listener');
+  const professionalRoles = roles.filter((role): role is ProfessionalRole => ['creator','writer','editor','artist'].includes(role));
   const referralCode = String(input.referralCode ?? '').trim().slice(0,80);
   await db.collection('registrationIntents').doc(identity.uid).set({
     userId: identity.uid,
     email: identity.email,
-    role,
-    referralCode: role === 'creator' && referralCode ? referralCode : null,
+    role: professionalRoles[0] ?? 'listener',
+    roles: ['listener', ...professionalRoles],
+    professionalRoles,
+    referralCode: professionalRoles.includes('creator') && referralCode ? referralCode : null,
     updatedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
   }, { merge:true });
-  return { role, staged:true };
+  return { role: professionalRoles[0] ?? 'listener', roles: ['listener', ...professionalRoles], professionalRoles, staged:true };
 });
 
 const requireAdminIdentity = (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
@@ -115,16 +121,20 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
   }
 
   const current = snapshot.exists ? snapshot.data() ?? {} : {};
-  const rawStagedRole = String(registrationIntent.data()?.role ?? '');
-  const stagedRole = !current.role && ['creator','listener','writer','editor'].includes(rawStagedRole)
-    ? rawStagedRole as SelectableRole
+  const intentData = registrationIntent.data() ?? {};
+  const rawStagedRole = String(intentData.role ?? '');
+  const stagedProfessionalRoles = cleanProfessionalRoles(
+    Array.isArray(intentData.professionalRoles)
+      ? intentData.professionalRoles
+      : Array.isArray(intentData.roles)
+        ? intentData.roles
+        : ['creator','writer','editor','artist'].includes(rawStagedRole) ? [rawStagedRole] : [],
+  );
+  const stagedRole = !current.role && rawStagedRole === 'listener' && !stagedProfessionalRoles.length
+    ? 'listener' as SelectableRole
     : null;
-  const role = (current.role as AccountRole | null) ?? stagedRole ?? null;
-  const status = current.role
-    ? String(current.status ?? 'active')
-    : stagedRole === 'creator' || stagedRole === 'editor'
-      ? 'pending_review'
-      : 'active';
+  const role = (current.role as AccountRole | null) ?? (stagedProfessionalRoles.length ? 'listener' : stagedRole) ?? null;
+  const status = String(current.status ?? 'active');
 
   await ref.set({
     email: identity.email,
@@ -135,18 +145,32 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge:true });
 
-  if (stagedRole === 'creator' || stagedRole === 'editor') {
-    await db.collection('creatorApplications').doc(identity.uid).set({
+  if (stagedProfessionalRoles.length) {
+    const applicationRef = professionalApplicationRef(identity.uid);
+    const application = await applicationRef.get();
+    const requestedRoles = Array.from(new Set([
+      ...cleanProfessionalRoles(application.data()?.requestedRoles),
+      ...stagedProfessionalRoles,
+    ]));
+    await applicationRef.set({
       userId: identity.uid,
       email: identity.email,
-      role: stagedRole,
-      status: 'pending',
-      submittedAt: FieldValue.serverTimestamp(),
+      requestedRoles,
+      approvedRoles: professionalRolesForAccount(current),
+      status: 'banked',
+      source: 'registration',
+      bankedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(application.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+    await ref.set({
+      pendingProfessionalRoles: requestedRoles,
+      approvedProfessionalRoles: professionalRolesForAccount(current),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge:true });
   }
 
-  const stagedReferralCode = stagedRole === 'creator'
+  const stagedReferralCode = stagedProfessionalRoles.includes('creator')
     ? String(registrationIntent.data()?.referralCode ?? '').trim().slice(0,80)
     : '';
   if (stagedReferralCode) {
@@ -185,38 +209,58 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
 
   const input = (request.data ?? {}) as { role?: unknown; referralCode?: unknown };
   const requestedRole = String(input.role ?? '') as SelectableRole;
-  if (!['creator', 'listener', 'writer', 'editor'].includes(requestedRole)) {
-    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer or Audio Editor.');
+  if (!['creator', 'listener', 'writer', 'editor', 'artist'].includes(requestedRole)) {
+    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer, Audio Editor or Artist.');
   }
 
   const ref = accountRef(identity.uid);
   const snapshot = await ref.get();
   const current = snapshot.data() ?? {};
+  const professionalRequest = ['creator','writer','editor','artist'].includes(requestedRole);
 
-  if (current.role && current.role !== requestedRole) {
-    throw new HttpsError('failed-precondition', 'This Nightjar account already has a role.');
-  }
-
-  const status = requestedRole === 'creator' || requestedRole === 'editor' ? 'pending_review' : 'active';
-  await ref.set({
-    email: identity.email,
-    emailVerified: true,
-    role: requestedRole,
-    status,
-    updatedAt: FieldValue.serverTimestamp(),
-    ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
-  }, { merge: true });
-
-  if (requestedRole === 'creator' || requestedRole === 'editor') {
-    await db.collection('creatorApplications').doc(identity.uid).set({
+  if (!professionalRequest) {
+    await ref.set({
+      email: identity.email,
+      emailVerified: true,
+      role: 'listener',
+      status: 'active',
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+  } else {
+    const applicationRef = professionalApplicationRef(identity.uid);
+    const application = await applicationRef.get();
+    const approved = professionalRolesForAccount(current);
+    const applicationStatus = cleanText(application.data()?.status, 30);
+    const carriedRequestedRoles = ['banked','waitlist'].includes(applicationStatus)
+      ? cleanProfessionalRoles(application.data()?.requestedRoles)
+      : [];
+    const requestedRoles = Array.from(new Set([
+      ...carriedRequestedRoles,
+      requestedRole as ProfessionalRole,
+    ])).filter((role) => !approved.includes(role));
+    await ref.set({
+      email: identity.email,
+      emailVerified: true,
+      role: cleanText(current.role, 30) || 'listener',
+      status: 'active',
+      approvedProfessionalRoles: approved,
+      pendingProfessionalRoles: requestedRoles,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+    await applicationRef.set({
       userId: identity.uid,
       email: identity.email,
-      role: requestedRole,
-      status: 'pending',
-      submittedAt: FieldValue.serverTimestamp(),
+      requestedRoles,
+      approvedRoles: approved,
+      status: 'banked',
+      bankedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+      ...(application.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
   }
+  const status = professionalRequest ? 'banked' : 'active';
 
   const referralCode = cleanText(input.referralCode, 80);
   if (requestedRole === 'creator' && referralCode) {
@@ -237,7 +281,12 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
     }
   }
 
-  return { userId: identity.uid, role: requestedRole, status };
+  return {
+    userId: identity.uid,
+    role: professionalRequest ? (cleanText(current.role, 30) || 'listener') : 'listener',
+    requestedProfessionalRole: professionalRequest ? requestedRole : null,
+    status,
+  };
 });
 
 const cleanText = (value: unknown, maxLength: number) =>
@@ -412,7 +461,7 @@ const syncCreatorCustomTagUsage = async (creatorUserId: string) => {
 
   const accountData = accountSnapshot.data() ?? {};
   const activeCreator = accountSnapshot.exists
-    && accountData.role === 'creator'
+    && professionalRolesForAccount(accountData).includes('creator')
     && String(accountData.status ?? '') === 'active';
 
   const desiredTags = activeCreator
@@ -507,10 +556,51 @@ const accountPresentation = async (uid: string) => {
   return { displayName, handle, email: email || null };
 };
 
+const roleProfileSlice = (data: Record<string, any>, role: string) => {
+  const stored = data.roleProfiles && typeof data.roleProfiles === 'object' && data.roleProfiles[role] && typeof data.roleProfiles[role] === 'object'
+    ? data.roleProfiles[role]
+    : null;
+  if (stored) {
+    return {
+      roleFocus: Array.isArray(stored.roleFocus) ? stored.roleFocus : [],
+      roleSpecialties: Array.isArray(stored.roleSpecialties) ? stored.roleSpecialties : [],
+      roleSecondary: Array.isArray(stored.roleSecondary) ? stored.roleSecondary : [],
+      roleAvailability: cleanText(stored.roleAvailability, 100),
+      roleDetailOne: cleanText(stored.roleDetailOne, 600),
+      roleDetailTwo: cleanText(stored.roleDetailTwo, 600),
+      portfolioNote: cleanText(stored.portfolioNote, 400),
+      featuredPortfolioIds: cleanStringList(stored.featuredPortfolioIds, 6),
+    };
+  }
+  return {
+    roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
+    roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
+    roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
+    roleAvailability: cleanText(data.roleAvailability, 100),
+    roleDetailOne: cleanText(data.roleDetailOne, 600),
+    roleDetailTwo: cleanText(data.roleDetailTwo, 600),
+    portfolioNote: cleanText(data.portfolioNote, 400),
+    featuredPortfolioIds: cleanStringList(data.featuredPortfolioIds, 6),
+  };
+};
+
 export const getMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  const snapshot = await profileRef(identity.uid).get();
-  return { profile: snapshot.exists ? snapshot.data() : null };
+  const [snapshot, accountSnapshot] = await Promise.all([
+    profileRef(identity.uid).get(),
+    accountRef(identity.uid).get(),
+  ]);
+  if (!snapshot.exists) return { profile:null };
+  const data = snapshot.data() ?? {};
+  const activeRole = identity.admin ? 'admin' : cleanText(accountSnapshot.data()?.role, 30) || 'listener';
+  return {
+    profile: {
+      ...data,
+      ...roleProfileSlice(data, activeRole),
+      activeRole,
+      roles: identity.admin ? ['admin'] : (professionalRolesForAccount(accountSnapshot.data() ?? {}).length ? professionalRolesForAccount(accountSnapshot.data() ?? {}) : ['listener']),
+    },
+  };
 });
 
 export const profileTagCatalogue = onCall({ region: REGION }, async (request) => {
@@ -732,13 +822,31 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
       transaction.delete(oldHandleRef);
     }
 
+    const currentProfileData = currentProfile.data() ?? {};
+    const roleProfiles = currentProfileData.roleProfiles && typeof currentProfileData.roleProfiles === 'object'
+      ? { ...currentProfileData.roleProfiles }
+      : {};
+    if (profileRole && profileRole !== 'admin') {
+      roleProfiles[profileRole] = {
+        roleFocus: nextProfile.roleFocus,
+        roleSpecialties: nextProfile.roleSpecialties,
+        roleSecondary: nextProfile.roleSecondary,
+        roleAvailability: nextProfile.roleAvailability,
+        roleDetailOne: nextProfile.roleDetailOne,
+        roleDetailTwo: nextProfile.roleDetailTwo,
+        portfolioNote: nextProfile.portfolioNote,
+        featuredPortfolioIds: nextProfile.featuredPortfolioIds,
+      };
+    }
+
     transaction.set(targetProfileRef, {
       ...nextProfile,
+      roleProfiles,
       ...(currentProfile.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
   });
 
-  if (profileRole === 'creator' && profileStatus === 'active') {
+  if (profileStatus === 'active' && professionalRolesForAccount(accountSnapshot.data() ?? {}).includes('creator')) {
     await syncCreatorCustomTagUsage(identity.uid);
   }
 
@@ -756,16 +864,25 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   }
 
   const saved = await targetProfileRef.get();
-  return { profile: saved.data() ?? null };
+  const savedData = saved.data() ?? {};
+  return {
+    profile: {
+      ...savedData,
+      ...roleProfileSlice(savedData, profileRole || 'listener'),
+      activeRole: profileRole || 'listener',
+    },
+  };
 });
 
 const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
   const profile = await profileRef(account.id).get();
   const data = profile.data();
   if (!data || data.publicProfile === false) return null;
+  const roles = professionalRolesForAccount(account.data() ?? {});
   return {
     userId: account.id,
-    role: account.data().role ?? null,
+    role: roles[0] ?? account.data().role ?? null,
+    roles: roles.length ? roles : ['listener'],
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
     handle: data.handle ?? null,
@@ -789,6 +906,7 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
     roleDetailOne: data.roleDetailOne ?? null,
     roleDetailTwo: data.roleDetailTwo ?? null,
     portfolioNote: data.portfolioNote ?? null,
+    roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
     featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
   };
 };
@@ -848,7 +966,7 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
   const [accounts, releases, listening] = await Promise.all([
-    db.collection('accounts').where('role', '==', 'creator').limit(200).get(),
+    db.collection('accounts').limit(1000).get(),
     db.collection('releases').where('status', '==', 'released').limit(1000).get(),
     db.collection('listeningEvents').limit(5000).get(),
   ]);
@@ -863,7 +981,7 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
 
   const creators = (await Promise.all(
     accounts.docs
-      .filter((doc) => doc.data().status === 'active')
+      .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
         if (!base) return null;
@@ -923,13 +1041,14 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
     if (recipientUserId) collaborationCountByUser.set(recipientUserId, (collaborationCountByUser.get(recipientUserId) ?? 0) + 1);
   }
 
-  const allowedRoles = new Set(['creator','writer','editor','listener']);
+  const allowedRoles = new Set(['creator','writer','editor','artist','listener']);
   const profiles = (await Promise.all(accounts.docs
-    .filter((doc) => doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
+    .filter((doc) => doc.data().status === 'active' && (allowedRoles.has(String(doc.data().role ?? '')) || professionalRolesForAccount(doc.data() ?? {}).length > 0))
     .map(async (doc) => {
       const data = profileByUser.get(doc.id);
       if (!data || data.publicProfile === false) return null;
-      const role = String(doc.data().role ?? '');
+      const professionalRoles = professionalRolesForAccount(doc.data() ?? {});
+      const role = professionalRoles[0] ?? String(doc.data().role ?? 'listener');
       const releaseCount = releaseCountByCreator.get(doc.id) ?? 0;
       const publishedWorkCount = publishedScriptsByWriter.get(doc.id) ?? 0;
       const creditedReleaseCount = creditCountByUser.get(doc.id) ?? 0;
@@ -937,6 +1056,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
+        roles: professionalRoles.length ? professionalRoles : ['listener'],
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
@@ -961,6 +1081,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         roleDetailTwo: data.roleDetailTwo ?? null,
         portfolioNote: data.portfolioNote ?? null,
         featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
+        roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
         releaseCount,
         publishedWorkCount,
         creditedReleaseCount,
@@ -1001,7 +1122,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
 
-  const role = String(accountData?.role ?? '');
+  const professionalRoles = professionalRolesForAccount(accountData ?? {});
+  const role = professionalRoles[0] ?? String(accountData?.role ?? 'listener');
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
@@ -1010,19 +1132,20 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   let creditedReleases: ReturnType<typeof releasePayload>[] = [];
   let publicPlaylists: Array<{ id: string; title: string; releaseCount: number; releases: ReturnType<typeof releasePayload>[] }> = [];
 
-  if (role === 'creator') {
+  if (professionalRoles.includes('creator')) {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
     creatorReleases = releases.docs
       .filter((doc) => doc.data().status === 'released')
       .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
     releaseCount = creatorReleases.length;
-  } else if (role === 'writer') {
+  }
+  if (professionalRoles.includes('writer')) {
     const scripts = await db.collection('scripts').where('writerUserId', '==', userId).limit(500).get();
     publishedWorkCount = scripts.docs.filter((doc) => ['Approved','Published'].includes(String(doc.data().status))).length;
   }
 
-  if (role === 'writer' || role === 'editor') {
+  if (professionalRoles.includes('writer') || professionalRoles.includes('editor')) {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     creditedReleases = releases.docs
       .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
@@ -1030,7 +1153,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
-  if (role === 'listener' && Array.isArray(data.featuredPortfolioIds) && data.featuredPortfolioIds.length) {
+  if (!professionalRoles.length && Array.isArray(data.featuredPortfolioIds) && data.featuredPortfolioIds.length) {
     const playlistDocs = await Promise.all(
       cleanStringList(data.featuredPortfolioIds, 6).map((playlistId) => accountRef(userId).collection('playlists').doc(playlistId).get()),
     );
@@ -1057,14 +1180,15 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const byId = new Map(items.map((item) => [String(item.id), item]));
     return selectedPortfolioIds.map((id) => byId.get(id)).filter((item): item is ReturnType<typeof releasePayload> => Boolean(item));
   };
-  const featuredWork = role === 'creator'
+  const featuredWork = professionalRoles.includes('creator')
     ? (hasPortfolioCuration ? orderedFeatured(creatorReleases) : creatorReleases.slice(0, 3))
-    : (role === 'writer' || role === 'editor')
+    : (professionalRoles.includes('writer') || professionalRoles.includes('editor'))
       ? (hasPortfolioCuration ? orderedFeatured(creditedReleases) : creditedReleases.slice(0, 3))
       : [];
-  const completedCollaborations = ['creator','writer','editor'].includes(role)
-    ? await completedCollaborationCountFor(userId)
-    : 0;
+  const [completedCollaborations, publicArtistPortfolio] = await Promise.all([
+    professionalRoles.length > 0 ? completedCollaborationCountFor(userId) : Promise.resolve(0),
+    professionalRoles.includes('artist') ? publicArtistPortfolioFor(userId) : Promise.resolve([]),
+  ]);
   const activityBadges = publicActivityBadges(role, {
     releases: releaseCount,
     publishedScripts: publishedWorkCount,
@@ -1076,6 +1200,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     profile: {
       userId,
       role,
+      roles: professionalRoles.length ? professionalRoles : ['listener'],
       displayName: data.displayName ?? 'Nightjar member',
       name: data.displayName ?? 'Nightjar member',
       handle: data.handle ?? null,
@@ -1098,8 +1223,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       roleDetailOne: data.roleDetailOne ?? null,
       roleDetailTwo: data.roleDetailTwo ?? null,
       portfolioNote: data.portfolioNote ?? null,
+      roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
+      artistPortfolio: publicArtistPortfolio,
       publicPlaylists,
       completedCollaborations,
       activityBadges,
@@ -1119,7 +1246,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
   if (!creatorUserId) throw new HttpsError('invalid-argument', 'Creator account is required.');
 
   const account = await accountRef(creatorUserId).get();
-  if (!account.exists || account.data()?.role !== 'creator' || account.data()?.status !== 'active') {
+  if (!account.exists || account.data()?.status !== 'active' || !professionalRolesForAccount(account.data() ?? {}).includes('creator')) {
     throw new HttpsError('not-found', 'Creator profile not found.');
   }
 
@@ -1185,10 +1312,10 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
 export const listWriters = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const accounts = await db.collection('accounts').where('role', '==', 'writer').limit(200).get();
+  const accounts = await db.collection('accounts').limit(1000).get();
   const writers = (await Promise.all(
     accounts.docs
-      .filter((doc) => doc.data().status === 'active')
+      .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('writer'))
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
         if (!base) return null;
@@ -1319,7 +1446,7 @@ export const setFavouriteRelease = onCall({ region: REGION }, async (request) =>
   return { releaseId, favourite: input.favourite !== false };
 });
 
-type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork';
+type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio';
 
 const IMAGE_CONTENT_TYPES = new Map([
   ['image/png', 'png'],
@@ -1371,7 +1498,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const kind = cleanText(input.kind, 40) as ModeratedImageKind;
-  if (!['profile_avatar', 'brand_logo', 'release_artwork'].includes(kind)) {
+  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'artist_portfolio'].includes(kind)) {
     throw new HttpsError('invalid-argument', 'Unsupported image type.');
   }
   if (kind === 'brand_logo' && !identity.admin) {
@@ -1382,8 +1509,21 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     ? identity.uid
     : cleanText(input.targetId, 160);
 
-  if (kind === 'release_artwork' && !targetId) {
-    throw new HttpsError('invalid-argument', 'Release artwork requires a release ID.');
+  if ((kind === 'release_artwork' || kind === 'artist_portfolio') && !targetId) {
+    throw new HttpsError('invalid-argument', kind === 'artist_portfolio' ? 'Artist portfolio artwork requires a portfolio item ID.' : 'Release artwork requires a release ID.');
+  }
+
+  if (kind === 'artist_portfolio') {
+    const [account, portfolioItem] = await Promise.all([
+      accountRef(identity.uid).get(),
+      db.collection('artistPortfolio').doc(targetId).get(),
+    ]);
+    if (!professionalRolesForAccount(account.data() ?? {}).includes('artist') || account.data()?.status !== 'active') {
+      throw new HttpsError('permission-denied', 'Approved Artist access is required to upload portfolio artwork.');
+    }
+    if (!portfolioItem.exists || portfolioItem.data()?.ownerUserId !== identity.uid) {
+      throw new HttpsError('not-found', 'Artist portfolio item not found.');
+    }
   }
 
   if (kind === 'release_artwork') {
@@ -1391,8 +1531,8 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     if (!release.exists) throw new HttpsError('not-found', 'Release not found.');
     if (!identity.admin) {
       const account = await accountRef(identity.uid).get();
-      if (account.data()?.role !== 'creator' || account.data()?.status !== 'active') {
-        throw new HttpsError('permission-denied', 'Active Creator access required.');
+      if (!professionalRolesForAccount(account.data() ?? {}).includes('creator') || account.data()?.status !== 'active') {
+        throw new HttpsError('permission-denied', 'Active VA Creator access required.');
       }
       if (release.data()?.creatorUserId !== identity.uid) {
         throw new HttpsError('permission-denied', 'You cannot change artwork for another creator.');
@@ -1468,6 +1608,22 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       pendingLogoStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+  } else if (kind === 'artist_portfolio') {
+    const portfolioRef = db.collection('artistPortfolio').doc(targetId);
+    const portfolioItem = await portfolioRef.get();
+    const previousPendingId = cleanText(portfolioItem.data()?.pendingImageAssetId, 160);
+    if (previousPendingId && previousPendingId !== assetId) {
+      const previousPending = await db.collection('imageAssets').doc(previousPendingId).get();
+      if (previousPending.exists && previousPending.data()?.status === 'pending') {
+        await clearAssetFile(previousPending.data() ?? {});
+        await previousPending.ref.set({ status:'removed', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      }
+    }
+    await portfolioRef.set({
+      pendingImageAssetId: assetId,
+      pendingImageStatus: 'pending',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge:true });
   } else if (kind === 'release_artwork') {
     const releaseRefForArtwork = db.collection('releases').doc(targetId);
     const release = await releaseRefForArtwork.get();
@@ -1619,6 +1775,17 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         pendingLogoStatus: 'rejected',
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+    } else if (asset.kind === 'artist_portfolio' && asset.targetId) {
+      const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
+      const portfolio = await portfolioRef.get();
+      if (portfolio.exists && portfolio.data()?.pendingImageAssetId === assetId) {
+        await portfolioRef.set({
+          pendingImageAssetId:null,
+          pendingImageStatus:'rejected',
+          status:'draft',
+          updatedAt:FieldValue.serverTimestamp(),
+        }, { merge:true });
+      }
     } else if (asset.kind === 'release_artwork' && asset.targetId) {
       const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
       const release = await releaseRefForArtwork.get();
@@ -1639,7 +1806,9 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
           ? 'Profile picture not approved'
           : asset.kind === 'release_artwork'
             ? 'Release artwork not approved'
-            : 'Nightjar image not approved',
+            : asset.kind === 'artist_portfolio'
+              ? 'Portfolio artwork not approved'
+              : 'Nightjar image not approved',
         message: note || 'The submitted image was not approved for use on Nightjar. You can remove it or submit a different image.',
         assetId,
         imageKind: asset.kind,
@@ -1699,6 +1868,32 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         await previous.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
     }
+  } else if (asset.kind === 'artist_portfolio' && asset.targetId) {
+    const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
+    const portfolio = await portfolioRef.get();
+    if (!portfolio.exists || portfolio.data()?.ownerUserId !== asset.ownerUserId || portfolio.data()?.pendingImageAssetId !== assetId) {
+      await clearAssetFile(asset);
+      await ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      throw new HttpsError('failed-precondition', 'This image is no longer the pending artwork for the Artist portfolio item.');
+    }
+    const previousAssetId = cleanText(portfolio.data()?.imageAssetId, 160);
+    await portfolioRef.set({
+      imageAssetId:assetId,
+      imageUrl:url,
+      imageStatus:'approved',
+      pendingImageAssetId:null,
+      pendingImageStatus:null,
+      status:'published',
+      publishedAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+    if (previousAssetId && previousAssetId !== assetId) {
+      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
+      if (previous.exists) {
+        await clearAssetFile(previous.data() ?? {});
+        await previous.ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      }
+    }
   } else if (asset.kind === 'release_artwork' && asset.targetId) {
     const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
     const release = await releaseRefForArtwork.get();
@@ -1737,7 +1932,9 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         ? 'Profile picture approved'
         : asset.kind === 'release_artwork'
           ? 'Release artwork approved'
-          : 'Nightjar image approved',
+          : asset.kind === 'artist_portfolio'
+            ? 'Portfolio artwork approved'
+            : 'Nightjar image approved',
       message: asset.kind === 'release_artwork'
         ? 'Your artwork passed Nightjar image moderation and is now available to the release.'
         : 'Your image passed Nightjar moderation and is now approved for use.',
@@ -1786,6 +1983,25 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
     publicUrl: null,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+
+  if (asset.kind === 'artist_portfolio' && asset.targetId) {
+    const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
+    const portfolio = await portfolioRef.get();
+    if (portfolio.exists) {
+      const update: Record<string, unknown> = { updatedAt:FieldValue.serverTimestamp() };
+      if (portfolio.data()?.pendingImageAssetId === assetId) {
+        update.pendingImageAssetId = null;
+        update.pendingImageStatus = null;
+      }
+      if (portfolio.data()?.imageAssetId === assetId) {
+        update.imageAssetId = null;
+        update.imageUrl = null;
+        update.imageStatus = null;
+        update.status = 'draft';
+      }
+      await portfolioRef.set(update, { merge:true });
+    }
+  }
 
   if (asset.kind === 'release_artwork' && asset.targetId) {
     const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
@@ -1866,6 +2082,113 @@ export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
   }, { merge: true });
   return { removed: true };
 });
+
+
+const artistPortfolioPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  ownerUserId: cleanText(data.ownerUserId, 160),
+  title: cleanText(data.title, 120),
+  description: cleanText(data.description, 600),
+  tags: cleanStringList(data.tags, 12),
+  commissionType: cleanText(data.commissionType, 80) || null,
+  status: cleanText(data.status, 30) || 'draft',
+  imageUrl: data.imageStatus === 'approved' ? validPublicUrl(data.imageUrl) : null,
+  imageStatus: cleanText(data.imageStatus, 30) || null,
+  pendingImageAssetId: cleanText(data.pendingImageAssetId, 160) || null,
+  pendingImageStatus: cleanText(data.pendingImageStatus, 30) || null,
+  createdAt: toIso(data.createdAt),
+  publishedAt: toIso(data.publishedAt),
+  updatedAt: toIso(data.updatedAt),
+});
+
+export const createArtistPortfolioItem = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['artist']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const title = cleanText(input.title, 120);
+  const description = cleanText(input.description, 600);
+  const tags = cleanStringList(input.tags, 12);
+  const commissionType = cleanText(input.commissionType, 80);
+  const humanCreatedAttestation = input.humanCreatedAttestation === true;
+  if (!title) throw new HttpsError('invalid-argument', 'Give the artwork a title.');
+  if (!humanCreatedAttestation) throw new HttpsError('failed-precondition', 'Artist portfolio submissions must be your own human-created artwork, not AI-generated imagery.');
+
+  const existing = await db.collection('artistPortfolio').where('ownerUserId','==',identity.uid).limit(40).get();
+  if (existing.docs.filter((doc)=>doc.data()?.status !== 'removed').length >= 24) {
+    throw new HttpsError('resource-exhausted', 'Artist portfolios can contain up to 24 active pieces.');
+  }
+
+  const ref = db.collection('artistPortfolio').doc();
+  await ref.set({
+    ownerUserId:identity.uid,
+    title,
+    description,
+    tags,
+    commissionType:commissionType || null,
+    humanCreatedAttestation:true,
+    humanCreatedAttestedAt:FieldValue.serverTimestamp(),
+    status:'draft',
+    imageAssetId:null,
+    imageUrl:null,
+    imageStatus:null,
+    pendingImageAssetId:null,
+    pendingImageStatus:null,
+    createdAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  });
+  const saved = await ref.get();
+  return { item:artistPortfolioPayload(saved.data() ?? {}, ref.id) };
+});
+
+export const myArtistPortfolio = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['artist']);
+  const snapshot = await db.collection('artistPortfolio').where('ownerUserId','==',identity.uid).limit(40).get();
+  return {
+    items:snapshot.docs
+      .map((doc)=>artistPortfolioPayload(doc.data() ?? {}, doc.id))
+      .filter((item)=>item.status !== 'removed')
+      .sort((a,b)=>String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))),
+  };
+});
+
+export const removeArtistPortfolioItem = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['artist']);
+  const itemId = cleanText((request.data as Record<string, unknown> | undefined)?.itemId, 160);
+  if (!itemId) throw new HttpsError('invalid-argument', 'Artist portfolio item is required.');
+  const ref = db.collection('artistPortfolio').doc(itemId);
+  const snapshot = await ref.get();
+  const data = snapshot.data() ?? {};
+  if (!snapshot.exists || data.ownerUserId !== identity.uid) throw new HttpsError('not-found', 'Artist portfolio item not found.');
+
+  for (const rawId of [data.imageAssetId,data.pendingImageAssetId]) {
+    const assetId = cleanText(rawId, 160);
+    if (!assetId) continue;
+    const asset = await db.collection('imageAssets').doc(assetId).get();
+    if (asset.exists && asset.data()?.ownerUserId === identity.uid) {
+      await clearAssetFile(asset.data() ?? {});
+      await asset.ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+    }
+  }
+  await ref.set({
+    status:'removed',
+    imageAssetId:null,
+    imageUrl:null,
+    imageStatus:null,
+    pendingImageAssetId:null,
+    pendingImageStatus:null,
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { removed:true, itemId };
+});
+
+const publicArtistPortfolioFor = async (userId: string) => {
+  const snapshot = await db.collection('artistPortfolio').where('ownerUserId','==',userId).limit(40).get();
+  return snapshot.docs
+    .map((doc)=>artistPortfolioPayload(doc.data() ?? {}, doc.id))
+    .filter((item)=>item.status === 'published' && Boolean(item.imageUrl))
+    .sort((a,b)=>String(b.publishedAt ?? '').localeCompare(String(a.publishedAt ?? '')))
+    .slice(0,24);
+};
 
 type CreatorRateBand = {
   minPaidSubscribers: number;
@@ -2054,11 +2377,11 @@ const deterministicDailyPick = <T>(items: T[], dateKey: string) => {
   return items[Math.abs(day) % items.length] ?? null;
 };
 
-const spotlightForRole = async (role: 'creator' | 'writer' | 'editor', dateKey: string) => {
-  const accounts = await db.collection('accounts').where('role', '==', role).limit(300).get();
+const spotlightForRole = async (role: 'creator' | 'writer' | 'editor' | 'artist', dateKey: string) => {
+  const accounts = await db.collection('accounts').limit(2000).get();
   const eligible = (await Promise.all(
     accounts.docs
-      .filter((doc) => doc.data().status === 'active')
+      .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data()).includes(role))
       .sort((a, b) => a.id.localeCompare(b.id))
       .map(async (doc) => {
         const profile = await profileRef(doc.id).get();
@@ -2066,15 +2389,17 @@ const spotlightForRole = async (role: 'creator' | 'writer' | 'editor', dateKey: 
         if (!data || data.publicProfile === false) return null;
         return {
           kind: role,
-          name: data.displayName ?? (role === 'editor' ? 'Nightjar Audio Editor' : 'Nightjar member'),
+          name: data.displayName ?? (role === 'editor' ? 'Nightjar Audio Editor' : role === 'artist' ? 'Nightjar Artist' : 'Nightjar member'),
           handle: data.handle ?? null,
-          title: data.headline ?? (role === 'editor' ? 'Audio Editor profile' : role === 'creator' ? 'Creator profile' : 'Writer profile'),
-          edition: role === 'editor' ? 'Audio Editor Spotlight' : role === 'creator' ? 'Creator Spotlight' : 'Writer Spotlight',
+          title: data.headline ?? (role === 'editor' ? 'Audio Editor profile' : role === 'creator' ? 'VA Creator profile' : role === 'artist' ? 'Artist profile' : 'Writer profile'),
+          edition: role === 'editor' ? 'Audio Editor Spotlight' : role === 'creator' ? 'VA Creator Spotlight' : role === 'artist' ? 'Artist Spotlight' : 'Writer Spotlight',
           detail: role === 'editor'
             ? 'A full day of recognition for an Audio Editor shaping Nightjar productions.'
             : role === 'creator'
-              ? 'A full day of discovery for this Nightjar creator.'
-              : 'A full day of discovery for this Nightjar writer.',
+              ? 'A full day of discovery for this Nightjar VA Creator.'
+              : role === 'artist'
+                ? 'A full day of discovery for a human Artist shaping Nightjar visual work.'
+                : 'A full day of discovery for this Nightjar writer.',
           initials: data.avatarInitials ?? null,
           imageUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
           targetId: doc.id,
@@ -2109,13 +2434,13 @@ const listenerSpotlightForToday = async (dateKey: string) => {
   const previousWeekEnd = new Date(weekStart);
 
   const [listenersSnapshot, eventsSnapshot] = await Promise.all([
-    db.collection('accounts').where('role', '==', 'listener').limit(1000).get(),
+    db.collection('accounts').limit(5000).get(),
     db.collection('listeningEvents').limit(10000).get(),
   ]);
 
   const listenerAccounts = new Map(
     listenersSnapshot.docs
-      .filter((doc) => doc.data().status === 'active')
+      .filter((doc) => doc.data().status === 'active' && doc.data().role !== 'admin')
       .map((doc) => [doc.id, doc]),
   );
 
@@ -2181,20 +2506,24 @@ const materializeSpotlightNotification = async (item: any, date: string) => {
   if (existing.exists) return;
 
   const title = kind === 'creator'
-    ? 'You are today’s Creator Spotlight'
+    ? 'You are today’s VA Creator Spotlight'
     : kind === 'writer'
       ? 'You are today’s Writer Spotlight'
       : kind === 'editor'
         ? 'You are today’s Audio Editor Spotlight'
-        : 'Thank you — you’re today’s Listener Spotlight';
+        : kind === 'artist'
+          ? 'You are today’s Artist Spotlight'
+          : 'Thank you — you’re today’s Listener Spotlight';
 
   const message = kind === 'creator'
-    ? 'Your public Nightjar creator profile is featured for the full day.'
+    ? 'Your public Nightjar VA Creator profile is featured for the full day.'
     : kind === 'writer'
       ? 'Your public Nightjar writer profile is featured for the full day.'
       : kind === 'editor'
         ? 'Your public Audio Editor profile is featured for the full day.'
-        : 'Thank you for being part of Nightjar. You are being recognised from the previous week’s Top 7 listeners.';
+        : kind === 'artist'
+          ? 'Your public Artist profile is featured for the full day.'
+          : 'Thank you for being part of Nightjar. You are being recognised from the previous week’s Top 7 listeners.';
 
   await ref.set({
     type: 'spotlight',
@@ -2213,13 +2542,14 @@ export const spotlightState = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
   const date = londonDateKey();
-  const [creator, writer, editor, listenerState] = await Promise.all([
+  const [creator, writer, editor, artist, listenerState] = await Promise.all([
     spotlightForRole('creator', date),
     spotlightForRole('writer', date),
     spotlightForRole('editor', date),
+    spotlightForRole('artist', date),
     listenerSpotlightForToday(date),
   ]);
-  const spotlights = [creator, writer, editor, listenerState.listener].filter(Boolean);
+  const spotlights = [creator, writer, editor, artist, listenerState.listener].filter(Boolean);
   await Promise.all(spotlights.map((item) => materializeSpotlightNotification(item, date)));
 
   return {
@@ -2242,6 +2572,8 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       userId: doc.id,
       email: account.email ?? null,
       role: account.role ?? null,
+      roles: professionalRolesForAccount(account),
+      pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles),
       status: account.status ?? 'active',
       name: profileData.displayName ?? account.email?.split('@')?.[0] ?? 'Nightjar account',
       handle: profileData.handle ?? null,
@@ -2252,10 +2584,11 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
   }));
 
   const counts = {
-    listener: accounts.filter((account) => account.role === 'listener').length,
-    creator: accounts.filter((account) => account.role === 'creator').length,
-    writer: accounts.filter((account) => account.role === 'writer').length,
-    editor: accounts.filter((account) => account.role === 'editor').length,
+    listener: accounts.filter((account) => account.role !== 'admin').length,
+    creator: accounts.filter((account) => account.roles?.includes('creator')).length,
+    writer: accounts.filter((account) => account.roles?.includes('writer')).length,
+    editor: accounts.filter((account) => account.roles?.includes('editor')).length,
+    artist: accounts.filter((account) => account.roles?.includes('artist')).length,
     admin: ADMIN_EMAILS.size,
   };
 
@@ -2305,7 +2638,7 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   const role = cleanText(input.role, 30) as AccountRole;
   const status = cleanText(input.status, 30);
 
-  if (!userId || !['listener', 'creator', 'writer', 'editor'].includes(role)) {
+  if (!userId || !['listener', 'creator', 'writer', 'editor', 'artist'].includes(role)) {
     throw new HttpsError('invalid-argument', 'Choose a valid Nightjar account role.');
   }
   if (!['active', 'pending_review', 'suspended'].includes(status)) {
@@ -2315,9 +2648,14 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   const ref = accountRef(userId);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
-  const email = cleanEmail(snapshot.data()?.email);
+  const accountData = snapshot.data() ?? {};
+  const email = cleanEmail(accountData.email);
   if (ADMIN_EMAILS.has(email)) {
     throw new HttpsError('failed-precondition', 'Owner administrator accounts cannot be reassigned here.');
+  }
+  const approvedProfessionalRoles = professionalRolesForAccount(accountData);
+  if (role !== 'listener' && !approvedProfessionalRoles.includes(role)) {
+    throw new HttpsError('failed-precondition', 'Approve this professional role through the controlled application bank before making it the active workspace.');
   }
 
   await ref.set({
@@ -2330,62 +2668,6 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
 
   await syncCreatorCustomTagUsage(userId);
   return { userId, role, status };
-});
-
-export const listCreatorApplications = onCall({ region: REGION }, async (request) => {
-  requireAdminIdentity(request);
-  const snapshot = await db.collection('creatorApplications').limit(500).get();
-  const applications = await Promise.all(snapshot.docs.map(async (doc) => {
-    const data = doc.data();
-    const profile = await profileRef(String(data.userId ?? doc.id)).get();
-    return {
-      id: doc.id,
-      userId: data.userId ?? doc.id,
-      email: data.email ?? null,
-      creatorName: profile.data()?.displayName ?? null,
-      displayName: profile.data()?.displayName ?? null,
-      role: data.role ?? 'creator',
-      status: data.status ?? 'pending',
-    };
-  }));
-  applications.sort((a, b) => String(a.status).localeCompare(String(b.status)));
-  return { applications };
-});
-
-export const decideCreatorApplication = onCall({ region: REGION }, async (request) => {
-  const admin = requireAdminIdentity(request);
-  const input = (request.data ?? {}) as Record<string, unknown>;
-  const applicationId = cleanText(input.applicationId, 160);
-  const decision = cleanText(input.decision, 30);
-  if (!applicationId || !['approved', 'waitlist', 'rejected'].includes(decision)) {
-    throw new HttpsError('invalid-argument', 'Choose a valid professional account decision.');
-  }
-
-  const applicationRef = db.collection('creatorApplications').doc(applicationId);
-  const application = await applicationRef.get();
-  if (!application.exists) throw new HttpsError('not-found', 'Creator application not found.');
-
-  const userId = String(application.data()?.userId ?? applicationId);
-  const account = await accountRef(userId).get();
-  const professionalRole = String(account.data()?.role ?? '');
-  if (!account.exists || !['creator','editor'].includes(professionalRole)) {
-    throw new HttpsError('failed-precondition', 'Professional account is no longer eligible for this application.');
-  }
-
-  await applicationRef.set({
-    status: decision,
-    decidedBy: admin.uid,
-    decidedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  await accountRef(userId).set({
-    status: decision === 'approved' ? 'active' : 'pending_review',
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  await syncCreatorCustomTagUsage(userId);
-  return { applicationId, userId, decision, accountStatus: decision === 'approved' ? 'active' : 'pending_review' };
 });
 
 export const listBillingSubscriptions = onCall({ region: REGION }, async (request) => {
@@ -2467,6 +2749,17 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   };
 });
 
+const professionalRolesForAccount = (data: Record<string, any>) => {
+  const approved = Array.isArray(data.approvedProfessionalRoles)
+    ? data.approvedProfessionalRoles.map((value: unknown) => cleanText(value, 30))
+    : [];
+  const legacyRole = cleanText(data.role, 30);
+  if (['creator','writer','editor','artist'].includes(legacyRole) && String(data.status ?? 'active') === 'active') {
+    approved.push(legacyRole);
+  }
+  return Array.from(new Set(approved.filter((role) => ['creator','writer','editor','artist'].includes(role)))) as AccountRole[];
+};
+
 const requireAccountRole = async (
   request: { auth?: { uid: string; token: Record<string, unknown> } | null },
   roles: AccountRole[],
@@ -2475,11 +2768,17 @@ const requireAccountRole = async (
   if (identity.admin && roles.includes('admin')) return { ...identity, role: 'admin' as AccountRole, status: 'active' };
   const snapshot = await accountRef(identity.uid).get();
   const data = snapshot.data() ?? {};
-  const role = data.role as AccountRole | null;
+  const activeRole = cleanText(data.role, 30) as AccountRole | '';
+  const approvedProfessionalRoles = professionalRolesForAccount(data);
   const status = String(data.status ?? 'active');
-  if (!role || !roles.includes(role)) throw new HttpsError('permission-denied', 'This Nightjar role does not have access.');
-  if (status !== 'active') throw new HttpsError('failed-precondition', 'This Nightjar account is not active.');
-  return { ...identity, role, status };
+  const allowedRole = roles.find((role) =>
+    role === 'listener'
+      ? true
+      : role === activeRole || approvedProfessionalRoles.includes(role),
+  ) ?? null;
+  if (!allowedRole) throw new HttpsError('permission-denied', 'This Nightjar role does not have access.');
+  if (status === 'suspended') throw new HttpsError('failed-precondition', 'This Nightjar account is suspended.');
+  return { ...identity, role: allowedRole as AccountRole, activeRole: activeRole || 'listener', approvedProfessionalRoles, status };
 };
 
 const releasePayload = (data: Record<string, unknown>, id: string) => ({
@@ -2781,15 +3080,14 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
-  if (TESTING_AGE_ASSURANCE_BYPASS) {
-    return { allowed: true, reason: 'testing-stage-global-bypass' };
+  if (!TESTING_AGE_ASSURANCE_BYPASS || AGE_ASSURANCE_CONFIGURED) {
+    return { allowed: false, reason: null as string | null };
   }
-  if (AGE_ASSURANCE_CONFIGURED) return { allowed: false, reason: null as string | null };
   const snapshot = await accountRef(uid).get();
   const data = snapshot.data() ?? {};
   const email = cleanEmail(data.email);
   if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' };
-  if (data.testAccess === true) return { allowed: true, reason: 'tester' };
+  if (data.testAccess === true) return { allowed: true, reason: 'approved-tester' };
   return { allowed: false, reason: null as string | null };
 };
 
@@ -3174,21 +3472,6 @@ export const markNotificationRead = onCall({ region: REGION }, async (request) =
 
 export const ageStatus = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  if (TESTING_AGE_ASSURANCE_BYPASS) {
-    return {
-      verified: true,
-      status: 'COMPLETE',
-      ageThreshold: 18,
-      configured: false,
-      provider: 'testing-stage-bypass',
-      environment: 'development',
-      verifiedAt: null,
-      reverifyRequired: false,
-      testAvailable: identity.admin,
-      temporaryBypass: true,
-      temporaryBypassReason: 'testing-stage-global-bypass',
-    };
-  }
   const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
   const data = snapshot.data() ?? {};
   const bypass = data.verified === true ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
@@ -3210,17 +3493,6 @@ export const ageStatus = onCall({ region: REGION }, async (request) => {
 
 export const startAgeAssurance = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  if (TESTING_AGE_ASSURANCE_BYPASS) {
-    return {
-      verified: true,
-      status: 'COMPLETE',
-      configured: false,
-      provider: 'testing-stage-bypass',
-      environment: 'development',
-      temporaryBypass: true,
-      temporaryBypassReason: 'testing-stage-global-bypass',
-    };
-  }
   const bypass = await temporaryAgeBypassFor(identity.uid);
   if (bypass.allowed) {
     return {
@@ -4316,16 +4588,19 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
     if (writerUserId) publishedScriptsByWriter.set(writerUserId, (publishedScriptsByWriter.get(writerUserId) ?? 0) + 1);
   }
 
-  const allowedRoles = new Set(['creator','writer','editor']);
+  const allowedRoles = new Set(['creator','writer','editor','artist']);
   const people = (await Promise.all(snapshot.docs
-    .filter((doc) => doc.id !== identity.uid && doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
+    .filter((doc) => doc.id !== identity.uid && doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).some((role) => allowedRoles.has(role)))
     .map(async (doc) => {
       const profile = await profileRef(doc.id).get();
       const data = profile.data();
       if (!data || data.publicProfile === false) return null;
+      const roles = professionalRolesForAccount(doc.data() ?? {});
+      const role = roles[0] ?? null;
       return {
         userId: doc.id,
-        role: doc.data().role,
+        role,
+        roles,
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
         headline: data.headline ?? null,
@@ -4337,7 +4612,7 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
         roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
         roleAvailability: data.roleAvailability ?? null,
         completedCollaborations: completedByUser.get(doc.id) ?? 0,
-        activityBadges: publicActivityBadges(String(doc.data().role ?? ''), {
+        activityBadges: publicActivityBadges(String(role ?? ''), {
           releases: releaseCountByCreator.get(doc.id) ?? 0,
           publishedScripts: publishedScriptsByWriter.get(doc.id) ?? 0,
           creditedReleases: creditedReleaseCountByUser.get(doc.id) ?? 0,
@@ -4789,12 +5064,14 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
     readCommercialSettings(),
     db.collection('accounts').limit(2000).get(),
   ]);
-  const counts = { creators: 0, writers: 0, editors: 0 };
+  const counts = { creators: 0, writers: 0, editors: 0, artists: 0 };
   for (const doc of accounts.docs) {
     if (doc.data().status !== 'active') continue;
-    if (doc.data().role === 'creator') counts.creators += 1;
-    if (doc.data().role === 'writer') counts.writers += 1;
-    if (doc.data().role === 'editor') counts.editors += 1;
+    const roles = professionalRolesForAccount(doc.data() ?? {});
+    if (roles.includes('creator')) counts.creators += 1;
+    if (roles.includes('writer')) counts.writers += 1;
+    if (roles.includes('editor')) counts.editors += 1;
+    if (roles.includes('artist')) counts.artists += 1;
   }
   return {
     planningMonthlyPricePence: settings.planningMonthlyPricePence,
@@ -4816,7 +5093,7 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
 
 
 
-const CREATIVE_MESSAGE_ROLES = new Set(['creator','writer','editor']);
+const CREATIVE_MESSAGE_ROLES = new Set(['creator','writer','editor','artist']);
 const directConversationId = (a: string, b: string) => createHash('sha256').update([a,b].sort().join('\u0000')).digest('hex');
 
 const directMessagingBlockState = async (a: string, b: string) => {
@@ -5109,7 +5386,7 @@ export const postReleaseComment = onCall({ region: REGION }, async (request) => 
 });
 
 export const replyToReleaseComment = onCall({ region: REGION }, async (request) => {
-  const identity = await requireAccountRole(request, ['creator','writer','editor']);
+  const identity = await requireAccountRole(request, ['creator','writer','editor','artist']);
   await requireAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const parentCommentId = cleanText(input.parentCommentId, 160);
@@ -5235,7 +5512,7 @@ export const reportReleaseComment = onCall({ region: REGION }, async (request) =
 const requireCreativeMessagingIdentity = async (
   request: { auth?: { uid: string; token: Record<string, unknown> } | null },
 ) => {
-  const identity = await requireAccountRole(request, ['creator','writer','editor']);
+  const identity = await requireAccountRole(request, ['creator','writer','editor','artist']);
   await requireAgeVerified(identity.uid);
   return identity;
 };
@@ -5334,7 +5611,8 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
   if (!targetUserId || targetUserId === identity.uid) throw new HttpsError('invalid-argument', 'Choose another creative account.');
 
   const target = await accountRef(targetUserId).get();
-  if (!target.exists || target.data()?.status !== 'active' || !CREATIVE_MESSAGE_ROLES.has(String(target.data()?.role ?? ''))) {
+  const targetRoles = target.exists ? professionalRolesForAccount(target.data() ?? {}) : [];
+  if (!target.exists || target.data()?.status !== 'active' || !targetRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role))) {
     throw new HttpsError('not-found', 'Eligible creative account not found.');
   }
   if (await directMessagingBlockedBetween(identity.uid, targetUserId)) {
@@ -5349,7 +5627,7 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
   if (!existing.exists) {
     await ref.set({
       participantUserIds:[identity.uid,targetUserId].sort(),
-      participantRoles:{ [identity.uid]:identity.role, [targetUserId]:target.data()?.role ?? null },
+      participantRoles:{ [identity.uid]:identity.role, [targetUserId]:targetRoles[0] ?? target.data()?.role ?? null },
       collaborationId:collaborationContext?.id ?? null,
       collaborationIds:collaborationContext ? [collaborationContext.id] : [],
       unreadCounts:{ [identity.uid]:0, [targetUserId]:0 },
@@ -5448,7 +5726,8 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
   }
   const recipientUserId = data.participantUserIds.find((id: string) => id !== identity.uid);
   const recipient = recipientUserId ? await accountRef(recipientUserId).get() : null;
-  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !CREATIVE_MESSAGE_ROLES.has(String(recipient.data()?.role ?? ''))) {
+  const recipientRoles = recipient?.exists ? professionalRolesForAccount(recipient.data() ?? {}) : [];
+  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !recipientRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role))) {
     throw new HttpsError('failed-precondition', 'The recipient account is no longer available for creative messaging.');
   }
   if (await directMessagingBlockedBetween(identity.uid, recipientUserId)) {
@@ -5609,7 +5888,7 @@ export const setDirectMessageBlock = onCall({ region: REGION }, async (request) 
   const blocked = input.blocked === true;
   if (!targetUserId || targetUserId === identity.uid) throw new HttpsError('invalid-argument', 'Choose another creative account.');
   const target = await accountRef(targetUserId).get();
-  if (!target.exists || !CREATIVE_MESSAGE_ROLES.has(String(target.data()?.role ?? ''))) throw new HttpsError('not-found', 'Creative account not found.');
+  if (!target.exists || !professionalRolesForAccount(target.data() ?? {}).some((role) => CREATIVE_MESSAGE_ROLES.has(role))) throw new HttpsError('not-found', 'Creative account not found.');
   const ref = accountRef(identity.uid).collection('messageBlocks').doc(targetUserId);
   if (blocked) await ref.set({ targetUserId, createdAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp() }, { merge:true });
   else await ref.delete().catch(()=>undefined);
@@ -5850,4 +6129,300 @@ export const adminModerateReview = onCall({ region: REGION }, async (request) =>
   }, { merge: true });
   const saved = await ref.get();
   return { review: reviewPayload(saved.data() ?? {}, reviewId) };
+});
+
+
+export { nightjarGiftConfig, myNightjarWallet, sendNightjars, myNightjarEarnings, myNightjarGiftHistory, clearMatureNightjarGifts, adminNightjarPayoutOverview, adminGrantNightjars } from './nightjars.js';
+
+
+// ---- Multi-role professional application bank --------------------------------
+const PROFESSIONAL_ROLE_KEYS = ['creator','writer','editor','artist'] as const;
+type ProfessionalRole = typeof PROFESSIONAL_ROLE_KEYS[number];
+const professionalApplicationRef = (uid: string) => db.collection('professionalApplications').doc(uid);
+const cleanProfessionalRoles = (value: unknown): ProfessionalRole[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(
+    value
+      .map((item) => cleanText(item, 30))
+      .filter((item): item is ProfessionalRole => PROFESSIONAL_ROLE_KEYS.includes(item as ProfessionalRole)),
+  ));
+};
+
+export const myProfessionalRoles = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) {
+    return {
+      listener: true,
+      approvedProfessionalRoles: [] as ProfessionalRole[],
+      pendingProfessionalRoles: [] as ProfessionalRole[],
+      activeRole: 'admin',
+      applicationStatus: null,
+    };
+  }
+  const [accountSnapshot, applicationSnapshot] = await Promise.all([
+    accountRef(identity.uid).get(),
+    professionalApplicationRef(identity.uid).get(),
+  ]);
+  const account = accountSnapshot.data() ?? {};
+  const application = applicationSnapshot.data() ?? {};
+  const approvedProfessionalRoles = professionalRolesForAccount(account).filter((role): role is ProfessionalRole => PROFESSIONAL_ROLE_KEYS.includes(role as ProfessionalRole));
+  const applicationStatus = applicationSnapshot.exists ? cleanText(application.status, 30) || 'banked' : null;
+  const pendingProfessionalRoles = ['banked','waitlist'].includes(String(applicationStatus))
+    ? cleanProfessionalRoles(application.requestedRoles).filter((role) => !approvedProfessionalRoles.includes(role))
+    : [];
+  return {
+    listener: true,
+    approvedProfessionalRoles,
+    pendingProfessionalRoles,
+    activeRole: cleanText(account.role, 30) || 'listener',
+    applicationStatus,
+    wave: cleanText(application.wave, 80) || null,
+  };
+});
+
+export const submitProfessionalApplication = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) throw new HttpsError('failed-precondition', 'Administrator accounts do not use professional applications.');
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const requestedRoles = cleanProfessionalRoles(input.roles);
+  if (!requestedRoles.length) throw new HttpsError('invalid-argument', 'Choose at least one professional role.');
+
+  const [accountSnapshot, currentApplication] = await Promise.all([
+    accountRef(identity.uid).get(),
+    professionalApplicationRef(identity.uid).get(),
+  ]);
+  const account = accountSnapshot.data() ?? {};
+  const approved = professionalRolesForAccount(account).filter((role): role is ProfessionalRole => PROFESSIONAL_ROLE_KEYS.includes(role as ProfessionalRole));
+  const currentApplicationStatus = cleanText(currentApplication.data()?.status, 30);
+  const carriedRequestedRoles = ['banked','waitlist'].includes(currentApplicationStatus)
+    ? cleanProfessionalRoles(currentApplication.data()?.requestedRoles)
+    : [];
+  const requested = Array.from(new Set([...carriedRequestedRoles, ...requestedRoles]))
+    .filter((role) => !approved.includes(role));
+
+  await accountRef(identity.uid).set({
+    status: String(account.status ?? 'active') === 'suspended' ? 'suspended' : 'active',
+    role: cleanText(account.role, 30) || 'listener',
+    approvedProfessionalRoles: approved,
+    pendingProfessionalRoles: requested,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(accountSnapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge:true });
+
+  await professionalApplicationRef(identity.uid).set({
+    userId: identity.uid,
+    email: identity.email,
+    requestedRoles: requested,
+    approvedRoles: approved,
+    status: 'banked',
+    statement: cleanText(input.statement, 2400) || null,
+    experience: cleanText(input.experience, 1600) || null,
+    portfolioUrl: validPublicUrl(input.portfolioUrl),
+    socialUrl: validPublicUrl(input.socialUrl),
+    note: cleanText(input.note, 1200) || null,
+    bankedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(currentApplication.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge:true });
+
+  return {
+    status: 'banked',
+    requestedRoles: requested,
+    approvedProfessionalRoles: approved,
+    message: 'Your professional application is stored in the Nightjar application bank for a future controlled intake wave.',
+  };
+});
+
+export const removeProfessionalRole = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) throw new HttpsError('failed-precondition', 'Administrator roles are managed separately.');
+  const role = cleanText((request.data as Record<string, unknown> | undefined)?.role, 30) as ProfessionalRole;
+  if (!PROFESSIONAL_ROLE_KEYS.includes(role)) throw new HttpsError('invalid-argument', 'Choose a valid professional role.');
+
+  const [accountSnapshot, applicationSnapshot] = await Promise.all([
+    accountRef(identity.uid).get(),
+    professionalApplicationRef(identity.uid).get(),
+  ]);
+  const account = accountSnapshot.data() ?? {};
+  const approved = professionalRolesForAccount(account).filter((value) => value !== role) as ProfessionalRole[];
+  const applicationStatus = cleanText(applicationSnapshot.data()?.status, 30);
+  const requested = (['banked','waitlist'].includes(applicationStatus)
+    ? cleanProfessionalRoles(applicationSnapshot.data()?.requestedRoles)
+    : []
+  ).filter((value) => value !== role);
+  const activeRole = cleanText(account.role, 30);
+  const nextActiveRole = activeRole === role ? (approved[0] ?? 'listener') : (activeRole || 'listener');
+
+  await accountRef(identity.uid).set({
+    approvedProfessionalRoles: approved,
+    pendingProfessionalRoles: requested,
+    role: nextActiveRole,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  if (applicationSnapshot.exists) {
+    await applicationSnapshot.ref.set({
+      requestedRoles: requested,
+      approvedRoles: approved,
+      status: requested.length ? 'banked' : approved.length ? 'approved' : 'withdrawn',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge:true });
+  }
+  await syncCreatorCustomTagUsage(identity.uid);
+  return { removedRole: role, approvedProfessionalRoles: approved, pendingProfessionalRoles: requested, activeRole: nextActiveRole };
+});
+
+export const setActiveNightjarRole = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) return { activeRole:'admin' };
+  const role = cleanText((request.data as Record<string, unknown> | undefined)?.role, 30);
+  const accountSnapshot = await accountRef(identity.uid).get();
+  const account = accountSnapshot.data() ?? {};
+  const approved = professionalRolesForAccount(account);
+  if (role !== 'listener' && !approved.includes(role as AccountRole)) {
+    throw new HttpsError('permission-denied', 'That professional role has not been approved for this account.');
+  }
+  await accountRef(identity.uid).set({
+    role,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { activeRole: role, approvedProfessionalRoles: approved };
+});
+
+export const listProfessionalApplicationBank = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('professionalApplications').limit(1000).get();
+  const applications = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data() ?? {};
+    const [profile, account, ageAssurance] = await Promise.all([
+      profileRef(doc.id).get(),
+      accountRef(doc.id).get(),
+      db.collection('ageAssurance').doc(doc.id).get(),
+    ]);
+    const accountData = account.data() ?? {};
+    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && accountData.testAccess === true;
+    return {
+      id: doc.id,
+      userId: doc.id,
+      email: data.email ?? accountData.email ?? null,
+      ageVerified: ageAssurance.data()?.verified === true,
+      temporaryTestAccess,
+      displayName: profile.data()?.displayName ?? null,
+      requestedRoles: cleanProfessionalRoles(data.requestedRoles),
+      approvedRoles: cleanProfessionalRoles(data.approvedRoles),
+      status: cleanText(data.status, 30) || 'banked',
+      wave: cleanText(data.wave, 80) || null,
+      statement: cleanText(data.statement, 2400) || null,
+      experience: cleanText(data.experience, 1600) || null,
+      portfolioUrl: validPublicUrl(data.portfolioUrl),
+      socialUrl: validPublicUrl(data.socialUrl),
+      note: cleanText(data.note, 1200) || null,
+      createdAt: toIso(data.createdAt),
+      bankedAt: toIso(data.bankedAt),
+      updatedAt: toIso(data.updatedAt),
+    };
+  }));
+  const statusOrder: Record<string, number> = { banked:0, waitlist:1, approved:2, rejected:3, withdrawn:4 };
+  applications.sort((a,b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9) || String(a.bankedAt ?? '').localeCompare(String(b.bankedAt ?? '')));
+  const buckets = Object.fromEntries(PROFESSIONAL_ROLE_KEYS.map((role) => [
+    role,
+    applications.filter((item) => item.requestedRoles.includes(role) && !item.approvedRoles.includes(role)).length,
+  ]));
+  return { applications, buckets, total: applications.length };
+});
+
+export const reviewProfessionalApplication = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const decision = cleanText(input.decision, 30);
+  const selectedRoles = cleanProfessionalRoles(input.roles);
+  const wave = cleanText(input.wave, 80);
+  if (!userId || !['banked','approved','rejected','waitlist'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid application decision.');
+  }
+
+  const [applicationSnapshot, accountSnapshot, ageAssuranceSnapshot] = await Promise.all([
+    professionalApplicationRef(userId).get(),
+    accountRef(userId).get(),
+    db.collection('ageAssurance').doc(userId).get(),
+  ]);
+  if (!applicationSnapshot.exists || !accountSnapshot.exists) throw new HttpsError('not-found', 'Professional application not found.');
+
+  const applicantAccount = accountSnapshot.data() ?? {};
+  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && applicantAccount.testAccess === true;
+  if (decision === 'approved' && ageAssuranceSnapshot.data()?.verified !== true && !temporaryTestAccess) {
+    throw new HttpsError('failed-precondition', 'This professional applicant must complete age assurance or be explicitly enabled as a controlled tester before approval.');
+  }
+
+  const application = applicationSnapshot.data() ?? {};
+  const requested = cleanProfessionalRoles(application.requestedRoles);
+  const rolesReviewed = (selectedRoles.length ? selectedRoles : requested).filter((role) => requested.includes(role));
+  const rolesToApprove = decision === 'approved' ? rolesReviewed : [];
+  if (decision === 'approved' && !rolesToApprove.length) {
+    throw new HttpsError('failed-precondition', 'There are no pending professional roles selected for approval.');
+  }
+  const currentApproved = professionalRolesForAccount(accountSnapshot.data() ?? {}) as ProfessionalRole[];
+  const nextApproved = decision === 'approved'
+    ? Array.from(new Set([...currentApproved, ...rolesToApprove]))
+    : currentApproved;
+  const remainingRequested = decision === 'approved'
+    ? requested.filter((role) => !rolesToApprove.includes(role))
+    : decision === 'rejected'
+      ? []
+      : requested;
+  const accountPendingRoles = remainingRequested;
+  const nextStatus = decision === 'approved'
+    ? (remainingRequested.length ? 'banked' : 'approved')
+    : decision;
+
+  await professionalApplicationRef(userId).set({
+    requestedRoles: remainingRequested,
+    approvedRoles: nextApproved,
+    status: nextStatus,
+    wave: wave || application.wave || null,
+    reviewedBy: admin.uid,
+    reviewedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  const currentRole = cleanText(accountSnapshot.data()?.role, 30);
+  const activeRole = currentRole === 'listener'
+    ? 'listener'
+    : currentRole && nextApproved.includes(currentRole as ProfessionalRole)
+      ? currentRole
+      : (nextApproved[0] ?? 'listener');
+  await accountRef(userId).set({
+    approvedProfessionalRoles: nextApproved,
+    pendingProfessionalRoles: accountPendingRoles,
+    role: activeRole,
+    status: 'active',
+    professionalAccessUpdatedBy: admin.uid,
+    professionalAccessUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  await professionalApplicationRef(userId).collection('events').doc().set({
+    userId,
+    decision,
+    roles: rolesReviewed,
+    wave: wave || null,
+    previousStatus: cleanText(application.status, 30) || 'banked',
+    resultingStatus: nextStatus,
+    approvedRolesAfter: nextApproved,
+    pendingRolesAfter: accountPendingRoles,
+    reviewedBy: admin.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  await syncCreatorCustomTagUsage(userId);
+  return {
+    userId,
+    decision,
+    approvedProfessionalRoles: nextApproved,
+    pendingProfessionalRoles: accountPendingRoles,
+    activeRole,
+    applicationStatus: nextStatus,
+    wave: wave || application.wave || null,
+  };
 });

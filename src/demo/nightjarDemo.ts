@@ -68,6 +68,7 @@ export const demoSpotlights = {
   creators: [{ kind:'creator', name:'Aria Vale', handle:'ariavale', title:'Creator Spotlight', edition:'Today', detail:'Cinematic storytelling and collaborative productions.', initials:'AV', targetId:'demo-creator-aria', publicProfile:true, imageUrl:null }],
   writers: [{ kind:'writer', name:'Mara Bell', handle:'marabell', title:'Writer Spotlight', edition:'Today', detail:'Character-led scripts with clear licensing controls.', initials:'MB', targetId:'demo-writer-mara', publicProfile:true, imageUrl:null }],
   editors: [{ kind:'editor', name:'Sam Reed', handle:'samreed', title:'Audio Editor Spotlight', edition:'Today', detail:'Dialogue editing, mixing and production polish.', initials:'SR', targetId:'demo-editor-sam', publicProfile:true, imageUrl:null }],
+  artists: [{ kind:'artist', name:'Elara Finch', handle:'elarafinch', title:'Artist Spotlight', edition:'Today', detail:'Human-created cover illustration, character art and atmospheric visual design.', initials:'EF', targetId:'demo-artist-elara', publicProfile:true, imageUrl:null }],
   listener: { kind:'listener', name:'Jamie', handle:'jamielistens', title:'Listener Spotlight', edition:'This week', detail:'A regular listener supporting independent work.', initials:'JL', targetId:'demo-listener-jamie', publicProfile:true, imageUrl:null, listenerRank:3, weeklyTrackedMinutes:286, weeklyTopSevenCount:2 },
 };
 
@@ -113,6 +114,7 @@ export const demoDirectory = [
   { userId:'demo-writer-ivy', name:'Ivy North', role:'writer' },
   { userId:'demo-editor-sam', name:'Sam Reed', role:'editor' },
   { userId:'demo-editor-rin', name:'Rin Cole', role:'editor' },
+  { userId:'demo-artist-elara', name:'Elara Finch', role:'artist' },
 ];
 
 export const demoCollaborations = [
