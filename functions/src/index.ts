@@ -848,7 +848,14 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   }
 
   const saved = await targetProfileRef.get();
-  return { profile: saved.data() ?? null };
+  const savedData = saved.data() ?? {};
+  return {
+    profile: {
+      ...savedData,
+      ...roleProfileSlice(savedData, profileRole || 'listener'),
+      activeRole: profileRole || 'listener',
+    },
+  };
 });
 
 const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
