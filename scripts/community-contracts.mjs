@@ -132,7 +132,7 @@ requireText(accountAccess,"role:'creator'",'Creator role-first registration card
 requireText(accountAccess,"role:'writer'",'Writer role-first registration card is missing');
 requireText(accountAccess,"role:'editor'",'Audio Editor role-first registration card is missing');
 requireText(accountAccess,'nightjar.registrationRole','Chosen signup role is not persisted through verification');
-requireText(accountPortal,"nextAccount.role === 'editor'",'Dedicated Audio Editor account routing is missing');
+requireText(accountPortal,"role === 'editor'",'Dedicated Audio Editor account routing is missing');
 requireText(functions,"type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor'",'Server role selection is missing a Nightjar account type');
 requireText(functions,"requestedRole === 'creator' || requestedRole === 'editor'",'Professional approval gate is missing Creator/Audio Editor coverage');
 
