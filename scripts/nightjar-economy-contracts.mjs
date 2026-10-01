@@ -22,14 +22,14 @@ const checks = [
   ['gift clearing is delayed', gifts.includes('GIFT_CLEARANCE_DAYS') && gifts.includes('pending_clearance')],
   ['multi-role application bank exists', functions.includes("db.collection('professionalApplications')")],
   ['professional applications accept multiple roles', functions.includes('submitProfessionalApplication') && functions.includes('requestedRoles')],
-  ['controlled intake waves are recorded', functions.includes('approvedWave') && functions.includes('wave')],
+  ['controlled intake waves are recorded', functions.includes('reviewProfessionalApplication') && functions.includes('wave: wave || application.wave || null')],
   ['professional roles can be removed', functions.includes('removeProfessionalRole')],
   ['professional workspaces can be switched', functions.includes('setActiveNightjarRole')],
   ['artist is a professional role', functions.includes("['creator','writer','editor','artist']")],
   ['Artist portfolios require human-created work attestation', functions.includes('humanCreatedAttestation') && functions.includes('not AI-generated imagery')],
   ['signup supports multiple professional selections', accountUi.includes('registrationRoles') && accountUi.includes("['listener', ...registrationRoles]")],
   ['gift UI lets multi-role recipients choose target profession', giftUi.includes('eligibleRoles.length > 1') && giftUi.includes('targetRole')],
-  ['role manager can add multiple professions', rolesUi.includes('selectedRoles') && rolesUi.includes('applyForProfessionalRoles')],
+  ['role manager can add multiple professions', rolesUi.includes('setSelected((items)=>') && rolesUi.includes('applyForProfessionalRoles(selected')],
 ];
 
 const failed = checks.filter(([, pass]) => !pass);
