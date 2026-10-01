@@ -7,6 +7,7 @@ const listCall = httpsCallable<void, { conversations:any[]; unreadCount:number }
 const startCall = httpsCallable<{ targetUserId:string; collaborationId?:string|null }, { conversationId:string }>(functions, 'startDirectConversation');
 const openCall = httpsCallable<{ conversationId:string }, { messages:any[]; blocked:boolean; blockedByMe?:boolean; blockedByOther?:boolean }>(functions, 'listDirectMessages');
 const sendCall = httpsCallable<{ conversationId:string; body:string; collaborationId?:string|null }, { message:any }>(functions, 'sendDirectMessage');
+const reminderCall = httpsCallable<{ conversationId:string }, { conversationId:string; reminderSent:boolean; reminderForLastMessageAt:string|null }>(functions, 'sendDirectMessageReminder');
 const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
 const reportCall = httpsCallable<{ conversationId:string; messageId:string; reason?:string }, { reported:boolean; reportId?:string }>(functions, 'reportDirectMessage');
 const adminReportsCall = httpsCallable<void, { reports:any[] }>(functions, 'adminListCommunityReports');
@@ -51,6 +52,10 @@ export const nightjarMessaging = {
 
   async send(conversationId:string, body:string, collaborationId?:string|null) {
     return (await sendCall({ conversationId, body, ...(collaborationId ? { collaborationId } : {}) })).data;
+  },
+
+  async remind(conversationId:string) {
+    return (await reminderCall({ conversationId })).data;
   },
 
   async setBlocked(targetUserId:string, blocked:boolean) {
