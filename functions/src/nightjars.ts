@@ -51,6 +51,7 @@ const giftLedger = () => db().collection('nightjarGiftLedger');
 
 export const nightjarGiftConfig = onCall({ region: REGION }, async () => ({
   unitCreatorValuePence: NIGHTJAR_VALUE_PENCE,
+  checkoutConfigured: false,
   packs: NIGHTJAR_PACKS.map((pack) => ({ ...pack })),
   eligibleRecipientRoles: [...ELIGIBLE_RECIPIENT_ROLES],
   rules: {
