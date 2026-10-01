@@ -61,6 +61,8 @@ export type AdminNightjarPayoutOverview = {
     clearedPence: number;
     lifetimeNightjars: number;
     lifetimePence: number;
+    outstandingWalletNightjars: number;
+    outstandingWalletLiabilityPence: number;
   };
 };
 
