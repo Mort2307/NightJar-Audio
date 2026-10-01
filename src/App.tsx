@@ -657,25 +657,27 @@ function App() {
   useEffect(() => {
     if (!user || !ageVerified || (role === 'admin' && !testingSessionHydrated)) return;
     void loadLiveProductData();
-    if (role === 'creator' || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
+    if ((role === 'creator' && accountStatus === 'active') || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
     if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
-    if (role === 'editor' || (canAdmin && previewRole === 'editor')) void loadEditorQueue();
+    if ((role === 'editor' && accountStatus === 'active') || (canAdmin && previewRole === 'editor')) void loadEditorQueue();
     if (canAdmin) {
       void loadAdminOverview();
       void loadSecurityAlerts();
       void loadAdminApplications();
+      void loadAdminCreatorSuggestions();
       void loadAdminReports();
       void loadAdminReviews();
       void loadAdminEditorial();
       void loadPendingImages();
       void loadCommercialControls();
     }
-  }, [user, ageVerified, role, currentIntent, previewRole, demoMode, testingSessionHydrated]);
+  }, [user, ageVerified, role, accountStatus, currentIntent, previewRole, demoMode, testingSessionHydrated]);
 
   useEffect(() => {
     const messageRole = role === 'admin' ? previewRole : role;
     const professional = ['creator','writer','editor'].includes(String(messageRole));
-    if (!user || !ageVerified || !professional) {
+    const professionalActive = role === 'admin' || accountStatus === 'active' || demoMode;
+    if (!user || !ageVerified || !professional || !professionalActive) {
       setMessageUnreadCount(0);
       setMessageNeedsReplyCount(0);
       setMessageAwaitingReplyCount(0);
@@ -715,7 +717,7 @@ function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [user?.userId, ageVerified, role, previewRole, demoMode]);
+  }, [user?.userId, ageVerified, role, accountStatus, previewRole, demoMode]);
 
 
   const clearToastTimer = () => {
@@ -2961,7 +2963,7 @@ function App() {
           {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); }}>Editorial</button>}
-          {['creator','writer','editor'].includes(String(effectiveRole)) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
+          {['creator','writer','editor'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
@@ -3222,7 +3224,7 @@ function App() {
           </section>
         )}
 
-        {view === 'messages' && ['creator','writer','editor'].includes(String(effectiveRole)) && (
+        {view === 'messages' && ['creator','writer','editor'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && (
           <section className="page-wrap messages-page">
             <div className="page-heading"><div><p className="eyebrow"><MessageCircle size={14}/> PRIVATE MESSAGING</p><h1>Keep creative conversations moving.</h1><p>Creators, Writers and Audio Editors can communicate directly inside Nightjar without changing manuscript rights or access permissions.</p></div></div>
             <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading private messages" />}><MessagingHub role={effectiveRole as 'creator'|'writer'|'editor'} currentUserId={user?.userId} initialRecipientUserId={messageRecipientUserId} initialConversationId={messageConversationId} initialCollaborationId={messageCollaborationId} onRecipientHandled={()=>{setMessageRecipientUserId(null);setMessageConversationId(null);setMessageCollaborationId(null);}} onUnreadChange={setMessageUnreadCount} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
@@ -3262,9 +3264,9 @@ function App() {
             <div id="creator-pipeline">
               {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
             </div>
-            {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator compensation" />}><CreatorCompensationCard key={'creator-pay-' + demoSessionKey} notify={notify} demoMode={demoMode} /></Suspense>}
+            {creatorOnly && accountStatus !== 'pending_review' && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator compensation" />}><CreatorCompensationCard key={'creator-pay-' + demoSessionKey} notify={notify} demoMode={demoMode} /></Suspense>}
             {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading script marketplace" />}><ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={openPublicProfile} demoMode={demoMode} simulationMode={simulationMode} /></Suspense>}
-            {creatorOnly && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>}
+            {creatorOnly && accountStatus !== 'pending_review' && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>}}
             <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Verified listening remains available as analytics and discovery data. It does not make one Creator’s standard base rate larger than another’s.</p></article>
           </section>
         )}
@@ -3443,6 +3445,7 @@ function App() {
             <div className="page-heading">
               <div><p className="eyebrow"><FileCheck2 size={14} /> EDITORIAL QUEUE</p><h1>Review work professionally.</h1><p>Only manuscripts assigned to your editor account appear here.</p></div>
             </div>
+            {accountStatus === 'pending_review' && <div className="admin-note"><Sparkles size={17}/><div><strong>AUDIO EDITOR ACCOUNT / PENDING REVIEW</strong><span>Your dedicated profile is active for setup, but editorial assignments, private professional messaging and collaboration tools unlock after Administrator approval.</span></div></div>}
             <RoleDashboard
               eyebrow="EDITOR COMMAND CENTRE"
               title="Production work at a glance."
@@ -3477,14 +3480,14 @@ function App() {
                 </div>
               </article>
             )}
-            <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Audio Editor collaborations" />}><CollaborationHub key={'editor-collab-' + demoSessionKey} role="editor" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>
+            {accountStatus !== 'pending_review' && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Audio Editor collaborations" />}><CollaborationHub key={'editor-collab-' + demoSessionKey} role="editor" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>
             <div className="protection-banner"><FileCheck2 size={19} /><div><strong>EDITOR BOUNDARY</strong><span>Editorial decisions are recorded against the assigned manuscript. Administrator authority remains separate.</span></div></div>
           </section>
         )}
 
         {view === 'admin' && canAdmin && !simulationMode && (
           <section className="page-wrap admin-page">
-            <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, Creator, Writer and Audio Editor accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAdminApplications(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
+            <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, Creator, Writer and Audio Editor accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
             <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
               title="Exceptions first."
@@ -3492,7 +3495,7 @@ function App() {
               metrics={[
                 {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts'},
                 {label:'Images',value:imageModeration.length,detail:'Awaiting moderation'},
-                {label:'Applications',value:adminApplications.length,detail:'Creator decisions'},
+                {label:'Applications',value:adminApplications.length,detail:'Professional decisions'},
                 {label:'Past due',value:commercialOverview?.subscriptions.pastDue ?? 0,detail:'Billing attention'},
               ]}
               actions={adminActions}
