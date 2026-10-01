@@ -2582,7 +2582,8 @@ const createNotification = async (userId: string, payload: Record<string, unknow
   const ref = dedupeKey
     ? accountRef(userId).collection('notifications').doc(createHash('sha256').update(dedupeKey).digest('hex').slice(0, 40))
     : accountRef(userId).collection('notifications').doc();
-  const { dedupeKey: _dedupeKey, ...persistedPayload } = safePayload as Record<string, unknown>;
+  const persistedPayload = { ...safePayload } as Record<string, unknown>;
+  delete persistedPayload.dedupeKey;
   await ref.set({
     ...persistedPayload,
     read: false,
