@@ -4316,3 +4316,6 @@ select:disabled {
 .nightjar-history-list em{display:flex;align-items:center;gap:.25rem;font-size:.72rem;opacity:.72}
 @media(max-width:900px){.nightjar-pack-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.nightjar-wallet-metrics,.nightjar-role-earnings>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.nightjar-pack-grid{grid-template-columns:1fr 1fr}.nightjar-wallet-metrics,.nightjar-role-earnings>div{grid-template-columns:1fr}}
+
+.nightjar-token-inline{width:18px;height:18px;object-fit:contain;display:inline-block;flex:0 0 auto}
+.nightjar-pack-birds .nightjar-token-inline,.nightjar-wallet-metrics .nightjar-token-inline{width:20px;height:20px}
