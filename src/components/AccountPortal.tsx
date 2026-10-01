@@ -29,6 +29,7 @@ export default function AccountPortal() {
     setLoadingAccount(true);
     setMessage('');
     try {
+      await nightjarAuth.idToken(true);
       let nextAccount = await nightjarAccount.identity();
       const pendingRole = sessionStorage.getItem('nightjar.registrationRole') as 'listener' | 'creator' | 'writer' | 'editor' | null;
       const referralCode = sessionStorage.getItem('nightjar.creatorReferralCode') ?? '';
@@ -54,9 +55,12 @@ export default function AccountPortal() {
           return;
         }
       }
-    } catch {
+    } catch (error) {
       setAccount(null);
-      setMessage('Nightjar could not reach the protected account service. Try again in a moment.');
+      const detail = error instanceof Error ? error.message : String(error ?? '');
+      setMessage(detail.includes('Verify your email')
+        ? 'Your email is verified in the browser, but Firebase had not refreshed the backend identity token yet. Refresh this page once; Nightjar now forces a fresh token before retrying.'
+        : 'Nightjar could not reach the protected account service. The age-assurance bypass is not involved in this step. Try once more; if it persists, the Functions deployment needs checking.');
     } finally {
       setLoadingAccount(false);
     }
@@ -137,6 +141,7 @@ export default function AccountPortal() {
     />}
 
     {identity?.emailVerified && <section className="account-backend-card">
+      <div className="account-testing-notice"><ShieldCheck size={14}/><span><strong>TESTING BUILD</strong> Age assurance is temporarily disabled for controlled QA. Email verification and protected backend permissions remain active.</span></div>
       <div className="account-backend-heading">
         <ShieldCheck size={19} />
         <div>
