@@ -6246,7 +6246,11 @@ export const removeProfessionalRole = onCall({ region: REGION }, async (request)
   ]);
   const account = accountSnapshot.data() ?? {};
   const approved = professionalRolesForAccount(account).filter((value) => value !== role) as ProfessionalRole[];
-  const requested = cleanProfessionalRoles(applicationSnapshot.data()?.requestedRoles).filter((value) => value !== role);
+  const applicationStatus = cleanText(applicationSnapshot.data()?.status, 30);
+  const requested = (['banked','waitlist'].includes(applicationStatus)
+    ? cleanProfessionalRoles(applicationSnapshot.data()?.requestedRoles)
+    : []
+  ).filter((value) => value !== role);
   const activeRole = cleanText(account.role, 30);
   const nextActiveRole = activeRole === role ? (approved[0] ?? 'listener') : (activeRole || 'listener');
 
@@ -6364,8 +6368,10 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
     : currentApproved;
   const remainingRequested = decision === 'approved'
     ? requested.filter((role) => !rolesToApprove.includes(role))
-    : requested;
-  const accountPendingRoles = decision === 'rejected' ? [] : remainingRequested;
+    : decision === 'rejected'
+      ? []
+      : requested;
+  const accountPendingRoles = remainingRequested;
   const nextStatus = decision === 'approved'
     ? (remainingRequested.length ? 'banked' : 'approved')
     : decision;
