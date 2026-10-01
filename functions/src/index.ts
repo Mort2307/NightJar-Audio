@@ -4901,14 +4901,20 @@ const conversationWaitingState = (data: Record<string, any>, viewerUserId: strin
       : lastSenderUserId === viewerUserId
         ? 'awaiting_them'
         : 'none';
+  const resolvedForLastMessageAt = cleanText(data.resolvedForLastMessageAt, 80) || null;
+  const resolved = Boolean(lastMessageAt && resolvedForLastMessageAt === lastMessageAt);
+  const effectiveWaitingState = resolved ? 'resolved' : waitingState;
   const reminderForLastMessageAt = cleanText(data.reminderForLastMessageAt, 80) || null;
   const reminderAlreadySent = Boolean(lastMessageAt && reminderForLastMessageAt === lastMessageAt);
   return {
-    waitingState,
+    waitingState:effectiveWaitingState,
     waitingHours,
     awaitingReplyFromUserId,
     reminderAlreadySent,
-    reminderEligible: waitingState === 'awaiting_them' && waitingHours >= 48 && !reminderAlreadySent,
+    reminderEligible: !resolved && waitingState === 'awaiting_them' && waitingHours >= 48 && !reminderAlreadySent,
+    resolved,
+    resolvedAt:toIso(data.resolvedAt),
+    resolvedByUserId:cleanText(data.resolvedByUserId, 160) || null,
     lastReminderAt: toIso(data.lastReminderAt),
   };
 };
@@ -5000,6 +5006,9 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
       reminderForLastMessageAt:null,
       lastReminderAt:null,
       lastReminderByUserId:null,
+      resolvedForLastMessageAt:null,
+      resolvedAt:null,
+      resolvedByUserId:null,
     });
   } else if (collaborationContext) {
     const existingIds = cleanStringList(
@@ -5134,6 +5143,9 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
     reminderForLastMessageAt:null,
     lastReminderAt:null,
     lastReminderByUserId:null,
+    resolvedForLastMessageAt:null,
+    resolvedAt:null,
+    resolvedByUserId:null,
     updatedAt:FieldValue.serverTimestamp(),
   }, { merge:true });
 
@@ -5149,6 +5161,31 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
 
   const saved = await messageRef.get();
   return { message:directMessagePayload(saved.data() ?? message, messageRef.id) };
+});
+
+export const closeDirectConversationLoop = onCall({ region: REGION }, async (request) => {
+  const identity = await requireCreativeMessagingIdentity(request);
+  const conversationId = cleanText((request.data as { conversationId?: unknown } | undefined)?.conversationId, 320);
+  if (!conversationId) throw new HttpsError('invalid-argument', 'Conversation is required.');
+
+  const ref = db.collection('directConversations').doc(conversationId);
+  const conversation = await ref.get();
+  const data = conversation.data();
+  if (!data || !Array.isArray(data.participantUserIds) || !data.participantUserIds.includes(identity.uid)) {
+    throw new HttpsError('not-found', 'Conversation not found.');
+  }
+
+  const lastMessageAt = toIso(data.lastMessageAt);
+  if (!lastMessageAt) throw new HttpsError('failed-precondition', 'There is no message loop to close.');
+
+  await ref.set({
+    resolvedForLastMessageAt:lastMessageAt,
+    resolvedAt:FieldValue.serverTimestamp(),
+    resolvedByUserId:identity.uid,
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  return { conversationId, resolved:true, resolvedForLastMessageAt:lastMessageAt };
 });
 
 export const sendDirectMessageReminder = onCall({ region: REGION }, async (request) => {
