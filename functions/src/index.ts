@@ -6233,14 +6233,16 @@ export const myProfessionalRoles = onCall({ region: REGION }, async (request) =>
   const account = accountSnapshot.data() ?? {};
   const application = applicationSnapshot.data() ?? {};
   const approvedProfessionalRoles = professionalRolesForAccount(account).filter((role): role is ProfessionalRole => PROFESSIONAL_ROLE_KEYS.includes(role as ProfessionalRole));
-  const pendingProfessionalRoles = cleanProfessionalRoles(application.requestedRoles)
-    .filter((role) => !approvedProfessionalRoles.includes(role));
+  const applicationStatus = applicationSnapshot.exists ? cleanText(application.status, 30) || 'banked' : null;
+  const pendingProfessionalRoles = ['banked','waitlist'].includes(String(applicationStatus))
+    ? cleanProfessionalRoles(application.requestedRoles).filter((role) => !approvedProfessionalRoles.includes(role))
+    : [];
   return {
     listener: true,
     approvedProfessionalRoles,
     pendingProfessionalRoles,
     activeRole: cleanText(account.role, 30) || 'listener',
-    applicationStatus: applicationSnapshot.exists ? cleanText(application.status, 30) || 'banked' : null,
+    applicationStatus,
     wave: cleanText(application.wave, 80) || null,
   };
 });
@@ -6408,6 +6410,7 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
   const remainingRequested = decision === 'approved'
     ? requested.filter((role) => !rolesToApprove.includes(role))
     : requested;
+  const accountPendingRoles = decision === 'rejected' ? [] : remainingRequested;
   const nextStatus = decision === 'approved'
     ? (remainingRequested.length ? 'banked' : 'approved')
     : decision;
@@ -6428,7 +6431,7 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
     : (nextApproved[0] ?? 'listener');
   await accountRef(userId).set({
     approvedProfessionalRoles: nextApproved,
-    pendingProfessionalRoles: remainingRequested,
+    pendingProfessionalRoles: accountPendingRoles,
     role: activeRole,
     status: 'active',
     professionalAccessUpdatedBy: admin.uid,
@@ -6441,7 +6444,7 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
     userId,
     decision,
     approvedProfessionalRoles: nextApproved,
-    pendingProfessionalRoles: remainingRequested,
+    pendingProfessionalRoles: accountPendingRoles,
     activeRole,
     applicationStatus: nextStatus,
     wave: wave || application.wave || null,
