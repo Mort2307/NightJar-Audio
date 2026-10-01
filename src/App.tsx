@@ -302,6 +302,8 @@ function App() {
   const [ageReverifyRequired, setAgeReverifyRequired] = useState(false);
   const [ageSessionActive, setAgeSessionActive] = useState(false);
   const [ageLoading, setAgeLoading] = useState(false);
+  const [ageTemporaryBypass, setAgeTemporaryBypass] = useState(false);
+  const [ageTemporaryBypassReason, setAgeTemporaryBypassReason] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [toastAction, setToastAction] = useState<{ label: string; run: () => void | Promise<void> } | null>(null);
   const toastTimer = useRef<number | null>(null);
@@ -334,6 +336,7 @@ function App() {
   const [reportSummary, setReportSummary] = useState('');
   const [adminOverview, setAdminOverview] = useState<any | null>(null);
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
+  const [adminTesterEmail, setAdminTesterEmail] = useState('');
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'artist' | 'admin' | null>(null);
   const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], publicProfile: true });
   const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
@@ -1233,6 +1236,8 @@ function App() {
       setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
       setAgeVerifiedAt(data.verifiedAt ?? null);
       setAgeReverifyRequired(data.reverifyRequired === true);
+      setAgeTemporaryBypass(data.temporaryBypass === true);
+      setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(false);
       setAgeStatus(data.status === 'COMPLETE' ? 'COMPLETE' : data.status === 'PENDING' || data.status === 'PROCESSING' || data.status === 'IN_PROGRESS' ? 'PENDING' : data.status === 'FAIL' || data.status === 'ERROR' || data.status === 'CANCELLED' ? 'FAIL' : 'NOT_STARTED');
       if (verified) setAgeStage('app');
@@ -1280,6 +1285,8 @@ function App() {
       setAgeConfigured(Boolean(data.configured));
       setAgeProvider(String(data.provider ?? 'not-configured'));
       setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+      setAgeTemporaryBypass(data.temporaryBypass === true);
+      setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(Boolean(data.sessionId && !data.verified));
       if (data.verified === true) {
         setAgeVerified(true);
@@ -1618,6 +1625,16 @@ function App() {
               { userId:'demo-admin-1', name:'Owner One', email:'owner.one@demo.invalid', role:'admin', status:'active' },
               { userId:'demo-admin-2', name:'Owner Two', email:'owner.two@demo.invalid', role:'admin', status:'active' },
               { userId:'demo-admin-3', name:'Owner Three', email:'owner.three@demo.invalid', role:'admin', status:'active' },
+            ],
+          },
+          testing: {
+            closedBeta: true,
+            ageAssuranceConfigured: false,
+            temporaryAgeBypassEnabled: true,
+            approvedTesterCount: 2,
+            approvedTesters: [
+              { email:'qa.one@demo.invalid', enabled:true },
+              { email:'qa.two@demo.invalid', enabled:true },
             ],
           },
           subscriptions: { active:12500, trialing:420, pastDue:86 },
@@ -2565,6 +2582,46 @@ function App() {
     }
   };
 
+  const changeClosedBetaTester = async (emailValue: string, enabled: boolean) => {
+    if (!canAdmin) return;
+    const email = emailValue.trim().toLowerCase();
+    if (!email) return notify('Enter the tester email address first.');
+    try {
+      if (demoMode) {
+        setAdminOverview((current:any) => {
+          const currentTesting = current?.testing ?? {};
+          const existing = Array.isArray(currentTesting.approvedTesters) ? currentTesting.approvedTesters : [];
+          const approvedTesters = enabled
+            ? [...existing.filter((item:any) => String(item.email).toLowerCase() !== email), { email, enabled:true }]
+            : existing.filter((item:any) => String(item.email).toLowerCase() !== email);
+          const updated = {
+            ...(current ?? {}),
+            testing: {
+              ...currentTesting,
+              closedBeta:true,
+              temporaryAgeBypassEnabled:true,
+              approvedTesters,
+              approvedTesterCount:approvedTesters.length,
+            },
+          };
+          writeDemo('adminOverview',updated);
+          return updated;
+        });
+        if (enabled) setAdminTesterEmail('');
+        notify(enabled ? 'Demo tester email approved locally.' : 'Demo tester email removed locally.');
+        return;
+      }
+      await nightjarAdministration.setClosedBetaTester(email, enabled);
+      if (enabled) setAdminTesterEmail('');
+      await loadAdminOverview();
+      notify(enabled
+        ? 'Tester email approved. They can now create or use a Nightjar account during private testing.'
+        : 'Tester email removed. Private Nightjar access and the temporary age bypass are revoked.');
+    } catch {
+      notify('Tester email access could not be changed.');
+    }
+  };
+
   const createWriterDraft = async () => {
     const title = writerDraftTitle.trim();
     if (!title) return notify('Give the script a working title first.');
@@ -2814,32 +2871,33 @@ function App() {
           <div className="verification-panel">
             <div className="verification-icon"><ShieldCheck size={23} /></div>
             <div>
-              <strong>{ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'}</strong>
+              <strong>{ageTemporaryBypass ? 'Nightjar Private Test Access' : ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'}</strong>
               <span>
-                {ageVerified
-                  ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins use this stored verification state.`
-                  : ageSessionActive
-                    ? 'A verification session is in progress. Finish it and return to Nightjar; the account state will update automatically.'
-                    : ageConfigured
-                      ? `Secure ${ageEnvironment} provider connected and ready for a verification session.`
-                      : 'Verification integration is ready; provider credentials still need to be added.'}
+                {ageTemporaryBypass
+                  ? `Approved QA account · temporary age-assurance bypass active${ageTemporaryBypassReason === 'administrator' ? ' for an administrator' : ''}. This is not a completed Yoti verification and automatically stops working when test bypass mode is disabled.`
+                  : ageVerified
+                    ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins use this stored verification state.`
+                    : ageSessionActive
+                      ? 'A verification session is in progress. Finish it and return to Nightjar; the account state will update automatically.'
+                      : ageConfigured
+                        ? `Secure ${ageEnvironment} provider connected and ready for a verification session.`
+                        : 'Verification integration is ready; provider credentials still need to be added.'}
               </span>
             </div>
-            <span className="status-pill">{ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
+            <span className="status-pill">{ageTemporaryBypass ? 'TEST ACCESS' : ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
           </div>
           <div className="verification-list">
-            <div><Check size={16} /><span>Adult access is checked before the catalogue is released.</span></div>
-            <div><Check size={16} /><span>Verification is stored against your Nightjar account, not repeated on each login or device.</span></div>
-            <div><Check size={16} /><span>Nightjar stores verification state and an opaque reference rather than raw identity documents.</span></div>
-            {ageReverifyRequired && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
+            {ageTemporaryBypass
+              ? <div><ShieldCheck size={16} /><span>This email is on Nightjar's private tester allowlist; temporary QA access is separate from production age verification.</span></div>
+              : <div><Check size={16} /><span>Adult access is checked before the catalogue is released.</span></div>}
+            <div><Check size={16} /><span>{ageTemporaryBypass ? 'No raw identity documents or fake verification result are created for this bypass.' : 'Verification is stored against your Nightjar account, not repeated on each login or device.'}</span></div>
+            <div><Check size={16} /><span>{ageTemporaryBypass ? 'Removing this email from the tester allowlist revokes the bypass immediately.' : 'Nightjar stores verification state and an opaque reference rather than raw identity documents.'}</span></div>
+            {ageReverifyRequired && !ageTemporaryBypass && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
           </div>
           <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
-            {ageLoading ? 'Opening secure check…' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
+            {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
           </button>
-          {!ageConfigured && user && role === 'admin' && <button className="secondary-button wide-button" disabled={ageLoading} onClick={() => void runAdminSandboxTest()}>
-            Run administrator sandbox test <ShieldCheck size={16} />
-          </button>}
-          <p className="access-fine">Adult catalogue access is granted only after a verified age-assurance result.</p>
+          <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Yoti verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
         </div>
       </main>
     );
@@ -3650,6 +3708,7 @@ function App() {
               <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">CREATOR ECONOMICS</span><h2>{formatMoneyPence(commercialSettings.planningMonthlyPricePence)} / month</h2><p>Configure the capped equal creator rate without tying standard pay to popularity.</p><strong>Open creator economics <ArrowRight size={13} /></strong></button>
               <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>{demoMode ? 'Preview a replacement logo locally while Demo Mode is active. Nothing is uploaded or changed in production.' : 'Upload or replace the logo used across Nightjar. A replacement stays pending until an administrator approves it in Image Moderation.'}</p><div className="logo-preview-grid"><div><span className="mini-label">CURRENT APPROVED</span><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt={demoMode ? 'Nightjar demo logo preview' : 'Current approved Nightjar logo'} /> : <img src="/favicon.svg" alt="Default Nightjar logo" />}</div></div>{!demoMode && pendingLogoPreviewUrl && <div><span className="mini-label">PENDING REPLACEMENT</span><div className="logo-preview-box pending-logo-preview"><img src={pendingLogoPreviewUrl} alt="Pending Nightjar logo replacement" /></div></div>}</div><div className="admin-data-actions"><label className="secondary-button upload-label"><Upload size={15} /> {demoMode ? 'Preview logo' : logoUploading ? 'Uploading…' : 'Replace logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label>{logoUrl && <button className="ghost-button" onClick={()=>void removeLogo()}>{demoMode ? 'Clear preview' : 'Remove logo'}</button>}</div><strong>{demoMode ? 'Local preview only · PNG / JPG / WebP · max 5 MB' : pendingLogoPreviewUrl ? 'Replacement uploaded · open Image Moderation to approve it' : 'PNG / JPG / WebP · max 5 MB · administrator approval required before the replacement goes live'}</strong></div>
             </div>
+            {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">PRIVATE TESTING / EMAIL ALLOWLIST</span><h2>Approved tester emails</h2><p>Only the owner accounts and emails listed here can enter Nightjar while Closed Beta is enabled. Approved testers still verify their Firebase email normally; the temporary age bypass is clearly marked as test access.</p></div><div className="admin-application-wavebar"><label>Tester email<input type="email" value={adminTesterEmail} onChange={(event)=>setAdminTesterEmail(event.target.value)} placeholder="tester@example.com" /></label><button className="primary-button" disabled={!adminTesterEmail.trim()} onClick={()=>void changeClosedBetaTester(adminTesterEmail,true)}>Approve tester email</button></div><div className="security-alert-list">{(adminOverview?.testing?.approvedTesters ?? []).length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No tester emails approved</strong><span>Owner administrator emails remain allowed automatically.</span></div> : (adminOverview?.testing?.approvedTesters ?? []).map((tester:any)=><article className="security-alert-row" key={tester.email}><div><strong>{tester.email}</strong><span>Private beta account access · temporary age-assurance bypass while test mode is enabled</span><em>Removing access blocks Nightjar backend use even if a Firebase Auth identity already exists.</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={()=>void changeClosedBetaTester(tester.email,false)}>Remove tester access</button></div></article>)}</div><strong>{adminOverview?.testing?.approvedTesterCount ?? 0} approved tester email{(adminOverview?.testing?.approvedTesterCount ?? 0) === 1 ? '' : 's'} · Closed Beta {adminOverview?.testing?.closedBeta === false ? 'OFF' : 'ON'}</strong></section>}
             <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>
             {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">SECURITY / OWNER ALERTS</span><h2>Suspicious activity</h2><p>Every qualifying alert is addressed to all three Nightjar owners and retained in the audit trail.</p></div><button className="secondary-button" onClick={() => void loadSecurityAlerts()}>{securityAlertsLoading ? 'Refreshing…' : 'Refresh alerts'}</button><div className="security-alert-list">{securityAlerts.length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No open security alerts</strong><span>Signals remain evidence, not accusations. Alerts are retained for review.</span></div> : securityAlerts.map((alert:any) => <article className="security-alert-row" key={alert.id}><div><strong>{alert.severity?.toUpperCase() ?? 'MEDIUM'} · Risk {alert.riskScore ?? '—'} · {alert.reason ?? 'Suspicious protected-content activity'}</strong><span>User: {alert.userName ?? 'Nightjar account'}{alert.userHandle ? ' · @' + String(alert.userHandle).replace(/^@/, '') : ''} · Script: {alert.relatedId ?? '—'} · {new Date(alert.createdAt).toLocaleString('en-GB')}</span>{alert.signal && <div className="security-signal-meta"><span><strong>{protectionEventLabel(alert.signal.eventType)}</strong>{protectionConfidenceLabel(alert.signal.detectionConfidence) ? ' · ' + protectionConfidenceLabel(alert.signal.detectionConfidence) : ''}</span>{alert.signal.detectionSource && <span>Source: {String(alert.signal.detectionSource).replaceAll('_',' ')}</span>}{Number(alert.signal.possibleCaptureEvents ?? 0) > 0 && <span>Possible capture signals / 10 min: {alert.signal.possibleCaptureEvents}</span>}{Number(alert.signal.nativeCaptureEvents ?? 0) > 0 && <span>Native capture callbacks / 10 min: {alert.signal.nativeCaptureEvents}</span>}</div>}<em>Delivered to all three owners · evidence requires human review · no automatic freeze</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={() => void openSecurityAlertEvidence(alert)}>{securityEvidenceLoading ? 'Loading evidence…' : 'Review evidence'}</button><button className="ghost-button" disabled={alert.status !== 'open'} onClick={() => void closeSecurityAlertBenign(alert)}>Benign</button><button className="secondary-button" disabled={alert.status !== 'open'} onClick={() => void revokeSessionsFromSecurityAlert(alert)}>Revoke reader sessions</button><button className="secondary-button" disabled={alert.status === 'actioned'} onClick={() => void suspendFromSecurityAlert(alert)}>{alert.status === 'actioned' ? 'Account suspended' : 'Suspend account'}</button></div></article>)}</div></section>}
             {adminPeopleRole && <div className="people-drawer" role="dialog" aria-modal="true" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="icon-button" onClick={() => setAdminPeopleRole(null)} aria-label="Close account directory"><X size={18} /></button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <div className="people-row-controls"><select value={account.role ?? 'listener'} onChange={(e)=>void changeAccountRole(account,e.target.value as 'listener'|'creator'|'writer'|'editor'|'artist')}><option value="listener">Listener</option>{(account.roles ?? []).filter((professionalRole:string)=>['creator','writer','editor','artist'].includes(professionalRole)).map((professionalRole:'creator'|'writer'|'editor'|'artist')=><option key={professionalRole} value={professionalRole}>{professionalRole === 'creator' ? 'VA Creator' : professionalRole === 'editor' ? 'Audio Editor' : professionalRole === 'artist' ? 'Artist' : 'Writer'}</option>)}</select><select value={account.status ?? 'active'} onChange={(e)=>void changeAccountStatus(account,e.target.value as 'active'|'pending_review'|'suspended')}><option value="active">Active</option><option value="pending_review">Pending review</option><option value="suspended">Suspended</option></select><button className={account.testAccess ? 'secondary-button' : 'ghost-button'} onClick={()=>void changeTestAccess(account, !account.testAccess)}>{account.testAccess ? 'Remove tester access' : 'Enable tester access'}</button></div>}</article>)}{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).length === 0 && <div className="people-empty"><Users size={18} /><strong>No accounts in this role yet</strong><span>The live directory will populate as accounts are created or approved.</span></div>}</div></div>}
