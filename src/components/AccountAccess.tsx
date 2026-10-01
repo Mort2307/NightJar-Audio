@@ -204,6 +204,13 @@ export default function AccountAccess({
     <span className="mini-label">NIGHTJAR ACCOUNT</span>
     <h2>{mode === 'register' ? 'Choose your Nightjar role.' : mode === 'reset' ? 'Reset your password' : 'Enter Nightjar'}</h2>
     <p>{mode === 'register' ? 'Each role opens a dedicated Nightjar workspace. Your login identity stays private from the public profile you create.' : mode === 'reset' ? 'We will send a secure reset link to your account email.' : 'Sign in with your protected Nightjar account.'}</p>
+    {mode === 'signin' && <div className="account-workspace-overview" aria-label="Nightjar account workspaces">
+      <span><Headphones size={14}/><strong>Listener</strong><small>Discovery, subscription, comments, Like/Love and private library.</small></span>
+      <span><Mic2 size={14}/><strong>Creator</strong><small>Publishing, credits, professional messaging and Creator Studio.</small></span>
+      <span><FileText size={14}/><strong>Writer</strong><small>Protected scripts, rights, collaboration and Writer Studio.</small></span>
+      <span><AudioLines size={14}/><strong>Audio Editor</strong><small>Assigned work, production credits, messaging and Editorial.</small></span>
+      <em>Your existing Nightjar account opens its own dedicated workspace automatically after sign-in.</em>
+    </div>}
     {mode === 'register' && <div className="account-role-cards" aria-label="Choose Nightjar account type">
       {[
         { role:'listener' as const, title:'Listener', detail:'Discover, subscribe, comment, Like/Love releases, follow profiles and build private playlists.', icon:<Headphones size={19}/> },
