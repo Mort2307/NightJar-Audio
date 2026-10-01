@@ -15,6 +15,7 @@ const reactionCall = httpsCallable<{ releaseId: string; reaction: ReleaseReactio
   reactions: { likes: number; loves: number; total: number; myReaction: ReleaseReaction };
 }>(functions, 'setReleaseReaction');
 const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any; reactions?: { likes:number; loves:number; total:number; myReaction:ReleaseReaction }; commentCount?: number }>(functions, 'postReleaseComment');
+const replyCall = httpsCallable<{ parentCommentId: string; body: string }, { comment: any; reactions?: { likes:number; loves:number; total:number; myReaction:ReleaseReaction }; commentCount?: number }>(functions, 'replyToReleaseComment');
 const deleteCommentCall = httpsCallable<{ commentId: string }, { deleted: boolean; commentId: string }>(functions, 'deleteOwnReleaseComment');
 const reportCommentCall = httpsCallable<{ commentId: string; reason?: string }, { reported: boolean; commentId: string }>(functions, 'reportReleaseComment');
 const adminReportsCall = httpsCallable<void, { reports: any[] }>(functions, 'adminListCommunityReports');
@@ -32,6 +33,9 @@ export const nightjarEngagement = {
   },
   async comment(releaseId: string, body: string) {
     return (await commentCall({ releaseId, body })).data;
+  },
+  async reply(parentCommentId: string, body: string) {
+    return (await replyCall({ parentCommentId, body })).data;
   },
   async deleteComment(commentId: string) {
     return (await deleteCommentCall({ commentId })).data;
