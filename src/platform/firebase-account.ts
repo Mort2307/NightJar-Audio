@@ -14,10 +14,16 @@ export type NightjarAccountIdentity = {
 
 const identityCall = httpsCallable<void, NightjarAccountIdentity>(functions, 'accountIdentity');
 const roleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'editor'; referralCode?: string }, { userId: string; role: 'creator' | 'listener' | 'writer' | 'editor'; status: string }>(functions, 'chooseAccountRole');
+const stageRoleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'editor'; referralCode?: string }, { role: 'creator' | 'listener' | 'writer' | 'editor'; staged: boolean }>(functions, 'stageRegistrationIntent');
 
 export const nightjarAccount = {
   async identity() {
     const result = await identityCall();
+    return result.data;
+  },
+
+  async stageRegistration(role: 'creator' | 'listener' | 'writer' | 'editor', referralCode = '') {
+    const result = await stageRoleCall({ role, ...(referralCode ? { referralCode } : {}) });
     return result.data;
   },
 
