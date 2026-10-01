@@ -91,7 +91,6 @@ const NightjarWalletPanel = lazy(() => import('./components/NightjarWalletPanel'
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
-const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type TestingMode = 'off' | 'demo' | 'simulation';
@@ -644,16 +643,8 @@ function App() {
 
       void (async () => {
         await loadAccount();
-        if (TESTING_AGE_ASSURANCE_BYPASS) {
-          setAgeVerified(true);
-          setAgeStatus('COMPLETE');
-          setAgeProvider('testing-stage-bypass');
-          setAgeEnvironment('sandbox');
-          setAgeStage('app');
-        } else {
-          const verified = await refreshAgeStatus();
-          if (!verified) setAgeStage('assurance');
-        }
+        const verified = await refreshAgeStatus();
+        if (!verified) setAgeStage('assurance');
       })();
     });
 
@@ -1228,18 +1219,6 @@ function App() {
 
   const refreshAgeStatus = async () => {
     if (!nightjarAuth.current()) return false;
-    if (TESTING_AGE_ASSURANCE_BYPASS) {
-      setAgeVerified(true);
-      setAgeConfigured(false);
-      setAgeProvider('testing-stage-bypass');
-      setAgeEnvironment('sandbox');
-      setAgeVerifiedAt(null);
-      setAgeReverifyRequired(false);
-      setAgeSessionActive(false);
-      setAgeStatus('COMPLETE');
-      setAgeStage('app');
-      return true;
-    }
     try {
       const data = await nightjarAge.status();
       const verified = data.verified === true;
@@ -2804,19 +2783,19 @@ function App() {
             character work and immersive soundscapes.
           </p>
           <div className="access-points">
-            <div><ShieldCheck size={18} /><div><strong>Adults only</strong><span>Nightjar remains an 18+ product; formal age assurance is temporarily bypassed during controlled testing.</span></div></div>
+            <div><ShieldCheck size={18} /><div><strong>Adults only</strong><span>Nightjar remains an 18+ product. Approved QA accounts can use restricted temporary test access until the production age-assurance provider is live.</span></div></div>
             <div><Headphones size={18} /><div><strong>Audio first</strong><span>Built around voice, atmosphere and headphone immersion.</span></div></div>
           </div>
           <button className="primary-button wide-button" disabled={accountLoading} onClick={() => void signIn()}>
             {accountLoading ? 'Opening secure sign-in…' : 'Sign in to Nightjar'} <ArrowRight size={17} />
           </button>
-          <p className="access-fine">Testing build: age assurance is temporarily disabled. The 18+ production gate must be restored before public launch.</p>
+          <p className="access-fine">Testing build: age assurance is not globally bypassed. Only owner accounts and explicitly approved testers can use temporary QA access.</p>
         </section>
       </main>
     );
   }
 
-  if (!TESTING_AGE_ASSURANCE_BYPASS && ageStage === 'assurance' && !rolePicker) {
+  if (ageStage === 'assurance' && !rolePicker) {
     return (
       <main className="access-shell">
         <div className="access-card assurance-card">
@@ -3081,7 +3060,7 @@ function App() {
   return (
     <div className="app-shell">
       <ProductExperience />
-      {TESTING_AGE_ASSURANCE_BYPASS && <div className="testing-age-bypass-banner" role="status"><ShieldCheck size={14}/><span><strong>TESTING BUILD</strong> Age assurance is temporarily disabled for controlled QA. Do not treat this build as public-launch ready.</span></div>}
+      {ageVerified && ageProvider === 'temporary-test-access' && <div className="testing-age-bypass-banner" role="status"><ShieldCheck size={14}/><span><strong>APPROVED TEST ACCESS</strong> This account is using temporary QA age access. Production age assurance is still required before public launch.</span></div>}
       <header className="topbar">
         <button className="brand-button" onClick={() => navigate('discover')} aria-label="Nightjar home">
           {logoUrl ? <img className="brand-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo" src="/favicon.svg" alt="Nightjar" />}<span>NIGHTJAR</span>
