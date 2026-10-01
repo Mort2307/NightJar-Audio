@@ -153,9 +153,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal">
       <header className="creator-profile-head">
         <div>
-          <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profile.role).toUpperCase() : 'PROFILE'}</span>
+          <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
           <h2>{loading ? 'Loading profile…' : profile?.displayName ?? 'Nightjar profile'}</h2>
-          <p>{profile?.handle ? '@' + String(profile.handle).replace(/^@/, '') : roleLabel(profile?.role)}</p>
+          <p>{profile?.handle ? '@' + String(profile.handle).replace(/^@/, '') : roleLabel(profileRole)}</p>
         </div>
         <button className="icon-button" onClick={onClose} aria-label="Close public profile"><X size={18}/></button>
       </header>
@@ -207,7 +207,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         </section>}
 
         <div className="writer-public-note">
-          {profile.role === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
+          {profileRole === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
           <div>
             <strong>{profileRole === 'editor'
               ? 'Public production identity, private client work.'
@@ -255,7 +255,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                       : 'Listener profile'}</h3>
             </div>
           </div>
-          {profile.role !== 'listener' && !!profile.featuredWork?.length && <div className="public-featured-work">
+          {profileRole === 'creator' && !!profile.featuredWork?.length && <div className="public-featured-work">
             <span className="mini-label">FEATURED</span>
             {profile.featuredWork.map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? profile.displayName}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
@@ -263,18 +263,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               <div className="public-work-community-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div>
             </article>)}
           </div>}
-          {profile.role === 'listener' && !!profile.publicPlaylists?.length && <div className="public-playlist-list">
+          {profileRole === 'listener' && !!profile.publicPlaylists?.length && <div className="public-playlist-list">
             <span className="mini-label">SHARED PLAYLISTS</span>
             {profile.publicPlaylists.map((playlist:any)=><article key={playlist.id}>
               <div className="public-playlist-head"><ListMusic size={16}/><div><strong>{playlist.title}</strong><span>{playlist.releaseCount ?? 0} release{playlist.releaseCount === 1 ? '' : 's'}</span></div></div>
               {!!playlist.releases?.length && <div className="public-playlist-preview">{playlist.releases.slice(0,4).map((release:any)=><button type="button" key={release.id} onClick={()=>onCommunityRelease?.(release)} disabled={!onCommunityRelease}><span>{release.title}</span><small>{release.creatorName ?? 'Nightjar creator'} · Community</small></button>)}</div>}
             </article>)}
           </div>}
-          {(profile.role === 'writer' || profile.role === 'editor') && <div className="public-credit-summary">
-            <span>{profile.role === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
+          {(profileRole === 'writer' || profileRole === 'editor') && <div className="public-credit-summary">
+            <span>{profileRole === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
             <strong>{profile.creditedReleaseCount ?? 0} credited release{profile.creditedReleaseCount === 1 ? '' : 's'}</strong>
           </div>}
-          {!!profile.creditedReleases?.length && <div className="public-credit-list">
+          {(profileRole === 'writer' || profileRole === 'editor') && !!profile.creditedReleases?.length && <div className="public-credit-list">
             {profile.creditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
