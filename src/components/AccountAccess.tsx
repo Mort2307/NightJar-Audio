@@ -61,9 +61,17 @@ export default function AccountAccess({
   const entryParams = new URLSearchParams(window.location.search);
   const requestedEntry = entryParams.get('entry');
   const requestedRole = entryParams.get('role');
-  const initialRole = (['listener','creator','writer','editor','artist'].includes(String(requestedRole)) ? requestedRole : sessionStorage.getItem('nightjar.registrationRole')) as RegistrationRole | null;
+  const initialRegistrationRoles = (() => {
+    if (['creator','writer','editor','artist'].includes(String(requestedRole))) return [requestedRole as RegistrationRole];
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('nightjar.registrationRoles') ?? '[]');
+      if (Array.isArray(stored)) return stored.filter((role): role is RegistrationRole => ['creator','writer','editor','artist'].includes(String(role)));
+    } catch { /* legacy registration state falls through */ }
+    const legacy = sessionStorage.getItem('nightjar.registrationRole');
+    return ['creator','writer','editor','artist'].includes(String(legacy)) ? [legacy as RegistrationRole] : [];
+  })();
   const [mode, setMode] = useState<Mode>(identity && !identity.emailVerified ? 'verify' : requestedEntry === 'register' ? 'register' : 'signin');
-  const [registrationRole, setRegistrationRole] = useState<RegistrationRole | null>(initialRole);
+  const [registrationRoles, setRegistrationRoles] = useState<RegistrationRole[]>(initialRegistrationRoles);
   const [email, setEmail] = useState(identity?.email ?? '');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -110,10 +118,6 @@ export default function AccountAccess({
       setMessage('Enter your password.');
       return;
     }
-    if (mode === 'register' && !registrationRole) {
-      setMessage('Choose the Nightjar profile type you are creating.');
-      return;
-    }
     if (mode === 'register' && !validPassword(password)) {
       const checks = passwordChecks(password);
       const missing = [
@@ -132,13 +136,12 @@ export default function AccountAccess({
 
     void run(async () => {
       if (mode === 'register') {
-        if (registrationRole) sessionStorage.setItem('nightjar.registrationRole', registrationRole);
+        sessionStorage.setItem('nightjar.registrationRoles', JSON.stringify(registrationRoles));
+        sessionStorage.removeItem('nightjar.registrationRole');
         const referralCode = entryParams.get('ref');
-        if (referralCode) sessionStorage.setItem('nightjar.creatorReferralCode', referralCode);
+        if (referralCode && registrationRoles.includes('creator')) sessionStorage.setItem('nightjar.creatorReferralCode', referralCode);
         const result = await nightjarAuth.register(email, password);
-        if (registrationRole) {
-          await nightjarAccount.stageRegistration(registrationRole, referralCode ?? '');
-        }
+        await nightjarAccount.stageRegistration(['listener', ...registrationRoles], registrationRoles.includes('creator') ? referralCode ?? '' : '');
         onAuthenticated(result.identity);
         setMode('verify');
         setMessage(result.verificationSent
@@ -206,8 +209,8 @@ export default function AccountAccess({
   return <section className="account-access-card">
     <div className="account-access-mark"><LockKeyhole size={22} /></div>
     <span className="mini-label">NIGHTJAR ACCOUNT</span>
-    <h2>{mode === 'register' ? 'Choose your Nightjar role.' : mode === 'reset' ? 'Reset your password' : 'Enter Nightjar'}</h2>
-    <p>{mode === 'register' ? 'Every account can subscribe and listen. Choose the professional route you want to apply for first; after joining, you can add Writer, VA Creator, Audio Editor and Artist roles to the same account.' : mode === 'reset' ? 'We will send a secure reset link to your account email.' : 'Sign in with your protected Nightjar account.'}</p>
+    <h2>{mode === 'register' ? 'Choose your Nightjar roles.' : mode === 'reset' ? 'Reset your password' : 'Enter Nightjar'}</h2>
+    <p>{mode === 'register' ? 'Listener access is included with every account. Select any professional roles you want to apply for now — one account can combine VA Creator, Writer, Audio Editor and Artist access after approval.' : mode === 'reset' ? 'We will send a secure reset link to your account email.' : 'Sign in with your protected Nightjar account.'}</p>
     {mode === 'signin' && <div className="account-workspace-overview" aria-label="Nightjar account workspaces">
       <span><Headphones size={14}/><strong>Listener</strong><small>Discovery, subscription, comments, Like/Love and private library.</small></span>
       <span><Mic2 size={14}/><strong>Creator</strong><small>Publishing, credits, professional messaging and Creator Studio.</small></span>
@@ -216,17 +219,30 @@ export default function AccountAccess({
       <span><Brush size={14}/><strong>Artist</strong><small>Portfolio, commissions, visual collaboration and artwork credits.</small></span>
       <em>Your account can hold multiple approved professional roles. Switch workspaces from your profile whenever you need to.</em>
     </div>}
-    {mode === 'register' && <div className="account-role-cards" aria-label="Choose Nightjar account type">
+    {mode === 'register' && <div className="account-role-cards" aria-label="Choose Nightjar professional roles">
+      <div className="account-role-card selected account-role-card-included" aria-label="Listener access included">
+        <span><Headphones size={19}/></span><div><strong>Listener · included</strong><small>Subscribe, listen, comment, follow profiles and build your private library. This access does not need professional approval.</small></div>
+      </div>
       {[
-        { role:'listener' as const, title:'Listener', detail:'Discover, subscribe, comment, Like/Love releases, follow profiles and build private playlists.', icon:<Headphones size={19}/> },
-        { role:'creator' as const, title:'VA Creator', detail:'Apply to publish audio, manage releases and collaborate with Writers, Audio Editors and Artists. The application is banked until Nightjar opens an intake wave.', icon:<Mic2 size={19}/> },
-        { role:'writer' as const, title:'Writer', detail:'Apply for protected scripts, rights, commissions and collaboration. Your application is banked until Nightjar opens an intake wave.', icon:<FileText size={19}/> },
-        { role:'editor' as const, title:'Audio Editor', detail:'Apply for editing and production work. Your application is banked until Nightjar opens an intake wave.', icon:<AudioLines size={19}/> },
-        { role:'artist' as const, title:'Artist', detail:'Apply to show a real-art portfolio, take commissions and collaborate on cover, character and promotional artwork. Your application is banked until an intake wave opens.', icon:<Brush size={19}/> },
-      ].map((item)=><button type="button" key={item.role} className={registrationRole===item.role?'account-role-card selected':'account-role-card'} aria-pressed={registrationRole===item.role} onClick={()=>{setRegistrationRole(item.role);sessionStorage.setItem('nightjar.registrationRole',item.role);}}>
-        <span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div>
-      </button>)}
-      {registrationRole && <p className="account-role-choice-note"><ShieldCheck size={13}/> You are creating a <strong>{registrationRole === 'editor' ? 'Audio Editor' : registrationRole === 'artist' ? 'Artist' : registrationRole.charAt(0).toUpperCase()+registrationRole.slice(1)}</strong> account. Professional access is application-controlled. Once inside Nightjar you can apply for additional professional roles or remove roles from the same account.</p>}
+        { role:'creator' as const, title:'VA Creator', detail:'Apply to publish audio, manage releases and collaborate with Writers, Audio Editors and Artists.', icon:<Mic2 size={19}/> },
+        { role:'writer' as const, title:'Writer', detail:'Apply for protected scripts, rights, commissions and creative collaboration.', icon:<FileText size={19}/> },
+        { role:'editor' as const, title:'Audio Editor', detail:'Apply for editing, production credits and professional collaboration.', icon:<AudioLines size={19}/> },
+        { role:'artist' as const, title:'Artist', detail:'Apply to show a real-art portfolio, take commissions and create cover, character and promotional artwork.', icon:<Brush size={19}/> },
+      ].map((item)=>{
+        const selected = registrationRoles.includes(item.role);
+        return <button type="button" key={item.role} className={selected?'account-role-card selected':'account-role-card'} aria-pressed={selected} onClick={()=>{
+          setRegistrationRoles((current)=>{
+            const next = current.includes(item.role) ? current.filter((role)=>role!==item.role) : [...current,item.role];
+            sessionStorage.setItem('nightjar.registrationRoles', JSON.stringify(next));
+            return next;
+          });
+        }}>
+          <span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.detail} Applications are banked until Nightjar opens a controlled intake wave.</small></div>
+        </button>;
+      })}
+      <p className="account-role-choice-note"><ShieldCheck size={13}/> {registrationRoles.length
+        ? <>You are applying for <strong>{registrationRoles.map((role)=>role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role === 'artist' ? 'Artist' : 'Writer').join(' + ')}</strong>. These roles stay banked until Mike or Megs approves them for an intake wave.</>
+        : <>You are creating a <strong>Listener</strong> account only. You can apply for professional roles later from your profile.</>}</p>
     </div>}
     <div className="account-access-field"><label>Email</label><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
     {mode !== 'reset' && <>
