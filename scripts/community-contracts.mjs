@@ -39,7 +39,7 @@ const creatorPipeline=read('src/components/CreatorAudioPipeline.tsx');
 ].forEach((name)=>requireText(functions,'export const '+name,name+' callable is missing'));
 
 requireText(functions,"requireAccountRole(request, ['listener'])",'Listener-only community posting contract is missing');
-requireText(functions,"requireAccountRole(request, ['creator','writer','editor'])",'Professional-message role gate is missing');
+requireText(functions,"requireAccountRole(request, ['creator','writer','editor','artist'])",'Professional-message role gate is missing');
 requireText(functions,'Only credited members of this release can reply as the work team.','Credited work-team reply boundary is missing');
 requireText(functions,'hideReleaseCommentReplies','Parent-comment deletion no longer hides orphaned work-team replies');
 requireText(functions,'reporterName:reporter.displayName','Admin community reports no longer expose human-readable reporter context');
@@ -135,14 +135,16 @@ requireText(messagingClient,"'reportDirectMessage'",'Messaging client report cal
 requireText(engagementClient,"'setReleaseReaction'",'Engagement client reaction callable is missing');
 requireText(engagementClient,"'replyToReleaseComment'",'Engagement client work-team reply callable is missing');
 
-requireText(accountAccess,"role:'listener'",'Listener role-first registration card is missing');
+requireText(accountAccess,'Listener · included','Universal Listener access at registration is missing');
 requireText(accountAccess,"role:'creator'",'Creator role-first registration card is missing');
 requireText(accountAccess,"role:'writer'",'Writer role-first registration card is missing');
-requireText(accountAccess,"role:'editor'",'Audio Editor role-first registration card is missing');
-requireText(accountAccess,'nightjar.registrationRole','Chosen signup role is not persisted through verification');
+requireText(accountAccess,"role:'editor'",'Audio Editor registration option is missing');
+requireText(accountAccess,"role:'artist'",'Artist registration option is missing');
+requireText(accountAccess,'registrationRoles.includes','Multi-role professional signup selection is missing');
+requireText(accountAccess,'nightjar.registrationRoles','Chosen signup professional roles are not persisted through verification');
 requireText(accountPortal,"role === 'editor'",'Dedicated Audio Editor account routing is missing');
-requireText(functions,"type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor'",'Server role selection is missing a Nightjar account type');
-requireText(functions,"requestedRole === 'creator' || requestedRole === 'editor'",'Professional approval gate is missing Creator/Audio Editor coverage');
+requireText(functions,"type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist'",'Server role selection is missing a Nightjar account type');
+requireText(functions,"const PROFESSIONAL_ROLE_KEYS = ['creator','writer','editor','artist'] as const",'Professional approval gate is missing the full professional role set');
 
 ['submitCreatorSuggestion','listCreatorSuggestions','reviewCreatorSuggestion','creatorRecommendationLink'].forEach((name)=>
   requireText(functions,'export const '+name,'Creator referral callable is missing: '+name)
