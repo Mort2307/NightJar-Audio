@@ -26,6 +26,7 @@ const checks = [
   ['professional roles can be removed', functions.includes('removeProfessionalRole')],
   ['professional workspaces can be switched', functions.includes('setActiveNightjarRole')],
   ['artist is a professional role', functions.includes("['creator','writer','editor','artist']")],
+  ['Artist portfolios require human-created work attestation', functions.includes('humanCreatedAttestation') && functions.includes('not AI-generated imagery')],
   ['signup supports multiple professional selections', accountUi.includes('registrationRoles') && accountUi.includes("['listener', ...registrationRoles]")],
   ['gift UI lets multi-role recipients choose target profession', giftUi.includes('eligibleRoles.length > 1') && giftUi.includes('targetRole')],
   ['role manager can add multiple professions', rolesUi.includes('selectedRoles') && rolesUi.includes('applyForProfessionalRoles')],
