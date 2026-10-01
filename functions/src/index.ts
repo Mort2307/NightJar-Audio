@@ -1162,9 +1162,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     : (professionalRoles.includes('writer') || professionalRoles.includes('editor'))
       ? (hasPortfolioCuration ? orderedFeatured(creditedReleases) : creditedReleases.slice(0, 3))
       : [];
-  const completedCollaborations = professionalRoles.length > 0
-    ? await completedCollaborationCountFor(userId)
-    : 0;
+  const [completedCollaborations, publicArtistPortfolio] = await Promise.all([
+    professionalRoles.length > 0 ? completedCollaborationCountFor(userId) : Promise.resolve(0),
+    professionalRoles.includes('artist') ? publicArtistPortfolioFor(userId) : Promise.resolve([]),
+  ]);
   const activityBadges = publicActivityBadges(role, {
     releases: releaseCount,
     publishedScripts: publishedWorkCount,
@@ -1202,6 +1203,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
+      artistPortfolio: publicArtistPortfolio,
       publicPlaylists,
       completedCollaborations,
       activityBadges,
@@ -1421,7 +1423,7 @@ export const setFavouriteRelease = onCall({ region: REGION }, async (request) =>
   return { releaseId, favourite: input.favourite !== false };
 });
 
-type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork';
+type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio';
 
 const IMAGE_CONTENT_TYPES = new Map([
   ['image/png', 'png'],
@@ -1473,7 +1475,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const kind = cleanText(input.kind, 40) as ModeratedImageKind;
-  if (!['profile_avatar', 'brand_logo', 'release_artwork'].includes(kind)) {
+  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'artist_portfolio'].includes(kind)) {
     throw new HttpsError('invalid-argument', 'Unsupported image type.');
   }
   if (kind === 'brand_logo' && !identity.admin) {
@@ -1484,8 +1486,21 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     ? identity.uid
     : cleanText(input.targetId, 160);
 
-  if (kind === 'release_artwork' && !targetId) {
-    throw new HttpsError('invalid-argument', 'Release artwork requires a release ID.');
+  if ((kind === 'release_artwork' || kind === 'artist_portfolio') && !targetId) {
+    throw new HttpsError('invalid-argument', kind === 'artist_portfolio' ? 'Artist portfolio artwork requires a portfolio item ID.' : 'Release artwork requires a release ID.');
+  }
+
+  if (kind === 'artist_portfolio') {
+    const [account, portfolioItem] = await Promise.all([
+      accountRef(identity.uid).get(),
+      db.collection('artistPortfolio').doc(targetId).get(),
+    ]);
+    if (!professionalRolesForAccount(account.data() ?? {}).includes('artist') || account.data()?.status !== 'active') {
+      throw new HttpsError('permission-denied', 'Approved Artist access is required to upload portfolio artwork.');
+    }
+    if (!portfolioItem.exists || portfolioItem.data()?.ownerUserId !== identity.uid) {
+      throw new HttpsError('not-found', 'Artist portfolio item not found.');
+    }
   }
 
   if (kind === 'release_artwork') {
@@ -1493,8 +1508,8 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     if (!release.exists) throw new HttpsError('not-found', 'Release not found.');
     if (!identity.admin) {
       const account = await accountRef(identity.uid).get();
-      if (account.data()?.role !== 'creator' || account.data()?.status !== 'active') {
-        throw new HttpsError('permission-denied', 'Active Creator access required.');
+      if (!professionalRolesForAccount(account.data() ?? {}).includes('creator') || account.data()?.status !== 'active') {
+        throw new HttpsError('permission-denied', 'Active VA Creator access required.');
       }
       if (release.data()?.creatorUserId !== identity.uid) {
         throw new HttpsError('permission-denied', 'You cannot change artwork for another creator.');
@@ -1570,6 +1585,22 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       pendingLogoStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+  } else if (kind === 'artist_portfolio') {
+    const portfolioRef = db.collection('artistPortfolio').doc(targetId);
+    const portfolioItem = await portfolioRef.get();
+    const previousPendingId = cleanText(portfolioItem.data()?.pendingImageAssetId, 160);
+    if (previousPendingId && previousPendingId !== assetId) {
+      const previousPending = await db.collection('imageAssets').doc(previousPendingId).get();
+      if (previousPending.exists && previousPending.data()?.status === 'pending') {
+        await clearAssetFile(previousPending.data() ?? {});
+        await previousPending.ref.set({ status:'removed', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      }
+    }
+    await portfolioRef.set({
+      pendingImageAssetId: assetId,
+      pendingImageStatus: 'pending',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge:true });
   } else if (kind === 'release_artwork') {
     const releaseRefForArtwork = db.collection('releases').doc(targetId);
     const release = await releaseRefForArtwork.get();
@@ -1721,6 +1752,17 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         pendingLogoStatus: 'rejected',
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+    } else if (asset.kind === 'artist_portfolio' && asset.targetId) {
+      const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
+      const portfolio = await portfolioRef.get();
+      if (portfolio.exists && portfolio.data()?.pendingImageAssetId === assetId) {
+        await portfolioRef.set({
+          pendingImageAssetId:null,
+          pendingImageStatus:'rejected',
+          status:'draft',
+          updatedAt:FieldValue.serverTimestamp(),
+        }, { merge:true });
+      }
     } else if (asset.kind === 'release_artwork' && asset.targetId) {
       const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
       const release = await releaseRefForArtwork.get();
@@ -1741,7 +1783,9 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
           ? 'Profile picture not approved'
           : asset.kind === 'release_artwork'
             ? 'Release artwork not approved'
-            : 'Nightjar image not approved',
+            : asset.kind === 'artist_portfolio'
+              ? 'Portfolio artwork not approved'
+              : 'Nightjar image not approved',
         message: note || 'The submitted image was not approved for use on Nightjar. You can remove it or submit a different image.',
         assetId,
         imageKind: asset.kind,
@@ -1801,6 +1845,32 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         await previous.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
     }
+  } else if (asset.kind === 'artist_portfolio' && asset.targetId) {
+    const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
+    const portfolio = await portfolioRef.get();
+    if (!portfolio.exists || portfolio.data()?.ownerUserId !== asset.ownerUserId || portfolio.data()?.pendingImageAssetId !== assetId) {
+      await clearAssetFile(asset);
+      await ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      throw new HttpsError('failed-precondition', 'This image is no longer the pending artwork for the Artist portfolio item.');
+    }
+    const previousAssetId = cleanText(portfolio.data()?.imageAssetId, 160);
+    await portfolioRef.set({
+      imageAssetId:assetId,
+      imageUrl:url,
+      imageStatus:'approved',
+      pendingImageAssetId:null,
+      pendingImageStatus:null,
+      status:'published',
+      publishedAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+    if (previousAssetId && previousAssetId !== assetId) {
+      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
+      if (previous.exists) {
+        await clearAssetFile(previous.data() ?? {});
+        await previous.ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      }
+    }
   } else if (asset.kind === 'release_artwork' && asset.targetId) {
     const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
     const release = await releaseRefForArtwork.get();
@@ -1839,7 +1909,9 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         ? 'Profile picture approved'
         : asset.kind === 'release_artwork'
           ? 'Release artwork approved'
-          : 'Nightjar image approved',
+          : asset.kind === 'artist_portfolio'
+            ? 'Portfolio artwork approved'
+            : 'Nightjar image approved',
       message: asset.kind === 'release_artwork'
         ? 'Your artwork passed Nightjar image moderation and is now available to the release.'
         : 'Your image passed Nightjar moderation and is now approved for use.',
@@ -1888,6 +1960,25 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
     publicUrl: null,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+
+  if (asset.kind === 'artist_portfolio' && asset.targetId) {
+    const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
+    const portfolio = await portfolioRef.get();
+    if (portfolio.exists) {
+      const update: Record<string, unknown> = { updatedAt:FieldValue.serverTimestamp() };
+      if (portfolio.data()?.pendingImageAssetId === assetId) {
+        update.pendingImageAssetId = null;
+        update.pendingImageStatus = null;
+      }
+      if (portfolio.data()?.imageAssetId === assetId) {
+        update.imageAssetId = null;
+        update.imageUrl = null;
+        update.imageStatus = null;
+        update.status = 'draft';
+      }
+      await portfolioRef.set(update, { merge:true });
+    }
+  }
 
   if (asset.kind === 'release_artwork' && asset.targetId) {
     const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
@@ -1968,6 +2059,109 @@ export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
   }, { merge: true });
   return { removed: true };
 });
+
+
+const artistPortfolioPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  ownerUserId: cleanText(data.ownerUserId, 160),
+  title: cleanText(data.title, 120),
+  description: cleanText(data.description, 600),
+  tags: cleanStringList(data.tags, 12),
+  commissionType: cleanText(data.commissionType, 80) || null,
+  status: cleanText(data.status, 30) || 'draft',
+  imageUrl: data.imageStatus === 'approved' ? validPublicUrl(data.imageUrl) : null,
+  imageStatus: cleanText(data.imageStatus, 30) || null,
+  pendingImageAssetId: cleanText(data.pendingImageAssetId, 160) || null,
+  pendingImageStatus: cleanText(data.pendingImageStatus, 30) || null,
+  createdAt: toIso(data.createdAt),
+  publishedAt: toIso(data.publishedAt),
+  updatedAt: toIso(data.updatedAt),
+});
+
+export const createArtistPortfolioItem = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['artist']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const title = cleanText(input.title, 120);
+  const description = cleanText(input.description, 600);
+  const tags = cleanStringList(input.tags, 12);
+  const commissionType = cleanText(input.commissionType, 80);
+  if (!title) throw new HttpsError('invalid-argument', 'Give the artwork a title.');
+
+  const existing = await db.collection('artistPortfolio').where('ownerUserId','==',identity.uid).limit(40).get();
+  if (existing.docs.filter((doc)=>doc.data()?.status !== 'removed').length >= 24) {
+    throw new HttpsError('resource-exhausted', 'Artist portfolios can contain up to 24 active pieces.');
+  }
+
+  const ref = db.collection('artistPortfolio').doc();
+  await ref.set({
+    ownerUserId:identity.uid,
+    title,
+    description,
+    tags,
+    commissionType:commissionType || null,
+    status:'draft',
+    imageAssetId:null,
+    imageUrl:null,
+    imageStatus:null,
+    pendingImageAssetId:null,
+    pendingImageStatus:null,
+    createdAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  });
+  const saved = await ref.get();
+  return { item:artistPortfolioPayload(saved.data() ?? {}, ref.id) };
+});
+
+export const myArtistPortfolio = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['artist']);
+  const snapshot = await db.collection('artistPortfolio').where('ownerUserId','==',identity.uid).limit(40).get();
+  return {
+    items:snapshot.docs
+      .map((doc)=>artistPortfolioPayload(doc.data() ?? {}, doc.id))
+      .filter((item)=>item.status !== 'removed')
+      .sort((a,b)=>String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))),
+  };
+});
+
+export const removeArtistPortfolioItem = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['artist']);
+  const itemId = cleanText((request.data as Record<string, unknown> | undefined)?.itemId, 160);
+  if (!itemId) throw new HttpsError('invalid-argument', 'Artist portfolio item is required.');
+  const ref = db.collection('artistPortfolio').doc(itemId);
+  const snapshot = await ref.get();
+  const data = snapshot.data() ?? {};
+  if (!snapshot.exists || data.ownerUserId !== identity.uid) throw new HttpsError('not-found', 'Artist portfolio item not found.');
+
+  for (const rawId of [data.imageAssetId,data.pendingImageAssetId]) {
+    const assetId = cleanText(rawId, 160);
+    if (!assetId) continue;
+    const asset = await db.collection('imageAssets').doc(assetId).get();
+    if (asset.exists && asset.data()?.ownerUserId === identity.uid) {
+      await clearAssetFile(asset.data() ?? {});
+      await asset.ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+    }
+  }
+  await ref.set({
+    status:'removed',
+    imageAssetId:null,
+    imageUrl:null,
+    imageStatus:null,
+    pendingImageAssetId:null,
+    pendingImageStatus:null,
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { removed:true, itemId };
+});
+
+const publicArtistPortfolioFor = async (userId: string) => {
+  const snapshot = await db.collection('artistPortfolio').where('ownerUserId','==',userId).limit(40).get();
+  return snapshot.docs
+    .map((doc)=>artistPortfolioPayload(doc.data() ?? {}, doc.id))
+    .filter((item)=>item.status === 'published' && Boolean(item.imageUrl))
+    .sort((a,b)=>String(b.publishedAt ?? '').localeCompare(String(a.publishedAt ?? '')))
+    .slice(0,24);
+};
 
 type CreatorRateBand = {
   minPaidSubscribers: number;
