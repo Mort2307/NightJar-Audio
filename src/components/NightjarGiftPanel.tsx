@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bird, Check, Gift, X } from 'lucide-react';
 import { nightjarGifts, type NightjarWallet } from '../platform/firebase-nightjars';
 
+type GiftRecipientRole = 'creator' | 'writer' | 'editor' | 'artist';
+
 type Props = {
   recipientUserId: string;
   recipientName: string;
@@ -16,6 +18,13 @@ const money = (pence: number) => new Intl.NumberFormat('en-GB', {
   currency: 'GBP',
 }).format(pence / 100);
 
+const roleLabel = (role: string) => {
+  if (role === 'creator') return 'VA Creator';
+  if (role === 'editor') return 'Audio Editor';
+  if (role === 'artist') return 'Artist';
+  return role === 'writer' ? 'Writer' : 'Professional';
+};
+
 export default function NightjarGiftPanel({ recipientUserId, recipientName, recipientRole, recipientRoles = [], onClose, notify }: Props) {
   const [wallet, setWallet] = useState<NightjarWallet | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -23,11 +32,21 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const eligibleRoles = Array.from(new Set([...(recipientRoles ?? []), recipientRole].filter((role) => ['creator','writer','editor','artist'].includes(role))));
-  const [targetRole, setTargetRole] = useState<string>(eligibleRoles[0] ?? recipientRole);
+
+  const eligibleRoles = useMemo<GiftRecipientRole[]>(() => Array.from(new Set(
+    [recipientRole, ...recipientRoles]
+      .map((role) => String(role))
+      .filter((role): role is GiftRecipientRole => ['creator','writer','editor','artist'].includes(role)),
+  )), [recipientRole, recipientRoles]);
+
+  const [targetRole, setTargetRole] = useState<GiftRecipientRole>(() => eligibleRoles[0] ?? 'creator');
+
+  useEffect(() => {
+    if (!eligibleRoles.includes(targetRole)) setTargetRole(eligibleRoles[0] ?? 'creator');
+  }, [eligibleRoles, targetRole]);
 
   const creatorValuePence = quantity * 100;
-  const canSend = Boolean(wallet && wallet.balance >= quantity && quantity >= 1 && quantity <= 100 && !sending);
+  const canSend = Boolean(wallet && eligibleRoles.length > 0 && wallet.balance >= quantity && quantity >= 1 && quantity <= 100 && !sending);
 
   useEffect(() => {
     void nightjarGifts.wallet()
@@ -35,23 +54,20 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
       .catch(() => notify('Your Nightjar wallet could not be loaded.'));
   }, []);
 
-  const roleLabel = useMemo(() => {
-    if (targetRole === 'creator') return 'VA Creator';
-    if (targetRole === 'editor') return 'Audio Editor';
-    if (targetRole === 'artist') return 'Artist';
-    return targetRole === 'writer' ? 'Writer' : 'Creator';
-  }, [targetRole]);
-
   const send = async () => {
     if (!canSend) return;
     setSending(true);
     try {
-      const result = await nightjarGifts.send(recipientUserId, quantity, { recipientRole: ['creator','writer','editor','artist'].includes(targetRole) ? targetRole as 'creator'|'writer'|'editor'|'artist' : undefined, note, anonymous });
+      const result = await nightjarGifts.send(recipientUserId, quantity, {
+        recipientRole: targetRole,
+        note,
+        anonymous,
+      });
       setWallet((current) => current ? { ...current, balance: result.balance, gifted: current.gifted + quantity } : current);
       setSent(true);
       notify(quantity === 1
-        ? `1 Nightjar sent to ${recipientName}. £1.00 has been added to their creator earnings.`
-        : `${quantity} Nightjars sent to ${recipientName}. ${money(result.creatorCreditPence)} has been added to their creator earnings.`);
+        ? `1 Nightjar sent to ${recipientName} as ${roleLabel(targetRole)}. £1.00 has been added to their creator earnings.`
+        : `${quantity} Nightjars sent to ${recipientName} as ${roleLabel(targetRole)}. ${money(result.creatorCreditPence)} has been added to their creator earnings.`);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Nightjars could not be sent.');
     } finally {
@@ -65,7 +81,7 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
         <div>
           <span className="mini-label">NIGHTJAR / SUPPORT GIFT</span>
           <h2>Send Nightjars</h2>
-          <p>Support {recipientName} · {roleLabel(selectedRecipientRole)}</p>
+          <p>Support {recipientName} · {roleLabel(targetRole)}</p>
         </div>
         <button className="icon-button" onClick={onClose} aria-label="Close Nightjar gift panel"><X size={18}/></button>
       </header>
@@ -78,15 +94,13 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
           </span>
           <div>
             <strong>{recipientName}</strong>
-            <small>Every Nightjar you send adds £1.00 to this creator's monthly earnings.</small>
+            <small>Every Nightjar you send adds £1.00 to this professional's monthly earnings.</small>
           </div>
         </div>
 
-        {eligibleRoles.length > 1 && <label className="account-access-field"><span>Support them as</span><select value={targetRole} onChange={(event)=>setTargetRole(event.target.value)}>{eligibleRoles.map((role)=><option key={role} value={role}>{role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role === 'artist' ? 'Artist' : 'Writer'}</option>)}</select></label>}
-
         {eligibleRoles.length > 1 && <div className="nightjar-recipient-role-picker">
           <span className="mini-label">SUPPORT WHICH ROLE?</span>
-          <div>{eligibleRoles.map((role) => <button type="button" key={role} className={selectedRecipientRole === role ? 'selected' : ''} aria-pressed={selectedRecipientRole === role} onClick={() => setSelectedRecipientRole(role)}>{roleLabel(role)}</button>)}</div>
+          <div>{eligibleRoles.map((role) => <button type="button" key={role} className={targetRole === role ? 'selected' : ''} aria-pressed={targetRole === role} onClick={() => setTargetRole(role)}>{roleLabel(role)}</button>)}</div>
           <small>Nightjars are credited one-to-one to the professional role you choose, even when one person has multiple Nightjar roles.</small>
         </div>}
 
@@ -133,7 +147,7 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
         </> : <div className="nightjar-gift-success">
           <Check size={28}/>
           <h3>Nightjars sent</h3>
-          <p>{money(creatorValuePence)} has been added to {recipientName}'s creator earnings.</p>
+          <p>{money(creatorValuePence)} has been added to {recipientName}'s {roleLabel(targetRole)} earnings.</p>
           <button className="secondary-button" onClick={onClose}>Done</button>
         </div>}
       </div>
