@@ -12,7 +12,8 @@
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "deploy": "firebase deploy --only functions",
     "audit:prod": "npm audit --omit=dev --audit-level=moderate",
-    "install-scripts:review": "npm install-scripts ls"
+    "install-scripts:review": "npm install-scripts ls",
+    "audit:guard": "node scripts/audit-known-advisories.mjs"
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",
