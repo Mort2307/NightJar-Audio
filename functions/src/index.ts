@@ -2726,6 +2726,14 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
     );
   }
 
+  const grantExpiresAtMs = Date.now() + 16 * 60 * 1000;
+  await accountRef(identity.uid).collection('playbackGrants').doc(releaseId).set({
+    releaseId,
+    accessReason: access.reason,
+    grantedAt: FieldValue.serverTimestamp(),
+    expiresAtMs: grantExpiresAtMs,
+  }, { merge:true });
+
   const [url] = await getStorage().bucket().file(String(data.audioStoragePath)).getSignedUrl({
     action: 'read',
     expires: Date.now() + 15 * 60 * 1000,
@@ -2840,6 +2848,14 @@ export const recordListeningEvent = onCall({ region: REGION }, async (request) =
   const eventType = cleanText(input.eventType, 30);
   if (!['start','progress','complete','skip','hide','favourite','unfavourite'].includes(eventType)) {
     throw new HttpsError('invalid-argument', 'Unsupported listening event.');
+  }
+
+  if (['start','progress','complete'].includes(eventType) && !identity.admin) {
+    const grant = await accountRef(identity.uid).collection('playbackGrants').doc(releaseId).get();
+    const expiresAtMs = Number(grant.data()?.expiresAtMs ?? 0);
+    if (!grant.exists || !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+      throw new HttpsError('failed-precondition', 'Open this release through Nightjar playback before recording listening activity.');
+    }
   }
 
   const event = {
