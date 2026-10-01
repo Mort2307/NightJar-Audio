@@ -17,7 +17,7 @@ const ADMIN_EMAILS = new Set([
 ]);
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
-type SelectableRole = 'creator' | 'listener' | 'writer';
+type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor';
 
 const cleanEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
 
@@ -116,9 +116,10 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   if (identity.admin) throw new HttpsError('failed-precondition', 'Administrator roles are assigned by Nightjar.');
 
-  const requestedRole = String((request.data as { role?: unknown } | undefined)?.role ?? '') as SelectableRole;
-  if (!['creator', 'listener', 'writer'].includes(requestedRole)) {
-    throw new HttpsError('invalid-argument', 'Choose Listener, Creator or Writer.');
+  const input = (request.data ?? {}) as { role?: unknown; referralCode?: unknown };
+  const requestedRole = String(input.role ?? '') as SelectableRole;
+  if (!['creator', 'listener', 'writer', 'editor'].includes(requestedRole)) {
+    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer or Audio Editor.');
   }
 
   const ref = accountRef(identity.uid);
@@ -129,7 +130,7 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('failed-precondition', 'This Nightjar account already has a role.');
   }
 
-  const status = requestedRole === 'creator' ? 'pending_review' : 'active';
+  const status = requestedRole === 'creator' || requestedRole === 'editor' ? 'pending_review' : 'active';
   await ref.set({
     email: identity.email,
     emailVerified: true,
@@ -139,14 +140,34 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge: true });
 
-  if (requestedRole === 'creator') {
+  if (requestedRole === 'creator' || requestedRole === 'editor') {
     await db.collection('creatorApplications').doc(identity.uid).set({
       userId: identity.uid,
       email: identity.email,
+      role: requestedRole,
       status: 'pending',
       submittedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+  }
+
+  const referralCode = cleanText(input.referralCode, 80);
+  if (requestedRole === 'creator' && referralCode) {
+    const referrals = await db.collection('creatorSuggestions').where('referralCode', '==', referralCode).limit(1).get();
+    const suggestion = referrals.docs[0];
+    if (suggestion) {
+      await suggestion.ref.set({
+        status: 'joined',
+        claimedByUserId: identity.uid,
+        claimedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await accountRef(identity.uid).set({
+        creatorReferralCode: referralCode,
+        creatorReferralSuggestionId: suggestion.id,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
   }
 
   return { userId: identity.uid, role: requestedRole, status };
@@ -154,6 +175,122 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
 
 const cleanText = (value: unknown, maxLength: number) =>
   String(value ?? '').trim().slice(0, maxLength);
+
+const validPublicUrl = (value: unknown) => {
+  const raw = cleanText(value, 500);
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return ['http:','https:'].includes(parsed.protocol) ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
+export const submitCreatorSuggestion = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const creatorName = cleanText(input.creatorName, 120);
+  const publicUrl = validPublicUrl(input.publicUrl);
+  const note = cleanText(input.note, 1200);
+  if (!creatorName) throw new HttpsError('invalid-argument', 'Creator name is required.');
+  if (cleanText(input.publicUrl, 500) && !publicUrl) throw new HttpsError('invalid-argument', 'Creator link must be a valid http or https URL.');
+
+  const profile = await profileRef(identity.uid).get();
+  const ref = db.collection('creatorSuggestions').doc();
+  const referralCode = randomUUID().replace(/-/g, '').slice(0, 14);
+  await ref.set({
+    creatorName,
+    publicUrl,
+    note: note || null,
+    submittedByUserId: identity.uid,
+    submittedByName: profile.data()?.displayName ?? identity.email.split('@')[0],
+    submittedByHandle: profile.data()?.handle ?? null,
+    referralCode,
+    status: 'new',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    suggestion: {
+      id: ref.id,
+      creatorName,
+      publicUrl,
+      status: 'new',
+      referralCode,
+      recommendationPath: '/account?entry=register&role=creator&ref=' + encodeURIComponent(referralCode),
+    },
+  };
+});
+
+export const listCreatorSuggestions = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('creatorSuggestions').limit(500).get();
+  const suggestions = snapshot.docs
+    .map((doc) => {
+      const data = doc.data() ?? {};
+      return {
+        id: doc.id,
+        creatorName: cleanText(data.creatorName, 120),
+        publicUrl: validPublicUrl(data.publicUrl),
+        note: cleanText(data.note, 1200) || null,
+        submittedByUserId: cleanText(data.submittedByUserId, 160) || null,
+        submittedByName: cleanText(data.submittedByName, 120) || 'Nightjar member',
+        submittedByHandle: cleanText(data.submittedByHandle, 120) || null,
+        referralCode: cleanText(data.referralCode, 80) || null,
+        status: cleanText(data.status, 40) || 'new',
+        claimedByUserId: cleanText(data.claimedByUserId, 160) || null,
+        createdAt: toIso(data.createdAt),
+        updatedAt: toIso(data.updatedAt),
+      };
+    })
+    .sort((a,b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return { suggestions };
+});
+
+export const reviewCreatorSuggestion = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const suggestionId = cleanText(input.suggestionId, 160);
+  const status = cleanText(input.status, 40);
+  if (!suggestionId) throw new HttpsError('invalid-argument', 'Creator suggestion is required.');
+  if (!['new','contacted','invited','joined','dismissed'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Creator suggestion status is invalid.');
+  }
+  const ref = db.collection('creatorSuggestions').doc(suggestionId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Creator suggestion not found.');
+  await ref.set({
+    status,
+    reviewedBy: admin.uid,
+    reviewedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { suggestionId, status };
+});
+
+export const creatorRecommendationLink = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const targetCreatorUserId = cleanText((request.data as Record<string, unknown> | undefined)?.targetCreatorUserId, 160);
+  if (!targetCreatorUserId) throw new HttpsError('invalid-argument', 'Creator is required.');
+  const target = await accountRef(targetCreatorUserId).get();
+  if (!target.exists || target.data()?.role !== 'creator' || target.data()?.status !== 'active') {
+    throw new HttpsError('not-found', 'Active Nightjar Creator not found.');
+  }
+  const code = createHash('sha256').update(identity.uid + '\u0000' + targetCreatorUserId).digest('hex').slice(0, 14);
+  await db.collection('creatorRecommendations').doc(code).set({
+    code,
+    recommenderUserId: identity.uid,
+    targetCreatorUserId,
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { path: '/people/' + encodeURIComponent(targetCreatorUserId) + '?recommend=' + encodeURIComponent(code), code };
+});
+
 
 const cleanStringList = (value: unknown, maxItems = 16) => {
   if (!Array.isArray(value)) return [];
