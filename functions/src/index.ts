@@ -2641,9 +2641,14 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   const ref = accountRef(userId);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
-  const email = cleanEmail(snapshot.data()?.email);
+  const accountData = snapshot.data() ?? {};
+  const email = cleanEmail(accountData.email);
   if (ADMIN_EMAILS.has(email)) {
     throw new HttpsError('failed-precondition', 'Owner administrator accounts cannot be reassigned here.');
+  }
+  const approvedProfessionalRoles = professionalRolesForAccount(accountData);
+  if (role !== 'listener' && !approvedProfessionalRoles.includes(role)) {
+    throw new HttpsError('failed-precondition', 'Approve this professional role through the controlled application bank before making it the active workspace.');
   }
 
   await ref.set({
