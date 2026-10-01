@@ -10,6 +10,8 @@ const db = getFirestore();
 const REGION = 'europe-west2';
 const AGE_ASSURANCE_CONFIGURED = false;
 const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
+const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
+const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
 
 const ADMIN_EMAILS = new Set([
   'mike.owen230792@gmail.com',
@@ -21,6 +23,41 @@ type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'art
 type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 
 const cleanEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
+const accountRef = (uid: string) => db.collection('accounts').doc(uid);
+const validEmailAddress = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const testerAllowlistRef = (email: string) => db
+  .collection(CLOSED_BETA_ALLOWLIST_COLLECTION)
+  .doc(createHash('sha256').update(cleanEmail(email)).digest('hex'));
+
+const testerAccessForEmail = async (emailValue: unknown) => {
+  const email = cleanEmail(emailValue);
+  if (!validEmailAddress(email)) return null;
+  const snapshot = await testerAllowlistRef(email).get();
+  const data = snapshot.data() ?? {};
+  if (!snapshot.exists || data.enabled !== true || cleanEmail(data.email) !== email) return null;
+  return data;
+};
+
+const closedBetaAccessFor = async (emailValue: unknown, accountState: Record<string, unknown> | null = null) => {
+  const email = cleanEmail(emailValue);
+  if (!CLOSED_BETA) return { allowed: true, reason: 'public-registration' as const };
+  if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' as const };
+  if (accountState?.testAccess === true) return { allowed: true, reason: 'legacy-test-access' as const };
+  if (await testerAccessForEmail(email)) return { allowed: true, reason: 'approved-tester' as const };
+  return { allowed: false, reason: 'not-invited' as const };
+};
+
+const requireClosedBetaAccess = async (emailValue: unknown, accountState: Record<string, unknown> | null = null) => {
+  const access = await closedBetaAccessFor(emailValue, accountState);
+  if (!access.allowed) {
+    throw new HttpsError(
+      'permission-denied',
+      'Nightjar is currently in private testing. This email has not been invited.',
+      { code: 'closed_beta_not_invited' },
+    );
+  }
+  return access;
+};
 
 const requireVerifiedIdentity = (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to Nightjar first.');
@@ -46,6 +83,7 @@ const requireRegistrationIdentity = (request: { auth?: { uid: string; token: Rec
 
 export const stageRegistrationIntent = onCall({ region: REGION }, async (request) => {
   const identity = requireRegistrationIdentity(request);
+  await requireClosedBetaAccess(identity.email);
   const input = (request.data ?? {}) as { role?: unknown; roles?: unknown; referralCode?: unknown };
   const legacyRole = String(input.role ?? '').trim();
   const submittedRoles = Array.isArray(input.roles)
@@ -75,12 +113,11 @@ const requireAdminIdentity = (request: { auth?: { uid: string; token: Record<str
   return identity;
 };
 
-const accountRef = (uid: string) => db.collection('accounts').doc(uid);
-
 const requireActiveIdentity = async (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
   const identity = requireVerifiedIdentity(request);
   if (identity.admin) return identity;
   const snapshot = await accountRef(identity.uid).get();
+  await requireClosedBetaAccess(identity.email, snapshot.data() ?? null);
   if (snapshot.exists && snapshot.data()?.status === 'suspended') {
     throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
   }
@@ -92,6 +129,23 @@ export const health = onRequest({ region: REGION }, (_request, response) => {
   response.status(200).json({ service: 'nightjar', status: 'ok' });
 });
 
+export const closedBetaRegistrationStatus = onCall({ region: REGION }, async (request) => {
+  const email = cleanEmail((request.data as { email?: unknown } | undefined)?.email);
+  if (!validEmailAddress(email)) {
+    return {
+      closedBeta: CLOSED_BETA,
+      allowed: false,
+      temporaryAgeBypass: false,
+    };
+  }
+  const access = await closedBetaAccessFor(email);
+  return {
+    closedBeta: CLOSED_BETA,
+    allowed: access.allowed,
+    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED,
+  };
+});
+
 export const accountIdentity = onCall({ region: REGION }, async (request) => {
   const identity = requireVerifiedIdentity(request);
   const ref = accountRef(identity.uid);
@@ -99,6 +153,7 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     ref.get(),
     db.collection('registrationIntents').doc(identity.uid).get(),
   ]);
+  const betaAccess = await requireClosedBetaAccess(identity.email, snapshot.data() ?? null);
 
   if (identity.admin) {
     const record = {
@@ -141,6 +196,7 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     role,
     status,
     emailVerified: true,
+    testAccess: current.testAccess === true || betaAccess.reason === 'approved-tester' || betaAccess.reason === 'legacy-test-access',
     updatedAt: FieldValue.serverTimestamp(),
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge:true });
@@ -2563,7 +2619,10 @@ export const spotlightState = onCall({ region: REGION }, async (request) => {
 
 export const adminAccountOverview = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const accountsSnapshot = await db.collection('accounts').limit(5000).get();
+  const [accountsSnapshot, testerSnapshot] = await Promise.all([
+    db.collection('accounts').limit(5000).get(),
+    db.collection(CLOSED_BETA_ALLOWLIST_COLLECTION).limit(1000).get(),
+  ]);
   const accounts = await Promise.all(accountsSnapshot.docs.map(async (doc) => {
     const account = doc.data();
     const profile = await profileRef(doc.id).get();
@@ -2582,6 +2641,16 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       testAccess: account.testAccess === true,
     };
   }));
+
+  const approvedTesters = testerSnapshot.docs
+    .map((doc) => doc.data() ?? {})
+    .filter((entry) => entry.enabled === true && validEmailAddress(cleanEmail(entry.email)))
+    .map((entry) => ({
+      email: cleanEmail(entry.email),
+      enabled: true,
+      note: cleanText(entry.note, 300) || null,
+    }))
+    .sort((a, b) => a.email.localeCompare(b.email));
 
   const counts = {
     listener: accounts.filter((account) => account.role !== 'admin').length,
@@ -2602,7 +2671,48 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
         status: 'active',
       })),
     },
+    testing: {
+      closedBeta: CLOSED_BETA,
+      ageAssuranceConfigured: AGE_ASSURANCE_CONFIGURED,
+      temporaryAgeBypassEnabled: TESTING_AGE_ASSURANCE_BYPASS,
+      approvedTesters,
+      approvedTesterCount: approvedTesters.length,
+    },
   };
+});
+
+export const adminSetClosedBetaTester = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const email = cleanEmail(input.email);
+  const enabled = input.enabled !== false;
+  const note = cleanText(input.note, 300);
+
+  if (!validEmailAddress(email)) throw new HttpsError('invalid-argument', 'Enter a valid tester email address.');
+  if (ADMIN_EMAILS.has(email)) {
+    throw new HttpsError('failed-precondition', 'Administrator emails already have private test access.');
+  }
+
+  const allowRef = testerAllowlistRef(email);
+  const existing = await allowRef.get();
+  await allowRef.set({
+    email,
+    enabled,
+    note: note || existing.data()?.note || null,
+    updatedBy: admin.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(existing.exists ? {} : { createdBy: admin.uid, createdAt: FieldValue.serverTimestamp() }),
+  }, { merge: true });
+
+  const matchingAccounts = await db.collection('accounts').where('email', '==', email).limit(5).get();
+  await Promise.all(matchingAccounts.docs.map((doc) => doc.ref.set({
+    testAccess: enabled,
+    testAccessUpdatedBy: admin.uid,
+    testAccessUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true })));
+
+  return { email, enabled, matchedAccounts: matchingAccounts.size };
 });
 
 export const adminSetTestAccess = onCall({ region: REGION }, async (request) => {
@@ -2626,6 +2736,16 @@ export const adminSetTestAccess = onCall({ region: REGION }, async (request) => 
     testAccessUpdatedBy: admin.uid,
     testAccessUpdatedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const allowRef = testerAllowlistRef(email);
+  const existingAllow = await allowRef.get();
+  await allowRef.set({
+    email,
+    enabled,
+    updatedBy: admin.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(existingAllow.exists ? {} : { createdBy: admin.uid, createdAt: FieldValue.serverTimestamp() }),
   }, { merge: true });
 
   return { userId, testAccess: enabled };
@@ -3087,14 +3207,17 @@ const temporaryAgeBypassFor = async (uid: string) => {
   const data = snapshot.data() ?? {};
   const email = cleanEmail(data.email);
   if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' };
-  if (data.testAccess === true) return { allowed: true, reason: 'approved-tester' };
+  if (data.testAccess === true || await testerAccessForEmail(email)) {
+    return { allowed: true, reason: 'approved-tester' };
+  }
   return { allowed: false, reason: null as string | null };
 };
 
 const requireAgeVerified = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
-  if (data?.verified) return data;
+  const persistentVerified = data?.verified === true && data?.testMode !== true && data?.provider !== 'admin-test';
+  if (persistentVerified) return data;
 
   const bypass = await temporaryAgeBypassFor(uid);
   if (bypass.allowed) {
@@ -3474,18 +3597,19 @@ export const ageStatus = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
   const data = snapshot.data() ?? {};
-  const bypass = data.verified === true ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
-  const verified = data.verified === true || bypass.allowed;
+  const persistentVerified = data.verified === true && data.testMode !== true && data.provider !== 'admin-test';
+  const bypass = persistentVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
+  const verified = persistentVerified || bypass.allowed;
   return {
     verified,
     status: verified ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
     ageThreshold: 18,
     configured: AGE_ASSURANCE_CONFIGURED,
-    provider: data.provider ?? (bypass.allowed ? 'temporary-test-access' : 'not-configured'),
-    environment: data.environment ?? (bypass.allowed ? 'development' : 'production'),
-    verifiedAt: data.verifiedAt ?? null,
-    reverifyRequired: data.reverifyRequired === true,
-    testAvailable: identity.admin,
+    provider: persistentVerified ? (data.provider ?? 'verified-provider') : (bypass.allowed ? 'temporary-test-access' : 'not-configured'),
+    environment: persistentVerified ? (data.environment ?? 'production') : (bypass.allowed ? 'development' : 'production'),
+    verifiedAt: persistentVerified ? (data.verifiedAt ?? null) : null,
+    reverifyRequired: persistentVerified && data.reverifyRequired === true,
+    testAvailable: identity.admin || bypass.allowed,
     temporaryBypass: bypass.allowed,
     temporaryBypassReason: bypass.reason,
   };
