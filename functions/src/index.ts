@@ -2327,6 +2327,42 @@ type ReleaseStatus = 'draft' | 'pending_review' | 'released' | 'rejected';
 
 const releaseRef = (releaseId: string) => db.collection('releases').doc(releaseId);
 
+const releaseWorkAccess = (data: Record<string, any>, userId: string) => {
+  if (cleanText(data.creatorUserId, 160) === userId) return true;
+  return normaliseReleaseContributors(data.contributors).some((credit) => credit.userId === userId);
+};
+
+const activeListeningSubscriptionFor = async (userId: string) => {
+  const snapshot = await db.collection('subscriptions').where('userId', '==', userId).limit(20).get();
+  const eligible = snapshot.docs.find((doc) => ['active','trialing'].includes(String(doc.data()?.status ?? '')));
+  return eligible ? { id: eligible.id, status: String(eligible.data()?.status ?? '') } : null;
+};
+
+const playbackAccessFor = (
+  data: Record<string, any>,
+  userId: string,
+  options: { admin?: boolean; subscription?: { id: string; status: string } | null } = {},
+) => {
+  if (options.admin) return { allowed:true, reason:'admin' as const };
+  if (releaseWorkAccess(data, userId)) return { allowed:true, reason:'credited_work' as const };
+  if (options.subscription) return { allowed:true, reason:'subscription' as const };
+  return { allowed:false, reason:'subscription_required' as const };
+};
+
+const decorateReleaseAccess = (
+  data: Record<string, any>,
+  id: string,
+  userId: string,
+  options: { admin?: boolean; subscription?: { id: string; status: string } | null } = {},
+) => {
+  const access = playbackAccessFor(data, userId, options);
+  return {
+    ...releasePayload(data, id),
+    playbackAllowed: access.allowed,
+    playbackAccessReason: access.reason,
+  };
+};
+
 const requireAccountRole = async (
   request: { auth?: { uid: string; token: Record<string, unknown> } | null },
   roles: AccountRole[],
@@ -2398,11 +2434,14 @@ export const listCatalogue = onCall({ region: REGION }, async (request) => {
   const query = cleanText(input.q, 120).toLowerCase();
   const category = cleanText(input.category, 80).toLowerCase();
 
-  const snapshot = await db.collection('releases').where('status', '==', 'released').limit(500).get();
+  const [snapshot, subscription] = await Promise.all([
+    db.collection('releases').where('status', '==', 'released').limit(500).get(),
+    identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+  ]);
   const catalogue = snapshot.docs
     .filter((doc) => !category || cleanText(doc.data().category, 80).toLowerCase() === category)
     .filter((doc) => !query || releaseSearchText(doc.data()).includes(query))
-    .map((doc) => releasePayload(doc.data(), doc.id));
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }));
 
   return { catalogue };
 });
@@ -2675,11 +2714,21 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
   const data = snapshot.data();
   if (!data || data.status !== 'released' || !data.audioStoragePath) throw new HttpsError('not-found', 'Playable release not found.');
 
+  const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const access = playbackAccessFor(data, identity.uid, { admin:identity.admin, subscription });
+  if (!access.allowed) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A Nightjar subscription is required to listen to catalogue work you are not credited on.',
+      { code:'subscription_required', releaseId },
+    );
+  }
+
   const [url] = await getStorage().bucket().file(String(data.audioStoragePath)).getSignedUrl({
     action: 'read',
     expires: Date.now() + 15 * 60 * 1000,
   });
-  return { releaseId, url, expiresInSeconds: 900 };
+  return { releaseId, url, expiresInSeconds: 900, accessReason:access.reason };
 });
 
 export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
@@ -2890,6 +2939,7 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
     }
   }
 
+  const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const following = new Set(followsSnapshot.docs.map((doc) => doc.id));
   const items = releasesSnapshot.docs.map((doc) => {
     const data = doc.data();
@@ -2904,7 +2954,7 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
     if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
     const matches = values.filter((value) => (liked.get(value.toLowerCase()) ?? 0) > 0).slice(0, 3);
     return {
-      ...releasePayload(data, doc.id),
+      ...decorateReleaseAccess(data, doc.id, identity.uid, { admin:identity.admin, subscription }),
       score,
       reason: matches.length
         ? 'Because you chose ' + matches.join(', ') + '.'
@@ -2920,9 +2970,10 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
 export const trendingReleases = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [releasesSnapshot, listeningSnapshot] = await Promise.all([
+  const [releasesSnapshot, listeningSnapshot, subscription] = await Promise.all([
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
     db.collection('listeningEvents').limit(5000).get(),
+    identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
   const counts = new Map<string, number>();
   for (const doc of listeningSnapshot.docs) {
@@ -2930,7 +2981,7 @@ export const trendingReleases = onCall({ region: REGION }, async (request) => {
     if (releaseId) counts.set(releaseId, (counts.get(releaseId) ?? 0) + 1);
   }
   const trending = releasesSnapshot.docs
-    .map((doc) => ({ ...releasePayload(doc.data(), doc.id), listeningEvents: counts.get(doc.id) ?? 0 }))
+    .map((doc) => ({ ...decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }), listeningEvents: counts.get(doc.id) ?? 0 }))
     .sort((a, b) => b.listeningEvents - a.listeningEvents)
     .slice(0, 24);
   return { trending };
