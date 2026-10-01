@@ -5,7 +5,7 @@ import { nightjarEngagement } from '../platform/firebase-engagement';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 
 type Props = {
-  release: { id: string; title: string; creator?: string };
+  release: { id: string; title: string; creator?: string; creatorUserId?: string | null; contributors?: any[] };
   onClose: () => void;
   notify: (message: string) => void;
   demoMode?: boolean;
@@ -26,7 +26,15 @@ export default function ReleaseReviews({
   onCommunityChanged,
 }: Props) {
   const canCommunityInteract = viewerRole === 'listener';
-  const canTeamReply = ['creator','writer','editor'].includes(String(viewerRole));
+  const creativeViewer = ['creator','writer','editor'].includes(String(viewerRole));
+  const creditedViewer = Boolean(
+    currentUserId
+    && (
+      String(release.creatorUserId ?? '') === String(currentUserId)
+      || (release.contributors ?? []).some((credit:any) => String(credit.userId ?? '') === String(currentUserId))
+    )
+  );
+  const canTeamReply = creativeViewer && ((demoMode && simulationMode) || creditedViewer);
   const dialogRef = useRef<HTMLElement | null>(null);
   const [tab, setTab] = useState<'comments' | 'reviews'>('comments');
   const [reviews, setReviews] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
