@@ -6,6 +6,7 @@ type Props = {
   recipientUserId: string;
   recipientName: string;
   recipientRole: string;
+  recipientRoles?: string[];
   onClose: () => void;
   notify: (message: string) => void;
 };
@@ -15,13 +16,15 @@ const money = (pence: number) => new Intl.NumberFormat('en-GB', {
   currency: 'GBP',
 }).format(pence / 100);
 
-export default function NightjarGiftPanel({ recipientUserId, recipientName, recipientRole, onClose, notify }: Props) {
+export default function NightjarGiftPanel({ recipientUserId, recipientName, recipientRole, recipientRoles = [], onClose, notify }: Props) {
   const [wallet, setWallet] = useState<NightjarWallet | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [anonymous, setAnonymous] = useState(false);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const eligibleRoles = Array.from(new Set([...(recipientRoles ?? []), recipientRole].filter((role) => ['creator','writer','editor','artist'].includes(role))));
+  const [targetRole, setTargetRole] = useState<string>(eligibleRoles[0] ?? recipientRole);
 
   const creatorValuePence = quantity * 100;
   const canSend = Boolean(wallet && wallet.balance >= quantity && quantity >= 1 && quantity <= 100 && !sending);
@@ -33,17 +36,17 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
   }, []);
 
   const roleLabel = useMemo(() => {
-    if (recipientRole === 'creator') return 'VA Creator';
-    if (recipientRole === 'editor') return 'Audio Editor';
-    if (recipientRole === 'artist') return 'Artist';
-    return recipientRole === 'writer' ? 'Writer' : 'Creator';
-  }, [recipientRole]);
+    if (targetRole === 'creator') return 'VA Creator';
+    if (targetRole === 'editor') return 'Audio Editor';
+    if (targetRole === 'artist') return 'Artist';
+    return targetRole === 'writer' ? 'Writer' : 'Creator';
+  }, [targetRole]);
 
   const send = async () => {
     if (!canSend) return;
     setSending(true);
     try {
-      const result = await nightjarGifts.send(recipientUserId, quantity, { recipientRole: ['creator','writer','editor','artist'].includes(recipientRole) ? recipientRole as 'creator'|'writer'|'editor'|'artist' : undefined, note, anonymous });
+      const result = await nightjarGifts.send(recipientUserId, quantity, { recipientRole: ['creator','writer','editor','artist'].includes(targetRole) ? targetRole as 'creator'|'writer'|'editor'|'artist' : undefined, note, anonymous });
       setWallet((current) => current ? { ...current, balance: result.balance, gifted: current.gifted + quantity } : current);
       setSent(true);
       notify(quantity === 1
@@ -78,6 +81,8 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
             <small>Every Nightjar you send adds £1.00 to this creator's monthly earnings.</small>
           </div>
         </div>
+
+        {eligibleRoles.length > 1 && <label className="account-access-field"><span>Support them as</span><select value={targetRole} onChange={(event)=>setTargetRole(event.target.value)}>{eligibleRoles.map((role)=><option key={role} value={role}>{role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role === 'artist' ? 'Artist' : 'Writer'}</option>)}</select></label>}
 
         <div className="nightjar-wallet-summary">
           <span>Your wallet</span>
