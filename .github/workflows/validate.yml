@@ -41,3 +41,7 @@ jobs:
       - name: Typecheck Firebase Functions
         working-directory: functions
         run: npm run check
+
+      - name: Audit Firebase Functions production dependencies
+        working-directory: functions
+        run: npm run audit:guard
