@@ -1,8 +1,11 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 const db = () => getFirestore();
 const REGION = 'europe-west2';
+const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
+const GIFT_CLEARANCE_DAYS = 7;
 const ELIGIBLE_RECIPIENT_ROLES = new Set(['creator', 'writer', 'editor', 'artist']);
 const professionalRolesFor = (data: Record<string, any>) => {
   const approved = Array.isArray(data.approvedProfessionalRoles) ? data.approvedProfessionalRoles.map((value: unknown) => cleanText(value, 30)) : [];
@@ -30,7 +33,7 @@ const requireIdentity = async (request: { auth?: { uid: string; token: Record<st
   const data = account.data() ?? {};
   if (data.status === 'suspended') throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
   const age = await db().collection('ageAssurance').doc(uid).get();
-  if (age.data()?.verified !== true && data.testAccess !== true && data.role !== 'admin') {
+  if (!TESTING_AGE_ASSURANCE_BYPASS && age.data()?.verified !== true && data.testAccess !== true && data.role !== 'admin') {
     throw new HttpsError('permission-denied', 'Age assurance is required before using Nightjar gifts.');
   }
   return { uid, account: data };
@@ -140,13 +143,23 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
     }, { merge: true });
 
     const currentEarnings = recipientEarnings.data() ?? {};
+    const byRole = currentEarnings.byRole && typeof currentEarnings.byRole === 'object' ? { ...currentEarnings.byRole } : {};
+    const roleEarnings = byRole[recipientRole] && typeof byRole[recipientRole] === 'object' ? { ...byRole[recipientRole] } : {};
+    byRole[recipientRole] = {
+      pendingNightjars: Number(roleEarnings.pendingNightjars ?? 0) + quantity,
+      pendingPence: Number(roleEarnings.pendingPence ?? 0) + creatorCreditPence,
+      clearedNightjars: Number(roleEarnings.clearedNightjars ?? 0),
+      clearedPence: Number(roleEarnings.clearedPence ?? 0),
+      lifetimeNightjars: Number(roleEarnings.lifetimeNightjars ?? 0) + quantity,
+      lifetimePence: Number(roleEarnings.lifetimePence ?? 0) + creatorCreditPence,
+    };
     tx.set(earningsRef(recipientUserId), {
       recipientUserId,
-      recipientRole,
       pendingNightjars: Number(currentEarnings.pendingNightjars ?? 0) + quantity,
       pendingPence: Number(currentEarnings.pendingPence ?? 0) + creatorCreditPence,
       lifetimeNightjars: Number(currentEarnings.lifetimeNightjars ?? 0) + quantity,
       lifetimePence: Number(currentEarnings.lifetimePence ?? 0) + creatorCreditPence,
+      byRole,
       updatedAt: FieldValue.serverTimestamp(),
       ...(recipientEarnings.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
@@ -163,6 +176,7 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
       anonymous,
       note: note || null,
       status: 'pending_clearance',
+      clearsAtMs: Date.now() + GIFT_CLEARANCE_DAYS * 24 * 60 * 60 * 1000,
       createdAt: FieldValue.serverTimestamp(),
     });
 
@@ -186,7 +200,96 @@ export const myNightjarEarnings = onCall({ region: REGION }, async (request) => 
     clearedPence: Number(data.clearedPence ?? 0),
     lifetimeNightjars: Number(data.lifetimeNightjars ?? 0),
     lifetimePence: Number(data.lifetimePence ?? 0),
+    byRole: data.byRole && typeof data.byRole === 'object' ? data.byRole : {},
   };
+});
+
+export const myNightjarGiftHistory = onCall({ region: REGION }, async (request) => {
+  const identity = await requireIdentity(request);
+  const [sentSnapshot, receivedSnapshot] = await Promise.all([
+    giftLedger().where('senderUserId', '==', identity.uid).limit(250).get(),
+    giftLedger().where('recipientUserId', '==', identity.uid).limit(250).get(),
+  ]);
+  const present = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+    const data = doc.data() ?? {};
+    return {
+      id: doc.id,
+      type: data.type ?? 'gift',
+      senderUserId: data.senderUserId ?? null,
+      recipientUserId: data.recipientUserId ?? null,
+      recipientRole: data.recipientRole ?? null,
+      recipientDisplayName: data.recipientDisplayName ?? null,
+      quantity: Number(data.quantity ?? 0),
+      unitCreatorValuePence: Number(data.unitCreatorValuePence ?? NIGHTJAR_VALUE_PENCE),
+      creatorCreditPence: Number(data.creatorCreditPence ?? 0),
+      anonymous: data.anonymous === true,
+      note: data.note ?? null,
+      status: data.status ?? null,
+      clearsAtMs: Number(data.clearsAtMs ?? 0) || null,
+      createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? null,
+      clearedAt: data.clearedAt?.toDate?.()?.toISOString?.() ?? null,
+    };
+  };
+  const newestFirst = (a: ReturnType<typeof present>, b: ReturnType<typeof present>) =>
+    String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''));
+  return {
+    sent: sentSnapshot.docs.map(present).sort(newestFirst),
+    received: receivedSnapshot.docs.map(present).sort(newestFirst),
+  };
+});
+
+export const clearMatureNightjarGifts = onSchedule({
+  region: REGION,
+  schedule: 'every day 03:15',
+  timeZone: 'Europe/London',
+}, async () => {
+  const snapshot = await giftLedger().where('status', '==', 'pending_clearance').limit(500).get();
+  const mature = snapshot.docs.filter((doc) => Number(doc.data()?.clearsAtMs ?? 0) > 0 && Number(doc.data()?.clearsAtMs ?? 0) <= Date.now());
+
+  for (const gift of mature) {
+    await db().runTransaction(async (tx) => {
+      const currentGift = await tx.get(gift.ref);
+      const giftData = currentGift.data() ?? {};
+      if (!currentGift.exists || giftData.status !== 'pending_clearance' || Number(giftData.clearsAtMs ?? 0) > Date.now()) return;
+
+      const recipientUserId = cleanText(giftData.recipientUserId);
+      const recipientRole = cleanText(giftData.recipientRole, 30);
+      const quantity = Number(giftData.quantity ?? 0);
+      const creatorCreditPence = Number(giftData.creatorCreditPence ?? quantity * NIGHTJAR_VALUE_PENCE);
+      if (!recipientUserId || !recipientRole || quantity <= 0 || creatorCreditPence <= 0) {
+        tx.set(gift.ref, { status:'clearance_error', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+        return;
+      }
+
+      const earningsDocument = earningsRef(recipientUserId);
+      const earningsSnapshot = await tx.get(earningsDocument);
+      const earnings = earningsSnapshot.data() ?? {};
+      const byRole = earnings.byRole && typeof earnings.byRole === 'object' ? { ...earnings.byRole } : {};
+      const roleEarnings = byRole[recipientRole] && typeof byRole[recipientRole] === 'object' ? { ...byRole[recipientRole] } : {};
+
+      byRole[recipientRole] = {
+        ...roleEarnings,
+        pendingNightjars: Math.max(0, Number(roleEarnings.pendingNightjars ?? 0) - quantity),
+        pendingPence: Math.max(0, Number(roleEarnings.pendingPence ?? 0) - creatorCreditPence),
+        clearedNightjars: Number(roleEarnings.clearedNightjars ?? 0) + quantity,
+        clearedPence: Number(roleEarnings.clearedPence ?? 0) + creatorCreditPence,
+      };
+
+      tx.set(earningsDocument, {
+        pendingNightjars: Math.max(0, Number(earnings.pendingNightjars ?? 0) - quantity),
+        pendingPence: Math.max(0, Number(earnings.pendingPence ?? 0) - creatorCreditPence),
+        clearedNightjars: Number(earnings.clearedNightjars ?? 0) + quantity,
+        clearedPence: Number(earnings.clearedPence ?? 0) + creatorCreditPence,
+        byRole,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge:true });
+      tx.set(gift.ref, {
+        status:'cleared',
+        clearedAt:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+    });
+  }
 });
 
 // Testing/admin bridge. Live purchases must credit wallets from a verified payment webhook, not from the client.
