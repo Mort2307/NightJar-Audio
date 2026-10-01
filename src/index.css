@@ -4247,3 +4247,16 @@ select:disabled {
 .professional-role-picker button.selected{border-color:rgba(37,192,201,.65);background:rgba(37,192,201,.1)}
 .professional-role-picker small{display:block;opacity:.7}
 @media(max-width:720px){.nightjar-quantity-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.professional-role-picker{grid-template-columns:1fr 1fr}.professional-role-row{align-items:flex-start;flex-wrap:wrap}.professional-role-actions{width:100%;justify-content:flex-end}}
+
+
+.profile-role-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.45rem}
+.profile-role-chips span{display:inline-flex;align-items:center;padding:.25rem .5rem;border-radius:999px;border:1px solid rgba(37,192,201,.25);background:rgba(37,192,201,.08);font-size:.72rem;font-weight:700;letter-spacing:.02em}
+.admin-application-wavebar{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;padding:1rem;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.03)}
+.admin-application-wavebar>div{min-width:0}
+.admin-application-wavebar strong,.admin-application-wavebar small{display:block}
+.admin-application-wavebar small{opacity:.72;margin-top:.25rem}
+.admin-application-wavebar label{min-width:220px}
+.admin-application-wavebar input{width:100%;margin-top:.35rem}
+.professional-application-row p{margin:.45rem 0 .25rem;line-height:1.5}
+.professional-application-row small{display:block;word-break:break-word}
+@media(max-width:720px){.admin-application-wavebar{align-items:stretch;flex-direction:column}.admin-application-wavebar label{min-width:0}}
