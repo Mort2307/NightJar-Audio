@@ -2658,62 +2658,6 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   return { userId, role, status };
 });
 
-export const listCreatorApplications = onCall({ region: REGION }, async (request) => {
-  requireAdminIdentity(request);
-  const snapshot = await db.collection('creatorApplications').limit(500).get();
-  const applications = await Promise.all(snapshot.docs.map(async (doc) => {
-    const data = doc.data();
-    const profile = await profileRef(String(data.userId ?? doc.id)).get();
-    return {
-      id: doc.id,
-      userId: data.userId ?? doc.id,
-      email: data.email ?? null,
-      creatorName: profile.data()?.displayName ?? null,
-      displayName: profile.data()?.displayName ?? null,
-      role: data.role ?? 'creator',
-      status: data.status ?? 'pending',
-    };
-  }));
-  applications.sort((a, b) => String(a.status).localeCompare(String(b.status)));
-  return { applications };
-});
-
-export const decideCreatorApplication = onCall({ region: REGION }, async (request) => {
-  const admin = requireAdminIdentity(request);
-  const input = (request.data ?? {}) as Record<string, unknown>;
-  const applicationId = cleanText(input.applicationId, 160);
-  const decision = cleanText(input.decision, 30);
-  if (!applicationId || !['approved', 'waitlist', 'rejected'].includes(decision)) {
-    throw new HttpsError('invalid-argument', 'Choose a valid professional account decision.');
-  }
-
-  const applicationRef = db.collection('creatorApplications').doc(applicationId);
-  const application = await applicationRef.get();
-  if (!application.exists) throw new HttpsError('not-found', 'Creator application not found.');
-
-  const userId = String(application.data()?.userId ?? applicationId);
-  const account = await accountRef(userId).get();
-  const professionalRole = String(account.data()?.role ?? '');
-  if (!account.exists || !['creator','writer','editor','artist'].includes(professionalRole)) {
-    throw new HttpsError('failed-precondition', 'Professional account is no longer eligible for this application.');
-  }
-
-  await applicationRef.set({
-    status: decision,
-    decidedBy: admin.uid,
-    decidedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  await accountRef(userId).set({
-    status: decision === 'approved' ? 'active' : 'pending_review',
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  await syncCreatorCustomTagUsage(userId);
-  return { applicationId, userId, decision, accountStatus: decision === 'approved' ? 'active' : 'pending_review' };
-});
-
 export const listBillingSubscriptions = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('subscriptions').limit(1000).get();
