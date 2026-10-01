@@ -357,8 +357,18 @@ function App() {
     popularityAffectsBaseRate: false,
     tipsEnabled: false,
     individualPurchasesEnabled: false,
+    listenerSubscriptionUrl: null,
   });
   const [commercialSaving, setCommercialSaving] = useState(false);
+  const [listeningAccess, setListeningAccess] = useState<{
+    role:string|null;
+    subscribed:boolean;
+    subscriptionStatus:string|null;
+    planningMonthlyPricePence:number|null;
+    subscriptionUrl:string|null;
+    creditedWorkIncluded:true;
+    rule:string;
+  } | null>(null);
   const [reviewTrack, setReviewTrack] = useState<Track | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [catalogueQuery, setCatalogueQuery] = useState('');
@@ -922,11 +932,12 @@ function App() {
       });
       await loadNotifications(epoch);
       if (user) {
-        const [recommendationsResponse, trendingResponse, communityState, reactionState] = await Promise.all([
+        const [recommendationsResponse, trendingResponse, communityState, reactionState, listeningAccessResponse] = await Promise.all([
           nightjarCatalogue.recommendations(currentIntent),
           nightjarCatalogue.trending(),
           nightjarCommunity.state(),
           nightjarEngagement.state(),
+          nightjarCommercial.listeningAccess(),
         ]);
         if (epoch !== productLoadEpoch.current) return;
         setLiveRecommendations(recommendationsResponse.recommendations ?? []);
@@ -934,6 +945,7 @@ function App() {
         setFavouriteReleaseIds((communityState.favourites ?? []).map((item: any) => String(item.releaseId)));
         setFollowingProfileIds((communityState.follows ?? []).map((item: any) => String(item.targetUserId ?? item.creatorUserId)).filter(Boolean));
         setReleaseReactions(Object.fromEntries((reactionState.reactions ?? []).map((item) => [String(item.releaseId), item.reaction])) as Record<string, Exclude<ReleaseReaction,null>>);
+        setListeningAccess(listeningAccessResponse);
       }
     } catch {
       if (epoch !== productLoadEpoch.current) return;
@@ -949,6 +961,7 @@ function App() {
       setNotificationsOpen(false);
       setLiveRecommendations([]);
       setLiveTrending([]);
+      setListeningAccess(null);
     }
   };
 
@@ -1519,7 +1532,12 @@ function App() {
       return;
     }
     if (track.playbackAllowed === false || track.playbackAccessReason === 'subscription_required') {
-      notify('A Nightjar subscription is required for work you are not credited on. Your own credited releases remain included for you.');
+      const message = 'A Nightjar subscription is required for work you are not credited on. Your own credited releases remain included for you.';
+      if (listeningAccess?.subscriptionUrl) {
+        notifyWithAction(message, 'Subscribe', () => { window.location.href = listeningAccess.subscriptionUrl!; });
+      } else {
+        notify(message + ' Subscription checkout is not connected yet.');
+      }
       return;
     }
     setPlaying(playing === track.id ? null : track.id);
@@ -3607,6 +3625,8 @@ function App() {
     <label>Standard creator monthly cap (£)<input type="number" min="0" step="1" value={commercialSettings.creatorMonthlyCapPence == null ? '' : commercialSettings.creatorMonthlyCapPence / 100} onChange={(e)=>setCommercialSettings((s)=>({...s,creatorMonthlyCapPence:e.target.value===''?null:Math.round(Number(e.target.value)*100)}))} placeholder="Leave unset until research is complete"/></label>
     <label>Operating reserve (%)<input type="number" min="0" max="100" step="0.01" value={commercialSettings.reservePercent ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,reservePercent:e.target.value===''?null:Number(e.target.value)}))}/></label>
     <label>Payout cadence<input value={commercialSettings.payoutCadence ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,payoutCadence:e.target.value||null}))} placeholder="e.g. Monthly"/></label>
+    <label className="commercial-span-two">Listener subscription checkout URL<input type="url" value={commercialSettings.listenerSubscriptionUrl ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,listenerSubscriptionUrl:e.target.value||null}))} placeholder="https://your-real-payment-provider.example/subscribe"/></label>
+    <p className="panel-note commercial-span-two">Nightjar only shows a Subscribe action when this is a real configured http/https checkout URL. Leave it blank until your billing provider is genuinely ready.</p>
     <label className="commercial-span-two">Creator eligibility definition<textarea value={commercialSettings.creatorEligibilityDefinition ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,creatorEligibilityDefinition:e.target.value||null}))} placeholder="Define fulfilled contracted work and eligibility without using popularity."/></label>
     <label className="commercial-span-two">Verified-listening analytics definition<textarea value={commercialSettings.eligibleListeningDefinition ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,eligibleListeningDefinition:e.target.value||null}))} placeholder="Define verified listening for analytics/discovery only. It does not determine the standard creator rate."/></label>
     <div className="rate-band-editor">
