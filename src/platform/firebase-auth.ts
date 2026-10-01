@@ -80,6 +80,9 @@ export const nightjarAuth = {
   async reloadIdentity() {
     if (!firebaseAuth.currentUser) return null;
     await firebaseAuth.currentUser.reload();
+    if (firebaseAuth.currentUser.emailVerified) {
+      await firebaseAuth.currentUser.getIdToken(true);
+    }
     return mapUser(firebaseAuth.currentUser);
   },
 
