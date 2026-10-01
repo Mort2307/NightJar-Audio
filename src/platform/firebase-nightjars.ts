@@ -43,6 +43,7 @@ const walletCall = httpsCallable<void, NightjarWallet>(functions, 'myNightjarWal
 const earningsCall = httpsCallable<void, NightjarEarnings>(functions, 'myNightjarEarnings');
 const sendCall = httpsCallable<{
   recipientUserId: string;
+  recipientRole?: 'creator' | 'writer' | 'editor' | 'artist';
   quantity: number;
   note?: string;
   anonymous?: boolean;
@@ -75,7 +76,7 @@ export const nightjarGifts = {
   async earnings() {
     return (await earningsCall()).data;
   },
-  async send(recipientUserId: string, quantity: number, options: { note?: string; anonymous?: boolean; idempotencyKey?: string } = {}) {
+  async send(recipientUserId: string, quantity: number, options: { recipientRole?: 'creator' | 'writer' | 'editor' | 'artist'; note?: string; anonymous?: boolean; idempotencyKey?: string } = {}) {
     const idempotencyKey = options.idempotencyKey ?? (
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -83,6 +84,7 @@ export const nightjarGifts = {
     );
     return (await sendCall({
       recipientUserId,
+      recipientRole: options.recipientRole,
       quantity,
       note: options.note,
       anonymous: options.anonymous,
