@@ -2247,7 +2247,7 @@ function App() {
             { userId:'demo-creator-aria', displayName:'Aria Vale', roles:['creator'], pendingNightjars:8, pendingPence:800, clearedNightjars:24, clearedPence:2400, lifetimeNightjars:32, lifetimePence:3200, byRole:{ creator:{ pendingNightjars:8,pendingPence:800,clearedNightjars:24,clearedPence:2400,lifetimeNightjars:32,lifetimePence:3200 } } },
             { userId:'demo-writer-mara', displayName:'Mara Bell', roles:['writer','artist'], pendingNightjars:10, pendingPence:1000, clearedNightjars:18, clearedPence:1800, lifetimeNightjars:28, lifetimePence:2800, byRole:{ writer:{ pendingNightjars:6,pendingPence:600,clearedNightjars:13,clearedPence:1300 }, artist:{ pendingNightjars:4,pendingPence:400,clearedNightjars:5,clearedPence:500 } } },
           ],
-          totals:{ pendingNightjars:18,pendingPence:1800,clearedNightjars:42,clearedPence:4200,lifetimeNightjars:60,lifetimePence:6000 },
+          totals:{ pendingNightjars:18,pendingPence:1800,clearedNightjars:42,clearedPence:4200,lifetimeNightjars:60,lifetimePence:6000,outstandingWalletNightjars:37,outstandingWalletLiabilityPence:3700 },
         });
         setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: data.subscriptions }));
       } else {
