@@ -27,6 +27,7 @@ const engagementClient=read('src/platform/firebase-engagement.ts');
   'listDirectMessages',
   'sendDirectMessage',
   'sendDirectMessageReminder',
+  'closeDirectConversationLoop',
   'setDirectMessageBlock',
   'reportDirectMessage',
   'adminListCommunityReports',
@@ -39,6 +40,7 @@ requireText(functions,'Only credited members of this release can reply as the wo
 requireText(functions,'reminderForLastMessageAt','Per-unanswered-streak reminder state is missing');
 requireText(functions,'A reminder has already been sent for this unanswered message.','One-reminder-per-streak guard is missing');
 requireText(functions,'A reminder is available after 48 hours without a reply.','48-hour reminder threshold is missing');
+requireText(functions,'resolvedForLastMessageAt','Close-loop state is missing from professional messaging');
 requireText(functions,"subtype:'direct_message_reminder'",'Professional follow-up notification is missing');
 requireText(functions,"dedupeKey:'release-reaction:'",'Reaction notification dedupe is missing');
 requireText(functions,'Please wait before posting more comments.','Comment rate-limit contract is missing');
@@ -59,6 +61,8 @@ requireText(app,'messageNeedsReplyCount','Read-but-unanswered Inbox responsibili
 requireText(inbox,'Reply needed','Inbox reply-needed indicator is missing');
 requireText(inbox,'Send one reminder','Inbox safe follow-up action is missing');
 requireText(inbox,'nightjarMessaging.remind','Inbox reminder API integration is missing');
+requireText(inbox,'Close loop','Inbox no-reply-needed control is missing');
+requireText(inbox,'nightjarMessaging.closeLoop','Inbox close-loop API integration is missing');
 requireText(app,'nav-messages','Universal search does not expose the professional Inbox');
 requireText(functions,'directMessagingBlockedBetween','Professional message block enforcement is missing');
 requireText(functions,'readBy:[identity.uid]','Direct-message read state is missing');
@@ -101,6 +105,7 @@ requireText(messagingClient,"'startDirectConversation'",'Messaging client canoni
 requireText(messagingClient,"'listDirectMessages'",'Messaging client canonical thread callable is missing');
 requireText(messagingClient,"'sendDirectMessage'",'Messaging client canonical send callable is missing');
 requireText(messagingClient,"'sendDirectMessageReminder'",'Messaging client follow-up reminder callable is missing');
+requireText(messagingClient,"'closeDirectConversationLoop'",'Messaging client close-loop callable is missing');
 requireText(messagingClient,'collaborationId?:string|null','Messaging client no longer carries per-message collaboration context');
 requireText(messagingClient,"'setDirectMessageBlock'",'Messaging client block callable is missing');
 requireText(messagingClient,"'reportDirectMessage'",'Messaging client report callable is missing');
