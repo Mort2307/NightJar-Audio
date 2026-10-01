@@ -968,6 +968,7 @@ function App() {
   const openNotification = async (item:any) => {
     await markNotificationRead(item);
     setNotificationsOpen(false);
+
     if (item.type === 'message' && item.conversationId && ['creator','writer','editor'].includes(String(effectiveRole))) {
       setMessageConversationId(String(item.conversationId));
       setMessageRecipientUserId(null);
@@ -975,9 +976,28 @@ function App() {
       navigate('messages');
       return;
     }
-    if (item.type === 'comment' && item.releaseId) {
-      const track = tracks.find((candidate) => candidate.id === String(item.releaseId));
-      if (track) setReviewTrack(track);
+
+    if ((item.type === 'comment' || item.subtype === 'release_comment' || item.subtype === 'release_reaction') && item.releaseId) {
+      const releaseId = String(item.releaseId);
+      const track = tracks.find((candidate) => candidate.id === releaseId) ?? {
+        id: releaseId,
+        title: String(item.releaseTitle ?? 'Published Nightjar work'),
+        creator: String(item.creatorName ?? 'Nightjar creator'),
+        duration: '—',
+        category: 'Published work',
+        descriptor: 'Nightjar community discussion.',
+      };
+      setReviewTrack(track as Track);
+      return;
+    }
+
+    if (item.type === 'content' && item.subtype === 'release' && item.releaseId) {
+      if (effectiveRole === 'creator') {
+        navigate('creator');
+        window.setTimeout(() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+      } else {
+        navigate('discover');
+      }
     }
   };
 
@@ -2749,7 +2769,6 @@ function App() {
     ...(effectiveRole === 'creator' || adminOnly ? [{ id:'nav-creator', group:'Studio', label:'Creator Studio', detail:'Releases, catalogue and creator operations', keywords:['publish','audio'], icon:<Mic2 size={15}/>, action:()=>{ navigate('creator'); void loadCreatorDashboard(); } }] : []),
     ...(effectiveRole === 'writer' ? [{ id:'nav-writer', group:'Studio', label:'Writer Studio', detail:'Manuscripts, rights and collaborations', keywords:['script','write'], icon:<FileText size={15}/>, action:()=>{ navigate('writer'); void loadWriterScripts(); } }] : []),
     ...(effectiveRole === 'editor' ? [{ id:'nav-editor', group:'Studio', label:'Editorial', detail:'Assigned manuscripts and production review', keywords:['edit','review'], icon:<FileCheck2 size={15}/>, action:()=>{ navigate('editor'); void loadEditorQueue(); } }] : []),
-    ...(['creator','writer','editor'].includes(String(effectiveRole)) ? [{ id:'nav-messages', group:'Creative', label:'Messages', detail:'Private Creator, Writer and Audio Editor conversations', keywords:['dm','inbox','chat','collaboration'], icon:<MessageCircle size={15}/>, action:()=>navigate('messages') }] : []),
     { id:'nav-profile', group:'Account', label:'Profile', detail:'Identity, public showcase and preferences', keywords:['settings','bio'], icon:<UserCircle2 size={15}/>, action:openProfileEditor },
     { id:'nav-protection', group:'Account', label:'Protection Centre', detail:'Reports, evidence and account safety', keywords:['security','safety'], icon:<ShieldCheck size={15}/>, action:()=>{ navigate('protection'); void loadProtection(); } },
     ...(canAdmin && !simulationMode ? [{ id:'nav-admin', group:'Administration', label:'Owner Console', detail:'People, content, security and commercial operations', keywords:['admin','moderation'], icon:<Settings2 size={15}/>, action:()=>{ navigate('admin'); void loadAdminOverview(); } }] : []),
