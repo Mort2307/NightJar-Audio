@@ -1046,7 +1046,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   let creditedReleases: ReturnType<typeof releasePayload>[] = [];
   let publicPlaylists: Array<{ id: string; title: string; releaseCount: number; releases: ReturnType<typeof releasePayload>[] }> = [];
 
-  if (role === 'creator') {
+  if (professionalRoles.includes('creator')) {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
     creatorReleases = releases.docs
       .filter((doc) => doc.data().status === 'released')
@@ -1059,7 +1059,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     publishedWorkCount = scripts.docs.filter((doc) => ['Approved','Published'].includes(String(doc.data().status))).length;
   }
 
-  if (role === 'writer' || role === 'editor') {
+  if (professionalRoles.includes('writer') || professionalRoles.includes('editor')) {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     creditedReleases = releases.docs
       .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
