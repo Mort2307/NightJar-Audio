@@ -119,12 +119,11 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
   const stagedRole = !current.role && ['creator','listener','writer','editor','artist'].includes(rawStagedRole)
     ? rawStagedRole as SelectableRole
     : null;
-  const role = (current.role as AccountRole | null) ?? stagedRole ?? null;
-  const status = current.role
-    ? String(current.status ?? 'active')
-    : stagedRole === 'creator' || stagedRole === 'editor' || stagedRole === 'artist'
-      ? 'pending_review'
-      : 'active';
+  const stagedProfessionalRole = stagedRole && ['creator','writer','editor','artist'].includes(stagedRole)
+    ? stagedRole as ProfessionalRole
+    : null;
+  const role = (current.role as AccountRole | null) ?? (stagedProfessionalRole ? 'listener' : stagedRole) ?? null;
+  const status = String(current.status ?? 'active');
 
   await ref.set({
     email: identity.email,
@@ -135,13 +134,26 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge:true });
 
-  if (stagedRole === 'creator' || stagedRole === 'editor' || stagedRole === 'artist') {
-    await db.collection('creatorApplications').doc(identity.uid).set({
+  if (stagedProfessionalRole) {
+    const applicationRef = professionalApplicationRef(identity.uid);
+    const application = await applicationRef.get();
+    const requestedRoles = Array.from(new Set([
+      ...cleanProfessionalRoles(application.data()?.requestedRoles),
+      stagedProfessionalRole,
+    ]));
+    await applicationRef.set({
       userId: identity.uid,
       email: identity.email,
-      role: stagedRole,
-      status: 'pending',
-      submittedAt: FieldValue.serverTimestamp(),
+      requestedRoles,
+      approvedRoles: professionalRolesForAccount(current),
+      status: 'banked',
+      bankedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(application.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+    await ref.set({
+      pendingProfessionalRoles: requestedRoles,
+      approvedProfessionalRoles: professionalRolesForAccount(current),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge:true });
   }
@@ -192,31 +204,47 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
   const ref = accountRef(identity.uid);
   const snapshot = await ref.get();
   const current = snapshot.data() ?? {};
+  const professionalRequest = ['creator','writer','editor','artist'].includes(requestedRole);
 
-  if (current.role && current.role !== requestedRole) {
-    throw new HttpsError('failed-precondition', 'This Nightjar account already has a role.');
-  }
-
-  const status = requestedRole === 'creator' || requestedRole === 'editor' || requestedRole === 'artist' ? 'pending_review' : 'active';
-  await ref.set({
-    email: identity.email,
-    emailVerified: true,
-    role: requestedRole,
-    status,
-    updatedAt: FieldValue.serverTimestamp(),
-    ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
-  }, { merge: true });
-
-  if (requestedRole === 'creator' || requestedRole === 'editor' || requestedRole === 'artist') {
-    await db.collection('creatorApplications').doc(identity.uid).set({
+  if (!professionalRequest) {
+    await ref.set({
+      email: identity.email,
+      emailVerified: true,
+      role: 'listener',
+      status: 'active',
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+  } else {
+    const applicationRef = professionalApplicationRef(identity.uid);
+    const application = await applicationRef.get();
+    const approved = professionalRolesForAccount(current);
+    const requestedRoles = Array.from(new Set([
+      ...cleanProfessionalRoles(application.data()?.requestedRoles),
+      requestedRole as ProfessionalRole,
+    ])).filter((role) => !approved.includes(role));
+    await ref.set({
+      email: identity.email,
+      emailVerified: true,
+      role: cleanText(current.role, 30) || 'listener',
+      status: 'active',
+      approvedProfessionalRoles: approved,
+      pendingProfessionalRoles: requestedRoles,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+    await applicationRef.set({
       userId: identity.uid,
       email: identity.email,
-      role: requestedRole,
-      status: 'pending',
-      submittedAt: FieldValue.serverTimestamp(),
+      requestedRoles,
+      approvedRoles: approved,
+      status: 'banked',
+      bankedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+      ...(application.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
   }
+  const status = professionalRequest ? 'banked' : 'active';
 
   const referralCode = cleanText(input.referralCode, 80);
   if (requestedRole === 'creator' && referralCode) {
@@ -237,7 +265,12 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
     }
   }
 
-  return { userId: identity.uid, role: requestedRole, status };
+  return {
+    userId: identity.uid,
+    role: professionalRequest ? (cleanText(current.role, 30) || 'listener') : 'listener',
+    requestedProfessionalRole: professionalRequest ? requestedRole : null,
+    status,
+  };
 });
 
 const cleanText = (value: unknown, maxLength: number) =>
@@ -2306,7 +2339,7 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   const role = cleanText(input.role, 30) as AccountRole;
   const status = cleanText(input.status, 30);
 
-  if (!userId || !['listener', 'creator', 'writer', 'editor'].includes(role)) {
+  if (!userId || !['listener', 'creator', 'writer', 'editor', 'artist'].includes(role)) {
     throw new HttpsError('invalid-argument', 'Choose a valid Nightjar account role.');
   }
   if (!['active', 'pending_review', 'suspended'].includes(status)) {
@@ -2369,7 +2402,7 @@ export const decideCreatorApplication = onCall({ region: REGION }, async (reques
   const userId = String(application.data()?.userId ?? applicationId);
   const account = await accountRef(userId).get();
   const professionalRole = String(account.data()?.role ?? '');
-  if (!account.exists || !['creator','editor'].includes(professionalRole)) {
+  if (!account.exists || !['creator','writer','editor','artist'].includes(professionalRole)) {
     throw new HttpsError('failed-precondition', 'Professional account is no longer eligible for this application.');
   }
 
