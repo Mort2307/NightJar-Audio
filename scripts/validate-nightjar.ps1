@@ -12,16 +12,42 @@ function Invoke-NightjarStep {
     Write-Host "=== $Name ===" -ForegroundColor Cyan
 
     $global:LASTEXITCODE = 0
-    $output = & $Action 2>&1
-    $exitCode = $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    $exitCode = 1
+    $commandFailed = $false
+    $commandError = $null
 
-    if ($null -ne $output) {
-        $output |
+    try {
+        # Windows PowerShell 5.1 can surface ordinary native stderr output
+        # (for example Git's "From https://..." progress line) as an
+        # ErrorRecord. Do not let that override the native process exit code.
+        $ErrorActionPreference = 'Continue'
+
+        & $Action 2>&1 |
             Tee-Object -FilePath $LogFile -Append |
             ForEach-Object { Write-Host $_ }
+
+        $exitCode = $LASTEXITCODE
+
+        if ($null -eq $exitCode) {
+            $exitCode = 0
+        }
+    }
+    catch {
+        $commandFailed = $true
+        $commandError = $_
+        $exitCode = 1
+
+        $errorText = $_ | Out-String
+        $errorText |
+            Tee-Object -FilePath $LogFile -Append |
+            ForEach-Object { Write-Host $_ -ForegroundColor Red }
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
     }
 
-    if ($exitCode -ne 0) {
+    if ($commandFailed -or $exitCode -ne 0) {
         Write-Host ""
         Write-Host "$Name FAILED (exit code $exitCode)" -ForegroundColor Red
         Write-Host "Validation stopped at the first failing step." -ForegroundColor Yellow
