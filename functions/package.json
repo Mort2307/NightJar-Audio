@@ -10,7 +10,9 @@
     "build": "tsc",
     "check": "tsc --noEmit",
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "audit:prod": "npm audit --omit=dev --audit-level=moderate",
+    "install-scripts:review": "npm install-scripts ls"
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",
@@ -18,5 +20,9 @@
   },
   "devDependencies": {
     "typescript": "^5.9.2"
+  },
+  "allowScripts": {
+    "@firebase/util@1.15.3": true,
+    "protobufjs@7.6.6": true
   }
 }
