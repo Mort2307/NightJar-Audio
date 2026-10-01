@@ -24,6 +24,7 @@ const checks = [
   ['professional applications accept multiple roles', functions.includes('submitProfessionalApplication') && functions.includes('requestedRoles')],
   ['controlled intake waves are recorded', functions.includes('reviewProfessionalApplication') && functions.includes('wave: wave || application.wave || null')],
   ['professional roles can be removed', functions.includes('removeProfessionalRole')],
+  ['rejected professional roles do not remain pending', functions.includes("const accountPendingRoles = decision === 'rejected' ? [] : remainingRequested")],
   ['professional workspaces can be switched', functions.includes('setActiveNightjarRole')],
   ['artist is a professional role', functions.includes("['creator','writer','editor','artist']")],
   ['Artist portfolios require human-created work attestation', functions.includes('humanCreatedAttestation') && functions.includes('not AI-generated imagery')],
