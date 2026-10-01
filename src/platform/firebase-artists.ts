@@ -25,13 +25,14 @@ const createCall = httpsCallable<{
   description?: string;
   tags?: string[];
   commissionType?: string;
+  humanCreatedAttestation: true;
 }, { item: ArtistPortfolioItem }>(functions, 'createArtistPortfolioItem');
 
 const listMineCall = httpsCallable<void, { items: ArtistPortfolioItem[] }>(functions, 'myArtistPortfolio');
 const removeCall = httpsCallable<{ itemId: string }, { removed: boolean; itemId: string }>(functions, 'removeArtistPortfolioItem');
 
 export const nightjarArtists = {
-  async createItem(input: { title: string; description?: string; tags?: string[]; commissionType?: string }) {
+  async createItem(input: { title: string; description?: string; tags?: string[]; commissionType?: string; humanCreatedAttestation: true }) {
     return (await createCall(input)).data;
   },
   async mine() {
