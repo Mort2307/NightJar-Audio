@@ -4,6 +4,7 @@ import { ArrowRight, Handshake, Heart, MessageCircle, Mic2, Share2, ShieldCheck,
 import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
+import { nightjarReferrals } from '../platform/firebase-referrals';
 
 type CreatorProfileData = {
   userId: string;
@@ -93,9 +94,13 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
 
   const share = async () => {
     if (!profile) return;
-    const url = window.location.origin + '/people/' + encodeURIComponent(creatorUserId);
-    const text = 'Discover ' + profile.name + ' on Nightjar — original immersive audio from an independent creator.';
+    let url = window.location.origin + '/people/' + encodeURIComponent(creatorUserId);
+    const text = 'I recommend ' + profile.name + ' on Nightjar — original immersive audio from an independent creator.';
     try {
+      if (!demoMode) {
+        const recommendation = await nightjarReferrals.recommendCreator(creatorUserId);
+        url = window.location.origin + recommendation.path;
+      }
       if (navigator.share) await navigator.share({ title: 'Nightjar · ' + profile.name, text, url });
       else if (navigator.clipboard) { await navigator.clipboard.writeText(text + ' ' + url); notify('Creator profile copied — ready to share.'); }
       else notify('Sharing is not available in this browser.');
