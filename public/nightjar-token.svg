@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Nightjar support token</title>
+  <g stroke="#171922" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <path fill="#343642" d="M62 43C47 27 30 19 10 18c5 8 8 15 9 22L6 42c8 8 16 13 25 16l-9 7c9 4 18 6 27 5l13-27Z"/>
+    <path fill="#343642" d="M66 43c15-16 32-24 52-25-5 8-8 15-9 22l13 2c-8 8-16 13-25 16l9 7c-9 4-18 6-27 5L66 43Z"/>
+    <path fill="#148B94" d="M18 27c8 2 16 6 24 12l-8 14c-7-3-13-7-18-13l7-2-5-11Z"/>
+    <path fill="#148B94" d="M110 27c-8 2-16 6-24 12l8 14c7-3 13-7 18-13l-7-2 5-11Z"/>
+    <path fill="#C5A978" d="M31 38c9 3 17 8 24 15l-6 12c-8-1-15-4-22-8l8-6-4-13Z"/>
+    <path fill="#C5A978" d="M97 38c-9 3-17 8-24 15l6 12c8-1 15-4 22-8l-8-6 4-13Z"/>
+    <path fill="#3C3F49" d="M64 30c17 0 27 11 27 27 0 10-5 18-12 24l-3 22-12 15-12-15-3-22c-7-6-12-14-12-24 0-16 10-27 27-27Z"/>
+    <path fill="#D8C39C" d="M46 48c5-8 11-12 18-12s13 4 18 12l-6 20-12 8-12-8-6-20Z"/>
+    <path fill="#2E303A" d="M46 47c6-5 12-8 18-8s12 3 18 8l-6 5-12-3-12 3-6-5Z"/>
+    <path fill="#F4EAD8" d="M48 54c4-4 9-6 14-4l-3 13c-5 2-10-1-11-9Z"/>
+    <path fill="#F4EAD8" d="M80 54c-4-4-9-6-14-4l3 13c5 2 10-1 11-9Z"/>
+    <ellipse fill="#148B94" cx="56" cy="56" rx="4.5" ry="5.5"/>
+    <ellipse fill="#148B94" cx="72" cy="56" rx="4.5" ry="5.5"/>
+    <circle fill="#171922" stroke="none" cx="56" cy="57" r="2"/>
+    <circle fill="#171922" stroke="none" cx="72" cy="57" r="2"/>
+    <path fill="#171922" d="M60 66h8l-4 6-4-6Z"/>
+    <path fill="#D8C39C" d="M51 76c8 4 18 4 26 0l-4 24-9 12-9-12-4-24Z"/>
+    <path fill="#148B94" d="M58 81h12l-2 19-4 7-4-7-2-19Z"/>
+    <path fill="#343642" d="M49 83l9 18-6 5-8-22 5-1Z"/>
+    <path fill="#343642" d="M79 83l-9 18 6 5 8-22-5-1Z"/>
+    <g fill="#F4EAD8" stroke="none">
+      <circle cx="28" cy="45" r="2"/><circle cx="36" cy="51" r="1.7"/><circle cx="100" cy="45" r="2"/><circle cx="92" cy="51" r="1.7"/>
+      <circle cx="55" cy="39" r="1.5"/><circle cx="64" cy="36" r="1.5"/><circle cx="73" cy="39" r="1.5"/>
+    </g>
+  </g>
+</svg>
