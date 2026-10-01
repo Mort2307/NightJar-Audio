@@ -87,7 +87,7 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
   const idempotencyKey = cleanText(input.idempotencyKey, 120);
 
   if (!recipientUserId || recipientUserId === sender.uid) {
-    throw new HttpsError('invalid-argument', 'Choose another Nightjar creator to support.');
+    throw new HttpsError('invalid-argument', 'Choose another Nightjar professional to support.');
   }
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
     throw new HttpsError('invalid-argument', 'Gift quantity must be a whole number from 1 to 100.');
@@ -122,12 +122,16 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
 
     const recipient = recipientAccount.data() ?? {};
     const recipientRoles = professionalRolesFor(recipient);
-    const recipientRole = requestedRecipientRole && recipientRoles.includes(requestedRecipientRole)
-      ? requestedRecipientRole
-      : recipientRoles[0] ?? '';
-    if (!recipientAccount.exists || recipient.status === 'suspended' || !recipientRole) {
+    if (!recipientAccount.exists || recipient.status === 'suspended' || !recipientRoles.length) {
       throw new HttpsError('failed-precondition', 'This profile is not currently eligible to receive Nightjars.');
     }
+    if (requestedRecipientRole && !recipientRoles.includes(requestedRecipientRole)) {
+      throw new HttpsError('failed-precondition', 'That professional role is not approved for this Nightjar recipient.');
+    }
+    if (!requestedRecipientRole && recipientRoles.length > 1) {
+      throw new HttpsError('invalid-argument', 'Choose which professional role this Nightjar gift supports.');
+    }
+    const recipientRole = requestedRecipientRole || recipientRoles[0];
 
     const wallet = senderWallet.data() ?? {};
     const balance = Number(wallet.balance ?? 0);
@@ -193,7 +197,7 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
       type:'payment',
       subtype:'nightjar_gift',
       title: quantity === 1 ? 'You received a Nightjar' : `You received ${quantity} Nightjars`,
-      message: `${senderName} sent support worth £${(result.creatorCreditPence / 100).toFixed(2)}. It has been added to your pending creator earnings.`,
+      message: `${senderName} sent support worth £${(result.creatorCreditPence / 100).toFixed(2)}. It has been added to your pending professional earnings.`,
       giftId:result.giftId,
       quantity,
       creatorCreditPence:result.creatorCreditPence,
