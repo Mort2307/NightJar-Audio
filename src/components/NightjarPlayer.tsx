@@ -13,6 +13,8 @@ export type NightjarPlayerTrack = {
   audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
+  playbackAllowed?: boolean;
+  playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'subscription_required' | null;
 };
 
 type Props = {
@@ -68,17 +70,23 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     }
     let cancelled = false;
     setPlaybackUrl(track?.audioUrl ?? null);
+    if (track?.playbackAllowed === false || track?.playbackAccessReason === 'subscription_required') {
+      setPlaybackUrl(null);
+      notify('A Nightjar subscription is required for work you are not credited on. Your own credited work remains included for you.');
+      return () => { cancelled = true; };
+    }
     if (!track?.id || track.audioUrl || !track.audioAvailable) return () => { cancelled = true; };
     void nightjarCatalogue.playback(track.id).then((data) => {
       if (!cancelled) setPlaybackUrl(data.url);
-    }).catch(() => {
+    }).catch((error) => {
       if (!cancelled) {
         setPlaybackUrl(null);
-        notify('Age-verified playback could not be opened for this release.');
+        const message = error instanceof Error ? error.message : '';
+        notify(message.includes('subscription') ? 'A Nightjar subscription is required for work you are not credited on. Your own credited work remains included for you.' : 'Playback could not be opened for this release.');
       }
     });
     return () => { cancelled = true; };
-  }, [track?.id, track?.audioAvailable, track?.audioUrl, simulationMode]);
+  }, [track?.id, track?.audioAvailable, track?.audioUrl, track?.playbackAllowed, track?.playbackAccessReason, simulationMode]);
 
   useEffect(() => {
     if (simulationMode) {
