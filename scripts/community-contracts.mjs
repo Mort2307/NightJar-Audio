@@ -14,6 +14,10 @@ const community=read('src/components/ReleaseReviews.tsx');
 const prefs=read('src/components/NotificationPreferences.tsx');
 const messagingClient=read('src/platform/firebase-messaging.ts');
 const engagementClient=read('src/platform/firebase-engagement.ts');
+const accountAccess=read('src/components/AccountAccess.tsx');
+const accountPortal=read('src/components/AccountPortal.tsx');
+const referralsClient=read('src/platform/firebase-referrals.ts');
+const creatorPipeline=read('src/components/CreatorAudioPipeline.tsx');
 
 [
   'releaseCommunity',
@@ -122,6 +126,32 @@ requireText(messagingClient,"'setDirectMessageBlock'",'Messaging client block ca
 requireText(messagingClient,"'reportDirectMessage'",'Messaging client report callable is missing');
 requireText(engagementClient,"'setReleaseReaction'",'Engagement client reaction callable is missing');
 requireText(engagementClient,"'replyToReleaseComment'",'Engagement client work-team reply callable is missing');
+
+requireText(accountAccess,"role:'listener'",'Listener role-first registration card is missing');
+requireText(accountAccess,"role:'creator'",'Creator role-first registration card is missing');
+requireText(accountAccess,"role:'writer'",'Writer role-first registration card is missing');
+requireText(accountAccess,"role:'editor'",'Audio Editor role-first registration card is missing');
+requireText(accountAccess,'nightjar.registrationRole','Chosen signup role is not persisted through verification');
+requireText(accountPortal,"nextAccount.role === 'editor'",'Dedicated Audio Editor account routing is missing');
+requireText(functions,"type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor'",'Server role selection is missing a Nightjar account type');
+requireText(functions,"requestedRole === 'creator' || requestedRole === 'editor'",'Professional approval gate is missing Creator/Audio Editor coverage');
+
+['submitCreatorSuggestion','listCreatorSuggestions','reviewCreatorSuggestion','creatorRecommendationLink'].forEach((name)=>
+  requireText(functions,'export const '+name,'Creator referral callable is missing: '+name)
+);
+requireText(referralsClient,'suggestCreator','Creator suggestion client is missing');
+requireText(referralsClient,'recommendCreator','Creator recommendation-link client is missing');
+requireText(app,'CreatorSuggestionBox','Directory Creator suggestion experience is missing');
+requireText(app,'recommendCreator(person)','Existing Creator recommendation action is missing');
+
+requireText(functions,'releaseWorkAccess','Credited-work playback entitlement helper is missing');
+requireText(functions,"['active','trialing']", 'Active/trialing subscription playback rule is missing');
+requireText(functions,"reason:'credited_work'",'Credited contributor free-access reason is missing');
+requireText(functions,"reason:'subscription_required'",'Unrelated paid-work subscription boundary is missing');
+requireText(functions,"collection('playbackGrants')",'Verified listening is not bound to server-issued playback access');
+requireText(app,'playbackAccessReason','Catalogue UI does not receive playback entitlement reason');
+requireText(creatorPipeline,'grants that credited person access to this release','Release credits do not explain free collaborator access');
+requireText(creatorPipeline,'Unlinked / external credit · no account access','External credits are not distinguished from Nightjar-linked entitlements');
 
 if (exists('src/components/ReleaseCommunity.tsx')) failures.push('Obsolete duplicate ReleaseCommunity component still exists');
 if (exists('src/components/ProfessionalInbox.tsx')) failures.push('Obsolete duplicate ProfessionalInbox component still exists');
