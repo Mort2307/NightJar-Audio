@@ -28,8 +28,6 @@ const roleLabel = (role: string | null | undefined) => {
   if (role === 'writer') return 'Writer';
   if (role === 'creator') return 'VA Creator';
   if (role === 'artist') return 'Artist';
-  if (role === 'writer') return 'Writer';
-  if (role === 'editor') return 'Audio Editor';
   return 'Listener';
 };
 
@@ -286,6 +284,6 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         </div>
       </div>}
     </section>
-    {giftOpen && profile && <NightjarGiftPanel recipientUserId={profile.userId} recipientName={profile.displayName} recipientRole={String(profile.role)} recipientRoles={Array.isArray(profile.roles)?profile.roles:[]} notify={notify} onClose={() => setGiftOpen(false)} />}
+    {giftOpen && profile && <NightjarGiftPanel recipientUserId={profile.userId} recipientName={profile.displayName} recipientRole={String(profileRole)} recipientRoles={Array.isArray(profile.roles)?profile.roles:[]} notify={notify} onClose={() => setGiftOpen(false)} />}
   </div>;
 }
