@@ -121,7 +121,7 @@ const ROLE_SETUP: Record<'listener' | 'creator' | 'writer' | 'editor' | 'artist'
       { key: 'roleDetailOne', label: 'Workflow & handoff', placeholder: 'Optional public-facing workflow note' },
       { key: 'roleDetailTwo', label: 'Turnaround / production note', placeholder: 'Optional public-facing production note' },
     ],
-  },,
+  },
   artist: {
     id: 'role-artist',
     label: 'ARTIST',
