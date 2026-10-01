@@ -642,7 +642,7 @@ const publicActivityBadges = (
 
 
 const profilePortfolioOptionsFor = async (userId: string, role: string) => {
-  if (role === 'creator') {
+  if (professionalRoles.includes('creator')) {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
     return releases.docs
       .filter((doc) => doc.data().status === 'released')
@@ -655,7 +655,7 @@ const profilePortfolioOptionsFor = async (userId: string, role: string) => {
       .slice(0, 100);
   }
 
-  if (role === 'writer' || role === 'editor') {
+  if (professionalRoles.includes('writer') || professionalRoles.includes('editor')) {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     return releases.docs
       .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
@@ -958,11 +958,12 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
 
   const allowedRoles = new Set(['creator','writer','editor','artist','listener']);
   const profiles = (await Promise.all(accounts.docs
-    .filter((doc) => doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
+    .filter((doc) => doc.data().status === 'active' && (allowedRoles.has(String(doc.data().role ?? '')) || professionalRolesForAccount(doc.data() ?? {}).length > 0))
     .map(async (doc) => {
       const data = profileByUser.get(doc.id);
       if (!data || data.publicProfile === false) return null;
-      const role = String(doc.data().role ?? '');
+      const professionalRoles = professionalRolesForAccount(doc.data() ?? {});
+      const role = professionalRoles[0] ?? String(doc.data().role ?? 'listener');
       const releaseCount = releaseCountByCreator.get(doc.id) ?? 0;
       const publishedWorkCount = publishedScriptsByWriter.get(doc.id) ?? 0;
       const creditedReleaseCount = creditCountByUser.get(doc.id) ?? 0;
@@ -970,6 +971,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
+        roles: professionalRoles.length ? professionalRoles : ['listener'],
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
@@ -1034,7 +1036,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
 
-  const role = String(accountData?.role ?? '');
+  const professionalRoles = professionalRolesForAccount(accountData ?? {});
+  const role = professionalRoles[0] ?? String(accountData?.role ?? 'listener');
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
@@ -1050,7 +1053,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
     releaseCount = creatorReleases.length;
-  } else if (role === 'writer') {
+  }
+  if (professionalRoles.includes('writer')) {
     const scripts = await db.collection('scripts').where('writerUserId', '==', userId).limit(500).get();
     publishedWorkCount = scripts.docs.filter((doc) => ['Approved','Published'].includes(String(doc.data().status))).length;
   }
@@ -1063,7 +1067,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
-  if (role === 'listener' && Array.isArray(data.featuredPortfolioIds) && data.featuredPortfolioIds.length) {
+  if (!professionalRoles.length && Array.isArray(data.featuredPortfolioIds) && data.featuredPortfolioIds.length) {
     const playlistDocs = await Promise.all(
       cleanStringList(data.featuredPortfolioIds, 6).map((playlistId) => accountRef(userId).collection('playlists').doc(playlistId).get()),
     );
@@ -1090,12 +1094,12 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const byId = new Map(items.map((item) => [String(item.id), item]));
     return selectedPortfolioIds.map((id) => byId.get(id)).filter((item): item is ReturnType<typeof releasePayload> => Boolean(item));
   };
-  const featuredWork = role === 'creator'
+  const featuredWork = professionalRoles.includes('creator')
     ? (hasPortfolioCuration ? orderedFeatured(creatorReleases) : creatorReleases.slice(0, 3))
-    : (role === 'writer' || role === 'editor')
+    : (professionalRoles.includes('writer') || professionalRoles.includes('editor'))
       ? (hasPortfolioCuration ? orderedFeatured(creditedReleases) : creditedReleases.slice(0, 3))
       : [];
-  const completedCollaborations = ['creator','writer','editor','artist'].includes(role)
+  const completedCollaborations = professionalRoles.length > 0
     ? await completedCollaborationCountFor(userId)
     : 0;
   const activityBadges = publicActivityBadges(role, {
@@ -1109,6 +1113,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     profile: {
       userId,
       role,
+      roles: professionalRoles.length ? professionalRoles : ['listener'],
       displayName: data.displayName ?? 'Nightjar member',
       name: data.displayName ?? 'Nightjar member',
       handle: data.handle ?? null,
@@ -1152,7 +1157,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
   if (!creatorUserId) throw new HttpsError('invalid-argument', 'Creator account is required.');
 
   const account = await accountRef(creatorUserId).get();
-  if (!account.exists || account.data()?.role !== 'creator' || account.data()?.status !== 'active') {
+  if (!account.exists || account.data()?.status !== 'active' || !professionalRolesForAccount(account.data() ?? {}).includes('creator')) {
     throw new HttpsError('not-found', 'Creator profile not found.');
   }
 
@@ -1218,10 +1223,10 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
 export const listWriters = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const accounts = await db.collection('accounts').where('role', '==', 'writer').limit(200).get();
+  const accounts = await db.collection('accounts').limit(1000).get();
   const writers = (await Promise.all(
     accounts.docs
-      .filter((doc) => doc.data().status === 'active')
+      .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('writer'))
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
         if (!base) return null;
