@@ -189,7 +189,7 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
           {(selected.portfolioNote || (selected.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
             {selected.portfolioNote && <p>{selected.portfolioNote}</p>}
             {(selected.completedCollaborations ?? 0) > 0 && <span><Handshake size={14}/>{selected.completedCollaborations} completed Nightjar collaboration{selected.completedCollaborations === 1 ? '' : 's'}</span>}
-          </section>
+          </section>}
           <div className="writer-public-note"><FileText size={16}/><div><strong>Public writing identity, protected manuscripts.</strong><p>Nightjar shows public profile metadata and credits without exposing private manuscript text, collaboration permissions, protected drafts or private deal terms.</p></div></div>
           <div className="creator-profile-releases">
             <div className="section-head"><div><span className="mini-label">PUBLIC WORK</span><h3>Writing portfolio</h3></div></div>
