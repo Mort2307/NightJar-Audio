@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bird, FileCheck2, Handshake, Headphones, Heart, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
+import { Bird, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -231,6 +231,16 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                     : 'VA Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
           </div>
         </div>
+
+        {profileRole === 'artist' && <section className="public-artist-portfolio">
+          <div className="section-head"><div><span className="mini-label">ARTIST PORTFOLIO</span><h3>Approved visual work</h3></div></div>
+          {!!profile.artistPortfolio?.length ? <div className="public-artist-grid">
+            {profile.artistPortfolio.map((item:any)=><article key={item.id}>
+              {item.imageUrl && <button type="button" className="public-artist-image" onClick={()=>window.open(item.imageUrl,'_blank','noopener,noreferrer')} aria-label={'Open '+item.title+' full size'}><img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/></button>}
+              <div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}{item.description&&<p>{item.description}</p>}{!!item.tags?.length&&<div className="creator-profile-tags">{item.tags.map((tag:string)=><span key={tag}>{tag}</span>)}</div>}</div>
+            </article>)}
+          </div> : <div className="people-empty"><ImagePlus size={18}/><strong>No approved portfolio pieces yet</strong><span>This Artist has not published moderated artwork to their Nightjar portfolio yet.</span></div>}
+        </section>}
 
         <div className="creator-profile-releases">
           <div className="section-head">
