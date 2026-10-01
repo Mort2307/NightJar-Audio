@@ -1,0 +1,53 @@
+name: Refresh Functions dependency lock
+on:
+  push:
+    branches:
+      - feature/nightjar-gifts-artists
+    paths:
+      - .github/workflows/refresh-functions-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/nightjar-gifts-artists
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Refresh patched transitive dependencies
+        working-directory: functions
+        run: npm audit fix --package-lock-only --ignore-scripts
+
+      - name: Verify Functions production audit
+        working-directory: functions
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Verify Functions typecheck
+        working-directory: functions
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+
+      - name: Commit refreshed Functions lock
+        run: |
+          if git diff --quiet -- functions/package.json functions/package-lock.json; then
+            echo "Functions dependency files already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/package.json functions/package-lock.json
+          git commit -m "Refresh patched Firebase Functions dependencies"
+          git push origin HEAD:feature/nightjar-gifts-artists
