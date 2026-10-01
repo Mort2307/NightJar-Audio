@@ -2263,6 +2263,7 @@ export const listCreatorApplications = onCall({ region: REGION }, async (request
       email: data.email ?? null,
       creatorName: profile.data()?.displayName ?? null,
       displayName: profile.data()?.displayName ?? null,
+      role: data.role ?? 'creator',
       status: data.status ?? 'pending',
     };
   }));
@@ -2276,7 +2277,7 @@ export const decideCreatorApplication = onCall({ region: REGION }, async (reques
   const applicationId = cleanText(input.applicationId, 160);
   const decision = cleanText(input.decision, 30);
   if (!applicationId || !['approved', 'waitlist', 'rejected'].includes(decision)) {
-    throw new HttpsError('invalid-argument', 'Choose a valid creator decision.');
+    throw new HttpsError('invalid-argument', 'Choose a valid professional account decision.');
   }
 
   const applicationRef = db.collection('creatorApplications').doc(applicationId);
@@ -2285,8 +2286,9 @@ export const decideCreatorApplication = onCall({ region: REGION }, async (reques
 
   const userId = String(application.data()?.userId ?? applicationId);
   const account = await accountRef(userId).get();
-  if (!account.exists || account.data()?.role !== 'creator') {
-    throw new HttpsError('failed-precondition', 'Creator account is no longer eligible for this application.');
+  const professionalRole = String(account.data()?.role ?? '');
+  if (!account.exists || !['creator','editor'].includes(professionalRole)) {
+    throw new HttpsError('failed-precondition', 'Professional account is no longer eligible for this application.');
   }
 
   await applicationRef.set({
