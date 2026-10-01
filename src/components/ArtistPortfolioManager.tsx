@@ -22,6 +22,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [tags, setTags] = useState('');
   const [commissionType, setCommissionType] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [humanCreated, setHumanCreated] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
@@ -44,13 +45,14 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const submit = async () => {
     if (!title.trim()) return notify('Give the artwork a title first.');
     if (!file) return notify('Choose the artwork image you want to submit.');
+    if (!humanCreated) return notify('Confirm that this is your own human-created artwork before submitting.');
     if (!['image/png','image/jpeg','image/webp'].includes(file.type)) return notify('Use PNG, JPG or WebP artwork.');
     if (file.size > 5 * 1024 * 1024) return notify('Portfolio artwork must be 5 MB or smaller.');
     if (demoMode) {
       setItems((current)=>[{
         id:'demo-artist-piece-'+Date.now(),ownerUserId:'demo-artist-lena',title:title.trim(),description:description.trim(),tags:tags.split(',').map((tag)=>tag.trim()).filter(Boolean).slice(0,12),commissionType:commissionType.trim()||null,status:'draft',imageUrl:null,imageStatus:null,pendingImageAssetId:'demo-pending-'+Date.now(),pendingImageStatus:'pending',createdAt:new Date().toISOString(),publishedAt:null,updatedAt:new Date().toISOString(),
       },...current]);
-      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);
+      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);
       notify('Simulation: artwork entered the fictional image-moderation queue.');
       return;
     }
@@ -62,6 +64,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         description:description.trim(),
         tags:tags.split(',').map((tag)=>tag.trim()).filter(Boolean).slice(0,12),
         commissionType:commissionType.trim(),
+        humanCreatedAttestation:true,
       });
       const dataUrl = await readFileDataUrl(file);
       await nightjarMedia.submitImage({
@@ -71,7 +74,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         contentType:file.type,
         fileName:file.name,
       });
-      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);
+      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);
       await load();
       notify('Artwork submitted. It stays private until an administrator approves the image.');
     } catch {
@@ -101,7 +104,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
 
   return <article className="panel artist-portfolio-manager">
     <div className="professional-role-head">
-      <div><span className="mini-label">ARTIST / PUBLIC PORTFOLIO</span><h2>Visual artwork</h2><p>Show Nightjar creators real examples of your work. Every image remains private until administrator image moderation approves it.</p></div>
+      <div><span className="mini-label">ARTIST / PUBLIC PORTFOLIO</span><h2>Visual artwork</h2><p>Show Nightjar creators real examples of your work. Portfolio pieces must be human-created; every image remains private until administrator image moderation approves it.</p></div>
       <ImagePlus size={20}/>
     </div>
 
@@ -111,7 +114,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <label className="artist-form-wide">Description<textarea maxLength={600} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="A short public note about the piece, style or brief."/></label>
       <label>Tags<input value={tags} onChange={(e)=>setTags(e.target.value)} placeholder="Atmospheric, fantasy, painterly"/></label>
       <label>Artwork image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e)=>setFile(e.target.files?.[0] ?? null)}/></label>
-      <button className="primary-button artist-form-wide" disabled={busy} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Submitting…</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
+      <label className="nightjar-anonymous-toggle artist-form-wide"><input type="checkbox" checked={humanCreated} onChange={(e)=>setHumanCreated(e.target.checked)}/><span>I confirm this is my own human-created artwork and is not AI-generated.</span></label>
+      <button className="primary-button artist-form-wide" disabled={busy || !humanCreated} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Submitting…</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
     </div>
 
     <div className="artist-portfolio-grid">
