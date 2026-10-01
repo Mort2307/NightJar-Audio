@@ -51,6 +51,10 @@ requireText(inbox,'Awaiting reply · 48h+','Inbox awaiting-reply indicator is mi
 requireText(app,'nav-messages','Universal search does not expose the professional Inbox');
 requireText(functions,'directMessagingBlockedBetween','Professional message block enforcement is missing');
 requireText(functions,'readBy:[identity.uid]','Direct-message read state is missing');
+requireText(functions,'messagingCollaborationContext','Verified multi-project message context validation is missing');
+requireText(functions,'collaborationIds','Multi-project professional conversation context is missing');
+requireText(functions,".where('participantUserIds', 'array-contains', identity.uid)",'Inbox conversation query is not participant-scoped');
+requireText(functions,".orderBy('createdAt', 'desc')",'Message history does not use deterministic recent ordering');
 ['listProfessionalConversations','startProfessionalConversation','openProfessionalConversation','sendProfessionalMessage','setProfessionalMessageBlock','reportProfessionalMessage'].forEach((legacy)=>{
   if(functions.includes('export const '+legacy)) failures.push('Legacy parallel messaging callable still exported: '+legacy);
 });
@@ -62,11 +66,16 @@ requireText(app,'setMessageCollaborationId','Collaboration-to-message context is
 requireText(app,'initialConversationId={messageConversationId}','Message notifications cannot open an exact private thread');
 requireText(app,'messageUnreadCount','Unread professional message state is missing');
 requireText(app,'<MessageCircle size={14}/> Comments','Published-work comments are not directly discoverable on release cards');
+requireText(app,'openNotification(item)','Activity rows no longer deep-link to their target');
+const navMessageCommands=(app.match(/id:'nav-messages'/g)??[]).length;
+if(navMessageCommands!==1) failures.push('Universal search must expose exactly one Messages command; found '+navMessageCommands);
 
 requireText(inbox,'nightjarMessaging.open','Inbox is not using canonical message thread API');
 requireText(inbox,'nightjarMessaging.setBlocked','Inbox block control is missing');
 requireText(inbox,'nightjarMessaging.report','Inbox report control is missing');
 requireText(inbox,'message-read-state','Inbox read-receipt UI is missing');
+requireText(inbox,'messaging-project-contexts','Multi-project Inbox context switcher is missing');
+requireText(inbox,'activeCollaborationId','Per-message project context state is missing');
 
 requireText(community,'nightjarEngagement.setReaction','Like/Love Community action is missing');
 requireText(community,'Post comment','Direct Listener comment UI is missing');
@@ -77,6 +86,7 @@ requireText(messagingClient,"'listMessageConversations'",'Messaging client canon
 requireText(messagingClient,"'startDirectConversation'",'Messaging client canonical conversation-start callable is missing');
 requireText(messagingClient,"'listDirectMessages'",'Messaging client canonical thread callable is missing');
 requireText(messagingClient,"'sendDirectMessage'",'Messaging client canonical send callable is missing');
+requireText(messagingClient,'collaborationId?:string|null','Messaging client no longer carries per-message collaboration context');
 requireText(messagingClient,"'setDirectMessageBlock'",'Messaging client block callable is missing');
 requireText(messagingClient,"'reportDirectMessage'",'Messaging client report callable is missing');
 requireText(engagementClient,"'setReleaseReaction'",'Engagement client reaction callable is missing');
