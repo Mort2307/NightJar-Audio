@@ -2377,11 +2377,11 @@ const deterministicDailyPick = <T>(items: T[], dateKey: string) => {
   return items[Math.abs(day) % items.length] ?? null;
 };
 
-const spotlightForRole = async (role: 'creator' | 'writer' | 'editor', dateKey: string) => {
-  const accounts = await db.collection('accounts').where('role', '==', role).limit(300).get();
+const spotlightForRole = async (role: 'creator' | 'writer' | 'editor' | 'artist', dateKey: string) => {
+  const accounts = await db.collection('accounts').limit(2000).get();
   const eligible = (await Promise.all(
     accounts.docs
-      .filter((doc) => doc.data().status === 'active')
+      .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data()).includes(role))
       .sort((a, b) => a.id.localeCompare(b.id))
       .map(async (doc) => {
         const profile = await profileRef(doc.id).get();
@@ -2389,15 +2389,17 @@ const spotlightForRole = async (role: 'creator' | 'writer' | 'editor', dateKey: 
         if (!data || data.publicProfile === false) return null;
         return {
           kind: role,
-          name: data.displayName ?? (role === 'editor' ? 'Nightjar Audio Editor' : 'Nightjar member'),
+          name: data.displayName ?? (role === 'editor' ? 'Nightjar Audio Editor' : role === 'artist' ? 'Nightjar Artist' : 'Nightjar member'),
           handle: data.handle ?? null,
-          title: data.headline ?? (role === 'editor' ? 'Audio Editor profile' : role === 'creator' ? 'Creator profile' : 'Writer profile'),
-          edition: role === 'editor' ? 'Audio Editor Spotlight' : role === 'creator' ? 'Creator Spotlight' : 'Writer Spotlight',
+          title: data.headline ?? (role === 'editor' ? 'Audio Editor profile' : role === 'creator' ? 'VA Creator profile' : role === 'artist' ? 'Artist profile' : 'Writer profile'),
+          edition: role === 'editor' ? 'Audio Editor Spotlight' : role === 'creator' ? 'VA Creator Spotlight' : role === 'artist' ? 'Artist Spotlight' : 'Writer Spotlight',
           detail: role === 'editor'
             ? 'A full day of recognition for an Audio Editor shaping Nightjar productions.'
             : role === 'creator'
-              ? 'A full day of discovery for this Nightjar creator.'
-              : 'A full day of discovery for this Nightjar writer.',
+              ? 'A full day of discovery for this Nightjar VA Creator.'
+              : role === 'artist'
+                ? 'A full day of discovery for a human Artist shaping Nightjar visual work.'
+                : 'A full day of discovery for this Nightjar writer.',
           initials: data.avatarInitials ?? null,
           imageUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
           targetId: doc.id,
@@ -2432,13 +2434,13 @@ const listenerSpotlightForToday = async (dateKey: string) => {
   const previousWeekEnd = new Date(weekStart);
 
   const [listenersSnapshot, eventsSnapshot] = await Promise.all([
-    db.collection('accounts').where('role', '==', 'listener').limit(1000).get(),
+    db.collection('accounts').limit(5000).get(),
     db.collection('listeningEvents').limit(10000).get(),
   ]);
 
   const listenerAccounts = new Map(
     listenersSnapshot.docs
-      .filter((doc) => doc.data().status === 'active')
+      .filter((doc) => doc.data().status === 'active' && doc.data().role !== 'admin')
       .map((doc) => [doc.id, doc]),
   );
 
@@ -2504,20 +2506,24 @@ const materializeSpotlightNotification = async (item: any, date: string) => {
   if (existing.exists) return;
 
   const title = kind === 'creator'
-    ? 'You are today’s Creator Spotlight'
+    ? 'You are today’s VA Creator Spotlight'
     : kind === 'writer'
       ? 'You are today’s Writer Spotlight'
       : kind === 'editor'
         ? 'You are today’s Audio Editor Spotlight'
-        : 'Thank you — you’re today’s Listener Spotlight';
+        : kind === 'artist'
+          ? 'You are today’s Artist Spotlight'
+          : 'Thank you — you’re today’s Listener Spotlight';
 
   const message = kind === 'creator'
-    ? 'Your public Nightjar creator profile is featured for the full day.'
+    ? 'Your public Nightjar VA Creator profile is featured for the full day.'
     : kind === 'writer'
       ? 'Your public Nightjar writer profile is featured for the full day.'
       : kind === 'editor'
         ? 'Your public Audio Editor profile is featured for the full day.'
-        : 'Thank you for being part of Nightjar. You are being recognised from the previous week’s Top 7 listeners.';
+        : kind === 'artist'
+          ? 'Your public Artist profile is featured for the full day.'
+          : 'Thank you for being part of Nightjar. You are being recognised from the previous week’s Top 7 listeners.';
 
   await ref.set({
     type: 'spotlight',
@@ -2536,13 +2542,14 @@ export const spotlightState = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
   const date = londonDateKey();
-  const [creator, writer, editor, listenerState] = await Promise.all([
+  const [creator, writer, editor, artist, listenerState] = await Promise.all([
     spotlightForRole('creator', date),
     spotlightForRole('writer', date),
     spotlightForRole('editor', date),
+    spotlightForRole('artist', date),
     listenerSpotlightForToday(date),
   ]);
-  const spotlights = [creator, writer, editor, listenerState.listener].filter(Boolean);
+  const spotlights = [creator, writer, editor, artist, listenerState.listener].filter(Boolean);
   await Promise.all(spotlights.map((item) => materializeSpotlightNotification(item, date)));
 
   return {
