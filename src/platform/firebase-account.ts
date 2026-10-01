@@ -13,7 +13,7 @@ export type NightjarAccountIdentity = {
 };
 
 const identityCall = httpsCallable<void, NightjarAccountIdentity>(functions, 'accountIdentity');
-const roleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' }, { userId: string; role: 'creator' | 'listener' | 'writer'; status: string }>(functions, 'chooseAccountRole');
+const roleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'editor'; referralCode?: string }, { userId: string; role: 'creator' | 'listener' | 'writer' | 'editor'; status: string }>(functions, 'chooseAccountRole');
 
 export const nightjarAccount = {
   async identity() {
@@ -21,8 +21,8 @@ export const nightjarAccount = {
     return result.data;
   },
 
-  async chooseRole(role: 'creator' | 'listener' | 'writer') {
-    const result = await roleCall({ role });
+  async chooseRole(role: 'creator' | 'listener' | 'writer' | 'editor', referralCode = '') {
+    const result = await roleCall({ role, ...(referralCode ? { referralCode } : {}) });
     return result.data;
   },
 };
