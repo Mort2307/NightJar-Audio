@@ -62,6 +62,7 @@ import TransparencyPanel from './components/TransparencyPanel';
 import SearchableMultiSelect from './components/SearchableMultiSelect';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS, PROFILE_CATEGORY_OPTIONS, ROLE_FOCUS_OPTIONS, ROLE_PROFILE_CONFIG } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
+import { nightjarReferrals } from './platform/firebase-referrals';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
 import MobileNavigation from './components/MobileNavigation';
 import ProductExperience from './components/ProductExperience';
@@ -80,6 +81,7 @@ const ListenerLibrary = lazy(() => import('./components/ListenerLibrary'));
 const CreatorCompensationCard = lazy(() => import('./components/CreatorCompensationCard'));
 const ScriptMarketplace = lazy(() => import('./components/ScriptMarketplace'));
 const ReleaseReviews = lazy(() => import('./components/ReleaseReviews'));
+const CreatorSuggestionBox = lazy(() => import('./components/CreatorSuggestionBox'));
 const MessagingHub = lazy(() => import('./components/MessagingHub'));
 
 
@@ -147,6 +149,8 @@ type Track = {
   communityLoveCount?: number;
   communityReactionCount?: number;
   communityCommentCount?: number;
+  playbackAllowed?: boolean;
+  playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'subscription_required' | null;
 };
 
 type PublicDirectoryProfile = {
@@ -327,8 +331,9 @@ function App() {
   const [securityAlertsLoading, setSecurityAlertsLoading] = useState(false);
   const [securityEvidenceReview, setSecurityEvidenceReview] = useState<{ alert: any; evidence: any[] } | null>(null);
   const [securityEvidenceLoading, setSecurityEvidenceLoading] = useState(false);
-  const [adminPanel, setAdminPanel] = useState<'approvals' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | null>(null);
+  const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | null>(null);
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
+  const [adminCreatorSuggestions, setAdminCreatorSuggestions] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
   const [adminScripts, setAdminScripts] = useState<any[]>([]);
   const [adminEditors, setAdminEditors] = useState<any[]>([]);
@@ -766,6 +771,25 @@ function App() {
     if (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value)) setView(value as View);
   };
 
+  const recommendCreator = async (creator: PublicDirectoryProfile) => {
+    if (creator.role !== 'creator') return;
+    try {
+      let url = window.location.origin + '/people/' + encodeURIComponent(creator.userId);
+      if (!demoMode) {
+        const data = await nightjarReferrals.recommendCreator(creator.userId);
+        url = window.location.origin + data.path;
+      }
+      const text = 'I recommend ' + creator.name + ' on Nightjar.';
+      if (navigator.share) await navigator.share({ title:'Nightjar · ' + creator.name, text, url });
+      else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text + ' ' + url);
+        notify('Creator recommendation link copied.');
+      } else notify('Sharing is not available in this browser.');
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) notify('Creator recommendation link could not be created.');
+    }
+  };
+
   useEffect(() => {
     if (accountLoading || !role) return;
     const perspective = role === 'admin' ? (simulationMode ? previewRole : 'admin') : role;
@@ -839,6 +863,12 @@ function App() {
         episodeNumber: release.episodeNumber ?? null,
         nightjarOriginal: release.nightjarOriginal === true,
         productionNote: release.productionNote ?? null,
+        communityLikeCount: Math.max(0, Number(release.communityLikeCount ?? 0)),
+        communityLoveCount: Math.max(0, Number(release.communityLoveCount ?? 0)),
+        communityReactionCount: Math.max(0, Number(release.communityReactionCount ?? 0)),
+        communityCommentCount: Math.max(0, Number(release.communityCommentCount ?? 0)),
+        playbackAllowed: typeof release.playbackAllowed === 'boolean' ? release.playbackAllowed : undefined,
+        playbackAccessReason: release.playbackAccessReason ?? null,
       })) as Track[];
       setTracks(liveTracks);
       setProfileDirectory((directoryResponse.profiles ?? []).map((item:any) => ({
@@ -1484,6 +1514,10 @@ function App() {
   const togglePlayback = (track: Track) => {
     if (!track.audioAvailable && !track.audioUrl) {
       notify('This release has no playable audio attached yet.');
+      return;
+    }
+    if (track.playbackAllowed === false || track.playbackAccessReason === 'subscription_required') {
+      notify('A Nightjar subscription is required for work you are not credited on. Your own credited releases remain included for you.');
       return;
     }
     setPlaying(playing === track.id ? null : track.id);
@@ -2183,6 +2217,40 @@ function App() {
     }
   };
 
+  const loadAdminCreatorSuggestions = async () => {
+    if (!canAdmin) return;
+    setAdminPanelLoading(true);
+    try {
+      if (demoMode) {
+        setAdminCreatorSuggestions([
+          { id:'demo-suggestion-1', creatorName:'Suggested Creator', publicUrl:'https://example.invalid/creator', note:'Strong community recommendation.', submittedByName:'Jamie', submittedByHandle:'jamielistens', status:'new', referralCode:'DEMO-CREATOR' },
+        ]);
+      } else {
+        const data = await nightjarReferrals.adminSuggestions();
+        setAdminCreatorSuggestions(data.suggestions ?? []);
+      }
+    } catch {
+      notify('Creator suggestions could not be loaded.');
+    } finally {
+      setAdminPanelLoading(false);
+    }
+  };
+
+  const reviewCreatorSuggestion = async (suggestion:any, status:'new'|'contacted'|'invited'|'joined'|'dismissed') => {
+    if (!canAdmin || !suggestion?.id) return;
+    try {
+      if (demoMode) {
+        setAdminCreatorSuggestions((items:any[]) => items.map((item:any) => item.id === suggestion.id ? { ...item, status } : item));
+      } else {
+        await nightjarReferrals.adminReviewSuggestion(suggestion.id, status);
+        await loadAdminCreatorSuggestions();
+      }
+      notify('Creator suggestion updated.');
+    } catch {
+      notify('Creator suggestion could not be updated.');
+    }
+  };
+
   const loadAdminSubscriptions = async () => {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
@@ -2291,11 +2359,12 @@ function App() {
     }
   };
 
-  const openAdminPanel = (panel: 'approvals' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags') => {
+  const openAdminPanel = (panel: 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags') => {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
     setAdminPanel(panel);
     if (panel === 'approvals') void loadAdminApplications();
+    if (panel === 'suggestions') void loadAdminCreatorSuggestions();
     if (panel === 'reports') void loadAdminReports();
     if (panel === 'reviews') void loadAdminReviews();
     if (panel === 'subscriptions') void loadAdminSubscriptions();
@@ -3106,6 +3175,8 @@ function App() {
               {!!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
             </div>
 
+            <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
+
             <div className="profile-directory-summary">
               <span><strong>{filteredDirectoryProfiles.length}</strong> matching profile{filteredDirectoryProfiles.length === 1 ? '' : 's'}</span>
               <span>Public profiles only · protected work and private listening remain excluded</span>
@@ -3139,6 +3210,7 @@ function App() {
                     </div>
                   </div>
                   <div className="profile-directory-actions">
+                    {person.role === 'creator' && <button className="ghost-button" onClick={() => void recommendCreator(person)}><Share2 size={13}/> Recommend</button>}
                     {['creator','writer','editor'].includes(String(effectiveRole)) && ['creator','writer','editor'].includes(String(person.role)) && person.userId !== user?.userId && <button className="ghost-button" onClick={() => { setMessageRecipientUserId(person.userId); setMessageCollaborationId(null); navigate('messages'); }}><MessageCircle size={13}/> Message</button>}
                     <button className="round-arrow" onClick={() => openPublicProfile(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
                   </div>
@@ -3660,6 +3732,8 @@ function releaseToTrack(release: any): Track {
     communityLoveCount: Math.max(0, Number(release.communityLoveCount ?? 0)),
     communityReactionCount: Math.max(0, Number(release.communityReactionCount ?? 0)),
     communityCommentCount: Math.max(0, Number(release.communityCommentCount ?? 0)),
+    playbackAllowed: typeof release.playbackAllowed === 'boolean' ? release.playbackAllowed : undefined,
+    playbackAccessReason: release.playbackAccessReason ?? null,
   };
 }
 
