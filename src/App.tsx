@@ -1247,28 +1247,6 @@ function App() {
     }
   };
 
-  const runAdminSandboxTest = async () => {
-    setAgeLoading(true);
-    try {
-      const data = await nightjarAge.adminTestPass();
-      if (data.verified) {
-        setAgeVerified(true);
-        setAgeStatus('COMPLETE');
-        setAgeProvider('nightjar-sandbox-test');
-        setAgeEnvironment('sandbox');
-        setAgeVerifiedAt(new Date().toISOString());
-        setAgeReverifyRequired(false);
-        setAgeSessionActive(false);
-        setAgeStage('app');
-        notify('Age verification is now stored on this Nightjar account; future logins will not repeat the check.');
-      }
-    } catch {
-      notify('Sandbox test could not be completed.');
-    } finally {
-      setAgeLoading(false);
-    }
-  };
-
   const openAgeCheck = async () => {
     setAgeLoading(true);
     try {
