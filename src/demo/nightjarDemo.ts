@@ -26,7 +26,7 @@ export const demoTracks = [
     audioAvailable: true, audioUrl: null, artworkUrl: null, creatorUserId: 'demo-creator-rowan',
     genre: 'Romantic story', tags: ['Gentle','Conversational'], tropes: ['Strangers to lovers','Meet-cute'],
     contributors: [{ userId: 'demo-writer-ivy', name: 'Ivy North', role: 'Writer' }, { userId: 'demo-editor-sam', name: 'Sam Reed', role: 'Audio Editor' }],
-    contentRating: 'suggestive', seriesTitle: null, episodeNumber: null, nightjarOriginal: false, productionNote: null, communityLikeCount:9, communityLoveCount:18, communityReactionCount:27, communityCommentCount:3, communityLikeCount:11, communityLoveCount:24, communityReactionCount:35, communityCommentCount:4,
+    contentRating: 'suggestive', seriesTitle: null, episodeNumber: null, nightjarOriginal: false, productionNote: null, communityLikeCount:11, communityLoveCount:24, communityReactionCount:35, communityCommentCount:4,
   },
   {
     id: 'demo-release-3', title: 'The Long Way Home', creator: 'Luca Grey', duration: '44 min', category: 'Audio drama',
