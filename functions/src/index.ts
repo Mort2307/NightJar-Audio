@@ -17,8 +17,8 @@ const ADMIN_EMAILS = new Set([
   'nightjar.audio.app@gmail.com',
 ]);
 
-type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor';
-type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor';
+type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
+type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 
 const cleanEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
 
@@ -48,8 +48,8 @@ export const stageRegistrationIntent = onCall({ region: REGION }, async (request
   const identity = requireRegistrationIdentity(request);
   const input = (request.data ?? {}) as { role?: unknown; referralCode?: unknown };
   const role = String(input.role ?? '') as SelectableRole;
-  if (!['creator','listener','writer','editor'].includes(role)) {
-    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer or Audio Editor.');
+  if (!['creator','listener','writer','editor','artist'].includes(role)) {
+    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer, Audio Editor or Artist.');
   }
   const referralCode = String(input.referralCode ?? '').trim().slice(0,80);
   await db.collection('registrationIntents').doc(identity.uid).set({
@@ -116,13 +116,13 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
 
   const current = snapshot.exists ? snapshot.data() ?? {} : {};
   const rawStagedRole = String(registrationIntent.data()?.role ?? '');
-  const stagedRole = !current.role && ['creator','listener','writer','editor'].includes(rawStagedRole)
+  const stagedRole = !current.role && ['creator','listener','writer','editor','artist'].includes(rawStagedRole)
     ? rawStagedRole as SelectableRole
     : null;
   const role = (current.role as AccountRole | null) ?? stagedRole ?? null;
   const status = current.role
     ? String(current.status ?? 'active')
-    : stagedRole === 'creator' || stagedRole === 'editor'
+    : stagedRole === 'creator' || stagedRole === 'editor' || stagedRole === 'artist'
       ? 'pending_review'
       : 'active';
 
@@ -135,7 +135,7 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge:true });
 
-  if (stagedRole === 'creator' || stagedRole === 'editor') {
+  if (stagedRole === 'creator' || stagedRole === 'editor' || stagedRole === 'artist') {
     await db.collection('creatorApplications').doc(identity.uid).set({
       userId: identity.uid,
       email: identity.email,
@@ -185,8 +185,8 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
 
   const input = (request.data ?? {}) as { role?: unknown; referralCode?: unknown };
   const requestedRole = String(input.role ?? '') as SelectableRole;
-  if (!['creator', 'listener', 'writer', 'editor'].includes(requestedRole)) {
-    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer or Audio Editor.');
+  if (!['creator', 'listener', 'writer', 'editor', 'artist'].includes(requestedRole)) {
+    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer, Audio Editor or Artist.');
   }
 
   const ref = accountRef(identity.uid);
@@ -197,7 +197,7 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('failed-precondition', 'This Nightjar account already has a role.');
   }
 
-  const status = requestedRole === 'creator' || requestedRole === 'editor' ? 'pending_review' : 'active';
+  const status = requestedRole === 'creator' || requestedRole === 'editor' || requestedRole === 'artist' ? 'pending_review' : 'active';
   await ref.set({
     email: identity.email,
     emailVerified: true,
@@ -207,7 +207,7 @@ export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge: true });
 
-  if (requestedRole === 'creator' || requestedRole === 'editor') {
+  if (requestedRole === 'creator' || requestedRole === 'editor' || requestedRole === 'artist') {
     await db.collection('creatorApplications').doc(identity.uid).set({
       userId: identity.uid,
       email: identity.email,
@@ -5851,3 +5851,6 @@ export const adminModerateReview = onCall({ region: REGION }, async (request) =>
   const saved = await ref.get();
   return { review: reviewPayload(saved.data() ?? {}, reviewId) };
 });
+
+
+export { nightjarGiftConfig, myNightjarWallet, sendNightjars, myNightjarEarnings, adminGrantNightjars } from './nightjars.js';
