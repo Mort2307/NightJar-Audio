@@ -84,6 +84,8 @@ requireText(app,'viewerRole={effectiveRole}','Release Community does not receive
 requireText(app,'messageUnreadCount','Unread Inbox state is missing');
 requireText(app,'setMessageCollaborationId','Collaboration-to-message context is missing');
 requireText(app,'initialConversationId={messageConversationId}','Message notifications cannot open an exact private thread');
+requireText(app,'suspendReportedCommunityAccount','Manual Administrator suspension escalation for serious community reports is missing');
+requireText(app,"'suspended'","Administrator report escalation no longer targets suspended account status");
 requireText(app,'messageUnreadCount','Unread professional message state is missing');
 requireText(app,'<MessageCircle size={14}/> Comments','Published-work comments are not directly discoverable on release cards');
 requireText(app,'openNotification(item)','Activity rows no longer deep-link to their target');
@@ -96,6 +98,9 @@ requireText(inbox,'nightjarMessaging.report','Inbox report control is missing');
 requireText(inbox,'message-read-state','Inbox read-receipt UI is missing');
 requireText(inbox,'messaging-project-contexts','Multi-project Inbox context switcher is missing');
 requireText(inbox,'activeCollaborationId','Per-message project context state is missing');
+requireText(inbox,"'needs_reply'",'Inbox responsibility filter for replies owed by the current user is missing');
+requireText(inbox,"'awaiting_reply'",'Inbox filter for conversations awaiting another professional is missing');
+requireText(inbox,'messaging-filter-tabs','Inbox responsibility filter controls are missing');
 
 requireText(community,'nightjarEngagement.setReaction','Like/Love Community action is missing');
 requireText(community,'Post comment','Direct Listener comment UI is missing');
