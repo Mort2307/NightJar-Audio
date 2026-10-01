@@ -15,6 +15,7 @@ import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarReviews } from './platform/firebase-reviews';
 import { nightjarMessaging } from './platform/firebase-messaging';
 import { nightjarEngagement, type ReleaseReaction } from './platform/firebase-engagement';
+import { nightjarGifts, type AdminNightjarPayoutOverview } from './platform/firebase-nightjars';
 import {
   ArrowRight,
   BarChart3,
@@ -355,6 +356,7 @@ function App() {
   const [moderationPreviewAsset, setModerationPreviewAsset] = useState<any | null>(null);
   const [profileImageBusy, setProfileImageBusy] = useState(false);
   const [commercialOverview, setCommercialOverview] = useState<CommercialOverview | null>(null);
+  const [nightjarPayoutOverview, setNightjarPayoutOverview] = useState<AdminNightjarPayoutOverview | null>(null);
   const [commercialSettings, setCommercialSettings] = useState<CommercialSettings>({
     planningMonthlyPricePence: 500,
     creatorPoolPercent: null,
@@ -2225,11 +2227,22 @@ function App() {
         const data:any = readDemo('commercial', demoAdminData.commercial);
         setCommercialOverview(data);
         setCommercialSettings(data.settings);
+        setNightjarPayoutOverview({
+          recipients: [
+            { userId:'demo-creator-aria', displayName:'Aria Vale', roles:['creator'], pendingNightjars:8, pendingPence:800, clearedNightjars:24, clearedPence:2400, lifetimeNightjars:32, lifetimePence:3200, byRole:{ creator:{ pendingNightjars:8,pendingPence:800,clearedNightjars:24,clearedPence:2400,lifetimeNightjars:32,lifetimePence:3200 } } },
+            { userId:'demo-writer-mara', displayName:'Mara Bell', roles:['writer','artist'], pendingNightjars:10, pendingPence:1000, clearedNightjars:18, clearedPence:1800, lifetimeNightjars:28, lifetimePence:2800, byRole:{ writer:{ pendingNightjars:6,pendingPence:600,clearedNightjars:13,clearedPence:1300 }, artist:{ pendingNightjars:4,pendingPence:400,clearedNightjars:5,clearedPence:500 } } },
+          ],
+          totals:{ pendingNightjars:18,pendingPence:1800,clearedNightjars:42,clearedPence:4200,lifetimeNightjars:60,lifetimePence:6000 },
+        });
         setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: data.subscriptions }));
       } else {
-        const data = await nightjarCommercial.overview();
+        const [data, giftPayouts] = await Promise.all([
+          nightjarCommercial.overview(),
+          nightjarGifts.adminPayoutOverview().catch(() => null),
+        ]);
         setCommercialOverview(data);
         setCommercialSettings(data.settings);
+        setNightjarPayoutOverview(giftPayouts);
         setAdminOverview((current: any) => ({ ...(current ?? {}), subscriptions: data.subscriptions }));
       }
     } catch { notify('Commercial controls could not be loaded.'); }
@@ -3712,6 +3725,21 @@ function App() {
     <div className="admin-modal-stat"><span>Live subscriptions</span><strong>{commercialOverview?.subscriptions.active ?? 0}</strong></div>
     <div className="admin-modal-stat"><span>Confirmed gross MRR</span><strong>{formatMoneyPence(commercialOverview?.confirmedGrossMrrPence ?? 0)}</strong></div>
   </div>
+  <section className="nightjar-admin-payout-panel">
+    <div className="subscription-finance-heading">
+      <div><span className="mini-label">NIGHTJAR SUPPORT GIFTS</span><h3>Gift liabilities and creator payout readiness</h3></div>
+      <span className="status-pill">£1 creator value per Nightjar</span>
+    </div>
+    <div className="subscription-payout-grid">
+      <div><span>Pending clearance</span><strong>{formatMoneyPence(nightjarPayoutOverview?.totals.pendingPence ?? 0)}</strong><small>{nightjarPayoutOverview?.totals.pendingNightjars ?? 0} Nightjars inside the seven-day clearance window.</small></div>
+      <div><span>Cleared for creator payout</span><strong>{formatMoneyPence(nightjarPayoutOverview?.totals.clearedPence ?? 0)}</strong><small>{nightjarPayoutOverview?.totals.clearedNightjars ?? 0} cleared Nightjars waiting for settlement through the monthly payout process.</small></div>
+      <div><span>Lifetime creator support</span><strong>{formatMoneyPence(nightjarPayoutOverview?.totals.lifetimePence ?? 0)}</strong><small>{nightjarPayoutOverview?.totals.lifetimeNightjars ?? 0} Nightjars received across all professional roles.</small></div>
+    </div>
+    {!!nightjarPayoutOverview?.recipients?.length && <div className="admin-data-list nightjar-payout-recipient-list">
+      {nightjarPayoutOverview.recipients.slice(0,20).map((recipient)=><article className="admin-data-row" key={recipient.userId}><div><strong>{recipient.displayName}</strong><span>{recipient.roles.map((role)=>role==='creator'?'VA Creator':role==='editor'?'Audio Editor':role==='artist'?'Artist':'Writer').join(' · ') || 'Professional'}</span><small>{recipient.pendingNightjars} pending · {recipient.clearedNightjars} cleared · {recipient.lifetimeNightjars} lifetime Nightjars</small></div><div><strong>{formatMoneyPence(recipient.clearedPence)}</strong><small>cleared support</small></div></article>)}
+    </div>}
+    <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>SEPARATE FROM SUBSCRIPTION PAY</strong><span>Nightjar gifts are direct creator-support liabilities. Cleared gift earnings are added to the recipient’s monthly payout; unused listener Nightjars remain a creator-value liability until gifted or legitimately refunded.</span></div></div>
+  </section>
   <div className="commercial-edit-grid">
     <label>Planning monthly price (£)<input type="number" min="0" step="0.01" value={commercialSettings.planningMonthlyPricePence == null ? '' : commercialSettings.planningMonthlyPricePence / 100} onChange={(e)=>setCommercialSettings((s)=>({...s,planningMonthlyPricePence:e.target.value===''?null:Math.round(Number(e.target.value)*100)}))}/></label>
     <label>Standard creator monthly cap (£)<input type="number" min="0" step="1" value={commercialSettings.creatorMonthlyCapPence == null ? '' : commercialSettings.creatorMonthlyCapPence / 100} onChange={(e)=>setCommercialSettings((s)=>({...s,creatorMonthlyCapPence:e.target.value===''?null:Math.round(Number(e.target.value)*100)}))} placeholder="Leave unset until research is complete"/></label>
