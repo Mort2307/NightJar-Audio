@@ -214,9 +214,9 @@ export default function AccountAccess({
     {mode === 'register' && <div className="account-role-cards" aria-label="Choose Nightjar account type">
       {[
         { role:'listener' as const, title:'Listener', detail:'Discover, subscribe, comment, Like/Love releases, follow profiles and build private playlists.', icon:<Headphones size={19}/> },
-        { role:'creator' as const, title:'Creator', detail:'Publish audio, manage releases, message Writers and Audio Editors, and build a professional Creator profile.', icon:<Mic2 size={19}/> },
+        { role:'creator' as const, title:'Creator', detail:'Publish audio, manage releases, message Writers and Audio Editors, and build a professional Creator profile. Professional access is reviewed before publishing unlocks.', icon:<Mic2 size={19}/> },
         { role:'writer' as const, title:'Writer', detail:'Protect manuscripts, manage rights, collaborate and message creative professionals from a dedicated Writer workspace.', icon:<FileText size={19}/> },
-        { role:'editor' as const, title:'Audio Editor', detail:'Receive assigned work, manage production credits, collaborate and message professional accounts.', icon:<AudioLines size={19}/> },
+        { role:'editor' as const, title:'Audio Editor', detail:'Receive assigned work, manage production credits, collaborate and message professional accounts. Professional access is reviewed before editorial tools unlock.', icon:<AudioLines size={19}/> },
       ].map((item)=><button type="button" key={item.role} className={registrationRole===item.role?'account-role-card selected':'account-role-card'} aria-pressed={registrationRole===item.role} onClick={()=>{setRegistrationRole(item.role);sessionStorage.setItem('nightjar.registrationRole',item.role);}}>
         <span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div>
       </button>)}
