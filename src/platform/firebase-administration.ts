@@ -6,8 +6,6 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 const overviewCall = httpsCallable<void, { people: any }>(functions, 'adminAccountOverview');
 const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist'; status: 'active' | 'pending_review' | 'suspended' }, { userId: string; role: string; status: string }>(functions, 'adminSetAccountRole');
 const setTestAccessCall = httpsCallable<{ userId: string; enabled: boolean }, { userId: string; testAccess: boolean }>(functions, 'adminSetTestAccess');
-const applicationsCall = httpsCallable<void, { applications: any[] }>(functions, 'listCreatorApplications');
-
 const professionalBankCall = httpsCallable<void, { applications: any[]; buckets: Record<string, number>; total: number }>(functions, 'listProfessionalApplicationBank');
 const reviewProfessionalCall = httpsCallable<{
   userId: string;
@@ -23,8 +21,6 @@ const reviewProfessionalCall = httpsCallable<{
   applicationStatus: string;
   wave: string | null;
 }>(functions, 'reviewProfessionalApplication');
-
-const decideCall = httpsCallable<{ applicationId: string; decision: 'approved' | 'waitlist' | 'rejected' }, { applicationId: string; userId: string; decision: string; accountStatus: string }>(functions, 'decideCreatorApplication');
 
 export const nightjarAdministration = {
   async overview() {
@@ -47,11 +43,4 @@ export const nightjarAdministration = {
     return (await reviewProfessionalCall({ userId, decision, ...(roles.length ? { roles } : {}), ...(wave ? { wave } : {}) })).data;
   },
 
-  async creatorApplications() {
-    return (await applicationsCall()).data;
-  },
-
-  async decideCreatorApplication(applicationId: string, decision: 'approved' | 'waitlist' | 'rejected') {
-    return (await decideCall({ applicationId, decision })).data;
-  },
 };
