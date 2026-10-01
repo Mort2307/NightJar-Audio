@@ -2107,3 +2107,53 @@ textarea {
     justify-content:center;
   }
 }
+
+
+.account-workspace-overview {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+  margin:15px 0 18px;
+}
+.account-workspace-overview > span {
+  min-width:0;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  column-gap:7px;
+  align-items:start;
+  padding:8px 9px;
+  border:1px solid var(--nj-line-subtle);
+  border-radius:10px;
+  background:rgba(255,255,255,.01);
+}
+.account-workspace-overview > span > svg {
+  grid-row:1 / span 2;
+  color:var(--nj-accent);
+  margin-top:1px;
+}
+.account-workspace-overview strong,
+.account-workspace-overview small {
+  display:block;
+}
+.account-workspace-overview strong {
+  color:var(--nj-text-primary);
+  font-size:8px;
+}
+.account-workspace-overview small {
+  margin-top:2px;
+  color:var(--nj-text-tertiary);
+  font-size:6.8px;
+  line-height:1.45;
+}
+.account-workspace-overview > em {
+  grid-column:1 / -1;
+  padding:5px 2px 0;
+  color:var(--nj-text-tertiary);
+  font-size:7px;
+  font-style:normal;
+  line-height:1.45;
+}
+@media (max-width:620px) {
+  .account-workspace-overview { grid-template-columns:1fr; }
+  .account-workspace-overview > em { grid-column:auto; }
+}
