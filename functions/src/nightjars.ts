@@ -183,6 +183,25 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
     return { giftId: ledgerRef.id, quantity, recipientUserId, creatorCreditPence, balance: nextBalance, duplicate: false };
   });
 
+  if (!result.duplicate) {
+    const senderProfile = await db().collection('profiles').doc(sender.uid).get();
+    const senderName = anonymous
+      ? 'An anonymous Nightjar listener'
+      : cleanText(senderProfile.data()?.displayName, 80) || 'A Nightjar listener';
+    await db().collection('accounts').doc(recipientUserId).collection('notifications').doc().set({
+      type:'payment',
+      subtype:'nightjar_gift',
+      title: quantity === 1 ? 'You received a Nightjar' : `You received ${quantity} Nightjars`,
+      message: `${senderName} sent support worth £${(creatorCreditPence / 100).toFixed(2)}. It has been added to your pending creator earnings.`,
+      giftId:result.giftId,
+      quantity,
+      creatorCreditPence,
+      recipientRole:requestedRecipientRole || null,
+      read:false,
+      createdAt:FieldValue.serverTimestamp(),
+    });
+  }
+
   return result;
 });
 
@@ -290,6 +309,42 @@ export const clearMatureNightjarGifts = onSchedule({
       }, { merge:true });
     });
   }
+});
+
+export const adminNightjarPayoutOverview = onCall({ region: REGION }, async (request) => {
+  await requireAdmin(request);
+  const snapshot = await db().collection('nightjarCreatorEarnings').limit(1000).get();
+  const recipients = await Promise.all(snapshot.docs.map(async (doc) => {
+    const [profile, account] = await Promise.all([
+      db().collection('profiles').doc(doc.id).get(),
+      db().collection('accounts').doc(doc.id).get(),
+    ]);
+    const data = doc.data() ?? {};
+    return {
+      userId:doc.id,
+      displayName:cleanText(profile.data()?.displayName, 80) || cleanText(account.data()?.email, 160) || 'Nightjar professional',
+      roles:professionalRolesFor(account.data() ?? {}),
+      pendingNightjars:Number(data.pendingNightjars ?? 0),
+      pendingPence:Number(data.pendingPence ?? 0),
+      clearedNightjars:Number(data.clearedNightjars ?? 0),
+      clearedPence:Number(data.clearedPence ?? 0),
+      lifetimeNightjars:Number(data.lifetimeNightjars ?? 0),
+      lifetimePence:Number(data.lifetimePence ?? 0),
+      byRole:data.byRole && typeof data.byRole === 'object' ? data.byRole : {},
+    };
+  }));
+  recipients.sort((a,b)=>b.clearedPence-a.clearedPence || b.pendingPence-a.pendingPence);
+  return {
+    recipients,
+    totals:recipients.reduce((totals,item)=>({
+      pendingNightjars:totals.pendingNightjars+item.pendingNightjars,
+      pendingPence:totals.pendingPence+item.pendingPence,
+      clearedNightjars:totals.clearedNightjars+item.clearedNightjars,
+      clearedPence:totals.clearedPence+item.clearedPence,
+      lifetimeNightjars:totals.lifetimeNightjars+item.lifetimeNightjars,
+      lifetimePence:totals.lifetimePence+item.lifetimePence,
+    }),{pendingNightjars:0,pendingPence:0,clearedNightjars:0,clearedPence:0,lifetimeNightjars:0,lifetimePence:0}),
+  };
 });
 
 // Testing/admin bridge. Live purchases must credit wallets from a verified payment webhook, not from the client.
