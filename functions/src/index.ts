@@ -4527,6 +4527,19 @@ const commentPayload = (data: Record<string, any>, id: string) => ({
   updatedAt: toIso(data.updatedAt),
 });
 
+const hideReleaseCommentReplies = async (parentCommentId: string, status: 'parent_deleted' | 'parent_removed') => {
+  const replies = await db.collection('releaseComments').where('parentCommentId', '==', parentCommentId).limit(500).get();
+  if (replies.empty) return;
+  const batch = db.batch();
+  for (const reply of replies.docs) {
+    batch.set(reply.ref, {
+      status,
+      updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+  }
+  await batch.commit();
+};
+
 const directMessagePayload = (data: Record<string, any>, id: string) => ({
   id,
   conversationId: data.conversationId ?? null,
@@ -4841,7 +4854,9 @@ export const deleteOwnReleaseComment = onCall({ region: REGION }, async (request
   const snapshot = await ref.get();
   if (!snapshot.exists || snapshot.data()?.userId !== identity.uid) throw new HttpsError('not-found', 'Comment not found.');
   const releaseId = cleanText(snapshot.data()?.releaseId, 160);
+  const parentCommentId = cleanText(snapshot.data()?.parentCommentId, 160);
   await ref.set({ status:'deleted_by_user', body:'', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  if (!parentCommentId) await hideReleaseCommentReplies(commentId, 'parent_deleted');
   if (releaseId) await syncReleaseCommunitySummary(releaseId, identity.uid);
   return { deleted:true, commentId };
 });
@@ -5337,9 +5352,12 @@ export const adminResolveCommunityReport = onCall({ region: REGION }, async (req
   if (!data || data.status !== 'open') throw new HttpsError('not-found', 'Open report not found.');
 
   if (decision === 'remove' && data.type === 'release_comment' && data.commentId) {
-    await db.collection('releaseComments').doc(String(data.commentId)).set({
+    const commentRef = db.collection('releaseComments').doc(String(data.commentId));
+    const comment = await commentRef.get();
+    await commentRef.set({
       status:'removed_by_admin', body:'', moderatedBy:admin.uid, moderatedAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp(),
     }, { merge:true });
+    if (!cleanText(comment.data()?.parentCommentId, 160)) await hideReleaseCommentReplies(String(data.commentId), 'parent_removed');
     const releaseId = cleanText(data.releaseId, 160);
     if (releaseId) await syncReleaseCommunitySummary(releaseId, admin.uid);
   }
@@ -5351,7 +5369,13 @@ export const adminResolveCommunityReport = onCall({ region: REGION }, async (req
     }, { merge:true });
     const conversation = await conversationRef.get();
     if (conversation.data()?.lastMessagePreview === data.snapshotText) {
-      await conversationRef.set({ lastMessagePreview:'Message removed by Nightjar moderation.', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      await conversationRef.set({
+        lastMessagePreview:'Message removed by Nightjar moderation.',
+        resolvedForLastMessageAt:toIso(conversation.data()?.lastMessageAt),
+        resolvedAt:FieldValue.serverTimestamp(),
+        resolvedByUserId:admin.uid,
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
     }
   }
   await reportRef.set({
