@@ -165,7 +165,7 @@ export default function AccountAccess({
       <div className="account-access-mark"><Mail size={22} /></div>
       <span className="mini-label">ACCOUNT SECURITY</span>
       <h2>Verify your email</h2>
-      <p>Nightjar needs a verified email before age assurance, subscriptions or protected content can be attached to this account. We have sent a verification link to your email; if it is not in your inbox, check your spam or junk folder.</p>
+      <p>Nightjar needs a verified email before subscriptions, professional permissions or protected content can be attached to this account. We have sent a verification link to your email; if it is not in your inbox, check your spam or junk folder.</p>
       <strong>{identity.email}</strong>
       {message && <p className="account-access-message">{message}</p>}
       <div className="account-access-actions">
