@@ -1,104 +1,53 @@
-Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $repoRoot
 
 function Invoke-NightjarStep {
     param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][scriptblock]$Action,
-        [Parameter(Mandatory = $true)][string]$LogFile
+        [Parameter(Mandatory=$true)][string]$Title,
+        [Parameter(Mandatory=$true)][scriptblock]$Command
     )
 
     Write-Host ""
-    Write-Host "=== $Name ===" -ForegroundColor Cyan
+    Write-Host "=== $Title ===" -ForegroundColor Cyan
 
-    $global:LASTEXITCODE = 0
-    $previousErrorActionPreference = $ErrorActionPreference
-    $exitCode = 1
-    $commandFailed = $false
-    $commandError = $null
+    & $Command
 
-    try {
-        # Windows PowerShell 5.1 can surface ordinary native stderr output
-        # (for example Git's "From https://..." progress line) as an
-        # ErrorRecord. Do not let that override the native process exit code.
-        $ErrorActionPreference = 'Continue'
-
-        & $Action 2>&1 |
-            Tee-Object -FilePath $LogFile -Append |
-            ForEach-Object { Write-Host $_ }
-
-        $exitCode = $LASTEXITCODE
-
-        if ($null -eq $exitCode) {
-            $exitCode = 0
-        }
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Title failed with exit code $LASTEXITCODE."
     }
-    catch {
-        $commandFailed = $true
-        $commandError = $_
-        $exitCode = 1
-
-        $errorText = $_ | Out-String
-        $errorText |
-            Tee-Object -FilePath $LogFile -Append |
-            ForEach-Object { Write-Host $_ -ForegroundColor Red }
-    }
-    finally {
-        $ErrorActionPreference = $previousErrorActionPreference
-    }
-
-    if ($commandFailed -or $exitCode -ne 0) {
-        Write-Host ""
-        Write-Host "$Name FAILED (exit code $exitCode)" -ForegroundColor Red
-        Write-Host "Validation stopped at the first failing step." -ForegroundColor Yellow
-        Write-Host "PowerShell remains open." -ForegroundColor Yellow
-        Write-Host "Log saved to: $LogFile" -ForegroundColor Yellow
-        return $false
-    }
-
-    Write-Host "$Name PASSED" -ForegroundColor Green
-    return $true
 }
 
-function Invoke-NightjarFullValidation {
-    $repoRoot = Split-Path -Parent $PSScriptRoot
-    Set-Location $repoRoot
-
-    $logFile = Join-Path $repoRoot "nightjar-validation.log"
-    if (Test-Path $logFile) {
-        Remove-Item $logFile -Force
+try {
+    Invoke-NightjarStep -Title "CURRENT VERSION" -Command {
+        git log -1 --oneline
     }
 
-    Write-Host ""
-    Write-Host "============================================" -ForegroundColor Cyan
-    Write-Host " NIGHTJAR FULL DEVELOPMENT VALIDATION" -ForegroundColor Cyan
-    Write-Host "============================================" -ForegroundColor Cyan
+    Invoke-NightjarStep -Title "INSTALLING APP DEPENDENCIES" -Command {
+        npm install
+    }
 
-    if (-not (Invoke-NightjarStep "PULLING LATEST NIGHTJAR" { git pull --ff-only origin main } $logFile)) { return $false }
-
-    Write-Host ""
-    Write-Host "=== CURRENT REVISION ===" -ForegroundColor Cyan
-    git log -1 --oneline
-
-    Write-Host ""
-    Write-Host "=== REPOSITORY STATUS ===" -ForegroundColor Cyan
-    git status --short
-
-    if (-not (Invoke-NightjarStep "INSTALLING APP DEPENDENCIES" { npm install } $logFile)) { return $false }
-    if (-not (Invoke-NightjarStep "TYPESCRIPT CHECK" { npm run typecheck } $logFile)) { return $false }
-    if (-not (Invoke-NightjarStep "VITE PRODUCTION BUILD" { npm run build } $logFile)) { return $false }
-    if (-not (Invoke-NightjarStep "PRODUCT / ACCESSIBILITY / SECURITY CONTRACTS" { npm run validate:contracts } $logFile)) { return $false }
-    if (-not (Invoke-NightjarStep "COMMUNITY CONTRACTS" { npm run validate:community } $logFile)) { return $false }
-    if (-not (Invoke-NightjarStep "BUNDLE BUDGET" { npm run validate:bundle } $logFile)) { return $false }
-
-    Write-Host ""
-    Write-Host "=== FIREBASE FUNCTIONS ===" -ForegroundColor Cyan
+    Invoke-NightjarStep -Title "RUNNING COMPLETE NIGHTJAR VALIDATION" -Command {
+        npm run validate
+    }
 
     Push-Location (Join-Path $repoRoot "functions")
     try {
-        if (-not (Invoke-NightjarStep "INSTALLING FUNCTIONS DEPENDENCIES" { npm install } $logFile)) { return $false }
-        if (-not (Invoke-NightjarStep "FUNCTIONS TYPESCRIPT CHECK" { npm run check } $logFile)) { return $false }
-        if (-not (Invoke-NightjarStep "FUNCTIONS PRODUCTION BUILD" { npm run build } $logFile)) { return $false }
+        Invoke-NightjarStep -Title "INSTALLING FIREBASE FUNCTIONS DEPENDENCIES" -Command {
+            npm install
+        }
+
+        Invoke-NightjarStep -Title "VALIDATING FIREBASE FUNCTIONS" -Command {
+            npm run check
+        }
+
+        if ((Get-Content package.json -Raw) -match '"audit:guard"') {
+            Invoke-NightjarStep -Title "AUDITING FIREBASE FUNCTIONS PRODUCTION DEPENDENCIES" -Command {
+                npm run audit:guard
+            }
+        }
     }
     finally {
         Pop-Location
@@ -106,19 +55,27 @@ function Invoke-NightjarFullValidation {
 
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Green
-    Write-Host " NIGHTJAR FULL BUILD VALIDATED" -ForegroundColor Green
+    Write-Host " NIGHTJAR FULL BUILD PASSED" -ForegroundColor Green
     Write-Host "============================================" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "Validation log:" -ForegroundColor Cyan
-    Write-Host $logFile
 
-    return $true
+    Write-Host ""
+    Write-Host "Repository status:" -ForegroundColor Cyan
+    git status --short
+
+    Write-Host ""
+    Write-Host "Current revision:" -ForegroundColor Cyan
+    git log -1 --oneline
 }
-
-$success = Invoke-NightjarFullValidation
-
-if (-not $success) {
+catch {
     Write-Host ""
-    Write-Host "NIGHTJAR VALIDATION DID NOT PASS." -ForegroundColor Red
-    Write-Host "Fix the failing step above, then run this script again." -ForegroundColor Yellow
+    Write-Host "============================================" -ForegroundColor Red
+    Write-Host " NIGHTJAR VALIDATION FAILED" -ForegroundColor Red
+    Write-Host "============================================" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "No success banner has been emitted for this failed run." -ForegroundColor Yellow
+    exit 1
+}
+finally {
+    Pop-Location
 }
