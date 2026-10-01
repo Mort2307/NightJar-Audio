@@ -36,6 +36,32 @@ const requireVerifiedIdentity = (request: { auth?: { uid: string; token: Record<
   };
 };
 
+const requireRegistrationIdentity = (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Create or sign in to your Nightjar account first.');
+  const email = cleanEmail(request.auth.token.email);
+  if (!email) throw new HttpsError('failed-precondition', 'A valid account email is required.');
+  return { uid: request.auth.uid, email };
+};
+
+export const stageRegistrationIntent = onCall({ region: REGION }, async (request) => {
+  const identity = requireRegistrationIdentity(request);
+  const input = (request.data ?? {}) as { role?: unknown; referralCode?: unknown };
+  const role = String(input.role ?? '') as SelectableRole;
+  if (!['creator','listener','writer','editor'].includes(role)) {
+    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer or Audio Editor.');
+  }
+  const referralCode = String(input.referralCode ?? '').trim().slice(0,80);
+  await db.collection('registrationIntents').doc(identity.uid).set({
+    userId: identity.uid,
+    email: identity.email,
+    role,
+    referralCode: role === 'creator' && referralCode ? referralCode : null,
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { role, staged:true };
+});
+
 const requireAdminIdentity = (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
   const identity = requireVerifiedIdentity(request);
   if (!identity.admin) throw new HttpsError('permission-denied', 'Administrator access required.');
@@ -62,7 +88,10 @@ export const health = onRequest({ region: REGION }, (_request, response) => {
 export const accountIdentity = onCall({ region: REGION }, async (request) => {
   const identity = requireVerifiedIdentity(request);
   const ref = accountRef(identity.uid);
-  const snapshot = await ref.get();
+  const [snapshot, registrationIntent] = await Promise.all([
+    ref.get(),
+    db.collection('registrationIntents').doc(identity.uid).get(),
+  ]);
 
   if (identity.admin) {
     const record = {
@@ -84,30 +113,67 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     };
   }
 
-  if (!snapshot.exists) {
-    await ref.set({
+  const current = snapshot.exists ? snapshot.data() ?? {} : {};
+  const rawStagedRole = String(registrationIntent.data()?.role ?? '');
+  const stagedRole = !current.role && ['creator','listener','writer','editor'].includes(rawStagedRole)
+    ? rawStagedRole as SelectableRole
+    : null;
+  const role = (current.role as AccountRole | null) ?? stagedRole ?? null;
+  const status = current.role
+    ? String(current.status ?? 'active')
+    : stagedRole === 'creator' || stagedRole === 'editor'
+      ? 'pending_review'
+      : 'active';
+
+  await ref.set({
+    email: identity.email,
+    role,
+    status,
+    emailVerified: true,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge:true });
+
+  if (stagedRole === 'creator' || stagedRole === 'editor') {
+    await db.collection('creatorApplications').doc(identity.uid).set({
+      userId: identity.uid,
       email: identity.email,
-      role: null,
-      status: 'active',
-      emailVerified: true,
-      createdAt: FieldValue.serverTimestamp(),
+      role: stagedRole,
+      status: 'pending',
+      submittedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
-  } else {
-    await ref.set({
-      email: identity.email,
-      emailVerified: true,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    }, { merge:true });
   }
 
-  const data = snapshot.exists ? snapshot.data() ?? {} : {};
+  const stagedReferralCode = stagedRole === 'creator'
+    ? String(registrationIntent.data()?.referralCode ?? '').trim().slice(0,80)
+    : '';
+  if (stagedReferralCode) {
+    const referrals = await db.collection('creatorSuggestions').where('referralCode','==',stagedReferralCode).limit(1).get();
+    const suggestion = referrals.docs[0];
+    if (suggestion) {
+      await suggestion.ref.set({
+        status:'joined',
+        claimedByUserId:identity.uid,
+        claimedAt:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+      await ref.set({
+        creatorReferralCode:stagedReferralCode,
+        creatorReferralSuggestionId:suggestion.id,
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+    }
+  }
+
+  if (registrationIntent.exists) await registrationIntent.ref.delete();
+
   return {
     userId: identity.uid,
     email: identity.email,
     admin: false,
-    role: (data.role as AccountRole | null) ?? null,
-    status: String(data.status ?? 'active'),
+    role,
+    status,
     emailVerified: true,
   };
 });
