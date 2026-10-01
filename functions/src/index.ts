@@ -2105,7 +2105,9 @@ export const createArtistPortfolioItem = onCall({ region: REGION }, async (reque
   const description = cleanText(input.description, 600);
   const tags = cleanStringList(input.tags, 12);
   const commissionType = cleanText(input.commissionType, 80);
+  const humanCreatedAttestation = input.humanCreatedAttestation === true;
   if (!title) throw new HttpsError('invalid-argument', 'Give the artwork a title.');
+  if (!humanCreatedAttestation) throw new HttpsError('failed-precondition', 'Artist portfolio submissions must be your own human-created artwork, not AI-generated imagery.');
 
   const existing = await db.collection('artistPortfolio').where('ownerUserId','==',identity.uid).limit(40).get();
   if (existing.docs.filter((doc)=>doc.data()?.status !== 'removed').length >= 24) {
@@ -2119,6 +2121,8 @@ export const createArtistPortfolioItem = onCall({ region: REGION }, async (reque
     description,
     tags,
     commissionType:commissionType || null,
+    humanCreatedAttestation:true,
+    humanCreatedAttestedAt:FieldValue.serverTimestamp(),
     status:'draft',
     imageAssetId:null,
     imageUrl:null,
