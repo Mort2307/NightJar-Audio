@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bird, Check, Gift, X } from 'lucide-react';
+import { Check, Gift, X } from 'lucide-react';
 import { nightjarGifts, type NightjarWallet } from '../platform/firebase-nightjars';
 
 type GiftRecipientRole = 'creator' | 'writer' | 'editor' | 'artist';
@@ -90,7 +90,6 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
         <div className="nightjar-gift-recipient">
           <span className="nightjar-token-glyph" aria-hidden="true">
             <img src="/nightjar-token.svg" alt="" />
-            <Bird size={28} className="nightjar-token-fallback"/>
           </span>
           <div>
             <strong>{recipientName}</strong>
