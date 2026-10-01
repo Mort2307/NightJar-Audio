@@ -401,6 +401,7 @@ function App() {
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
   const [editorSpotlightList, setEditorSpotlightList] = useState<Spotlight[]>([]);
+  const [artistSpotlightList, setArtistSpotlightList] = useState<Spotlight[]>([]);
   const [listenerSpotlight, setListenerSpotlight] = useState<Spotlight | null>(null);
   const [spotlightMeta, setSpotlightMeta] = useState<{ listenerTopSevenCount: number; listenerSpotlightDay: number | null; listenerWeek: string | null }>({ listenerTopSevenCount: 0, listenerSpotlightDay: null, listenerWeek: null });
   const [creatorDashboard, setCreatorDashboard] = useState<{ metrics: any; releases: any[] }>({ metrics: {}, releases: [] });
@@ -497,6 +498,7 @@ function App() {
   const creatorSpotlight = creatorSpotlightList[0] ?? null;
   const writerSpotlight = writerSpotlightList[0] ?? null;
   const editorSpotlight = editorSpotlightList[0] ?? null;
+  const artistSpotlight = artistSpotlightList[0] ?? null;
   const directoryTagOptions = useMemo(() => Array.from(new Set(
     profileDirectory.flatMap((profile) => {
       const roleProfiles = Object.values(profile.roleProfiles ?? {});
@@ -885,6 +887,7 @@ function App() {
         setCreatorSpotlightList(structuredClone(demoSpotlights.creators) as Spotlight[]);
         setWriterSpotlightList(structuredClone(demoSpotlights.writers) as Spotlight[]);
         setEditorSpotlightList(structuredClone(demoSpotlights.editors) as Spotlight[]);
+        setArtistSpotlightList(structuredClone(demoSpotlights.artists ?? []) as Spotlight[]);
         setListenerSpotlight(structuredClone(demoSpotlights.listener) as Spotlight);
         setSpotlightMeta({ listenerTopSevenCount: 2, listenerSpotlightDay: 3, listenerWeek: 'Demo week' });
         const demoMessages = readDemo('notifications', demoNotifications);
@@ -972,6 +975,7 @@ function App() {
       setCreatorSpotlightList(spotlights.filter((item: any) => item.kind === 'creator' && item.name).map(mapSpotlight));
       setWriterSpotlightList(spotlights.filter((item: any) => item.kind === 'writer' && item.name).map(mapSpotlight));
       setEditorSpotlightList(spotlights.filter((item: any) => item.kind === 'editor' && item.name).map(mapSpotlight));
+      setArtistSpotlightList(spotlights.filter((item: any) => item.kind === 'artist' && item.name).map(mapSpotlight));
       const listener = spotlights.find((item: any) => item.kind === 'listener' && item.name);
       setListenerSpotlight(listener ? mapSpotlight(listener) : null);
       setSpotlightMeta({
@@ -1003,6 +1007,7 @@ function App() {
       setCreatorSpotlightList([]);
       setWriterSpotlightList([]);
       setEditorSpotlightList([]);
+      setArtistSpotlightList([]);
       setListenerSpotlight(null);
       setSpotlightMeta({ listenerTopSevenCount: 0, listenerSpotlightDay: null, listenerWeek: null });
       setNotifications([]);
@@ -1099,7 +1104,7 @@ function App() {
 
 
   const shareSpotlight = async (spotlight: Spotlight) => {
-    const kindLabel = spotlight.kind === 'creator' ? 'Creator' : spotlight.kind === 'editor' ? 'Audio Editor' : 'Writer';
+    const kindLabel = spotlight.kind === 'creator' ? 'VA Creator' : spotlight.kind === 'editor' ? 'Audio Editor' : spotlight.kind === 'artist' ? 'Artist' : 'Writer';
     const text = spotlight.kind === 'listener'
       ? `Nightjar is recognising ${spotlight.name} today as a Listener Spotlight. Thank you for being part of the listening community.`
       : `Today on Nightjar: ${spotlight.name} is our ${kindLabel} Spotlight. Discover the people shaping Nightjar's independent productions.`;
