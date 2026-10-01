@@ -35,6 +35,8 @@ export default function AccountPortal() {
       if (!nextAccount.admin && !nextAccount.role && pendingRole && ['listener','creator','writer','editor'].includes(pendingRole)) {
         await nightjarAccount.chooseRole(pendingRole, referralCode);
         nextAccount = await nightjarAccount.identity();
+      }
+      if (nextAccount.role) {
         sessionStorage.removeItem('nightjar.registrationRole');
         sessionStorage.removeItem('nightjar.creatorReferralCode');
       }
