@@ -13,6 +13,7 @@ type Props = {
   notify: (message: string) => void;
   canMessage?: boolean;
   onMessage?: (userId: string) => void;
+  onCommunityRelease?: (release: any) => void;
   demoMode?: boolean;
 };
 
@@ -23,7 +24,7 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, demoMode = false }: Props) {
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, onCommunityRelease, demoMode = false }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -218,13 +219,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             {profile.featuredWork.map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? profile.displayName}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
+              {onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Community</button>}
             </article>)}
           </div>}
           {profile.role === 'listener' && !!profile.publicPlaylists?.length && <div className="public-playlist-list">
             <span className="mini-label">SHARED PLAYLISTS</span>
             {profile.publicPlaylists.map((playlist:any)=><article key={playlist.id}>
               <div className="public-playlist-head"><ListMusic size={16}/><div><strong>{playlist.title}</strong><span>{playlist.releaseCount ?? 0} release{playlist.releaseCount === 1 ? '' : 's'}</span></div></div>
-              {!!playlist.releases?.length && <div className="public-playlist-preview">{playlist.releases.slice(0,4).map((release:any)=><span key={release.id}>{release.title} · {release.creatorName ?? 'Nightjar creator'}</span>)}</div>}
+              {!!playlist.releases?.length && <div className="public-playlist-preview">{playlist.releases.slice(0,4).map((release:any)=><button type="button" key={release.id} onClick={()=>onCommunityRelease?.(release)} disabled={!onCommunityRelease}><span>{release.title}</span><small>{release.creatorName ?? 'Nightjar creator'} · Community</small></button>)}</div>}
             </article>)}
           </div>}
           {(profile.role === 'writer' || profile.role === 'editor') && <div className="public-credit-summary">
@@ -235,6 +237,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             {profile.creditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
+              {onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Community</button>}
             </article>)}
           </div>}
         </div>
