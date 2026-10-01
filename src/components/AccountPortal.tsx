@@ -15,6 +15,7 @@ const accountDestination = (account: NightjarAccountIdentity) => {
 };
 
 export default function AccountPortal() {
+  const [explicitSignIn] = useState(() => new URLSearchParams(window.location.search).get('entry') === 'signin');
   const [identity, setIdentity] = useState<NightjarIdentity | null>(() => nightjarAuth.current());
   const [account, setAccount] = useState<NightjarAccountIdentity | null>(null);
   const [loadingAccount, setLoadingAccount] = useState(false);
@@ -67,8 +68,7 @@ export default function AccountPortal() {
   };
 
   useEffect(() => {
-    const entry = new URLSearchParams(window.location.search).get('entry');
-    if (entry === 'signin') {
+    if (explicitSignIn) {
       window.history.replaceState({}, '', '/account');
     }
 
@@ -86,7 +86,7 @@ export default function AccountPortal() {
     refreshBranding();
     const unsubscribe = nightjarAuth.observe((next) => {
       setIdentity(next);
-      void loadAccount(next, Boolean(next?.emailVerified));
+      void loadAccount(next, Boolean(next?.emailVerified) && !explicitSignIn);
     });
     const onFocus = () => refreshBranding();
     const onStorage = (event: StorageEvent) => {
@@ -103,7 +103,7 @@ export default function AccountPortal() {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('nightjar:branding-changed', onBrandingChanged);
     };
-  }, []);
+  }, [explicitSignIn]);
 
   const chooseRole = async (role: 'listener' | 'creator' | 'writer' | 'editor') => {
     setLoadingAccount(true);
@@ -145,11 +145,35 @@ export default function AccountPortal() {
       <div className="account-backend-heading">
         <ShieldCheck size={19} />
         <div>
-          <strong>Verified Nightjar identity</strong>
-          <span>Firebase Authentication → trusted Nightjar backend</span>
+          <strong>{explicitSignIn ? 'Choose your Nightjar account' : 'Verified Nightjar identity'}</strong>
+          <span>{explicitSignIn ? `You are currently signed in as ${identity.email ?? 'this Firebase account'}.` : 'Firebase Authentication → trusted Nightjar backend'}</span>
         </div>
-        <button className="ghost-button" onClick={() => void nightjarAuth.signOut().then(() => { setIdentity(null); setAccount(null); setMessage(''); })}>Sign out</button>
       </div>
+
+      {explicitSignIn && <div className="account-access-actions">
+        <button
+          className="primary-button"
+          disabled={loadingAccount || !account}
+          onClick={() => void loadAccount(identity, true)}
+        >
+          Continue as {identity.email ?? 'current account'}
+        </button>
+        <button
+          className="secondary-button"
+          disabled={loadingAccount}
+          onClick={() => void nightjarAuth.signOut().then(() => {
+            setIdentity(null);
+            setAccount(null);
+            setMessage('');
+          })}
+        >
+          Use a different account
+        </button>
+      </div>}
+
+      {!explicitSignIn && <div className="account-access-actions">
+        <button className="ghost-button" onClick={() => void nightjarAuth.signOut().then(() => { setIdentity(null); setAccount(null); setMessage(''); })}>Sign out</button>
+      </div>}
 
       {loadingAccount && <p>Checking protected account state…</p>}
       {message && <p className="account-access-message">{message}</p>}
