@@ -1,7 +1,7 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
-const db = getFirestore();
+const db = () => getFirestore();
 const REGION = 'europe-west2';
 const ELIGIBLE_RECIPIENT_ROLES = new Set(['creator', 'writer', 'editor', 'artist']);
 const professionalRolesFor = (data: Record<string, any>) => {
@@ -25,11 +25,11 @@ const cleanText = (value: unknown, max = 160) => String(value ?? '').trim().slic
 const requireIdentity = async (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to Nightjar first.');
   const uid = request.auth.uid;
-  const account = await db.collection('accounts').doc(uid).get();
+  const account = await db().collection('accounts').doc(uid).get();
   if (!account.exists) throw new HttpsError('failed-precondition', 'Nightjar account not found.');
   const data = account.data() ?? {};
   if (data.status === 'suspended') throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
-  const age = await db.collection('ageAssurance').doc(uid).get();
+  const age = await db().collection('ageAssurance').doc(uid).get();
   if (age.data()?.verified !== true && data.testAccess !== true && data.role !== 'admin') {
     throw new HttpsError('permission-denied', 'Age assurance is required before using Nightjar gifts.');
   }
@@ -42,9 +42,9 @@ const requireAdmin = async (request: { auth?: { uid: string; token: Record<strin
   return identity;
 };
 
-const walletRef = (uid: string) => db.collection('nightjarWallets').doc(uid);
-const earningsRef = (uid: string) => db.collection('nightjarCreatorEarnings').doc(uid);
-const giftLedger = () => db.collection('nightjarGiftLedger');
+const walletRef = (uid: string) => db().collection('nightjarWallets').doc(uid);
+const earningsRef = (uid: string) => db().collection('nightjarCreatorEarnings').doc(uid);
+const giftLedger = () => db().collection('nightjarGiftLedger');
 
 export const nightjarGiftConfig = onCall({ region: REGION }, async () => ({
   unitCreatorValuePence: NIGHTJAR_VALUE_PENCE,
@@ -90,11 +90,11 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
   }
   if (!idempotencyKey) throw new HttpsError('invalid-argument', 'A gift idempotency key is required.');
 
-  const recipientAccountRef = db.collection('accounts').doc(recipientUserId);
-  const recipientProfileRef = db.collection('profiles').doc(recipientUserId);
+  const recipientAccountRef = db().collection('accounts').doc(recipientUserId);
+  const recipientProfileRef = db().collection('profiles').doc(recipientUserId);
   const ledgerRef = giftLedger().doc(idempotencyKey);
 
-  const result = await db.runTransaction(async (tx) => {
+  const result = await db().runTransaction(async (tx) => {
     const [senderWallet, recipientAccount, recipientProfile, existingGift, recipientEarnings] = await Promise.all([
       tx.get(walletRef(sender.uid)),
       tx.get(recipientAccountRef),
@@ -202,7 +202,7 @@ export const adminGrantNightjars = onCall({ region: REGION }, async (request) =>
 
   const targetWallet = walletRef(targetUserId);
   const ledgerRef = giftLedger().doc();
-  await db.runTransaction(async (tx) => {
+  await db().runTransaction(async (tx) => {
     const snapshot = await tx.get(targetWallet);
     const data = snapshot.data() ?? {};
     tx.set(targetWallet, {
