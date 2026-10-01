@@ -4640,6 +4640,8 @@ export const setReleaseReaction = onCall({ region: REGION }, async (request) => 
       title:'New reaction to published work',
       message:'A Listener reacted to ' + String(releaseData.title ?? 'a Nightjar release') + '.',
       releaseId,
+      releaseTitle:String(releaseData.title ?? 'Nightjar release'),
+      creatorName:String(releaseData.creatorName ?? ''),
     })));
   }
 
@@ -4714,6 +4716,8 @@ export const postReleaseComment = onCall({ region: REGION }, async (request) => 
     title:'New comment on published work',
     message:presenter.displayName + ' commented on ' + String(releaseData.title ?? 'a Nightjar release') + '.',
     releaseId,
+    releaseTitle:String(releaseData.title ?? 'Nightjar release'),
+    creatorName:String(releaseData.creatorName ?? ''),
     commentId:ref.id,
   })));
 
@@ -4936,6 +4940,7 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
     title:'New private message',
     message:presenter.displayName + ' sent you a private Nightjar message.',
     conversationId,
+    collaborationId:data.collaborationId ?? null,
     senderUserId:identity.uid,
   });
 
