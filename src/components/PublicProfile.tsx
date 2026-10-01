@@ -108,9 +108,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   };
 
   const following = Boolean(profile?.userId && followingIds.includes(profile.userId));
-  const availableProfileRoles = Array.from(new Set(
+  const availableProfileRoles: string[] = Array.from(new Set<string>(
     (Array.isArray(profile?.roles) && profile.roles.length ? profile.roles : [profile?.role ?? 'listener'])
-      .filter((role:string) => ['creator','listener','writer','editor','artist'].includes(role)),
+      .map((role: unknown) => String(role))
+      .filter((role: string) => ['creator','listener','writer','editor','artist'].includes(role)),
   ));
   const profileRole = ((selectedProfileRole && availableProfileRoles.includes(selectedProfileRole)
     ? selectedProfileRole
