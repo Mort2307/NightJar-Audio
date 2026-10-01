@@ -2280,6 +2280,8 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       userId: doc.id,
       email: account.email ?? null,
       role: account.role ?? null,
+      roles: professionalRolesForAccount(account),
+      pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles),
       status: account.status ?? 'active',
       name: profileData.displayName ?? account.email?.split('@')?.[0] ?? 'Nightjar account',
       handle: profileData.handle ?? null,
@@ -2290,11 +2292,11 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
   }));
 
   const counts = {
-    listener: accounts.filter((account) => account.role === 'listener').length,
-    creator: accounts.filter((account) => account.role === 'creator').length,
-    writer: accounts.filter((account) => account.role === 'writer').length,
-    editor: accounts.filter((account) => account.role === 'editor').length,
-    artist: accounts.filter((account) => account.role === 'artist').length,
+    listener: accounts.filter((account) => account.role !== 'admin').length,
+    creator: accounts.filter((account) => account.roles?.includes('creator')).length,
+    writer: accounts.filter((account) => account.roles?.includes('writer')).length,
+    editor: accounts.filter((account) => account.roles?.includes('editor')).length,
+    artist: accounts.filter((account) => account.roles?.includes('artist')).length,
     admin: ADMIN_EMAILS.size,
   };
 
@@ -4374,14 +4376,17 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
 
   const allowedRoles = new Set(['creator','writer','editor','artist']);
   const people = (await Promise.all(snapshot.docs
-    .filter((doc) => doc.id !== identity.uid && doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
+    .filter((doc) => doc.id !== identity.uid && doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).some((role) => allowedRoles.has(role)))
     .map(async (doc) => {
       const profile = await profileRef(doc.id).get();
       const data = profile.data();
       if (!data || data.publicProfile === false) return null;
+      const roles = professionalRolesForAccount(doc.data() ?? {});
+      const role = roles[0] ?? null;
       return {
         userId: doc.id,
-        role: doc.data().role,
+        role,
+        roles,
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
         headline: data.headline ?? null,
@@ -4393,7 +4398,7 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
         roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
         roleAvailability: data.roleAvailability ?? null,
         completedCollaborations: completedByUser.get(doc.id) ?? 0,
-        activityBadges: publicActivityBadges(String(doc.data().role ?? ''), {
+        activityBadges: publicActivityBadges(String(role ?? ''), {
           releases: releaseCountByCreator.get(doc.id) ?? 0,
           publishedScripts: publishedScriptsByWriter.get(doc.id) ?? 0,
           creditedReleases: creditedReleaseCountByUser.get(doc.id) ?? 0,
@@ -4845,12 +4850,14 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
     readCommercialSettings(),
     db.collection('accounts').limit(2000).get(),
   ]);
-  const counts = { creators: 0, writers: 0, editors: 0 };
+  const counts = { creators: 0, writers: 0, editors: 0, artists: 0 };
   for (const doc of accounts.docs) {
     if (doc.data().status !== 'active') continue;
-    if (doc.data().role === 'creator') counts.creators += 1;
-    if (doc.data().role === 'writer') counts.writers += 1;
-    if (doc.data().role === 'editor') counts.editors += 1;
+    const roles = professionalRolesForAccount(doc.data() ?? {});
+    if (roles.includes('creator')) counts.creators += 1;
+    if (roles.includes('writer')) counts.writers += 1;
+    if (roles.includes('editor')) counts.editors += 1;
+    if (roles.includes('artist')) counts.artists += 1;
   }
   return {
     planningMonthlyPricePence: settings.planningMonthlyPricePence,
@@ -5390,7 +5397,8 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
   if (!targetUserId || targetUserId === identity.uid) throw new HttpsError('invalid-argument', 'Choose another creative account.');
 
   const target = await accountRef(targetUserId).get();
-  if (!target.exists || target.data()?.status !== 'active' || !CREATIVE_MESSAGE_ROLES.has(String(target.data()?.role ?? ''))) {
+  const targetRoles = target.exists ? professionalRolesForAccount(target.data() ?? {}) : [];
+  if (!target.exists || target.data()?.status !== 'active' || !targetRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role))) {
     throw new HttpsError('not-found', 'Eligible creative account not found.');
   }
   if (await directMessagingBlockedBetween(identity.uid, targetUserId)) {
@@ -5405,7 +5413,7 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
   if (!existing.exists) {
     await ref.set({
       participantUserIds:[identity.uid,targetUserId].sort(),
-      participantRoles:{ [identity.uid]:identity.role, [targetUserId]:target.data()?.role ?? null },
+      participantRoles:{ [identity.uid]:identity.role, [targetUserId]:targetRoles[0] ?? target.data()?.role ?? null },
       collaborationId:collaborationContext?.id ?? null,
       collaborationIds:collaborationContext ? [collaborationContext.id] : [],
       unreadCounts:{ [identity.uid]:0, [targetUserId]:0 },
@@ -5504,7 +5512,8 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
   }
   const recipientUserId = data.participantUserIds.find((id: string) => id !== identity.uid);
   const recipient = recipientUserId ? await accountRef(recipientUserId).get() : null;
-  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !CREATIVE_MESSAGE_ROLES.has(String(recipient.data()?.role ?? ''))) {
+  const recipientRoles = recipient?.exists ? professionalRolesForAccount(recipient.data() ?? {}) : [];
+  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !recipientRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role))) {
     throw new HttpsError('failed-precondition', 'The recipient account is no longer available for creative messaging.');
   }
   if (await directMessagingBlockedBetween(identity.uid, recipientUserId)) {
@@ -5665,7 +5674,7 @@ export const setDirectMessageBlock = onCall({ region: REGION }, async (request) 
   const blocked = input.blocked === true;
   if (!targetUserId || targetUserId === identity.uid) throw new HttpsError('invalid-argument', 'Choose another creative account.');
   const target = await accountRef(targetUserId).get();
-  if (!target.exists || !CREATIVE_MESSAGE_ROLES.has(String(target.data()?.role ?? ''))) throw new HttpsError('not-found', 'Creative account not found.');
+  if (!target.exists || !professionalRolesForAccount(target.data() ?? {}).some((role) => CREATIVE_MESSAGE_ROLES.has(role))) throw new HttpsError('not-found', 'Creative account not found.');
   const ref = accountRef(identity.uid).collection('messageBlocks').doc(targetUserId);
   if (blocked) await ref.set({ targetUserId, createdAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp() }, { merge:true });
   else await ref.delete().catch(()=>undefined);
