@@ -43,7 +43,7 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
     if (!canSend) return;
     setSending(true);
     try {
-      const result = await nightjarGifts.send(recipientUserId, quantity, { note, anonymous });
+      const result = await nightjarGifts.send(recipientUserId, quantity, { recipientRole: ['creator','writer','editor','artist'].includes(recipientRole) ? recipientRole as 'creator'|'writer'|'editor'|'artist' : undefined, note, anonymous });
       setWallet((current) => current ? { ...current, balance: result.balance, gifted: current.gifted + quantity } : current);
       setSent(true);
       notify(quantity === 1
