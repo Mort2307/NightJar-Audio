@@ -89,8 +89,8 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
       <div className="creator-profile-body">
         <div className="nightjar-gift-recipient">
           <span className="nightjar-token-glyph" aria-hidden="true">
-            <img src="/nightjar-token.png" alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-            <Bird size={28}/>
+            <img src="/nightjar-token.svg" alt="" />
+            <Bird size={28} className="nightjar-token-fallback"/>
           </span>
           <div>
             <strong>{recipientName}</strong>
@@ -114,7 +114,7 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
           <div className="nightjar-quantity-grid" aria-label="Choose number of Nightjars">
             {[1,2,3,5,10].map((value) =>
               <button type="button" key={value} className={quantity === value ? 'selected' : ''} onClick={() => setQuantity(value)}>
-                <Bird size={16}/> {value}
+                <img className="nightjar-token-inline" src="/nightjar-token.svg" alt="" /> {value}
               </button>
             )}
           </div>
