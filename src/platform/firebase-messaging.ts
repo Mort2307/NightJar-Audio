@@ -6,7 +6,7 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 const listCall = httpsCallable<void, { conversations:any[]; unreadCount:number }>(functions, 'listMessageConversations');
 const startCall = httpsCallable<{ targetUserId:string; collaborationId?:string|null }, { conversationId:string }>(functions, 'startDirectConversation');
 const openCall = httpsCallable<{ conversationId:string }, { messages:any[]; blocked:boolean; blockedByMe?:boolean; blockedByOther?:boolean }>(functions, 'listDirectMessages');
-const sendCall = httpsCallable<{ conversationId:string; body:string }, { message:any }>(functions, 'sendDirectMessage');
+const sendCall = httpsCallable<{ conversationId:string; body:string; collaborationId?:string|null }, { message:any }>(functions, 'sendDirectMessage');
 const blockCall = httpsCallable<{ targetUserId:string; blocked:boolean }, { targetUserId:string; blocked:boolean }>(functions, 'setDirectMessageBlock');
 const reportCall = httpsCallable<{ conversationId:string; messageId:string; reason?:string }, { reported:boolean; reportId?:string }>(functions, 'reportDirectMessage');
 const adminReportsCall = httpsCallable<void, { reports:any[] }>(functions, 'adminListCommunityReports');
@@ -49,8 +49,8 @@ export const nightjarMessaging = {
     };
   },
 
-  async send(conversationId:string, body:string, _collaborationId?:string|null) {
-    return (await sendCall({ conversationId, body })).data;
+  async send(conversationId:string, body:string, collaborationId?:string|null) {
+    return (await sendCall({ conversationId, body, ...(collaborationId ? { collaborationId } : {}) })).data;
   },
 
   async setBlocked(targetUserId:string, blocked:boolean) {
