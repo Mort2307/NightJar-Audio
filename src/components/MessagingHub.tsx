@@ -3,7 +3,7 @@ import { Ban, BellRing, Check, CheckCheck, CircleCheckBig, Clock3, Flag, Handsha
 import { nightjarMessaging } from '../platform/firebase-messaging';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 
-type Role='creator'|'writer'|'editor';
+type Role='creator'|'writer'|'editor'|'artist';
 
 type Props={
   role:Role;
@@ -21,7 +21,7 @@ type Props={
 
 type MessageTargetEvent=CustomEvent<{userId?:string;collaborationId?:string|null}>;
 
-const roleLabel=(role:string)=>role==='editor'?'Audio Editor':role==='writer'?'Writer':'Creator';
+const roleLabel=(role:string)=>role==='editor'?'Audio Editor':role==='writer'?'Writer':role==='artist'?'Artist':'VA Creator';
 
 export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialConversationId,initialCollaborationId,onRecipientHandled,onUnreadChange,onStatusChange,notify,demoMode=false,simulationMode=false}:Props){
   const [conversations,setConversations]=useState<any[]>([]);
@@ -68,10 +68,11 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
           {userId:'demo-writer-mara',role:'writer',name:'Mara Bell',handle:'marabell',headline:'Dialogue-first Writer'},
           {userId:'demo-creator-noah',role:'creator',name:'Noah Vale',handle:'noahvale',headline:'Character-led Creator'},
           {userId:'demo-editor-sam',role:'editor',name:'Sam Reed',handle:'samreed',headline:'Dialogue editing and production polish'},
+          {userId:'demo-artist-lena',role:'artist',name:'Lena Moss',handle:'lenamoss',headline:'Illustration, cover art and character artwork'},
         ].filter((item)=>item.userId!==currentUserId));
       }else{
         const data=await nightjarCollaboration.directory();
-        setDirectory((data.people??[]).filter((item:any)=>['creator','writer','editor'].includes(String(item.role))&&item.userId!==currentUserId));
+        setDirectory((data.people??[]).filter((item:any)=>['creator','writer','editor','artist'].includes(String(item.role))&&item.userId!==currentUserId));
       }
     }catch{/* existing conversations still work */}
   };
