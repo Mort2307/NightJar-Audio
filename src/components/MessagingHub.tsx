@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, BellRing, Check, CheckCheck, Clock3, Flag, Handshake, MessageCircle, RefreshCw, Search, Send, ShieldCheck } from 'lucide-react';
+import { Ban, BellRing, Check, CheckCheck, CircleCheckBig, Clock3, Flag, Handshake, MessageCircle, RefreshCw, Search, Send, ShieldCheck } from 'lucide-react';
 import { nightjarMessaging } from '../platform/firebase-messaging';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 
@@ -230,6 +230,20 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     }finally{setReminding(false);}
   };
 
+  const closeLoop=async()=>{
+    if(!selectedId||!selected)return;
+    try{
+      if(demoMode){
+        if(!simulationMode)return notify('Start a creative-role Simulation to close a demo message loop.');
+        setConversations((items)=>items.map((item)=>item.id===selectedId?{...item,waitingState:'resolved',resolved:true,resolvedAt:new Date().toISOString(),reminderEligible:false}:item));
+      }else{
+        await nightjarMessaging.closeLoop(selectedId);
+        await loadConversations(true);
+      }
+      notify('Conversation loop closed. A new message will reopen it automatically.');
+    }catch{notify('Conversation loop could not be closed.');}
+  };
+
   const toggleBlock=async()=>{
     if(!selected?.otherUserId)return;
     const next=!blockedByMe;
@@ -250,7 +264,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
       <div><span className="mini-label">PRIVATE PROFESSIONAL MESSAGING</span><h2>Keep the conversation with the work.</h2><p>Creators, Writers and Audio Editors can message each other directly, with unread state, collaboration context, blocking and reporting built in.</p></div>
       <div className="messaging-head-actions"><span className="status-pill">{unreadTotal} unread</span><button className="secondary-button" onClick={()=>void loadConversations()}><RefreshCw size={13}/> Refresh</button></div>
     </div>
-    <div className="messaging-safety-note"><ShieldCheck size={16}/><div><strong>A message is not a manuscript permission.</strong><span>Listeners cannot enter these DMs. Full scripts stay in Protected Reader / controlled sharing. Nightjar keeps reply responsibility visible and allows only one reminder per unanswered message streak after 48 hours.</span></div></div>
+    <div className="messaging-safety-note"><ShieldCheck size={16}/><div><strong>A message is not a manuscript permission.</strong><span>Listeners cannot enter these DMs. Full scripts stay in Protected Reader / controlled sharing. Nightjar keeps reply responsibility visible, lets either professional close a finished loop, and allows only one reminder per unanswered message streak after 48 hours.</span></div></div>
 
     <div className="messaging-layout">
       <aside className="messaging-sidebar">
@@ -258,12 +272,12 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         {!!query.trim()&&<div className="messaging-directory">{filteredPeople.map((person:any)=><button key={person.userId} onClick={()=>void startWith(person.userId)}><span>{String(person.name??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{person.name}</strong><small>{roleLabel(person.role)}{person.handle?' · @'+String(person.handle).replace(/^@/,''):''}</small></div></button>)}{!filteredPeople.length&&<div className="people-empty">No matching professional accounts.</div>}</div>}
         <div className="messaging-conversations">
           <span className="mini-label">CONVERSATIONS</span>
-          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>selectConversation(conversation)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt="" loading="lazy" decoding="async"/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small>{needsReply(conversation)?<span className="messaging-needs-reply"><Clock3 size={10}/> Reply needed</span>:awaitingReply(conversation)?<span className={conversation.reminderAlreadySent?'messaging-awaiting-reply reminder-sent':'messaging-awaiting-reply'}><Clock3 size={10}/>{conversation.reminderAlreadySent?'Reminder sent · still awaiting reply':'Awaiting reply · '+waitingHours(conversation)+'h'}</span>:waitingState(conversation)==='awaiting_them'?<span className="messaging-awaiting-reply"><Clock3 size={10}/> Awaiting reply</span>:null}</div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em></button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
+          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>selectConversation(conversation)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt="" loading="lazy" decoding="async"/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small>{needsReply(conversation)?<span className="messaging-needs-reply"><Clock3 size={10}/> Reply needed</span>:awaitingReply(conversation)?<span className={conversation.reminderAlreadySent?'messaging-awaiting-reply reminder-sent':'messaging-awaiting-reply'}><Clock3 size={10}/>{conversation.reminderAlreadySent?'Reminder sent · still awaiting reply':'Awaiting reply · '+waitingHours(conversation)+'h'}</span>:waitingState(conversation)==='awaiting_them'?<span className="messaging-awaiting-reply"><Clock3 size={10}/> Awaiting reply</span>:waitingState(conversation)==='resolved'?<span className="messaging-loop-resolved"><CircleCheckBig size={10}/> Loop closed</span>:null}</div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em></button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
         </div>
       </aside>
 
       <div className="messaging-thread">
-        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{needsReply(selected)?' · your reply is expected':awaitingReply(selected)?' · waiting '+waitingHours(selected)+'h for a reply':waitingState(selected)==='awaiting_them'?' · awaiting their reply':''}</p></div><div className="messaging-thread-actions">{(selected.reminderEligible===true || (awaitingReply(selected)&&selected.reminderAlreadySent!==true))&&<button className="secondary-button" disabled={reminding||blocked} onClick={()=>void sendReminder()}><BellRing size={12}/>{reminding?'Sending…':'Send one reminder'}</button>}{selected.reminderAlreadySent&&<span className="messaging-reminder-sent"><Check size={11}/> Reminder sent</span>}<button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></div></header>
+        {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{needsReply(selected)?' · your reply is expected':awaitingReply(selected)?' · waiting '+waitingHours(selected)+'h for a reply':waitingState(selected)==='awaiting_them'?' · awaiting their reply':waitingState(selected)==='resolved'?' · loop closed — no reply needed':''}</p></div><div className="messaging-thread-actions">{waitingState(selected)!=='resolved'&&waitingState(selected)!=='none'&&<button className="ghost-button" onClick={()=>void closeLoop()}><CircleCheckBig size={12}/> Close loop</button>}{(selected.reminderEligible===true || (awaitingReply(selected)&&selected.reminderAlreadySent!==true))&&<button className="secondary-button" disabled={reminding||blocked} onClick={()=>void sendReminder()}><BellRing size={12}/>{reminding?'Sending…':'Send one reminder'}</button>}{selected.reminderAlreadySent&&waitingState(selected)!=='resolved'&&<span className="messaging-reminder-sent"><Check size={11}/> Reminder sent</span>}<button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></div></header>
           {!!selected.collaborations?.length && <div className="messaging-collaboration-context">
             <Handshake size={15}/>
             <div className="messaging-collaboration-context-main">
