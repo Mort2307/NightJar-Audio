@@ -33,7 +33,8 @@ const requireIdentity = async (request: { auth?: { uid: string; token: Record<st
   const data = account.data() ?? {};
   if (data.status === 'suspended') throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
   const age = await db().collection('ageAssurance').doc(uid).get();
-  if (!TESTING_AGE_ASSURANCE_BYPASS && age.data()?.verified !== true && data.testAccess !== true && data.role !== 'admin') {
+  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && (data.testAccess === true || data.role === 'admin');
+  if (age.data()?.verified !== true && !temporaryTestAccess) {
     throw new HttpsError('permission-denied', 'Age assurance is required before using Nightjar gifts.');
   }
   return { uid, account: data };
