@@ -40,6 +40,30 @@ export type NightjarEarnings = {
   byRole: Record<string, { pendingNightjars?: number; pendingPence?: number; clearedNightjars?: number; clearedPence?: number; lifetimeNightjars?: number; lifetimePence?: number }>;
 };
 
+
+export type AdminNightjarPayoutOverview = {
+  recipients: Array<{
+    userId: string;
+    displayName: string;
+    roles: string[];
+    pendingNightjars: number;
+    pendingPence: number;
+    clearedNightjars: number;
+    clearedPence: number;
+    lifetimeNightjars: number;
+    lifetimePence: number;
+    byRole: Record<string, { pendingNightjars?: number; pendingPence?: number; clearedNightjars?: number; clearedPence?: number; lifetimeNightjars?: number; lifetimePence?: number }>;
+  }>;
+  totals: {
+    pendingNightjars: number;
+    pendingPence: number;
+    clearedNightjars: number;
+    clearedPence: number;
+    lifetimeNightjars: number;
+    lifetimePence: number;
+  };
+};
+
 export type NightjarGiftHistoryItem = {
   id: string;
   type: string;
@@ -77,6 +101,7 @@ const sendCall = httpsCallable<{
   balance: number;
   duplicate: boolean;
 }>(functions, 'sendNightjars');
+const adminPayoutOverviewCall = httpsCallable<void, AdminNightjarPayoutOverview>(functions, 'adminNightjarPayoutOverview');
 const adminGrantCall = httpsCallable<{
   targetUserId: string;
   quantity: number;
@@ -114,6 +139,9 @@ export const nightjarGifts = {
       anonymous: options.anonymous,
       idempotencyKey,
     })).data;
+  },
+  async adminPayoutOverview() {
+    return (await adminPayoutOverviewCall()).data;
   },
   async adminGrant(targetUserId: string, quantity: number, reason?: string) {
     return (await adminGrantCall({ targetUserId, quantity, reason })).data;
