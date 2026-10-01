@@ -4288,3 +4288,31 @@ select:disabled {
 .profile-role-chips button{display:inline-flex;align-items:center;padding:.25rem .5rem;border-radius:999px;border:1px solid rgba(37,192,201,.25);background:rgba(37,192,201,.08);color:inherit;font-size:.72rem;font-weight:700;letter-spacing:.02em}
 .profile-role-chips button.active{border-color:rgba(37,192,201,.75);background:rgba(37,192,201,.18)}
 @media(max-width:720px){.artist-portfolio-form,.artist-portfolio-grid,.public-artist-grid{grid-template-columns:1fr}}
+
+
+.nightjar-wallet-panel{margin:1rem 0 1.4rem}
+.nightjar-wallet-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.7rem;margin-top:1rem}
+.nightjar-wallet-metrics>div{border:1px solid rgba(255,255,255,.09);border-radius:16px;padding:.85rem;background:rgba(255,255,255,.025)}
+.nightjar-wallet-metrics span,.nightjar-wallet-metrics small{display:block}
+.nightjar-wallet-metrics strong{display:flex;align-items:center;gap:.35rem;font-size:1.25rem;margin:.2rem 0}
+.nightjar-wallet-metrics small{opacity:.68}
+.nightjar-pack-section,.nightjar-role-earnings,.nightjar-history{margin-top:1rem}
+.nightjar-pack-section h3,.nightjar-history h3{margin:.2rem 0 .35rem}
+.nightjar-pack-section p{margin:.25rem 0 .8rem;opacity:.76}
+.nightjar-pack-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.6rem}
+.nightjar-pack-grid>article{display:grid;gap:.35rem;border:1px solid rgba(255,255,255,.09);border-radius:16px;padding:.8rem;background:rgba(255,255,255,.025)}
+.nightjar-pack-grid strong{font-size:1.08rem}
+.nightjar-pack-grid small{opacity:.68}
+.nightjar-pack-birds{display:flex;align-items:center;gap:.3rem;font-weight:800}
+.nightjar-role-earnings>div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.6rem;margin-top:.65rem}
+.nightjar-role-earnings article{border:1px solid rgba(255,255,255,.09);border-radius:15px;padding:.75rem;background:rgba(255,255,255,.025)}
+.nightjar-role-earnings strong,.nightjar-role-earnings span,.nightjar-role-earnings small{display:block}
+.nightjar-role-earnings small{opacity:.68}
+.nightjar-history-list{display:grid;gap:.5rem;margin-top:.65rem}
+.nightjar-history-list>article{display:flex;align-items:center;gap:.65rem;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:.7rem .8rem;background:rgba(255,255,255,.02)}
+.nightjar-history-list>article>div{flex:1;min-width:0}
+.nightjar-history-list strong,.nightjar-history-list small{display:block}
+.nightjar-history-list small{opacity:.7;margin-top:.1rem}
+.nightjar-history-list em{display:flex;align-items:center;gap:.25rem;font-size:.72rem;opacity:.72}
+@media(max-width:900px){.nightjar-pack-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.nightjar-wallet-metrics,.nightjar-role-earnings>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.nightjar-pack-grid{grid-template-columns:1fr 1fr}.nightjar-wallet-metrics,.nightjar-role-earnings>div{grid-template-columns:1fr}}
