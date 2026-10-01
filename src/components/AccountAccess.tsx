@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Eye, EyeOff, KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { AudioLines, Eye, EyeOff, FileText, Headphones, KeyRound, LockKeyhole, Mail, Mic2, ShieldCheck } from 'lucide-react';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 
 type Mode = 'signin' | 'register' | 'reset' | 'verify' | 'security';
+type RegistrationRole = 'listener' | 'creator' | 'writer' | 'editor';
 
 const firebaseErrorCode = (error: unknown) => {
   if (error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string') {
@@ -56,7 +57,12 @@ export default function AccountAccess({
   onAuthenticated: (identity: NightjarIdentity) => void;
   onSignedOut?: () => void;
 }) {
-  const [mode, setMode] = useState<Mode>(identity && !identity.emailVerified ? 'verify' : 'signin');
+  const entryParams = new URLSearchParams(window.location.search);
+  const requestedEntry = entryParams.get('entry');
+  const requestedRole = entryParams.get('role');
+  const initialRole = (['listener','creator','writer','editor'].includes(String(requestedRole)) ? requestedRole : sessionStorage.getItem('nightjar.registrationRole')) as RegistrationRole | null;
+  const [mode, setMode] = useState<Mode>(identity && !identity.emailVerified ? 'verify' : requestedEntry === 'register' ? 'register' : 'signin');
+  const [registrationRole, setRegistrationRole] = useState<RegistrationRole | null>(initialRole);
   const [email, setEmail] = useState(identity?.email ?? '');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -102,6 +108,10 @@ export default function AccountAccess({
       setMessage('Enter your password.');
       return;
     }
+    if (mode === 'register' && !registrationRole) {
+      setMessage('Choose the Nightjar profile type you are creating.');
+      return;
+    }
     if (mode === 'register' && !validPassword(password)) {
       const checks = passwordChecks(password);
       const missing = [
@@ -120,6 +130,9 @@ export default function AccountAccess({
 
     void run(async () => {
       if (mode === 'register') {
+        if (registrationRole) sessionStorage.setItem('nightjar.registrationRole', registrationRole);
+        const referralCode = entryParams.get('ref');
+        if (referralCode) sessionStorage.setItem('nightjar.creatorReferralCode', referralCode);
         const result = await nightjarAuth.register(email, password);
         onAuthenticated(result.identity);
         setMode('verify');
@@ -188,8 +201,19 @@ export default function AccountAccess({
   return <section className="account-access-card">
     <div className="account-access-mark"><LockKeyhole size={22} /></div>
     <span className="mini-label">NIGHTJAR ACCOUNT</span>
-    <h2>{mode === 'register' ? 'Create your account' : mode === 'reset' ? 'Reset your password' : 'Enter Nightjar'}</h2>
-    <p>{mode === 'register' ? 'Your login identity stays private from your public Nightjar profile.' : mode === 'reset' ? 'We will send a secure reset link to your account email.' : 'Sign in with your protected Nightjar account.'}</p>
+    <h2>{mode === 'register' ? 'Choose your Nightjar role.' : mode === 'reset' ? 'Reset your password' : 'Enter Nightjar'}</h2>
+    <p>{mode === 'register' ? 'Each role opens a dedicated Nightjar workspace. Your login identity stays private from the public profile you create.' : mode === 'reset' ? 'We will send a secure reset link to your account email.' : 'Sign in with your protected Nightjar account.'}</p>
+    {mode === 'register' && <div className="account-role-cards" aria-label="Choose Nightjar account type">
+      {[
+        { role:'listener' as const, title:'Listener', detail:'Discover, subscribe, comment, Like/Love releases, follow profiles and build private playlists.', icon:<Headphones size={19}/> },
+        { role:'creator' as const, title:'Creator', detail:'Publish audio, manage releases, message Writers and Audio Editors, and build a professional Creator profile.', icon:<Mic2 size={19}/> },
+        { role:'writer' as const, title:'Writer', detail:'Protect manuscripts, manage rights, collaborate and message creative professionals from a dedicated Writer workspace.', icon:<FileText size={19}/> },
+        { role:'editor' as const, title:'Audio Editor', detail:'Receive assigned work, manage production credits, collaborate and message professional accounts.', icon:<AudioLines size={19}/> },
+      ].map((item)=><button type="button" key={item.role} className={registrationRole===item.role?'account-role-card selected':'account-role-card'} aria-pressed={registrationRole===item.role} onClick={()=>{setRegistrationRole(item.role);sessionStorage.setItem('nightjar.registrationRole',item.role);}}>
+        <span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div>
+      </button>)}
+      {registrationRole && <p className="account-role-choice-note"><ShieldCheck size={13}/> You are creating a <strong>{registrationRole === 'editor' ? 'Audio Editor' : registrationRole.charAt(0).toUpperCase()+registrationRole.slice(1)}</strong> account. This role cannot be casually switched later because permissions and public identity depend on it.</p>}
+    </div>}
     <div className="account-access-field"><label>Email</label><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
     {mode !== 'reset' && <>
       <div className="account-access-field"><label>Password</label><div className="account-password-input"><input type={showPassword ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
