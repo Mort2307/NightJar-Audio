@@ -224,6 +224,10 @@ const roleMeta: Record<AccountRole, { label: string; description: string }> = {
     label: 'Audio Editor',
     description: 'Shape productions, review assigned scripts, revisions and controlled editorial workflow.',
   },
+  artist: {
+    label: 'Artist',
+    description: 'Create commissioned visual artwork, cover art, character art and promotional visuals.',
+  },
 };
 
 
