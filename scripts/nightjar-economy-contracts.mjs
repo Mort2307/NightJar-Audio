@@ -20,6 +20,7 @@ const checks = [
   ['listener-to-listener transfer is disabled', gifts.includes('transferableBetweenListeners: false')],
   ['gifting uses idempotency keys', gifts.includes('idempotencyKey')],
   ['gift clearing is delayed', gifts.includes('GIFT_CLEARANCE_DAYS') && gifts.includes('pending_clearance')],
+  ['unspent wallet Nightjars remain an explicit creator-value liability', gifts.includes("collection('nightjarWallets')") && gifts.includes('outstandingWalletLiabilityPence')],
   ['multi-role application bank exists', functions.includes("db.collection('professionalApplications')")],
   ['professional applications accept multiple roles', functions.includes('submitProfessionalApplication') && functions.includes('requestedRoles')],
   ['controlled intake waves are recorded', functions.includes('reviewProfessionalApplication') && functions.includes('wave: wave || application.wave || null')],
