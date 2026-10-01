@@ -4960,7 +4960,7 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
   const activeCollaboration = requestedCollaborationId
     ? await messagingCollaborationContext(requestedCollaborationId, identity.uid, recipientUserId)
     : null;
-  const collaborationId = activeCollaboration?.id ?? cleanText(data.collaborationId, 160) || null;
+  const collaborationId = activeCollaboration?.id ?? (cleanText(data.collaborationId, 160) || null);
 
   const presenter = await accountPresentation(identity.uid);
   const messageRef = ref.collection('messages').doc();
