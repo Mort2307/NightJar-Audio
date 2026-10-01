@@ -10,6 +10,7 @@ export type NightjarPack = {
 
 export type NightjarGiftConfig = {
   unitCreatorValuePence: number;
+  checkoutConfigured: boolean;
   packs: NightjarPack[];
   eligibleRecipientRoles: string[];
   rules: {
