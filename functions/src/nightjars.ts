@@ -316,7 +316,14 @@ export const clearMatureNightjarGifts = onSchedule({
 
 export const adminNightjarPayoutOverview = onCall({ region: REGION }, async (request) => {
   await requireAdmin(request);
-  const snapshot = await db().collection('nightjarCreatorEarnings').limit(1000).get();
+  const [snapshot, walletSnapshot] = await Promise.all([
+    db().collection('nightjarCreatorEarnings').limit(1000).get(),
+    db().collection('nightjarWallets').limit(5000).get(),
+  ]);
+  const outstandingWalletNightjars = walletSnapshot.docs.reduce((total, doc) => {
+    const balance = Number(doc.data()?.balance ?? 0);
+    return total + (Number.isFinite(balance) && balance > 0 ? Math.floor(balance) : 0);
+  }, 0);
   const recipients = await Promise.all(snapshot.docs.map(async (doc) => {
     const [profile, account] = await Promise.all([
       db().collection('profiles').doc(doc.id).get(),
@@ -339,14 +346,18 @@ export const adminNightjarPayoutOverview = onCall({ region: REGION }, async (req
   recipients.sort((a,b)=>b.clearedPence-a.clearedPence || b.pendingPence-a.pendingPence);
   return {
     recipients,
-    totals:recipients.reduce((totals,item)=>({
-      pendingNightjars:totals.pendingNightjars+item.pendingNightjars,
-      pendingPence:totals.pendingPence+item.pendingPence,
-      clearedNightjars:totals.clearedNightjars+item.clearedNightjars,
-      clearedPence:totals.clearedPence+item.clearedPence,
-      lifetimeNightjars:totals.lifetimeNightjars+item.lifetimeNightjars,
-      lifetimePence:totals.lifetimePence+item.lifetimePence,
-    }),{pendingNightjars:0,pendingPence:0,clearedNightjars:0,clearedPence:0,lifetimeNightjars:0,lifetimePence:0}),
+    totals:{
+      ...recipients.reduce((totals,item)=>({
+        pendingNightjars:totals.pendingNightjars+item.pendingNightjars,
+        pendingPence:totals.pendingPence+item.pendingPence,
+        clearedNightjars:totals.clearedNightjars+item.clearedNightjars,
+        clearedPence:totals.clearedPence+item.clearedPence,
+        lifetimeNightjars:totals.lifetimeNightjars+item.lifetimeNightjars,
+        lifetimePence:totals.lifetimePence+item.lifetimePence,
+      }),{pendingNightjars:0,pendingPence:0,clearedNightjars:0,clearedPence:0,lifetimeNightjars:0,lifetimePence:0}),
+      outstandingWalletNightjars,
+      outstandingWalletLiabilityPence:outstandingWalletNightjars*NIGHTJAR_VALUE_PENCE,
+    },
   };
 });
 
