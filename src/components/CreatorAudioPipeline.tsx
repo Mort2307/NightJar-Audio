@@ -429,7 +429,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </div>
 
           <section className="release-credits-editor">
-            <div className="release-credits-head"><div><span className="mini-label">PRODUCTION CREDITS</span><strong>Credit everyone involved.</strong><p>Voice Actors, Writers, Audio Editors and other collaborators stay attached to the release.</p></div><button className="secondary-button" type="button" onClick={addContributor}>Add credit</button></div>
+            <div className="release-credits-head"><div><span className="mini-label">PRODUCTION CREDITS</span><strong>Credit everyone involved.</strong><p>Voice Actors, Writers, Audio Editors and other collaborators stay attached to the release. Linking a Nightjar professional account also grants that credited person access to this release without needing a separate Listener subscription.</p></div><button className="secondary-button" type="button" onClick={addContributor}>Add credit</button></div>
             <div className="release-credit-list">
               {(current.contributors ?? []).map((contributor, index) => <div className="release-credit-row" key={index}>
                 <select value={contributor.role} onChange={(event) => updateContributor(index, { role: event.target.value })}>
@@ -440,7 +440,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
                   if (person) updateContributor(index, { userId: person.userId, name: person.name, role: person.role === 'writer' ? 'Writer' : person.role === 'editor' ? 'Audio Editor' : contributor.role });
                   else updateContributor(index, { userId: null });
                 }}>
-                  <option value="">Unlinked / external credit</option>
+                  <option value="">Unlinked / external credit · no account access</option>
                   {creditDirectory.map((person) => <option key={person.userId} value={person.userId}>{person.name} · {person.role === 'editor' ? 'Audio Editor' : person.role === 'writer' ? 'Writer' : 'Creator'}</option>)}
                 </select>
                 <input value={contributor.name} onChange={(event) => updateContributor(index, { name: event.target.value })} placeholder="Credited name"/>
