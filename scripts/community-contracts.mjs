@@ -75,6 +75,8 @@ requireText(inbox,'nightjarMessaging.closeLoop','Inbox close-loop API integratio
 requireText(app,'nav-messages','Universal search does not expose the professional Inbox');
 requireText(functions,'directMessagingBlockedBetween','Professional message block enforcement is missing');
 requireText(functions,'readBy:[identity.uid]','Direct-message read state is missing');
+requireText(functions,'readAt:{ [identity.uid]:new Date().toISOString() }','Timestamped sender read state is missing');
+requireText(functions,'readAt[identity.uid] = seenAt','Timestamped recipient read receipt is missing');
 requireText(functions,'messagingCollaborationContext','Verified multi-project message context validation is missing');
 requireText(functions,'collaborationIds','Multi-project professional conversation context is missing');
 requireText(functions,".where('participantUserIds', 'array-contains', identity.uid)",'Inbox conversation query is not participant-scoped');
@@ -91,6 +93,9 @@ requireText(app,'initialConversationId={messageConversationId}','Message notific
 requireText(app,'suspendReportedCommunityAccount','Manual Administrator suspension escalation for serious community reports is missing');
 requireText(app,"'suspended'","Administrator report escalation no longer targets suspended account status");
 requireText(app,'messageUnreadCount','Unread professional message state is missing');
+requireText(app,'onStatusChange={({unread,needsReply,awaitingReply})=>','App shell does not receive live Inbox responsibility changes');
+requireText(app,'communityByRelease={communityByRelease}','Public profile community counts are not bound to live release state');
+requireText(app,"canReact={effectiveRole==='listener'}",'Public profile direct reaction role guard is missing');
 requireText(app,'<MessageCircle size={14}/> Comments','Published-work comments are not directly discoverable on release cards');
 requireText(app,'openNotification(item)','Activity rows no longer deep-link to their target');
 const navMessageCommands=(app.match(/id:'nav-messages'/g)??[]).length;
@@ -100,6 +105,9 @@ requireText(inbox,'nightjarMessaging.open','Inbox is not using canonical message
 requireText(inbox,'nightjarMessaging.setBlocked','Inbox block control is missing');
 requireText(inbox,'nightjarMessaging.report','Inbox report control is missing');
 requireText(inbox,'message-read-state','Inbox read-receipt UI is missing');
+requireText(inbox,'message.readAt?.[selected.otherUserId]','Inbox timestamped read receipt is missing');
+requireText(inbox,'onStatusChange?.({ unread:unreadTotal, needsReply:needsReplyTotal, awaitingReply:awaitingReplyTotal })','Inbox live responsibility propagation is missing');
+requireText(inbox,'messaging-responsibility-bar','Conversation responsibility summary is missing');
 requireText(inbox,'messaging-project-contexts','Multi-project Inbox context switcher is missing');
 requireText(inbox,'activeCollaborationId','Per-message project context state is missing');
 requireText(inbox,"'needs_reply'",'Inbox responsibility filter for replies owed by the current user is missing');
