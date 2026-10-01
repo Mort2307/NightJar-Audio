@@ -20,7 +20,7 @@
     "validate:nightjar-economy": "node scripts/nightjar-economy-contracts.mjs"
   },
   "dependencies": {
-    "firebase": "^12.4.0",
+    "firebase": "^12.19.0",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -39,5 +39,8 @@
     "@firebase/util@1.15.3": true,
     "protobufjs@7.6.6": true,
     "esbuild@0.25.12": true
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.5"
   }
 }
