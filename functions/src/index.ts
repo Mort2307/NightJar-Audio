@@ -4490,6 +4490,22 @@ const directMessagingBlockState = async (a: string, b: string) => {
 
 const directMessagingBlockedBetween = async (a: string, b: string) => (await directMessagingBlockState(a,b)).blocked;
 
+const messagingCollaborationContext = async (collaborationId: string, userA: string, userB: string) => {
+  if (!collaborationId) return null;
+  const snapshot = await db.collection('collaborationProposals').doc(collaborationId).get();
+  const data = snapshot.data();
+  if (!data) throw new HttpsError('not-found', 'Collaboration context not found.');
+  const participants = new Set([cleanText(data.writerUserId, 160), cleanText(data.recipientUserId, 160)].filter(Boolean));
+  if (!participants.has(userA) || !participants.has(userB)) {
+    throw new HttpsError('permission-denied', 'That collaboration is not shared by both message participants.');
+  }
+  return {
+    id: snapshot.id,
+    title: cleanText(data.scriptTitle, 180) || 'Nightjar collaboration',
+    status: cleanText(data.status, 40) || null,
+  };
+};
+
 const commentPayload = (data: Record<string, any>, id: string) => ({
   id,
   releaseId: data.releaseId ?? null,
@@ -4790,9 +4806,22 @@ export const listMessageConversations = onCall({ region: REGION }, async (reques
       const otherAccount = otherUserId ? await accountRef(otherUserId).get() : null;
       const otherProfile = otherUserId ? await profileRef(otherUserId).get() : null;
       const unreadCounts = data.unreadCounts && typeof data.unreadCounts === 'object' ? data.unreadCounts : {};
-      const collaborationId = cleanText(data.collaborationId, 160) || null;
-      const collaboration = collaborationId ? await db.collection('collaborationProposals').doc(collaborationId).get() : null;
-      const collaborationData = collaboration?.data() ?? null;
+      const collaborationIds = cleanStringList(
+        Array.isArray(data.collaborationIds) ? data.collaborationIds : data.collaborationId ? [data.collaborationId] : [],
+        50,
+      );
+      const collaborationSnapshots = await Promise.all(
+        collaborationIds.map((id) => db.collection('collaborationProposals').doc(id).get()),
+      );
+      const collaborations = collaborationSnapshots
+        .filter((item) => item.exists)
+        .map((item) => ({
+          id:item.id,
+          title:cleanText(item.data()?.scriptTitle, 180) || 'Nightjar collaboration',
+          status:cleanText(item.data()?.status, 40) || null,
+        }));
+      const latestCollaborationId = cleanText(data.collaborationId, 160) || collaborationIds[collaborationIds.length - 1] || null;
+      const latestCollaboration = collaborations.find((item) => item.id === latestCollaborationId) ?? collaborations[collaborations.length - 1] ?? null;
       return {
         id:doc.id,
         otherUserId,
@@ -4804,9 +4833,11 @@ export const listMessageConversations = onCall({ region: REGION }, async (reques
         lastMessageAt:toIso(data.lastMessageAt),
         lastSenderUserId:data.lastSenderUserId ?? null,
         unreadCount:Math.max(0, Number(unreadCounts[identity.uid] ?? 0)),
-        collaborationId,
-        collaborationTitle:collaborationData ? cleanText(collaborationData.scriptTitle, 180) || 'Nightjar collaboration' : null,
-        collaborationStatus:collaborationData ? cleanText(collaborationData.status, 40) || null : null,
+        collaborationIds,
+        collaborations,
+        collaborationId:latestCollaboration?.id ?? null,
+        collaborationTitle:latestCollaboration?.title ?? null,
+        collaborationStatus:latestCollaboration?.status ?? null,
       };
     }))).sort((a,b)=>String(b.lastMessageAt ?? '').localeCompare(String(a.lastMessageAt ?? '')));
   return { conversations, unreadCount:conversations.reduce((sum,item)=>sum+item.unreadCount,0) };
@@ -4826,6 +4857,9 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
   if (await directMessagingBlockedBetween(identity.uid, targetUserId)) {
     throw new HttpsError('permission-denied', 'Private messaging is blocked between these accounts.');
   }
+  const collaborationContext = collaborationId
+    ? await messagingCollaborationContext(collaborationId, identity.uid, targetUserId)
+    : null;
   const id = directConversationId(identity.uid, targetUserId);
   const ref = db.collection('directConversations').doc(id);
   const existing = await ref.get();
@@ -4833,7 +4867,8 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
     await ref.set({
       participantUserIds:[identity.uid,targetUserId].sort(),
       participantRoles:{ [identity.uid]:identity.role, [targetUserId]:target.data()?.role ?? null },
-      collaborationId,
+      collaborationId:collaborationContext?.id ?? null,
+      collaborationIds:collaborationContext ? [collaborationContext.id] : [],
       unreadCounts:{ [identity.uid]:0, [targetUserId]:0 },
       createdAt:FieldValue.serverTimestamp(),
       updatedAt:FieldValue.serverTimestamp(),
@@ -4841,8 +4876,21 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
       lastMessagePreview:'',
       lastSenderUserId:null,
     });
-  } else if (collaborationId && !existing.data()?.collaborationId) {
-    await ref.set({ collaborationId, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+  } else if (collaborationContext) {
+    const existingIds = cleanStringList(
+      Array.isArray(existing.data()?.collaborationIds)
+        ? existing.data()?.collaborationIds
+        : existing.data()?.collaborationId ? [existing.data()?.collaborationId] : [],
+      50,
+    );
+    const collaborationIds = existingIds.includes(collaborationContext.id)
+      ? existingIds
+      : [...existingIds, collaborationContext.id].slice(-50);
+    await ref.set({
+      collaborationId:collaborationContext.id,
+      collaborationIds,
+      updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
   }
   return { conversationId:id };
 });
@@ -4885,6 +4933,7 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
   const input = (request.data ?? {}) as Record<string, unknown>;
   const conversationId = cleanText(input.conversationId, 320);
   const body = cleanText(input.body, 4000);
+  const requestedCollaborationId = cleanText(input.collaborationId, 160) || null;
   if (!conversationId || !body) throw new HttpsError('invalid-argument', 'Write a message first.');
 
   const ref = db.collection('directConversations').doc(conversationId);
@@ -4908,6 +4957,11 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('resource-exhausted', 'Please slow down before sending more messages.');
   }
 
+  const activeCollaboration = requestedCollaborationId
+    ? await messagingCollaborationContext(requestedCollaborationId, identity.uid, recipientUserId)
+    : null;
+  const collaborationId = activeCollaboration?.id ?? cleanText(data.collaborationId, 160) || null;
+
   const presenter = await accountPresentation(identity.uid);
   const messageRef = ref.collection('messages').doc();
   const message = {
@@ -4916,7 +4970,7 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
     senderName:presenter.displayName,
     body,
     status:'visible',
-    collaborationId:data.collaborationId ?? null,
+    collaborationId,
     readBy:[identity.uid],
     createdAt:FieldValue.serverTimestamp(),
     updatedAt:FieldValue.serverTimestamp(),
@@ -4926,11 +4980,20 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
   const unreadCounts = data.unreadCounts && typeof data.unreadCounts === 'object' ? { ...data.unreadCounts } : {};
   unreadCounts[recipientUserId] = Math.max(0, Number(unreadCounts[recipientUserId] ?? 0)) + 1;
   unreadCounts[identity.uid] = 0;
+  const existingCollaborationIds = cleanStringList(
+    Array.isArray(data.collaborationIds) ? data.collaborationIds : data.collaborationId ? [data.collaborationId] : [],
+    50,
+  );
+  const collaborationIds = collaborationId && !existingCollaborationIds.includes(collaborationId)
+    ? [...existingCollaborationIds, collaborationId].slice(-50)
+    : existingCollaborationIds;
   await ref.set({
     unreadCounts,
     lastMessagePreview:body.slice(0,180),
     lastMessageAt:FieldValue.serverTimestamp(),
     lastSenderUserId:identity.uid,
+    collaborationId,
+    collaborationIds,
     updatedAt:FieldValue.serverTimestamp(),
   }, { merge:true });
 
@@ -4940,7 +5003,7 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
     title:'New private message',
     message:presenter.displayName + ' sent you a private Nightjar message.',
     conversationId,
-    collaborationId:data.collaborationId ?? null,
+    collaborationId,
     senderUserId:identity.uid,
   });
 
