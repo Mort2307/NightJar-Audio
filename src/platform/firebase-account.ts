@@ -51,7 +51,7 @@ const setActiveRoleCall = httpsCallable<{ role: 'listener' | NightjarProfessiona
   approvedProfessionalRoles: NightjarProfessionalRole[];
 }>(functions, 'setActiveNightjarRole');
 
-const stageRoleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; referralCode?: string }, { role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; staged: boolean }>(functions, 'stageRegistrationIntent');
+const stageRoleCall = httpsCallable<{ role?: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles?: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; referralCode?: string }, { role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; professionalRoles: NightjarProfessionalRole[]; staged: boolean }>(functions, 'stageRegistrationIntent');
 
 export const nightjarAccount = {
   async identity() {
@@ -59,8 +59,9 @@ export const nightjarAccount = {
     return result.data;
   },
 
-  async stageRegistration(role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist', referralCode = '') {
-    const result = await stageRoleCall({ role, ...(referralCode ? { referralCode } : {}) });
+  async stageRegistration(roleOrRoles: 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[], referralCode = '') {
+    const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles];
+    const result = await stageRoleCall({ roles, ...(referralCode ? { referralCode } : {}) });
     return result.data;
   },
 
