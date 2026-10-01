@@ -2468,6 +2468,17 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   };
 });
 
+const professionalRolesForAccount = (data: Record<string, any>) => {
+  const approved = Array.isArray(data.approvedProfessionalRoles)
+    ? data.approvedProfessionalRoles.map((value: unknown) => cleanText(value, 30))
+    : [];
+  const legacyRole = cleanText(data.role, 30);
+  if (['creator','writer','editor','artist'].includes(legacyRole) && String(data.status ?? 'active') === 'active') {
+    approved.push(legacyRole);
+  }
+  return Array.from(new Set(approved.filter((role) => ['creator','writer','editor','artist'].includes(role)))) as AccountRole[];
+};
+
 const requireAccountRole = async (
   request: { auth?: { uid: string; token: Record<string, unknown> } | null },
   roles: AccountRole[],
@@ -2476,11 +2487,17 @@ const requireAccountRole = async (
   if (identity.admin && roles.includes('admin')) return { ...identity, role: 'admin' as AccountRole, status: 'active' };
   const snapshot = await accountRef(identity.uid).get();
   const data = snapshot.data() ?? {};
-  const role = data.role as AccountRole | null;
+  const activeRole = cleanText(data.role, 30) as AccountRole | '';
+  const approvedProfessionalRoles = professionalRolesForAccount(data);
   const status = String(data.status ?? 'active');
-  if (!role || !roles.includes(role)) throw new HttpsError('permission-denied', 'This Nightjar role does not have access.');
-  if (status !== 'active') throw new HttpsError('failed-precondition', 'This Nightjar account is not active.');
-  return { ...identity, role, status };
+  const allowedRole = roles.find((role) =>
+    role === 'listener'
+      ? true
+      : role === activeRole || approvedProfessionalRoles.includes(role),
+  ) ?? null;
+  if (!allowedRole) throw new HttpsError('permission-denied', 'This Nightjar role does not have access.');
+  if (status === 'suspended') throw new HttpsError('failed-precondition', 'This Nightjar account is suspended.');
+  return { ...identity, role: allowedRole as AccountRole, activeRole: activeRole || 'listener', approvedProfessionalRoles, status };
 };
 
 const releasePayload = (data: Record<string, unknown>, id: string) => ({
@@ -5855,3 +5872,250 @@ export const adminModerateReview = onCall({ region: REGION }, async (request) =>
 
 
 export { nightjarGiftConfig, myNightjarWallet, sendNightjars, myNightjarEarnings, adminGrantNightjars } from './nightjars.js';
+
+
+// ---- Multi-role professional application bank --------------------------------
+const PROFESSIONAL_ROLE_KEYS = ['creator','writer','editor','artist'] as const;
+type ProfessionalRole = typeof PROFESSIONAL_ROLE_KEYS[number];
+const professionalApplicationRef = (uid: string) => db.collection('professionalApplications').doc(uid);
+const cleanProfessionalRoles = (value: unknown): ProfessionalRole[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(
+    value
+      .map((item) => cleanText(item, 30))
+      .filter((item): item is ProfessionalRole => PROFESSIONAL_ROLE_KEYS.includes(item as ProfessionalRole)),
+  ));
+};
+
+export const myProfessionalRoles = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) {
+    return {
+      listener: true,
+      approvedProfessionalRoles: [] as ProfessionalRole[],
+      pendingProfessionalRoles: [] as ProfessionalRole[],
+      activeRole: 'admin',
+      applicationStatus: null,
+    };
+  }
+  const [accountSnapshot, applicationSnapshot] = await Promise.all([
+    accountRef(identity.uid).get(),
+    professionalApplicationRef(identity.uid).get(),
+  ]);
+  const account = accountSnapshot.data() ?? {};
+  const application = applicationSnapshot.data() ?? {};
+  const approvedProfessionalRoles = professionalRolesForAccount(account).filter((role): role is ProfessionalRole => PROFESSIONAL_ROLE_KEYS.includes(role as ProfessionalRole));
+  const pendingProfessionalRoles = cleanProfessionalRoles(application.requestedRoles)
+    .filter((role) => !approvedProfessionalRoles.includes(role));
+  return {
+    listener: true,
+    approvedProfessionalRoles,
+    pendingProfessionalRoles,
+    activeRole: cleanText(account.role, 30) || 'listener',
+    applicationStatus: applicationSnapshot.exists ? cleanText(application.status, 30) || 'banked' : null,
+    wave: cleanText(application.wave, 80) || null,
+  };
+});
+
+export const submitProfessionalApplication = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) throw new HttpsError('failed-precondition', 'Administrator accounts do not use professional applications.');
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const requestedRoles = cleanProfessionalRoles(input.roles);
+  if (!requestedRoles.length) throw new HttpsError('invalid-argument', 'Choose at least one professional role.');
+
+  const [accountSnapshot, currentApplication] = await Promise.all([
+    accountRef(identity.uid).get(),
+    professionalApplicationRef(identity.uid).get(),
+  ]);
+  const account = accountSnapshot.data() ?? {};
+  const approved = professionalRolesForAccount(account).filter((role): role is ProfessionalRole => PROFESSIONAL_ROLE_KEYS.includes(role as ProfessionalRole));
+  const requested = Array.from(new Set([...cleanProfessionalRoles(currentApplication.data()?.requestedRoles), ...requestedRoles]))
+    .filter((role) => !approved.includes(role));
+
+  await accountRef(identity.uid).set({
+    status: String(account.status ?? 'active') === 'suspended' ? 'suspended' : 'active',
+    role: cleanText(account.role, 30) || 'listener',
+    approvedProfessionalRoles: approved,
+    pendingProfessionalRoles: requested,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(accountSnapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge:true });
+
+  await professionalApplicationRef(identity.uid).set({
+    userId: identity.uid,
+    email: identity.email,
+    requestedRoles: requested,
+    approvedRoles: approved,
+    status: 'banked',
+    statement: cleanText(input.statement, 2400) || null,
+    experience: cleanText(input.experience, 1600) || null,
+    portfolioUrl: validPublicUrl(input.portfolioUrl),
+    socialUrl: validPublicUrl(input.socialUrl),
+    note: cleanText(input.note, 1200) || null,
+    bankedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(currentApplication.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge:true });
+
+  return {
+    status: 'banked',
+    requestedRoles: requested,
+    approvedProfessionalRoles: approved,
+    message: 'Your professional application is stored in the Nightjar application bank for a future controlled intake wave.',
+  };
+});
+
+export const removeProfessionalRole = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) throw new HttpsError('failed-precondition', 'Administrator roles are managed separately.');
+  const role = cleanText((request.data as Record<string, unknown> | undefined)?.role, 30) as ProfessionalRole;
+  if (!PROFESSIONAL_ROLE_KEYS.includes(role)) throw new HttpsError('invalid-argument', 'Choose a valid professional role.');
+
+  const [accountSnapshot, applicationSnapshot] = await Promise.all([
+    accountRef(identity.uid).get(),
+    professionalApplicationRef(identity.uid).get(),
+  ]);
+  const account = accountSnapshot.data() ?? {};
+  const approved = professionalRolesForAccount(account).filter((value) => value !== role) as ProfessionalRole[];
+  const requested = cleanProfessionalRoles(applicationSnapshot.data()?.requestedRoles).filter((value) => value !== role);
+  const activeRole = cleanText(account.role, 30);
+  const nextActiveRole = activeRole === role ? (approved[0] ?? 'listener') : (activeRole || 'listener');
+
+  await accountRef(identity.uid).set({
+    approvedProfessionalRoles: approved,
+    pendingProfessionalRoles: requested,
+    role: nextActiveRole,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  if (applicationSnapshot.exists) {
+    await applicationSnapshot.ref.set({
+      requestedRoles: requested,
+      approvedRoles: approved,
+      status: requested.length ? 'banked' : approved.length ? 'approved' : 'withdrawn',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge:true });
+  }
+  await syncCreatorCustomTagUsage(identity.uid);
+  return { removedRole: role, approvedProfessionalRoles: approved, pendingProfessionalRoles: requested, activeRole: nextActiveRole };
+});
+
+export const setActiveNightjarRole = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) return { activeRole:'admin' };
+  const role = cleanText((request.data as Record<string, unknown> | undefined)?.role, 30);
+  const accountSnapshot = await accountRef(identity.uid).get();
+  const account = accountSnapshot.data() ?? {};
+  const approved = professionalRolesForAccount(account);
+  if (role !== 'listener' && !approved.includes(role as AccountRole)) {
+    throw new HttpsError('permission-denied', 'That professional role has not been approved for this account.');
+  }
+  await accountRef(identity.uid).set({
+    role,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { activeRole: role, approvedProfessionalRoles: approved };
+});
+
+export const listProfessionalApplicationBank = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('professionalApplications').limit(1000).get();
+  const applications = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data() ?? {};
+    const profile = await profileRef(doc.id).get();
+    const account = await accountRef(doc.id).get();
+    return {
+      id: doc.id,
+      userId: doc.id,
+      email: data.email ?? account.data()?.email ?? null,
+      displayName: profile.data()?.displayName ?? null,
+      requestedRoles: cleanProfessionalRoles(data.requestedRoles),
+      approvedRoles: cleanProfessionalRoles(data.approvedRoles),
+      status: cleanText(data.status, 30) || 'banked',
+      wave: cleanText(data.wave, 80) || null,
+      statement: cleanText(data.statement, 2400) || null,
+      experience: cleanText(data.experience, 1600) || null,
+      portfolioUrl: validPublicUrl(data.portfolioUrl),
+      socialUrl: validPublicUrl(data.socialUrl),
+      note: cleanText(data.note, 1200) || null,
+      createdAt: toIso(data.createdAt),
+      bankedAt: toIso(data.bankedAt),
+      updatedAt: toIso(data.updatedAt),
+    };
+  }));
+  const statusOrder: Record<string, number> = { banked:0, waitlist:1, approved:2, rejected:3, withdrawn:4 };
+  applications.sort((a,b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9) || String(a.bankedAt ?? '').localeCompare(String(b.bankedAt ?? '')));
+  const buckets = Object.fromEntries(PROFESSIONAL_ROLE_KEYS.map((role) => [
+    role,
+    applications.filter((item) => item.requestedRoles.includes(role) && !item.approvedRoles.includes(role)).length,
+  ]));
+  return { applications, buckets, total: applications.length };
+});
+
+export const reviewProfessionalApplication = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const decision = cleanText(input.decision, 30);
+  const selectedRoles = cleanProfessionalRoles(input.roles);
+  const wave = cleanText(input.wave, 80);
+  if (!userId || !['banked','approved','rejected','waitlist'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid application decision.');
+  }
+
+  const [applicationSnapshot, accountSnapshot] = await Promise.all([
+    professionalApplicationRef(userId).get(),
+    accountRef(userId).get(),
+  ]);
+  if (!applicationSnapshot.exists || !accountSnapshot.exists) throw new HttpsError('not-found', 'Professional application not found.');
+
+  const application = applicationSnapshot.data() ?? {};
+  const requested = cleanProfessionalRoles(application.requestedRoles);
+  const rolesToApprove = (selectedRoles.length ? selectedRoles : requested).filter((role) => requested.includes(role));
+  const currentApproved = professionalRolesForAccount(accountSnapshot.data() ?? {}) as ProfessionalRole[];
+  const nextApproved = decision === 'approved'
+    ? Array.from(new Set([...currentApproved, ...rolesToApprove]))
+    : currentApproved;
+  const remainingRequested = decision === 'approved'
+    ? requested.filter((role) => !rolesToApprove.includes(role))
+    : requested;
+  const nextStatus = decision === 'approved'
+    ? (remainingRequested.length ? 'banked' : 'approved')
+    : decision;
+
+  await professionalApplicationRef(userId).set({
+    requestedRoles: remainingRequested,
+    approvedRoles: nextApproved,
+    status: nextStatus,
+    wave: wave || application.wave || null,
+    reviewedBy: admin.uid,
+    reviewedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  const currentRole = cleanText(accountSnapshot.data()?.role, 30);
+  const activeRole = currentRole && currentRole !== 'listener' && nextApproved.includes(currentRole as ProfessionalRole)
+    ? currentRole
+    : (nextApproved[0] ?? 'listener');
+  await accountRef(userId).set({
+    approvedProfessionalRoles: nextApproved,
+    pendingProfessionalRoles: remainingRequested,
+    role: activeRole,
+    status: 'active',
+    professionalAccessUpdatedBy: admin.uid,
+    professionalAccessUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  await syncCreatorCustomTagUsage(userId);
+  return {
+    userId,
+    decision,
+    approvedProfessionalRoles: nextApproved,
+    pendingProfessionalRoles: remainingRequested,
+    activeRole,
+    applicationStatus: nextStatus,
+    wave: wave || application.wave || null,
+  };
+});
