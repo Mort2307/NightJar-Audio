@@ -28,6 +28,8 @@ const roleLabel = (role: string | null | undefined) => {
   if (role === 'writer') return 'Writer';
   if (role === 'creator') return 'VA Creator';
   if (role === 'artist') return 'Artist';
+  if (role === 'writer') return 'Writer';
+  if (role === 'editor') return 'Audio Editor';
   return 'Listener';
 };
 
@@ -156,11 +158,12 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <h3>{profile.displayName}</h3>
             <p>{profile.headline || (profile.role === 'editor' ? 'Audio Editor on Nightjar.' : profile.role === 'listener' ? 'Part of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
+            {!!profile.roles?.length && <div className="profile-role-chips">{profile.roles.map((role:string)=><span key={role}>{roleLabel(role)}</span>)}</div>}
           </div>
           <div className="writer-discovery-actions">
             <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>
-            {canMessage && onMessage && ['creator','writer','editor','artist'].includes(String(profile.role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
-            {['creator','writer','editor','artist'].includes(String(profile.role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Send Nightjars</button>}
+            {canMessage && onMessage && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
+            {(profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Send Nightjars</button>}
             <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>
           </div>
         </div>
@@ -256,6 +259,6 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         </div>
       </div>}
     </section>
-    {giftOpen && profile && <NightjarGiftPanel recipientUserId={profile.userId} recipientName={profile.displayName} recipientRole={String(profile.role)} notify={notify} onClose={() => setGiftOpen(false)} />}
+    {giftOpen && profile && <NightjarGiftPanel recipientUserId={profile.userId} recipientName={profile.displayName} recipientRole={String(profile.role)} recipientRoles={Array.isArray(profile.roles)?profile.roles:[]} notify={notify} onClose={() => setGiftOpen(false)} />}
   </div>;
 }
