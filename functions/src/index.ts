@@ -1815,6 +1815,7 @@ type CommercialSettings = {
   popularityAffectsBaseRate: false;
   tipsEnabled: boolean;
   individualPurchasesEnabled: boolean;
+  listenerSubscriptionUrl: string | null;
 };
 
 const readCommercialSettings = async (): Promise<CommercialSettings> => {
@@ -1846,6 +1847,7 @@ const readCommercialSettings = async (): Promise<CommercialSettings> => {
     popularityAffectsBaseRate: false,
     tipsEnabled: data.tipsEnabled === true,
     individualPurchasesEnabled: data.individualPurchasesEnabled === true,
+    listenerSubscriptionUrl: validPublicUrl(data.listenerSubscriptionUrl),
   };
 };
 
@@ -1951,6 +1953,13 @@ export const saveCommercialSettings = onCall({ region: REGION }, async (request)
     popularityAffectsBaseRate: false,
     tipsEnabled: input.tipsEnabled === true,
     individualPurchasesEnabled: input.individualPurchasesEnabled === true,
+    listenerSubscriptionUrl: (() => {
+      const raw = cleanText(input.listenerSubscriptionUrl, 500);
+      if (!raw) return null;
+      const url = validPublicUrl(raw);
+      if (!url) throw new HttpsError('invalid-argument', 'Listener subscription checkout URL must use http or https.');
+      return url;
+    })(),
   };
 
   await db.collection('settings').doc('commercial').set({
@@ -2366,6 +2375,27 @@ const decorateReleaseAccess = (
     playbackAccessReason: access.reason,
   };
 };
+
+export const myListeningAccess = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const [account, settings, subscription] = await Promise.all([
+    accountRef(identity.uid).get(),
+    readCommercialSettings(),
+    identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+  ]);
+
+  const role = identity.admin ? 'admin' : cleanText(account.data()?.role, 40) || null;
+  return {
+    role,
+    subscribed: identity.admin || Boolean(subscription),
+    subscriptionStatus: identity.admin ? 'admin' : subscription?.status ?? null,
+    planningMonthlyPricePence: settings.planningMonthlyPricePence,
+    subscriptionUrl: settings.listenerSubscriptionUrl,
+    creditedWorkIncluded: true,
+    rule: 'Work credited to your Nightjar account is included for you. Listening to unrelated paid catalogue work requires an active or trialing Listener subscription.',
+  };
+});
 
 const requireAccountRole = async (
   request: { auth?: { uid: string; token: Record<string, unknown> } | null },
@@ -4674,6 +4704,7 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
     popularityAffectsBaseRate: false,
     tipsEnabled: settings.tipsEnabled,
     individualPurchasesEnabled: settings.individualPurchasesEnabled,
+    listenerSubscriptionUrl: settings.listenerSubscriptionUrl,
     activeCreativeAccounts: counts,
     principles: [
       'Creators are paid against a published capped standard rate rather than popularity.',
