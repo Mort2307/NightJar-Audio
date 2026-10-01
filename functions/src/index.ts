@@ -540,10 +540,51 @@ const accountPresentation = async (uid: string) => {
   return { displayName, handle, email: email || null };
 };
 
+const roleProfileSlice = (data: Record<string, any>, role: string) => {
+  const stored = data.roleProfiles && typeof data.roleProfiles === 'object' && data.roleProfiles[role] && typeof data.roleProfiles[role] === 'object'
+    ? data.roleProfiles[role]
+    : null;
+  if (stored) {
+    return {
+      roleFocus: Array.isArray(stored.roleFocus) ? stored.roleFocus : [],
+      roleSpecialties: Array.isArray(stored.roleSpecialties) ? stored.roleSpecialties : [],
+      roleSecondary: Array.isArray(stored.roleSecondary) ? stored.roleSecondary : [],
+      roleAvailability: cleanText(stored.roleAvailability, 100),
+      roleDetailOne: cleanText(stored.roleDetailOne, 600),
+      roleDetailTwo: cleanText(stored.roleDetailTwo, 600),
+      portfolioNote: cleanText(stored.portfolioNote, 400),
+      featuredPortfolioIds: cleanStringList(stored.featuredPortfolioIds, 6),
+    };
+  }
+  return {
+    roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
+    roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
+    roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
+    roleAvailability: cleanText(data.roleAvailability, 100),
+    roleDetailOne: cleanText(data.roleDetailOne, 600),
+    roleDetailTwo: cleanText(data.roleDetailTwo, 600),
+    portfolioNote: cleanText(data.portfolioNote, 400),
+    featuredPortfolioIds: cleanStringList(data.featuredPortfolioIds, 6),
+  };
+};
+
 export const getMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  const snapshot = await profileRef(identity.uid).get();
-  return { profile: snapshot.exists ? snapshot.data() : null };
+  const [snapshot, accountSnapshot] = await Promise.all([
+    profileRef(identity.uid).get(),
+    accountRef(identity.uid).get(),
+  ]);
+  if (!snapshot.exists) return { profile:null };
+  const data = snapshot.data() ?? {};
+  const activeRole = identity.admin ? 'admin' : cleanText(accountSnapshot.data()?.role, 30) || 'listener';
+  return {
+    profile: {
+      ...data,
+      ...roleProfileSlice(data, activeRole),
+      activeRole,
+      roles: identity.admin ? ['admin'] : (professionalRolesForAccount(accountSnapshot.data() ?? {}).length ? professionalRolesForAccount(accountSnapshot.data() ?? {}) : ['listener']),
+    },
+  };
 });
 
 export const profileTagCatalogue = onCall({ region: REGION }, async (request) => {
@@ -765,8 +806,26 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
       transaction.delete(oldHandleRef);
     }
 
+    const currentProfileData = currentProfile.data() ?? {};
+    const roleProfiles = currentProfileData.roleProfiles && typeof currentProfileData.roleProfiles === 'object'
+      ? { ...currentProfileData.roleProfiles }
+      : {};
+    if (profileRole && profileRole !== 'admin') {
+      roleProfiles[profileRole] = {
+        roleFocus: nextProfile.roleFocus,
+        roleSpecialties: nextProfile.roleSpecialties,
+        roleSecondary: nextProfile.roleSecondary,
+        roleAvailability: nextProfile.roleAvailability,
+        roleDetailOne: nextProfile.roleDetailOne,
+        roleDetailTwo: nextProfile.roleDetailTwo,
+        portfolioNote: nextProfile.portfolioNote,
+        featuredPortfolioIds: nextProfile.featuredPortfolioIds,
+      };
+    }
+
     transaction.set(targetProfileRef, {
       ...nextProfile,
+      roleProfiles,
       ...(currentProfile.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
   });
@@ -824,6 +883,7 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
     roleDetailOne: data.roleDetailOne ?? null,
     roleDetailTwo: data.roleDetailTwo ?? null,
     portfolioNote: data.portfolioNote ?? null,
+    roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
     featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
   };
 };
@@ -998,6 +1058,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         roleDetailTwo: data.roleDetailTwo ?? null,
         portfolioNote: data.portfolioNote ?? null,
         featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
+        roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
         releaseCount,
         publishedWorkCount,
         creditedReleaseCount,
@@ -1138,6 +1199,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       roleDetailOne: data.roleDetailOne ?? null,
       roleDetailTwo: data.roleDetailTwo ?? null,
       portfolioNote: data.portfolioNote ?? null,
+      roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
       publicPlaylists,
