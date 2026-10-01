@@ -29,7 +29,15 @@ export default function AccountPortal() {
     setLoadingAccount(true);
     setMessage('');
     try {
-      const nextAccount = await nightjarAccount.identity();
+      let nextAccount = await nightjarAccount.identity();
+      const pendingRole = sessionStorage.getItem('nightjar.registrationRole') as 'listener' | 'creator' | 'writer' | 'editor' | null;
+      const referralCode = sessionStorage.getItem('nightjar.creatorReferralCode') ?? '';
+      if (!nextAccount.admin && !nextAccount.role && pendingRole && ['listener','creator','writer','editor'].includes(pendingRole)) {
+        await nightjarAccount.chooseRole(pendingRole, referralCode);
+        nextAccount = await nightjarAccount.identity();
+        sessionStorage.removeItem('nightjar.registrationRole');
+        sessionStorage.removeItem('nightjar.creatorReferralCode');
+      }
       setAccount(nextAccount);
 
       if (nextAccount.status === 'suspended') {
@@ -91,11 +99,11 @@ export default function AccountPortal() {
     };
   }, []);
 
-  const chooseRole = async (role: 'listener' | 'creator' | 'writer') => {
+  const chooseRole = async (role: 'listener' | 'creator' | 'writer' | 'editor') => {
     setLoadingAccount(true);
     setMessage('');
     try {
-      await nightjarAccount.chooseRole(role);
+      await nightjarAccount.chooseRole(role, sessionStorage.getItem('nightjar.creatorReferralCode') ?? '');
       const nextAccount = await nightjarAccount.identity();
       setAccount(nextAccount);
       const destination = accountDestination(nextAccount);
@@ -148,11 +156,12 @@ export default function AccountPortal() {
         </dl>
 
         {!account.admin && !account.role && <div className="account-role-picker">
-          <p>Choose the permanent role for this Nightjar account.</p>
+          <p>Choose the permanent role for this legacy Nightjar account. New accounts choose this before registration.</p>
           <div>
             <button className="secondary-button" disabled={loadingAccount} onClick={() => void chooseRole('listener')}>Listener</button>
             <button className="secondary-button" disabled={loadingAccount} onClick={() => void chooseRole('creator')}>Creator</button>
             <button className="secondary-button" disabled={loadingAccount} onClick={() => void chooseRole('writer')}>Writer</button>
+            <button className="secondary-button" disabled={loadingAccount} onClick={() => void chooseRole('editor')}>Audio Editor</button>
           </div>
         </div>}
       </>}
