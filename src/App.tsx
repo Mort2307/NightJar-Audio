@@ -3768,7 +3768,7 @@ function App() {
       </div>)}
       {!(commercialSettings.creatorRateBands??[]).length && <p className="panel-note">No rates are locked yet. Add bands after the next creator-research review.</p>}
     </div>
-    <label className="rights-check"><input type="checkbox" checked={commercialSettings.tipsEnabled} onChange={(e)=>setCommercialSettings((s)=>({...s,tipsEnabled:e.target.checked}))}/> Enable creator tips when payment processing is ready</label>
+    <div className="panel-note commercial-span-two"><strong>Direct-tip switch retired.</strong> Nightjar support now uses the auditable Nightjar wallet and gift ledger. Real-money pack checkout will only unlock after a verified payment-provider callback is connected.</div>
     <label className="rights-check"><input type="checkbox" checked={commercialSettings.individualPurchasesEnabled} onChange={(e)=>setCommercialSettings((s)=>({...s,individualPurchasesEnabled:e.target.checked}))}/> Enable individual audio purchases when commerce is ready</label>
   </div>
   <button className="primary-button" disabled={commercialSaving} onClick={()=>void saveCommercialControls()}>{commercialSaving?'Saving…':'Save commercial controls'}</button>
