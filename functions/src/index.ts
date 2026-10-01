@@ -6283,12 +6283,19 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
   const snapshot = await db.collection('professionalApplications').limit(1000).get();
   const applications = await Promise.all(snapshot.docs.map(async (doc) => {
     const data = doc.data() ?? {};
-    const profile = await profileRef(doc.id).get();
-    const account = await accountRef(doc.id).get();
+    const [profile, account, ageAssurance] = await Promise.all([
+      profileRef(doc.id).get(),
+      accountRef(doc.id).get(),
+      db.collection('ageAssurance').doc(doc.id).get(),
+    ]);
+    const accountData = account.data() ?? {};
+    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && accountData.testAccess === true;
     return {
       id: doc.id,
       userId: doc.id,
-      email: data.email ?? account.data()?.email ?? null,
+      email: data.email ?? accountData.email ?? null,
+      ageVerified: ageAssurance.data()?.verified === true,
+      temporaryTestAccess,
       displayName: profile.data()?.displayName ?? null,
       requestedRoles: cleanProfessionalRoles(data.requestedRoles),
       approvedRoles: cleanProfessionalRoles(data.approvedRoles),
@@ -6324,11 +6331,18 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
     throw new HttpsError('invalid-argument', 'Choose a valid application decision.');
   }
 
-  const [applicationSnapshot, accountSnapshot] = await Promise.all([
+  const [applicationSnapshot, accountSnapshot, ageAssuranceSnapshot] = await Promise.all([
     professionalApplicationRef(userId).get(),
     accountRef(userId).get(),
+    db.collection('ageAssurance').doc(userId).get(),
   ]);
   if (!applicationSnapshot.exists || !accountSnapshot.exists) throw new HttpsError('not-found', 'Professional application not found.');
+
+  const applicantAccount = accountSnapshot.data() ?? {};
+  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && applicantAccount.testAccess === true;
+  if (decision === 'approved' && ageAssuranceSnapshot.data()?.verified !== true && !temporaryTestAccess) {
+    throw new HttpsError('failed-precondition', 'This professional applicant must complete age assurance or be explicitly enabled as a controlled tester before approval.');
+  }
 
   const application = applicationSnapshot.data() ?? {};
   const requested = cleanProfessionalRoles(application.requestedRoles);
