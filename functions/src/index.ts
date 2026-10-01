@@ -4854,6 +4854,7 @@ const directMessagePayload = (data: Record<string, any>, id: string) => ({
   status: data.status ?? 'visible',
   collaborationId: data.collaborationId ?? null,
   readBy: Array.isArray(data.readBy) ? data.readBy.map(String) : [],
+  readAt: data.readAt && typeof data.readAt === 'object' ? data.readAt : {},
   createdAt: toIso(data.createdAt),
   updatedAt: toIso(data.updatedAt),
 });
@@ -5285,6 +5286,7 @@ export const listMessageConversations = onCall({ region: REGION }, async (reques
         collaborationId:latestCollaboration?.id ?? null,
         collaborationTitle:latestCollaboration?.title ?? null,
         collaborationStatus:latestCollaboration?.status ?? null,
+        otherReadAt:otherUserId && data.readAt && typeof data.readAt === 'object' ? data.readAt[otherUserId] ?? null : null,
         ...conversationWaitingState(data, identity.uid),
       };
     }))).sort((a,b)=>String(b.lastMessageAt ?? '').localeCompare(String(a.lastMessageAt ?? '')));
@@ -5367,10 +5369,13 @@ export const listDirectMessages = onCall({ region: REGION }, async (request) => 
     .map((doc) => {
       const value = doc.data();
       const readBy = Array.isArray(value.readBy) ? value.readBy.map(String) : [];
+      const readAt = value.readAt && typeof value.readAt === 'object' ? { ...value.readAt } : {};
       if (!readBy.includes(identity.uid)) {
-        batch.set(doc.ref, { readBy:[...readBy,identity.uid], updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+        const seenAt = new Date().toISOString();
+        readAt[identity.uid] = seenAt;
+        batch.set(doc.ref, { readBy:[...readBy,identity.uid], readAt, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
       }
-      return directMessagePayload({ ...value, readBy:Array.from(new Set([...readBy,identity.uid])) }, doc.id);
+      return directMessagePayload({ ...value, readBy:Array.from(new Set([...readBy,identity.uid])), readAt }, doc.id);
     })
     .sort((a,b)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
 
@@ -5438,6 +5443,7 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
     status:'visible',
     collaborationId,
     readBy:[identity.uid],
+    readAt:{ [identity.uid]:new Date().toISOString() },
     createdAt:FieldValue.serverTimestamp(),
     updatedAt:FieldValue.serverTimestamp(),
   };
