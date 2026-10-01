@@ -85,6 +85,7 @@ const CreatorSuggestionBox = lazy(() => import('./components/CreatorSuggestionBo
 const MessagingHub = lazy(() => import('./components/MessagingHub'));
 const ProfessionalRoleManager = lazy(() => import('./components/ProfessionalRoleManager'));
 const ArtistPortfolioManager = lazy(() => import('./components/ArtistPortfolioManager'));
+const NightjarWalletPanel = lazy(() => import('./components/NightjarWalletPanel'));
 
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
@@ -3362,6 +3363,7 @@ function App() {
               <button className="secondary-button" onClick={() => document.getElementById('profile-public-preview')?.scrollIntoView({behavior:'smooth',block:'center'})}>Preview public profile</button>
             </div>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}><ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':'discover'); }} /></Suspense>
+            {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel notify={notify} professional={['creator','writer','editor','artist'].includes(String(effectiveRole))} demoMode={demoMode} /></Suspense>}
             {effectiveRole === 'artist' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Artist portfolio" />}><ArtistPortfolioManager notify={notify} demoMode={demoMode} /></Suspense>}
             <div className="profile-editor-grid">
               <article className="panel profile-editor-card">
