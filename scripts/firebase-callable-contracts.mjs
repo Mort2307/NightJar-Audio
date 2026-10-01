@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root=process.cwd();
-const functionsSource=fs.readFileSync(path.join(root,'functions/src/index.ts'),'utf8');
+const functionsDir=path.join(root,'functions/src');
+const functionFiles=fs.readdirSync(functionsDir).filter((name)=>name.endsWith('.ts'));
+const functionSources=functionFiles.map((name)=>fs.readFileSync(path.join(functionsDir,name),'utf8'));
+const functionsSource=functionSources.join('\n');
 const platformDir=path.join(root,'src/platform');
 const platformFiles=fs.readdirSync(platformDir).filter((name)=>name.endsWith('.ts'));
 
