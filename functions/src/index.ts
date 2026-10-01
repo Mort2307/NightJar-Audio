@@ -923,7 +923,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
     if (recipientUserId) collaborationCountByUser.set(recipientUserId, (collaborationCountByUser.get(recipientUserId) ?? 0) + 1);
   }
 
-  const allowedRoles = new Set(['creator','writer','editor','listener']);
+  const allowedRoles = new Set(['creator','writer','editor','artist','listener']);
   const profiles = (await Promise.all(accounts.docs
     .filter((doc) => doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
     .map(async (doc) => {
@@ -1062,7 +1062,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     : (role === 'writer' || role === 'editor')
       ? (hasPortfolioCuration ? orderedFeatured(creditedReleases) : creditedReleases.slice(0, 3))
       : [];
-  const completedCollaborations = ['creator','writer','editor'].includes(role)
+  const completedCollaborations = ['creator','writer','editor','artist'].includes(role)
     ? await completedCollaborationCountFor(userId)
     : 0;
   const activityBadges = publicActivityBadges(role, {
@@ -2256,6 +2256,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
     creator: accounts.filter((account) => account.role === 'creator').length,
     writer: accounts.filter((account) => account.role === 'writer').length,
     editor: accounts.filter((account) => account.role === 'editor').length,
+    artist: accounts.filter((account) => account.role === 'artist').length,
     admin: ADMIN_EMAILS.size,
   };
 
@@ -4316,7 +4317,7 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
     if (writerUserId) publishedScriptsByWriter.set(writerUserId, (publishedScriptsByWriter.get(writerUserId) ?? 0) + 1);
   }
 
-  const allowedRoles = new Set(['creator','writer','editor']);
+  const allowedRoles = new Set(['creator','writer','editor','artist']);
   const people = (await Promise.all(snapshot.docs
     .filter((doc) => doc.id !== identity.uid && doc.data().status === 'active' && allowedRoles.has(String(doc.data().role ?? '')))
     .map(async (doc) => {
@@ -4816,7 +4817,7 @@ export const transparencySnapshot = onCall({ region: REGION }, async (request) =
 
 
 
-const CREATIVE_MESSAGE_ROLES = new Set(['creator','writer','editor']);
+const CREATIVE_MESSAGE_ROLES = new Set(['creator','writer','editor','artist']);
 const directConversationId = (a: string, b: string) => createHash('sha256').update([a,b].sort().join('\u0000')).digest('hex');
 
 const directMessagingBlockState = async (a: string, b: string) => {
@@ -5109,7 +5110,7 @@ export const postReleaseComment = onCall({ region: REGION }, async (request) => 
 });
 
 export const replyToReleaseComment = onCall({ region: REGION }, async (request) => {
-  const identity = await requireAccountRole(request, ['creator','writer','editor']);
+  const identity = await requireAccountRole(request, ['creator','writer','editor','artist']);
   await requireAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const parentCommentId = cleanText(input.parentCommentId, 160);
@@ -5235,7 +5236,7 @@ export const reportReleaseComment = onCall({ region: REGION }, async (request) =
 const requireCreativeMessagingIdentity = async (
   request: { auth?: { uid: string; token: Record<string, unknown> } | null },
 ) => {
-  const identity = await requireAccountRole(request, ['creator','writer','editor']);
+  const identity = await requireAccountRole(request, ['creator','writer','editor','artist']);
   await requireAgeVerified(identity.uid);
   return identity;
 };
