@@ -185,6 +185,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   }, [simulationMode, current?.id, current?.pendingArtworkAssetId, current?.pendingArtworkStatus]);
 
   const createDraft = async () => {
+    if (!canPublish || accountStatus === 'pending_review') return notify('Creator release tools unlock after your professional account is approved.');
     if (!draft.title.trim()) return notify('Give the release a title first.');
     try {
       if (simulationMode) {
@@ -388,7 +389,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No release drafts yet.</strong><span>Create the first piece of Nightjar’s launch catalogue.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="New release title" />
-          <button className="primary-button" onClick={() => void createDraft()}><UploadCloud size={14} /> Start release</button>
+          <button className="primary-button" disabled={!canPublish || accountStatus === 'pending_review'} onClick={() => void createDraft()}><UploadCloud size={14} /> {accountStatus === 'pending_review' ? 'Approval required' : 'Start release'}</button>
         </div>
       </aside>
 
