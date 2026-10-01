@@ -13,6 +13,7 @@ type Props={
   initialCollaborationId?:string|null;
   onRecipientHandled?:()=>void;
   onUnreadChange?:(count:number)=>void;
+  onStatusChange?:(status:{unread:number;needsReply:number;awaitingReply:number})=>void;
   notify:(message:string)=>void;
   demoMode?:boolean;
   simulationMode?:boolean;
@@ -22,7 +23,7 @@ type MessageTargetEvent=CustomEvent<{userId?:string;collaborationId?:string|null
 
 const roleLabel=(role:string)=>role==='editor'?'Audio Editor':role==='writer'?'Writer':'Creator';
 
-export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialConversationId,initialCollaborationId,onRecipientHandled,onUnreadChange,notify,demoMode=false,simulationMode=false}:Props){
+export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialConversationId,initialCollaborationId,onRecipientHandled,onUnreadChange,onStatusChange,notify,demoMode=false,simulationMode=false}:Props){
   const [conversations,setConversations]=useState<any[]>([]);
   const [directory,setDirectory]=useState<any[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(null);
@@ -80,8 +81,8 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
       if(demoMode){
         const selected=conversations.find((item)=>item.id===conversationId);
         setMessages([
-          {id:'demo-message-1',conversationId,senderUserId:selected?.otherUserId??'demo-writer-mara',body:'I wanted to keep this conversation attached to Nightjar so the collaboration does not disappear into another inbox.',readBy:[selected?.otherUserId??'demo-writer-mara',viewerId],createdAt:new Date(Date.now()-3600000).toISOString(),collaborationId:'demo-collab-1'},
-          {id:'demo-message-2',conversationId,senderUserId:viewerId,body:'Perfect. I can see the proposal state and message history together now.',readBy:[viewerId,selected?.otherUserId??'demo-writer-mara'],createdAt:new Date(Date.now()-3000000).toISOString(),collaborationId:'demo-collab-1'},
+          {id:'demo-message-1',conversationId,senderUserId:selected?.otherUserId??'demo-writer-mara',body:'I wanted to keep this conversation attached to Nightjar so the collaboration does not disappear into another inbox.',readBy:[selected?.otherUserId??'demo-writer-mara',viewerId],readAt:{[viewerId]:new Date(Date.now()-3500000).toISOString(),[selected?.otherUserId??'demo-writer-mara']:new Date(Date.now()-3400000).toISOString()},createdAt:new Date(Date.now()-3600000).toISOString(),collaborationId:'demo-collab-1'},
+          {id:'demo-message-2',conversationId,senderUserId:viewerId,body:'Perfect. I can see the proposal state and message history together now.',readBy:[viewerId,selected?.otherUserId??'demo-writer-mara'],readAt:{[viewerId]:new Date(Date.now()-3000000).toISOString(),[selected?.otherUserId??'demo-writer-mara']:new Date(Date.now()-2600000).toISOString()},createdAt:new Date(Date.now()-3000000).toISOString(),collaborationId:'demo-collab-1'},
         ]);
         setBlocked(false);
         setBlockedByMe(false);
@@ -266,12 +267,16 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     return true;
   }),[conversations,inboxFilter,viewerId]);
 
-  useEffect(()=>{onUnreadChange?.(unreadTotal);},[unreadTotal]);
+  useEffect(()=>{
+    onUnreadChange?.(unreadTotal);
+    onStatusChange?.({ unread:unreadTotal, needsReply:needsReplyTotal, awaitingReply:awaitingReplyTotal });
+  },[unreadTotal,needsReplyTotal,awaitingReplyTotal]);
+
 
   return <section className="messaging-hub" id="nightjar-messaging-hub">
     <div className="messaging-hub-head">
       <div><span className="mini-label">PRIVATE PROFESSIONAL MESSAGING</span><h2>Keep the conversation with the work.</h2><p>Creators, Writers and Audio Editors can message each other directly, with unread state, collaboration context, blocking and reporting built in.</p></div>
-      <div className="messaging-head-actions"><span className="status-pill">{unreadTotal} unread</span><button className="secondary-button" onClick={()=>void loadConversations()}><RefreshCw size={13}/> Refresh</button></div>
+      <div className="messaging-head-actions"><span className="status-pill">{unreadTotal} unread</span>{needsReplyTotal>0&&<span className="status-pill messaging-priority-pill">{needsReplyTotal} need reply</span>}{awaitingReplyTotal>0&&<span className="status-pill muted">{awaitingReplyTotal} awaiting</span>}<button className="secondary-button" onClick={()=>void loadConversations()}><RefreshCw size={13}/> Refresh</button></div>
     </div>
     <div className="messaging-safety-note"><ShieldCheck size={16}/><div><strong>A message is not a manuscript permission.</strong><span>Listeners cannot enter these DMs. Full scripts stay in Protected Reader / controlled sharing. Nightjar keeps reply responsibility visible, lets either professional close a finished loop, and allows only one reminder per unanswered message streak after 48 hours.</span></div></div>
 
@@ -293,6 +298,13 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
 
       <div className="messaging-thread">
         {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{needsReply(selected)?' · your reply is expected':awaitingReply(selected)?' · waiting '+waitingHours(selected)+'h for a reply':waitingState(selected)==='awaiting_them'?' · awaiting their reply':waitingState(selected)==='resolved'?' · loop closed — no reply needed':''}</p></div><div className="messaging-thread-actions">{waitingState(selected)!=='resolved'&&waitingState(selected)!=='none'&&<button className="ghost-button" onClick={()=>void closeLoop()}><CircleCheckBig size={12}/> Close loop</button>}{(selected.reminderEligible===true || (awaitingReply(selected)&&selected.reminderAlreadySent!==true))&&<button className="secondary-button" disabled={reminding||blocked} onClick={()=>void sendReminder()}><BellRing size={12}/>{reminding?'Sending…':'Send one reminder'}</button>}{selected.reminderAlreadySent&&waitingState(selected)!=='resolved'&&<span className="messaging-reminder-sent"><Check size={11}/> Reminder sent</span>}<button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></div></header>
+          <div className="messaging-responsibility-bar">
+            <div className={needsReply(selected)?'needs-reply':waitingState(selected)==='awaiting_them'?'awaiting-reply':waitingState(selected)==='resolved'?'resolved':'clear'}>
+              {needsReply(selected)?<Clock3 size={14}/>:waitingState(selected)==='awaiting_them'?<Clock3 size={14}/>:<CircleCheckBig size={14}/>}
+              <span><strong>{needsReply(selected)?'Your reply is the next step':waitingState(selected)==='awaiting_them'?'You are waiting for their reply':waitingState(selected)==='resolved'?'Conversation loop closed':'No outstanding reply'}</strong><small>{needsReply(selected)?'Reading the thread does not clear this responsibility — replying or deliberately closing the loop does.':waitingState(selected)==='awaiting_them'?(waitingHours(selected)>=48?'This has been unanswered for '+waitingHours(selected)+' hours. One Nightjar reminder can be sent for this waiting period.':'Your latest message is waiting for a response.'):waitingState(selected)==='resolved'?'Either professional can reopen the loop by sending a new message.':'Start a message when there is a concrete next step to discuss.'}</small></span>
+            </div>
+            {selected.otherReadAt && waitingState(selected)==='awaiting_them' && <span className="messaging-last-seen"><CheckCheck size={12}/> Conversation opened {new Date(selected.otherReadAt).toLocaleString('en-GB')}</span>}
+          </div>
           {!!selected.collaborations?.length && <div className="messaging-collaboration-context">
             <Handshake size={15}/>
             <div className="messaging-collaboration-context-main">
@@ -310,7 +322,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
           <div className="message-list" ref={messageListRef}>{messages.length?messages.map((message:any)=>{
             const mine=message.senderUserId===viewerId;
             const readByOther=mine&&selected.otherUserId&&(message.readBy??[]).includes(selected.otherUserId);
-            return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}{mine&&<em className="message-read-state">{readByOther?<><CheckCheck size={11}/> Read</>:<><Check size={11}/> Sent</>}</em>}</time></div>{message.collaborationId && <span className="direct-message-context"><Handshake size={10}/>{selected.collaborations?.find((item:any)=>item.id===message.collaborationId)?.title ?? 'Linked collaboration'}</span>}<p>{message.status==='removed_by_admin'?'Message removed by Nightjar moderation.':message.body||'Message unavailable.'}</p>{!mine&&message.status!=='removed_by_admin'&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
+            return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}{mine&&<em className="message-read-state">{readByOther?<><CheckCheck size={11}/> Read{message.readAt?.[selected.otherUserId] ? ' · '+new Date(message.readAt[selected.otherUserId]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : ''}</>:<><Check size={11}/> Sent</>}</em>}</time></div>{message.collaborationId && <span className="direct-message-context"><Handshake size={10}/>{selected.collaborations?.find((item:any)=>item.id===message.collaborationId)?.title ?? 'Linked collaboration'}</span>}<p>{message.status==='removed_by_admin'?'Message removed by Nightjar moderation.':message.body||'Message unavailable.'}</p>{!mine&&message.status!=='removed_by_admin'&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
           }):<div className="people-empty"><MessageCircle size={17}/><strong>Conversation ready.</strong><span>Start with the work, expectations or next step. Protected material should stay in Nightjar’s controlled script tools.</span></div>}</div>
           <div className="message-compose">{blocked&&<div className="messaging-blocked-note"><Ban size={13}/><span>{blockedByMe?'You blocked messages from this account. You can unblock them here when ready.':blockedByOther?'This account is not currently accepting private messages from you. Existing collaboration records remain intact.':'Private messaging is blocked for this conversation.'}</span></div>}<textarea value={body} maxLength={4000} disabled={blocked} onChange={(event)=>setBody(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey&&!blocked){event.preventDefault();void send();}}} placeholder="Write a private message…"/><div><small>{body.length}/4000 · {activeCollaborationId ? 'linked to ' + (selected.collaborations?.find((item:any)=>item.id===activeCollaborationId)?.title ?? 'a Nightjar collaboration') + ' · ' : 'general thread · '}Enter to send · Shift+Enter for a new line · do not paste full protected scripts</small><button className="primary-button" disabled={sending||blocked||!body.trim()} onClick={()=>void send()}><Send size={13}/>{sending?'Sending…':'Send'}</button></div></div>
         </>:<div className="messaging-thread-empty"><MessageCircle size={22}/><strong>Select a conversation.</strong><span>Messages keep creative communication visible without changing rights, licences or manuscript permissions.</span></div>}
