@@ -44,7 +44,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     try{
       if(demoMode){
         const demoConversations=[
-          {id:'demo-professional-1',otherUserId:'demo-writer-mara',otherName:'Mara Bell',otherHandle:'marabell',otherRole:'writer',lastMessage:'I updated the rights note — happy to talk through the changes.',lastMessageAt:new Date(Date.now()-1200000).toISOString(),unreadCount:1,collaborationIds:['demo-collab-1']},
+          {id:'demo-professional-1',otherUserId:'demo-writer-mara',otherName:'Mara Bell',otherHandle:'marabell',otherRole:'writer',lastMessage:'I updated the rights note — happy to talk through the changes.',lastMessageAt:new Date(Date.now()-1200000).toISOString(),unreadCount:1,collaborationId:'demo-collab-1',collaborationIds:['demo-collab-1','demo-collab-2'],collaborations:[{id:'demo-collab-1',title:'Midnight Call',status:'discussing'},{id:'demo-collab-2',title:'After Hours',status:'accepted'}]},
           {id:'demo-professional-2',otherUserId:'demo-editor-sam',otherName:'Sam Reed',otherHandle:'samreed',otherRole:'editor',lastMessage:'Just checking whether the latest production handoff reached you.',lastMessagePreview:'Just checking whether the latest production handoff reached you.',lastMessageAt:new Date(Date.now()-72*60*60*1000).toISOString(),lastSenderUserId:viewerId,unreadCount:0,collaborationIds:[]},
         ];
         setConversations(demoConversations);
@@ -88,6 +88,8 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
       }else{
         const data=await nightjarMessaging.open(conversationId);
         setMessages(data.messages??[]);
+        const activeConversation=data.conversation??{};
+        setActiveCollaborationId((current)=>current && (activeConversation.collaborationIds??[]).includes(current) ? current : activeConversation.collaborationId ?? activeConversation.collaborations?.[activeConversation.collaborations.length-1]?.id ?? null);
         setBlocked(data.blocked===true);
         setBlockedByMe(data.blockedByMe===true);
         setBlockedByOther(data.blockedByOther===true);
@@ -147,6 +149,12 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     const timer=window.setInterval(()=>void loadMessages(selectedId),20000);
     return()=>window.clearInterval(timer);
   },[selectedId,demoMode]);
+
+  const selectConversation=(conversation:any)=>{
+    setSelectedId(conversation.id);
+    const collaborationId=conversation.collaborationId ?? conversation.collaborations?.[conversation.collaborations.length-1]?.id ?? null;
+    setActiveCollaborationId(collaborationId);
+  };
 
   const filteredPeople=useMemo(()=>{
     const needle=query.trim().toLowerCase();
@@ -222,19 +230,32 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         {!!query.trim()&&<div className="messaging-directory">{filteredPeople.map((person:any)=><button key={person.userId} onClick={()=>void startWith(person.userId)}><span>{String(person.name??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{person.name}</strong><small>{roleLabel(person.role)}{person.handle?' · @'+String(person.handle).replace(/^@/,''):''}</small></div></button>)}{!filteredPeople.length&&<div className="people-empty">No matching professional accounts.</div>}</div>}
         <div className="messaging-conversations">
           <span className="mini-label">CONVERSATIONS</span>
-          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>setSelectedId(conversation.id)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt="" loading="lazy" decoding="async"/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small>{awaitingReply(conversation)&&<span className="messaging-awaiting-reply">Awaiting reply · 48h+</span>}</div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em>}</button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
+          {loading?<div className="people-empty">Loading messages…</div>:conversations.length?conversations.map((conversation:any)=><button className={selectedId===conversation.id?'active':''} key={conversation.id} onClick={()=>selectConversation(conversation)}><span className="messaging-avatar">{conversation.otherAvatarUrl?<img className="avatar-approved-image" src={conversation.otherAvatarUrl} alt="" loading="lazy" decoding="async"/>:String(conversation.otherName??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{conversation.otherName}</strong><small>{conversation.lastMessagePreview||'Conversation ready'}</small>{awaitingReply(conversation)&&<span className="messaging-awaiting-reply">Awaiting reply · 48h+</span>}</div>{conversation.unreadCount>0&&<em>{conversation.unreadCount}</em>}</button>):<div className="people-empty"><MessageCircle size={16}/><strong>No conversations yet.</strong><span>Search for a Creator, Writer or Audio Editor to start one.</span></div>}
         </div>
       </aside>
 
       <div className="messaging-thread">
         {selected?<><header><div><span className="mini-label">PRIVATE THREAD</span><h3>{selected.otherName}</h3><p>{selected.otherRole?roleLabel(selected.otherRole)+' · ':''}{selected.otherHandle?'@'+String(selected.otherHandle).replace(/^@/,''):'Nightjar professional account'}{awaitingReply(selected)?' · awaiting reply for 48h+':''}</p></div><button className={blockedByMe?'secondary-button':'ghost-button'} onClick={()=>void toggleBlock()}><Ban size={12}/>{blockedByMe?'Unblock':'Block messages'}</button></header>
-          {selected.collaborationId && <div className="messaging-collaboration-context"><Handshake size={15}/><div><span className="mini-label">LINKED COLLABORATION</span><strong>{selected.collaborationTitle || 'Nightjar collaboration'}</strong><small>{selected.collaborationStatus ? String(selected.collaborationStatus).replaceAll('_',' ') : 'Collaboration status available in the workspace'} · Messaging does not change script rights, permissions or collaboration state.</small></div></div>}
+          {!!selected.collaborations?.length && <div className="messaging-collaboration-context">
+            <Handshake size={15}/>
+            <div className="messaging-collaboration-context-main">
+              <span className="mini-label">PROJECT CONTEXT</span>
+              <strong>{selected.collaborations.length === 1 ? 'Linked Nightjar collaboration' : selected.collaborations.length + ' linked Nightjar collaborations'}</strong>
+              <small>Choose which verified project this message belongs to. Messaging never changes script rights, permissions or collaboration state.</small>
+              <div className="messaging-project-contexts">
+                {selected.collaborations.map((item:any)=><button type="button" key={item.id} className={activeCollaborationId===item.id?'active':''} onClick={()=>setActiveCollaborationId(item.id)} aria-pressed={activeCollaborationId===item.id}>
+                  <span>{item.title}</span><small>{item.status ? String(item.status).replaceAll('_',' ') : 'Nightjar collaboration'}</small>
+                </button>)}
+                <button type="button" className={activeCollaborationId==null?'active':''} onClick={()=>setActiveCollaborationId(null)} aria-pressed={activeCollaborationId==null}><span>General conversation</span><small>No project context</small></button>
+              </div>
+            </div>
+          </div>}
           <div className="message-list" ref={messageListRef}>{messages.length?messages.map((message:any)=>{
             const mine=message.senderUserId===viewerId;
             const readByOther=mine&&selected.otherUserId&&(message.readBy??[]).includes(selected.otherUserId);
-            return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}{mine&&<em className="message-read-state">{readByOther?<><CheckCheck size={11}/> Read</>:<><Check size={11}/> Sent</>}</em>}</time></div><p>{message.status==='removed_by_admin'?'Message removed by Nightjar moderation.':message.body||'Message unavailable.'}</p>{!mine&&message.status!=='removed_by_admin'&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
+            return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}{mine&&<em className="message-read-state">{readByOther?<><CheckCheck size={11}/> Read</>:<><Check size={11}/> Sent</>}</em>}</time></div>{message.collaborationId && <span className="direct-message-context"><Handshake size={10}/>{selected.collaborations?.find((item:any)=>item.id===message.collaborationId)?.title ?? 'Linked collaboration'}</span>}<p>{message.status==='removed_by_admin'?'Message removed by Nightjar moderation.':message.body||'Message unavailable.'}</p>{!mine&&message.status!=='removed_by_admin'&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
           }):<div className="people-empty"><MessageCircle size={17}/><strong>Conversation ready.</strong><span>Start with the work, expectations or next step. Protected material should stay in Nightjar’s controlled script tools.</span></div>}</div>
-          <div className="message-compose">{blocked&&<div className="messaging-blocked-note"><Ban size={13}/><span>{blockedByMe?'You blocked messages from this account. You can unblock them here when ready.':blockedByOther?'This account is not currently accepting private messages from you. Existing collaboration records remain intact.':'Private messaging is blocked for this conversation.'}</span></div>}<textarea value={body} maxLength={4000} disabled={blocked} onChange={(event)=>setBody(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey&&!blocked){event.preventDefault();void send();}}} placeholder="Write a private message…"/><div><small>{body.length}/4000 · Enter to send · Shift+Enter for a new line · do not paste full protected scripts</small><button className="primary-button" disabled={sending||blocked||!body.trim()} onClick={()=>void send()}><Send size={13}/>{sending?'Sending…':'Send'}</button></div></div>
+          <div className="message-compose">{blocked&&<div className="messaging-blocked-note"><Ban size={13}/><span>{blockedByMe?'You blocked messages from this account. You can unblock them here when ready.':blockedByOther?'This account is not currently accepting private messages from you. Existing collaboration records remain intact.':'Private messaging is blocked for this conversation.'}</span></div>}<textarea value={body} maxLength={4000} disabled={blocked} onChange={(event)=>setBody(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey&&!blocked){event.preventDefault();void send();}}} placeholder="Write a private message…"/><div><small>{body.length}/4000 · {activeCollaborationId ? 'linked to ' + (selected.collaborations?.find((item:any)=>item.id===activeCollaborationId)?.title ?? 'a Nightjar collaboration') + ' · ' : 'general thread · '}Enter to send · Shift+Enter for a new line · do not paste full protected scripts</small><button className="primary-button" disabled={sending||blocked||!body.trim()} onClick={()=>void send()}><Send size={13}/>{sending?'Sending…':'Send'}</button></div></div>
         </>:<div className="messaging-thread-empty"><MessageCircle size={22}/><strong>Select a conversation.</strong><span>Messages keep creative communication visible without changing rights, licences or manuscript permissions.</span></div>}
       </div>
     </div>
