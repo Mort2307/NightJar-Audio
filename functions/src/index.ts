@@ -2578,12 +2578,16 @@ const createNotification = async (userId: string, payload: Record<string, unknow
     safePayload.message = 'Someone commented on published work you are credited on.';
   }
 
-  const ref = accountRef(userId).collection('notifications').doc();
+  const dedupeKey = cleanText(payload.dedupeKey, 240);
+  const ref = dedupeKey
+    ? accountRef(userId).collection('notifications').doc(createHash('sha256').update(dedupeKey).digest('hex').slice(0, 40))
+    : accountRef(userId).collection('notifications').doc();
+  const { dedupeKey: _dedupeKey, ...persistedPayload } = safePayload as Record<string, unknown>;
   await ref.set({
-    ...safePayload,
+    ...persistedPayload,
     read: false,
     createdAt: FieldValue.serverTimestamp(),
-  });
+  }, { merge: Boolean(dedupeKey) });
 };
 
 export const moderateRelease = onCall({ region: REGION }, async (request) => {
@@ -4659,6 +4663,7 @@ export const setReleaseReaction = onCall({ region: REGION }, async (request) => 
       subtype:'release_reaction',
       title:'New reaction to published work',
       message:'A Listener reacted to ' + String(releaseData.title ?? 'a Nightjar release') + '.',
+      dedupeKey:'release-reaction:' + releaseId + ':' + identity.uid,
       releaseId,
       releaseTitle:String(releaseData.title ?? 'Nightjar release'),
       creatorName:String(releaseData.creatorName ?? ''),
