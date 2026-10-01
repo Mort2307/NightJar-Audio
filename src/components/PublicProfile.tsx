@@ -141,11 +141,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               ['Release credits', profile.creditedReleaseCount ?? 0],
               ['Collaborations', profile.completedCollaborations ?? 0],
             ]
-          : [
-              ['Followers', profile.followerCount ?? 0],
-              ['Following', profile.followingCount ?? 0],
-              ['Profile tags', profile.favouriteTags?.length ?? 0],
-            ]
+          : profileRole === 'artist'
+            ? [
+                ['Followers', profile.followerCount ?? 0],
+                ['Following', profile.followingCount ?? 0],
+                ['Portfolio pieces', profile.artistPortfolio?.length ?? 0],
+                ['Collaborations', profile.completedCollaborations ?? 0],
+              ]
+            : [
+                ['Followers', profile.followerCount ?? 0],
+                ['Following', profile.followingCount ?? 0],
+                ['Profile tags', profile.favouriteTags?.length ?? 0],
+              ]
   ) : [];
 
 
