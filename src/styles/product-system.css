@@ -2223,3 +2223,42 @@ textarea {
   gap:3px;
   margin-left:6px;
 }
+
+
+.profile-release-community-counts {
+  display:inline-flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-right:auto;
+  color:var(--nj-text-tertiary);
+}
+.profile-release-community-counts > span {
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  font-size:7px;
+}
+.creator-release-actions,
+.public-work-community-actions {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+}
+.active-community-action {
+  border-color:rgba(203,181,204,.3) !important;
+  background:rgba(126,78,113,.14) !important;
+  color:#eadce7 !important;
+}
+@media (max-width:620px) {
+  .profile-release-community-counts {
+    width:100%;
+    margin:0 0 2px;
+  }
+  .creator-release-actions > button,
+  .public-work-community-actions > button {
+    flex:1;
+    justify-content:center;
+  }
+}
