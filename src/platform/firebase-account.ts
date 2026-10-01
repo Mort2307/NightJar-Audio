@@ -12,6 +12,13 @@ export type NightjarAccountIdentity = {
   emailVerified: boolean;
 };
 
+export type ClosedBetaRegistrationStatus = {
+  closedBeta: boolean;
+  allowed: boolean;
+  temporaryAgeBypass: boolean;
+};
+
+const registrationStatusCall = httpsCallable<{ email: string }, ClosedBetaRegistrationStatus>(functions, 'closedBetaRegistrationStatus');
 const identityCall = httpsCallable<void, NightjarAccountIdentity>(functions, 'accountIdentity');
 const roleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; referralCode?: string }, { userId: string; role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; requestedProfessionalRole?: 'creator' | 'writer' | 'editor' | 'artist' | null; status: string }>(functions, 'chooseAccountRole');
 
@@ -54,6 +61,10 @@ const setActiveRoleCall = httpsCallable<{ role: 'listener' | NightjarProfessiona
 const stageRoleCall = httpsCallable<{ role?: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles?: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; referralCode?: string }, { role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; professionalRoles: NightjarProfessionalRole[]; staged: boolean }>(functions, 'stageRegistrationIntent');
 
 export const nightjarAccount = {
+  async registrationAccess(email: string) {
+    return (await registrationStatusCall({ email: email.trim() })).data;
+  },
+
   async identity() {
     const result = await identityCall();
     return result.data;
