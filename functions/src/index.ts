@@ -5297,10 +5297,31 @@ export const reportDirectMessage = onCall({ region: REGION }, async (request) =>
 export const adminListCommunityReports = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('communityReports').limit(1000).get();
-  const reports = snapshot.docs
+  const reports = (await Promise.all(snapshot.docs
     .filter((doc) => doc.data().status === 'open')
-    .map((doc) => ({ id:doc.id, ...doc.data(), createdAt:toIso(doc.data().createdAt) }))
-    .sort((a:any,b:any)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+    .map(async (doc) => {
+      const data = doc.data() ?? {};
+      const reporterUserId = cleanText(data.reporterUserId, 160);
+      const subjectUserId = cleanText(data.subjectUserId, 160);
+      const releaseId = cleanText(data.releaseId, 160);
+      const [reporter, subject, subjectAccount, release] = await Promise.all([
+        reporterUserId ? accountPresentation(reporterUserId) : Promise.resolve({ displayName:'Nightjar member', handle:null }),
+        subjectUserId ? accountPresentation(subjectUserId) : Promise.resolve({ displayName:'Nightjar member', handle:null }),
+        subjectUserId ? accountRef(subjectUserId).get() : Promise.resolve(null),
+        releaseId ? releaseRef(releaseId).get() : Promise.resolve(null),
+      ]);
+      return {
+        id:doc.id,
+        ...data,
+        reporterName:reporter.displayName,
+        reporterHandle:reporter.handle,
+        subjectName:subject.displayName,
+        subjectHandle:subject.handle,
+        subjectRole:subjectAccount?.data()?.role ?? null,
+        releaseTitle:release?.data()?.title ?? null,
+        createdAt:toIso(data.createdAt),
+      };
+    }))).sort((a:any,b:any)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
   return { reports };
 });
 
@@ -5339,6 +5360,32 @@ export const adminResolveCommunityReport = onCall({ region: REGION }, async (req
     resolvedBy:admin.uid,
     resolvedAt:FieldValue.serverTimestamp(),
   }, { merge:true });
+
+  const reporterUserId = cleanText(data.reporterUserId, 160);
+  const subjectUserId = cleanText(data.subjectUserId, 160);
+  if (reporterUserId) {
+    await createNotification(reporterUserId, {
+      type:'moderation',
+      subtype:'community_report_reviewed',
+      title:'Your Nightjar report was reviewed',
+      message:decision === 'remove'
+        ? 'Nightjar reviewed your report and removed the reported content.'
+        : 'Nightjar reviewed your report. No content removal was applied.',
+      reportId,
+    });
+  }
+  if (decision === 'remove' && subjectUserId) {
+    await createNotification(subjectUserId, {
+      type:'moderation',
+      subtype:'community_content_removed',
+      title:'Nightjar moderation removed content',
+      message:data.type === 'direct_message'
+        ? 'A private message you sent was removed after Administrator review.'
+        : 'A public comment or reply you posted was removed after Administrator review.',
+      reportId,
+    });
+  }
+
   return { reportId, decision };
 });
 
