@@ -65,7 +65,7 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
         <div>
           <span className="mini-label">NIGHTJAR / SUPPORT GIFT</span>
           <h2>Send Nightjars</h2>
-          <p>Support {recipientName} · {roleLabel}</p>
+          <p>Support {recipientName} · {roleLabel(selectedRecipientRole)}</p>
         </div>
         <button className="icon-button" onClick={onClose} aria-label="Close Nightjar gift panel"><X size={18}/></button>
       </header>
@@ -83,6 +83,12 @@ export default function NightjarGiftPanel({ recipientUserId, recipientName, reci
         </div>
 
         {eligibleRoles.length > 1 && <label className="account-access-field"><span>Support them as</span><select value={targetRole} onChange={(event)=>setTargetRole(event.target.value)}>{eligibleRoles.map((role)=><option key={role} value={role}>{role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role === 'artist' ? 'Artist' : 'Writer'}</option>)}</select></label>}
+
+        {eligibleRoles.length > 1 && <div className="nightjar-recipient-role-picker">
+          <span className="mini-label">SUPPORT WHICH ROLE?</span>
+          <div>{eligibleRoles.map((role) => <button type="button" key={role} className={selectedRecipientRole === role ? 'selected' : ''} aria-pressed={selectedRecipientRole === role} onClick={() => setSelectedRecipientRole(role)}>{roleLabel(role)}</button>)}</div>
+          <small>Nightjars are credited one-to-one to the professional role you choose, even when one person has multiple Nightjar roles.</small>
+        </div>}
 
         <div className="nightjar-wallet-summary">
           <span>Your wallet</span>
