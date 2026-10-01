@@ -6387,9 +6387,11 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
   }, { merge:true });
 
   const currentRole = cleanText(accountSnapshot.data()?.role, 30);
-  const activeRole = currentRole && currentRole !== 'listener' && nextApproved.includes(currentRole as ProfessionalRole)
-    ? currentRole
-    : (nextApproved[0] ?? 'listener');
+  const activeRole = currentRole === 'listener'
+    ? 'listener'
+    : currentRole && nextApproved.includes(currentRole as ProfessionalRole)
+      ? currentRole
+      : (nextApproved[0] ?? 'listener');
   await accountRef(userId).set({
     approvedProfessionalRoles: nextApproved,
     pendingProfessionalRoles: accountPendingRoles,
