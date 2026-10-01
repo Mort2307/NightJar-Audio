@@ -213,9 +213,6 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
 
 export const myNightjarEarnings = onCall({ region: REGION }, async (request) => {
   const identity = await requireIdentity(request);
-  if (!professionalRolesFor(identity.account).length) {
-    throw new HttpsError('permission-denied', 'This Nightjar account does not have an approved professional role that can receive gifts.');
-  }
   const snapshot = await earningsRef(identity.uid).get();
   const data = snapshot.data() ?? {};
   return {
