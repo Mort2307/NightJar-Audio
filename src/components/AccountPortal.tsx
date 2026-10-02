@@ -78,8 +78,8 @@ export default function AccountPortal() {
         setLogoUrl(nextLogo);
         const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
         const touchIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
-        if (favicon) favicon.href = nextLogo ?? '/favicon.svg';
-        if (touchIcon) touchIcon.href = nextLogo ?? '/favicon.svg';
+        if (favicon) favicon.href = nextLogo ?? '/brand-logo';
+        if (touchIcon) touchIcon.href = nextLogo ?? '/brand-logo';
       }).catch(() => { /* static fallback remains available */ });
     };
 
@@ -123,7 +123,7 @@ export default function AccountPortal() {
 
   return <main className="account-portal-shell">
     <header className="account-portal-header">
-      <a href="/discover" className="account-portal-brand"><img className="account-portal-logo" src={logoUrl ?? "/favicon.svg"} alt="" /> Nightjar</a>
+      <a href="/discover" className="account-portal-brand"><img className="account-portal-logo" src={logoUrl ?? "/brand-logo"} alt="" /> Nightjar</a>
       <span>Secure account access</span>
     </header>
 

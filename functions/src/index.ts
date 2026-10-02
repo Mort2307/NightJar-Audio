@@ -1734,6 +1734,43 @@ export const approvedImage = onRequest({ region: REGION }, async (request, respo
   stream.pipe(response);
 });
 
+export const brandLogoImage = onRequest({ region: REGION }, async (_request, response) => {
+  const brandingSnapshot = await db.collection('settings').doc('branding').get();
+  const branding = brandingSnapshot.data() ?? {};
+  const assetId = cleanText(branding.logoAssetId, 160);
+
+  if (branding.logoStatus !== 'approved' || !assetId) {
+    response.redirect(302, '/favicon.svg');
+    return;
+  }
+
+  const assetSnapshot = await db.collection('imageAssets').doc(assetId).get();
+  const asset = assetSnapshot.data();
+  if (!asset || asset.status !== 'approved' || asset.kind !== 'brand_logo') {
+    response.redirect(302, '/favicon.svg');
+    return;
+  }
+
+  const storagePath = cleanText(asset.storagePath, 500);
+  if (!storagePath) {
+    response.redirect(302, '/favicon.svg');
+    return;
+  }
+
+  response.setHeader('Content-Type', cleanText(asset.contentType, 80) || 'application/octet-stream');
+  response.setHeader('Cache-Control', 'no-store,max-age=0,must-revalidate');
+  response.setHeader('Pragma', 'no-cache');
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+
+  const stream = getStorage().bucket().file(storagePath).createReadStream();
+  stream.on('error', () => {
+    if (!response.headersSent) response.redirect(302, '/favicon.svg');
+    else response.end();
+  });
+  stream.pipe(response);
+});
+
 export const getPendingImagePreview = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const assetId = cleanText((request.data as { assetId?: unknown } | undefined)?.assetId, 160);

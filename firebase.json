@@ -18,6 +18,13 @@
     "trailingSlash": false,
     "rewrites": [
       {
+        "source": "/brand-logo",
+        "function": {
+          "functionId": "brandLogoImage",
+          "region": "europe-west2"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
