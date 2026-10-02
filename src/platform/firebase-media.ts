@@ -19,7 +19,12 @@ const moderateCall = httpsCallable<{ assetId: string; decision: 'approved' | 're
 const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status: string; publicUrl: string | null; moderationNote: string | null }>(functions, 'getImageAssetStatus');
 const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string }>(functions, 'removeOwnedImageAsset');
 const removeAvatarCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileAvatar');
-const brandingCall = httpsCallable<void, { logoUrl: string | null; logoStatus: string | null }>(functions, 'getBranding');
+const brandingCall = httpsCallable<void, { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null }>(functions, 'getBranding');
+const syncBrandIconsCall = httpsCallable<{
+  icon192DataUrl: string;
+  icon512DataUrl: string;
+  maskable512DataUrl: string;
+}, { updated: boolean; version: number }>(functions, 'syncBrandIconVariants');
 const removeBrandLogoCall = httpsCallable<void, { removed: boolean }>(functions, 'removeBrandLogo');
 
 export const nightjarMedia = {
@@ -53,6 +58,10 @@ export const nightjarMedia = {
 
   async getBranding() {
     return (await brandingCall()).data;
+  },
+
+  async syncBrandIcons(input: { icon192DataUrl: string; icon512DataUrl: string; maskable512DataUrl: string }) {
+    return (await syncBrandIconsCall(input)).data;
   },
 
   async removeBrandLogo() {
