@@ -5306,7 +5306,7 @@ const calculateCreatorRate = (settings: CommercialSettings, activePaidSubscriber
 };
 
 export const creatorCompensationStatus = onCall({ region: REGION }, async (request) => {
-  const identity = await requireAccountRole(request, ['creator','admin']);
+  const identity = await requireAccountRole(request, ['admin']);
   const [settings, subscriptions] = await Promise.all([
     readCommercialSettings(),
     db.collection('subscriptions').where('status', '==', 'active').limit(5000).get(),
