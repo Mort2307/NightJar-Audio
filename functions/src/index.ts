@@ -1550,6 +1550,21 @@ const clearAssetFile = async (asset: Record<string, unknown>) => {
   try { await getStorage().bucket().file(storagePath).delete({ ignoreNotFound: true }); } catch { /* metadata remains for audit */ }
 };
 
+const decodeExactBrandPng = (dataUrl: unknown, expectedSize: number, label: string) => {
+  const match = String(dataUrl ?? '').match(/^data:image\/png;base64,(.+)$/s);
+  if (!match) throw new HttpsError('invalid-argument', label + ' must be a PNG data URL.');
+  const buffer = Buffer.from(match[1], 'base64');
+  const signature = buffer.length >= 24 && buffer.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]));
+  if (!signature || buffer.length > 4 * 1024 * 1024) throw new HttpsError('invalid-argument', label + ' is not a valid PNG.');
+  if (buffer.readUInt32BE(16) !== expectedSize || buffer.readUInt32BE(20) !== expectedSize) throw new HttpsError('invalid-argument', label + ' must be exactly ' + expectedSize + '×' + expectedSize + ' pixels.');
+  return buffer;
+};
+
+const clearBrandingIconFiles = async (branding: Record<string, unknown>) => {
+  const paths = [cleanText(branding.icon192Path,500),cleanText(branding.icon512Path,500),cleanText(branding.maskable512Path,500)].filter(Boolean);
+  await Promise.all(paths.map(async (path) => { try { await getStorage().bucket().file(path).delete({ignoreNotFound:true}); } catch { /* non-blocking cleanup */ } }));
+};
+
 export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -1722,6 +1737,7 @@ export const approvedImage = onRequest({ region: REGION }, async (request, respo
   }
 
   response.setHeader('Content-Type', cleanText(asset.contentType, 80) || 'application/octet-stream');
+  response.setHeader('Access-Control-Allow-Origin', '*');
   response.setHeader('Cache-Control', 'no-store,max-age=0');
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
@@ -1735,40 +1751,68 @@ export const approvedImage = onRequest({ region: REGION }, async (request, respo
 });
 
 export const brandLogoImage = onRequest({ region: REGION }, async (_request, response) => {
-  const brandingSnapshot = await db.collection('settings').doc('branding').get();
-  const branding = brandingSnapshot.data() ?? {};
-  const assetId = cleanText(branding.logoAssetId, 160);
-
-  if (branding.logoStatus !== 'approved' || !assetId) {
-    response.redirect(302, '/favicon.svg');
-    return;
-  }
-
-  const assetSnapshot = await db.collection('imageAssets').doc(assetId).get();
-  const asset = assetSnapshot.data();
-  if (!asset || asset.status !== 'approved' || asset.kind !== 'brand_logo') {
-    response.redirect(302, '/favicon.svg');
-    return;
-  }
-
-  const storagePath = cleanText(asset.storagePath, 500);
-  if (!storagePath) {
-    response.redirect(302, '/favicon.svg');
-    return;
-  }
-
-  response.setHeader('Content-Type', cleanText(asset.contentType, 80) || 'application/octet-stream');
-  response.setHeader('Cache-Control', 'no-store,max-age=0,must-revalidate');
-  response.setHeader('Pragma', 'no-cache');
-  response.setHeader('X-Content-Type-Options', 'nosniff');
-  response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-
-  const stream = getStorage().bucket().file(storagePath).createReadStream();
-  stream.on('error', () => {
-    if (!response.headersSent) response.redirect(302, '/favicon.svg');
-    else response.end();
-  });
+  const snap = await db.collection('settings').doc('branding').get();
+  const branding = snap.data() ?? {};
+  if (branding.logoStatus !== 'approved') { response.status(404).send('Nightjar logo not configured.'); return; }
+  const fallbackUrl = validPublicUrl(branding.logoUrl);
+  let assetId = cleanText(branding.logoAssetId,160);
+  if (!assetId && fallbackUrl) { try { assetId = cleanText(new URL(fallbackUrl).searchParams.get('assetId'),160); } catch {} }
+  if (!assetId) { if (fallbackUrl) response.redirect(302,fallbackUrl); else response.status(404).send('Nightjar logo not available.'); return; }
+  const assetSnap = await db.collection('imageAssets').doc(assetId).get();
+  const asset = assetSnap.data();
+  const storagePath = cleanText(asset?.storagePath,500);
+  if (!asset || asset.status !== 'approved' || asset.kind !== 'brand_logo' || !storagePath) { if (fallbackUrl) response.redirect(302,fallbackUrl); else response.status(404).send('Nightjar logo not available.'); return; }
+  response.setHeader('Content-Type', cleanText(asset.contentType,80) || 'application/octet-stream');
+  response.setHeader('Access-Control-Allow-Origin','*');
+  response.setHeader('Cache-Control','no-store,max-age=0,must-revalidate');
+  response.setHeader('Pragma','no-cache');
+  response.setHeader('X-Content-Type-Options','nosniff');
+  const stream=getStorage().bucket().file(storagePath).createReadStream();
+  stream.on('error',()=>{ if(!response.headersSent && fallbackUrl) response.redirect(302,fallbackUrl); else if(!response.headersSent) response.status(404).send('Nightjar logo not available.'); else response.end(); });
   stream.pipe(response);
+});
+
+const streamBrandingIcon = async (field: 'icon192Path'|'icon512Path'|'maskable512Path', response: any) => {
+  const snap=await db.collection('settings').doc('branding').get();
+  const branding=snap.data()??{};
+  const path=branding.logoStatus==='approved' ? cleanText(branding[field],500) : '';
+  if(!path){ response.status(404).send('Nightjar app icon not generated yet.'); return; }
+  response.setHeader('Content-Type','image/png');
+  response.setHeader('Cache-Control','no-store,max-age=0,must-revalidate');
+  response.setHeader('Pragma','no-cache');
+  response.setHeader('X-Content-Type-Options','nosniff');
+  const stream=getStorage().bucket().file(path).createReadStream();
+  stream.on('error',()=>{ if(!response.headersSent) response.status(404).send('Nightjar app icon not available.'); else response.end(); });
+  stream.pipe(response);
+};
+export const brandIcon192=onRequest({region:REGION},async(_r,res)=>{await streamBrandingIcon('icon192Path',res);});
+export const brandIcon512=onRequest({region:REGION},async(_r,res)=>{await streamBrandingIcon('icon512Path',res);});
+export const brandIconMaskable512=onRequest({region:REGION},async(_r,res)=>{await streamBrandingIcon('maskable512Path',res);});
+
+export const syncBrandIconVariants = onCall({region:REGION},async(request)=>{
+  const admin=requireAdminIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const icon192=decodeExactBrandPng(input.icon192DataUrl,192,'192px app icon');
+  const icon512=decodeExactBrandPng(input.icon512DataUrl,512,'512px app icon');
+  const maskable512=decodeExactBrandPng(input.maskable512DataUrl,512,'512px maskable app icon');
+  const ref=db.collection('settings').doc('branding');
+  const snap=await ref.get();
+  const branding=snap.data()??{};
+  if(branding.logoStatus!=='approved'||!validPublicUrl(branding.logoUrl)) throw new HttpsError('failed-precondition','Approve the Nightjar logo before generating install icons.');
+  await clearBrandingIconFiles(branding);
+  const source=cleanText(branding.logoAssetId,160)||'approved-logo';
+  const version=Date.now();
+  const icon192Path=`brand-icons/${source}/${version}-192.png`;
+  const icon512Path=`brand-icons/${source}/${version}-512.png`;
+  const maskable512Path=`brand-icons/${source}/${version}-maskable-512.png`;
+  const bucket=getStorage().bucket();
+  await Promise.all([
+    bucket.file(icon192Path).save(icon192,{resumable:false,contentType:'image/png',metadata:{cacheControl:'no-store,max-age=0'}}),
+    bucket.file(icon512Path).save(icon512,{resumable:false,contentType:'image/png',metadata:{cacheControl:'no-store,max-age=0'}}),
+    bucket.file(maskable512Path).save(maskable512,{resumable:false,contentType:'image/png',metadata:{cacheControl:'no-store,max-age=0'}}),
+  ]);
+  await ref.set({icon192Path,icon512Path,maskable512Path,iconVersion:version,iconSourceAssetId:cleanText(branding.logoAssetId,160)||null,iconsGeneratedBy:admin.uid,iconsGeneratedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  return {updated:true,version};
 });
 
 export const getPendingImagePreview = onCall({ region: REGION }, async (request) => {
@@ -1945,13 +1989,20 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
   } else if (asset.kind === 'brand_logo') {
     const brandingRef = db.collection('settings').doc('branding');
     const branding = await brandingRef.get();
-    const previousAssetId = cleanText(branding.data()?.logoAssetId, 160);
+    const previousBranding = branding.data() ?? {};
+    const previousAssetId = cleanText(previousBranding.logoAssetId, 160);
+    if (previousAssetId !== assetId) await clearBrandingIconFiles(previousBranding);
     await brandingRef.set({
       logoAssetId: assetId,
       logoUrl: url,
       logoStatus: 'approved',
       pendingLogoAssetId: null,
       pendingLogoStatus: null,
+      icon192Path: null,
+      icon512Path: null,
+      maskable512Path: null,
+      iconVersion: null,
+      iconSourceAssetId: null,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     if (previousAssetId && previousAssetId !== assetId) {
@@ -2147,6 +2198,8 @@ export const getBranding = onCall({ region: REGION }, async () => {
   return {
     logoUrl: data.logoStatus === 'approved' ? data.logoUrl ?? null : null,
     logoStatus: data.logoStatus ?? null,
+    installIconsReady: Boolean(data.icon192Path && data.icon512Path && data.maskable512Path),
+    iconVersion: data.iconVersion ?? null,
     pendingLogoAssetId: null,
   };
 });
@@ -2156,6 +2209,7 @@ export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
   const ref = db.collection('settings').doc('branding');
   const snapshot = await ref.get();
   const data = snapshot.data() ?? {};
+  await clearBrandingIconFiles(data);
   for (const assetId of [data.logoAssetId, data.pendingLogoAssetId]) {
     const cleanId = cleanText(assetId, 160);
     if (!cleanId) continue;
@@ -2171,6 +2225,11 @@ export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
     logoStatus: null,
     pendingLogoAssetId: null,
     pendingLogoStatus: null,
+    icon192Path: null,
+    icon512Path: null,
+    maskable512Path: null,
+    iconVersion: null,
+    iconSourceAssetId: null,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   return { removed: true };
