@@ -1,5 +1,5 @@
-const CACHE = 'nightjar-shell-v3';
-const SHELL = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest'];
+const CACHE = 'nightjar-shell-v4';
+const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -15,7 +15,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  const isStaticAsset = url.pathname.startsWith('/assets/') || url.pathname === '/favicon.svg' || url.pathname === '/manifest.webmanifest';
+  const isStaticAsset = url.pathname.startsWith('/assets/');
   const isNavigation = request.mode === 'navigate';
 
   if (isStaticAsset) {
