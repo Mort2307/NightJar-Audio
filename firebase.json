@@ -25,6 +25,27 @@
         }
       },
       {
+        "source": "/brand-icon-192.png",
+        "function": {
+          "functionId": "brandIcon192",
+          "region": "europe-west2"
+        }
+      },
+      {
+        "source": "/brand-icon-512.png",
+        "function": {
+          "functionId": "brandIcon512",
+          "region": "europe-west2"
+        }
+      },
+      {
+        "source": "/brand-icon-maskable-512.png",
+        "function": {
+          "functionId": "brandIconMaskable512",
+          "region": "europe-west2"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -44,7 +65,7 @@
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "public,max-age=3600"
+            "value": "no-store,max-age=0,must-revalidate"
           }
         ]
       },
