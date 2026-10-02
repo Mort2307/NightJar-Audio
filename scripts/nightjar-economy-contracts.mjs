@@ -8,6 +8,8 @@ const functions = read('functions/src/index.ts');
 const giftUi = read('src/components/NightjarGiftPanel.tsx');
 const rolesUi = read('src/components/ProfessionalRoleManager.tsx');
 const accountUi = read('src/components/AccountAccess.tsx');
+const commercialUi = read('src/components/CreatorCapacityBank.tsx');
+const commercialClient = read('src/platform/firebase-commercial.ts');
 
 const checks = [
   ['Nightjar creator value is exactly £1', gifts.includes('const NIGHTJAR_VALUE_PENCE = 100')],
