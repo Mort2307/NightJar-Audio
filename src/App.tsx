@@ -80,6 +80,7 @@ const CollaborationHub = lazy(() => import('./components/CollaborationHub'));
 const WriterRightsPanel = lazy(() => import('./components/WriterRightsPanel'));
 const ListenerLibrary = lazy(() => import('./components/ListenerLibrary'));
 const CreatorCompensationCard = lazy(() => import('./components/CreatorCompensationCard'));
+const CreatorCapacityBank = lazy(() => import('./components/CreatorCapacityBank'));
 const ScriptMarketplace = lazy(() => import('./components/ScriptMarketplace'));
 const ReleaseReviews = lazy(() => import('./components/ReleaseReviews'));
 const CreatorSuggestionBox = lazy(() => import('./components/CreatorSuggestionBox'));
@@ -366,14 +367,31 @@ function App() {
   const [commercialOverview, setCommercialOverview] = useState<CommercialOverview | null>(null);
   const [nightjarPayoutOverview, setNightjarPayoutOverview] = useState<AdminNightjarPayoutOverview | null>(null);
   const [commercialSettings, setCommercialSettings] = useState<CommercialSettings>({
-    planningMonthlyPricePence: 500,
-    creatorPoolPercent: null,
-    reservePercent: null,
+    planningMonthlyPricePence: 699,
+    creatorPoolPercent: 50,
+    companyProfitPercent: 30,
+    businessFundPercent: 20,
+    planningEligibleNetPercent: 66.33,
+    safeCreatorUtilizationPercent: 70,
+    revenueAveragingDays: 90,
+    subscriberStressTestPercent: 20,
+    minimumBankedCreatorSlots: 2,
+    automaticCreatorSlotOpening: false,
+    creatorSlotRecommendations: true,
+    reservePercent: 20,
     payoutCadence: 'Monthly',
     eligibleListeningDefinition: null,
     compensationModel: 'capped_equal_rate',
-    creatorMonthlyCapPence: null,
-    creatorRateBands: [],
+    creatorMonthlyCapPence: 300000,
+    creatorRateBands: [
+      { minPaidSubscribers: 0, monthlyRatePence: 0 },
+      { minPaidSubscribers: 500, monthlyRatePence: 25000 },
+      { minPaidSubscribers: 1000, monthlyRatePence: 50000 },
+      { minPaidSubscribers: 2500, monthlyRatePence: 75000 },
+      { minPaidSubscribers: 5000, monthlyRatePence: 150000 },
+      { minPaidSubscribers: 7500, monthlyRatePence: 225000 },
+      { minPaidSubscribers: 10000, monthlyRatePence: 300000 },
+    ],
     creatorEligibilityDefinition: null,
     popularityAffectsBaseRate: false,
     tipsEnabled: false,
@@ -381,6 +399,7 @@ function App() {
     listenerSubscriptionUrl: null,
   });
   const [commercialSaving, setCommercialSaving] = useState(false);
+  const [creatorSlotBusyUserId, setCreatorSlotBusyUserId] = useState<string | null>(null);
   const [listeningAccess, setListeningAccess] = useState<{
     role:string|null;
     subscribed:boolean;
@@ -2276,6 +2295,50 @@ function App() {
     finally { setCommercialSaving(false); }
   };
 
+  const togglePaidCreatorSlot = async (userId: string, active: boolean) => {
+    if (!canAdmin || creatorSlotBusyUserId) return;
+    setCreatorSlotBusyUserId(userId);
+    try {
+      if (demoMode) {
+        setCommercialOverview((current) => {
+          if (!current) return current;
+          const creatorSlots = current.creatorSlots.map((creator) => creator.userId === userId ? { ...creator, paidCreatorSlotActive: active } : creator);
+          const paidCreatorCount = creatorSlots.filter((creator) => creator.paidCreatorSlotActive).length;
+          const plannedCreatorPayoutPence = paidCreatorCount * current.standardMonthlyCreatorRatePence;
+          const unusedCreatorCapacityPence = Math.max(0, current.creatorCapacityPence - plannedCreatorPayoutPence);
+          const bankedCreatorCapacity = Math.max(0, current.theoreticalCreatorCapacity - paidCreatorCount);
+          const safeReleaseSlots = Math.max(0, current.safeCreatorCapacity - paidCreatorCount);
+          const creatorBudgetUtilizationPercent = current.creatorCapacityPence > 0 ? Math.round((plannedCreatorPayoutPence / current.creatorCapacityPence) * 10000) / 100 : 0;
+          return {
+            ...current,
+            creatorSlots,
+            paidCreatorCount,
+            plannedCreatorPayoutPence,
+            unusedCreatorCapacityPence,
+            growthAndStabilityFundContributionPence: current.coreBusinessFundPence + unusedCreatorCapacityPence,
+            bankedCreatorCapacity,
+            safeReleaseSlots,
+            creatorBudgetUtilizationPercent,
+            stressTestPass: plannedCreatorPayoutPence <= current.stressCreatorCapacityPence,
+            nextCreatorRecommended: paidCreatorCount + 1 <= current.safeCreatorCapacity
+              && Math.max(0, current.theoreticalCreatorCapacity - (paidCreatorCount + 1)) >= commercialSettings.minimumBankedCreatorSlots
+              && (paidCreatorCount + 1) * current.standardMonthlyCreatorRatePence <= current.stressCreatorCapacityPence,
+          };
+        });
+        notify(active ? 'Demo paid Creator slot released.' : 'Demo Creator slot returned to the bank.');
+        return;
+      }
+      const data = await nightjarCommercial.setCreatorPaidSlot(userId, active);
+      setCommercialOverview(data.overview);
+      setCommercialSettings(data.overview.settings);
+      notify(active ? 'Paid Creator slot released.' : 'Creator slot returned to the bank.');
+    } catch (error: any) {
+      notify(error?.message || 'Creator slot could not be changed safely.');
+    } finally {
+      setCreatorSlotBusyUserId(null);
+    }
+  };
+
   const openAdminPeople = (nextRole: 'listener' | 'creator' | 'writer' | 'editor' | 'artist' | 'admin') => {
     if (!canAdmin) return;
     setAdminPanel(null);
@@ -3780,7 +3843,11 @@ function App() {
     <div className="admin-modal-stat"><span>Planning price</span><strong>{formatMoneyPence(commercialSettings.planningMonthlyPricePence)}</strong></div>
     <div className="admin-modal-stat"><span>Live subscriptions</span><strong>{commercialOverview?.subscriptions.active ?? 0}</strong></div>
     <div className="admin-modal-stat"><span>Confirmed gross MRR</span><strong>{formatMoneyPence(commercialOverview?.confirmedGrossMrrPence ?? 0)}</strong></div>
+    <div className="admin-modal-stat"><span>Eligible net revenue</span><strong>{formatMoneyPence(commercialOverview?.eligibleNetRevenuePence ?? 0)}</strong></div>
   </div>
+  <Suspense fallback={<div className="people-empty">Loading Creator Capacity Bank…</div>}>
+    <CreatorCapacityBank overview={commercialOverview} settings={commercialSettings} busyUserId={creatorSlotBusyUserId} onTogglePaidSlot={(userId, active)=>void togglePaidCreatorSlot(userId, active)} />
+  </Suspense>
   <section className="nightjar-admin-payout-panel">
     <div className="subscription-finance-heading">
       <div><span className="mini-label">NIGHTJAR SUPPORT GIFTS</span><h3>Gift liabilities and creator payout readiness</h3></div>
@@ -3799,9 +3866,18 @@ function App() {
   </section>
   <div className="commercial-edit-grid">
     <label>Planning monthly price (£)<input type="number" min="0" step="0.01" value={commercialSettings.planningMonthlyPricePence == null ? '' : commercialSettings.planningMonthlyPricePence / 100} onChange={(e)=>setCommercialSettings((s)=>({...s,planningMonthlyPricePence:e.target.value===''?null:Math.round(Number(e.target.value)*100)}))}/></label>
-    <label>Standard creator monthly cap (£)<input type="number" min="0" step="1" value={commercialSettings.creatorMonthlyCapPence == null ? '' : commercialSettings.creatorMonthlyCapPence / 100} onChange={(e)=>setCommercialSettings((s)=>({...s,creatorMonthlyCapPence:e.target.value===''?null:Math.round(Number(e.target.value)*100)}))} placeholder="Leave unset until research is complete"/></label>
-    <label>Operating reserve (%)<input type="number" min="0" max="100" step="0.01" value={commercialSettings.reservePercent ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,reservePercent:e.target.value===''?null:Number(e.target.value)}))}/></label>
+    <label>Current creator monthly cap (£)<input type="number" min="0" step="1" value={commercialSettings.creatorMonthlyCapPence == null ? '' : commercialSettings.creatorMonthlyCapPence / 100} onChange={(e)=>setCommercialSettings((s)=>({...s,creatorMonthlyCapPence:e.target.value===''?null:Math.round(Number(e.target.value)*100)}))}/></label>
+    <label>Creator compensation ceiling (%)<input type="number" min="0" max="100" step="0.01" value={commercialSettings.creatorPoolPercent} onChange={(e)=>setCommercialSettings((s)=>({...s,creatorPoolPercent:Number(e.target.value)}))}/></label>
+    <label>Company / profit allocation (%)<input type="number" min="0" max="100" step="0.01" value={commercialSettings.companyProfitPercent} onChange={(e)=>setCommercialSettings((s)=>({...s,companyProfitPercent:Number(e.target.value)}))}/></label>
+    <label>Core business fund (%)<input type="number" min="0" max="100" step="0.01" value={commercialSettings.businessFundPercent} onChange={(e)=>setCommercialSettings((s)=>({...s,businessFundPercent:Number(e.target.value),reservePercent:Number(e.target.value)}))}/></label>
+    <label>Planning eligible-net factor (%)<input type="number" min="1" max="100" step="0.01" value={commercialSettings.planningEligibleNetPercent} onChange={(e)=>setCommercialSettings((s)=>({...s,planningEligibleNetPercent:Number(e.target.value)}))}/></label>
+    <label>Maximum safe Creator utilisation (%)<input type="number" min="1" max="100" step="0.01" value={commercialSettings.safeCreatorUtilizationPercent} onChange={(e)=>setCommercialSettings((s)=>({...s,safeCreatorUtilizationPercent:Number(e.target.value)}))}/></label>
+    <label>Rolling revenue average (days)<input type="number" min="1" max="365" step="1" value={commercialSettings.revenueAveragingDays} onChange={(e)=>setCommercialSettings((s)=>({...s,revenueAveragingDays:Math.max(1,Math.round(Number(e.target.value)||1))}))}/></label>
+    <label>Subscriber / revenue stress test (%)<input type="number" min="0" max="90" step="0.01" value={commercialSettings.subscriberStressTestPercent} onChange={(e)=>setCommercialSettings((s)=>({...s,subscriberStressTestPercent:Number(e.target.value)}))}/></label>
+    <label>Minimum Creator slots kept in bank<input type="number" min="0" max="100" step="1" value={commercialSettings.minimumBankedCreatorSlots} onChange={(e)=>setCommercialSettings((s)=>({...s,minimumBankedCreatorSlots:Math.max(0,Math.round(Number(e.target.value)||0))}))}/></label>
     <label>Payout cadence<input value={commercialSettings.payoutCadence ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,payoutCadence:e.target.value||null}))} placeholder="e.g. Monthly"/></label>
+    <p className="panel-note commercial-span-two"><strong>Allocation rule:</strong> Creator compensation + company/profit + core business fund must total 100%. Unused Creator capacity rolls into the Nightjar Growth & Stability Fund. The planning eligible-net factor is only used where the payment provider has not supplied a confirmed net settlement amount.</p>
+    <label className="rights-check commercial-span-two"><input type="checkbox" checked={commercialSettings.creatorSlotRecommendations} onChange={(e)=>setCommercialSettings((s)=>({...s,creatorSlotRecommendations:e.target.checked}))}/> Show safe paid-Creator-slot recommendations. Slot release always remains manual.</label>
     <label className="commercial-span-two">Listener subscription checkout URL<input type="url" value={commercialSettings.listenerSubscriptionUrl ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,listenerSubscriptionUrl:e.target.value||null}))} placeholder="https://your-real-payment-provider.example/subscribe"/></label>
     <p className="panel-note commercial-span-two">Nightjar only shows a Subscribe action when this is a real configured http/https checkout URL. Leave it blank until your billing provider is genuinely ready.</p>
     <label className="commercial-span-two">Creator eligibility definition<textarea value={commercialSettings.creatorEligibilityDefinition ?? ''} onChange={(e)=>setCommercialSettings((s)=>({...s,creatorEligibilityDefinition:e.target.value||null}))} placeholder="Define fulfilled contracted work and eligibility without using popularity."/></label>
@@ -3820,18 +3896,20 @@ function App() {
   </div>
   <button className="primary-button" disabled={commercialSaving} onClick={()=>void saveCommercialControls()}>{commercialSaving?'Saving…':'Save commercial controls'}</button>
   <div className="admin-formula">
-    <div><b>01</b><strong>Count confirmed paying subscriptions, not free/trial accounts.</strong></div>
-    <div><b>02</b><strong>Apply the published subscriber band to every eligible contracted Creator.</strong></div>
-    <div><b>03</b><strong>Limit the standard rate at the configured monthly cap.</strong></div>
-    <div><b>04</b><strong>Listening performance stays analytics/discovery data and never increases or decreases the standard base rate.</strong></div>
+    <div><b>01</b><strong>Establish Eligible Net Revenue after taxes, processor costs, refunds and chargebacks where confirmed settlement data exists.</strong></div>
+    <div><b>02</b><strong>Allocate up to {commercialSettings.creatorPoolPercent}% to Creator compensation, {commercialSettings.companyProfitPercent}% to company/profit and {commercialSettings.businessFundPercent}% to the core Nightjar fund.</strong></div>
+    <div><b>03</b><strong>Apply the subscriber payout band equally, capped at {formatMoneyPence(commercialSettings.creatorMonthlyCapPence)} per paid Creator.</strong></div>
+    <div><b>04</b><strong>Never automatically fill capacity: keep at least {commercialSettings.minimumBankedCreatorSlots} Creator slots banked and require the rolling-revenue and downturn checks before recommending expansion.</strong></div>
   </div>
-  <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>CONFIRMED VS PLANNING</strong><span>Subscriber bands and the cap remain editable until research is complete. Confirmed MRR only uses real billing records; Nightjar does not invent revenue or payouts.</span></div></div>
+  <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>CONFIRMED VS PLANNING</strong><span>Where a processor has not supplied confirmed net settlement values, Nightjar clearly labels the eligible-net figure as a conservative planning estimate. Paid Creator slot activation is always manual and is also checked by the backend.</span></div></div>
 </div>}
 {adminPanel === 'economics' && <div>
   <div className="admin-modal-grid">
     <div className="admin-modal-stat"><span>Launch reference</span><strong>{formatMoneyPence(commercialSettings.planningMonthlyPricePence)}</strong></div>
     <div className="admin-modal-stat"><span>Standard-rate cap</span><strong>{formatMoneyPence(commercialSettings.creatorMonthlyCapPence)}</strong></div>
-    <div className="admin-modal-stat"><span>Reserve</span><strong>{commercialSettings.reservePercent == null ? 'Not set' : commercialSettings.reservePercent + '%'}</strong></div>
+    <div className="admin-modal-stat"><span>Creator ceiling</span><strong>{commercialSettings.creatorPoolPercent}%</strong></div>
+    <div className="admin-modal-stat"><span>Company / profit</span><strong>{commercialSettings.companyProfitPercent}%</strong></div>
+    <div className="admin-modal-stat"><span>Core business fund</span><strong>{commercialSettings.businessFundPercent}%</strong></div>
   </div>
   <div className="admin-formula">
     <div><b>01</b><strong>Confirmed paid subscriptions</strong></div>
