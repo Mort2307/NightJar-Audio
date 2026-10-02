@@ -8,6 +8,8 @@ const functions = read('functions/src/index.ts');
 const giftUi = read('src/components/NightjarGiftPanel.tsx');
 const rolesUi = read('src/components/ProfessionalRoleManager.tsx');
 const accountUi = read('src/components/AccountAccess.tsx');
+const commercialUi = read('src/components/CreatorCapacityBank.tsx');
+const commercialClient = read('src/platform/firebase-commercial.ts');
 
 const checks = [
   ['Nightjar creator value is exactly £1', gifts.includes('const NIGHTJAR_VALUE_PENCE = 100')],
@@ -32,6 +34,21 @@ const checks = [
   ['signup supports multiple professional selections', accountUi.includes('registrationRoles') && accountUi.includes("['listener', ...registrationRoles]")],
   ['gift UI lets multi-role recipients choose target profession', giftUi.includes('eligibleRoles.length > 1') && giftUi.includes('targetRole') && giftUi.includes('recipientRole: targetRole')],
   ['role manager can add multiple professions', rolesUi.includes('setSelected((items)=>') && rolesUi.includes('applyForProfessionalRoles(selected')],
+  ['creator compensation defaults to 50 percent', functions.includes('creatorPoolPercent') && functions.includes(': 50')],
+  ['company profit allocation defaults to 30 percent', functions.includes('companyProfitPercent') && functions.includes(': 30')],
+  ['core business fund defaults to 20 percent', functions.includes('businessFundPercent') && functions.includes(': 20')],
+  ['commercial allocations must total 100 percent', functions.includes('allocations must total 100%')],
+  ['current Creator monthly cap defaults to £3,000', functions.includes('creatorMonthlyCapPence') && functions.includes(': 300000')],
+  ['safe Creator utilisation defaults to 70 percent', functions.includes('safeCreatorUtilizationPercent') && functions.includes(': 70')],
+  ['Creator revenue uses a 90 day rolling window', functions.includes('revenueAveragingDays') && functions.includes(': 90')],
+  ['Creator capacity includes a 20 percent downturn stress test', functions.includes('subscriberStressTestPercent') && functions.includes(': 20')],
+  ['at least two Creator slots are kept banked by default', functions.includes('minimumBankedCreatorSlots') && functions.includes(': 2')],
+  ['paid Creator slots never open automatically', functions.includes('automaticCreatorSlotOpening: false')],
+  ['unsafe paid Creator slot activation is rejected server-side', functions.includes('setCreatorPaidSlotStatus') && functions.includes('safe Creator payroll capacity') && functions.includes('required banked Creator headroom')],
+  ['unused Creator capacity rolls into Nightjar growth fund', functions.includes('growthAndStabilityFundContributionPence') && functions.includes('unusedCreatorCapacityPence')],
+  ['Creator Capacity Bank exposes theoretical safe and banked capacity', commercialUi.includes('Theoretical capacity') && commercialUi.includes('Safe active capacity') && commercialUi.includes('Creator headroom in bank')],
+  ['Creator paid-slot controls remain manual in the admin UI', commercialUi.includes('Release paid slot') && commercialUi.includes('Automatic slot opening is disabled')],
+  ['commercial client exposes guarded paid-slot mutation', commercialClient.includes('setCreatorPaidSlotStatus') && commercialClient.includes('setCreatorPaidSlot')],
 ];
 
 const failed = checks.filter(([, pass]) => !pass);

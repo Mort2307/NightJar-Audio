@@ -2290,7 +2290,16 @@ type CreatorRateBand = {
 
 type CommercialSettings = {
   planningMonthlyPricePence: number | null;
-  creatorPoolPercent: number | null;
+  creatorPoolPercent: number;
+  companyProfitPercent: number;
+  businessFundPercent: number;
+  planningEligibleNetPercent: number;
+  safeCreatorUtilizationPercent: number;
+  revenueAveragingDays: number;
+  subscriberStressTestPercent: number;
+  minimumBankedCreatorSlots: number;
+  automaticCreatorSlotOpening: false;
+  creatorSlotRecommendations: boolean;
   reservePercent: number | null;
   payoutCadence: string | null;
   eligibleListeningDefinition: string | null;
@@ -2304,31 +2313,71 @@ type CommercialSettings = {
   listenerSubscriptionUrl: string | null;
 };
 
+const DEFAULT_CREATOR_RATE_BANDS: CreatorRateBand[] = [
+  { minPaidSubscribers: 0, monthlyRatePence: 0 },
+  { minPaidSubscribers: 500, monthlyRatePence: 25000 },
+  { minPaidSubscribers: 1000, monthlyRatePence: 50000 },
+  { minPaidSubscribers: 2500, monthlyRatePence: 75000 },
+  { minPaidSubscribers: 5000, monthlyRatePence: 150000 },
+  { minPaidSubscribers: 7500, monthlyRatePence: 225000 },
+  { minPaidSubscribers: 10000, monthlyRatePence: 300000 },
+];
+
 const readCommercialSettings = async (): Promise<CommercialSettings> => {
   const snapshot = await db.collection('settings').doc('commercial').get();
   const data = snapshot.data() ?? {};
+  const creatorPoolPercent = typeof data.creatorPoolPercent === 'number' ? Math.max(0, Math.min(100, data.creatorPoolPercent)) : 50;
+  const companyProfitPercent = typeof data.companyProfitPercent === 'number' ? Math.max(0, Math.min(100, data.companyProfitPercent)) : 30;
+  const businessFundPercent = typeof data.businessFundPercent === 'number'
+    ? Math.max(0, Math.min(100, data.businessFundPercent))
+    : typeof data.reservePercent === 'number'
+      ? Math.max(0, Math.min(100, data.reservePercent))
+      : 20;
+  const storedBands = Array.isArray(data.creatorRateBands)
+    ? data.creatorRateBands
+      .map((item: any) => ({
+        minPaidSubscribers: Math.max(0, Math.round(Number(item?.minPaidSubscribers ?? 0))),
+        monthlyRatePence: Math.max(0, Math.round(Number(item?.monthlyRatePence ?? 0))),
+      }))
+      .filter((item: CreatorRateBand) => Number.isFinite(item.minPaidSubscribers) && Number.isFinite(item.monthlyRatePence))
+      .sort((a: CreatorRateBand, b: CreatorRateBand) => a.minPaidSubscribers - b.minPaidSubscribers)
+      .slice(0, 24)
+    : [];
+
   return {
     planningMonthlyPricePence: typeof data.planningMonthlyPricePence === 'number'
       ? data.planningMonthlyPricePence
       : snapshot.exists && Object.prototype.hasOwnProperty.call(data, 'planningMonthlyPricePence')
         ? null
-        : 500,
-    creatorPoolPercent: typeof data.creatorPoolPercent === 'number' ? data.creatorPoolPercent : null,
-    reservePercent: typeof data.reservePercent === 'number' ? data.reservePercent : null,
-    payoutCadence: data.payoutCadence ? String(data.payoutCadence) : null,
+        : 699,
+    creatorPoolPercent,
+    companyProfitPercent,
+    businessFundPercent,
+    planningEligibleNetPercent: typeof data.planningEligibleNetPercent === 'number'
+      ? Math.max(1, Math.min(100, data.planningEligibleNetPercent))
+      : 66.33,
+    safeCreatorUtilizationPercent: typeof data.safeCreatorUtilizationPercent === 'number'
+      ? Math.max(1, Math.min(100, data.safeCreatorUtilizationPercent))
+      : 70,
+    revenueAveragingDays: typeof data.revenueAveragingDays === 'number'
+      ? Math.max(1, Math.min(365, Math.round(data.revenueAveragingDays)))
+      : 90,
+    subscriberStressTestPercent: typeof data.subscriberStressTestPercent === 'number'
+      ? Math.max(0, Math.min(90, data.subscriberStressTestPercent))
+      : 20,
+    minimumBankedCreatorSlots: typeof data.minimumBankedCreatorSlots === 'number'
+      ? Math.max(0, Math.min(100, Math.round(data.minimumBankedCreatorSlots)))
+      : 2,
+    automaticCreatorSlotOpening: false,
+    creatorSlotRecommendations: data.creatorSlotRecommendations !== false,
+    reservePercent: businessFundPercent,
+    payoutCadence: data.payoutCadence ? String(data.payoutCadence) : 'Monthly',
     eligibleListeningDefinition: data.eligibleListeningDefinition ? String(data.eligibleListeningDefinition) : null,
-    compensationModel: data.compensationModel === 'capped_equal_rate' ? 'capped_equal_rate' : 'capped_equal_rate',
-    creatorMonthlyCapPence: typeof data.creatorMonthlyCapPence === 'number' ? Math.max(0, Math.round(data.creatorMonthlyCapPence)) : null,
-    creatorRateBands: Array.isArray(data.creatorRateBands)
-      ? data.creatorRateBands
-        .map((item: any) => ({
-          minPaidSubscribers: Math.max(0, Math.round(Number(item?.minPaidSubscribers ?? 0))),
-          monthlyRatePence: Math.max(0, Math.round(Number(item?.monthlyRatePence ?? 0))),
-        }))
-        .filter((item: CreatorRateBand) => Number.isFinite(item.minPaidSubscribers) && Number.isFinite(item.monthlyRatePence))
-        .sort((a: CreatorRateBand, b: CreatorRateBand) => a.minPaidSubscribers - b.minPaidSubscribers)
-        .slice(0, 24)
-      : [],
+    compensationModel: 'capped_equal_rate',
+    creatorMonthlyCapPence: typeof data.creatorMonthlyCapPence === 'number'
+      ? Math.max(0, Math.round(data.creatorMonthlyCapPence))
+      : 300000,
+    creatorRateBands: storedBands.length ? storedBands : DEFAULT_CREATOR_RATE_BANDS,
     creatorEligibilityDefinition: data.creatorEligibilityDefinition ? String(data.creatorEligibilityDefinition) : null,
     popularityAffectsBaseRate: false,
     tipsEnabled: data.tipsEnabled === true,
@@ -2337,12 +2386,11 @@ const readCommercialSettings = async (): Promise<CommercialSettings> => {
   };
 };
 
-export const commercialOverview = onCall({ region: REGION }, async (request) => {
-  requireAdminIdentity(request);
-  const [settings, subscriptions, creators] = await Promise.all([
+const buildCommercialOverview = async (writeSnapshot: boolean) => {
+  const [settings, subscriptions, accounts] = await Promise.all([
     readCommercialSettings(),
     db.collection('subscriptions').limit(5000).get(),
-    db.collection('accounts').where('role', '==', 'creator').limit(1000).get(),
+    db.collection('accounts').limit(2000).get(),
   ]);
 
   let active = 0;
@@ -2350,6 +2398,8 @@ export const commercialOverview = onCall({ region: REGION }, async (request) => 
   let pastDue = 0;
   let activePaidSubscribers = 0;
   let confirmedGrossMrrPence = 0;
+  let eligibleNetRevenuePence = 0;
+  let confirmedEligibleNetSubscriptionCount = 0;
   let trialPotentialPence = 0;
   let pastDueAtRiskPence = 0;
   const fallbackMonthlyPricePence = Math.max(0, Math.round(settings.planningMonthlyPricePence ?? 0));
@@ -2360,6 +2410,9 @@ export const commercialOverview = onCall({ region: REGION }, async (request) => 
     const confirmedAmount = typeof data.confirmedMonthlyAmountPence === 'number'
       ? Math.max(0, Math.round(data.confirmedMonthlyAmountPence))
       : null;
+    const confirmedEligibleNetAmount = typeof data.confirmedEligibleNetMonthlyAmountPence === 'number'
+      ? Math.max(0, Math.round(data.confirmedEligibleNetMonthlyAmountPence))
+      : null;
     const planningAmount = confirmedAmount ?? fallbackMonthlyPricePence;
 
     if (status === 'active') {
@@ -2367,6 +2420,12 @@ export const commercialOverview = onCall({ region: REGION }, async (request) => 
       if (confirmedAmount != null && confirmedAmount > 0) {
         activePaidSubscribers += 1;
         confirmedGrossMrrPence += confirmedAmount;
+        if (confirmedEligibleNetAmount != null) {
+          eligibleNetRevenuePence += Math.min(confirmedAmount, confirmedEligibleNetAmount);
+          confirmedEligibleNetSubscriptionCount += 1;
+        } else {
+          eligibleNetRevenuePence += Math.round(confirmedAmount * (settings.planningEligibleNetPercent / 100));
+        }
       }
     } else if (status === 'trialing') {
       trialing += 1;
@@ -2377,14 +2436,88 @@ export const commercialOverview = onCall({ region: REGION }, async (request) => 
     }
   }
 
-  const activeCreatorCount = creators.docs.filter((doc) => doc.data().status === 'active').length;
+  const activeCreatorDocs = accounts.docs.filter((doc) => {
+    const data = doc.data();
+    return data.status === 'active' && professionalRolesForAccount(data).includes('creator');
+  });
+  const activeCreatorCount = activeCreatorDocs.length;
+  const paidCreatorDocs = activeCreatorDocs.filter((doc) => doc.data().paidCreatorSlotActive === true);
+  const paidCreatorCount = paidCreatorDocs.length;
   const standardMonthlyCreatorRatePence = calculateCreatorRate(settings, activePaidSubscribers);
-  const plannedCreatorPayoutPence = standardMonthlyCreatorRatePence * activeCreatorCount;
-  const reservePence = settings.reservePercent == null
-    ? 0
-    : Math.max(0, Math.round(confirmedGrossMrrPence * (settings.reservePercent / 100)));
-  const planningBalanceBeforeFeesTaxPence =
-    confirmedGrossMrrPence - plannedCreatorPayoutPence - reservePence;
+  const plannedCreatorPayoutPence = standardMonthlyCreatorRatePence * paidCreatorCount;
+
+  const dateKey = londonDateKey();
+  const historySnapshot = await db.collection('commercialSnapshots')
+    .orderBy('dateKey', 'desc')
+    .limit(Math.min(365, Math.max(1, settings.revenueAveragingDays)))
+    .get();
+  const historyValues = historySnapshot.docs
+    .map((doc) => doc.data())
+    .filter((item) => String(item.dateKey ?? '') !== dateKey)
+    .map((item) => Math.max(0, Math.round(Number(item.eligibleNetRevenuePence ?? 0))))
+    .filter((value) => Number.isFinite(value));
+  const rollingValues = [eligibleNetRevenuePence, ...historyValues].slice(0, settings.revenueAveragingDays);
+  const rollingAverageEligibleNetRevenuePence = rollingValues.length
+    ? Math.round(rollingValues.reduce((sum, value) => sum + value, 0) / rollingValues.length)
+    : eligibleNetRevenuePence;
+  const sustainableEligibleNetRevenuePence = Math.min(
+    eligibleNetRevenuePence,
+    rollingAverageEligibleNetRevenuePence || eligibleNetRevenuePence,
+  );
+
+  const creatorCapacityPence = Math.max(0, Math.round(eligibleNetRevenuePence * (settings.creatorPoolPercent / 100)));
+  const companyProfitAllocationPence = Math.max(0, Math.round(eligibleNetRevenuePence * (settings.companyProfitPercent / 100)));
+  const coreBusinessFundPence = Math.max(0, Math.round(eligibleNetRevenuePence * (settings.businessFundPercent / 100)));
+  const unusedCreatorCapacityPence = Math.max(0, creatorCapacityPence - plannedCreatorPayoutPence);
+  const growthAndStabilityFundContributionPence = coreBusinessFundPence + unusedCreatorCapacityPence;
+  const safeCreatorPayrollPence = Math.max(0, Math.round(
+    sustainableEligibleNetRevenuePence
+      * (settings.creatorPoolPercent / 100)
+      * (settings.safeCreatorUtilizationPercent / 100),
+  ));
+  const stressEligibleNetRevenuePence = Math.max(0, Math.round(
+    sustainableEligibleNetRevenuePence * (1 - settings.subscriberStressTestPercent / 100),
+  ));
+  const stressCreatorCapacityPence = Math.max(0, Math.round(
+    stressEligibleNetRevenuePence * (settings.creatorPoolPercent / 100),
+  ));
+
+  const theoreticalCreatorCapacity = standardMonthlyCreatorRatePence > 0
+    ? Math.floor(creatorCapacityPence / standardMonthlyCreatorRatePence)
+    : 0;
+  const safeCreatorCapacity = standardMonthlyCreatorRatePence > 0
+    ? Math.min(theoreticalCreatorCapacity, Math.floor(safeCreatorPayrollPence / standardMonthlyCreatorRatePence))
+    : 0;
+  const bankedCreatorCapacity = Math.max(0, theoreticalCreatorCapacity - paidCreatorCount);
+  const safeReleaseSlots = Math.max(0, safeCreatorCapacity - paidCreatorCount);
+  const creatorBudgetUtilizationPercent = creatorCapacityPence > 0
+    ? Math.round((plannedCreatorPayoutPence / creatorCapacityPence) * 10000) / 100
+    : 0;
+  const stressTestPass = plannedCreatorPayoutPence <= stressCreatorCapacityPence;
+  const afterNextBankedSlots = Math.max(0, theoreticalCreatorCapacity - (paidCreatorCount + 1));
+  const nextCreatorRecommended = settings.creatorSlotRecommendations
+    && standardMonthlyCreatorRatePence > 0
+    && paidCreatorCount + 1 <= safeCreatorCapacity
+    && afterNextBankedSlots >= settings.minimumBankedCreatorSlots
+    && (paidCreatorCount + 1) * standardMonthlyCreatorRatePence <= stressCreatorCapacityPence;
+  const capacityStatus = plannedCreatorPayoutPence > creatorCapacityPence
+    ? 'overcommitted'
+    : paidCreatorCount > safeCreatorCapacity || !stressTestPass
+      ? 'guarded'
+      : 'healthy';
+
+  if (writeSnapshot) {
+    await db.collection('commercialSnapshots').doc(dateKey).set({
+      dateKey,
+      activePaidSubscribers,
+      confirmedGrossMrrPence,
+      eligibleNetRevenuePence,
+      paidCreatorCount,
+      standardMonthlyCreatorRatePence,
+      plannedCreatorPayoutPence,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
 
   return {
     settings,
@@ -2395,12 +2528,55 @@ export const commercialOverview = onCall({ region: REGION }, async (request) => 
     trialPotentialPence,
     pastDueAtRiskPence,
     potentialGrossWithTrialsPence: confirmedGrossMrrPence + trialPotentialPence,
+    eligibleNetRevenuePence,
+    eligibleNetRevenueSource: activePaidSubscribers === 0
+      ? 'none'
+      : confirmedEligibleNetSubscriptionCount === activePaidSubscribers
+        ? 'confirmed'
+        : confirmedEligibleNetSubscriptionCount === 0
+          ? 'planning_estimate'
+          : 'mixed',
+    confirmedEligibleNetSubscriptionCount,
+    rollingAverageEligibleNetRevenuePence,
+    revenueHistorySampleDays: rollingValues.length,
+    sustainableEligibleNetRevenuePence,
     activeCreatorCount,
+    paidCreatorCount,
     standardMonthlyCreatorRatePence,
     plannedCreatorPayoutPence,
-    reservePence,
-    planningBalanceBeforeFeesTaxPence,
+    creatorCapacityPence,
+    companyProfitAllocationPence,
+    coreBusinessFundPence,
+    unusedCreatorCapacityPence,
+    growthAndStabilityFundContributionPence,
+    safeCreatorPayrollPence,
+    stressEligibleNetRevenuePence,
+    stressCreatorCapacityPence,
+    theoreticalCreatorCapacity,
+    safeCreatorCapacity,
+    bankedCreatorCapacity,
+    safeReleaseSlots,
+    creatorBudgetUtilizationPercent,
+    stressTestPass,
+    nextCreatorRecommended,
+    capacityStatus,
+    creatorSlots: activeCreatorDocs.map((doc) => {
+      const data = doc.data();
+      return {
+        userId: doc.id,
+        displayName: data.displayName ?? data.name ?? data.email ?? 'Nightjar Creator',
+        email: data.email ?? null,
+        paidCreatorSlotActive: data.paidCreatorSlotActive === true,
+      };
+    }),
+    reservePence: coreBusinessFundPence,
+    planningBalanceBeforeFeesTaxPence: Math.max(0, eligibleNetRevenuePence - plannedCreatorPayoutPence),
   };
+};
+
+export const commercialOverview = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  return buildCommercialOverview(true);
 });
 
 export const saveCommercialSettings = onCall({ region: REGION }, async (request) => {
@@ -2415,6 +2591,8 @@ export const saveCommercialSettings = onCall({ region: REGION }, async (request)
     }
     return integer ? Math.round(number) : Math.round(number * 100) / 100;
   };
+  const requiredNumber = (value: unknown, fallback: number, min: number, max: number, integer = false) =>
+    nullableNumber(value, min, max, integer) ?? fallback;
 
   const rawBands = Array.isArray(input.creatorRateBands) ? input.creatorRateBands : [];
   const creatorRateBands: CreatorRateBand[] = rawBands
@@ -2426,15 +2604,33 @@ export const saveCommercialSettings = onCall({ region: REGION }, async (request)
     .sort((a, b) => a.minPaidSubscribers - b.minPaidSubscribers)
     .slice(0, 24);
 
+  const creatorPoolPercent = requiredNumber(input.creatorPoolPercent, 50, 0, 100);
+  const companyProfitPercent = requiredNumber(input.companyProfitPercent, 30, 0, 100);
+  const businessFundPercent = requiredNumber(input.businessFundPercent, 20, 0, 100);
+  const allocationTotal = Math.round((creatorPoolPercent + companyProfitPercent + businessFundPercent) * 100) / 100;
+  if (Math.abs(allocationTotal - 100) > 0.01) {
+    throw new HttpsError('invalid-argument', 'Creator, company-profit and business-fund allocations must total 100%.');
+  }
+
+  const previous = await readCommercialSettings();
   const settings: CommercialSettings = {
     planningMonthlyPricePence: nullableNumber(input.planningMonthlyPricePence, 0, 100000, true),
-    creatorPoolPercent: null,
-    reservePercent: nullableNumber(input.reservePercent, 0, 100),
-    payoutCadence: cleanText(input.payoutCadence, 80) || null,
+    creatorPoolPercent,
+    companyProfitPercent,
+    businessFundPercent,
+    planningEligibleNetPercent: requiredNumber(input.planningEligibleNetPercent, 66.33, 1, 100),
+    safeCreatorUtilizationPercent: requiredNumber(input.safeCreatorUtilizationPercent, 70, 1, 100),
+    revenueAveragingDays: requiredNumber(input.revenueAveragingDays, 90, 1, 365, true),
+    subscriberStressTestPercent: requiredNumber(input.subscriberStressTestPercent, 20, 0, 90),
+    minimumBankedCreatorSlots: requiredNumber(input.minimumBankedCreatorSlots, 2, 0, 100, true),
+    automaticCreatorSlotOpening: false,
+    creatorSlotRecommendations: input.creatorSlotRecommendations !== false,
+    reservePercent: businessFundPercent,
+    payoutCadence: cleanText(input.payoutCadence, 80) || 'Monthly',
     eligibleListeningDefinition: cleanText(input.eligibleListeningDefinition, 1200) || null,
     compensationModel: 'capped_equal_rate',
-    creatorMonthlyCapPence: nullableNumber(input.creatorMonthlyCapPence, 0, 10000000, true),
-    creatorRateBands,
+    creatorMonthlyCapPence: nullableNumber(input.creatorMonthlyCapPence, 0, 10000000, true) ?? 300000,
+    creatorRateBands: creatorRateBands.length ? creatorRateBands : DEFAULT_CREATOR_RATE_BANDS,
     creatorEligibilityDefinition: cleanText(input.creatorEligibilityDefinition, 1600) || null,
     popularityAffectsBaseRate: false,
     tipsEnabled: input.tipsEnabled === true,
@@ -2453,8 +2649,63 @@ export const saveCommercialSettings = onCall({ region: REGION }, async (request)
     updatedBy: admin.uid,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+  await db.collection('settings').doc('commercial').collection('audit').add({
+    changedBy: admin.uid,
+    previous,
+    next: settings,
+    createdAt: FieldValue.serverTimestamp(),
+  });
 
   return { settings };
+});
+
+export const setCreatorPaidSlotStatus = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 180);
+  const active = input.active === true;
+  if (!userId) throw new HttpsError('invalid-argument', 'Creator user ID is required.');
+
+  const ref = accountRef(userId);
+  const snapshot = await ref.get();
+  const account = snapshot.data();
+  if (!snapshot.exists || !account || !professionalRolesForAccount(account).includes('creator')) {
+    throw new HttpsError('not-found', 'Creator account was not found.');
+  }
+  if (active && account.status !== 'active') {
+    throw new HttpsError('failed-precondition', 'Only active Creator accounts can receive a paid Creator slot.');
+  }
+  if ((account.paidCreatorSlotActive === true) === active) {
+    return { active, overview: await buildCommercialOverview(false) };
+  }
+
+  if (active) {
+    const overview = await buildCommercialOverview(false);
+    const nextPaidCount = overview.paidCreatorCount + 1;
+    if (nextPaidCount > overview.safeCreatorCapacity) {
+      throw new HttpsError('failed-precondition', 'This slot would exceed Nightjar safe Creator payroll capacity.');
+    }
+    if (overview.theoreticalCreatorCapacity - nextPaidCount < overview.settings.minimumBankedCreatorSlots) {
+      throw new HttpsError('failed-precondition', 'This slot would use Nightjar’s required banked Creator headroom.');
+    }
+    if (nextPaidCount * overview.standardMonthlyCreatorRatePence > overview.stressCreatorCapacityPence) {
+      throw new HttpsError('failed-precondition', 'This slot would fail the configured subscriber stress test.');
+    }
+  }
+
+  await ref.set({
+    paidCreatorSlotActive: active,
+    paidCreatorSlotUpdatedBy: admin.uid,
+    paidCreatorSlotUpdatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  await db.collection('settings').doc('commercial').collection('creatorSlotAudit').add({
+    userId,
+    active,
+    changedBy: admin.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { active, overview: await buildCommercialOverview(false) };
 });
 
 const londonDateKey = () => new Intl.DateTimeFormat('en-CA', {

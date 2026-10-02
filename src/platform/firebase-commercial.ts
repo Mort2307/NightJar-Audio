@@ -10,7 +10,16 @@ export type CreatorRateBand = {
 
 export type CommercialSettings = {
   planningMonthlyPricePence: number | null;
-  creatorPoolPercent: number | null;
+  creatorPoolPercent: number;
+  companyProfitPercent: number;
+  businessFundPercent: number;
+  planningEligibleNetPercent: number;
+  safeCreatorUtilizationPercent: number;
+  revenueAveragingDays: number;
+  subscriberStressTestPercent: number;
+  minimumBankedCreatorSlots: number;
+  automaticCreatorSlotOpening: false;
+  creatorSlotRecommendations: boolean;
   reservePercent: number | null;
   payoutCadence: string | null;
   eligibleListeningDefinition: string | null;
@@ -22,6 +31,13 @@ export type CommercialSettings = {
   tipsEnabled: boolean;
   individualPurchasesEnabled: boolean;
   listenerSubscriptionUrl: string | null;
+};
+
+export type CreatorSlot = {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  paidCreatorSlotActive: boolean;
 };
 
 export type CommercialOverview = {
@@ -37,9 +53,33 @@ export type CommercialOverview = {
   trialPotentialPence: number;
   pastDueAtRiskPence: number;
   potentialGrossWithTrialsPence: number;
+  eligibleNetRevenuePence: number;
+  eligibleNetRevenueSource: 'confirmed' | 'planning_estimate' | 'mixed' | 'none';
+  confirmedEligibleNetSubscriptionCount: number;
+  rollingAverageEligibleNetRevenuePence: number;
+  revenueHistorySampleDays: number;
+  sustainableEligibleNetRevenuePence: number;
   activeCreatorCount: number;
+  paidCreatorCount: number;
   standardMonthlyCreatorRatePence: number;
   plannedCreatorPayoutPence: number;
+  creatorCapacityPence: number;
+  companyProfitAllocationPence: number;
+  coreBusinessFundPence: number;
+  unusedCreatorCapacityPence: number;
+  growthAndStabilityFundContributionPence: number;
+  safeCreatorPayrollPence: number;
+  stressEligibleNetRevenuePence: number;
+  stressCreatorCapacityPence: number;
+  theoreticalCreatorCapacity: number;
+  safeCreatorCapacity: number;
+  bankedCreatorCapacity: number;
+  safeReleaseSlots: number;
+  creatorBudgetUtilizationPercent: number;
+  stressTestPass: boolean;
+  nextCreatorRecommended: boolean;
+  capacityStatus: 'healthy' | 'guarded' | 'overcommitted';
+  creatorSlots: CreatorSlot[];
   reservePence: number;
   planningBalanceBeforeFeesTaxPence: number;
 };
@@ -58,6 +98,10 @@ const creatorCompensationCall = httpsCallable<void, {
   verifiedListeningIsAnalyticsOnly: boolean;
   payoutCadence: string | null;
 }>(functions, 'creatorCompensationStatus');
+const setCreatorPaidSlotCall = httpsCallable<{ userId: string; active: boolean }, {
+  active: boolean;
+  overview: CommercialOverview;
+}>(functions, 'setCreatorPaidSlotStatus');
 const transparencyCall = httpsCallable<void, any>(functions, 'transparencySnapshot');
 const listeningAccessCall = httpsCallable<void, {
   role: string | null;
@@ -84,6 +128,10 @@ export const nightjarCommercial = {
 
   async creatorCompensation() {
     return (await creatorCompensationCall()).data;
+  },
+
+  async setCreatorPaidSlot(userId: string, active: boolean) {
+    return (await setCreatorPaidSlotCall({ userId, active })).data;
   },
 
   async transparency() {
