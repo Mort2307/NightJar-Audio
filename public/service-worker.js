@@ -1,4 +1,4 @@
-const CACHE = 'nightjar-shell-v6';
+const CACHE = 'nightjar-shell-v7';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
