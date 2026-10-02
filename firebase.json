@@ -35,7 +35,11 @@
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache"
+            "value": "no-store,max-age=0,must-revalidate"
+          },
+          {
+            "key": "Service-Worker-Allowed",
+            "value": "/"
           }
         ]
       },
@@ -45,11 +49,24 @@
           {
             "key": "Cache-Control",
             "value": "no-store,max-age=0,must-revalidate"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/manifest+json; charset=utf-8"
           }
         ]
       },
       {
-        "source": "**/*.@(js|css|svg|png|jpg|jpeg|webp|woff|woff2)",
+        "source": "/nightjar-home-*.png",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store,max-age=0,must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(js|css|svg|jpg|jpeg|webp|woff|woff2)",
         "headers": [
           {
             "key": "Cache-Control",
