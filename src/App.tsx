@@ -2300,6 +2300,22 @@ function App() {
     setCreatorSlotBusyUserId(userId);
     try {
       if (demoMode) {
+        if (active) {
+          if (!commercialOverview) {
+            notify('Demo Creator capacity is not loaded yet.');
+            return;
+          }
+          const nextPaidCount = commercialOverview.paidCreatorCount + 1;
+          const violatesSafeCapacity = nextPaidCount > commercialOverview.safeCreatorCapacity;
+          const violatesBankedHeadroom =
+            commercialOverview.theoreticalCreatorCapacity - nextPaidCount < commercialSettings.minimumBankedCreatorSlots;
+          const violatesStressTest =
+            nextPaidCount * commercialOverview.standardMonthlyCreatorRatePence > commercialOverview.stressCreatorCapacityPence;
+          if (violatesSafeCapacity || violatesBankedHeadroom || violatesStressTest) {
+            notify('Demo safety guard kept this Creator slot banked.');
+            return;
+          }
+        }
         setCommercialOverview((current) => {
           if (!current) return current;
           const creatorSlots = current.creatorSlots.map((creator) => creator.userId === userId ? { ...creator, paidCreatorSlotActive: active } : creator);
