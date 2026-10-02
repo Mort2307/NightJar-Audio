@@ -289,6 +289,40 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
   reader.readAsDataURL(file);
 });
 
+const buildBrandInstallIcons = async (sourceUrl: string) => {
+  const response = await fetch(sourceUrl, { cache: 'no-store', mode: 'cors' });
+  if (!response.ok) throw new Error('Approved Nightjar logo could not be loaded.');
+  const bitmap = await createImageBitmap(await response.blob());
+
+  const render = (size: number, contentScale = 1) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas is unavailable.');
+    context.fillStyle = '#000000';
+    context.fillRect(0, 0, size, size);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    const available = size * contentScale;
+    const scale = Math.min(available / bitmap.width, available / bitmap.height);
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    context.drawImage(bitmap, Math.round((size-width)/2), Math.round((size-height)/2), width, height);
+    return canvas.toDataURL('image/png');
+  };
+
+  try {
+    return {
+      icon192DataUrl: render(192),
+      icon512DataUrl: render(512),
+      maskable512DataUrl: render(512, 0.78),
+    };
+  } finally {
+    bitmap.close();
+  }
+};
+
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
   const [playing, setPlaying] = useState<string | null>(null);
@@ -325,6 +359,7 @@ function App() {
   const [pendingLogoPreviewUrl, setPendingLogoPreviewUrl] = useState<string | null>(null);
   const [demoLogoPreviewUrl, setDemoLogoPreviewUrl] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [brandInstallIconsReady, setBrandInstallIconsReady] = useState(false);
   const [identityEmail, setIdentityEmail] = useState<string | null>(null);
   const [identityAdmin, setIdentityAdmin] = useState(false);
   const [protectedReaderOpen, setProtectedReaderOpen] = useState(false);
@@ -638,6 +673,7 @@ function App() {
         const data = await nightjarMedia.getBranding();
         const nextLogo = data.logoUrl ?? null;
         setLogoUrl(nextLogo);
+        setBrandInstallIconsReady(Boolean(data.installIconsReady));
         const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
         if (favicon) favicon.href = nextLogo ?? '/brand-logo';
       } catch { /* branded wordmark remains available */ }
@@ -2073,6 +2109,7 @@ function App() {
         return;
       }
       const data = await nightjarMedia.getBranding();
+      setBrandInstallIconsReady(Boolean(data.installIconsReady));
       applyRuntimeLogo(data.logoUrl ?? null);
     } catch { /* wordmark fallback remains available */ }
   };
@@ -2091,6 +2128,30 @@ function App() {
       window.removeEventListener('storage', onStorage);
     };
   }, [demoMode, demoLogoPreviewUrl]);
+
+  const syncBrandInstallIcons = async (sourceUrl = logoUrl, quiet = false) => {
+    if (!canAdmin || demoMode || !sourceUrl) return;
+    setLogoUploading(true);
+    try {
+      const iconSet = await buildBrandInstallIcons(sourceUrl);
+      await nightjarMedia.syncBrandIcons(iconSet);
+      setBrandInstallIconsReady(true);
+      window.localStorage.setItem('nightjar.branding.version', String(Date.now()));
+      const registration = await navigator.serviceWorker?.getRegistration();
+      if (registration) await registration.update();
+      if (!quiet) notify('Installed-app icon rebuilt from the approved Nightjar logo.');
+    } catch (error) {
+      console.error('Nightjar install icon sync failed', error);
+      if (!quiet) notify('Installed-app icon could not be rebuilt from the approved Nightjar logo.');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!canAdmin || demoMode || !logoUrl || brandInstallIconsReady || logoUploading) return;
+    void syncBrandInstallIcons(logoUrl, true);
+  }, [canAdmin, demoMode, logoUrl, brandInstallIconsReady]);
 
   const uploadLogo = async (file: File) => {
     if (!canAdmin) return;
@@ -2231,8 +2292,12 @@ function App() {
       if (asset.kind === 'brand_logo') {
         setPendingLogoPreviewUrl(null);
         if (decision === 'approved') {
-          if (moderationResult.publicUrl) applyRuntimeLogo(moderationResult.publicUrl);
-          else await loadBranding();
+          if (moderationResult.publicUrl) {
+            applyRuntimeLogo(moderationResult.publicUrl);
+            await syncBrandInstallIcons(moderationResult.publicUrl, true);
+          } else {
+            await loadBranding();
+          }
         }
         window.localStorage.setItem('nightjar.branding.version', String(Date.now()));
         window.dispatchEvent(new CustomEvent('nightjar:branding-changed'));
@@ -3763,7 +3828,7 @@ function App() {
               <button className="admin-panel admin-tile" onClick={() => navigate('protection')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">SAFETY</span><h2>Access & moderation</h2><p>Review protection signals and age-assurance boundaries.</p><strong>Open Protection Centre <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile subscription-tile" onClick={() => openAdminPanel('subscriptions')}><span className="admin-icon"><WalletCards size={19} /></span><span className="mini-label">SUBSCRIPTIONS</span><h2>{adminOverviewLoading ? '…' : commercialOverview?.subscriptions.active ?? adminOverview?.subscriptions?.active ?? 0}</h2><p>Active paid subscriptions tracked by the confirmed Nightjar billing ledger.</p><strong>{commercialOverview?.subscriptions.trialing ?? adminOverview?.subscriptions?.trialing ?? 0} trial · {commercialOverview?.subscriptions.pastDue ?? adminOverview?.subscriptions?.pastDue ?? 0} past due <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">CREATOR ECONOMICS</span><h2>{formatMoneyPence(commercialSettings.planningMonthlyPricePence)} / month</h2><p>Configure the capped equal creator rate without tying standard pay to popularity.</p><strong>Open creator economics <ArrowRight size={13} /></strong></button>
-              <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>{demoMode ? 'Preview a replacement logo locally while Demo Mode is active. Nothing is uploaded or changed in production.' : 'Upload or replace the logo used across Nightjar. A replacement stays pending until an administrator approves it in Image Moderation.'}</p><div className="logo-preview-grid"><div><span className="mini-label">CURRENT APPROVED</span><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt={demoMode ? 'Nightjar demo logo preview' : 'Current approved Nightjar logo'} /> : <img src="/brand-logo" alt="Default Nightjar logo" />}</div></div>{!demoMode && pendingLogoPreviewUrl && <div><span className="mini-label">PENDING REPLACEMENT</span><div className="logo-preview-box pending-logo-preview"><img src={pendingLogoPreviewUrl} alt="Pending Nightjar logo replacement" /></div></div>}</div><div className="admin-data-actions"><label className="secondary-button upload-label"><Upload size={15} /> {demoMode ? 'Preview logo' : logoUploading ? 'Uploading…' : 'Replace logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label>{logoUrl && <button className="ghost-button" onClick={()=>void removeLogo()}>{demoMode ? 'Clear preview' : 'Remove logo'}</button>}</div><strong>{demoMode ? 'Local preview only · PNG / JPG / WebP · max 5 MB' : pendingLogoPreviewUrl ? 'Replacement uploaded · open Image Moderation to approve it' : 'PNG / JPG / WebP · max 5 MB · administrator approval required before the replacement goes live'}</strong></div>
+              <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>{demoMode ? 'Preview a replacement logo locally while Demo Mode is active. Nothing is uploaded or changed in production.' : 'Upload or replace the logo used across Nightjar. A replacement stays pending until an administrator approves it in Image Moderation.'}</p><div className="logo-preview-grid"><div><span className="mini-label">CURRENT APPROVED</span><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt={demoMode ? 'Nightjar demo logo preview' : 'Current approved Nightjar logo'} /> : <img src="/brand-logo" alt="Default Nightjar logo" />}</div></div>{!demoMode && pendingLogoPreviewUrl && <div><span className="mini-label">PENDING REPLACEMENT</span><div className="logo-preview-box pending-logo-preview"><img src={pendingLogoPreviewUrl} alt="Pending Nightjar logo replacement" /></div></div>}</div><div className="admin-data-actions"><label className="secondary-button upload-label"><Upload size={15} /> {demoMode ? 'Preview logo' : logoUploading ? 'Working…' : 'Replace logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label>{logoUrl && !demoMode && <button className="ghost-button" disabled={logoUploading} onClick={()=>void syncBrandInstallIcons()}><RefreshCw size={15}/> {brandInstallIconsReady ? 'Rebuild install icon' : 'Fix install icon'}</button>}{logoUrl && <button className="ghost-button" onClick={()=>void removeLogo()}>{demoMode ? 'Clear preview' : 'Remove logo'}</button>}</div><strong>{demoMode ? 'Local preview only · PNG / JPG / WebP · max 5 MB' : pendingLogoPreviewUrl ? 'Replacement uploaded · open Image Moderation to approve it' : brandInstallIconsReady ? 'Approved logo is also synced to Android/PWA install icons.' : 'Approved logo is live · install icon still needs syncing.'}</strong></div>
             </div>
             {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">PRIVATE TESTING / EMAIL ALLOWLIST</span><h2>Approved tester emails</h2><p>Only the owner accounts and emails listed here can enter Nightjar while Closed Beta is enabled. Approved testers still verify their Firebase email normally; the temporary age bypass is clearly marked as test access.</p></div><div className="admin-application-wavebar"><label>Tester email<input type="email" value={adminTesterEmail} onChange={(event)=>setAdminTesterEmail(event.target.value)} placeholder="tester@example.com" /></label><button className="primary-button" disabled={!adminTesterEmail.trim()} onClick={()=>void changeClosedBetaTester(adminTesterEmail,true)}>Approve tester email</button></div><div className="security-alert-list">{(adminOverview?.testing?.approvedTesters ?? []).length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No tester emails approved</strong><span>Owner administrator emails remain allowed automatically.</span></div> : (adminOverview?.testing?.approvedTesters ?? []).map((tester:any)=><article className="security-alert-row" key={tester.email}><div><strong>{tester.email}</strong><span>Private beta account access · temporary age-assurance bypass while test mode is enabled</span><em>Removing access blocks Nightjar backend use even if a Firebase Auth identity already exists.</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={()=>void changeClosedBetaTester(tester.email,false)}>Remove tester access</button></div></article>)}</div><strong>{adminOverview?.testing?.approvedTesterCount ?? 0} approved tester email{(adminOverview?.testing?.approvedTesterCount ?? 0) === 1 ? '' : 's'} · Closed Beta {adminOverview?.testing?.closedBeta === false ? 'OFF' : 'ON'}</strong></section>}
             <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>
