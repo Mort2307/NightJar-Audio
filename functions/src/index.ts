@@ -612,14 +612,24 @@ const accountPresentation = async (uid: string) => {
   return { displayName, handle, email: email || null };
 };
 
-const cleanEditorSkillLevels = (value: unknown) => {
+const cleanEditorExperienceYears = (value: unknown) => {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? Math.min(60, Math.max(0, Math.floor(parsed)))
+    : null;
+};
+
+const cleanEditorSkillLevels = (value: unknown, selectedSkills: unknown) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const allowed = new Set(['Learning', 'Comfortable', 'Experienced', 'Specialist']);
+  const allowedLevels = new Set(['Learning', 'Comfortable', 'Experienced', 'Specialist']);
+  const allowedSkills = new Set(cleanStringList(selectedSkills, 30));
+  if (!allowedSkills.size) return {};
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
       .slice(0, 30)
       .map(([skill, level]) => [cleanText(skill, 100), cleanText(level, 32)] as const)
-      .filter(([skill, level]) => Boolean(skill) && allowed.has(level)),
+      .filter(([skill, level]) => Boolean(skill) && allowedSkills.has(skill) && allowedLevels.has(level)),
   );
 };
 
@@ -642,10 +652,8 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
       editorDeliveryFormats: cleanStringList(stored.editorDeliveryFormats, 16),
       editorCollaborationPreferences: cleanStringList(stored.editorCollaborationPreferences, 16),
       editorTurnaround: cleanText(stored.editorTurnaround, 80),
-      editorExperienceYears: Number.isFinite(Number(stored.editorExperienceYears))
-        ? Math.min(60, Math.max(0, Math.floor(Number(stored.editorExperienceYears))))
-        : null,
-      editorSkillLevels: cleanEditorSkillLevels(stored.editorSkillLevels),
+      editorExperienceYears: cleanEditorExperienceYears(stored.editorExperienceYears),
+      editorSkillLevels: cleanEditorSkillLevels(stored.editorSkillLevels, stored.roleSpecialties),
     };
   }
   return {
@@ -662,10 +670,8 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
     editorDeliveryFormats: cleanStringList(data.editorDeliveryFormats, 16),
     editorCollaborationPreferences: cleanStringList(data.editorCollaborationPreferences, 16),
     editorTurnaround: cleanText(data.editorTurnaround, 80),
-    editorExperienceYears: Number.isFinite(Number(data.editorExperienceYears))
-      ? Math.min(60, Math.max(0, Math.floor(Number(data.editorExperienceYears))))
-      : null,
-    editorSkillLevels: cleanEditorSkillLevels(data.editorSkillLevels),
+    editorExperienceYears: cleanEditorExperienceYears(data.editorExperienceYears),
+    editorSkillLevels: cleanEditorSkillLevels(data.editorSkillLevels, data.roleSpecialties),
   };
 };
 
@@ -880,10 +886,8 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     editorDeliveryFormats: cleanStringList(input.editorDeliveryFormats, 16),
     editorCollaborationPreferences: cleanStringList(input.editorCollaborationPreferences, 16),
     editorTurnaround: cleanText(input.editorTurnaround, 80),
-    editorExperienceYears: Number.isFinite(Number(input.editorExperienceYears))
-      ? Math.min(60, Math.max(0, Math.floor(Number(input.editorExperienceYears))))
-      : null,
-    editorSkillLevels: cleanEditorSkillLevels(input.editorSkillLevels),
+    editorExperienceYears: cleanEditorExperienceYears(input.editorExperienceYears),
+    editorSkillLevels: cleanEditorSkillLevels(input.editorSkillLevels, input.roleSpecialties),
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
