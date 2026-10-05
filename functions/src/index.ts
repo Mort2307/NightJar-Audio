@@ -612,6 +612,17 @@ const accountPresentation = async (uid: string) => {
   return { displayName, handle, email: email || null };
 };
 
+const cleanEditorSkillLevels = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const allowed = new Set(['Learning', 'Comfortable', 'Experienced', 'Specialist']);
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .slice(0, 30)
+      .map(([skill, level]) => [cleanText(skill, 100), cleanText(level, 32)] as const)
+      .filter(([skill, level]) => Boolean(skill) && allowed.has(level)),
+  );
+};
+
 const roleProfileSlice = (data: Record<string, any>, role: string) => {
   const stored = data.roleProfiles && typeof data.roleProfiles === 'object' && data.roleProfiles[role] && typeof data.roleProfiles[role] === 'object'
     ? data.roleProfiles[role]
@@ -626,6 +637,15 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
       roleDetailTwo: cleanText(stored.roleDetailTwo, 600),
       portfolioNote: cleanText(stored.portfolioNote, 400),
       featuredPortfolioIds: cleanStringList(stored.featuredPortfolioIds, 6),
+      editorSoftware: cleanStringList(stored.editorSoftware, 16),
+      editorProjectTypes: cleanStringList(stored.editorProjectTypes, 16),
+      editorDeliveryFormats: cleanStringList(stored.editorDeliveryFormats, 16),
+      editorCollaborationPreferences: cleanStringList(stored.editorCollaborationPreferences, 16),
+      editorTurnaround: cleanText(stored.editorTurnaround, 80),
+      editorExperienceYears: Number.isFinite(Number(stored.editorExperienceYears))
+        ? Math.min(60, Math.max(0, Math.floor(Number(stored.editorExperienceYears))))
+        : null,
+      editorSkillLevels: cleanEditorSkillLevels(stored.editorSkillLevels),
     };
   }
   return {
@@ -637,6 +657,15 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
     roleDetailTwo: cleanText(data.roleDetailTwo, 600),
     portfolioNote: cleanText(data.portfolioNote, 400),
     featuredPortfolioIds: cleanStringList(data.featuredPortfolioIds, 6),
+    editorSoftware: cleanStringList(data.editorSoftware, 16),
+    editorProjectTypes: cleanStringList(data.editorProjectTypes, 16),
+    editorDeliveryFormats: cleanStringList(data.editorDeliveryFormats, 16),
+    editorCollaborationPreferences: cleanStringList(data.editorCollaborationPreferences, 16),
+    editorTurnaround: cleanText(data.editorTurnaround, 80),
+    editorExperienceYears: Number.isFinite(Number(data.editorExperienceYears))
+      ? Math.min(60, Math.max(0, Math.floor(Number(data.editorExperienceYears))))
+      : null,
+    editorSkillLevels: cleanEditorSkillLevels(data.editorSkillLevels),
   };
 };
 
@@ -846,6 +875,15 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     roleDetailTwo: cleanText(input.roleDetailTwo, 600),
     portfolioNote: cleanText(input.portfolioNote, 400),
     featuredPortfolioIds,
+    editorSoftware: cleanStringList(input.editorSoftware, 16),
+    editorProjectTypes: cleanStringList(input.editorProjectTypes, 16),
+    editorDeliveryFormats: cleanStringList(input.editorDeliveryFormats, 16),
+    editorCollaborationPreferences: cleanStringList(input.editorCollaborationPreferences, 16),
+    editorTurnaround: cleanText(input.editorTurnaround, 80),
+    editorExperienceYears: Number.isFinite(Number(input.editorExperienceYears))
+      ? Math.min(60, Math.max(0, Math.floor(Number(input.editorExperienceYears))))
+      : null,
+    editorSkillLevels: cleanEditorSkillLevels(input.editorSkillLevels),
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
@@ -892,6 +930,15 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
         roleDetailTwo: nextProfile.roleDetailTwo,
         portfolioNote: nextProfile.portfolioNote,
         featuredPortfolioIds: nextProfile.featuredPortfolioIds,
+        ...(profileRole === 'editor' ? {
+          editorSoftware: nextProfile.editorSoftware,
+          editorProjectTypes: nextProfile.editorProjectTypes,
+          editorDeliveryFormats: nextProfile.editorDeliveryFormats,
+          editorCollaborationPreferences: nextProfile.editorCollaborationPreferences,
+          editorTurnaround: nextProfile.editorTurnaround,
+          editorExperienceYears: nextProfile.editorExperienceYears,
+          editorSkillLevels: nextProfile.editorSkillLevels,
+        } : {}),
       };
     }
 
