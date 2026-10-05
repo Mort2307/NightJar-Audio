@@ -65,6 +65,76 @@ export const PROFILE_CATEGORY_OPTIONS = [
   'Historical romance',
 ] as const;
 
+export const EDITOR_SOFTWARE_OPTIONS = [
+  'Reaper',
+  'Adobe Audition',
+  'Pro Tools',
+  'Logic Pro',
+  'Ableton Live',
+  'Studio One',
+  'Cubase',
+  'Nuendo',
+  'DaVinci Resolve / Fairlight',
+  'iZotope RX',
+  'Steinberg SpectraLayers',
+  'Audacity',
+  'Hindenburg',
+  'Other professional DAW',
+] as const;
+
+export const EDITOR_PROJECT_TYPE_OPTIONS = [
+  'Single-voice roleplay',
+  'Multi-voice audio drama',
+  'Narration / audiobook style',
+  'ASMR / close-mic audio',
+  'Binaural / spatial scenes',
+  'Long-form episodes',
+  'Short-form releases',
+  'Series / episodic production',
+  'Trailers / promos',
+  'Restoration / rescue edits',
+] as const;
+
+export const EDITOR_DELIVERY_OPTIONS = [
+  'WAV master',
+  'MP3 delivery',
+  'FLAC delivery',
+  '24-bit delivery',
+  '48 kHz delivery',
+  'Separate stems',
+  'Dialogue stem',
+  'Music / ambience stems',
+  'Loudness-matched master',
+  'Platform-ready final',
+] as const;
+
+export const EDITOR_COLLABORATION_OPTIONS = [
+  'VAs / performers',
+  'Writers',
+  'Other editors',
+  'Sound designers',
+  'Directors / producers',
+  'Long-term series teams',
+  'One-off commissions',
+  'First-time creators',
+] as const;
+
+export const EDITOR_TURNAROUND_OPTIONS = [
+  '1–2 days',
+  '2–4 days',
+  '3–5 days',
+  '5–7 days',
+  '1–2 weeks',
+  'Project dependent',
+] as const;
+
+export const EDITOR_PROFICIENCY_OPTIONS = [
+  'Learning',
+  'Comfortable',
+  'Experienced',
+  'Specialist',
+] as const;
+
 export const ROLE_FOCUS_OPTIONS: Record<ProfileRoleKey, readonly string[]> = {
   admin: [
     'Platform operations',
@@ -196,9 +266,9 @@ export const ROLE_PROFILE_CONFIG: Record<ProfileRoleKey, RoleProfileConfig> = {
     tagLabel: 'Production tags',
     focusLabel: 'Editor focus',
     specialtiesLabel: 'Editing services',
-    specialtiesOptions: ['Dialogue editing', 'Noise cleanup', 'Comping', 'Mixing', 'Mastering', 'Sound design', 'Binaural production', 'Loudness delivery', 'Quality control', 'Revision passes', 'Audio drama assembly'],
+    specialtiesOptions: ['Dialogue editing', 'Noise cleanup / restoration', 'Breath / mouth-click cleanup', 'Comping', 'EQ / vocal polish', 'Compression / dynamics', 'De-essing', 'Mixing', 'Mastering', 'Sound design', 'Foley', 'Ambience building', 'Binaural / spatial production', 'Loudness delivery', 'Quality control', 'Revision passes', 'Audio drama assembly', 'Trailer / promo production'],
     secondaryLabel: 'Production strengths',
-    secondaryOptions: ['Fast turnaround', 'Long-form projects', 'Series consistency', 'Remote handoff', 'Detailed notes', 'Creator coaching', 'Restoration', 'Music / ambience integration', 'Metadata delivery'],
+    secondaryOptions: ['Fast turnaround', 'Long-form projects', 'Series consistency', 'Remote handoff', 'Detailed notes', 'Creator coaching', 'Restoration', 'Music / ambience integration', 'Metadata delivery', 'Multi-character scene assembly', 'Room-tone repair', 'Broadcast-ready delivery'],
     availabilityLabel: 'Booking availability',
     availabilityOptions: ['Open for bookings', 'Limited availability', 'Booked but taking enquiries', 'Not currently available'],
     detailOneLabel: 'Workflow & handoff',

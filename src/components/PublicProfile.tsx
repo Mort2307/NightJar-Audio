@@ -55,11 +55,24 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         publicProfile:true, followerCount:person.role === 'writer' ? 486 : 352,
         publishedWorkCount:writer ? 3 : 0, creditedReleaseCount:creditedReleases.length, creditedReleases,
         roleFocus:person.role === 'writer' ? ['Script writing','Dialogue writing'] : person.role === 'editor' ? ['Audio editing','Mixing'] : [],
-        roleSpecialties:person.role === 'writer' ? ['Dialogue','Character development'] : person.role === 'editor' ? ['Dialogue editing','Mixing'] : ['Story-first','Atmospheric'],
-        roleSecondary:person.role === 'writer' ? ['Single-voice script','Series / episodic'] : person.role === 'editor' ? ['Series consistency','Remote handoff'] : ['Hidden gems','Series'],
+        roleSpecialties:person.role === 'writer' ? ['Dialogue','Character development'] : person.role === 'editor' ? ['Dialogue editing','Noise cleanup / restoration','Breath / mouth-click cleanup','Mixing','Mastering','Binaural / spatial production'] : ['Story-first','Atmospheric'],
+        roleSecondary:person.role === 'writer' ? ['Single-voice script','Series / episodic'] : person.role === 'editor' ? ['Series consistency','Remote handoff','Detailed notes','Room-tone repair','Broadcast-ready delivery'] : ['Hidden gems','Series'],
         roleAvailability:person.role === 'writer' ? 'Open to commissions' : person.role === 'editor' ? 'Open for bookings' : '',
-        roleDetailOne:person.role === 'writer' ? 'Dialogue-first work with strong character progression.' : person.role === 'editor' ? 'Organised remote handoff with clear revision passes.' : 'Late-night stories, atmosphere and independent creators.',
-        roleDetailTwo:person.role === 'writer' ? 'Collaboration and licensing stay inside protected Nightjar workflows.' : person.role === 'editor' ? 'Best suited to dialogue-heavy and series work.' : 'Always happy to discover smaller creators.',
+        roleDetailOne:person.role === 'writer' ? 'Dialogue-first work with strong character progression.' : person.role === 'editor' ? 'Organised remote handoff with labelled revisions, timestamped notes and non-destructive project delivery.' : 'Late-night stories, atmosphere and independent creators.',
+        roleDetailTwo:person.role === 'writer' ? 'Collaboration and licensing stay inside protected Nightjar workflows.' : person.role === 'editor' ? 'Dialogue-heavy, binaural and recurring series work are the sweet spot.' : 'Always happy to discover smaller creators.',
+        ...(person.role === 'editor' ? {
+          editorSoftware:['Reaper','iZotope RX','Adobe Audition'],
+          editorProjectTypes:['Single-voice roleplay','Multi-voice audio drama','ASMR / close-mic audio','Binaural / spatial scenes','Series / episodic production','Restoration / rescue edits'],
+          editorDeliveryFormats:['WAV master','24-bit delivery','48 kHz delivery','Separate stems','Dialogue stem','Loudness-matched master','Platform-ready final'],
+          editorCollaborationPreferences:['VAs / performers','Writers','Long-term series teams','One-off commissions','First-time creators'],
+          editorTurnaround:'3–5 days',
+          editorExperienceYears:6,
+          editorSkillLevels:{'Dialogue editing':'Specialist','Noise cleanup / restoration':'Specialist','Breath / mouth-click cleanup':'Specialist','Mixing':'Experienced','Mastering':'Experienced','Binaural / spatial production':'Experienced'},
+          editorShowcaseSamples:[
+            {id:'dialogue-rescue',title:'Dialogue restoration',beforeLabel:'Room noise, mouth clicks, uneven level',afterLabel:'Clean dialogue master',techniques:['Noise reduction','Click repair','EQ','De-essing']},
+            {id:'immersive-scene',title:'Immersive scene build',beforeLabel:'Dry mono performance',afterLabel:'Spatial scene-ready mix',techniques:['Room tone','Ambience','Binaural staging','Dynamics']},
+          ],
+        } : {}),
         favouriteTags:['Cinematic','Story-led'],
         portfolioNote:person.role === 'listener' ? 'A few playlists I chose to share publicly.' : 'A small selection of work that represents what I do on Nightjar.',
         completedCollaborations:['writer','editor','creator'].includes(person.role) ? 4 : 0,
@@ -137,9 +150,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         : profileRole === 'editor'
           ? [
               ['Followers', profile.followerCount ?? 0],
-              ['Following', profile.followingCount ?? 0],
               ['Release credits', profile.creditedReleaseCount ?? 0],
               ['Collaborations', profile.completedCollaborations ?? 0],
+              ['Specialist skills', Object.values(roleDetails.editorSkillLevels ?? {}).filter((level) => level === 'Specialist').length],
             ]
           : profileRole === 'artist'
             ? [
@@ -207,6 +220,56 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite tropes' : 'Tropes & themes'}</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {(roleDetails.roleDetailOne || roleDetails.roleDetailTwo) && <div className="public-role-copy">{roleDetails.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{roleDetails.roleDetailOne}</p></div>}{roleDetails.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{roleDetails.roleDetailTwo}</p></div>}</div>}
         </section>
+
+        {profileRole === 'editor' && <section className="editor-public-professional">
+          <div className="editor-public-heading">
+            <div><span className="mini-label">EDITOR PROFESSIONAL PROFILE</span><h3>Production capability</h3><p>Useful working detail for VAs, Writers and production teams — without exposing private client files, manuscripts or revision notes.</p></div>
+            <FileCheck2 size={18}/>
+          </div>
+          <div className="editor-public-facts">
+            <div><span>Availability</span><strong>{roleDetails.roleAvailability || 'Ask first'}</strong></div>
+            <div><span>Typical turnaround</span><strong>{roleDetails.editorTurnaround || 'Project dependent'}</strong></div>
+            <div><span>Experience</span><strong>{Number(roleDetails.editorExperienceYears) > 0 ? roleDetails.editorExperienceYears + ' years' : 'Not stated'}</strong></div>
+            <div><span>Verified releases</span><strong>{profile.creditedReleaseCount ?? 0}</strong></div>
+          </div>
+
+          <div className="editor-public-columns">
+            <div className="editor-public-card">
+              <span className="mini-label">TOOLS</span>
+              <h4>DAWs & production tools</h4>
+              {!!roleDetails.editorSoftware?.length ? <div className="creator-profile-tags">{roleDetails.editorSoftware.map((item:string)=><span key={item}>{item}</span>)}</div> : <p>Production tools not listed yet.</p>}
+            </div>
+            <div className="editor-public-card">
+              <span className="mini-label">PROJECT FIT</span>
+              <h4>Best suited to</h4>
+              {!!roleDetails.editorProjectTypes?.length ? <div className="creator-profile-tags">{roleDetails.editorProjectTypes.map((item:string)=><span key={item}>{item}</span>)}</div> : <p>Project preferences not listed yet.</p>}
+            </div>
+            <div className="editor-public-card">
+              <span className="mini-label">DELIVERY</span>
+              <h4>Technical handoff</h4>
+              {!!roleDetails.editorDeliveryFormats?.length ? <div className="creator-profile-tags">{roleDetails.editorDeliveryFormats.map((item:string)=><span key={item}>{item}</span>)}</div> : <p>Delivery formats not listed yet.</p>}
+            </div>
+          </div>
+
+          {!!roleDetails.roleSpecialties?.length && <div className="editor-public-skills">
+            <div><span className="mini-label">SKILL MATRIX</span><h4>Editing services & proficiency</h4><p>Proficiency is self-described. Verified credits below show work actually published through Nightjar.</p></div>
+            <div className="editor-public-skill-list">{roleDetails.roleSpecialties.map((skill:string)=><div key={skill}><span>{skill}</span><strong>{roleDetails.editorSkillLevels?.[skill] || 'Available'}</strong></div>)}</div>
+          </div>}
+
+          {!!roleDetails.editorCollaborationPreferences?.length && <div className="editor-collaboration-fit">
+            <span className="mini-label">COLLABORATION FIT</span>
+            <div className="creator-profile-tags">{roleDetails.editorCollaborationPreferences.map((item:string)=><span key={item}>{item}</span>)}</div>
+          </div>}
+
+          {!!profile.editorShowcaseSamples?.length && <div className="editor-process-showcase">
+            <div><span className="mini-label">BEFORE / AFTER SHOWCASE</span><h4>What the edit changes</h4><p>Simulation samples demonstrate the profile format. Live public audio samples will only be shown when the editor has permission to publish the source material.</p></div>
+            <div className="editor-process-grid">{profile.editorShowcaseSamples.map((sample:any)=><article key={sample.id}>
+              <strong>{sample.title}</strong>
+              <div className="editor-process-compare"><span><em>RAW</em>{sample.beforeLabel}</span><span><em>EDITED</em>{sample.afterLabel}</span></div>
+              {!!sample.techniques?.length && <div className="creator-profile-tags">{sample.techniques.map((item:string)=><span key={item}>{item}</span>)}</div>}
+            </article>)}</div>
+          </div>}
+        </section>}
 
         {(roleDetails.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
           {roleDetails.portfolioNote && <p>{roleDetails.portfolioNote}</p>}
