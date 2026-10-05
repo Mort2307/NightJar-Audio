@@ -178,6 +178,13 @@ type PublicDirectoryProfile = {
     roleSpecialties?: string[];
     roleSecondary?: string[];
     roleAvailability?: string | null;
+    editorSoftware?: string[];
+    editorProjectTypes?: string[];
+    editorDeliveryFormats?: string[];
+    editorCollaborationPreferences?: string[];
+    editorTurnaround?: string | null;
+    editorExperienceYears?: number | null;
+    editorSkillLevels?: Record<string,string>;
   }>;
   releaseCount?: number;
   publishedWorkCount?: number;
@@ -532,6 +539,10 @@ function App() {
           ...(slice.roleFocus ?? []),
           ...(slice.roleSpecialties ?? []),
           ...(slice.roleSecondary ?? []),
+          ...(slice.editorSoftware ?? []),
+          ...(slice.editorProjectTypes ?? []),
+          ...(slice.editorDeliveryFormats ?? []),
+          ...(slice.editorCollaborationPreferences ?? []),
         ]),
       ];
     }),
@@ -561,9 +572,15 @@ function App() {
         ...(profile.favouriteCategories ?? []),
         ...allRoleSlices.flatMap((slice) => [
           slice.roleAvailability,
+          slice.editorTurnaround,
           ...(slice.roleFocus ?? []),
           ...(slice.roleSpecialties ?? []),
           ...(slice.roleSecondary ?? []),
+          ...(slice.editorSoftware ?? []),
+          ...(slice.editorProjectTypes ?? []),
+          ...(slice.editorDeliveryFormats ?? []),
+          ...(slice.editorCollaborationPreferences ?? []),
+          ...Object.keys(slice.editorSkillLevels ?? {}),
         ]),
         ...(profile.activityBadges ?? []).map((badge) => badge.label),
       ].filter(Boolean).join(' ').toLowerCase();
@@ -573,6 +590,10 @@ function App() {
         ...(selectedRoleSlice?.roleFocus ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.roleFocus ?? []) : [])),
         ...(selectedRoleSlice?.roleSpecialties ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.roleSpecialties ?? []) : profile.roleSpecialties ?? [])),
         ...(selectedRoleSlice?.roleSecondary ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.roleSecondary ?? []) : [])),
+        ...(selectedRoleSlice?.editorSoftware ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.editorSoftware ?? []) : [])),
+        ...(selectedRoleSlice?.editorProjectTypes ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.editorProjectTypes ?? []) : [])),
+        ...(selectedRoleSlice?.editorDeliveryFormats ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.editorDeliveryFormats ?? []) : [])),
+        ...(selectedRoleSlice?.editorCollaborationPreferences ?? (directoryRoleFilter === 'all' ? allRoleSlices.flatMap((slice) => slice.editorCollaborationPreferences ?? []) : [])),
       ];
       const availabilityValues = directoryRoleFilter !== 'all'
         ? [selectedRoleSlice?.roleAvailability, profile.role === directoryRoleFilter ? profile.roleAvailability : null]
