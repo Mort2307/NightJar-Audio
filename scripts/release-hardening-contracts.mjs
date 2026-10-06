@@ -17,8 +17,15 @@ const mobileNav=read('src/components/MobileNavigation.tsx');
 const css=read('src/index.css');
 const firestore=read('firestore.rules');
 const storage=read('storage.rules');
+const indexes=read('firestore.indexes.json');
+const accountPortal=read('src/components/AccountPortal.tsx');
 
 requireText(functions,"roles: ['listener', ...professionalRoles]",'Public profiles must preserve Listener alongside professional roles.');
+requireText(functions,'publicRoleProfiles.listener?.featuredPortfolioIds','Detailed public profiles must use the Listener role slice for public playlists.');
+requireText(functions,'listenerProfile.featuredPortfolioIds ?? profileData.featuredPortfolioIds','Listener library must use Listener role curation rather than the active professional portfolio.');
+requireText(functions,'roleProfiles.listener = {','Listener playlist visibility must write to the Listener role slice.');
+requireText(accountPortal,"account.role === 'artist'",'Artist account portal routing is missing.');
+requireText(accountPortal,"chooseRole('artist')",'Legacy Artist workspace selection is missing.');
 requireText(functions,"roles: identity.admin ? ['admin'] : ['listener', ...professionalRolesForAccount",'Private profile payload must preserve Listener alongside professional roles.');
 for(const field of ['creatorLanguages','creatorDirectionModes','writerScriptLengths','writerRightsNote','artistMediums','artistDeliveryFormats','listenerCommunityStyle']){
   requireText(functions,field,'Role-specific server profile field missing: '+field);
@@ -33,6 +40,8 @@ requireText(functions,'recordAuthenticationSuccess','Successful sign-in security
 requireText(functions,'listMySignInActivity','Private sign-in activity endpoint is missing.');
 requireText(functions,"type:'account_security'",'New-device user notification is missing.');
 requireText(functions,'passwordCaptured:false','Authentication activity must explicitly avoid password capture.');
+requireText(indexes,'"collectionGroup": "signInActivity"','Successful sign-in activity TTL collection is missing.');
+requireText(indexes,'"fieldPath": "retentionUntil"','Authentication retention TTL field is missing.');
 
 requireText(updater,'navigator.serviceWorker.getRegistrations()','Force update must address all service-worker registrations.');
 requireText(updater,'await Promise.all(keys.map((key) => caches.delete(key)))','Force update must clear legacy Cache Storage.');
