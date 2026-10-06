@@ -48,7 +48,6 @@ import {
   Bell,
   Download,
   FileCheck2,
-  Handshake,
   Share2,
   Coins,
   WalletCards,
