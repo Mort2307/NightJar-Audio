@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AudioLines, Brush, Eye, EyeOff, FileText, Headphones, KeyRound, LockKeyhole, Mail, Mic2, ShieldCheck } from 'lucide-react';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
+import { nightjarAuthSecurity } from '../platform/firebase-auth-security';
 import { nightjarAccount } from '../platform/firebase-account';
 import { nightjarAuthSecurity } from '../platform/firebase-auth-security';
 
@@ -82,7 +83,13 @@ export default function AccountAccess({
   const [nextConfirm, setNextConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(() => {
+    try {
+      const notice=sessionStorage.getItem('nightjar.security.notice') ?? '';
+      if(notice) sessionStorage.removeItem('nightjar.security.notice');
+      return notice;
+    } catch { return ''; }
+  });
 
   useEffect(() => {
     const guestEntryMode: Mode = requestedEntry === 'register' ? 'register' : 'signin';
@@ -230,8 +237,16 @@ export default function AccountAccess({
         <button className="primary-button" disabled={busy || !validPassword(nextPassword) || nextPassword !== nextConfirm} onClick={() => void run(async () => {
           await nightjarAuth.changePassword(currentPassword, nextPassword);
           setCurrentPassword(''); setNextPassword(''); setNextConfirm('');
-          setMessage('Password changed. Your Nightjar account is secured with the new password.');
+          setMessage('Password changed. Existing Firebase refresh sessions are invalidated by the password change; use the session control below for an explicit server-side revocation too.');
         })}><KeyRound size={15} /> Change password</button>
+        <button className="secondary-button" disabled={busy} onClick={() => void run(async () => {
+          if (!window.confirm('Revoke Nightjar sign-in sessions on every device? You will need to sign in again.')) return;
+          await nightjarAuthSecurity.revokeMySessions();
+          try { sessionStorage.setItem('nightjar.security.notice','All Nightjar sessions were revoked. Sign in again with your current password.'); } catch { /* optional */ }
+          await nightjarAuth.signOut();
+          onSignedOut?.();
+          window.location.replace('/account?entry=signin');
+        })}><ShieldCheck size={15}/> Revoke all sessions</button>
         <button className="secondary-button" disabled={busy} onClick={() => window.location.assign('/profile')}>Back to Nightjar</button>
         <button className="ghost-button" disabled={busy} onClick={() => void run(async () => { await nightjarAuth.signOut(); onSignedOut?.(); setMode('signin'); })}>Sign out</button>
       </div>
