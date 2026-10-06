@@ -167,7 +167,7 @@ export default function AccountAccess({
           setMessage('Nightjar is currently in private testing. This email has not been invited by an administrator.');
           return;
         }
-        let next;
+        let next: NightjarIdentity;
         try {
           next = await nightjarAuth.signIn(email, password);
         } catch (error) {
