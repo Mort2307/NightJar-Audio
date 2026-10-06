@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { Bell, Check, Heart, ImagePlus, ShieldCheck, Sparkles, Star, UserCircle2 } from 'lucide-react';
 import SearchableMultiSelect from './SearchableMultiSelect';
+import AppUpdateControl from './AppUpdateControl';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -147,6 +148,8 @@ export default function UserProfileStudio({
           {tasteVector.length ? tasteVector.slice(0,10).map((item:any,index:number)=><div key={item.label} style={{'--weight':Math.max(.2,Math.min(1,Number(item.weight ?? .5))), '--index':index} as CSSProperties}><strong>{item.label}</strong><span>{Math.round(Number(item.weight ?? 0)*100)}%</span></div>) : <div className="people-empty"><Star size={17}/><strong>Your constellation will form naturally.</strong><span>Save, finish, replay and explore. Nightjar keeps this separate from your public identity.</span></div>}
         </div>
       </article>
+
+      <AppUpdateControl />
     </div>
 
     <div className="premium-profile-savebar">
