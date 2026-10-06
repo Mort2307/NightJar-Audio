@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Calculator, Coins, RefreshCw, ShieldCheck, SlidersHorizontal, UsersRound, WalletCards } from 'lucide-react';
+import { Calculator, Coins, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Trash2, UsersRound, WalletCards } from 'lucide-react';
 import type { CommercialSettings } from '../platform/firebase-commercial';
 
 type Props = {
@@ -9,6 +9,37 @@ type Props = {
 };
 type RoleKey = 'creator' | 'writer' | 'editor' | 'artist';
 type RoleScenario = { label: string; allocationPercent: number; eligiblePeople: number; monthlyCap: number };
+type SavedFinanceScenario = {
+  id: string;
+  name: string;
+  createdAt: string;
+  inputs: {
+    totalUsers: number;
+    paidSubscribers: number;
+    subscriptionPrice: number;
+    vatRate: number;
+    priceIncludesVat: boolean;
+    processorPercent: number;
+    processorFixed: number;
+    refundPercent: number;
+    contributorPercent: number;
+    appPercent: number;
+    operatorPercent: number;
+    corporationTaxRate: number;
+    appTaxablePercent: number;
+    operatorTaxablePercent: number;
+    rollUnusedToApp: boolean;
+    roles: Record<RoleKey, RoleScenario>;
+  };
+  outputs: {
+    customerBillings: number;
+    distributableNet: number;
+    contributorPaid: number;
+    appPotAfterTax: number;
+    operatorPotAfterTax: number;
+    estimatedCorporationTax: number;
+  };
+};
 
 const gbp = (value: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 })
@@ -44,6 +75,16 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
   const [hasSavedScenario, setHasSavedScenario] = useState(() => {
     try { return Boolean(window.localStorage.getItem('nightjar.admin.finance-scenario.v1')); }
     catch { return false; }
+  });
+  const [scenarioName,setScenarioName]=useState('');
+  const [savedScenarios,setSavedScenarios]=useState<SavedFinanceScenario[]>(() => {
+    try {
+      const raw=window.localStorage.getItem('nightjar.admin.finance-scenarios.v2');
+      const parsed=raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.slice(0,8) : [];
+    } catch {
+      return [];
+    }
   });
 
   const saveSandboxScenario = () => {
@@ -201,6 +242,73 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
     operatorTaxablePercent, rollUnusedToApp, roles,
   ]);
 
+  const financeInputs = () => ({
+    totalUsers,
+    paidSubscribers,
+    subscriptionPrice,
+    vatRate,
+    priceIncludesVat,
+    processorPercent,
+    processorFixed,
+    refundPercent,
+    contributorPercent,
+    appPercent,
+    operatorPercent,
+    corporationTaxRate,
+    appTaxablePercent,
+    operatorTaxablePercent,
+    rollUnusedToApp,
+    roles:structuredClone(roles),
+  });
+
+  const persistSavedScenarios = (next: SavedFinanceScenario[]) => {
+    setSavedScenarios(next);
+    try { window.localStorage.setItem('nightjar.admin.finance-scenarios.v2', JSON.stringify(next)); }
+    catch { /* local comparison storage is optional */ }
+  };
+
+  const saveNamedScenario = () => {
+    const name=scenarioName.trim() || 'Scenario ' + (savedScenarios.length + 1);
+    const scenario: SavedFinanceScenario = {
+      id:(typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : String(Date.now()),
+      name:name.slice(0,60),
+      createdAt:new Date().toISOString(),
+      inputs:financeInputs(),
+      outputs:{
+        customerBillings:model.customerBillings,
+        distributableNet:model.distributableNet,
+        contributorPaid:model.contributorPaid,
+        appPotAfterTax:model.appPotAfterTax,
+        operatorPotAfterTax:model.operatorPotAfterTax,
+        estimatedCorporationTax:model.estimatedCorporationTax,
+      },
+    };
+    persistSavedScenarios([scenario,...savedScenarios].slice(0,8));
+    setScenarioName('');
+  };
+
+  const loadNamedScenario = (scenario: SavedFinanceScenario) => {
+    const saved=scenario.inputs;
+    setTotalUsers(saved.totalUsers);
+    setPaidSubscribers(saved.paidSubscribers);
+    setSubscriptionPrice(saved.subscriptionPrice);
+    setVatRate(saved.vatRate);
+    setPriceIncludesVat(saved.priceIncludesVat);
+    setProcessorPercent(saved.processorPercent);
+    setProcessorFixed(saved.processorFixed);
+    setRefundPercent(saved.refundPercent);
+    setContributorPercent(saved.contributorPercent);
+    setAppPercent(saved.appPercent);
+    setOperatorPercent(saved.operatorPercent);
+    setCorporationTaxRate(saved.corporationTaxRate);
+    setAppTaxablePercent(saved.appTaxablePercent);
+    setOperatorTaxablePercent(saved.operatorTaxablePercent);
+    setRollUnusedToApp(saved.rollUnusedToApp);
+    setRoles(structuredClone(saved.roles));
+  };
+
+  const removeNamedScenario = (id:string) => persistSavedScenarios(savedScenarios.filter((scenario)=>scenario.id!==id));
+
   const updateRole = (key: RoleKey, field: Exclude<keyof RoleScenario, 'label'>, value: number) =>
     setRoles((current) => ({ ...current, [key]: { ...current[key], [field]: value } }));
 
@@ -227,6 +335,26 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
       <span className={rolesValid ? 'status-pill' : 'status-pill muted'}>{rolesValid ? 'Contributor roles = 100%' : 'Contributor roles = ' + model.rolePercentTotal.toFixed(2) + '%'}</span>
       <span className="status-pill muted">{model.subscriberConversion.toFixed(1)}% user → paid conversion</span>
     </div>
+
+    <section className="finance-scenario-comparison">
+      <div className="subscription-finance-heading">
+        <div><span className="mini-label">SCENARIO COMPARISON</span><h3>Keep the baselines you want to compare.</h3><p className="panel-note">Save up to eight named simulations. Each snapshot preserves the assumptions and the resulting monthly money split so changing the live sandbox does not destroy the previous comparison.</p></div>
+        <div className="finance-scenario-save"><input value={scenarioName} maxLength={60} onChange={(event)=>setScenarioName(event.target.value)} placeholder="e.g. Fair baseline"/><button className="secondary-button" onClick={saveNamedScenario}><Save size={14}/> Save current</button></div>
+      </div>
+      <div className="finance-scenario-table">
+        <div className="finance-scenario-row current"><div><strong>Current sandbox</strong><small>{model.subscribers.toLocaleString()} paid · {gbp(subscriptionPrice)}/month</small></div><span>{gbp(model.distributableNet)}<small>net</small></span><span>{gbp(model.contributorPaid)}<small>professionals</small></span><span>{gbp(model.appPotAfterTax)}<small>app after tax</small></span><span>{gbp(model.operatorPotAfterTax)}<small>owners after tax</small></span><span>{gbp(model.estimatedCorporationTax)}<small>tax reserve</small></span><div/></div>
+        {savedScenarios.map((scenario)=><div className="finance-scenario-row" key={scenario.id}>
+          <div><strong>{scenario.name}</strong><small>{scenario.inputs.paidSubscribers.toLocaleString()} paid · {gbp(scenario.inputs.subscriptionPrice)}/month</small></div>
+          <span>{gbp(scenario.outputs.distributableNet)}<small>net</small></span>
+          <span>{gbp(scenario.outputs.contributorPaid)}<small>professionals</small></span>
+          <span>{gbp(scenario.outputs.appPotAfterTax)}<small>app after tax</small></span>
+          <span>{gbp(scenario.outputs.operatorPotAfterTax)}<small>owners after tax</small></span>
+          <span>{gbp(scenario.outputs.estimatedCorporationTax)}<small>tax reserve</small></span>
+          <div><button className="ghost-button" onClick={()=>loadNamedScenario(scenario)}>Load</button><button className="ghost-button" aria-label={'Delete '+scenario.name} onClick={()=>removeNamedScenario(scenario.id)}><Trash2 size={13}/></button></div>
+        </div>)}
+        {!savedScenarios.length && <div className="people-empty"><Calculator size={17}/><strong>No comparison scenarios saved yet.</strong><span>Set the numbers how you want, name the model and save it. You can then change everything and compare without losing this baseline.</span></div>}
+      </div>
+    </section>
 
     <div className="finance-sim-control-grid">
       <article className="panel finance-sim-controls">

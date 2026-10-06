@@ -666,6 +666,20 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
       editorTurnaround: cleanText(stored.editorTurnaround, 80),
       editorExperienceYears: cleanEditorExperienceYears(stored.editorExperienceYears),
       editorSkillLevels: cleanEditorSkillLevels(stored.editorSkillLevels, stored.roleSpecialties),
+      creatorLanguages: cleanStringList(stored.creatorLanguages, 12),
+      creatorDirectionModes: cleanStringList(stored.creatorDirectionModes, 12),
+      creatorDeliveryFormats: cleanStringList(stored.creatorDeliveryFormats, 12),
+      creatorTurnaround: cleanText(stored.creatorTurnaround, 80),
+      creatorEquipment: cleanText(stored.creatorEquipment, 300),
+      writerScriptLengths: cleanStringList(stored.writerScriptLengths, 12),
+      writerCollaborationPreferences: cleanStringList(stored.writerCollaborationPreferences, 12),
+      writerTurnaround: cleanText(stored.writerTurnaround, 80),
+      writerRightsNote: cleanText(stored.writerRightsNote, 500),
+      artistMediums: cleanStringList(stored.artistMediums, 12),
+      artistDeliveryFormats: cleanStringList(stored.artistDeliveryFormats, 12),
+      artistTurnaround: cleanText(stored.artistTurnaround, 80),
+      artistSoftware: cleanStringList(stored.artistSoftware, 12),
+      listenerCommunityStyle: cleanStringList(stored.listenerCommunityStyle, 12),
     };
   }
   return {
@@ -686,6 +700,20 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
     editorTurnaround: cleanText(data.editorTurnaround, 80),
     editorExperienceYears: cleanEditorExperienceYears(data.editorExperienceYears),
     editorSkillLevels: cleanEditorSkillLevels(data.editorSkillLevels, data.roleSpecialties),
+    creatorLanguages: cleanStringList(data.creatorLanguages, 12),
+    creatorDirectionModes: cleanStringList(data.creatorDirectionModes, 12),
+    creatorDeliveryFormats: cleanStringList(data.creatorDeliveryFormats, 12),
+    creatorTurnaround: cleanText(data.creatorTurnaround, 80),
+    creatorEquipment: cleanText(data.creatorEquipment, 300),
+    writerScriptLengths: cleanStringList(data.writerScriptLengths, 12),
+    writerCollaborationPreferences: cleanStringList(data.writerCollaborationPreferences, 12),
+    writerTurnaround: cleanText(data.writerTurnaround, 80),
+    writerRightsNote: cleanText(data.writerRightsNote, 500),
+    artistMediums: cleanStringList(data.artistMediums, 12),
+    artistDeliveryFormats: cleanStringList(data.artistDeliveryFormats, 12),
+    artistTurnaround: cleanText(data.artistTurnaround, 80),
+    artistSoftware: cleanStringList(data.artistSoftware, 12),
+    listenerCommunityStyle: cleanStringList(data.listenerCommunityStyle, 12),
   };
 };
 
@@ -703,7 +731,7 @@ export const getMyProfile = onCall({ region: REGION }, async (request) => {
       ...data,
       ...roleProfileSlice(data, activeRole),
       activeRole,
-      roles: identity.admin ? ['admin'] : (professionalRolesForAccount(accountSnapshot.data() ?? {}).length ? professionalRolesForAccount(accountSnapshot.data() ?? {}) : ['listener']),
+      roles: identity.admin ? ['admin'] : ['listener', ...professionalRolesForAccount(accountSnapshot.data() ?? {})],
     },
   };
 });
@@ -803,6 +831,13 @@ const publicActivityBadges = (
 };
 
 
+const releaseCreditMatchesProfileRole = (creditRole: unknown, profileRole: string) => {
+  const role = cleanText(creditRole, 80);
+  if (profileRole === 'writer') return role === 'Writer';
+  if (profileRole === 'editor') return ['Audio Editor','Sound Designer','Producer'].includes(role);
+  return false;
+};
+
 const profilePortfolioOptionsFor = async (userId: string, role: string) => {
   if (role === 'creator') {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
@@ -820,9 +855,11 @@ const profilePortfolioOptionsFor = async (userId: string, role: string) => {
   if (role === 'writer' || role === 'editor') {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     return releases.docs
-      .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
+      .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) =>
+        credit.userId === userId && releaseCreditMatchesProfileRole(credit.role, role)))
       .map((doc) => {
-        const credit = normaliseReleaseContributors(doc.data().contributors).find((item) => item.userId === userId);
+        const credit = normaliseReleaseContributors(doc.data().contributors).find((item) =>
+          item.userId === userId && releaseCreditMatchesProfileRole(item.role, role));
         return {
           id: doc.id,
           type: 'credit',
@@ -840,6 +877,16 @@ const profilePortfolioOptionsFor = async (userId: string, role: string) => {
       type: 'playlist',
       title: cleanText(doc.data().title, 100) || 'Untitled playlist',
       subtitle: (Array.isArray(doc.data().releaseIds) ? doc.data().releaseIds.length : 0) + ' releases',
+    }));
+  }
+
+  if (role === 'artist') {
+    const items = await publicArtistPortfolioFor(userId);
+    return items.map((item) => ({
+      id: item.id,
+      type: 'artwork',
+      title: item.title || 'Untitled artwork',
+      subtitle: [item.commissionType, ...(item.tags ?? []).slice(0, 2)].filter(Boolean).join(' · '),
     }));
   }
 
@@ -904,6 +951,20 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     editorTurnaround: cleanText(input.editorTurnaround, 80),
     editorExperienceYears: cleanEditorExperienceYears(input.editorExperienceYears),
     editorSkillLevels: cleanEditorSkillLevels(input.editorSkillLevels, input.roleSpecialties),
+    creatorLanguages: cleanStringList(input.creatorLanguages, 12),
+    creatorDirectionModes: cleanStringList(input.creatorDirectionModes, 12),
+    creatorDeliveryFormats: cleanStringList(input.creatorDeliveryFormats, 12),
+    creatorTurnaround: cleanText(input.creatorTurnaround, 80),
+    creatorEquipment: cleanText(input.creatorEquipment, 300),
+    writerScriptLengths: cleanStringList(input.writerScriptLengths, 12),
+    writerCollaborationPreferences: cleanStringList(input.writerCollaborationPreferences, 12),
+    writerTurnaround: cleanText(input.writerTurnaround, 80),
+    writerRightsNote: cleanText(input.writerRightsNote, 500),
+    artistMediums: cleanStringList(input.artistMediums, 12),
+    artistDeliveryFormats: cleanStringList(input.artistDeliveryFormats, 12),
+    artistTurnaround: cleanText(input.artistTurnaround, 80),
+    artistSoftware: cleanStringList(input.artistSoftware, 12),
+    listenerCommunityStyle: cleanStringList(input.listenerCommunityStyle, 12),
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
@@ -961,6 +1022,28 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
           editorExperienceYears: nextProfile.editorExperienceYears,
           editorSkillLevels: nextProfile.editorSkillLevels,
         } : {}),
+        ...(profileRole === 'creator' ? {
+          creatorLanguages: nextProfile.creatorLanguages,
+          creatorDirectionModes: nextProfile.creatorDirectionModes,
+          creatorDeliveryFormats: nextProfile.creatorDeliveryFormats,
+          creatorTurnaround: nextProfile.creatorTurnaround,
+          creatorEquipment: nextProfile.creatorEquipment,
+        } : {}),
+        ...(profileRole === 'writer' ? {
+          writerScriptLengths: nextProfile.writerScriptLengths,
+          writerCollaborationPreferences: nextProfile.writerCollaborationPreferences,
+          writerTurnaround: nextProfile.writerTurnaround,
+          writerRightsNote: nextProfile.writerRightsNote,
+        } : {}),
+        ...(profileRole === 'artist' ? {
+          artistMediums: nextProfile.artistMediums,
+          artistDeliveryFormats: nextProfile.artistDeliveryFormats,
+          artistTurnaround: nextProfile.artistTurnaround,
+          artistSoftware: nextProfile.artistSoftware,
+        } : {}),
+        ...(profileRole === 'listener' ? {
+          listenerCommunityStyle: nextProfile.listenerCommunityStyle,
+        } : {}),
       };
     }
 
@@ -999,15 +1082,17 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   };
 });
 
-const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
-  const profile = await profileRef(account.id).get();
-  const data = profile.data();
+const publicProfilePayload = (
+  userId: string,
+  accountData: Record<string, any>,
+  data: Record<string, any> | undefined,
+) => {
   if (!data || data.publicProfile === false) return null;
-  const roles = professionalRolesForAccount(account.data() ?? {});
+  const roles = professionalRolesForAccount(accountData);
   return {
-    userId: account.id,
-    role: roles[0] ?? account.data().role ?? null,
-    roles: roles.length ? roles : ['listener'],
+    userId,
+    role: roles[0] ?? accountData.role ?? null,
+    roles: ['listener', ...roles],
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
     handle: data.handle ?? null,
@@ -1034,6 +1119,11 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
     roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
     featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
   };
+};
+
+const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
+  const profile = await profileRef(account.id).get();
+  return publicProfilePayload(account.id, account.data() ?? {}, profile.data());
 };
 
 const calculateVerifiedListening = (events: Array<Record<string, any>>) => {
@@ -1090,11 +1180,13 @@ const calculateVerifiedListening = (events: Array<Record<string, any>>) => {
 export const listCreators = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [accounts, releases, listening] = await Promise.all([
+  const [accounts, profilesSnapshot, releases, listening] = await Promise.all([
     db.collection('accounts').limit(1000).get(),
+    db.collection('profiles').limit(1000).get(),
     db.collection('releases').where('status', '==', 'released').limit(1000).get(),
     db.collection('listeningEvents').limit(5000).get(),
   ]);
+  const profileByUser = new Map(profilesSnapshot.docs.map((doc) => [doc.id, doc.data() ?? {}]));
 
   const releaseCounts = new Map<string, number>();
   for (const release of releases.docs) {
@@ -1104,24 +1196,23 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
 
   const verified = calculateVerifiedListening(listening.docs.map((doc) => doc.data()));
 
-  const creators = (await Promise.all(
-    accounts.docs
-      .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
-      .map(async (doc) => {
-        const base = await publicProfileForAccount(doc);
-        if (!base) return null;
-        const seconds = verified.byCreator.get(doc.id) ?? 0;
-        return {
-          ...base,
-          followerCount: Number((base as any).followerCount ?? 0),
-          releaseCount: releaseCounts.get(doc.id) ?? 0,
-          verifiedListeningMinutes: Math.round((seconds / 60) * 10) / 10,
-          listeningSharePercent: verified.totalSeconds > 0
-            ? Math.round((seconds / verified.totalSeconds) * 1000) / 10
-            : 0,
-        };
-      }),
-  )).filter(Boolean);
+  const creators = accounts.docs
+    .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
+    .map((doc) => {
+      const base = publicProfilePayload(doc.id, doc.data() ?? {}, profileByUser.get(doc.id));
+      if (!base) return null;
+      const seconds = verified.byCreator.get(doc.id) ?? 0;
+      return {
+        ...base,
+        followerCount: Number((base as any).followerCount ?? 0),
+        releaseCount: releaseCounts.get(doc.id) ?? 0,
+        verifiedListeningMinutes: Math.round((seconds / 60) * 10) / 10,
+        listeningSharePercent: verified.totalSeconds > 0
+          ? Math.round((seconds / verified.totalSeconds) * 1000) / 10
+          : 0,
+      };
+    })
+    .filter(Boolean);
 
   return { creators };
 });
@@ -1181,7 +1272,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
-        roles: professionalRoles.length ? professionalRoles : ['listener'],
+        roles: ['listener', ...professionalRoles],
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
@@ -1206,7 +1297,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         roleDetailTwo: data.roleDetailTwo ?? null,
         portfolioNote: data.portfolioNote ?? null,
         featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
-        roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
+        roleProfiles,
         releaseCount,
         publishedWorkCount,
         creditedReleaseCount,
@@ -1278,9 +1369,14 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
-  if (!professionalRoles.length && Array.isArray(data.featuredPortfolioIds) && data.featuredPortfolioIds.length) {
+  const publicRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const listenerFeaturedIds = cleanStringList(
+    publicRoleProfiles.listener?.featuredPortfolioIds ?? (!professionalRoles.length ? data.featuredPortfolioIds : []),
+    6,
+  );
+  if (listenerFeaturedIds.length) {
     const playlistDocs = await Promise.all(
-      cleanStringList(data.featuredPortfolioIds, 6).map((playlistId) => accountRef(userId).collection('playlists').doc(playlistId).get()),
+      listenerFeaturedIds.map((playlistId) => accountRef(userId).collection('playlists').doc(playlistId).get()),
     );
     publicPlaylists = await Promise.all(playlistDocs
       .filter((playlist) => playlist.exists)
@@ -1299,17 +1395,37 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       }));
   }
 
-  const hasPortfolioCuration = Array.isArray(data.featuredPortfolioIds);
-  const selectedPortfolioIds = cleanStringList(data.featuredPortfolioIds, 6);
-  const orderedFeatured = (items: ReturnType<typeof releasePayload>[]) => {
+  const roleProfiles = publicRoleProfiles;
+  const rolePortfolioIds = (targetRole: string) => cleanStringList(
+    roleProfiles[targetRole]?.featuredPortfolioIds ?? (targetRole === role ? data.featuredPortfolioIds : []),
+    6,
+  );
+  const selectedPortfolioIds = rolePortfolioIds(role);
+  const orderForRole = <T extends { id: string }>(items: T[], targetRole: string) => {
+    const ids = rolePortfolioIds(targetRole);
+    if (!ids.length) return items.slice(0, 3);
     const byId = new Map(items.map((item) => [String(item.id), item]));
-    return selectedPortfolioIds.map((id) => byId.get(id)).filter((item): item is ReturnType<typeof releasePayload> => Boolean(item));
+    return ids.map((id) => byId.get(id)).filter((item): item is T => Boolean(item));
   };
-  const featuredWork = professionalRoles.includes('creator')
-    ? (hasPortfolioCuration ? orderedFeatured(creatorReleases) : creatorReleases.slice(0, 3))
-    : (professionalRoles.includes('writer') || professionalRoles.includes('editor'))
-      ? (hasPortfolioCuration ? orderedFeatured(creditedReleases) : creditedReleases.slice(0, 3))
+  const featuredWork = role === 'creator'
+    ? orderForRole(creatorReleases, 'creator')
+    : (role === 'writer' || role === 'editor')
+      ? orderForRole(creditedReleases, role)
       : [];
+  const creditedReleasesByRole = {
+    writer: creditedReleases.filter((release: any) =>
+      (release.contributors ?? []).some((credit: any) =>
+        credit.userId === userId && releaseCreditMatchesProfileRole(credit.role, 'writer'))),
+    editor: creditedReleases.filter((release: any) =>
+      (release.contributors ?? []).some((credit: any) =>
+        credit.userId === userId && releaseCreditMatchesProfileRole(credit.role, 'editor'))),
+  };
+  const featuredWorkByRole = {
+    creator: orderForRole(creatorReleases, 'creator'),
+    writer: orderForRole(creditedReleasesByRole.writer, 'writer'),
+    editor: orderForRole(creditedReleasesByRole.editor, 'editor'),
+  };
+
   const [completedCollaborations, publicArtistPortfolio] = await Promise.all([
     professionalRoles.length > 0 ? completedCollaborationCountFor(userId) : Promise.resolve(0),
     professionalRoles.includes('artist') ? publicArtistPortfolioFor(userId) : Promise.resolve([]),
@@ -1325,7 +1441,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     profile: {
       userId,
       role,
-      roles: professionalRoles.length ? professionalRoles : ['listener'],
+      roles: ['listener', ...professionalRoles],
       displayName: data.displayName ?? 'Nightjar member',
       name: data.displayName ?? 'Nightjar member',
       handle: data.handle ?? null,
@@ -1351,7 +1467,17 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
+      featuredWorkByRole,
+      creditedReleasesByRole,
       artistPortfolio: publicArtistPortfolio,
+      featuredArtistPortfolio: role === 'artist'
+        ? (() => {
+            const ids = rolePortfolioIds('artist');
+            if (!ids.length) return publicArtistPortfolio.slice(0, 6);
+            const byId = new Map(publicArtistPortfolio.map((item) => [String(item.id), item]));
+            return ids.map((id) => byId.get(id)).filter(Boolean);
+          })()
+        : [],
       publicPlaylists,
       completedCollaborations,
       activityBadges,
@@ -3035,19 +3161,20 @@ export const spotlightState = onCall({ region: REGION }, async (request) => {
 
 export const adminAccountOverview = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const [accountsSnapshot, testerSnapshot] = await Promise.all([
+  const [accountsSnapshot, testerSnapshot, profilesSnapshot] = await Promise.all([
     db.collection('accounts').limit(5000).get(),
     db.collection(CLOSED_BETA_ALLOWLIST_COLLECTION).limit(1000).get(),
+    db.collection('profiles').limit(5000).get(),
   ]);
-  const accounts = await Promise.all(accountsSnapshot.docs.map(async (doc) => {
+  const profileByUser = new Map(profilesSnapshot.docs.map((doc) => [doc.id, doc.data() ?? {}]));
+  const accounts = accountsSnapshot.docs.map((doc) => {
     const account = doc.data();
-    const profile = await profileRef(doc.id).get();
-    const profileData = profile.data() ?? {};
+    const profileData = profileByUser.get(doc.id) ?? {};
     return {
       userId: doc.id,
       email: account.email ?? null,
       role: account.role ?? null,
-      roles: professionalRolesForAccount(account),
+      roles: account.role === 'admin' ? ['admin'] : ['listener', ...professionalRolesForAccount(account)],
       pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles),
       status: account.status ?? 'active',
       name: profileData.displayName ?? account.email?.split('@')?.[0] ?? 'Nightjar account',
@@ -3056,7 +3183,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       avatarUrl: profileData.avatarStatus === 'approved' ? profileData.avatarUrl ?? null : null,
       testAccess: account.testAccess === true,
     };
-  }));
+  });
 
   const approvedTesters = testerSnapshot.docs
     .map((doc) => doc.data() ?? {})
@@ -4943,6 +5070,75 @@ export const recordAuthenticationAttempt = onCall({ region: REGION }, async (req
   return { recorded: true, eventId: ref.id, alert };
 });
 
+export const recordAuthenticationSuccess = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const clientAttemptId = cleanText(input.clientAttemptId, 120);
+  if (!clientAttemptId) return { recorded:false, newDevice:false };
+
+  const clientPlatform = cleanText(input.clientPlatform, 120) || null;
+  const route = cleanText(input.route, 160) || '/account';
+  const deviceKey = createHash('sha256').update(identity.uid + ':' + clientAttemptId).digest('hex').slice(0, 48);
+  const deviceRef = accountRef(identity.uid).collection('authDevices').doc(deviceKey);
+  const device = await deviceRef.get();
+  const newDevice = !device.exists;
+
+  await deviceRef.set({
+    deviceKey,
+    clientAttemptIdHash: createHash('sha256').update(clientAttemptId).digest('hex'),
+    clientPlatform,
+    firstSeenAt: device.exists ? device.data()?.firstSeenAt ?? FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
+    lastSeenAt: FieldValue.serverTimestamp(),
+    lastRoute: route,
+  }, { merge:true });
+
+  const activityRef = accountRef(identity.uid).collection('signInActivity').doc();
+  await activityRef.set({
+    eventType:'signin_success',
+    clientPlatform,
+    route,
+    newDevice,
+    passwordCaptured:false,
+    retentionUntil:new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    createdAt:FieldValue.serverTimestamp(),
+  });
+
+  if (newDevice) {
+    await createNotification(identity.uid, {
+      type:'account_security',
+      subtype:'new_signin_device',
+      title:'New Nightjar sign-in',
+      message:clientPlatform
+        ? 'Nightjar was signed into from a new app or browser profile: ' + clientPlatform + '.'
+        : 'Nightjar was signed into from a new app or browser profile.',
+      dedupeKey:'new-signin-device:' + deviceKey,
+      route:'/profile',
+    });
+  }
+
+  return { recorded:true, newDevice };
+});
+
+export const listMySignInActivity = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const snapshot = await accountRef(identity.uid).collection('signInActivity').limit(50).get();
+  const activity = snapshot.docs
+    .map((doc) => {
+      const data = doc.data() ?? {};
+      return {
+        id:doc.id,
+        eventType:'signin_success',
+        clientPlatform:cleanText(data.clientPlatform,120) || null,
+        route:cleanText(data.route,160) || null,
+        newDevice:data.newDevice === true,
+        createdAt:toIso(data.createdAt),
+      };
+    })
+    .sort((a,b)=>String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+    .slice(0,20);
+  return { activity };
+});
+
 export const listAuthenticationEvents = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('authenticationEvents').limit(500).get();
@@ -5687,7 +5883,11 @@ export const listenerLibrary = onCall({ region: REGION }, async (request) => {
   const library = await listenerHistoryFor(identity.uid);
   const playlistsSnapshot = await accountRef(identity.uid).collection('playlists').limit(100).get();
   const profile = await profileRef(identity.uid).get();
-  const publicPlaylistIds = new Set(cleanStringList(profile.data()?.featuredPortfolioIds, 6));
+  const profileData = profile.data() ?? {};
+  const listenerProfile = profileData.roleProfiles && typeof profileData.roleProfiles === 'object'
+    ? profileData.roleProfiles.listener ?? {}
+    : {};
+  const publicPlaylistIds = new Set(cleanStringList(listenerProfile.featuredPortfolioIds ?? profileData.featuredPortfolioIds, 6));
   const playlists = playlistsSnapshot.docs
     .map((doc) => ({
       id: doc.id,
@@ -5762,7 +5962,14 @@ export const setPlaylistProfileVisibility = onCall({ region: REGION }, async (re
   if (!playlist.exists) throw new HttpsError('not-found', 'Playlist not found.');
 
   const profile = await profileRef(identity.uid).get();
-  const current = cleanStringList(profile.data()?.featuredPortfolioIds, 6);
+  const profileData = profile.data() ?? {};
+  const roleProfiles = profileData.roleProfiles && typeof profileData.roleProfiles === 'object'
+    ? { ...profileData.roleProfiles }
+    : {};
+  const listenerProfile = roleProfiles.listener && typeof roleProfiles.listener === 'object'
+    ? { ...roleProfiles.listener }
+    : {};
+  const current = cleanStringList(listenerProfile.featuredPortfolioIds ?? profileData.featuredPortfolioIds, 6);
   const has = current.includes(playlistId);
   let next = current;
 
@@ -5773,8 +5980,12 @@ export const setPlaylistProfileVisibility = onCall({ region: REGION }, async (re
     next = current.filter((id) => id !== playlistId);
   }
 
-  await profileRef(identity.uid).set({
+  roleProfiles.listener = {
+    ...listenerProfile,
     featuredPortfolioIds: next,
+  };
+  await profileRef(identity.uid).set({
+    roleProfiles,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
@@ -5787,8 +5998,20 @@ export const deletePlaylist = onCall({ region: REGION }, async (request) => {
   if (!playlistId) throw new HttpsError('invalid-argument', 'Playlist is required.');
   await accountRef(identity.uid).collection('playlists').doc(playlistId).delete();
   const profile = await profileRef(identity.uid).get();
-  const featuredPortfolioIds = cleanStringList(profile.data()?.featuredPortfolioIds, 6).filter((id) => id !== playlistId);
-  await profileRef(identity.uid).set({ featuredPortfolioIds, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const profileData = profile.data() ?? {};
+  const roleProfiles = profileData.roleProfiles && typeof profileData.roleProfiles === 'object'
+    ? { ...profileData.roleProfiles }
+    : {};
+  const listenerProfile = roleProfiles.listener && typeof roleProfiles.listener === 'object'
+    ? { ...roleProfiles.listener }
+    : {};
+  const featuredPortfolioIds = cleanStringList(listenerProfile.featuredPortfolioIds ?? profileData.featuredPortfolioIds, 6)
+    .filter((id) => id !== playlistId);
+  roleProfiles.listener = {
+    ...listenerProfile,
+    featuredPortfolioIds,
+  };
+  await profileRef(identity.uid).set({ roleProfiles, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { deleted: true, playlistId };
 });
 

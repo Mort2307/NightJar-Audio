@@ -183,7 +183,10 @@ export default function AccountAccess({
         }
         onAuthenticated(next);
         setMode(next.emailVerified ? 'signin' : 'verify');
-        if (next.emailVerified) setMessage('Signed in. Opening Nightjar…');
+        if (next.emailVerified) {
+          void nightjarAuthSecurity.recordSuccess().catch(() => { /* sign-in telemetry must never block account access */ });
+          setMessage('Signed in. Opening Nightjar…');
+        }
         return;
       }
       if (mode === 'reset') {
@@ -246,7 +249,7 @@ export default function AccountAccess({
       <span><Headphones size={14}/><strong>Listener</strong><small>Discovery, subscription, comments, Like/Love and private library.</small></span>
       <span><Mic2 size={14}/><strong>Creator</strong><small>Publishing, credits, professional messaging and Creator Studio.</small></span>
       <span><FileText size={14}/><strong>Writer</strong><small>Protected scripts, rights, collaboration and Writer Studio.</small></span>
-      <span><AudioLines size={14}/><strong>Audio Editor</strong><small>Assigned work, production credits, messaging and Editorial.</small></span>
+      <span><AudioLines size={14}/><strong>Audio Editor</strong><small>Assigned work, production credits, messaging and Editor Studio.</small></span>
       <span><Brush size={14}/><strong>Artist</strong><small>Portfolio, commissions, visual collaboration and artwork credits.</small></span>
       <em>Your account can hold multiple approved professional roles. Switch workspaces from your profile whenever you need to.</em>
     </div>}

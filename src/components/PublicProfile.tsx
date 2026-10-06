@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bird, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
+import { Bird, BookOpenText, Brush, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -35,6 +35,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
   const [giftOpen, setGiftOpen] = useState(false);
   const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(null);
 
@@ -43,6 +45,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadError('');
     if (demoMode) {
       const person = demoDirectory.find((item) => item.userId === userId);
       const creditedReleases = demoTracks.filter((release:any) => (release.contributors ?? []).some((credit:any) => credit.userId === userId));
@@ -62,6 +65,25 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         roleBio:person.role === 'writer' ? 'Character-led scripts with strong dialogue, clear emotional progression and room for performer interpretation.' : person.role === 'editor' ? 'Dialogue-first post-production with a clean, natural finish and careful restoration work.' : person.role === 'artist' ? 'Painterly visual storytelling for covers, character work and atmospheric promotional artwork.' : person.role === 'creator' ? 'Character-led voice performance with intimate delivery, cinematic pacing and collaborative production instincts.' : 'Long-form character stories, atmosphere, slow builds and independent creators are what make Nightjar feel like home.',
         roleDetailOne:person.role === 'writer' ? 'Dialogue-first work with strong character progression.' : person.role === 'editor' ? 'Organised remote handoff with labelled revisions, timestamped notes and non-destructive project delivery.' : person.role === 'artist' ? 'Painterly digital illustration with cinematic lighting and strong character silhouettes.' : person.role === 'creator' ? 'Character-led performance with restrained, intimate delivery and cinematic pacing.' : 'Late-night stories, atmosphere and independent creators.',
         roleDetailTwo:person.role === 'writer' ? 'Collaboration and licensing stay inside protected Nightjar workflows.' : person.role === 'editor' ? 'Dialogue-heavy, binaural and recurring series work are the sweet spot.' : person.role === 'artist' ? 'Open to cover, character and promotional commissions through Nightjar.' : person.role === 'creator' ? 'Broadcast-quality home setup with remote direction available.' : 'Always happy to discover smaller creators.',
+        ...(person.role === 'creator' ? {
+          creatorLanguages:['English · UK','Northern English'],
+          creatorDirectionModes:['Self-directed','Live direction','Written direction / notes'],
+          creatorDeliveryFormats:['Raw WAV','Cleaned dialogue','Multiple takes','Pickups included','Series continuity'],
+          creatorTurnaround:'3–5 days',
+          creatorEquipment:'Broadcast-quality home booth · BEACN microphone · remote direction available.',
+        } : person.role === 'writer' ? {
+          writerScriptLengths:['Short · 500–1,500 words','Medium · 1,500–4,000 words','Series / episodic'],
+          writerCollaborationPreferences:['VA-led commissions','Collaborative outlining','Long-running series','Licensing existing scripts'],
+          writerTurnaround:'1–2 weeks',
+          writerRightsNote:'Open to licensed catalogue work and commissioned originals through protected Nightjar workflows.',
+        } : person.role === 'artist' ? {
+          artistMediums:['Digital painting','Illustration','Typography'],
+          artistDeliveryFormats:['Cover artwork','Square social artwork','Portrait artwork','Series visual system'],
+          artistTurnaround:'1–2 weeks',
+          artistSoftware:['Procreate','Adobe Photoshop'],
+        } : person.role === 'listener' ? {
+          listenerCommunityStyle:['Recommendations welcome','Playlist curator','Independent-creator supporter','Series follower'],
+        } : {}),
         ...(person.role === 'editor' ? {
           editorSoftware:['Reaper','iZotope RX','Adobe Audition'],
           editorProjectTypes:['Single-voice roleplay','Multi-voice audio drama','ASMR / close-mic audio','Binaural / spatial scenes','Series / episodic production','Restoration / rescue edits'],
@@ -94,12 +116,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     void nightjarCommunity.getPublicProfile(userId).then((data) => {
       if (!cancelled) setProfile(data.profile ?? null);
     }).catch(() => {
-      if (!cancelled) notify('Public profile could not be loaded.');
+      if (!cancelled) {
+        setProfile(null);
+        setLoadError(navigator.onLine
+          ? 'Nightjar could not load this public profile from the protected service.'
+          : 'You are offline. Public profiles need a connection because Nightjar does not cache protected account data.');
+        notify('Public profile could not be loaded.');
+      }
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [userId, demoMode]);
+  }, [userId, demoMode, retryKey]);
 
   const share = async () => {
     if (!profile) return;
@@ -128,11 +156,13 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   ));
   const profileRole = ((selectedProfileRole && availableProfileRoles.includes(selectedProfileRole)
     ? selectedProfileRole
-    : availableProfileRoles[0] ?? 'listener')) as ProfileRoleKey;
+    : (profile?.role && availableProfileRoles.includes(String(profile.role)) ? String(profile.role) : availableProfileRoles[0] ?? 'listener'))) as ProfileRoleKey;
   const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
   const roleDetails = profile?.roleProfiles && typeof profile.roleProfiles === 'object' && profile.roleProfiles[profileRole]
     ? profile.roleProfiles[profileRole]
     : profile ?? {};
+  const roleFeaturedWork = (profile?.featuredWorkByRole?.[profileRole] ?? profile?.featuredWork ?? []) as any[];
+  const roleCreditedReleases = (profile?.creditedReleasesByRole?.[profileRole] ?? profile?.creditedReleases ?? []) as any[];
   const profileMetrics = profile ? (
     profileRole === 'creator'
       ? [
@@ -182,6 +212,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         <button className="icon-button" onClick={onClose} aria-label="Close public profile"><X size={18}/></button>
       </header>
 
+      {!loading && loadError && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile temporarily unavailable</strong><p>{loadError}</p></div><button className="secondary-button" onClick={()=>setRetryKey((value)=>value+1)}>Try again</button></div>}
+      {!loading && !loadError && !profile && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile not available</strong><p>This profile is private, unavailable or no longer active.</p></div></div>}
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero">
           <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
@@ -222,6 +254,65 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite tropes' : 'Tropes & themes'}</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {(roleDetails.roleDetailOne || roleDetails.roleDetailTwo) && <div className="public-role-copy">{roleDetails.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{roleDetails.roleDetailOne}</p></div>}{roleDetails.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{roleDetails.roleDetailTwo}</p></div>}</div>}
         </section>
+
+        {profileRole === 'creator' && <section className="role-public-professional creator-public-professional">
+          <div className="role-public-professional-head"><div><span className="mini-label">VA CREATOR PROFILE</span><h3>Performance & recording craft</h3><p>A working snapshot for listeners and collaborators — voice identity, direction style and delivery without exposing private production files or contact details.</p></div><Mic2 size={19}/></div>
+          <div className="role-public-fact-grid">
+            <div><span>Availability</span><strong>{roleDetails.roleAvailability || 'Ask first'}</strong></div>
+            <div><span>Turnaround</span><strong>{roleDetails.creatorTurnaround || 'Project dependent'}</strong></div>
+            <div><span>Released work</span><strong>{profile.releaseCount ?? 0}</strong></div>
+            <div><span>Collaborations</span><strong>{profile.completedCollaborations ?? 0}</strong></div>
+          </div>
+          {!!roleDetails.creatorLanguages?.length && <div className="role-public-detail-card"><span className="mini-label">VOICE RANGE</span><h4>Languages, accents & dialects</h4><div className="creator-profile-tags">{roleDetails.creatorLanguages.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          <div className="role-public-two-column">
+            <div className="role-public-detail-card"><span className="mini-label">DIRECTION</span><h4>How they like to work</h4>{roleDetails.creatorDirectionModes?.length?<div className="creator-profile-tags">{roleDetails.creatorDirectionModes.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Direction preferences not listed yet.</p>}</div>
+            <div className="role-public-detail-card"><span className="mini-label">DELIVERY</span><h4>What they can hand off</h4>{roleDetails.creatorDeliveryFormats?.length?<div className="creator-profile-tags">{roleDetails.creatorDeliveryFormats.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Delivery options not listed yet.</p>}</div>
+          </div>
+          {roleDetails.creatorEquipment && <div className="role-public-note"><strong>Studio / equipment</strong><p>{roleDetails.creatorEquipment}</p></div>}
+        </section>}
+
+        {profileRole === 'writer' && <section className="role-public-professional writer-public-professional">
+          <div className="role-public-professional-head"><div><span className="mini-label">WRITER PROFILE</span><h3>Author, formats & rights posture</h3><p>Useful commissioning context without exposing drafts, manuscript text, private rates or protected deal terms.</p></div><BookOpenText size={19}/></div>
+          <div className="role-public-fact-grid">
+            <div><span>Availability</span><strong>{roleDetails.roleAvailability || 'Ask first'}</strong></div>
+            <div><span>Turnaround</span><strong>{roleDetails.writerTurnaround || 'Project dependent'}</strong></div>
+            <div><span>Published scripts</span><strong>{profile.publishedWorkCount ?? 0}</strong></div>
+            <div><span>Release credits</span><strong>{profile.creditedReleaseCount ?? 0}</strong></div>
+          </div>
+          <div className="role-public-two-column">
+            <div className="role-public-detail-card"><span className="mini-label">SCRIPT SCALE</span><h4>Typical lengths</h4>{roleDetails.writerScriptLengths?.length?<div className="creator-profile-tags">{roleDetails.writerScriptLengths.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Script lengths not listed yet.</p>}</div>
+            <div className="role-public-detail-card"><span className="mini-label">COLLABORATION</span><h4>Best working fit</h4>{roleDetails.writerCollaborationPreferences?.length?<div className="creator-profile-tags">{roleDetails.writerCollaborationPreferences.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Collaboration preferences not listed yet.</p>}</div>
+          </div>
+          {roleDetails.writerRightsNote && <div className="role-public-note"><strong>Rights / licensing note</strong><p>{roleDetails.writerRightsNote}</p></div>}
+        </section>}
+
+        {profileRole === 'artist' && <section className="role-public-professional artist-public-professional">
+          <div className="role-public-professional-head"><div><span className="mini-label">ARTIST PROFILE</span><h3>Visual practice & commission fit</h3><p>Public creative capability and approved work — private briefs, source files and licensing negotiations stay private.</p></div><Brush size={19}/></div>
+          <div className="role-public-fact-grid">
+            <div><span>Availability</span><strong>{roleDetails.roleAvailability || 'Ask first'}</strong></div>
+            <div><span>Turnaround</span><strong>{roleDetails.artistTurnaround || 'Project dependent'}</strong></div>
+            <div><span>Portfolio pieces</span><strong>{profile.artistPortfolio?.length ?? 0}</strong></div>
+            <div><span>Collaborations</span><strong>{profile.completedCollaborations ?? 0}</strong></div>
+          </div>
+          <div className="role-public-two-column">
+            <div className="role-public-detail-card"><span className="mini-label">MEDIUMS</span><h4>How they make</h4>{roleDetails.artistMediums?.length?<div className="creator-profile-tags">{roleDetails.artistMediums.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Mediums not listed yet.</p>}</div>
+            <div className="role-public-detail-card"><span className="mini-label">DELIVERABLES</span><h4>What they can produce</h4>{roleDetails.artistDeliveryFormats?.length?<div className="creator-profile-tags">{roleDetails.artistDeliveryFormats.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Deliverables not listed yet.</p>}</div>
+          </div>
+          {!!roleDetails.artistSoftware?.length && <div className="role-public-detail-card"><span className="mini-label">TOOLS</span><h4>Software & tools</h4><div className="creator-profile-tags">{roleDetails.artistSoftware.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!profile.featuredArtistPortfolio?.length && <div className="public-artist-featured"><span className="mini-label">FEATURED ARTWORK</span><div className="public-artist-featured-grid">{profile.featuredArtistPortfolio.map((item:any)=><article key={item.id}>{item.imageUrl&&<img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/>}<div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}<p>{item.description}</p></div></article>)}</div></div>}
+        </section>}
+
+        {profileRole === 'listener' && <section className="role-public-professional listener-public-professional">
+          <div className="role-public-professional-head"><div><span className="mini-label">LISTENER SIGNATURE</span><h3>A curated member profile, not a behavioural dossier.</h3><p>This space is made from information the Listener deliberately chose to share. Private listening history, favourites, completion data and library contents are not exposed.</p></div><Headphones size={19}/></div>
+          <div className="role-public-fact-grid">
+            <div><span>Followers</span><strong>{profile.followerCount ?? 0}</strong></div>
+            <div><span>Following</span><strong>{profile.followingCount ?? 0}</strong></div>
+            <div><span>Public playlists</span><strong>{profile.publicPlaylists?.length ?? 0}</strong></div>
+            <div><span>Shared interests</span><strong>{(profile.favouriteTags?.length ?? 0)+(profile.favouriteCategories?.length ?? 0)}</strong></div>
+          </div>
+          {!!roleDetails.listenerCommunityStyle?.length && <div className="role-public-detail-card"><span className="mini-label">COMMUNITY STYLE</span><h4>How they like to take part</h4><div className="creator-profile-tags">{roleDetails.listenerCommunityStyle.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          <div className="listener-public-privacy"><ShieldCheck size={15}/><span>Only deliberate public profile choices are shown here.</span></div>
+        </section>}
 
         {profileRole === 'editor' && <section className="editor-public-professional">
           <div className="editor-public-heading">
@@ -339,9 +430,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                       : 'Listener profile'}</h3>
             </div>
           </div>
-          {profileRole === 'creator' && !!profile.featuredWork?.length && <div className="public-featured-work">
+          {profileRole === 'creator' && !!roleFeaturedWork.length && <div className="public-featured-work">
             <span className="mini-label">FEATURED</span>
-            {profile.featuredWork.map((release:any)=><article key={release.id}>
+            {roleFeaturedWork.map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? profile.displayName}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
               <div className="public-work-community-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div>
@@ -354,12 +445,19 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               {!!playlist.releases?.length && <div className="public-playlist-preview">{playlist.releases.slice(0,4).map((release:any)=><button type="button" key={release.id} onClick={()=>onCommunityRelease?.(release)} disabled={!onCommunityRelease}><span>{release.title}</span><small>{release.creatorName ?? 'Nightjar creator'} · Community</small></button>)}</div>}
             </article>)}
           </div>}
+          {(profileRole === 'writer' || profileRole === 'editor') && !!roleFeaturedWork.length && <div className="public-featured-work">
+            <span className="mini-label">FEATURED {profileRole === 'writer' ? 'WRITING' : 'PRODUCTION'} CREDITS</span>
+            {roleFeaturedWork.map((release:any)=><article key={'featured-'+release.id}>
+              <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
+              <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId && (profileRole==='writer' ? credit.role==='Writer' : ['Audio Editor','Sound Designer','Producer'].includes(credit.role))).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
+            </article>)}
+          </div>}
           {(profileRole === 'writer' || profileRole === 'editor') && <div className="public-credit-summary">
             <span>{profileRole === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
             <strong>{profile.creditedReleaseCount ?? 0} credited release{profile.creditedReleaseCount === 1 ? '' : 's'}</strong>
           </div>}
-          {(profileRole === 'writer' || profileRole === 'editor') && !!profile.creditedReleases?.length && <div className="public-credit-list">
-            {profile.creditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
+          {(profileRole === 'writer' || profileRole === 'editor') && !!roleCreditedReleases.length && <div className="public-credit-list">
+            {roleCreditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
               <div className="public-work-community-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div>

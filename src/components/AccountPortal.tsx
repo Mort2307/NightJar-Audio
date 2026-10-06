@@ -11,6 +11,7 @@ const accountDestination = (account: NightjarAccountIdentity) => {
   if (account.role === 'creator') return '/creator';
   if (account.role === 'writer') return '/writer';
   if (account.role === 'editor') return '/editor';
+  if (account.role === 'artist') return '/profile';
   if (account.role === 'listener') return '/discover';
   return null;
 };
@@ -33,9 +34,9 @@ export default function AccountPortal() {
     try {
       await nightjarAuth.idToken(true);
       let nextAccount = await nightjarAccount.identity();
-      const pendingRole = sessionStorage.getItem('nightjar.registrationRole') as 'listener' | 'creator' | 'writer' | 'editor' | null;
+      const pendingRole = sessionStorage.getItem('nightjar.registrationRole') as 'listener' | 'creator' | 'writer' | 'editor' | 'artist' | null;
       const referralCode = sessionStorage.getItem('nightjar.creatorReferralCode') ?? '';
-      if (!nextAccount.admin && !nextAccount.role && pendingRole && ['listener','creator','writer','editor'].includes(pendingRole)) {
+      if (!nextAccount.admin && !nextAccount.role && pendingRole && ['listener','creator','writer','editor','artist'].includes(pendingRole)) {
         await nightjarAccount.chooseRole(pendingRole, referralCode);
         nextAccount = await nightjarAccount.identity();
       }
@@ -60,9 +61,11 @@ export default function AccountPortal() {
     } catch (error) {
       setAccount(null);
       const detail = error instanceof Error ? error.message : String(error ?? '');
-      setMessage(detail.includes('Verify your email')
-        ? 'Your email is verified in the browser, but Firebase had not refreshed the backend identity token yet. Refresh this page once; Nightjar now forces a fresh token before retrying.'
-        : 'Nightjar could not reach the protected account service. The age-assurance bypass is not involved in this step. Try once more; if it persists, the Functions deployment needs checking.');
+      setMessage(!navigator.onLine
+        ? 'You are offline. Nightjar account state is never cached for offline access; reconnect and try again.'
+        : detail.includes('Verify your email')
+          ? 'Your email is verified in the browser, but Firebase had not refreshed the backend identity token yet. Refresh this page once; Nightjar now forces a fresh token before retrying.'
+          : 'Nightjar could not reach the protected account service. Try again; if it persists, the Functions deployment or Firebase connection needs checking.');
     } finally {
       setLoadingAccount(false);
     }
@@ -106,7 +109,7 @@ export default function AccountPortal() {
     };
   }, [explicitSignIn]);
 
-  const chooseRole = async (role: 'listener' | 'creator' | 'writer' | 'editor') => {
+  const chooseRole = async (role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') => {
     setLoadingAccount(true);
     setMessage('');
     try {
@@ -194,6 +197,7 @@ export default function AccountPortal() {
             <button className="secondary-button" disabled={loadingAccount} onClick={() => void chooseRole('creator')}>Creator</button>
             <button className="secondary-button" disabled={loadingAccount} onClick={() => void chooseRole('writer')}>Writer</button>
             <button className="secondary-button" disabled={loadingAccount} onClick={() => void chooseRole('editor')}>Audio Editor</button>
+            <button className="secondary-button" disabled={loadingAccount} onClick={() => void chooseRole('artist')}>Artist</button>
           </div>
         </div>}
       </>}
