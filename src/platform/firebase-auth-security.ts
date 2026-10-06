@@ -3,6 +3,8 @@ import { firebaseApp } from './firebase-auth';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
+export const NIGHTJAR_AUTH_EVIDENCE_QUALITY = 'nightjar_client_observed' as const;
+
 export type AuthenticationSecurityEvent = {
   id: string;
   eventType: 'signin_failed' | 'closed_beta_signin_denied' | string;
@@ -24,6 +26,7 @@ const recordCall = httpsCallable<{
   clientAttemptId?: string;
   clientPlatform?: string;
   route?: string;
+  evidenceQuality: typeof NIGHTJAR_AUTH_EVIDENCE_QUALITY;
 }, { recorded: boolean; eventId?: string; alert?: { alertId?: string; severity?: string; riskScore?: number } | null }>(
   functions,
   'recordAuthenticationAttempt',
@@ -75,6 +78,7 @@ export const nightjarAuthSecurity = {
       clientAttemptId: clientAttemptId(),
       clientPlatform: navigator.userAgent.slice(0, 120),
       route: window.location.pathname + window.location.search,
+      evidenceQuality: NIGHTJAR_AUTH_EVIDENCE_QUALITY,
     });
     return result.data;
   },
@@ -95,6 +99,7 @@ export const nightjarAuthSecurity = {
       clientAttemptId: clientAttemptId(),
       clientPlatform: navigator.userAgent.slice(0, 120),
       route: window.location.pathname + window.location.search,
+      evidenceQuality: NIGHTJAR_AUTH_EVIDENCE_QUALITY,
     });
     return result.data;
   },
