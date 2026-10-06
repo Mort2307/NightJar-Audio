@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bird, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
+import { Bird, BookOpenText, Brush, Clock3, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, ThumbsUp, UsersRound, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -128,7 +128,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   ));
   const profileRole = ((selectedProfileRole && availableProfileRoles.includes(selectedProfileRole)
     ? selectedProfileRole
-    : availableProfileRoles[0] ?? 'listener')) as ProfileRoleKey;
+    : (profile?.role && availableProfileRoles.includes(String(profile.role)) ? String(profile.role) : availableProfileRoles[0] ?? 'listener'))) as ProfileRoleKey;
   const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
   const roleDetails = profile?.roleProfiles && typeof profile.roleProfiles === 'object' && profile.roleProfiles[profileRole]
     ? profile.roleProfiles[profileRole]
@@ -222,6 +222,65 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite tropes' : 'Tropes & themes'}</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {(roleDetails.roleDetailOne || roleDetails.roleDetailTwo) && <div className="public-role-copy">{roleDetails.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{roleDetails.roleDetailOne}</p></div>}{roleDetails.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{roleDetails.roleDetailTwo}</p></div>}</div>}
         </section>
+
+        {profileRole === 'creator' && <section className="role-public-professional creator-public-professional">
+          <div className="role-public-professional-head"><div><span className="mini-label">VA CREATOR PROFILE</span><h3>Performance & recording craft</h3><p>A working snapshot for listeners and collaborators — voice identity, direction style and delivery without exposing private production files or contact details.</p></div><Mic2 size={19}/></div>
+          <div className="role-public-fact-grid">
+            <div><span>Availability</span><strong>{roleDetails.roleAvailability || 'Ask first'}</strong></div>
+            <div><span>Turnaround</span><strong>{roleDetails.creatorTurnaround || 'Project dependent'}</strong></div>
+            <div><span>Released work</span><strong>{profile.releaseCount ?? 0}</strong></div>
+            <div><span>Collaborations</span><strong>{profile.completedCollaborations ?? 0}</strong></div>
+          </div>
+          {!!roleDetails.creatorLanguages?.length && <div className="role-public-detail-card"><span className="mini-label">VOICE RANGE</span><h4>Languages, accents & dialects</h4><div className="creator-profile-tags">{roleDetails.creatorLanguages.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          <div className="role-public-two-column">
+            <div className="role-public-detail-card"><span className="mini-label">DIRECTION</span><h4>How they like to work</h4>{roleDetails.creatorDirectionModes?.length?<div className="creator-profile-tags">{roleDetails.creatorDirectionModes.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Direction preferences not listed yet.</p>}</div>
+            <div className="role-public-detail-card"><span className="mini-label">DELIVERY</span><h4>What they can hand off</h4>{roleDetails.creatorDeliveryFormats?.length?<div className="creator-profile-tags">{roleDetails.creatorDeliveryFormats.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Delivery options not listed yet.</p>}</div>
+          </div>
+          {roleDetails.creatorEquipment && <div className="role-public-note"><strong>Studio / equipment</strong><p>{roleDetails.creatorEquipment}</p></div>}
+        </section>}
+
+        {profileRole === 'writer' && <section className="role-public-professional writer-public-professional">
+          <div className="role-public-professional-head"><div><span className="mini-label">WRITER PROFILE</span><h3>Author, formats & rights posture</h3><p>Useful commissioning context without exposing drafts, manuscript text, private rates or protected deal terms.</p></div><BookOpenText size={19}/></div>
+          <div className="role-public-fact-grid">
+            <div><span>Availability</span><strong>{roleDetails.roleAvailability || 'Ask first'}</strong></div>
+            <div><span>Turnaround</span><strong>{roleDetails.writerTurnaround || 'Project dependent'}</strong></div>
+            <div><span>Published scripts</span><strong>{profile.publishedWorkCount ?? 0}</strong></div>
+            <div><span>Release credits</span><strong>{profile.creditedReleaseCount ?? 0}</strong></div>
+          </div>
+          <div className="role-public-two-column">
+            <div className="role-public-detail-card"><span className="mini-label">SCRIPT SCALE</span><h4>Typical lengths</h4>{roleDetails.writerScriptLengths?.length?<div className="creator-profile-tags">{roleDetails.writerScriptLengths.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Script lengths not listed yet.</p>}</div>
+            <div className="role-public-detail-card"><span className="mini-label">COLLABORATION</span><h4>Best working fit</h4>{roleDetails.writerCollaborationPreferences?.length?<div className="creator-profile-tags">{roleDetails.writerCollaborationPreferences.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Collaboration preferences not listed yet.</p>}</div>
+          </div>
+          {roleDetails.writerRightsNote && <div className="role-public-note"><strong>Rights / licensing note</strong><p>{roleDetails.writerRightsNote}</p></div>}
+        </section>}
+
+        {profileRole === 'artist' && <section className="role-public-professional artist-public-professional">
+          <div className="role-public-professional-head"><div><span className="mini-label">ARTIST PROFILE</span><h3>Visual practice & commission fit</h3><p>Public creative capability and approved work — private briefs, source files and licensing negotiations stay private.</p></div><Brush size={19}/></div>
+          <div className="role-public-fact-grid">
+            <div><span>Availability</span><strong>{roleDetails.roleAvailability || 'Ask first'}</strong></div>
+            <div><span>Turnaround</span><strong>{roleDetails.artistTurnaround || 'Project dependent'}</strong></div>
+            <div><span>Portfolio pieces</span><strong>{profile.artistPortfolio?.length ?? 0}</strong></div>
+            <div><span>Collaborations</span><strong>{profile.completedCollaborations ?? 0}</strong></div>
+          </div>
+          <div className="role-public-two-column">
+            <div className="role-public-detail-card"><span className="mini-label">MEDIUMS</span><h4>How they make</h4>{roleDetails.artistMediums?.length?<div className="creator-profile-tags">{roleDetails.artistMediums.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Mediums not listed yet.</p>}</div>
+            <div className="role-public-detail-card"><span className="mini-label">DELIVERABLES</span><h4>What they can produce</h4>{roleDetails.artistDeliveryFormats?.length?<div className="creator-profile-tags">{roleDetails.artistDeliveryFormats.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Deliverables not listed yet.</p>}</div>
+          </div>
+          {!!roleDetails.artistSoftware?.length && <div className="role-public-detail-card"><span className="mini-label">TOOLS</span><h4>Software & tools</h4><div className="creator-profile-tags">{roleDetails.artistSoftware.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {!!profile.featuredArtistPortfolio?.length && <div className="public-artist-featured"><span className="mini-label">FEATURED ARTWORK</span><div className="public-artist-featured-grid">{profile.featuredArtistPortfolio.map((item:any)=><article key={item.id}>{item.imageUrl&&<img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/>}<div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}<p>{item.description}</p></div></article>)}</div></div>}
+        </section>}
+
+        {profileRole === 'listener' && <section className="role-public-professional listener-public-professional">
+          <div className="role-public-professional-head"><div><span className="mini-label">LISTENER SIGNATURE</span><h3>A curated member profile, not a behavioural dossier.</h3><p>This space is made from information the Listener deliberately chose to share. Private listening history, favourites, completion data and library contents are not exposed.</p></div><Headphones size={19}/></div>
+          <div className="role-public-fact-grid">
+            <div><span>Followers</span><strong>{profile.followerCount ?? 0}</strong></div>
+            <div><span>Following</span><strong>{profile.followingCount ?? 0}</strong></div>
+            <div><span>Public playlists</span><strong>{profile.publicPlaylists?.length ?? 0}</strong></div>
+            <div><span>Shared interests</span><strong>{(profile.favouriteTags?.length ?? 0)+(profile.favouriteCategories?.length ?? 0)}</strong></div>
+          </div>
+          {!!roleDetails.listenerCommunityStyle?.length && <div className="role-public-detail-card"><span className="mini-label">COMMUNITY STYLE</span><h4>How they like to take part</h4><div className="creator-profile-tags">{roleDetails.listenerCommunityStyle.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          <div className="listener-public-privacy"><ShieldCheck size={15}/><span>Only deliberate public profile choices are shown here.</span></div>
+        </section>}
 
         {profileRole === 'editor' && <section className="editor-public-professional">
           <div className="editor-public-heading">
