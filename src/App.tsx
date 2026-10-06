@@ -1674,7 +1674,7 @@ function App() {
     }
   };
 
-  const loadProfile = async () => {
+  const loadProfile = async (roleOverride?: PreviewRole | 'admin') => {
     if (!user) return;
     setProfileLoading(true);
     try {
@@ -1687,7 +1687,7 @@ function App() {
           artist: { displayName:'Lena Moss', handle:'lenamoss', headline:'Atmospheric illustration and cover artwork', bio:'Fictional Artist profile for Nightjar Simulation Mode.', welcomeMessage:'Visual storytelling for audio creators, writers and series.', pronouns:'', avatarInitials:'LM', avatarTone:'plum', avatarUrl:null, favouriteTags:['Atmospheric','Cinematic'], favouriteTropes:[], favouriteCategories:['Fantasy','Contemporary romance'], roleFocus:['Illustration','Cover artwork','Character art'], roleSpecialties:['Cover artwork','Character illustration','Digital painting'], roleSecondary:['Atmospheric artwork','Dark / moody artwork','Long-form collaboration'], roleAvailability:'Open for commissions', roleDetailOne:'Painterly digital illustration with cinematic lighting and strong character silhouettes.', roleDetailTwo:'Open to cover, character and promotional commissions through Nightjar.', publicProfile:true },
           admin: { displayName:'Nightjar Admin Demo', handle:'nightjardemo', headline:'Administrator demo profile', bio:'Fictional admin-facing profile while Demo Data is enabled.', welcomeMessage:'', pronouns:'', avatarInitials:'NJ', avatarTone:'plum', avatarUrl:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:['Platform operations'], roleSpecialties:['Platform operations','Community safety'], roleSecondary:['Testing','Reports'], roleAvailability:'', roleDetailOne:'Owner-console simulation profile.', roleDetailTwo:'', publicProfile:false },
         };
-        const demoRole = previewRole ?? 'admin';
+        const demoRole = roleOverride ?? previewRole ?? 'admin';
         const demoProfile = readDemo('profile:' + demoRole, demoProfiles[demoRole]);
         setProfile(demoProfile);
         setTasteVector([{label:'Atmospheric',weight:0.92},{label:'Slow burn',weight:0.81},{label:'Story-led',weight:0.76},{label:'Cinematic',weight:0.69}]);
@@ -2854,6 +2854,7 @@ function App() {
     else if (next === 'writer') navigate('writer');
     else if (next === 'editor') navigate('editor');
     else navigate('profile');
+    void loadProfile(next);
     notify(`Simulation Mode: ${roleMeta[next].label}. No simulated action writes to live Nightjar data.`);
   };
 
@@ -2876,7 +2877,7 @@ function App() {
     setWriterPermissions([]);
     setWriterSelected(null);
     setEditorSelected(null);
-    setProfile((current:any) => ({ ...current, displayName:'', handle:'', headline:'', bio:'', welcomeMessage:'', avatarUrl:null, pendingAvatarAssetId:null, pendingAvatarStatus:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:[], roleSpecialties:[], roleSecondary:[], roleAvailability:'', roleDetailOne:'', roleDetailTwo:'' }));
+    setProfile((current:any) => ({ ...current, displayName:'', handle:'', headline:'', bio:'', welcomeMessage:'', avatarUrl:null, pendingAvatarAssetId:null, pendingAvatarStatus:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:[], roleSpecialties:[], roleSecondary:[], roleAvailability:'', roleHeadline:'', roleBio:'', roleDetailOne:'', roleDetailTwo:'', portfolioNote:'', featuredPortfolioIds:[], editorSoftware:[], editorProjectTypes:[], editorDeliveryFormats:[], editorCollaborationPreferences:[], editorTurnaround:'', editorExperienceYears:'', editorSkillLevels:{} }));
     setProfileTagCatalogue([]);
     void loadLiveProductData();
     void loadCreatorDashboard();
