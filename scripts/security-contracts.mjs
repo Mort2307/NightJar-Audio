@@ -25,6 +25,14 @@ if (!protection.includes('passwordCaptured: false')) failures.push('authenticati
 if (!protection.includes("category: 'authentication'")) failures.push('authentication alerts must remain a distinct security-alert category');
 if (!accountAccess.includes('nightjarAuthSecurity.recordFailure')) failures.push('Nightjar account portal is not reporting observed failed sign-ins');
 if (!authSecurity.includes('nightjar_client_observed')) failures.push('authentication evidence quality must be explicit about client-observed scope');
+if (!protection.includes('recordAuthenticationSuccess')) failures.push('successful sign-in security telemetry is missing');
+if (!protection.includes("collection('trustedAuthDevices')")) failures.push('trusted authentication device tracking is missing');
+if (!protection.includes("subtype:'new_device_signin'")) failures.push('new-device sign-ins must notify the account owner');
+if (!protection.includes('listMyAuthenticationEvents')) failures.push('members must be able to review their own authentication history');
+if (!authSecurity.includes('recordSuccess')) failures.push('account client does not report successful sign-ins');
+if (!pwa.includes('getRegistrations()') || !pwa.includes('registration.unregister()')) failures.push('force update must reset stale service-worker registrations');
+if (!pwa.includes('Promise.all(keys.map((key) => caches.delete(key)))')) failures.push('force update must clear legacy Cache Storage, not only one cache prefix');
+if (!sw.includes("type === 'SKIP_WAITING'")) failures.push('service worker must support explicit update activation');
 if (!pwa.includes("fetch('/version.json")) failures.push('manual update check must compare against the deployed build manifest');
 if (!vite.includes("fileName: 'version.json'")) failures.push('Nightjar build must emit the update version manifest');
 if (!hosting.includes('"source": "/version.json"') || !hosting.includes('no-store,max-age=0,must-revalidate')) failures.push('version manifest must be served without cache');
