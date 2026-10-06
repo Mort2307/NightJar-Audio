@@ -3129,14 +3129,15 @@ export const spotlightState = onCall({ region: REGION }, async (request) => {
 
 export const adminAccountOverview = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const [accountsSnapshot, testerSnapshot] = await Promise.all([
+  const [accountsSnapshot, testerSnapshot, profilesSnapshot] = await Promise.all([
     db.collection('accounts').limit(5000).get(),
     db.collection(CLOSED_BETA_ALLOWLIST_COLLECTION).limit(1000).get(),
+    db.collection('profiles').limit(5000).get(),
   ]);
-  const accounts = await Promise.all(accountsSnapshot.docs.map(async (doc) => {
+  const profileByUser = new Map(profilesSnapshot.docs.map((doc) => [doc.id, doc.data() ?? {}]));
+  const accounts = accountsSnapshot.docs.map((doc) => {
     const account = doc.data();
-    const profile = await profileRef(doc.id).get();
-    const profileData = profile.data() ?? {};
+    const profileData = profileByUser.get(doc.id) ?? {};
     return {
       userId: doc.id,
       email: account.email ?? null,
@@ -3150,7 +3151,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       avatarUrl: profileData.avatarStatus === 'approved' ? profileData.avatarUrl ?? null : null,
       testAccess: account.testAccess === true,
     };
-  }));
+  });
 
   const approvedTesters = testerSnapshot.docs
     .map((doc) => doc.data() ?? {})
