@@ -3,7 +3,6 @@ import { AudioLines, Brush, Eye, EyeOff, FileText, Headphones, KeyRound, LockKey
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAuthSecurity } from '../platform/firebase-auth-security';
 import { nightjarAccount } from '../platform/firebase-account';
-import { nightjarAuthSecurity } from '../platform/firebase-auth-security';
 
 type Mode = 'signin' | 'register' | 'reset' | 'verify' | 'security';
 type RegistrationRole = 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
