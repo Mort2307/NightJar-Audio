@@ -1726,10 +1726,10 @@ function App() {
         return;
       }
       const [profileData, tasteData, tagData, portfolioData] = await Promise.all([
-        nightjarCommunity.getMyProfile(),
+        nightjarCommunity.getMyProfile(roleOverride),
         nightjarListening.taste(),
         nightjarCommunity.profileTagCatalogue().catch(() => ({ tags: [] })),
-        nightjarCommunity.getMyProfilePortfolioOptions().catch(() => ({ options: [], completedCollaborations: 0 })),
+        nightjarCommunity.getMyProfilePortfolioOptions(roleOverride).catch(() => ({ options: [], completedCollaborations: 0 })),
       ]);
       if (profileData?.profile) {
         setProfile((current: any) => ({ ...current, ...profileData.profile }));
