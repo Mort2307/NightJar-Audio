@@ -41,6 +41,58 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
   const [operatorTaxablePercent, setOperatorTaxablePercent] = useState(100);
   const [rollUnusedToApp, setRollUnusedToApp] = useState(true);
   const [roles, setRoles] = useState<Record<RoleKey, RoleScenario>>(defaultRoles);
+  const [hasSavedScenario, setHasSavedScenario] = useState(() => {
+    try { return Boolean(window.localStorage.getItem('nightjar.admin.finance-scenario.v1')); }
+    catch { return false; }
+  });
+
+  const saveSandboxScenario = () => {
+    try {
+      window.localStorage.setItem('nightjar.admin.finance-scenario.v1', JSON.stringify({
+        totalUsers, paidSubscribers, subscriptionPrice, vatRate, priceIncludesVat, processorPercent, processorFixed,
+        refundPercent, contributorPercent, appPercent, operatorPercent, corporationTaxRate, appTaxablePercent,
+        operatorTaxablePercent, rollUnusedToApp, roles,
+      }));
+      setHasSavedScenario(true);
+    } catch { /* local sandbox persistence is optional */ }
+  };
+
+  const loadSavedScenario = () => {
+    try {
+      const raw = window.localStorage.getItem('nightjar.admin.finance-scenario.v1');
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      setTotalUsers(Math.max(0, Number(saved.totalUsers) || 0));
+      setPaidSubscribers(Math.max(0, Number(saved.paidSubscribers) || 0));
+      setSubscriptionPrice(Math.max(0, Number(saved.subscriptionPrice) || 0));
+      setVatRate(clamp(Number(saved.vatRate), 0, 100));
+      setPriceIncludesVat(saved.priceIncludesVat !== false);
+      setProcessorPercent(clamp(Number(saved.processorPercent), 0, 100));
+      setProcessorFixed(Math.max(0, Number(saved.processorFixed) || 0));
+      setRefundPercent(clamp(Number(saved.refundPercent), 0, 100));
+      setContributorPercent(clamp(Number(saved.contributorPercent), 0, 100));
+      setAppPercent(clamp(Number(saved.appPercent), 0, 100));
+      setOperatorPercent(clamp(Number(saved.operatorPercent), 0, 100));
+      setCorporationTaxRate(clamp(Number(saved.corporationTaxRate), 0, 100));
+      setAppTaxablePercent(clamp(Number(saved.appTaxablePercent), 0, 100));
+      setOperatorTaxablePercent(clamp(Number(saved.operatorTaxablePercent), 0, 100));
+      setRollUnusedToApp(saved.rollUnusedToApp !== false);
+      if (saved.roles && typeof saved.roles === 'object') {
+        const defaults = defaultRoles();
+        const next = { ...defaults } as Record<RoleKey, RoleScenario>;
+        (Object.keys(defaults) as RoleKey[]).forEach((key) => {
+          const role = saved.roles[key] ?? {};
+          next[key] = {
+            label: defaults[key].label,
+            allocationPercent: clamp(Number(role.allocationPercent ?? defaults[key].allocationPercent), 0, 100),
+            eligiblePeople: Math.max(0, Math.round(Number(role.eligiblePeople ?? defaults[key].eligiblePeople) || 0)),
+            monthlyCap: Math.max(0, Number(role.monthlyCap ?? defaults[key].monthlyCap) || 0),
+          };
+        });
+        setRoles(next);
+      }
+    } catch { /* ignore invalid local sandbox state */ }
+  };
 
   const resetNightjarScenario = () => {
     setTotalUsers(25000);
@@ -164,6 +216,8 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
       </div>
       <div className="admin-finance-simulator-actions">
         <button className="secondary-button" onClick={loadCommercialAssumptions}><WalletCards size={14}/> Load current Nightjar assumptions</button>
+        <button className="secondary-button" onClick={saveSandboxScenario}>Save sandbox scenario</button>
+        {hasSavedScenario && <button className="ghost-button" onClick={loadSavedScenario}>Load saved scenario</button>}
         <button className="ghost-button" onClick={resetNightjarScenario}><RefreshCw size={14}/> Reset 10k / £5 scenario</button>
       </div>
     </div>
