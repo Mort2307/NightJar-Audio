@@ -4943,6 +4943,87 @@ export const recordAuthenticationAttempt = onCall({ region: REGION }, async (req
   return { recorded: true, eventId: ref.id, alert };
 });
 
+
+export const recordAuthenticationSuccess = onCall({ region: REGION }, async (request) => {
+  const identity = requireRegistrationIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const clientAttemptId = cleanText(input.clientAttemptId, 120) || null;
+  const clientPlatform = cleanText(input.clientPlatform, 120) || null;
+  const route = cleanText(input.route, 160) || '/account';
+  const emailHash = createHash('sha256').update(identity.email).digest('hex');
+  const trackableDevice = Boolean(clientAttemptId && clientAttemptId !== 'nightjar-client-unavailable');
+  let newDevice = false;
+  let deviceId: string | null = null;
+
+  if (trackableDevice && clientAttemptId) {
+    deviceId = createHash('sha256').update(identity.uid + '\0' + clientAttemptId).digest('hex').slice(0, 40);
+    const deviceRef = accountRef(identity.uid).collection('trustedAuthDevices').doc(deviceId);
+    const deviceSnapshot = await deviceRef.get();
+    newDevice = !deviceSnapshot.exists;
+    await deviceRef.set({
+      deviceId,
+      clientAttemptId,
+      clientPlatform,
+      firstSeenAt: deviceSnapshot.exists ? (deviceSnapshot.data()?.firstSeenAt ?? FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
+      lastSeenAt: FieldValue.serverTimestamp(),
+      lastRoute: route,
+    }, { merge:true });
+  }
+
+  const record = {
+    eventType: 'signin_success',
+    emailHash,
+    targetEmailMasked: maskSecurityEmail(identity.email),
+    targetUserId: identity.uid,
+    adminTarget: ADMIN_EMAILS.has(identity.email),
+    firebaseCode: null,
+    clientAttemptId,
+    clientPlatform,
+    route,
+    evidenceQuality: 'firebase_authenticated_client_observed',
+    passwordCaptured: false,
+    newDevice,
+    deviceId,
+    retentionUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  const ref = await db.collection('authenticationEvents').add(record);
+
+  if (newDevice && deviceId) {
+    await createNotification(identity.uid, {
+      type:'security',
+      subtype:'new_device_signin',
+      title:'New Nightjar sign-in',
+      message:'A new device signed in to your Nightjar account' + (clientPlatform ? ' · ' + clientPlatform : '') + '. If this was not you, change your password and report Account security from the Protection Centre.',
+      dedupeKey:'auth-device:' + deviceId,
+      authenticationEventId:ref.id,
+    });
+  }
+
+  return { recorded:true, eventId:ref.id, newDevice };
+});
+
+export const listMyAuthenticationEvents = onCall({ region: REGION }, async (request) => {
+  const identity = requireRegistrationIdentity(request);
+  const snapshot = await db.collection('authenticationEvents').where('targetUserId', '==', identity.uid).limit(100).get();
+  const events = snapshot.docs
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id:doc.id,
+        eventType:cleanText(data.eventType, 80),
+        targetEmailMasked:cleanText(data.targetEmailMasked, 180) || maskSecurityEmail(identity.email),
+        firebaseCode:cleanText(data.firebaseCode, 80) || null,
+        clientPlatform:cleanText(data.clientPlatform, 120) || null,
+        evidenceQuality:cleanText(data.evidenceQuality, 80) || null,
+        newDevice:data.newDevice === true,
+        createdAt:toIso(data.createdAt),
+      };
+    })
+    .sort((a,b)=>String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return { events };
+});
+
 export const listAuthenticationEvents = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('authenticationEvents').limit(500).get();
