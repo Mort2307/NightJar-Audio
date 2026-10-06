@@ -871,6 +871,16 @@ const profilePortfolioOptionsFor = async (userId: string, role: string) => {
     }));
   }
 
+  if (role === 'artist') {
+    const items = await publicArtistPortfolioFor(userId);
+    return items.map((item) => ({
+      id: item.id,
+      type: 'artwork',
+      title: item.title || 'Untitled artwork',
+      subtitle: [item.commissionType, ...(item.tags ?? []).slice(0, 2)].filter(Boolean).join(' · '),
+    }));
+  }
+
   return [];
 };
 
@@ -1245,7 +1255,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
-        roles: professionalRoles.length ? professionalRoles : ['listener'],
+        roles: ['listener', ...professionalRoles],
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
@@ -1270,7 +1280,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         roleDetailTwo: data.roleDetailTwo ?? null,
         portfolioNote: data.portfolioNote ?? null,
         featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
-        roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
+        roleProfiles,
         releaseCount,
         publishedWorkCount,
         creditedReleaseCount,
@@ -1363,16 +1373,28 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       }));
   }
 
-  const hasPortfolioCuration = Array.isArray(data.featuredPortfolioIds);
-  const selectedPortfolioIds = cleanStringList(data.featuredPortfolioIds, 6);
+  const roleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const rolePortfolioIds = (targetRole: string) => cleanStringList(
+    roleProfiles[targetRole]?.featuredPortfolioIds ?? (targetRole === role ? data.featuredPortfolioIds : []),
+    6,
+  );
+  const selectedPortfolioIds = rolePortfolioIds(role);
+  const hasPortfolioCuration = selectedPortfolioIds.length > 0 || Array.isArray(roleProfiles[role]?.featuredPortfolioIds);
   const orderedFeatured = (items: ReturnType<typeof releasePayload>[]) => {
     const byId = new Map(items.map((item) => [String(item.id), item]));
     return selectedPortfolioIds.map((id) => byId.get(id)).filter((item): item is ReturnType<typeof releasePayload> => Boolean(item));
   };
-  const featuredWork = professionalRoles.includes('creator')
-    ? (hasPortfolioCuration ? orderedFeatured(creatorReleases) : creatorReleases.slice(0, 3))
-    : (professionalRoles.includes('writer') || professionalRoles.includes('editor'))
-      ? (hasPortfolioCuration ? orderedFeatured(creditedReleases) : creditedReleases.slice(0, 3))
+  const activeRoleFeaturedIds = rolePortfolioIds(role);
+  const orderForRole = <T extends { id: string }>(items: T[], targetRole: string) => {
+    const ids = rolePortfolioIds(targetRole);
+    if (!ids.length) return items.slice(0, 3);
+    const byId = new Map(items.map((item) => [String(item.id), item]));
+    return ids.map((id) => byId.get(id)).filter((item): item is T => Boolean(item));
+  };
+  const featuredWork = role === 'creator'
+    ? orderForRole(creatorReleases, 'creator')
+    : (role === 'writer' || role === 'editor')
+      ? orderForRole(creditedReleases, role)
       : [];
   const [completedCollaborations, publicArtistPortfolio] = await Promise.all([
     professionalRoles.length > 0 ? completedCollaborationCountFor(userId) : Promise.resolve(0),
@@ -1416,6 +1438,14 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
       artistPortfolio: publicArtistPortfolio,
+      featuredArtistPortfolio: role === 'artist'
+        ? (() => {
+            const ids = rolePortfolioIds('artist');
+            if (!ids.length) return publicArtistPortfolio.slice(0, 6);
+            const byId = new Map(publicArtistPortfolio.map((item) => [String(item.id), item]));
+            return ids.map((id) => byId.get(id)).filter(Boolean);
+          })()
+        : [],
       publicPlaylists,
       completedCollaborations,
       activityBadges,
