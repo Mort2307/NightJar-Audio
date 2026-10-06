@@ -1,3 +1,12 @@
+export type NightjarUpdateStatus = {
+  supported: boolean;
+  currentBuildId: string;
+  currentBuiltAt: string;
+  latestBuildId: string | null;
+  latestBuiltAt: string | null;
+  updateAvailable: boolean;
+};
+
 export const registerNightjarServiceWorker = () => {
   if (!('serviceWorker' in navigator) || import.meta.env.DEV) return;
 
@@ -20,4 +29,49 @@ export const registerNightjarServiceWorker = () => {
       // PWA enhancement must never block Nightjar.
     });
   });
+};
+
+export const checkNightjarUpdate = async (): Promise<NightjarUpdateStatus> => {
+  const base: NightjarUpdateStatus = {
+    supported: 'serviceWorker' in navigator,
+    currentBuildId: __NIGHTJAR_BUILD_ID__,
+    currentBuiltAt: __NIGHTJAR_BUILT_AT__,
+    latestBuildId: null,
+    latestBuiltAt: null,
+    updateAvailable: false,
+  };
+
+  try {
+    const response = await fetch('/version.json?nightjar-update-check=' + Date.now(), {
+      cache: 'no-store',
+      headers: { 'cache-control': 'no-cache' },
+    });
+    if (!response.ok) return base;
+    const data = await response.json() as { buildId?: unknown; builtAt?: unknown };
+    const latestBuildId = typeof data.buildId === 'string' ? data.buildId : null;
+    const latestBuiltAt = typeof data.builtAt === 'string' ? data.builtAt : null;
+    return {
+      ...base,
+      latestBuildId,
+      latestBuiltAt,
+      updateAvailable: Boolean(latestBuildId && latestBuildId !== __NIGHTJAR_BUILD_ID__),
+    };
+  } catch {
+    return base;
+  }
+};
+
+export const applyNightjarUpdate = async () => {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) await registration.update();
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((key) => key.startsWith('nightjar-')).map((key) => caches.delete(key)));
+    }
+  } finally {
+    window.location.reload();
+  }
 };

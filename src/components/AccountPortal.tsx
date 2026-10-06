@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import AccountAccess from './AccountAccess';
+import AppUpdateControl from './AppUpdateControl';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount, type NightjarAccountIdentity } from '../platform/firebase-account';
 import { nightjarMedia } from '../platform/firebase-media';
@@ -124,7 +125,7 @@ export default function AccountPortal() {
   return <main className="account-portal-shell">
     <header className="account-portal-header">
       <a href="/discover" className="account-portal-brand"><img className="account-portal-logo" src={logoUrl ?? "/brand-logo"} alt="" /> Nightjar</a>
-      <span>Secure account access</span>
+      <div className="account-portal-header-tools"><span>Secure account access</span><AppUpdateControl compact /></div>
     </header>
 
     {!identity?.emailVerified && <AccountAccess
