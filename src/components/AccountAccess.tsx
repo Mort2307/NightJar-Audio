@@ -63,6 +63,10 @@ export default function AccountAccess({
   const entryParams = new URLSearchParams(window.location.search);
   const requestedEntry = entryParams.get('entry');
   const requestedRole = entryParams.get('role');
+  const requestedNotice = entryParams.get('notice');
+  const entryNotice = requestedNotice === 'sessions-revoked'
+    ? 'All Nightjar sign-in sessions were revoked. Sign in again with your current password.'
+    : '';
   const initialRegistrationRoles = (() => {
     if (['creator','writer','editor','artist'].includes(String(requestedRole))) return [requestedRole as RegistrationRole];
     try {
@@ -82,19 +86,13 @@ export default function AccountAccess({
   const [nextConfirm, setNextConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(() => {
-    try {
-      const notice=sessionStorage.getItem('nightjar.security.notice') ?? '';
-      if(notice) sessionStorage.removeItem('nightjar.security.notice');
-      return notice;
-    } catch { return ''; }
-  });
+  const [message, setMessage] = useState(entryNotice);
 
   useEffect(() => {
     const guestEntryMode: Mode = requestedEntry === 'register' ? 'register' : 'signin';
     const normalEntryMode: Mode = identity && !identity.emailVerified ? 'verify' : requestedEntry === 'security' && identity?.emailVerified ? 'security' : identity ? 'signin' : guestEntryMode;
     setMode(normalEntryMode);
-    setMessage('');
+    setMessage(entryNotice);
 
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
@@ -241,10 +239,9 @@ export default function AccountAccess({
         <button className="secondary-button" disabled={busy} onClick={() => void run(async () => {
           if (!window.confirm('Revoke Nightjar sign-in sessions on every device? You will need to sign in again.')) return;
           await nightjarAuthSecurity.revokeMySessions();
-          try { sessionStorage.setItem('nightjar.security.notice','All Nightjar sessions were revoked. Sign in again with your current password.'); } catch { /* optional */ }
           await nightjarAuth.signOut();
           onSignedOut?.();
-          window.location.replace('/account?entry=signin');
+          window.location.replace('/account?entry=signin&notice=sessions-revoked');
         })}><ShieldCheck size={15}/> Revoke all sessions</button>
         <button className="secondary-button" disabled={busy} onClick={() => window.location.assign('/profile')}>Back to Nightjar</button>
         <button className="ghost-button" disabled={busy} onClick={() => void run(async () => { await nightjarAuth.signOut(); onSignedOut?.(); setMode('signin'); })}>Sign out</button>
