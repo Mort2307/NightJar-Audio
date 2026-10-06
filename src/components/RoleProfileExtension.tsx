@@ -48,6 +48,14 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
       <Sparkles size={20}/>
     </div>
 
+    <article className="panel premium-role-positioning">
+      <span className="mini-label">ROLE POSITIONING</span>
+      <div className="premium-role-positioning-grid">
+        <label>Role-specific headline<input maxLength={140} value={profile.roleHeadline ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,roleHeadline:event.target.value}))} placeholder={role==='listener'?'A line that captures your Nightjar vibe':'A professional line for this role'}/><small className="field-counter">{String(profile.roleHeadline ?? '').length}/140</small></label>
+        <label>About this role<textarea maxLength={1200} value={profile.roleBio ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,roleBio:event.target.value}))} placeholder={role==='listener'?'What kind of listener are you, and what do you enjoy discovering?':'Tell people what you bring to this role and how you like to work.'}/><small className="field-counter">{String(profile.roleBio ?? '').length}/1200</small></label>
+      </div>
+    </article>
+
     <div className="premium-role-extension-grid">
       <article className="panel premium-role-extension-card">
         <span className="mini-label">ROLE SIGNATURE</span>
