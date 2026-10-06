@@ -1352,9 +1352,14 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
-  if (!professionalRoles.length && Array.isArray(data.featuredPortfolioIds) && data.featuredPortfolioIds.length) {
+  const publicRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const listenerFeaturedIds = cleanStringList(
+    publicRoleProfiles.listener?.featuredPortfolioIds ?? (!professionalRoles.length ? data.featuredPortfolioIds : []),
+    6,
+  );
+  if (listenerFeaturedIds.length) {
     const playlistDocs = await Promise.all(
-      cleanStringList(data.featuredPortfolioIds, 6).map((playlistId) => accountRef(userId).collection('playlists').doc(playlistId).get()),
+      listenerFeaturedIds.map((playlistId) => accountRef(userId).collection('playlists').doc(playlistId).get()),
     );
     publicPlaylists = await Promise.all(playlistDocs
       .filter((playlist) => playlist.exists)
@@ -1373,7 +1378,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       }));
   }
 
-  const roleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const roleProfiles = publicRoleProfiles;
   const rolePortfolioIds = (targetRole: string) => cleanStringList(
     roleProfiles[targetRole]?.featuredPortfolioIds ?? (targetRole === role ? data.featuredPortfolioIds : []),
     6,
