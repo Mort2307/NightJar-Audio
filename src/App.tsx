@@ -3686,7 +3686,10 @@ function App() {
                   </div>)}
                   {!myAuthenticationEvents.length && <small>No account-portal authentication events are available for this account yet.</small>}
                 </div>
-                <button className="secondary-button" onClick={() => void loadProtection()}>Refresh sign-in history</button>
+                <div className="security-alert-actions">
+                  <button className="secondary-button" onClick={() => void loadProtection()}>Refresh sign-in history</button>
+                  <button className="primary-button" onClick={() => window.location.assign('/account?entry=security')}>Open account security</button>
+                </div>
               </div>
               <div className="admin-panel"><span className="admin-icon"><Ban size={19} /></span><span className="mini-label">ACCOUNT CONTROL</span><h2>Block and disengage</h2><p>If a user is causing a problem, blocking is available from supported account surfaces. For serious incidents, block and report rather than relying on either action alone.</p><button className="secondary-button" onClick={() => notify('Open the relevant user profile to block that account.')}>How blocking works</button></div>
             </div>
