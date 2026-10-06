@@ -5851,7 +5851,11 @@ export const listenerLibrary = onCall({ region: REGION }, async (request) => {
   const library = await listenerHistoryFor(identity.uid);
   const playlistsSnapshot = await accountRef(identity.uid).collection('playlists').limit(100).get();
   const profile = await profileRef(identity.uid).get();
-  const publicPlaylistIds = new Set(cleanStringList(profile.data()?.featuredPortfolioIds, 6));
+  const profileData = profile.data() ?? {};
+  const listenerProfile = profileData.roleProfiles && typeof profileData.roleProfiles === 'object'
+    ? profileData.roleProfiles.listener ?? {}
+    : {};
+  const publicPlaylistIds = new Set(cleanStringList(listenerProfile.featuredPortfolioIds ?? profileData.featuredPortfolioIds, 6));
   const playlists = playlistsSnapshot.docs
     .map((doc) => ({
       id: doc.id,
@@ -5926,7 +5930,14 @@ export const setPlaylistProfileVisibility = onCall({ region: REGION }, async (re
   if (!playlist.exists) throw new HttpsError('not-found', 'Playlist not found.');
 
   const profile = await profileRef(identity.uid).get();
-  const current = cleanStringList(profile.data()?.featuredPortfolioIds, 6);
+  const profileData = profile.data() ?? {};
+  const roleProfiles = profileData.roleProfiles && typeof profileData.roleProfiles === 'object'
+    ? { ...profileData.roleProfiles }
+    : {};
+  const listenerProfile = roleProfiles.listener && typeof roleProfiles.listener === 'object'
+    ? { ...roleProfiles.listener }
+    : {};
+  const current = cleanStringList(listenerProfile.featuredPortfolioIds ?? profileData.featuredPortfolioIds, 6);
   const has = current.includes(playlistId);
   let next = current;
 
@@ -5937,8 +5948,12 @@ export const setPlaylistProfileVisibility = onCall({ region: REGION }, async (re
     next = current.filter((id) => id !== playlistId);
   }
 
-  await profileRef(identity.uid).set({
+  roleProfiles.listener = {
+    ...listenerProfile,
     featuredPortfolioIds: next,
+  };
+  await profileRef(identity.uid).set({
+    roleProfiles,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
@@ -5951,8 +5966,20 @@ export const deletePlaylist = onCall({ region: REGION }, async (request) => {
   if (!playlistId) throw new HttpsError('invalid-argument', 'Playlist is required.');
   await accountRef(identity.uid).collection('playlists').doc(playlistId).delete();
   const profile = await profileRef(identity.uid).get();
-  const featuredPortfolioIds = cleanStringList(profile.data()?.featuredPortfolioIds, 6).filter((id) => id !== playlistId);
-  await profileRef(identity.uid).set({ featuredPortfolioIds, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const profileData = profile.data() ?? {};
+  const roleProfiles = profileData.roleProfiles && typeof profileData.roleProfiles === 'object'
+    ? { ...profileData.roleProfiles }
+    : {};
+  const listenerProfile = roleProfiles.listener && typeof roleProfiles.listener === 'object'
+    ? { ...roleProfiles.listener }
+    : {};
+  const featuredPortfolioIds = cleanStringList(listenerProfile.featuredPortfolioIds ?? profileData.featuredPortfolioIds, 6)
+    .filter((id) => id !== playlistId);
+  roleProfiles.listener = {
+    ...listenerProfile,
+    featuredPortfolioIds,
+  };
+  await profileRef(identity.uid).set({ roleProfiles, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { deleted: true, playlistId };
 });
 
