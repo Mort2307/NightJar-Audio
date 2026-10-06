@@ -54,12 +54,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         bio:'Fictional Nightjar demo profile used for Simulation Mode.', welcomeMessage:'Thanks for exploring this Nightjar demo profile.',
         publicProfile:true, followerCount:person.role === 'writer' ? 486 : 352,
         publishedWorkCount:writer ? 3 : 0, creditedReleaseCount:creditedReleases.length, creditedReleases,
-        roleFocus:person.role === 'writer' ? ['Script writing','Dialogue writing'] : person.role === 'editor' ? ['Audio editing','Mixing'] : [],
-        roleSpecialties:person.role === 'writer' ? ['Dialogue','Character development'] : person.role === 'editor' ? ['Dialogue editing','Noise cleanup / restoration','Breath / mouth-click cleanup','Mixing','Mastering','Binaural / spatial production'] : ['Story-first','Atmospheric'],
-        roleSecondary:person.role === 'writer' ? ['Single-voice script','Series / episodic'] : person.role === 'editor' ? ['Series consistency','Remote handoff','Detailed notes','Room-tone repair','Broadcast-ready delivery'] : ['Hidden gems','Series'],
-        roleAvailability:person.role === 'writer' ? 'Open to commissions' : person.role === 'editor' ? 'Open for bookings' : '',
-        roleDetailOne:person.role === 'writer' ? 'Dialogue-first work with strong character progression.' : person.role === 'editor' ? 'Organised remote handoff with labelled revisions, timestamped notes and non-destructive project delivery.' : 'Late-night stories, atmosphere and independent creators.',
-        roleDetailTwo:person.role === 'writer' ? 'Collaboration and licensing stay inside protected Nightjar workflows.' : person.role === 'editor' ? 'Dialogue-heavy, binaural and recurring series work are the sweet spot.' : 'Always happy to discover smaller creators.',
+        roleFocus:person.role === 'writer' ? ['Script writing','Dialogue writing'] : person.role === 'editor' ? ['Audio editing','Mixing'] : person.role === 'artist' ? ['Illustration','Cover artwork','Character art'] : person.role === 'creator' ? ['Voice performance','Narration','Audio production'] : ['Discovery','Supporting creators'],
+        roleSpecialties:person.role === 'writer' ? ['Dialogue','Character development'] : person.role === 'editor' ? ['Dialogue editing','Noise cleanup / restoration','Breath / mouth-click cleanup','Mixing','Mastering','Binaural / spatial production'] : person.role === 'artist' ? ['Cover artwork','Character illustration','Digital painting'] : person.role === 'creator' ? ['Character roleplay','Narration','Dramatic performance'] : ['Late-night','Story-first','Atmospheric'],
+        roleSecondary:person.role === 'writer' ? ['Single-voice script','Series / episodic'] : person.role === 'editor' ? ['Series consistency','Remote handoff','Detailed notes','Room-tone repair','Broadcast-ready delivery'] : person.role === 'artist' ? ['Atmospheric artwork','Dark / moody artwork','Long-form collaboration'] : person.role === 'creator' ? ['Close-mic performance','Series work','Remote collaboration'] : ['Hidden gems','Series'],
+        roleAvailability:person.role === 'writer' ? 'Open to commissions' : person.role === 'editor' ? 'Open for bookings' : person.role === 'artist' ? 'Open for commissions' : person.role === 'creator' ? 'Open to collaborations' : '',
+        roleHeadline:person.role === 'writer' ? 'Dialogue-first Writer · Character development · Collaborative scripts' : person.role === 'editor' ? 'Dialogue Editor · Restoration · Immersive Audio' : person.role === 'artist' ? 'Atmospheric Artist · Covers · Character illustration' : person.role === 'creator' ? 'Cinematic VA · Character-led performance · Intimate delivery' : 'Late-night listener · Story-first · Atmospheric',
+        roleBio:person.role === 'writer' ? 'Character-led scripts with strong dialogue, clear emotional progression and room for performer interpretation.' : person.role === 'editor' ? 'Dialogue-first post-production with a clean, natural finish and careful restoration work.' : person.role === 'artist' ? 'Painterly visual storytelling for covers, character work and atmospheric promotional artwork.' : person.role === 'creator' ? 'Character-led voice performance with intimate delivery, cinematic pacing and collaborative production instincts.' : 'Long-form character stories, atmosphere, slow builds and independent creators are what make Nightjar feel like home.',
+        roleDetailOne:person.role === 'writer' ? 'Dialogue-first work with strong character progression.' : person.role === 'editor' ? 'Organised remote handoff with labelled revisions, timestamped notes and non-destructive project delivery.' : person.role === 'artist' ? 'Painterly digital illustration with cinematic lighting and strong character silhouettes.' : person.role === 'creator' ? 'Character-led performance with restrained, intimate delivery and cinematic pacing.' : 'Late-night stories, atmosphere and independent creators.',
+        roleDetailTwo:person.role === 'writer' ? 'Collaboration and licensing stay inside protected Nightjar workflows.' : person.role === 'editor' ? 'Dialogue-heavy, binaural and recurring series work are the sweet spot.' : person.role === 'artist' ? 'Open to cover, character and promotional commissions through Nightjar.' : person.role === 'creator' ? 'Broadcast-quality home setup with remote direction available.' : 'Always happy to discover smaller creators.',
         ...(person.role === 'editor' ? {
           editorSoftware:['Reaper','iZotope RX','Adobe Audition'],
           editorProjectTypes:['Single-voice roleplay','Multi-voice audio drama','ASMR / close-mic audio','Binaural / spatial scenes','Series / episodic production','Restoration / rescue edits'],
@@ -170,7 +172,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
 
   return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
-    <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal">
+    <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal premium-public-profile">
       <header className="creator-profile-head">
         <div>
           <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
@@ -185,7 +187,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
           <div>
             <h3>{profile.displayName}</h3>
-            <p>{profile.headline || (profile.role === 'editor' ? 'Audio Editor on Nightjar.' : profile.role === 'listener' ? 'Part of the Nightjar listening community.' : 'Nightjar member.')}</p>
+            <p>{roleDetails.roleHeadline || profile.headline || (profileRole === 'editor' ? 'Audio Editor on Nightjar.' : profileRole === 'listener' ? 'A curated corner of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
             {availableProfileRoles.length > 0 && <div className="profile-role-chips" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" className={profileRole===role?'active':''} key={role} onClick={()=>setSelectedProfileRole(role)}>{roleLabel(role)}</button>)}</div>}
           </div>
@@ -213,7 +215,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
         <section className="public-role-profile">
           <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profileRole).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{roleDetails.roleAvailability && <strong>{roleDetails.roleAvailability}</strong>}</div>
-          <p>{roleConfig.description}</p>
+          <p>{roleDetails.roleBio || roleConfig.description}</p>
           {!!roleDetails.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{roleDetails.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!roleDetails.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{roleDetails.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!profile.favouriteCategories?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite categories' : 'Relevant categories'}</span><div className="creator-profile-tags">{profile.favouriteCategories.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
@@ -299,6 +301,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                     : 'VA Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
           </div>
         </div>
+
+        {profileRole === 'listener' && <section className="premium-listener-signature">
+          <div className="premium-listener-signature-head">
+            <div><span className="mini-label">LISTENER SIGNATURE</span><h3>A profile built around taste, not status.</h3><p>Listeners get the same profile care as professionals. This space shows only the interests and collections this person deliberately chose to make public — never private listening history.</p></div>
+            <Headphones size={19}/>
+          </div>
+          <div className="premium-listener-groups">
+            <div><strong>Moods & tags</strong>{profile.favouriteTags?.length ? <div className="creator-profile-tags">{profile.favouriteTags.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>Still shaping their Nightjar world.</p>}</div>
+            <div><strong>Categories</strong>{profile.favouriteCategories?.length ? <div className="creator-profile-tags">{profile.favouriteCategories.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>No public categories selected yet.</p>}</div>
+            <div><strong>Tropes & themes</strong>{profile.favouriteTropes?.length ? <div className="creator-profile-tags">{profile.favouriteTropes.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>No public themes selected yet.</p>}</div>
+          </div>
+        </section>}
 
         {profileRole === 'artist' && <section className="public-artist-portfolio">
           <div className="section-head"><div><span className="mini-label">ARTIST PORTFOLIO</span><h3>Approved visual work</h3></div></div>

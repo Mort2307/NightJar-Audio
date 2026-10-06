@@ -48,7 +48,6 @@ import {
   Bell,
   Download,
   FileCheck2,
-  Handshake,
   Share2,
   Coins,
   WalletCards,
@@ -60,8 +59,7 @@ import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
 import TransparencyPanel from './components/TransparencyPanel';
-import SearchableMultiSelect from './components/SearchableMultiSelect';
-import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS, PROFILE_CATEGORY_OPTIONS, ROLE_FOCUS_OPTIONS, ROLE_PROFILE_CONFIG, EDITOR_SOFTWARE_OPTIONS, EDITOR_PROJECT_TYPE_OPTIONS, EDITOR_DELIVERY_OPTIONS, EDITOR_COLLABORATION_OPTIONS, EDITOR_TURNAROUND_OPTIONS, EDITOR_PROFICIENCY_OPTIONS } from './data/nightjarTaxonomy';
+import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
 import { nightjarReferrals } from './platform/firebase-referrals';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
@@ -88,6 +86,10 @@ const MessagingHub = lazy(() => import('./components/MessagingHub'));
 const ProfessionalRoleManager = lazy(() => import('./components/ProfessionalRoleManager'));
 const ArtistPortfolioManager = lazy(() => import('./components/ArtistPortfolioManager'));
 const NightjarWalletPanel = lazy(() => import('./components/NightjarWalletPanel'));
+const UserProfileStudio = lazy(() => import('./components/UserProfileStudio'));
+const RoleProfileExtension = lazy(() => import('./components/RoleProfileExtension'));
+const EditorStudio = lazy(() => import('./components/EditorStudio'));
+const AdminFinanceSimulator = lazy(() => import('./components/AdminFinanceSimulator'));
 
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
@@ -178,6 +180,8 @@ type PublicDirectoryProfile = {
     roleSpecialties?: string[];
     roleSecondary?: string[];
     roleAvailability?: string | null;
+    roleHeadline?: string | null;
+    roleBio?: string | null;
     editorSoftware?: string[];
     editorProjectTypes?: string[];
     editorDeliveryFormats?: string[];
@@ -346,10 +350,9 @@ function App() {
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
   const [adminTesterEmail, setAdminTesterEmail] = useState('');
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'artist' | 'admin' | null>(null);
-  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, publicProfile: true });
+  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, publicProfile: true });
   const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
   const [profilePortfolioOptions, setProfilePortfolioOptions] = useState<any[]>([]);
-  const [profilePortfolioQuery, setProfilePortfolioQuery] = useState('');
   const [profileCompletedCollaborations, setProfileCompletedCollaborations] = useState(0);
   const [profileLoading, setProfileLoading] = useState(false);
   const [tasteVector, setTasteVector] = useState<any[]>([]);
@@ -572,6 +575,8 @@ function App() {
         ...(profile.favouriteCategories ?? []),
         ...allRoleSlices.flatMap((slice) => [
           slice.roleAvailability,
+          slice.roleHeadline,
+          slice.roleBio,
           slice.editorTurnaround,
           ...(slice.roleFocus ?? []),
           ...(slice.roleSpecialties ?? []),
@@ -605,11 +610,6 @@ function App() {
       return true;
     });
   }, [profileDirectory, directoryQuery, directoryRoleFilter, directoryTagFilter, directoryAvailabilityFilter]);
-  const filteredProfilePortfolioOptions = useMemo(() => {
-    const query = profilePortfolioQuery.trim().toLowerCase();
-    if (!query) return profilePortfolioOptions;
-    return profilePortfolioOptions.filter((item:any) => [item.title, item.subtitle, item.type].filter(Boolean).join(' ').toLowerCase().includes(query));
-  }, [profilePortfolioOptions, profilePortfolioQuery]);
 
   const filteredTracks = useMemo(() => {
     const query = catalogueQuery.trim().toLowerCase();
@@ -924,6 +924,7 @@ function App() {
           { userId:'demo-writer-mara', role:'writer', name:'Mara Bell', handle:'marabell', headline:'Dialogue-first Writer', followerCount:486, avatarInitials:'MB', favouriteTags:['Dialogue-heavy','Story-led'], favouriteCategories:['Erotic romance'], roleSpecialties:['Dialogue','Character development'], roleAvailability:'Open to commissions', publishedWorkCount:3, creditedReleaseCount:2, completedCollaborations:3, activityBadges:[{id:'published-writer',label:'Published Writer',detail:'Has published writing recorded by Nightjar.'},{id:'completed-collaborator',label:'Completed Collaborator',detail:'Has completed Nightjar collaborations.'}] },
           { userId:'demo-editor-sam', role:'editor', name:'Sam Reed', handle:'samreed', headline:'Dialogue, mixing and production polish', followerCount:352, avatarInitials:'SR', favouriteTags:['Sound-rich','Cinematic'], favouriteCategories:['Audio drama'], roleSpecialties:['Dialogue editing','Mixing'], roleAvailability:'Open for bookings', creditedReleaseCount:4, completedCollaborations:5, activityBadges:[{id:'credited-editor',label:'Credited Audio Editor',detail:'Has public Nightjar release credits.'},{id:'frequent-collaborator',label:'Frequent Collaborator',detail:'Five or more completed Nightjar collaborations.'}] },
           { userId:'demo-listener-jamie', role:'listener', name:'Jamie', handle:'jamielistens', headline:'Late-night story listener', followerCount:74, avatarInitials:'JL', favouriteTags:['Atmospheric','Slow-paced'], favouriteCategories:['Romantic story'], roleSpecialties:['Story-first','Atmospheric'], roleAvailability:null, activityBadges:[] },
+          { userId:'demo-artist-elara', role:'artist', name:'Elara Finch', handle:'elarafinch', headline:'Atmospheric covers and character illustration', followerCount:219, avatarInitials:'EF', favouriteTags:['Atmospheric','Cinematic'], favouriteCategories:['Fantasy'], roleSpecialties:['Cover artwork','Character illustration','Digital painting'], roleAvailability:'Open for commissions', completedCollaborations:2, activityBadges:[{id:'artist-profile',label:'Human Artist',detail:'Approved Nightjar Artist profile.'}] },
         ] as PublicDirectoryProfile[]);
         setCreatorSpotlightList(structuredClone(demoSpotlights.creators) as Spotlight[]);
         setWriterSpotlightList(structuredClone(demoSpotlights.writers) as Spotlight[]);
@@ -1674,20 +1675,20 @@ function App() {
     }
   };
 
-  const loadProfile = async () => {
+  const loadProfile = async (roleOverride?: PreviewRole | 'admin') => {
     if (!user) return;
     setProfileLoading(true);
     try {
       if (demoMode) {
         const demoProfiles: Record<PreviewRole | 'admin', any> = {
-          listener: { displayName:'Jamie', handle:'jamielistens', headline:'Late-night story listener', bio:'Fictional listener profile for Nightjar Simulation Mode.', welcomeMessage:'Here for stories, atmosphere and independent creators.', pronouns:'', avatarInitials:'JL', avatarTone:'plum', avatarUrl:null, favouriteTags:['Atmospheric','Gentle'], favouriteTropes:['Slow burn','Comfort & reassurance'], favouriteCategories:['Romantic story','Audio drama'], roleFocus:['Discovery','Supporting creators'], roleSpecialties:['Late-night','Story-first','Atmospheric'], roleSecondary:['Hidden gems','Series'], roleAvailability:'', roleDetailOne:'Long-form character stories, atmosphere and a slow build.', roleDetailTwo:'Always happy to discover smaller independent creators.', publicProfile:true },
-          creator: { displayName:'Aria Vale', handle:'ariavale', headline:'Cinematic character-led audio', bio:'Fictional Creator profile for Nightjar Simulation Mode.', welcomeMessage:'Welcome — start with After Midnight.', pronouns:'', avatarInitials:'AV', avatarTone:'plum', avatarUrl:null, favouriteTags:['Cinematic','Atmospheric','After-hours tension'], favouriteTropes:['Slow burn','Mutual pining'], favouriteCategories:['Audio drama','Romantic story'], roleFocus:['Voice performance','Narration','Audio production'], roleSpecialties:['Character roleplay','Narration','Dramatic performance'], roleSecondary:['Close-mic performance','Series work','Remote collaboration'], roleAvailability:'Open to collaborations', roleDetailOne:'Character-led performance with restrained, intimate delivery and cinematic pacing.', roleDetailTwo:'Broadcast-quality home setup with remote direction available.', publicProfile:true },
-          writer: { displayName:'Mara Bell', handle:'marabell', headline:'Character-led scripts and collaborative productions', bio:'Fictional Writer profile for Nightjar Simulation Mode.', welcomeMessage:'Scripts, licensing and collaboration live here.', pronouns:'', avatarInitials:'MB', avatarTone:'plum', avatarUrl:null, favouriteTags:['Story-led','Dialogue-heavy'], favouriteTropes:['Forbidden attraction','Second chance'], favouriteCategories:['Romantic story','Sci-fi'], roleFocus:['Script writing','Dialogue writing','Character development'], roleSpecialties:['Dialogue','Character development','Romance'], roleSecondary:['Single-voice script','Series / episodic','Collaborative rewrite'], roleAvailability:'Open to commissions', roleDetailOne:'Dialogue-first scripts with strong character progression and room for performer interpretation.', roleDetailTwo:'Open to licensed catalogue work and creator commissions through protected Nightjar workflows.', publicProfile:true },
-          editor: { displayName:'Sam Reed', handle:'samreed', headline:'Dialogue Editor · Restoration · Immersive Audio', bio:'Fictional Audio Editor profile for Nightjar Simulation Mode. Dialogue-first post-production with a clean, natural finish and obsessive attention to the tiny noises nobody notices until they are gone.', welcomeMessage:'Clean edits, clear handoffs, properly credited work.', pronouns:'', avatarInitials:'SR', avatarTone:'plum', avatarUrl:null, favouriteTags:['Sound-rich','Cinematic','Binaural'], favouriteTropes:[], favouriteCategories:['Audio drama','Audio roleplay','ASMR / whisper'], roleFocus:['Audio editing','Dialogue editing','Sound design','Mixing','Mastering'], roleSpecialties:['Dialogue editing','Noise cleanup / restoration','Breath / mouth-click cleanup','Mixing','Mastering','Binaural / spatial production'], roleSecondary:['Series consistency','Detailed notes','Remote handoff','Room-tone repair','Broadcast-ready delivery'], roleAvailability:'Open for bookings', roleDetailOne:'Organised remote handoff, labelled revisions, timestamped notes and non-destructive project delivery. Happy working directly with VAs, writers or an established production team.', roleDetailTwo:'Dialogue-led scenes, binaural work and recurring series are the sweet spot. Difficult recordings are welcome when expectations are agreed before the edit.', editorSoftware:['Reaper','iZotope RX','Adobe Audition'], editorProjectTypes:['Single-voice roleplay','Multi-voice audio drama','ASMR / close-mic audio','Binaural / spatial scenes','Series / episodic production','Restoration / rescue edits'], editorDeliveryFormats:['WAV master','24-bit delivery','48 kHz delivery','Separate stems','Dialogue stem','Loudness-matched master','Platform-ready final'], editorCollaborationPreferences:['VAs / performers','Writers','Long-term series teams','One-off commissions','First-time creators'], editorTurnaround:'3–5 days', editorExperienceYears:6, editorSkillLevels:{'Dialogue editing':'Specialist','Noise cleanup / restoration':'Specialist','Breath / mouth-click cleanup':'Specialist','Mixing':'Experienced','Mastering':'Experienced','Binaural / spatial production':'Experienced'}, publicProfile:true },
-          artist: { displayName:'Lena Moss', handle:'lenamoss', headline:'Atmospheric illustration and cover artwork', bio:'Fictional Artist profile for Nightjar Simulation Mode.', welcomeMessage:'Visual storytelling for audio creators, writers and series.', pronouns:'', avatarInitials:'LM', avatarTone:'plum', avatarUrl:null, favouriteTags:['Atmospheric','Cinematic'], favouriteTropes:[], favouriteCategories:['Fantasy','Contemporary romance'], roleFocus:['Illustration','Cover artwork','Character art'], roleSpecialties:['Cover artwork','Character illustration','Digital painting'], roleSecondary:['Atmospheric artwork','Dark / moody artwork','Long-form collaboration'], roleAvailability:'Open for commissions', roleDetailOne:'Painterly digital illustration with cinematic lighting and strong character silhouettes.', roleDetailTwo:'Open to cover, character and promotional commissions through Nightjar.', publicProfile:true },
+          listener: { displayName:'Jamie', handle:'jamielistens', headline:'Late-night story listener', bio:'Fictional listener profile for Nightjar Simulation Mode.', welcomeMessage:'Here for stories, atmosphere and independent creators.', pronouns:'', avatarInitials:'JL', avatarTone:'plum', avatarUrl:null, favouriteTags:['Atmospheric','Gentle'], favouriteTropes:['Slow burn','Comfort & reassurance'], favouriteCategories:['Romantic story','Audio drama'], roleFocus:['Discovery','Supporting creators'], roleSpecialties:['Late-night','Story-first','Atmospheric'], roleSecondary:['Hidden gems','Series'], roleAvailability:'', roleHeadline:'Late-night listener · Story-first · Atmospheric', roleBio:'I come to Nightjar for long-form character stories, atmosphere, slow builds and independent creators I might not find elsewhere.', roleDetailOne:'Long-form character stories, atmosphere and a slow build.', roleDetailTwo:'Always happy to discover smaller independent creators.', publicProfile:true },
+          creator: { displayName:'Aria Vale', handle:'ariavale', headline:'Cinematic character-led audio', bio:'Fictional Creator profile for Nightjar Simulation Mode.', welcomeMessage:'Welcome — start with After Midnight.', pronouns:'', avatarInitials:'AV', avatarTone:'plum', avatarUrl:null, favouriteTags:['Cinematic','Atmospheric','After-hours tension'], favouriteTropes:['Slow burn','Mutual pining'], favouriteCategories:['Audio drama','Romantic story'], roleFocus:['Voice performance','Narration','Audio production'], roleSpecialties:['Character roleplay','Narration','Dramatic performance'], roleSecondary:['Close-mic performance','Series work','Remote collaboration'], roleAvailability:'Open to collaborations', roleHeadline:'Cinematic VA · Character-led performance · Intimate delivery', roleBio:'Character-led voice performance with restrained pacing, close-mic intimacy and collaborative production instincts.', roleDetailOne:'Character-led performance with restrained, intimate delivery and cinematic pacing.', roleDetailTwo:'Broadcast-quality home setup with remote direction available.', publicProfile:true },
+          writer: { displayName:'Mara Bell', handle:'marabell', headline:'Character-led scripts and collaborative productions', bio:'Fictional Writer profile for Nightjar Simulation Mode.', welcomeMessage:'Scripts, licensing and collaboration live here.', pronouns:'', avatarInitials:'MB', avatarTone:'plum', avatarUrl:null, favouriteTags:['Story-led','Dialogue-heavy'], favouriteTropes:['Forbidden attraction','Second chance'], favouriteCategories:['Romantic story','Sci-fi'], roleFocus:['Script writing','Dialogue writing','Character development'], roleSpecialties:['Dialogue','Character development','Romance'], roleSecondary:['Single-voice script','Series / episodic','Collaborative rewrite'], roleAvailability:'Open to commissions', roleHeadline:'Dialogue-first Writer · Character development · Collaborative scripts', roleBio:'I write character-led scripts with strong dialogue, clear emotional progression and enough room for performers to make the work their own.', roleDetailOne:'Dialogue-first scripts with strong character progression and room for performer interpretation.', roleDetailTwo:'Open to licensed catalogue work and creator commissions through protected Nightjar workflows.', publicProfile:true },
+          editor: { displayName:'Sam Reed', handle:'samreed', headline:'Dialogue Editor · Restoration · Immersive Audio', bio:'Fictional Audio Editor profile for Nightjar Simulation Mode. Dialogue-first post-production with a clean, natural finish and obsessive attention to the tiny noises nobody notices until they are gone.', welcomeMessage:'Clean edits, clear handoffs, properly credited work.', pronouns:'', avatarInitials:'SR', avatarTone:'plum', avatarUrl:null, favouriteTags:['Sound-rich','Cinematic','Binaural'], favouriteTropes:[], favouriteCategories:['Audio drama','Audio roleplay','ASMR / whisper'], roleFocus:['Audio editing','Dialogue editing','Sound design','Mixing','Mastering'], roleSpecialties:['Dialogue editing','Noise cleanup / restoration','Breath / mouth-click cleanup','Mixing','Mastering','Binaural / spatial production'], roleSecondary:['Series consistency','Detailed notes','Remote handoff','Room-tone repair','Broadcast-ready delivery'], roleAvailability:'Open for bookings', roleHeadline:'Dialogue Editor · Restoration · Immersive Audio', roleBio:'Dialogue-first post-production with a clean, natural finish and obsessive attention to the tiny noises nobody notices until they are gone.', roleDetailOne:'Organised remote handoff, labelled revisions, timestamped notes and non-destructive project delivery. Happy working directly with VAs, writers or an established production team.', roleDetailTwo:'Dialogue-led scenes, binaural work and recurring series are the sweet spot. Difficult recordings are welcome when expectations are agreed before the edit.', editorSoftware:['Reaper','iZotope RX','Adobe Audition'], editorProjectTypes:['Single-voice roleplay','Multi-voice audio drama','ASMR / close-mic audio','Binaural / spatial scenes','Series / episodic production','Restoration / rescue edits'], editorDeliveryFormats:['WAV master','24-bit delivery','48 kHz delivery','Separate stems','Dialogue stem','Loudness-matched master','Platform-ready final'], editorCollaborationPreferences:['VAs / performers','Writers','Long-term series teams','One-off commissions','First-time creators'], editorTurnaround:'3–5 days', editorExperienceYears:6, editorSkillLevels:{'Dialogue editing':'Specialist','Noise cleanup / restoration':'Specialist','Breath / mouth-click cleanup':'Specialist','Mixing':'Experienced','Mastering':'Experienced','Binaural / spatial production':'Experienced'}, publicProfile:true },
+          artist: { displayName:'Lena Moss', handle:'lenamoss', headline:'Atmospheric illustration and cover artwork', bio:'Fictional Artist profile for Nightjar Simulation Mode.', welcomeMessage:'Visual storytelling for audio creators, writers and series.', pronouns:'', avatarInitials:'LM', avatarTone:'plum', avatarUrl:null, favouriteTags:['Atmospheric','Cinematic'], favouriteTropes:[], favouriteCategories:['Fantasy','Contemporary romance'], roleFocus:['Illustration','Cover artwork','Character art'], roleSpecialties:['Cover artwork','Character illustration','Digital painting'], roleSecondary:['Atmospheric artwork','Dark / moody artwork','Long-form collaboration'], roleAvailability:'Open for commissions', roleHeadline:'Atmospheric Artist · Covers · Character illustration', roleBio:'Painterly digital illustration with cinematic lighting, strong silhouettes and a focus on artwork that belongs to the world of the audio.', roleDetailOne:'Painterly digital illustration with cinematic lighting and strong character silhouettes.', roleDetailTwo:'Open to cover, character and promotional commissions through Nightjar.', publicProfile:true },
           admin: { displayName:'Nightjar Admin Demo', handle:'nightjardemo', headline:'Administrator demo profile', bio:'Fictional admin-facing profile while Demo Data is enabled.', welcomeMessage:'', pronouns:'', avatarInitials:'NJ', avatarTone:'plum', avatarUrl:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:['Platform operations'], roleSpecialties:['Platform operations','Community safety'], roleSecondary:['Testing','Reports'], roleAvailability:'', roleDetailOne:'Owner-console simulation profile.', roleDetailTwo:'', publicProfile:false },
         };
-        const demoRole = previewRole ?? 'admin';
+        const demoRole = roleOverride ?? previewRole ?? 'admin';
         const demoProfile = readDemo('profile:' + demoRole, demoProfiles[demoRole]);
         setProfile(demoProfile);
         setTasteVector([{label:'Atmospheric',weight:0.92},{label:'Slow burn',weight:0.81},{label:'Story-led',weight:0.76},{label:'Cinematic',weight:0.69}]);
@@ -2063,7 +2064,6 @@ function App() {
 
   const accountLabel = role ? roleMeta[role].label : 'Signed out';
   const effectiveRole: AccountRole | null = role === 'admin' ? (previewRole ?? 'admin') : role;
-  const profileRoleConfig = ROLE_PROFILE_CONFIG[effectiveRole ?? 'listener'];
   const combinedProfileTagOptions = Array.from(new Set([...PROFILE_TAG_OPTIONS, ...profileTagCatalogue]));
   const canAdmin = role === 'admin';
   const canProtection = Boolean(user);
@@ -2855,6 +2855,7 @@ function App() {
     else if (next === 'writer') navigate('writer');
     else if (next === 'editor') navigate('editor');
     else navigate('profile');
+    void loadProfile(next);
     notify(`Simulation Mode: ${roleMeta[next].label}. No simulated action writes to live Nightjar data.`);
   };
 
@@ -2877,7 +2878,7 @@ function App() {
     setWriterPermissions([]);
     setWriterSelected(null);
     setEditorSelected(null);
-    setProfile((current:any) => ({ ...current, displayName:'', handle:'', headline:'', bio:'', welcomeMessage:'', avatarUrl:null, pendingAvatarAssetId:null, pendingAvatarStatus:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:[], roleSpecialties:[], roleSecondary:[], roleAvailability:'', roleDetailOne:'', roleDetailTwo:'' }));
+    setProfile((current:any) => ({ ...current, displayName:'', handle:'', headline:'', bio:'', welcomeMessage:'', avatarUrl:null, pendingAvatarAssetId:null, pendingAvatarStatus:null, favouriteTags:[], favouriteTropes:[], favouriteCategories:[], roleFocus:[], roleSpecialties:[], roleSecondary:[], roleAvailability:'', roleHeadline:'', roleBio:'', roleDetailOne:'', roleDetailTwo:'', portfolioNote:'', featuredPortfolioIds:[], editorSoftware:[], editorProjectTypes:[], editorDeliveryFormats:[], editorCollaborationPreferences:[], editorTurnaround:'', editorExperienceYears:'', editorSkillLevels:{} }));
     setProfileTagCatalogue([]);
     void loadLiveProductData();
     void loadCreatorDashboard();
@@ -3105,17 +3106,13 @@ function App() {
 
   const profileCompletionSignals = [
     Boolean(profile.displayName),
+    Boolean(profile.handle),
     Boolean(profile.headline),
     Boolean(profile.bio),
+    Boolean(profile.welcomeMessage),
     Array.isArray(profile.favouriteTags) && profile.favouriteTags.length > 0,
-    Array.isArray(profile.roleSpecialties) && profile.roleSpecialties.length > 0,
+    Array.isArray(profile.favouriteCategories) && profile.favouriteCategories.length > 0,
     profile.avatarStatus === 'approved' || Boolean(profile.avatarUrl),
-    Boolean(profile.portfolioNote),
-    Array.isArray(profile.featuredPortfolioIds) && profile.featuredPortfolioIds.length > 0,
-    ...(effectiveRole === 'editor' ? [
-      Array.isArray(profile.editorSoftware) && profile.editorSoftware.length > 0,
-      Boolean(profile.editorTurnaround),
-    ] : []),
   ];
   const profileCompletion = Math.round((profileCompletionSignals.filter(Boolean).length / profileCompletionSignals.length) * 100);
 
@@ -3134,7 +3131,7 @@ function App() {
     ...(effectiveRole === 'listener' ? [{ id:'nav-library', group:'Navigate', label:'Library', detail:'Favourites, history and playlists', keywords:['saved','playlist'], icon:<Headphones size={15}/>, action:()=>navigate('library') }] : []),
     ...(effectiveRole === 'creator' || adminOnly ? [{ id:'nav-creator', group:'Studio', label:'Creator Studio', detail:'Releases, catalogue and creator operations', keywords:['publish','audio'], icon:<Mic2 size={15}/>, action:()=>{ navigate('creator'); void loadCreatorDashboard(); } }] : []),
     ...(effectiveRole === 'writer' ? [{ id:'nav-writer', group:'Studio', label:'Writer Studio', detail:'Manuscripts, rights and collaborations', keywords:['script','write'], icon:<FileText size={15}/>, action:()=>{ navigate('writer'); void loadWriterScripts(); } }] : []),
-    ...(effectiveRole === 'editor' ? [{ id:'nav-editor', group:'Studio', label:'Editorial', detail:'Assigned manuscripts and production review', keywords:['edit','review'], icon:<FileCheck2 size={15}/>, action:()=>{ navigate('editor'); void loadEditorQueue(); } }] : []),
+    ...(effectiveRole === 'editor' ? [{ id:'nav-editor', group:'Studio', label:'Editor Studio', detail:'Professional profile, portfolio, projects and collaborations', keywords:['edit','review','portfolio','services'], icon:<FileCheck2 size={15}/>, action:()=>{ navigate('editor'); void loadEditorQueue(); void loadProfile(); } }] : []),
     { id:'nav-profile', group:'Account', label:'Profile', detail:'Identity, public showcase and preferences', keywords:['settings','bio'], icon:<UserCircle2 size={15}/>, action:openProfileEditor },
     { id:'nav-protection', group:'Account', label:'Protection Centre', detail:'Reports, evidence and account safety', keywords:['security','safety'], icon:<ShieldCheck size={15}/>, action:()=>{ navigate('protection'); void loadProtection(); } },
     ...(canAdmin && !simulationMode ? [{ id:'nav-admin', group:'Administration', label:'Owner Console', detail:'People, content, security and commercial operations', keywords:['admin','moderation'], icon:<Settings2 size={15}/>, action:()=>{ navigate('admin'); void loadAdminOverview(); } }] : []),
@@ -3213,7 +3210,7 @@ function App() {
           {(effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && <button className={view === 'library' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('library')}>Library</button>}
           {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
-          {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); }}>Editorial</button>}
+          {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
           {['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
@@ -3451,8 +3448,9 @@ function App() {
                       ? (person.creditedReleaseCount ?? 0) + ' release credits'
                       : person.role === 'artist'
                         ? 'Visual artist profile'
-                        : 'Community profile';
-                return <article className="creator-profile profile-directory-card" key={person.userId}>
+                        : 'Curated Listener profile';
+                const primaryRoleSlice = person.roleProfiles?.[person.role] ?? {};
+                return <article className="creator-profile profile-directory-card premium-directory-card" key={person.userId}>
                   <div className="profile-number">{String(index + 1).padStart(2,'0')}</div>
                   <span className="avatar-xl">{person.avatarUrl ? <img className="avatar-approved-image" src={person.avatarUrl} alt="" loading="lazy" decoding="async" /> : person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>
                   <div className="profile-main">
@@ -3460,7 +3458,7 @@ function App() {
                       <div><div className="profile-role-chips directory-role-chips">{(person.roles?.length ? person.roles : [person.role]).filter((value,index,array)=>array.indexOf(value)===index).map((personRole)=><span className="directory-role-label" key={personRole}>{roleMeta[personRole].label}</span>)}</div><h2>{person.name}</h2><span>{person.handle ? '@' + person.handle.replace(/^@/,'') : 'Handle not set'}</span></div>
                       <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>
                     </div>
-                    <p>{person.headline || person.bio || roleMeta[person.role].description}</p>
+                    <p>{primaryRoleSlice.roleHeadline || person.headline || primaryRoleSlice.roleBio || person.bio || roleMeta[person.role].description}</p>
                     {person.roleAvailability && <span className="creator-availability-pill">{person.roleAvailability}</span>}
                     {!!person.activityBadges?.length && <div className="profile-activity-badges">{person.activityBadges.slice(0,3).map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={11}/>{badge.label}</span>)}</div>}
                     <div className="creator-directory-tags">{[...(person.roleSpecialties??[]),...(person.favouriteTags??[])].slice(0,5).map((item)=><span key={item}>{item}</span>)}</div>
@@ -3542,146 +3540,69 @@ function App() {
         )}
 
         {view === 'profile' && (
-          <section className="page-section profile-page">
-            <div className="page-heading"><div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Make Nightjar yours.</h1><p>Every account gets a personal identity and taste profile. Your role controls permissions; your profile controls how you present yourself.</p></div></div>
-            <div className="nj-profile-progress">
-              <div><span className="mini-label">PROFILE READINESS</span><strong>{profileCompletion}% complete</strong><small>{profileDirty ? 'Unsaved changes' : 'All current changes saved'}</small></div>
-              <div className="nj-profile-progress-track" aria-label={profileCompletion + '% profile complete'}><span style={{width:profileCompletion + '%'}}/></div>
-              <button className="secondary-button" onClick={() => document.getElementById('profile-public-preview')?.scrollIntoView({behavior:'smooth',block:'center'})}>Preview public profile</button>
+          <section className="page-section profile-page premium-profile-page">
+            <div className="page-heading premium-profile-page-heading">
+              <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
+              {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId)}>View my public profile</button>}
             </div>
-            <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}><ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':next==='artist'?'profile':'discover'); void loadProfile(); }} /></Suspense>
-            {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel notify={notify} professional={['creator','writer','editor','artist'].includes(String(effectiveRole))} demoMode={demoMode} /></Suspense>}
+
+            <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
+              <UserProfileStudio
+                profile={profile}
+                setProfile={setProfile}
+                userName={simulationMode ? simulationIdentity.name : user?.name}
+                userEmail={user?.email}
+                role={effectiveRole}
+                profileCompletion={profileCompletion}
+                profileLoading={profileLoading}
+                profileDirty={profileDirty}
+                profileBaseline={profileBaseline}
+                profileImageBusy={profileImageBusy}
+                combinedTagOptions={combinedProfileTagOptions}
+                tasteVector={tasteVector}
+                onUploadAvatar={uploadProfileAvatar}
+                onRemoveAvatar={removeProfileImage}
+                onSave={saveProfile}
+                onRevert={()=>profileBaseline && setProfile(structuredClone(profileBaseline))}
+                onOpenEditorStudio={effectiveRole==='editor'?()=>{navigate('editor'); void loadEditorQueue(); void loadProfile();}:undefined}
+              />
+            </Suspense>
+
+            <div className="premium-profile-support-grid">
+              <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
+                <ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':next==='artist'?'profile':'discover'); void loadProfile(); }} />
+              </Suspense>
+              {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel notify={notify} professional={['creator','writer','editor','artist'].includes(String(effectiveRole))} demoMode={demoMode} /></Suspense>}
+            </div>
+
+            {effectiveRole && ['listener','creator','writer','artist'].includes(String(effectiveRole)) && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading role profile" />}>
+              <RoleProfileExtension
+                role={effectiveRole as 'listener'|'creator'|'writer'|'artist'}
+                profile={profile}
+                setProfile={setProfile}
+                portfolioOptions={profilePortfolioOptions}
+                completedCollaborations={profileCompletedCollaborations}
+              />
+            </Suspense>}
+
             {effectiveRole === 'artist' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Artist portfolio" />}><ArtistPortfolioManager notify={notify} demoMode={demoMode} /></Suspense>}
-            <div className="profile-editor-grid">
-              <article className="panel profile-editor-card">
-                <span className="mini-label">IDENTITY</span>
-                <div className="profile-avatar-preview" data-tone={profile.avatarTone || 'plum'}>{profile.avatarUrl ? <img className="profile-approved-image" src={profile.avatarUrl} alt="Approved profile" loading="lazy" decoding="async" /> : <strong>{profile.avatarInitials || (profile.displayName || user?.name || 'N').slice(0,2).toUpperCase()}</strong>}</div>
-                <div className="profile-image-controls"><label className="secondary-button upload-label"><ImagePlus size={15}/> {profileImageBusy ? 'Working…' : profile.avatarUrl ? 'Replace picture' : 'Add profile picture'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file) void uploadProfileAvatar(file); event.currentTarget.value='';}} /></label>{(profile.avatarUrl || profile.pendingAvatarAssetId) && <button className="ghost-button" disabled={profileImageBusy} onClick={()=>void removeProfileImage()}>Remove picture</button>}</div>
-                {profile.pendingAvatarStatus === 'pending' && <p className="image-moderation-status">Picture pending administrator approval. It is not public yet.</p>}
-                {profile.pendingAvatarStatus === 'rejected' && <p className="image-moderation-status">The submitted picture was not approved. You can upload another.</p>}
-                <h2>{profile.displayName || user?.name || 'Choose your name'}</h2>
-                <label>Chosen name<input maxLength={80} value={profile.displayName} onChange={(e)=>setProfile((p:any)=>({...p,displayName:e.target.value}))} placeholder="How Nightjar should call you"/><small className="field-counter">{String(profile.displayName ?? '').length}/80</small></label>
-                <label>@handle<input maxLength={30} value={profile.handle} onChange={(e)=>setProfile((p:any)=>({...p,handle:e.target.value}))} placeholder="youruniquehandle" aria-describedby="profile-handle-help"/><small id="profile-handle-help" className="field-counter">3–30 letters, numbers, underscores or hyphens · {String(profile.handle ?? '').length}/30</small></label>
-                <div className="profile-inline-fields"><label>Avatar initials<input maxLength={4} value={profile.avatarInitials} onChange={(e)=>setProfile((p:any)=>({...p,avatarInitials:e.target.value.toUpperCase()}))} placeholder="NJ"/></label><label>Profile tone<select value={profile.avatarTone || 'plum'} onChange={(e)=>setProfile((p:any)=>({...p,avatarTone:e.target.value}))}><option value="plum">Plum</option><option value="wine">Wine</option><option value="mauve">Mauve</option><option value="ivory">Ivory</option></select></label></div>
-                <label>Headline<input maxLength={140} value={profile.headline} onChange={(e)=>setProfile((p:any)=>({...p,headline:e.target.value}))} placeholder="A short line that feels like you"/><small className="field-counter">{String(profile.headline ?? '').length}/140</small></label>
-                <label>Pronouns <span className="optional-label">optional</span><input maxLength={60} value={profile.pronouns} onChange={(e)=>setProfile((p:any)=>({...p,pronouns:e.target.value}))} placeholder="e.g. she/her"/><small className="field-counter">{String(profile.pronouns ?? '').length}/60</small></label>
-                <label>Bio<textarea maxLength={1200} value={profile.bio} onChange={(e)=>setProfile((p:any)=>({...p,bio:e.target.value}))} placeholder="Tell people a little about you"/><small className="field-counter">{String(profile.bio ?? '').length}/1200</small></label>
-                <label>Welcome message <span className="optional-label">optional</span><textarea maxLength={300} value={profile.welcomeMessage ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,welcomeMessage:e.target.value}))} placeholder="A message visitors see when they open your profile"/><small className="field-counter">{String(profile.welcomeMessage ?? '').length}/300</small></label>
-              </article>
-              <article className="panel profile-editor-card">
-                <span className="mini-label">DISCOVERY & TAGS</span>
-                <h2>How Nightjar should describe you</h2>
-                <p className="panel-note">Search the catalogue instead of digging through a wall of options. Creator accounts can also add missing custom tags; frequently reused creator tags are promoted into the shared catalogue automatically.</p>
-                <SearchableMultiSelect label={profileRoleConfig.tagLabel} options={combinedProfileTagOptions} values={profile.favouriteTags ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTags:values}))} allowCreate={effectiveRole !== 'admin'} createLabel="Add custom tag" helperText={effectiveRole === 'creator' ? 'Add any tag that is missing, including niche or explicit descriptors. Custom tags appear on your profile immediately; only repeated use by distinct approved creators can promote a tag into Nightjar’s shared catalogue.' : effectiveRole === 'admin' ? undefined : 'Add any useful tag that is missing from the standard list. Your custom tags stay attached to your profile; shared catalogue promotion is driven by approved creator usage.'}/>
-                <SearchableMultiSelect label={effectiveRole === 'listener' ? 'Favourite tropes' : effectiveRole === 'writer' ? 'Writing tropes' : effectiveRole === 'creator' ? 'Creator tropes' : 'Project tropes'} options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteTropes:values}))}/>
-                <SearchableMultiSelect label={effectiveRole === 'listener' ? 'Favourite categories' : 'Relevant categories'} options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>setProfile((p:any)=>({...p,favouriteCategories:values}))}/>
-                <SearchableMultiSelect label={profileRoleConfig.focusLabel} options={ROLE_FOCUS_OPTIONS[effectiveRole ?? 'listener']} values={profile.roleFocus ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleFocus:values}))}/>
-                <label className="profile-toggle"><input type="checkbox" checked={effectiveRole === 'admin' ? false : profile.publicProfile !== false} disabled={effectiveRole === 'admin'} onChange={(e)=>setProfile((p:any)=>({...p,publicProfile:e.target.checked}))}/> {effectiveRole === 'admin' ? 'Administrator profiles remain private' : 'Public profile'}</label>
-              </article>
-              <article className="panel profile-editor-card profile-role-card">
-                <span className="mini-label">{(effectiveRole ?? 'listener').toUpperCase()} PROFILE</span>
-                <h2>{profileRoleConfig.title}</h2>
-                <p className="panel-note">{profileRoleConfig.description}</p>
-                <div className="profile-role-fields">
-                  <SearchableMultiSelect label={profileRoleConfig.specialtiesLabel} options={profileRoleConfig.specialtiesOptions} values={profile.roleSpecialties ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleSpecialties:values}))}/>
-                  <SearchableMultiSelect label={profileRoleConfig.secondaryLabel} options={profileRoleConfig.secondaryOptions} values={profile.roleSecondary ?? []} onChange={(values)=>setProfile((p:any)=>({...p,roleSecondary:values}))}/>
-                </div>
-                {profileRoleConfig.availabilityLabel && <label>{profileRoleConfig.availabilityLabel}<select value={profile.roleAvailability ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,roleAvailability:e.target.value}))}><option value="">Not specified</option>{profileRoleConfig.availabilityOptions.map((option)=><option value={option} key={option}>{option}</option>)}</select></label>}
-                <div className="profile-role-copy-grid">
-                  <label>{profileRoleConfig.detailOneLabel}<textarea maxLength={600} value={profile.roleDetailOne ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,roleDetailOne:e.target.value}))} placeholder={profileRoleConfig.detailOnePlaceholder}/><small className="field-counter">{String(profile.roleDetailOne ?? '').length}/600</small></label>
-                  <label>{profileRoleConfig.detailTwoLabel}<textarea maxLength={600} value={profile.roleDetailTwo ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,roleDetailTwo:e.target.value}))} placeholder={profileRoleConfig.detailTwoPlaceholder}/><small className="field-counter">{String(profile.roleDetailTwo ?? '').length}/600</small></label>
-                </div>
-                {effectiveRole === 'editor' && <section className="editor-professional-editor">
-                  <div className="profile-portfolio-head">
-                    <div>
-                      <span className="mini-label">EDITOR PROFESSIONAL CARD</span>
-                      <h3>Show how you actually work</h3>
-                      <p>Give VAs, Writers and production teams enough technical detail to know whether you are the right fit before they message you. These fields are public when your profile is public; private project files and client notes remain private.</p>
-                    </div>
-                    <FileCheck2 size={18}/>
-                  </div>
-                  <div className="editor-professional-grid">
-                    <label>Years actively editing <span className="optional-label">optional</span><input type="number" min="0" max="60" inputMode="numeric" value={profile.editorExperienceYears ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,editorExperienceYears:e.target.value === '' ? '' : Math.min(60,Math.max(0,Number(e.target.value)))}))} placeholder="e.g. 6"/></label>
-                    <label>Typical turnaround<select value={profile.editorTurnaround ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,editorTurnaround:e.target.value}))}><option value="">Project dependent / not specified</option>{EDITOR_TURNAROUND_OPTIONS.map((option)=><option value={option} key={option}>{option}</option>)}</select></label>
-                  </div>
-                  <SearchableMultiSelect label="DAWs & production tools" options={EDITOR_SOFTWARE_OPTIONS} values={profile.editorSoftware ?? []} onChange={(values)=>setProfile((p:any)=>({...p,editorSoftware:values}))} helperText="Choose the tools collaborators are most likely to care about. This is not a software flex contest — it is useful workflow context."/>
-                  <SearchableMultiSelect label="Project types I want to edit" options={EDITOR_PROJECT_TYPE_OPTIONS} values={profile.editorProjectTypes ?? []} onChange={(values)=>setProfile((p:any)=>({...p,editorProjectTypes:values}))}/>
-                  <SearchableMultiSelect label="Delivery capabilities" options={EDITOR_DELIVERY_OPTIONS} values={profile.editorDeliveryFormats ?? []} onChange={(values)=>setProfile((p:any)=>({...p,editorDeliveryFormats:values}))}/>
-                  <SearchableMultiSelect label="Best collaboration fit" options={EDITOR_COLLABORATION_OPTIONS} values={profile.editorCollaborationPreferences ?? []} onChange={(values)=>setProfile((p:any)=>({...p,editorCollaborationPreferences:values}))}/>
-                  <div className="editor-skill-matrix-editor">
-                    <div><span className="mini-label">SKILL MATRIX</span><h4>How confident are you in each selected service?</h4><p>Self-described proficiency is shown separately from Nightjar-verified credits. No fake 97/100 nonsense.</p></div>
-                    {(profile.roleSpecialties ?? []).length ? <div className="editor-skill-matrix-list">{(profile.roleSpecialties ?? []).map((skill:string)=><label key={skill}><span>{skill}</span><select value={profile.editorSkillLevels?.[skill] ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,editorSkillLevels:{...(p.editorSkillLevels??{}),[skill]:e.target.value}}))}><option value="">Not stated</option>{EDITOR_PROFICIENCY_OPTIONS.map((level)=><option value={level} key={level}>{level}</option>)}</select></label>)}</div> : <div className="people-empty"><strong>Choose editing services above first.</strong><span>Your selected services become the rows in this public skill matrix.</span></div>}
-                  </div>
-                </section>}
-                {effectiveRole !== 'admin' && <section className="profile-portfolio-editor">
-                  <div className="profile-portfolio-head">
-                    <div>
-                      <span className="mini-label">PUBLIC SHOWCASE</span>
-                      <h3>{effectiveRole === 'creator' ? 'Featured releases' : effectiveRole === 'writer' ? 'Featured writing credits' : effectiveRole === 'editor' ? 'Featured production credits' : 'Public playlists'}</h3>
-                      <p>{effectiveRole === 'listener'
-                        ? 'Choose playlists to publish on your profile. Your listening history, favourites and private library remain private.'
-                        : 'Choose up to six verified pieces of public work to lead your profile. Nightjar validates every selection against your real credits.'}</p>
-                    </div>
-                    {['creator','writer','editor','artist'].includes(String(effectiveRole)) && <span className="profile-collaboration-badge"><Handshake size={14}/>{profileCompletedCollaborations} completed collaboration{profileCompletedCollaborations === 1 ? '' : 's'}</span>}
-                  </div>
-                  <label>Portfolio note <span className="optional-label">optional</span><textarea maxLength={400} value={profile.portfolioNote ?? ''} onChange={(e)=>setProfile((p:any)=>({...p,portfolioNote:e.target.value}))} placeholder={effectiveRole === 'listener' ? 'Optional note about the playlists you choose to share.' : 'Optional introduction to the work you have chosen to feature.'}/><small className="field-counter">{String(profile.portfolioNote ?? '').length}/400</small></label>
-                  {profilePortfolioOptions.length > 6 && <label className="profile-portfolio-search"><Search size={14}/><input value={profilePortfolioQuery} onChange={(event)=>setProfilePortfolioQuery(event.target.value)} placeholder="Search eligible showcase work…"/></label>}
-                  <div className="profile-portfolio-options">
-                    {profilePortfolioOptions.length ? filteredProfilePortfolioOptions.map((item:any)=>{
-                      const selected = (profile.featuredPortfolioIds ?? []).includes(item.id);
-                      const atLimit = !selected && (profile.featuredPortfolioIds ?? []).length >= 6;
-                      return <label className={selected ? 'profile-portfolio-option selected' : 'profile-portfolio-option'} key={item.id}>
-                        <input type="checkbox" checked={selected} disabled={atLimit} onChange={(event)=>setProfile((current:any)=>{
-                          const ids = Array.isArray(current.featuredPortfolioIds) ? current.featuredPortfolioIds : [];
-                          return { ...current, featuredPortfolioIds:event.target.checked ? [...ids,item.id].slice(0,6) : ids.filter((id:string)=>id!==item.id) };
-                        })}/>
-                        <span><strong>{item.title}</strong><small>{item.subtitle || (item.type === 'playlist' ? 'Playlist' : 'Nightjar public work')}</small></span>
-                      </label>;
-                    }) : <div className="people-empty"><strong>No eligible showcase items yet.</strong><span>{effectiveRole === 'listener' ? 'Create a playlist in your Library first.' : 'Published and credited work will appear here automatically.'}</span></div>}
-                    {profilePortfolioOptions.length > 0 && filteredProfilePortfolioOptions.length === 0 && <div className="people-empty"><Search size={16}/><strong>No showcase items match.</strong><span>Try a different title or credit search.</span></div>}
-                  </div>
-                  {!!(profile.featuredPortfolioIds ?? []).length && <div className="profile-featured-order">
-                    <span className="mini-label">FEATURED ORDER</span>
-                    {(profile.featuredPortfolioIds ?? []).map((id:string,index:number)=>{
-                      const item = profilePortfolioOptions.find((option:any)=>option.id===id);
-                      if (!item) return null;
-                      return <div className="profile-featured-order-row" key={id}>
-                        <span className="profile-featured-order-index">{index + 1}</span>
-                        <div><strong>{item.title}</strong><small>{item.subtitle || 'Nightjar public work'}</small></div>
-                        <div className="profile-featured-order-actions">
-                          <button type="button" className="ghost-button" disabled={index===0} onClick={()=>setProfile((current:any)=>{
-                            const ids=[...(current.featuredPortfolioIds??[])]; [ids[index-1],ids[index]]=[ids[index],ids[index-1]]; return {...current,featuredPortfolioIds:ids};
-                          })}>Up</button>
-                          <button type="button" className="ghost-button" disabled={index===(profile.featuredPortfolioIds??[]).length-1} onClick={()=>setProfile((current:any)=>{
-                            const ids=[...(current.featuredPortfolioIds??[])]; [ids[index+1],ids[index]]=[ids[index],ids[index+1]]; return {...current,featuredPortfolioIds:ids};
-                          })}>Down</button>
-                          <button type="button" className="ghost-button" onClick={()=>setProfile((current:any)=>({...current,featuredPortfolioIds:(current.featuredPortfolioIds??[]).filter((value:string)=>value!==id)}))}>Remove</button>
-                        </div>
-                      </div>;
-                    })}
-                  </div>}
-                  <small className="profile-portfolio-limit">{(profile.featuredPortfolioIds ?? []).length}/6 selected</small>
-                </section>}
-                <div className="nj-profile-save-bar">
-                  <div><strong>{profileDirty ? 'You have unsaved profile changes.' : 'Profile is up to date.'}</strong><span>{profileDirty ? 'Save or revert before leaving to avoid losing your edits.' : 'Nightjar will warn you before closing the browser if future edits are unsaved.'}</span></div>
-                  <div>
-                    {profileDirty && profileBaseline && <button type="button" className="ghost-button" disabled={profileLoading} onClick={()=>setProfile(structuredClone(profileBaseline))}>Revert</button>}
-                    <button className="primary-button profile-save-button" disabled={profileLoading || !profileDirty} onClick={()=>void saveProfile()}>{profileLoading ? 'Saving…' : profileDirty ? 'Save profile' : 'Saved'} <Check size={15}/></button>
-                  </div>
+
+            {profileDirty && <div className="premium-profile-floating-save">
+              <span><strong>Profile changes waiting.</strong><small>Save once and the personal + role sections update together.</small></span>
+              <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}><Check size={14}/>{profileLoading?'Saving…':'Save all profile changes'}</button>
+            </div>}
+
+            <div className="premium-profile-account-grid">
+              <article className="panel nj-account-activity premium-account-activity">
+                <div className="panel-title"><div><span className="mini-label">ACCOUNT ACTIVITY</span><h2>Your Nightjar pulse</h2></div><Bell size={17}/></div>
+                <p className="panel-note">Useful account and community changes live here. Protected audit events remain in the Protection Centre.</p>
+                <div className="nj-account-activity-list">
+                  {notifications.slice(0,8).map((item:any)=><button key={item.id} className={item.read ? '' : 'unread'} onClick={()=>void markNotificationRead(item)}><span>{item.subtype === 'creator' ? <Mic2 size={14}/> : item.subtype === 'writer' ? <FileText size={14}/> : item.subtype === 'editor' ? <FileCheck2 size={14}/> : <Bell size={14}/>}</span><div><strong>{item.title}</strong><small>{item.message}</small></div>{item.read !== true && <em>NEW</em>}</button>)}
+                  {!notifications.length && <div className="people-empty"><Bell size={17}/><strong>Quiet for now.</strong><span>Account and community updates will appear here when something changes.</span></div>}
                 </div>
               </article>
+              <NotificationPreferences key={'notification-prefs-' + demoSessionKey} notify={notify} simulationMode={demoMode} />
             </div>
-            <div className="profile-public-preview panel" id="profile-public-preview">{profile.avatarUrl && <span className="profile-preview-avatar"><img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /></span>}<div><span className="mini-label">PUBLIC PROFILE</span><h3>{profile.displayName || 'Your chosen name'} <span>{profile.handle ? '@'+profile.handle.replace(/^@/,'') : '@yourhandle'}</span></h3><p>{profile.headline || 'Your Nightjar headline appears here.'}</p>{profile.welcomeMessage && <p className="profile-welcome-preview">{profile.welcomeMessage}</p>}<div className="profile-preview-chips">{[...(profile.roleSpecialties??[]),...(profile.favouriteTags??[]),...(profile.favouriteTropes??[])].slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div>{profile.roleAvailability && <small className="profile-preview-availability">{profile.roleAvailability}</small>}</div><em>{profile.publicProfile === false ? 'Private' : 'Visible to your Nightjar community'}</em></div>
-            <article className="panel taste-panel"><div><span className="mini-label">TASTE ENGINE</span><h2>What Nightjar is learning</h2><p>Declared taste is kept separate from identity. Listening signals can refine recommendations without trying to infer who you are.</p></div><div className="taste-vector">{tasteVector.length===0 ? <span className="taste-empty">Your taste graph will grow as you save, finish, replay and explore.</span> : tasteVector.slice(0,10).map((item:any)=><div className="taste-chip" key={item.label}><strong>{item.label}</strong><span>{item.weight}</span></div>)}</div></article>
-            <article className="panel nj-account-activity">
-              <div className="panel-title"><div><span className="mini-label">ACCOUNT ACTIVITY</span><h2>What changed recently</h2></div><Bell size={17}/></div>
-              <p className="panel-note">A useful account-level view of Nightjar updates. Protected audit events remain in the Protection Centre rather than being mixed into normal activity.</p>
-              <div className="nj-account-activity-list">
-                {notifications.slice(0,8).map((item:any)=><button key={item.id} className={item.read ? '' : 'unread'} onClick={()=>void markNotificationRead(item)}><span>{item.subtype === 'creator' ? <Mic2 size={14}/> : item.subtype === 'writer' ? <FileText size={14}/> : item.subtype === 'editor' ? <FileCheck2 size={14}/> : <Bell size={14}/>}</span><div><strong>{item.title}</strong><small>{item.message}</small></div>{item.read !== true && <em>NEW</em>}</button>)}
-                {!notifications.length && <div className="people-empty"><Bell size={17}/><strong>No recent activity.</strong><span>Account and community updates will appear here when something changes.</span></div>}
-              </div>
-            </article>
-            <NotificationPreferences key={'notification-prefs-' + demoSessionKey} notify={notify} simulationMode={demoMode} />
           </section>
         )}
 
@@ -3724,48 +3645,34 @@ function App() {
         )}
 
         {view === 'editor' && effectiveRole === 'editor' && (
-          <section className="page-wrap role-studio-page">
-            <div className="page-heading">
-              <div><p className="eyebrow"><FileCheck2 size={14} /> EDITORIAL QUEUE</p><h1>Review work professionally.</h1><p>Only manuscripts assigned to your editor account appear here.</p></div>
-            </div>
-            {accountStatus === 'pending_review' && <div className="admin-note"><Sparkles size={17}/><div><strong>AUDIO EDITOR ACCOUNT / PENDING REVIEW</strong><span>Your dedicated profile is active for setup, but editorial assignments, private professional messaging and collaboration tools unlock after Administrator approval.</span></div></div>}
-            <RoleDashboard
-              eyebrow="EDITOR COMMAND CENTRE"
-              title="Production work at a glance."
-              description="Assigned manuscripts and collaboration activity are surfaced here; private client material stays inside controlled workspaces."
-              metrics={[
-                {label:'Assigned',value:editorQueue.length,detail:'Current queue'},
-                {label:'In review',value:editorQueue.filter((item:any)=>String(item.status).toLowerCase().includes('review')).length,detail:'Active decisions'},
-                {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads'},
-              ]}
+          <Suspense fallback={<NightjarSkeleton variant="page" count={5} label="Loading Editor Studio" />}>
+            <EditorStudio
+              profile={profile}
+              setProfile={setProfile}
+              profileLoading={profileLoading}
+              profileDirty={profileDirty}
+              profileBaseline={profileBaseline}
+              onSaveProfile={saveProfile}
+              onRevertProfile={()=>profileBaseline && setProfile(structuredClone(profileBaseline))}
+              profilePortfolioOptions={profilePortfolioOptions}
+              completedCollaborations={profileCompletedCollaborations}
+              editorQueue={editorQueue}
+              editorSelected={editorSelected}
+              setEditorSelected={setEditorSelected}
+              onReviewScript={reviewEditorScript}
+              accountStatus={accountStatus}
+              messageUnreadCount={messageUnreadCount}
+              messageNeedsReplyCount={messageNeedsReplyCount}
+              messageAwaitingReplyCount={messageAwaitingReplyCount}
               actions={editorActions}
+              demoMode={demoMode}
+              simulationMode={simulationMode}
+              demoSessionKey={demoSessionKey}
+              notify={notify}
+              onOpenMessages={()=>navigate('messages')}
+              onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }}
             />
-            <div className="editor-queue-grid editorial-queue">
-              {editorQueue.map((script: any) => (
-                <button key={script.id} className={editorSelected?.id === script.id ? 'editor-queue-card active' : 'editor-queue-card'} onClick={() => setEditorSelected(script)}>
-                  <div className="editor-status-line"><span>{script.status ?? 'Submitted'}</span><strong>v{script.version ?? 1}</strong></div>
-                  <h2>{script.title}</h2>
-                  <p>{script.lastEditorialComment || 'No editorial note recorded yet.'}</p>
-                </button>
-              ))}
-            </div>
-            {!editorQueue.length && <div className="people-empty"><FileCheck2 size={18} /><strong>No editorial assignments.</strong><span>An administrator must assign a live manuscript to you before review work can begin.</span></div>}
-            {editorSelected && (
-              <article className="panel-card editorial-review-panel">
-                <div className="panel-title"><div><span className="mini-label">CURRENT REVIEW</span><h2>{editorSelected.title}</h2></div><span className="status-pill">{editorSelected.status}</span></div>
-                <p className="panel-note">{editorSelected.lastEditorialComment || 'No previous editorial note.'}</p>
-                <div className="script-card-actions">
-                  <button className="secondary-button" onClick={() => void reviewEditorScript('Under review')}>Mark under review</button>
-                  <button className="secondary-button" onClick={() => void reviewEditorScript('Revision requested')}>Request revision</button>
-                  <button className="primary-button" onClick={() => void reviewEditorScript('Approved')}>Approve</button>
-                  <button className="ghost-button" onClick={() => void reviewEditorScript('Rejected')}>Reject</button>
-                </div>
-              </article>
-            )}
-            {accountStatus !== 'pending_review' && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Audio Editor collaborations" />}><CollaborationHub key={'editor-collab-' + demoSessionKey} role="editor" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>}
-            <div className="protection-banner"><FileCheck2 size={19} /><div><strong>EDITOR BOUNDARY</strong><span>Editorial decisions are recorded against the assigned manuscript. Administrator authority remains separate.</span></div></div>
-          </section>
+          </Suspense>
         )}
 
         {view === 'admin' && canAdmin && !simulationMode && (
@@ -3805,14 +3712,14 @@ function App() {
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('reviews')}><span className="admin-icon"><Star size={19} /></span><span className="mini-label">REVIEW MODERATION</span><h2>{adminReviewQueue.length || 'Review'}</h2><p>Approve or reject listener ratings and written reviews before they appear publicly.</p><strong>Open review queue <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => navigate('protection')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">SAFETY</span><h2>Access & moderation</h2><p>Review protection signals and age-assurance boundaries.</p><strong>Open Protection Centre <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile subscription-tile" onClick={() => openAdminPanel('subscriptions')}><span className="admin-icon"><WalletCards size={19} /></span><span className="mini-label">SUBSCRIPTIONS</span><h2>{adminOverviewLoading ? '…' : commercialOverview?.subscriptions.active ?? adminOverview?.subscriptions?.active ?? 0}</h2><p>Active paid subscriptions tracked by the confirmed Nightjar billing ledger.</p><strong>{commercialOverview?.subscriptions.trialing ?? adminOverview?.subscriptions?.trialing ?? 0} trial · {commercialOverview?.subscriptions.pastDue ?? adminOverview?.subscriptions?.pastDue ?? 0} past due <ArrowRight size={13} /></strong></button>
-              <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">CREATOR ECONOMICS</span><h2>{formatMoneyPence(commercialSettings.planningMonthlyPricePence)} / month</h2><p>Configure the capped equal creator rate without tying standard pay to popularity.</p><strong>Open creator economics <ArrowRight size={13} /></strong></button>
+              <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">FINANCE LAB</span><h2>Model the whole split</h2><p>Simulate users, subscribers, price, VAT, fees, professional-role payouts, app funding, tax reserve and operator income.</p><strong>Open finance simulator <ArrowRight size={13} /></strong></button>
               <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>{demoMode ? 'Preview a replacement logo locally while Demo Mode is active. Nothing is uploaded or changed in production.' : 'Upload or replace the logo used across Nightjar. A replacement stays pending until an administrator approves it in Image Moderation.'}</p><div className="logo-preview-grid"><div><span className="mini-label">CURRENT APPROVED</span><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt={demoMode ? 'Nightjar demo logo preview' : 'Current approved Nightjar logo'} /> : <img src="/brand-logo" alt="Default Nightjar logo" />}</div></div>{!demoMode && pendingLogoPreviewUrl && <div><span className="mini-label">PENDING REPLACEMENT</span><div className="logo-preview-box pending-logo-preview"><img src={pendingLogoPreviewUrl} alt="Pending Nightjar logo replacement" /></div></div>}</div><div className="admin-data-actions"><label className="secondary-button upload-label"><Upload size={15} /> {demoMode ? 'Preview logo' : logoUploading ? 'Working…' : 'Replace logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label>{logoUrl && <button className="ghost-button" onClick={()=>void removeLogo()}>{demoMode ? 'Clear preview' : 'Remove logo'}</button>}</div><strong>{demoMode ? 'Local preview only · PNG / JPG / WebP · max 5 MB' : pendingLogoPreviewUrl ? 'Replacement uploaded · open Image Moderation to approve it' : 'Approved logo is used inside Nightjar. The home-screen/PWA icon is the fixed official Nightjar mark shipped with the app release.'}</strong></div>
             </div>
             {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">PRIVATE TESTING / EMAIL ALLOWLIST</span><h2>Approved tester emails</h2><p>Only the owner accounts and emails listed here can enter Nightjar while Closed Beta is enabled. Approved testers still verify their Firebase email normally; the temporary age bypass is clearly marked as test access.</p></div><div className="admin-application-wavebar"><label>Tester email<input type="email" value={adminTesterEmail} onChange={(event)=>setAdminTesterEmail(event.target.value)} placeholder="tester@example.com" /></label><button className="primary-button" disabled={!adminTesterEmail.trim()} onClick={()=>void changeClosedBetaTester(adminTesterEmail,true)}>Approve tester email</button></div><div className="security-alert-list">{(adminOverview?.testing?.approvedTesters ?? []).length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No tester emails approved</strong><span>Owner administrator emails remain allowed automatically.</span></div> : (adminOverview?.testing?.approvedTesters ?? []).map((tester:any)=><article className="security-alert-row" key={tester.email}><div><strong>{tester.email}</strong><span>Private beta account access · temporary age-assurance bypass while test mode is enabled</span><em>Removing access blocks Nightjar backend use even if a Firebase Auth identity already exists.</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={()=>void changeClosedBetaTester(tester.email,false)}>Remove tester access</button></div></article>)}</div><strong>{adminOverview?.testing?.approvedTesterCount ?? 0} approved tester email{(adminOverview?.testing?.approvedTesterCount ?? 0) === 1 ? '' : 's'} · Closed Beta {adminOverview?.testing?.closedBeta === false ? 'OFF' : 'ON'}</strong></section>}
             <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>
             {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">SECURITY / OWNER ALERTS</span><h2>Suspicious activity</h2><p>Every qualifying alert is addressed to all three Nightjar owners and retained in the audit trail.</p></div><button className="secondary-button" onClick={() => void loadSecurityAlerts()}>{securityAlertsLoading ? 'Refreshing…' : 'Refresh alerts'}</button><div className="security-alert-list">{securityAlerts.length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No open security alerts</strong><span>Signals remain evidence, not accusations. Alerts are retained for review.</span></div> : securityAlerts.map((alert:any) => <article className="security-alert-row" key={alert.id}><div><strong>{alert.severity?.toUpperCase() ?? 'MEDIUM'} · Risk {alert.riskScore ?? '—'} · {alert.reason ?? 'Suspicious protected-content activity'}</strong><span>User: {alert.userName ?? 'Nightjar account'}{alert.userHandle ? ' · @' + String(alert.userHandle).replace(/^@/, '') : ''} · Script: {alert.relatedId ?? '—'} · {new Date(alert.createdAt).toLocaleString('en-GB')}</span>{alert.signal && <div className="security-signal-meta"><span><strong>{protectionEventLabel(alert.signal.eventType)}</strong>{protectionConfidenceLabel(alert.signal.detectionConfidence) ? ' · ' + protectionConfidenceLabel(alert.signal.detectionConfidence) : ''}</span>{alert.signal.detectionSource && <span>Source: {String(alert.signal.detectionSource).replaceAll('_',' ')}</span>}{Number(alert.signal.possibleCaptureEvents ?? 0) > 0 && <span>Possible capture signals / 10 min: {alert.signal.possibleCaptureEvents}</span>}{Number(alert.signal.nativeCaptureEvents ?? 0) > 0 && <span>Native capture callbacks / 10 min: {alert.signal.nativeCaptureEvents}</span>}</div>}<em>Delivered to all three owners · evidence requires human review · no automatic freeze</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={() => void openSecurityAlertEvidence(alert)}>{securityEvidenceLoading ? 'Loading evidence…' : 'Review evidence'}</button><button className="ghost-button" disabled={alert.status !== 'open'} onClick={() => void closeSecurityAlertBenign(alert)}>Benign</button><button className="secondary-button" disabled={alert.status !== 'open'} onClick={() => void revokeSessionsFromSecurityAlert(alert)}>Revoke reader sessions</button><button className="secondary-button" disabled={alert.status === 'actioned'} onClick={() => void suspendFromSecurityAlert(alert)}>{alert.status === 'actioned' ? 'Account suspended' : 'Suspend account'}</button></div></article>)}</div></section>}
             {adminPeopleRole && <div className="people-drawer" role="dialog" aria-modal="true" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="icon-button" onClick={() => setAdminPeopleRole(null)} aria-label="Close account directory"><X size={18} /></button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <div className="people-row-controls"><select value={account.role ?? 'listener'} onChange={(e)=>void changeAccountRole(account,e.target.value as 'listener'|'creator'|'writer'|'editor'|'artist')}><option value="listener">Listener</option>{(account.roles ?? []).filter((professionalRole:string)=>['creator','writer','editor','artist'].includes(professionalRole)).map((professionalRole:'creator'|'writer'|'editor'|'artist')=><option key={professionalRole} value={professionalRole}>{professionalRole === 'creator' ? 'VA Creator' : professionalRole === 'editor' ? 'Audio Editor' : professionalRole === 'artist' ? 'Artist' : 'Writer'}</option>)}</select><select value={account.status ?? 'active'} onChange={(e)=>void changeAccountStatus(account,e.target.value as 'active'|'pending_review'|'suspended')}><option value="active">Active</option><option value="pending_review">Pending review</option><option value="suspended">Suspended</option></select><button className={account.testAccess ? 'secondary-button' : 'ghost-button'} onClick={()=>void changeTestAccess(account, !account.testAccess)}>{account.testAccess ? 'Remove tester access' : 'Enable tester access'}</button></div>}</article>)}{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).length === 0 && <div className="people-empty"><Users size={18} /><strong>No accounts in this role yet</strong><span>The live directory will populate as accounts are created or approved.</span></div>}</div></div>}
-            {adminPanel && <div className="admin-panel-modal" role="dialog" aria-modal="true"><section><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Professional approval queue' : adminPanel === 'suggestions' ? 'Creator suggestions' : adminPanel === 'reports' ? 'Reports & feedback' : adminPanel === 'reviews' ? 'Review moderation' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : adminPanel === 'editorial' ? 'Editorial assignments' : adminPanel === 'images' ? 'Image moderation' : adminPanel === 'tags' ? 'Tag catalogue governance' : 'Creator economics'}</h2><p>{adminPanel === 'approvals' ? 'Review banked VA Creator, Writer, Audio Editor and Artist applications. Approve whole applications or individual roles into a named intake wave.' : adminPanel === 'suggestions' ? 'Review Creators recommended by Nightjar members. Suggestions never auto-approve a professional account.' : adminPanel === 'reports' ? 'Review user-submitted safety reports, technical issues and feedback. Reporter identity is shown by profile name and handle.' : adminPanel === 'reviews' ? 'Listener ratings and written reviews are moderated before public display.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : adminPanel === 'editorial' ? 'Assign live manuscripts to active Audio Editor accounts.' : adminPanel === 'images' ? 'Every uploaded image stays private until an administrator explicitly approves it.' : adminPanel === 'tags' ? 'Review creator-made discovery tags. Explicit adult terminology is allowed; administrators can promote useful terms or hide unsuitable catalogue entries.' : 'Planning assumptions for Nightjar’s capped equal creator-rate model. Listening remains analytics, not the standard pay formula.'}</p></div><button className="icon-button" onClick={() => setAdminPanel(null)} aria-label="Close administrator panel"><X size={18} /></button></div>{adminPanel === 'reports' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading reports & feedback…</div> : (adminReports.length === 0 && adminCommunityReports.length === 0) ? <div className="people-empty"><ShieldCheck size={18}/><strong>No reports or feedback yet</strong><span>User submissions will appear here for Administrator review.</span></div> : adminReports.map((report:any) => <article className="admin-data-row" key={report.id}><div><strong>{report.reporterName ?? 'Nightjar account'}{report.reporterHandle ? ' · @' + String(report.reporterHandle).replace(/^@/, '') : ''}</strong><span>{report.caseId ?? 'Nightjar report'} · {report.category ?? 'Something else'} · {report.status ?? 'New'}</span><small>{report.reporterEmail ?? 'Account email unavailable'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</small><p>{report.summary ?? 'No report detail supplied.'}</p></div></article>)}{adminCommunityReports.map((report:any)=><article className="admin-data-row community-report-row" key={report.id}><div><strong>{report.type === 'direct_message' ? 'Reported professional message' : 'Reported release comment / reply'}</strong><span>{report.reason ?? 'Community report'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</span><small>Reporter: {report.reporterName ?? 'Nightjar member'}{report.reporterHandle ? ' · @'+String(report.reporterHandle).replace(/^@/,'') : ''} · Reported account: {report.subjectName ?? 'Nightjar member'}{report.subjectRole ? ' · '+(report.subjectRole === 'editor' ? 'Audio Editor' : String(report.subjectRole).charAt(0).toUpperCase()+String(report.subjectRole).slice(1)) : ''}{report.releaseTitle ? ' · '+report.releaseTitle : ''}</small><p>{report.snapshotText || 'No retained report excerpt.'}</p><small>{report.type === 'direct_message' ? 'Only the specifically reported message snapshot is shown here — not the full private conversation.' : 'The reported public comment can be removed without affecting the release.'}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void resolveCommunityReport(report,'dismiss')}>Dismiss</button><button className="secondary-button" onClick={()=>void resolveCommunityReport(report,'remove')}>{report.type === 'direct_message' ? 'Remove message' : 'Remove comment'}</button>{report.subjectUserId && report.subjectRole && report.subjectRole !== 'admin' && <button className="danger-button" onClick={()=>void suspendReportedCommunityAccount(report)}>Suspend reported account</button>}</div></article>)}</div>}{adminPanel === 'reviews' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading review queue…</div> : adminReviewQueue.length === 0 ? <div className="people-empty"><Star size={18}/><strong>No reviews awaiting moderation</strong><span>Listener submissions will appear here before public display.</span></div> : adminReviewQueue.map((review:any)=><article className="admin-data-row" key={review.id}><div><strong>{review.releaseTitle ?? 'Nightjar release'}</strong><span>{review.reviewerName ?? 'Nightjar listener'}{review.reviewerHandle ? ' · @' + String(review.reviewerHandle).replace(/^@/,'') : ''} · {'★'.repeat(review.rating ?? 0)}{'☆'.repeat(Math.max(0,5-(review.rating ?? 0)))}</span><p>{review.review || 'Rating only — no written review.'}</p></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void moderateReleaseReview(review,'rejected')}>Reject</button><button className="primary-button" onClick={()=>void moderateReleaseReview(review,'approved')}>Approve review</button></div></article>)}</div>}{adminPanel === 'suggestions' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading Creator suggestions…</div> : adminCreatorSuggestions.length === 0 ? <div className="people-empty"><Users size={18}/><strong>No Creator suggestions yet</strong><span>Member recommendations will appear here for review.</span></div> : adminCreatorSuggestions.map((suggestion:any)=><article className="admin-data-row" key={suggestion.id}><div><strong>{suggestion.creatorName}</strong><span>{suggestion.status ?? 'new'} · suggested by {suggestion.submittedByName ?? 'Nightjar member'}{suggestion.submittedByHandle ? ' · @'+String(suggestion.submittedByHandle).replace(/^@/,'') : ''}</span>{suggestion.publicUrl && <small>{suggestion.publicUrl}</small>}{suggestion.note && <p>{suggestion.note}</p>}<small>Referral: {suggestion.referralCode ?? '—'}{suggestion.claimedByUserId ? ' · joined Nightjar' : ''}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'dismissed')}>Dismiss</button><button className="secondary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'contacted')}>Contacted</button><button className="primary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'invited')}>Invited</button></div></article>)}</div>}{adminPanel === 'approvals' && <div className="admin-data-list">
+            {adminPanel && <div className="admin-panel-modal" role="dialog" aria-modal="true"><section><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Professional approval queue' : adminPanel === 'suggestions' ? 'Creator suggestions' : adminPanel === 'reports' ? 'Reports & feedback' : adminPanel === 'reviews' ? 'Review moderation' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : adminPanel === 'editorial' ? 'Editorial assignments' : adminPanel === 'images' ? 'Image moderation' : adminPanel === 'tags' ? 'Tag catalogue governance' : 'Finance simulator & creator economics'}</h2><p>{adminPanel === 'approvals' ? 'Review banked VA Creator, Writer, Audio Editor and Artist applications. Approve whole applications or individual roles into a named intake wave.' : adminPanel === 'suggestions' ? 'Review Creators recommended by Nightjar members. Suggestions never auto-approve a professional account.' : adminPanel === 'reports' ? 'Review user-submitted safety reports, technical issues and feedback. Reporter identity is shown by profile name and handle.' : adminPanel === 'reviews' ? 'Listener ratings and written reviews are moderated before public display.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : adminPanel === 'editorial' ? 'Assign live manuscripts to active Audio Editor accounts.' : adminPanel === 'images' ? 'Every uploaded image stays private until an administrator explicitly approves it.' : adminPanel === 'tags' ? 'Review creator-made discovery tags. Explicit adult terminology is allowed; administrators can promote useful terms or hide unsuitable catalogue entries.' : 'Adjust the complete Nightjar finance model safely: audience, subscription price, taxes and fees, contributor role shares, app funding and operator income. The simulator never changes live billing.'}</p></div><button className="icon-button" onClick={() => setAdminPanel(null)} aria-label="Close administrator panel"><X size={18} /></button></div>{adminPanel === 'reports' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading reports & feedback…</div> : (adminReports.length === 0 && adminCommunityReports.length === 0) ? <div className="people-empty"><ShieldCheck size={18}/><strong>No reports or feedback yet</strong><span>User submissions will appear here for Administrator review.</span></div> : adminReports.map((report:any) => <article className="admin-data-row" key={report.id}><div><strong>{report.reporterName ?? 'Nightjar account'}{report.reporterHandle ? ' · @' + String(report.reporterHandle).replace(/^@/, '') : ''}</strong><span>{report.caseId ?? 'Nightjar report'} · {report.category ?? 'Something else'} · {report.status ?? 'New'}</span><small>{report.reporterEmail ?? 'Account email unavailable'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</small><p>{report.summary ?? 'No report detail supplied.'}</p></div></article>)}{adminCommunityReports.map((report:any)=><article className="admin-data-row community-report-row" key={report.id}><div><strong>{report.type === 'direct_message' ? 'Reported professional message' : 'Reported release comment / reply'}</strong><span>{report.reason ?? 'Community report'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</span><small>Reporter: {report.reporterName ?? 'Nightjar member'}{report.reporterHandle ? ' · @'+String(report.reporterHandle).replace(/^@/,'') : ''} · Reported account: {report.subjectName ?? 'Nightjar member'}{report.subjectRole ? ' · '+(report.subjectRole === 'editor' ? 'Audio Editor' : String(report.subjectRole).charAt(0).toUpperCase()+String(report.subjectRole).slice(1)) : ''}{report.releaseTitle ? ' · '+report.releaseTitle : ''}</small><p>{report.snapshotText || 'No retained report excerpt.'}</p><small>{report.type === 'direct_message' ? 'Only the specifically reported message snapshot is shown here — not the full private conversation.' : 'The reported public comment can be removed without affecting the release.'}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void resolveCommunityReport(report,'dismiss')}>Dismiss</button><button className="secondary-button" onClick={()=>void resolveCommunityReport(report,'remove')}>{report.type === 'direct_message' ? 'Remove message' : 'Remove comment'}</button>{report.subjectUserId && report.subjectRole && report.subjectRole !== 'admin' && <button className="danger-button" onClick={()=>void suspendReportedCommunityAccount(report)}>Suspend reported account</button>}</div></article>)}</div>}{adminPanel === 'reviews' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading review queue…</div> : adminReviewQueue.length === 0 ? <div className="people-empty"><Star size={18}/><strong>No reviews awaiting moderation</strong><span>Listener submissions will appear here before public display.</span></div> : adminReviewQueue.map((review:any)=><article className="admin-data-row" key={review.id}><div><strong>{review.releaseTitle ?? 'Nightjar release'}</strong><span>{review.reviewerName ?? 'Nightjar listener'}{review.reviewerHandle ? ' · @' + String(review.reviewerHandle).replace(/^@/,'') : ''} · {'★'.repeat(review.rating ?? 0)}{'☆'.repeat(Math.max(0,5-(review.rating ?? 0)))}</span><p>{review.review || 'Rating only — no written review.'}</p></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void moderateReleaseReview(review,'rejected')}>Reject</button><button className="primary-button" onClick={()=>void moderateReleaseReview(review,'approved')}>Approve review</button></div></article>)}</div>}{adminPanel === 'suggestions' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading Creator suggestions…</div> : adminCreatorSuggestions.length === 0 ? <div className="people-empty"><Users size={18}/><strong>No Creator suggestions yet</strong><span>Member recommendations will appear here for review.</span></div> : adminCreatorSuggestions.map((suggestion:any)=><article className="admin-data-row" key={suggestion.id}><div><strong>{suggestion.creatorName}</strong><span>{suggestion.status ?? 'new'} · suggested by {suggestion.submittedByName ?? 'Nightjar member'}{suggestion.submittedByHandle ? ' · @'+String(suggestion.submittedByHandle).replace(/^@/,'') : ''}</span>{suggestion.publicUrl && <small>{suggestion.publicUrl}</small>}{suggestion.note && <p>{suggestion.note}</p>}<small>Referral: {suggestion.referralCode ?? '—'}{suggestion.claimedByUserId ? ' · joined Nightjar' : ''}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'dismissed')}>Dismiss</button><button className="secondary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'contacted')}>Contacted</button><button className="primary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'invited')}>Invited</button></div></article>)}</div>}{adminPanel === 'approvals' && <div className="admin-data-list">
   <div className="admin-application-wavebar">
     <div><span className="mini-label">CONTROLLED INTAKE</span><strong>Professional application bank</strong><small>Applications stay banked until you deliberately release a wave. Filter by profession when planning each intake.</small></div>
     <label>Application box<select value={adminApplicationRoleFilter} onChange={(e)=>setAdminApplicationRoleFilter(e.target.value as 'all'|'creator'|'writer'|'editor'|'artist')}><option value="all">All professionals</option><option value="creator">VA Creators</option><option value="writer">Writers</option><option value="editor">Audio Editors</option><option value="artist">Artists</option></select></label>
@@ -3963,6 +3870,15 @@ function App() {
   <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>CONFIRMED VS PLANNING</strong><span>Where a processor has not supplied confirmed net settlement values, Nightjar clearly labels the eligible-net figure as a conservative planning estimate. Paid Creator slot activation is always manual and is also checked by the backend.</span></div></div>
 </div>}
 {adminPanel === 'economics' && <div>
+  <Suspense fallback={<div className="people-empty">Loading Finance Lab…</div>}>
+    <AdminFinanceSimulator
+      settings={commercialSettings}
+      currentPaidSubscribers={commercialOverview?.activePaidSubscribers ?? 0}
+      currentUsers={(adminOverview?.people?.accounts?.length ?? 0) + (adminOverview?.people?.administrators?.length ?? 0)}
+    />
+  </Suspense>
+  <div className="admin-economics-existing-model">
+  <div className="subscription-finance-heading"><div><span className="mini-label">CURRENT LIVE PLANNING MODEL</span><h3>Existing Creator-capacity assumptions</h3></div><span className="status-pill muted">Separate from simulator</span></div>
   <div className="admin-modal-grid">
     <div className="admin-modal-stat"><span>Launch reference</span><strong>{formatMoneyPence(commercialSettings.planningMonthlyPricePence)}</strong></div>
     <div className="admin-modal-stat"><span>Standard-rate cap</span><strong>{formatMoneyPence(commercialSettings.creatorMonthlyCapPence)}</strong></div>
@@ -3977,7 +3893,8 @@ function App() {
     <div><b>04</b><strong>Hard monthly cap</strong></div>
   </div>
   <div className="rights-ai-lock"><ShieldCheck size={16}/><div><strong>Popularity affects standard pay: NO</strong><span>Verified listening remains valuable for analytics, recommendations and discovery without determining a Creator’s standard monthly rate.</span></div></div>
-  <p className="panel-note">Use Commercial controls to edit the planning price, rate bands, eligibility definition, reserve and final cap. The figures can remain unset while further creator research is collected.</p>
+  <p className="panel-note">Use Commercial controls to edit the live planning price, rate bands, eligibility definition, reserve and final cap. The Finance Lab above is deliberately a sandbox until you decide which scenario becomes policy.</p>
+  </div>
 </div>}</section></div>}
           </section>
         )}
