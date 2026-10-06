@@ -30,6 +30,10 @@ if (!protection.includes("collection('trustedAuthDevices')")) failures.push('tru
 if (!protection.includes("subtype:'new_device_signin'")) failures.push('new-device sign-ins must notify the account owner');
 if (!protection.includes('listMyAuthenticationEvents')) failures.push('members must be able to review their own authentication history');
 if (!authSecurity.includes('recordSuccess')) failures.push('account client does not report successful sign-ins');
+if (!protection.includes("'nightjar-auth-client\\0'")) failures.push('authentication client correlation tokens must be hashed server-side');
+if (!protection.includes('revokeMyAuthenticationSessions') || !protection.includes('revokeRefreshTokens')) failures.push('member-triggered session revocation is missing');
+if (!authSecurity.includes('revokeMySessions')) failures.push('Account Security does not expose session revocation');
+if (!accountAccess.includes('Revoke all sessions')) failures.push('Account Security UI is missing the all-session revocation action');
 if (!pwa.includes('getRegistrations()') || !pwa.includes('registration.unregister()')) failures.push('force update must reset stale service-worker registrations');
 if (!pwa.includes('Promise.all(keys.map((key) => caches.delete(key)))')) failures.push('force update must clear legacy Cache Storage, not only one cache prefix');
 if (!sw.includes("type === 'SKIP_WAITING'")) failures.push('service worker must support explicit update activation');
