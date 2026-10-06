@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bird, BookOpenText, Brush, Clock3, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, ThumbsUp, UsersRound, X } from 'lucide-react';
+import { Bird, BookOpenText, Brush, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
