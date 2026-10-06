@@ -5,7 +5,7 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 
 export type AuthenticationSecurityEvent = {
   id: string;
-  eventType: 'signin_failed' | 'closed_beta_signin_denied' | string;
+  eventType: 'signin_failed' | 'closed_beta_signin_denied' | 'signin_success' | string;
   targetEmailMasked: string;
   targetUserId?: string | null;
   adminTarget: boolean;
@@ -14,6 +14,7 @@ export type AuthenticationSecurityEvent = {
   clientPlatform?: string | null;
   route?: string | null;
   evidenceQuality?: string | null;
+  newDevice?: boolean;
   createdAt?: string | null;
 };
 
@@ -32,6 +33,20 @@ const recordCall = httpsCallable<{
 const listCall = httpsCallable<void, { events: AuthenticationSecurityEvent[] }>(
   functions,
   'listAuthenticationEvents',
+);
+
+const successCall = httpsCallable<{
+  clientAttemptId?: string;
+  clientPlatform?: string;
+  route?: string;
+}, { recorded: boolean; eventId?: string; newDevice?: boolean }>(
+  functions,
+  'recordAuthenticationSuccess',
+);
+
+const myEventsCall = httpsCallable<void, { events: AuthenticationSecurityEvent[] }>(
+  functions,
+  'listMyAuthenticationEvents',
 );
 
 const clientAttemptId = () => {
@@ -64,6 +79,19 @@ export const nightjarAuthSecurity = {
       route: window.location.pathname + window.location.search,
     });
     return result.data;
+  },
+
+  async recordSuccess() {
+    const result = await successCall({
+      clientAttemptId: clientAttemptId(),
+      clientPlatform: navigator.userAgent.slice(0, 120),
+      route: window.location.pathname + window.location.search,
+    });
+    return result.data;
+  },
+
+  async myEvents() {
+    return (await myEventsCall()).data;
   },
 
   async events() {
