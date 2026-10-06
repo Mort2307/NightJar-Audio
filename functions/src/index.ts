@@ -1082,14 +1082,16 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   };
 });
 
-const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
-  const profile = await profileRef(account.id).get();
-  const data = profile.data();
+const publicProfilePayload = (
+  userId: string,
+  accountData: Record<string, any>,
+  data: Record<string, any> | undefined,
+) => {
   if (!data || data.publicProfile === false) return null;
-  const roles = professionalRolesForAccount(account.data() ?? {});
+  const roles = professionalRolesForAccount(accountData);
   return {
-    userId: account.id,
-    role: roles[0] ?? account.data().role ?? null,
+    userId,
+    role: roles[0] ?? accountData.role ?? null,
     roles: ['listener', ...roles],
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
@@ -1117,6 +1119,11 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
     roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
     featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
   };
+};
+
+const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
+  const profile = await profileRef(account.id).get();
+  return publicProfilePayload(account.id, account.data() ?? {}, profile.data());
 };
 
 const calculateVerifiedListening = (events: Array<Record<string, any>>) => {
@@ -1173,11 +1180,13 @@ const calculateVerifiedListening = (events: Array<Record<string, any>>) => {
 export const listCreators = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [accounts, releases, listening] = await Promise.all([
+  const [accounts, profilesSnapshot, releases, listening] = await Promise.all([
     db.collection('accounts').limit(1000).get(),
+    db.collection('profiles').limit(1000).get(),
     db.collection('releases').where('status', '==', 'released').limit(1000).get(),
     db.collection('listeningEvents').limit(5000).get(),
   ]);
+  const profileByUser = new Map(profilesSnapshot.docs.map((doc) => [doc.id, doc.data() ?? {}]));
 
   const releaseCounts = new Map<string, number>();
   for (const release of releases.docs) {
@@ -1187,24 +1196,23 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
 
   const verified = calculateVerifiedListening(listening.docs.map((doc) => doc.data()));
 
-  const creators = (await Promise.all(
-    accounts.docs
-      .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
-      .map(async (doc) => {
-        const base = await publicProfileForAccount(doc);
-        if (!base) return null;
-        const seconds = verified.byCreator.get(doc.id) ?? 0;
-        return {
-          ...base,
-          followerCount: Number((base as any).followerCount ?? 0),
-          releaseCount: releaseCounts.get(doc.id) ?? 0,
-          verifiedListeningMinutes: Math.round((seconds / 60) * 10) / 10,
-          listeningSharePercent: verified.totalSeconds > 0
-            ? Math.round((seconds / verified.totalSeconds) * 1000) / 10
-            : 0,
-        };
-      }),
-  )).filter(Boolean);
+  const creators = accounts.docs
+    .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
+    .map((doc) => {
+      const base = publicProfilePayload(doc.id, doc.data() ?? {}, profileByUser.get(doc.id));
+      if (!base) return null;
+      const seconds = verified.byCreator.get(doc.id) ?? 0;
+      return {
+        ...base,
+        followerCount: Number((base as any).followerCount ?? 0),
+        releaseCount: releaseCounts.get(doc.id) ?? 0,
+        verifiedListeningMinutes: Math.round((seconds / 60) * 10) / 10,
+        listeningSharePercent: verified.totalSeconds > 0
+          ? Math.round((seconds / verified.totalSeconds) * 1000) / 10
+          : 0,
+      };
+    })
+    .filter(Boolean);
 
   return { creators };
 });
