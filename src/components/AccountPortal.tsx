@@ -90,7 +90,7 @@ export default function AccountPortal() {
     refreshBranding();
     const unsubscribe = nightjarAuth.observe((next) => {
       setIdentity(next);
-      void loadAccount(next, Boolean(next?.emailVerified) && !explicitSignIn);
+      void loadAccount(next, Boolean(next?.emailVerified) && !explicitSignIn && !explicitSecurity);
     });
     const onFocus = () => refreshBranding();
     const onStorage = (event: StorageEvent) => {
@@ -107,7 +107,7 @@ export default function AccountPortal() {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('nightjar:branding-changed', onBrandingChanged);
     };
-  }, [explicitSignIn]);
+  }, [explicitSignIn, explicitSecurity]);
 
   const chooseRole = async (role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') => {
     setLoadingAccount(true);
