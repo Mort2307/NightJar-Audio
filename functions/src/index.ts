@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
+import { getAuth } from 'firebase-admin/auth';
 import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 
@@ -23,6 +24,15 @@ type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'art
 type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 
 const cleanEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
+const maskSecurityEmail = (value: unknown) => {
+  const email = cleanEmail(value);
+  const [local = '', domain = ''] = email.split('@');
+  if (!local || !domain) return 'unknown account';
+  const visible = local.length <= 2 ? local.slice(0, 1) : local.slice(0, 2);
+  return visible + '***@' + domain;
+};
+const authenticationEventMillis = (data: Record<string, any>) => data.createdAt?.toMillis?.() ?? 0;
+
 const accountRef = (uid: string) => db.collection('accounts').doc(uid);
 const validEmailAddress = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const testerAllowlistRef = (email: string) => db
@@ -4389,7 +4399,7 @@ const NATIVE_CAPTURE_EVENTS = new Set([
   'native_screen_capture_detected',
 ]);
 
-const createSecurityAlertFirebase = async (userId: string, details: Record<string, unknown>) => {
+const createSecurityAlertFirebase = async (userId: string | null, details: Record<string, unknown>) => {
   const ref = db.collection('securityAlerts').doc();
   const record = {
     userId,
@@ -4429,6 +4439,94 @@ const createSecurityAlertFirebase = async (userId: string, details: Record<strin
   }
 
   return ref.id;
+};
+
+const resolveAuthenticationTarget = async (email: string) => {
+  try {
+    const record = await getAuth().getUserByEmail(email);
+    return record.uid;
+  } catch {
+    return null;
+  }
+};
+
+const assessAuthenticationFailureFirebase = async (
+  eventId: string,
+  record: Record<string, any>,
+) => {
+  const now = Date.now();
+  const snapshot = await db.collection('authenticationEvents').limit(750).get();
+  const events = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as any[];
+  const fifteenMinutes = events.filter((item) => now - authenticationEventMillis(item) < 15 * 60_000);
+  const sameTarget = fifteenMinutes.filter((item) => item.emailHash === record.emailHash);
+  const sameClient = record.clientAttemptId
+    ? fifteenMinutes.filter((item) => item.clientAttemptId === record.clientAttemptId)
+    : [];
+
+  let score = 10;
+  const reasons: string[] = [];
+
+  if (sameTarget.length >= 3) {
+    score += 35;
+    reasons.push(String(sameTarget.length) + ' failed or blocked sign-in attempts against the same account within 15 minutes');
+  }
+  if (sameTarget.length >= 5) {
+    score += 15;
+    reasons.push('repeated credential attempts continued beyond the initial alert threshold');
+  }
+  if (sameClient.length >= 8) {
+    score += 15;
+    reasons.push('high-volume failed sign-in activity from the same Nightjar client token');
+  }
+  if (record.firebaseCode === 'auth/too-many-requests') {
+    score += 45;
+    reasons.push('Firebase rate limiting reported too many authentication attempts');
+  }
+  if (record.adminTarget === true) {
+    score += 15;
+    reasons.push('an owner administrator identity was targeted');
+  }
+  if (record.eventType === 'closed_beta_signin_denied') {
+    score += 5;
+    reasons.push('the sign-in identity was outside the private testing allowlist');
+  }
+
+  if (score < 45) return null;
+
+  const alertSnapshot = await db.collection('securityAlerts').limit(500).get();
+  const duplicate = alertSnapshot.docs.some((doc) => {
+    const data = doc.data();
+    return data.category === 'authentication'
+      && data.status === 'open'
+      && data.emailHash === record.emailHash
+      && now - (data.createdAt?.toMillis?.() ?? 0) < 10 * 60_000;
+  });
+  if (duplicate) return null;
+
+  const severity = score >= 80 ? 'critical' : score >= 60 ? 'high' : 'medium';
+  const alertId = await createSecurityAlertFirebase(record.targetUserId ?? null, {
+    category: 'authentication',
+    severity,
+    riskScore: Math.min(score, 100),
+    reason: reasons.join('; ') || 'Repeated Nightjar-observed authentication failures require review.',
+    relatedId: null,
+    emailHash: record.emailHash,
+    targetEmailMasked: record.targetEmailMasked,
+    targetUserId: record.targetUserId ?? null,
+    signal: {
+      eventType: record.eventType,
+      failedAttempts15m: sameTarget.length,
+      sameClientAttempts15m: sameClient.length,
+      firebaseCode: record.firebaseCode ?? null,
+      clientPlatform: record.clientPlatform ?? null,
+      route: record.route ?? '/account',
+      evidenceQuality: 'nightjar_client_observed',
+      latestAuthenticationEventId: eventId,
+    },
+    automaticAction: 'none',
+    reviewRequired: true,
+  });
+  return { alertId, severity, riskScore: Math.min(score, 100) };
 };
 
 const assessProtectedActivityFirebase = async (userId: string, signal: Record<string, unknown>) => {
@@ -4792,6 +4890,73 @@ export const submitProtectionReport = onCall({ region: REGION }, async (request)
   };
 });
 
+export const recordAuthenticationAttempt = onCall({ region: REGION }, async (request) => {
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const email = cleanEmail(input.email);
+  if (!validEmailAddress(email)) return { recorded: false, alert: null };
+
+  const eventType = cleanText(input.eventType, 80);
+  if (!['signin_failed','closed_beta_signin_denied'].includes(eventType)) {
+    throw new HttpsError('invalid-argument', 'Unsupported authentication event type.');
+  }
+
+  const allowedCodes = new Set([
+    'auth/invalid-credential',
+    'auth/too-many-requests',
+    'auth/user-disabled',
+    'auth/invalid-email',
+    'closed_beta_not_invited',
+    'auth/unknown',
+  ]);
+  const submittedCode = cleanText(input.firebaseCode, 80);
+  const firebaseCode = allowedCodes.has(submittedCode) ? submittedCode : 'auth/unknown';
+  const emailHash = createHash('sha256').update(email).digest('hex');
+  const targetUserId = await resolveAuthenticationTarget(email);
+  const clientAttemptId = cleanText(input.clientAttemptId, 120) || null;
+
+  const record = {
+    eventType,
+    emailHash,
+    targetEmailMasked: maskSecurityEmail(email),
+    targetUserId,
+    adminTarget: ADMIN_EMAILS.has(email),
+    firebaseCode,
+    clientAttemptId,
+    clientPlatform: cleanText(input.clientPlatform, 120) || null,
+    route: cleanText(input.route, 160) || '/account',
+    evidenceQuality: 'nightjar_client_observed',
+    passwordCaptured: false,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  const ref = await db.collection('authenticationEvents').add(record);
+  const alert = await assessAuthenticationFailureFirebase(ref.id, { ...record, createdAt: new Date().toISOString() });
+  return { recorded: true, eventId: ref.id, alert };
+});
+
+export const listAuthenticationEvents = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('authenticationEvents').limit(500).get();
+  const events = snapshot.docs
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        eventType: cleanText(data.eventType, 80),
+        targetEmailMasked: cleanText(data.targetEmailMasked, 180) || 'unknown account',
+        targetUserId: cleanText(data.targetUserId, 160) || null,
+        adminTarget: data.adminTarget === true,
+        firebaseCode: cleanText(data.firebaseCode, 80) || null,
+        clientAttemptId: cleanText(data.clientAttemptId, 120) || null,
+        clientPlatform: cleanText(data.clientPlatform, 120) || null,
+        route: cleanText(data.route, 160) || '/account',
+        evidenceQuality: cleanText(data.evidenceQuality, 80) || 'nightjar_client_observed',
+        createdAt: toIso(data.createdAt),
+      };
+    })
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return { events };
+});
+
 export const listSecurityAlerts = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('securityAlerts').limit(500).get();
@@ -4811,6 +4976,9 @@ export const listSecurityAlerts = onCall({ region: REGION }, async (request) => 
         userName: presenter?.displayName ?? 'Nightjar account',
         userHandle: presenter?.handle ?? null,
         userEmail: presenter?.email ?? null,
+        category: cleanText(data.category, 80) || 'protected_content',
+        targetEmailMasked: cleanText(data.targetEmailMasked, 180) || null,
+        targetUserId: cleanText(data.targetUserId, 160) || null,
         createdAt: toIso(data.createdAt),
       };
     })
@@ -4829,11 +4997,29 @@ export const securityAlertEvidence = onCall({ region: REGION }, async (request) 
 
   const userId = cleanText(alertData.userId, 160);
   const relatedId = cleanText(alertData.relatedId, 160);
-  const snapshot = await db.collection('protectionEvents').where('userId', '==', userId).limit(1000).get();
+  const authenticationAlert = cleanText(alertData.category, 80) === 'authentication';
+  const snapshot = authenticationAlert
+    ? await db.collection('authenticationEvents').where('emailHash', '==', cleanText(alertData.emailHash, 100)).limit(100).get()
+    : await db.collection('protectionEvents').where('userId', '==', userId).limit(1000).get();
   const evidence = snapshot.docs
     .map((doc) => {
       const data = doc.data() ?? {};
-      return {
+      return authenticationAlert ? {
+        id: doc.id,
+        eventType: cleanText(data.eventType, 80),
+        relatedType: 'authentication',
+        relatedId: null,
+        deviceId: cleanText(data.clientAttemptId, 120) || null,
+        readerSessionId: null,
+        clientPlatform: cleanText(data.clientPlatform, 120) || null,
+        visibilityState: null,
+        viewport: null,
+        detectionSource: 'nightjar_account_portal',
+        detectionConfidence: 'contextual',
+        route: cleanText(data.route, 160) || '/account',
+        summary: (cleanText(data.targetEmailMasked, 180) || 'Nightjar account') + ' · ' + (cleanText(data.firebaseCode, 80) || 'authentication failure'),
+        createdAt: toIso(data.createdAt),
+      } : {
         id: doc.id,
         eventType: cleanText(data.eventType, 80),
         relatedType: cleanText(data.relatedType, 80) || null,
@@ -4866,6 +5052,9 @@ export const securityAlertEvidence = onCall({ region: REGION }, async (request) 
       reason: cleanText(alertData.reason, 1200) || null,
       signal: alertData.signal ?? null,
       status: alertData.status ?? 'open',
+      category: cleanText(alertData.category, 80) || 'protected_content',
+      targetEmailMasked: cleanText(alertData.targetEmailMasked, 180) || null,
+      targetUserId: cleanText(alertData.targetUserId, 160) || null,
       createdAt: toIso(alertData.createdAt),
     },
     evidence,
