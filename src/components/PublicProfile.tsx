@@ -170,7 +170,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
 
   return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
-    <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal">
+    <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal premium-public-profile">
       <header className="creator-profile-head">
         <div>
           <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
@@ -185,7 +185,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
           <div>
             <h3>{profile.displayName}</h3>
-            <p>{profile.headline || (profile.role === 'editor' ? 'Audio Editor on Nightjar.' : profile.role === 'listener' ? 'Part of the Nightjar listening community.' : 'Nightjar member.')}</p>
+            <p>{roleDetails.roleHeadline || profile.headline || (profileRole === 'editor' ? 'Audio Editor on Nightjar.' : profileRole === 'listener' ? 'A curated corner of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
             {availableProfileRoles.length > 0 && <div className="profile-role-chips" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" className={profileRole===role?'active':''} key={role} onClick={()=>setSelectedProfileRole(role)}>{roleLabel(role)}</button>)}</div>}
           </div>
@@ -213,7 +213,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
         <section className="public-role-profile">
           <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profileRole).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{roleDetails.roleAvailability && <strong>{roleDetails.roleAvailability}</strong>}</div>
-          <p>{roleConfig.description}</p>
+          <p>{roleDetails.roleBio || roleConfig.description}</p>
           {!!roleDetails.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{roleDetails.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!roleDetails.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{roleDetails.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
           {!!profile.favouriteCategories?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite categories' : 'Relevant categories'}</span><div className="creator-profile-tags">{profile.favouriteCategories.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
@@ -299,6 +299,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                     : 'VA Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
           </div>
         </div>
+
+        {profileRole === 'listener' && <section className="premium-listener-signature">
+          <div className="premium-listener-signature-head">
+            <div><span className="mini-label">LISTENER SIGNATURE</span><h3>A profile built around taste, not status.</h3><p>Listeners get the same profile care as professionals. This space shows only the interests and collections this person deliberately chose to make public — never private listening history.</p></div>
+            <Headphones size={19}/>
+          </div>
+          <div className="premium-listener-groups">
+            <div><strong>Moods & tags</strong>{profile.favouriteTags?.length ? <div className="creator-profile-tags">{profile.favouriteTags.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>Still shaping their Nightjar world.</p>}</div>
+            <div><strong>Categories</strong>{profile.favouriteCategories?.length ? <div className="creator-profile-tags">{profile.favouriteCategories.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>No public categories selected yet.</p>}</div>
+            <div><strong>Tropes & themes</strong>{profile.favouriteTropes?.length ? <div className="creator-profile-tags">{profile.favouriteTropes.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>No public themes selected yet.</p>}</div>
+          </div>
+        </section>}
 
         {profileRole === 'artist' && <section className="public-artist-portfolio">
           <div className="section-head"><div><span className="mini-label">ARTIST PORTFOLIO</span><h3>Approved visual work</h3></div></div>
