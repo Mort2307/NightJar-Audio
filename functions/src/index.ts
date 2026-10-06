@@ -4956,7 +4956,10 @@ export const recordAuthenticationAttempt = onCall({ region: REGION }, async (req
   const firebaseCode = allowedCodes.has(submittedCode) ? submittedCode : 'auth/unknown';
   const emailHash = createHash('sha256').update(email).digest('hex');
   const targetUserId = await resolveAuthenticationTarget(email);
-  const clientAttemptId = cleanText(input.clientAttemptId, 120) || null;
+  const submittedClientAttemptId = cleanText(input.clientAttemptId, 120) || null;
+  const clientAttemptId = submittedClientAttemptId
+    ? createHash('sha256').update('nightjar-auth-client\0' + submittedClientAttemptId).digest('hex').slice(0, 40)
+    : null;
 
   const recentSnapshot = await db.collection('authenticationEvents').limit(750).get();
   const now = Date.now();
@@ -4991,11 +4994,14 @@ export const recordAuthenticationAttempt = onCall({ region: REGION }, async (req
 export const recordAuthenticationSuccess = onCall({ region: REGION }, async (request) => {
   const identity = requireRegistrationIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
-  const clientAttemptId = cleanText(input.clientAttemptId, 120) || null;
+  const submittedClientAttemptId = cleanText(input.clientAttemptId, 120) || null;
+  const clientAttemptId = submittedClientAttemptId && submittedClientAttemptId !== 'nightjar-client-unavailable'
+    ? createHash('sha256').update('nightjar-auth-client\0' + submittedClientAttemptId).digest('hex').slice(0, 40)
+    : null;
   const clientPlatform = cleanText(input.clientPlatform, 120) || null;
   const route = cleanText(input.route, 160) || '/account';
   const emailHash = createHash('sha256').update(identity.email).digest('hex');
-  const trackableDevice = Boolean(clientAttemptId && clientAttemptId !== 'nightjar-client-unavailable');
+  const trackableDevice = Boolean(clientAttemptId);
   let newDevice = false;
   let deviceId: string | null = null;
 
@@ -5006,7 +5012,7 @@ export const recordAuthenticationSuccess = onCall({ region: REGION }, async (req
     newDevice = !deviceSnapshot.exists;
     await deviceRef.set({
       deviceId,
-      clientAttemptId,
+      clientFingerprint: clientAttemptId,
       clientPlatform,
       firstSeenAt: deviceSnapshot.exists ? (deviceSnapshot.data()?.firstSeenAt ?? FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
       lastSeenAt: FieldValue.serverTimestamp(),
