@@ -22,7 +22,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
     : role === 'writer'
       ? { view:'writer', label:'Write', icon:FileText }
       : role === 'editor'
-        ? { view:'editor', label:'Editorial', icon:FileText }
+        ? { view:'editor', label:'Editor Studio', icon:FileText }
         : role === 'artist'
           ? { view:'profile', label:'Artist', icon:Brush }
         : role === 'admin'
