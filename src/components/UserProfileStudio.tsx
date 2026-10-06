@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { Bell, Check, Heart, ImagePlus, ShieldCheck, Sparkles, Star, UserCircle2 } from 'lucide-react';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import AppUpdateControl from './AppUpdateControl';
+import AccountSecurityActivity from './AccountSecurityActivity';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -149,6 +150,7 @@ export default function UserProfileStudio({
         </div>
       </article>
 
+      <AccountSecurityActivity />
       <AppUpdateControl />
     </div>
 
