@@ -721,7 +721,16 @@ export const getMyProfile = onCall({ region: REGION }, async (request) => {
   ]);
   if (!snapshot.exists) return { profile:null };
   const data = snapshot.data() ?? {};
-  const activeRole = identity.admin ? 'admin' : cleanText(accountSnapshot.data()?.role, 30) || 'listener';
+  const approvedRoles = professionalRolesForAccount(accountSnapshot.data() ?? {});
+  const requestedRole = cleanText((request.data as { role?: unknown } | undefined)?.role, 30);
+  let activeRole = identity.admin ? 'admin' : cleanText(accountSnapshot.data()?.role, 30) || 'listener';
+  if (requestedRole) {
+    const allowed = identity.admin
+      ? requestedRole === 'admin'
+      : requestedRole === 'listener' || approvedRoles.includes(requestedRole as ProfessionalRole);
+    if (!allowed) throw new HttpsError('permission-denied', 'That Nightjar profile role is not available on this account.');
+    activeRole = requestedRole;
+  }
   return {
     profile: {
       ...data,
@@ -881,7 +890,16 @@ export const getMyProfilePortfolioOptions = onCall({ region: REGION }, async (re
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
   const account = await accountRef(identity.uid).get();
-  const role = identity.admin ? 'admin' : cleanText(account.data()?.role, 30);
+  const approvedRoles = professionalRolesForAccount(account.data() ?? {});
+  const requestedRole = cleanText((request.data as { role?: unknown } | undefined)?.role, 30);
+  let role = identity.admin ? 'admin' : cleanText(account.data()?.role, 30) || 'listener';
+  if (requestedRole) {
+    const allowed = identity.admin
+      ? requestedRole === 'admin'
+      : requestedRole === 'listener' || approvedRoles.includes(requestedRole as ProfessionalRole);
+    if (!allowed) throw new HttpsError('permission-denied', 'That Nightjar portfolio role is not available on this account.');
+    role = requestedRole;
+  }
   const [options, completedCollaborations] = await Promise.all([
     profilePortfolioOptionsFor(identity.uid, role),
     role === 'admin' ? Promise.resolve(0) : completedCollaborationCountFor(identity.uid),
