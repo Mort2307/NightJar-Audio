@@ -183,7 +183,10 @@ export default function AccountAccess({
         }
         onAuthenticated(next);
         setMode(next.emailVerified ? 'signin' : 'verify');
-        if (next.emailVerified) setMessage('Signed in. Opening Nightjar…');
+        if (next.emailVerified) {
+          void nightjarAuthSecurity.recordSuccess().catch(() => { /* sign-in telemetry must never block account access */ });
+          setMessage('Signed in. Opening Nightjar…');
+        }
         return;
       }
       if (mode === 'reset') {
