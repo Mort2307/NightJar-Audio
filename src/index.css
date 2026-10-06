@@ -6672,3 +6672,52 @@ textarea { overflow-wrap:anywhere; }
   }
   .finance-scenario-save input { min-width:0; width:100%; box-sizing:border-box; }
 }
+
+
+/* Explicit recoverable loading failures */
+.public-profile-load-failure {
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  margin:14px 0;
+  padding:16px;
+  border:1px solid rgba(203,181,204,.14);
+  border-radius:14px;
+  background:rgba(255,255,255,.012);
+}
+.public-profile-load-failure > svg {
+  flex:0 0 auto;
+  color:#c9b6c5;
+}
+.public-profile-load-failure > div {
+  min-width:0;
+  flex:1 1 auto;
+}
+.public-profile-load-failure strong,
+.public-profile-load-failure p { display:block; }
+.public-profile-load-failure strong { font-size:10px; }
+.public-profile-load-failure p {
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:8px;
+  line-height:1.55;
+}
+.account-portal-header-tools {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+}
+@media (max-width:560px) {
+  .public-profile-load-failure { display:grid; }
+  .public-profile-load-failure > button { width:100%; }
+  .account-portal-header {
+    align-items:flex-start;
+    gap:10px;
+  }
+  .account-portal-header-tools {
+    display:grid;
+    justify-items:end;
+  }
+}
