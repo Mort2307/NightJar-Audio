@@ -4926,6 +4926,7 @@ export const recordAuthenticationAttempt = onCall({ region: REGION }, async (req
     route: cleanText(input.route, 160) || '/account',
     evidenceQuality: 'nightjar_client_observed',
     passwordCaptured: false,
+    retentionUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
     createdAt: FieldValue.serverTimestamp(),
   };
   const ref = await db.collection('authenticationEvents').add(record);
@@ -5068,6 +5069,9 @@ export const suspendFromSecurityAlert = onCall({ region: REGION }, async (reques
   const alert = await alertRef.get();
   const data = alert.data();
   if (!data) throw new HttpsError('not-found', 'Security alert not found.');
+  if (cleanText(data.category, 80) === 'authentication') {
+    throw new HttpsError('failed-precondition', 'Failed-login alerts are evidence only and cannot suspend the targeted account.');
+  }
 
   await accountRef(String(data.userId)).set({
     status: 'suspended',
@@ -5096,6 +5100,9 @@ export const revokeSessionsFromSecurityAlert = onCall({ region: REGION }, async 
   const alert = await alertRef.get();
   const data = alert.data();
   if (!data) throw new HttpsError('not-found', 'Security alert not found.');
+  if (cleanText(data.category, 80) === 'authentication') {
+    throw new HttpsError('failed-precondition', 'A failed-login alert has no authenticated reader session to revoke.');
+  }
   const revokedCount = await revokeReaderSessions(String(data.userId), undefined, 'admin_security_review');
   await alertRef.set({
     lastAction: 'reader_sessions_revoked',
