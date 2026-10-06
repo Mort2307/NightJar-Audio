@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, Check, Sparkles, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { ArrowRight, Check, Sparkles, X } from 'lucide-react';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import {
   PROFILE_CATEGORY_OPTIONS,
   PROFILE_TAG_OPTIONS,
   PROFILE_TROPE_OPTIONS,
-  ROLE_FOCUS_OPTIONS,
-  ROLE_PROFILE_CONFIG,
-  type ProfileRoleKey,
 } from '../data/nightjarTaxonomy';
 
 type Props = {
@@ -19,136 +16,31 @@ type Props = {
   notify: (message: string) => void;
 };
 
-type Field = {
-  key: string;
-  label: string;
-  placeholder: string;
-};
+type Step = 'identity' | 'presence' | 'personalisation';
 
-type QuestionGroup = {
-  id: string;
-  label: string;
-  title: string;
-  description: string;
-  fields: Field[];
-};
-
-const QUESTION_GROUPS: QuestionGroup[] = [
+const steps: { id: Step; label: string; title: string; description: string }[] = [
   {
     id: 'identity',
-    label: 'YOU',
-    title: 'How should Nightjar know you?',
-    description: 'Tell Nightjar only what you choose to share. Pronouns and identity details are optional and never used as assumptions about taste.',
-    fields: [
-      { key: 'displayName', label: 'Display name', placeholder: 'What should people see?' },
-      { key: 'handle', label: '@handle', placeholder: 'your-nightjar-name' },
-      { key: 'pronouns', label: 'Pronouns', placeholder: 'Optional' },
-      { key: 'headline', label: 'Headline', placeholder: 'A short line that feels like you' },
-    ],
+    label: 'YOUR NIGHTJAR',
+    title: 'Create a profile that feels like yours.',
+    description: 'This is your account-level identity across Nightjar. Whether you listen, create, write, edit or make artwork, your personal profile is never treated as the “basic” version.',
   },
   {
-    id: 'taste',
-    label: 'TASTE',
-    title: 'What are you actually here for?',
-    description: 'Search and select what fits. If a useful tag is missing, non-admin accounts can add it here instead of working around a fixed list.',
-    fields: [
-      { key: 'favouriteTags', label: 'Favourite tags', placeholder: 'Search or add a tag' },
-      { key: 'favouriteTropes', label: 'Favourite tropes', placeholder: 'Search tropes' },
-      { key: 'favouriteCategories', label: 'Favourite categories', placeholder: 'Search categories' },
-      { key: 'roleFocus', label: 'Creative interests', placeholder: 'Search role focus' },
-    ],
+    id: 'presence',
+    label: 'YOUR PRESENCE',
+    title: 'Give people a reason to remember you.',
+    description: 'A premium profile should feel intentional. Add a headline, a short introduction and an optional welcome note. Professional services and credentials stay in the relevant role Studio.',
   },
   {
-    id: 'discovery',
-    label: 'DISCOVERY',
-    title: 'How should your Nightjar experience feel?',
-    description: 'You can change these later. The answers are used to make discovery more relevant without turning behaviour into identity.',
-    fields: [
-      { key: 'bio', label: 'About you', placeholder: 'Optional short introduction' },
-      { key: 'welcomeMessage', label: 'Welcome message', placeholder: 'Optional message visitors see on your profile' },
-    ],
+    id: 'personalisation',
+    label: 'YOUR WORLD',
+    title: 'Shape what Nightjar feels like for you.',
+    description: 'Choose themes, moods and categories that genuinely interest you. These are discovery preferences, not assumptions about identity.',
   },
 ];
 
-const ROLE_SETUP: Record<'listener' | 'creator' | 'writer' | 'editor' | 'artist', QuestionGroup> = {
-  listener: {
-    id: 'role-listener',
-    label: 'LISTENER',
-    title: 'Build your listener profile.',
-    description: 'Give recommendations and community profiles a little more context without exposing private listening history.',
-    fields: [
-      { key: 'roleSpecialties', label: 'Listening moods', placeholder: 'Choose listening moods' },
-      { key: 'roleSecondary', label: 'Discovery style', placeholder: 'Choose discovery styles' },
-      { key: 'roleDetailOne', label: 'What you come to Nightjar for', placeholder: 'Optional short note' },
-      { key: 'roleDetailTwo', label: 'Community note', placeholder: 'Optional public community note' },
-    ],
-  },
-  creator: {
-    id: 'role-creator',
-    label: 'CREATOR',
-    title: 'Build your creator identity.',
-    description: 'Tell listeners and collaborators what you perform and how you like to work. Custom creator tags can be added during setup as well as later.',
-    fields: [
-      { key: 'roleSpecialties', label: 'Performance specialties', placeholder: 'Choose performance specialties' },
-      { key: 'roleSecondary', label: 'Voice / production strengths', placeholder: 'Choose strengths' },
-      { key: 'roleAvailability', label: 'Collaboration availability', placeholder: 'Choose availability' },
-      { key: 'roleDetailOne', label: 'Voice & performance notes', placeholder: 'Optional public-facing performance note' },
-      { key: 'roleDetailTwo', label: 'Recording / production setup', placeholder: 'Optional public-facing production note' },
-    ],
-  },
-  writer: {
-    id: 'role-writer',
-    label: 'WRITER',
-    title: 'Build your writer identity.',
-    description: 'Show your writing strengths without exposing protected scripts or private deal terms.',
-    fields: [
-      { key: 'roleSpecialties', label: 'Writing specialties', placeholder: 'Choose writing specialties' },
-      { key: 'roleSecondary', label: 'Script formats', placeholder: 'Choose script formats' },
-      { key: 'roleAvailability', label: 'Commission availability', placeholder: 'Choose availability' },
-      { key: 'roleDetailOne', label: 'Writing style & tone', placeholder: 'Optional public-facing note' },
-      { key: 'roleDetailTwo', label: 'Licensing & collaboration note', placeholder: 'Optional public-facing collaboration note' },
-    ],
-  },
-  editor: {
-    id: 'role-editor',
-    label: 'AUDIO EDITOR',
-    title: 'Build your Audio Editor identity.',
-    description: 'Make your production skills visible while private assignments, notes and client material stay private.',
-    fields: [
-      { key: 'roleSpecialties', label: 'Editing services', placeholder: 'Choose editing services' },
-      { key: 'roleSecondary', label: 'Production strengths', placeholder: 'Choose production strengths' },
-      { key: 'roleAvailability', label: 'Booking availability', placeholder: 'Choose availability' },
-      { key: 'roleDetailOne', label: 'Workflow & handoff', placeholder: 'Optional public-facing workflow note' },
-      { key: 'roleDetailTwo', label: 'Turnaround / production note', placeholder: 'Optional public-facing production note' },
-    ],
-  },
-  artist: {
-    id: 'role-artist',
-    label: 'ARTIST',
-    title: 'Build your artist identity.',
-    description: 'Show creators what you make, the briefs you enjoy and whether you are open for commissions.',
-    fields: [
-      { key: 'roleSpecialties', label: 'Art services', placeholder: 'Choose art services' },
-      { key: 'roleSecondary', label: 'Creative strengths', placeholder: 'Choose creative strengths' },
-      { key: 'roleAvailability', label: 'Commission availability', placeholder: 'Choose availability' },
-      { key: 'roleDetailOne', label: 'Style & portfolio note', placeholder: 'Optional public-facing style note' },
-      { key: 'roleDetailTwo', label: 'Commission / licensing note', placeholder: 'Optional public-facing commission note' },
-    ],
-  },
-
-};
-
-const listFields = new Set([
-  'favouriteTags',
-  'favouriteTropes',
-  'favouriteCategories',
-  'roleFocus',
-  'roleSpecialties',
-  'roleSecondary',
-]);
-
 export default function NightjarOnboarding({ initialProfile, role, onComplete, onSkip, notify }: Props) {
-  const [groupIndex, setGroupIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
   const [profile, setProfile] = useState<any>({
@@ -161,166 +53,114 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     favouriteTags: initialProfile?.favouriteTags || [],
     favouriteTropes: initialProfile?.favouriteTropes || [],
     favouriteCategories: initialProfile?.favouriteCategories || [],
-    roleFocus: initialProfile?.roleFocus || [],
-    roleSpecialties: initialProfile?.roleSpecialties || [],
-    roleSecondary: initialProfile?.roleSecondary || [],
-    roleAvailability: initialProfile?.roleAvailability || '',
-    roleDetailOne: initialProfile?.roleDetailOne || '',
-    roleDetailTwo: initialProfile?.roleDetailTwo || '',
-    portfolioNote: initialProfile?.portfolioNote || '',
-    featuredPortfolioIds: Array.isArray(initialProfile?.featuredPortfolioIds) ? initialProfile.featuredPortfolioIds : [],
     publicProfile: initialProfile?.publicProfile !== false,
-    onboardingComplete: initialProfile?.onboardingComplete === true,
   });
 
   useEffect(() => {
     let cancelled = false;
     void nightjarCommunity.profileTagCatalogue()
-      .then((data) => {
-        if (!cancelled) setPromotedTags(data?.tags ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setPromotedTags([]);
-      });
+      .then((data) => { if (!cancelled) setPromotedTags(data?.tags ?? []); })
+      .catch(() => { if (!cancelled) setPromotedTags([]); });
     return () => { cancelled = true; };
   }, []);
 
-  const roleKey = (role ?? 'listener') as ProfileRoleKey;
-  const roleConfig = ROLE_PROFILE_CONFIG[roleKey];
   const combinedTags = useMemo(
     () => Array.from(new Set([...PROFILE_TAG_OPTIONS, ...promotedTags])).sort((a, b) => a.localeCompare(b)),
     [promotedTags],
   );
+  const step = steps[Math.min(stepIndex, steps.length - 1)];
+  const initials = (profile.displayName || 'NJ').split(/\s+/).map((part:string)=>part[0]).join('').slice(0,2).toUpperCase();
+  const roleLabel = role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Nightjar member';
 
-  const questionGroups = role && role !== 'admin'
-    ? [...QUESTION_GROUPS, ROLE_SETUP[role]]
-    : QUESTION_GROUPS;
-  const group = questionGroups[Math.min(groupIndex, questionGroups.length - 1)];
-
-  const updateScalar = (key: string, value: string) => {
-    setProfile((current: any) => ({ ...current, [key]: value }));
-  };
-
-  const updateList = (key: string, values: string[]) => {
-    setProfile((current: any) => ({ ...current, [key]: values }));
-  };
-
-  const optionsForField = (key: string): readonly string[] => {
-    if (key === 'favouriteTags') return combinedTags;
-    if (key === 'favouriteTropes') return PROFILE_TROPE_OPTIONS;
-    if (key === 'favouriteCategories') return PROFILE_CATEGORY_OPTIONS;
-    if (key === 'roleFocus') return ROLE_FOCUS_OPTIONS[roleKey];
-    if (key === 'roleSpecialties') return roleConfig.specialtiesOptions;
-    if (key === 'roleSecondary') return roleConfig.secondaryOptions;
-    return [];
-  };
-
-  const labelForField = (field: Field) => {
-    if (field.key === 'favouriteTags') return roleConfig.tagLabel;
-    if (field.key === 'roleFocus') return roleConfig.focusLabel;
-    if (field.key === 'roleSpecialties') return roleConfig.specialtiesLabel;
-    if (field.key === 'roleSecondary') return roleConfig.secondaryLabel;
-    if (field.key === 'roleAvailability') return roleConfig.availabilityLabel ?? field.label;
-    if (field.key === 'roleDetailOne') return roleConfig.detailOneLabel;
-    if (field.key === 'roleDetailTwo') return roleConfig.detailTwoLabel;
-    return field.label;
-  };
+  const update = (key: string, value: unknown) => setProfile((current:any)=>({...current,[key]:value}));
 
   const finish = async () => {
     setSaving(true);
     try {
-      const payload = { ...profile, onboardingComplete: true, onboardingVersion: 2 };
+      const payload = {
+        ...(initialProfile ?? {}),
+        ...profile,
+        avatarInitials: initialProfile?.avatarInitials || initials,
+        onboardingComplete: true,
+        onboardingVersion: 3,
+      };
       const data = await nightjarCommunity.saveMyProfile(payload);
       onComplete(data?.profile ?? payload);
-      notify('Nightjar profile and taste preferences saved.');
+      notify(role === 'editor'
+        ? 'Your Nightjar profile is ready. Build your professional Audio Editor identity inside Editor Studio.'
+        : 'Your Nightjar profile is ready.');
     } catch {
-      notify('Nightjar could not save your onboarding yet.');
+      notify('Nightjar could not save your profile yet.');
     } finally {
       setSaving(false);
     }
   };
 
-  const renderField = (field: Field) => {
-    const label = labelForField(field);
-
-    if (listFields.has(field.key)) {
-      const allowCustomTag = field.key === 'favouriteTags' && role !== 'admin';
-      return <SearchableMultiSelect
-        key={field.key}
-        label={label}
-        options={optionsForField(field.key)}
-        values={Array.isArray(profile[field.key]) ? profile[field.key] : []}
-        onChange={(values) => updateList(field.key, values)}
-        allowCreate={allowCustomTag}
-        createLabel="Add custom tag"
-        helperText={allowCustomTag
-          ? role === 'creator'
-            ? 'Missing niche or explicit descriptor? Add it here. Repeated use by distinct approved creators can promote it into Nightjar’s shared catalogue.'
-            : 'Missing something useful? Add a custom tag to your profile. Shared catalogue promotion is driven by approved creator usage.'
-          : undefined}
-      />;
+  const renderStep = () => {
+    if (step.id === 'identity') {
+      return <div className="premium-onboarding-fields">
+        <div className="premium-onboarding-identity-preview">
+          <span>{initials}</span>
+          <div><strong>{profile.displayName || 'Your chosen name'}</strong><small>{profile.handle ? '@' + profile.handle.replace(/^@/,'') : '@yourhandle'}</small><em>{roleLabel}</em></div>
+        </div>
+        <div className="premium-onboarding-two">
+          <label>Chosen name<input maxLength={80} value={profile.displayName} onChange={(event)=>update('displayName',event.target.value)} placeholder="How should Nightjar know you?"/></label>
+          <label>@handle<input maxLength={30} value={profile.handle} onChange={(event)=>update('handle',event.target.value)} placeholder="your-nightjar-name"/></label>
+        </div>
+        <label>Pronouns <span className="optional-label">optional</span><input maxLength={60} value={profile.pronouns} onChange={(event)=>update('pronouns',event.target.value)} placeholder="e.g. she/her"/></label>
+        <label className="profile-toggle premium-onboarding-public"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(event)=>update('publicProfile',event.target.checked)}/> Let other Nightjar members discover my profile</label>
+      </div>;
     }
 
-    if (field.key === 'roleAvailability' && roleConfig.availabilityLabel) {
-      return <label key={field.key}>{label}
-        <select value={profile.roleAvailability ?? ''} onChange={(event) => updateScalar('roleAvailability', event.target.value)}>
-          <option value="">Not specified</option>
-          {roleConfig.availabilityOptions.map((option) => <option value={option} key={option}>{option}</option>)}
-        </select>
-      </label>;
+    if (step.id === 'presence') {
+      return <div className="premium-onboarding-fields">
+        <label>Profile headline<input maxLength={140} value={profile.headline} onChange={(event)=>update('headline',event.target.value)} placeholder="A short line that feels unmistakably you"/><small className="field-counter">{String(profile.headline ?? '').length}/140</small></label>
+        <label>About you<textarea maxLength={1200} value={profile.bio} onChange={(event)=>update('bio',event.target.value)} placeholder="Introduce yourself in your own words."/><small className="field-counter">{String(profile.bio ?? '').length}/1200</small></label>
+        <label>Welcome message <span className="optional-label">optional</span><textarea maxLength={300} value={profile.welcomeMessage} onChange={(event)=>update('welcomeMessage',event.target.value)} placeholder="A small message people see when they open your profile."/><small className="field-counter">{String(profile.welcomeMessage ?? '').length}/300</small></label>
+        <div className="premium-onboarding-note"><Sparkles size={16}/><div><strong>Your professional identity stays separate.</strong><span>If you hold a professional role, its services, experience, portfolio and availability live in that role's Studio — so your personal profile still feels like you.</span></div></div>
+      </div>;
     }
 
-    if (['bio', 'welcomeMessage', 'roleDetailOne', 'roleDetailTwo'].includes(field.key)) {
-      return <label key={field.key}>{label}
-        <textarea
-          value={profile[field.key] ?? ''}
-          onChange={(event) => updateScalar(field.key, event.target.value)}
-          placeholder={field.placeholder}
-        />
-      </label>;
-    }
-
-    return <label key={field.key}>{label}
-      <input
-        value={profile[field.key] ?? ''}
-        onChange={(event) => updateScalar(field.key, event.target.value)}
-        placeholder={field.placeholder}
-      />
-    </label>;
+    return <div className="premium-onboarding-fields">
+      <SearchableMultiSelect label="Moods & tags I enjoy" options={combinedTags} values={profile.favouriteTags ?? []} onChange={(values)=>update('favouriteTags',values)} allowCreate createLabel="Add custom tag" helperText="Your selections help discovery and give visitors a feel for your Nightjar world. They are never treated as professional credentials."/>
+      <SearchableMultiSelect label="Tropes & themes I enjoy" options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>update('favouriteTropes',values)}/>
+      <SearchableMultiSelect label="Categories I enjoy" options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>update('favouriteCategories',values)}/>
+      <div className="premium-onboarding-finish-card"><Sparkles size={18}/><div><strong>This is only the beginning.</strong><span>Your profile grows with public playlists, verified credits, collaborations, badges and the work or recommendations you choose to share.</span></div></div>
+    </div>;
   };
 
-  return <div className="onboarding-backdrop" role="dialog" aria-modal="true" aria-labelledby="nightjar-onboarding-title">
-    <section className="onboarding-card">
+  return <div className="onboarding-backdrop premium-onboarding-backdrop" role="dialog" aria-modal="true" aria-labelledby="nightjar-onboarding-title">
+    <section className="onboarding-card premium-onboarding-card">
+      <div className="premium-onboarding-aura" aria-hidden="true"/>
       <header>
         <div>
-          <span className="mini-label">NIGHTJAR / PERSONALISATION</span>
-          <p className="eyebrow"><Sparkles size={13}/> EXPLICIT TASTE · YOUR CONTROL</p>
-          <h2 id="nightjar-onboarding-title">Make Nightjar yours.</h2>
-          <p>Nightjar learns from what you deliberately tell it. It does not need to guess who you are.</p>
+          <span className="mini-label">NIGHTJAR / PROFILE CREATION</span>
+          <p className="eyebrow"><UserCircle2 size={13}/> YOUR SPACE AFTER DARK</p>
+          <h2 id="nightjar-onboarding-title">You belong here.</h2>
+          <p>Nightjar profiles are designed to feel considered and personal — not like a username attached to a database row.</p>
         </div>
-        <button className="icon-button" onClick={onSkip} aria-label="Close onboarding"><X size={18}/></button>
+        <button className="icon-button" onClick={onSkip} aria-label="Close profile creation"><X size={18}/></button>
       </header>
 
-      <div className="onboarding-progress">
-        <span style={{ width: ((groupIndex + 1) / questionGroups.length * 100) + '%' }} />
-        <small>Step {groupIndex + 1} of {questionGroups.length}</small>
+      <div className="premium-onboarding-stagebar">
+        {steps.map((item,index)=><div className={index===stepIndex?'active':index<stepIndex?'complete':''} key={item.id}><span>{index<stepIndex?<Check size={11}/>:index+1}</span><small>{item.label}</small></div>)}
       </div>
 
-      <article className="onboarding-group">
-        <span className="mini-label">{group.label}</span>
-        <h3>{group.title}</h3>
-        <p>{group.description}</p>
-        <div className="onboarding-fields">{group.fields.map(renderField)}</div>
+      <article className="onboarding-group premium-onboarding-group">
+        <span className="mini-label">{step.label}</span>
+        <h3>{step.title}</h3>
+        <p>{step.description}</p>
+        {renderStep()}
       </article>
 
-      <div className="onboarding-footer">
-        <span>{role ? 'Account role: ' + (role === 'editor' ? 'Audio Editor' : role.charAt(0).toUpperCase() + role.slice(1)) : 'Nightjar account'}</span>
+      <div className="onboarding-footer premium-onboarding-footer">
+        <span>{roleLabel} · personal profile</span>
         <div>
-          {groupIndex > 0 && <button className="secondary-button" onClick={() => setGroupIndex((index) => index - 1)}>Back</button>}
-          {groupIndex < questionGroups.length - 1
-            ? <button className="primary-button" onClick={() => setGroupIndex((index) => index + 1)}>Continue <ArrowRight size={14}/></button>
-            : <button className="primary-button" disabled={saving} onClick={() => void finish()}><Check size={14}/> {saving ? 'Saving…' : 'Finish setup'}</button>}
-          <button className="ghost-button" disabled={saving} onClick={onSkip}>Skip for now</button>
+          {stepIndex > 0 && <button className="secondary-button" onClick={()=>setStepIndex((index)=>index-1)}>Back</button>}
+          {stepIndex < steps.length - 1
+            ? <button className="primary-button" onClick={()=>setStepIndex((index)=>index+1)}>Continue <ArrowRight size={14}/></button>
+            : <button className="primary-button" disabled={saving} onClick={()=>void finish()}><Check size={14}/>{saving?'Creating profile…':'Create my Nightjar profile'}</button>}
+          <button className="ghost-button" disabled={saving} onClick={onSkip}>Finish later</button>
         </div>
       </div>
     </section>
