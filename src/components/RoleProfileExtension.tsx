@@ -71,6 +71,29 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
     return {...current,featuredPortfolioIds:checked?[...ids,id].slice(0,6):ids.filter((value:string)=>value!==id)};
   });
 
+  const displayName = profile.displayName || (role === 'listener' ? 'Nightjar Listener' : role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : 'Artist');
+  const initials = profile.avatarInitials || displayName.split(/\s+/).map((part:string)=>part[0]).join('').slice(0,2).toUpperCase() || 'NJ';
+  const roleName = role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'artist' ? 'Artist' : 'Listener';
+  const turnaround = role === 'creator'
+    ? profile.creatorTurnaround
+    : role === 'writer'
+      ? profile.writerTurnaround
+      : role === 'artist'
+        ? profile.artistTurnaround
+        : null;
+  const sharedInterestCount = [
+    ...(profile.roleFocus ?? []),
+    ...(profile.roleSpecialties ?? []),
+    ...(profile.roleSecondary ?? []),
+  ].length;
+  const headline = profile.roleHeadline || (role === 'listener'
+    ? 'A curated corner of Nightjar.'
+    : role === 'creator'
+      ? 'Performance, voice and recording craft.'
+      : role === 'writer'
+        ? 'Writing voice, formats and collaboration.'
+        : 'Visual craft, commissions and creative collaboration.');
+
   const positioning=<article className={'panel premium-role-positioning premium-role-positioning-'+role}>
     <div className="premium-role-card-title"><span><Icon size={17}/></span><div><span className="mini-label">ROLE POSITIONING</span><h3>Give this role its own voice.</h3></div></div>
     <div className="premium-role-positioning-grid">
@@ -123,6 +146,37 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
       <div><span className="mini-label">{meta.eyebrow}</span><h2>{meta.title}</h2><p>{meta.copy}</p></div>
       <Icon size={22}/>
     </div>
+
+    <section className={'role-profile-hero role-profile-hero-'+role}>
+      <div className="role-profile-hero-main">
+        <span className="role-profile-hero-avatar" data-tone={profile.avatarTone || 'plum'}>
+          {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" loading="lazy" decoding="async"/> : initials}
+        </span>
+        <div className="role-profile-hero-copy">
+          <span className="mini-label">{role === 'listener' ? 'PREMIUM MEMBER PROFILE' : 'PROFESSIONAL PROFILE'}</span>
+          <h3>{displayName}</h3>
+          <p>{headline}</p>
+          <div className="role-profile-hero-status">
+            <span>{roleName}</span>
+            {role !== 'listener' && <span>{profile.roleAvailability || 'Availability not set'}</span>}
+          </div>
+        </div>
+        <Icon size={21}/>
+      </div>
+      <div className="role-profile-hero-metrics">
+        {role === 'listener' ? <>
+          <div><span>Shared interests</span><strong>{sharedInterestCount}</strong><small>Chosen profile signals</small></div>
+          <div><span>Featured playlists</span><strong>{featuredIds.length}</strong><small>Deliberately public</small></div>
+          <div><span>Community style</span><strong>{(profile.listenerCommunityStyle ?? []).length}</strong><small>Selected preferences</small></div>
+          <div><span>Privacy</span><strong>Curated</strong><small>Listening history stays private</small></div>
+        </> : <>
+          <div><span>Verified showcase</span><strong>{portfolioOptions.length}</strong><small>Eligible Nightjar work</small></div>
+          <div><span>Collaborations</span><strong>{completedCollaborations}</strong><small>Platform-recorded</small></div>
+          <div><span>Specialties</span><strong>{(profile.roleSpecialties ?? []).length}</strong><small>Public capability</small></div>
+          <div><span>Turnaround</span><strong>{turnaround || '—'}</strong><small>Typical estimate</small></div>
+        </>}
+      </div>
+    </section>
 
     {positioning}
 
