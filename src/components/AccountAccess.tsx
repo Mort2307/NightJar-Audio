@@ -181,6 +181,7 @@ export default function AccountAccess({
           }
           throw error;
         }
+        void nightjarAuthSecurity.recordSuccess().catch(() => { /* security telemetry must never block account UX */ });
         onAuthenticated(next);
         setMode(next.emailVerified ? 'signin' : 'verify');
         if (next.emailVerified) setMessage('Signed in. Opening Nightjar…');
