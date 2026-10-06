@@ -24,8 +24,10 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [file, setFile] = useState<File | null>(null);
   const [humanCreated, setHumanCreated] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const load = async () => {
+    setLoadFailed(false);
     if (demoMode) {
       setItems([{
         id:'demo-artist-piece-1', ownerUserId:'demo-artist-lena', title:'Midnight Window', description:'Fictional cover-art example for Artist Simulation.', tags:['Atmospheric','Cover art'], commissionType:'Cover artwork', status:'published', imageUrl:null, imageStatus:'approved', pendingImageAssetId:null, pendingImageStatus:null, createdAt:null, publishedAt:null, updatedAt:null,
@@ -36,6 +38,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       const data = await nightjarArtists.mine();
       setItems(data.items ?? []);
     } catch {
+      setLoadFailed(true);
       notify('Artist portfolio could not be loaded.');
     }
   };
@@ -118,13 +121,14 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <button className="primary-button artist-form-wide" disabled={busy || !humanCreated} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Submitting…</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
     </div>
 
-    <div className="artist-portfolio-grid">
+    {loadFailed && <div className="people-empty artist-portfolio-load-error"><ImagePlus size={18}/><strong>Your portfolio could not be loaded.</strong><span>No artwork has been removed. Retry the Artist portfolio service.</span><button className="secondary-button" onClick={()=>void load()}>Retry portfolio</button></div>}
+    {!loadFailed && <div className="artist-portfolio-grid">
       {items.map((item)=><article key={item.id} className="artist-portfolio-card">
         <div className="artist-portfolio-image">{item.imageUrl?<img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/>:<div><ImagePlus size={22}/><span>{item.pendingImageStatus==='pending'?'Awaiting image approval':item.pendingImageStatus==='rejected'?'Image rejected':'No public image yet'}</span></div>}</div>
         <div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}<p>{item.description}</p>{!!item.tags?.length&&<div className="creator-profile-tags">{item.tags.map((tag)=><span key={tag}>{tag}</span>)}</div>}<em>{item.status==='published'?'Public':'Private / moderation pending'}</em></div>
         <button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={14}/> Remove</button>
       </article>)}
       {!items.length&&<div className="people-empty"><ImagePlus size={18}/><strong>No portfolio pieces yet</strong><span>Add a few strong examples so VA Creators, Writers and Audio Editors can understand your visual style.</span></div>}
-    </div>
+    </div>}
   </article>;
 }
