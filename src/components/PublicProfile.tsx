@@ -172,7 +172,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
 
   return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
-    <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal premium-public-profile">
+    <section ref={dialogRef} tabIndex={-1} className={'creator-profile-modal premium-public-profile public-profile-modal-' + profileRole}>
       <header className="creator-profile-head">
         <div>
           <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
@@ -213,7 +213,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         {!!roleDetails.roleFocus?.length && <div className="creator-profile-tags">{roleDetails.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
 
-        <section className="public-role-profile">
+        <section className={'public-role-profile public-profile-role-' + profileRole}>
           <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profileRole).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{roleDetails.roleAvailability && <strong>{roleDetails.roleAvailability}</strong>}</div>
           <p>{roleDetails.roleBio || roleConfig.description}</p>
           {!!roleDetails.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{roleDetails.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
