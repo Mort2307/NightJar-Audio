@@ -5,7 +5,17 @@ import { applyNightjarUpdate, checkNightjarUpdate, type NightjarUpdateStatus } f
 export default function AppUpdateControl({ compact = false }: { compact?: boolean }) {
   const [status, setStatus] = useState<NightjarUpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(() => {
+    try {
+      const appliedAt = window.sessionStorage.getItem('nightjar.update-applied.v1');
+      if (!appliedAt) return '';
+      window.sessionStorage.removeItem('nightjar.update-applied.v1');
+      return 'Nightjar was refreshed from the deployed app and local app caches were cleared.';
+    } catch {
+      return '';
+    }
+  });
+  const [applying, setApplying] = useState(false);
 
   const check = async () => {
     setChecking(true);
@@ -21,12 +31,20 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
     }
   };
 
+  const apply = async () => {
+    setApplying(true);
+    setMessage('Clearing cached app files and reloading Nightjar…');
+    await applyNightjarUpdate();
+  };
+
   if (compact) {
     return <div className="app-update-control compact">
-      <button className="ghost-button" disabled={checking} onClick={()=>void check()}>
+      <button className="ghost-button" disabled={checking || applying} onClick={()=>void check()}>
         <RefreshCw size={14}/>{checking ? 'Checking…' : 'Check for update'}
       </button>
-      {status?.updateAvailable && <button className="primary-button" onClick={()=>void applyNightjarUpdate()}><Download size={14}/> Update now</button>}
+      {status?.updateAvailable
+        ? <button className="primary-button" disabled={applying} onClick={()=>void apply()}><Download size={14}/>{applying ? 'Updating…' : 'Update now'}</button>
+        : <button className="ghost-button" disabled={applying} onClick={()=>void apply()}><RefreshCw size={14}/>{applying ? 'Refreshing…' : 'Force app refresh'}</button>}
       {message && <small>{message}</small>}
     </div>;
   }
@@ -43,9 +61,11 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
     </div>
     {message && <div className={status?.updateAvailable ? 'app-update-result available' : 'app-update-result'}>{status?.updateAvailable ? <Download size={16}/> : <CheckCircle2 size={16}/>}<span>{message}</span></div>}
     <div className="app-update-actions">
-      <button className="secondary-button" disabled={checking} onClick={()=>void check()}><RefreshCw size={14}/>{checking ? 'Checking Nightjar…' : 'Check for update'}</button>
-      {status?.updateAvailable && <button className="primary-button" onClick={()=>void applyNightjarUpdate()}><Download size={14}/> Update Nightjar now</button>}
+      <button className="secondary-button" disabled={checking || applying} onClick={()=>void check()}><RefreshCw size={14}/>{checking ? 'Checking Nightjar…' : 'Check for update'}</button>
+      {status?.updateAvailable
+        ? <button className="primary-button" disabled={applying} onClick={()=>void apply()}><Download size={14}/>{applying ? 'Updating Nightjar…' : 'Update Nightjar now'}</button>
+        : <button className="ghost-button" disabled={applying} onClick={()=>void apply()}><RefreshCw size={14}/>{applying ? 'Refreshing app…' : 'Force refresh app'}</button>}
     </div>
-    <div className="app-update-safety"><ShieldCheck size={14}/><span>Updating only clears Nightjar app caches and reloads the deployed application. It does not remove your account, profile or cloud data.</span></div>
+    <div className="app-update-safety"><ShieldCheck size={14}/><span>Force refresh unregisters old Nightjar service workers, clears browser Cache Storage and reloads the deployed app. It does not remove your account, profile, subscriptions or cloud data.</span></div>
   </article>;
 }
