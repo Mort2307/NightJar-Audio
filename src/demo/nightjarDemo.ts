@@ -115,6 +115,7 @@ export const demoDirectory = [
   { userId:'demo-editor-sam', name:'Sam Reed', role:'editor' },
   { userId:'demo-editor-rin', name:'Rin Cole', role:'editor' },
   { userId:'demo-artist-elara', name:'Elara Finch', role:'artist' },
+  { userId:'demo-listener-jamie', name:'Jamie', role:'listener' },
 ];
 
 export const demoCollaborations = [
