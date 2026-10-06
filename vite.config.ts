@@ -1,8 +1,25 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig, type Plugin } from 'vite';
+
+const buildId = String(Date.now());
+const builtAt = new Date(Number(buildId)).toISOString();
+
+const nightjarVersionManifest = (): Plugin => ({
+  name: 'nightjar-version-manifest',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'version.json',
+      source: JSON.stringify({ buildId, builtAt }),
+    });
+  },
+});
 
 export default defineConfig({
-  plugins: [react()],
+  define: {
+    __NIGHTJAR_BUILD_ID__: JSON.stringify(buildId),
+    __NIGHTJAR_BUILT_AT__: JSON.stringify(builtAt),
+  },
+  plugins: [nightjarVersionManifest()],
   base: './',
   build: {
     outDir: 'dist',
