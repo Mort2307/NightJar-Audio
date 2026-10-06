@@ -1411,7 +1411,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     profile: {
       userId,
       role,
-      roles: professionalRoles.length ? professionalRoles : ['listener'],
+      roles: ['listener', ...professionalRoles],
       displayName: data.displayName ?? 'Nightjar member',
       name: data.displayName ?? 'Nightjar member',
       handle: data.handle ?? null,
@@ -3141,7 +3141,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       userId: doc.id,
       email: account.email ?? null,
       role: account.role ?? null,
-      roles: professionalRolesForAccount(account),
+      roles: account.role === 'admin' ? ['admin'] : ['listener', ...professionalRolesForAccount(account)],
       pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles),
       status: account.status ?? 'active',
       name: profileData.displayName ?? account.email?.split('@')?.[0] ?? 'Nightjar account',
