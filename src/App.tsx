@@ -190,6 +190,20 @@ type PublicDirectoryProfile = {
     editorTurnaround?: string | null;
     editorExperienceYears?: number | null;
     editorSkillLevels?: Record<string,string>;
+    creatorLanguages?: string[];
+    creatorDirectionModes?: string[];
+    creatorDeliveryFormats?: string[];
+    creatorTurnaround?: string | null;
+    creatorEquipment?: string | null;
+    writerScriptLengths?: string[];
+    writerCollaborationPreferences?: string[];
+    writerTurnaround?: string | null;
+    writerRightsNote?: string | null;
+    artistMediums?: string[];
+    artistDeliveryFormats?: string[];
+    artistTurnaround?: string | null;
+    artistSoftware?: string[];
+    listenerCommunityStyle?: string[];
   }>;
   releaseCount?: number;
   publishedWorkCount?: number;
@@ -351,7 +365,7 @@ function App() {
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
   const [adminTesterEmail, setAdminTesterEmail] = useState('');
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'artist' | 'admin' | null>(null);
-  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, publicProfile: true });
+  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, creatorLanguages: [], creatorDirectionModes: [], creatorDeliveryFormats: [], creatorTurnaround: '', creatorEquipment: '', writerScriptLengths: [], writerCollaborationPreferences: [], writerTurnaround: '', writerRightsNote: '', artistMediums: [], artistDeliveryFormats: [], artistTurnaround: '', artistSoftware: [], listenerCommunityStyle: [], publicProfile: true });
   const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
   const [profilePortfolioOptions, setProfilePortfolioOptions] = useState<any[]>([]);
   const [profileCompletedCollaborations, setProfileCompletedCollaborations] = useState(0);
@@ -549,6 +563,15 @@ function App() {
           ...(slice.editorProjectTypes ?? []),
           ...(slice.editorDeliveryFormats ?? []),
           ...(slice.editorCollaborationPreferences ?? []),
+          ...(slice.creatorLanguages ?? []),
+          ...(slice.creatorDirectionModes ?? []),
+          ...(slice.creatorDeliveryFormats ?? []),
+          ...(slice.writerScriptLengths ?? []),
+          ...(slice.writerCollaborationPreferences ?? []),
+          ...(slice.artistMediums ?? []),
+          ...(slice.artistDeliveryFormats ?? []),
+          ...(slice.artistSoftware ?? []),
+          ...(slice.listenerCommunityStyle ?? []),
         ]),
       ];
     }),
@@ -581,6 +604,11 @@ function App() {
           slice.roleHeadline,
           slice.roleBio,
           slice.editorTurnaround,
+          slice.creatorTurnaround,
+          slice.creatorEquipment,
+          slice.writerTurnaround,
+          slice.writerRightsNote,
+          slice.artistTurnaround,
           ...(slice.roleFocus ?? []),
           ...(slice.roleSpecialties ?? []),
           ...(slice.roleSecondary ?? []),
