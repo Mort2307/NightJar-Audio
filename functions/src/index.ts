@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase-admin/app';
+import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
@@ -5063,6 +5064,23 @@ export const recordAuthenticationSuccess = onCall({ region: REGION }, async (req
   }
 
   return { recorded:true, eventId:ref.id, newDevice };
+});
+
+export const revokeMyAuthenticationSessions = onCall({ region: REGION }, async (request) => {
+  const identity = requireRegistrationIdentity(request);
+  await getAdminAuth().revokeRefreshTokens(identity.uid);
+  await accountRef(identity.uid).set({
+    authenticationSessionsRevokedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  await createNotification(identity.uid, {
+    type:'security',
+    subtype:'sessions_revoked',
+    title:'Nightjar sessions revoked',
+    message:'All Nightjar Firebase refresh sessions for this account were revoked from Account security.',
+    dedupeKey:'auth-sessions-revoked:' + Math.floor(Date.now() / 60_000),
+  });
+  return { revoked:true, revokedAt:new Date().toISOString() };
 });
 
 export const listMyAuthenticationEvents = onCall({ region: REGION }, async (request) => {
