@@ -3112,17 +3112,13 @@ function App() {
 
   const profileCompletionSignals = [
     Boolean(profile.displayName),
+    Boolean(profile.handle),
     Boolean(profile.headline),
     Boolean(profile.bio),
+    Boolean(profile.welcomeMessage),
     Array.isArray(profile.favouriteTags) && profile.favouriteTags.length > 0,
-    Array.isArray(profile.roleSpecialties) && profile.roleSpecialties.length > 0,
+    Array.isArray(profile.favouriteCategories) && profile.favouriteCategories.length > 0,
     profile.avatarStatus === 'approved' || Boolean(profile.avatarUrl),
-    Boolean(profile.portfolioNote),
-    Array.isArray(profile.featuredPortfolioIds) && profile.featuredPortfolioIds.length > 0,
-    ...(effectiveRole === 'editor' ? [
-      Array.isArray(profile.editorSoftware) && profile.editorSoftware.length > 0,
-      Boolean(profile.editorTurnaround),
-    ] : []),
   ];
   const profileCompletion = Math.round((profileCompletionSignals.filter(Boolean).length / profileCompletionSignals.length) * 100);
 
