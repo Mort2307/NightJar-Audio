@@ -6338,3 +6338,89 @@ select:disabled {
   .role-experience-metrics { grid-template-columns:1fr; }
   .role-experience-icon { width:46px; height:46px; }
 }
+
+
+/* Finance scenario comparison */
+.finance-scenario-library {
+  display:grid;
+  gap:12px;
+  padding:18px;
+  border:1px solid var(--line-soft);
+  border-radius:16px;
+  background:rgba(255,255,255,.009);
+}
+.finance-scenario-save {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+}
+.finance-scenario-save input {
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid var(--line-soft);
+  border-radius:10px;
+  padding:10px 11px;
+  background:rgba(0,0,0,.22);
+  color:var(--ivory);
+}
+.finance-scenario-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
+}
+.finance-scenario-grid > article {
+  display:grid;
+  gap:10px;
+  padding:13px;
+  border:1px solid rgba(203,181,204,.11);
+  border-radius:13px;
+  background:rgba(0,0,0,.12);
+}
+.finance-scenario-grid > article > div:first-child {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+}
+.finance-scenario-grid small { color:var(--muted); font-size:7px; }
+.finance-scenario-metrics {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+}
+.finance-scenario-metrics > span {
+  display:block;
+  padding:7px;
+  border:1px solid var(--line-soft);
+  border-radius:9px;
+}
+.finance-scenario-metrics small,
+.finance-scenario-metrics strong { display:block; }
+.finance-scenario-metrics strong {
+  margin-top:3px;
+  font-family:Georgia,serif;
+  font-size:14px;
+  font-weight:400;
+}
+.finance-scenario-actions {
+  display:flex;
+  gap:6px;
+  justify-content:flex-end;
+}
+.profile-directory-load-more {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-top:14px;
+  padding:12px 14px;
+  border:1px solid var(--line-soft);
+  border-radius:12px;
+  color:var(--muted);
+  font-size:8px;
+}
+@media (max-width:760px) {
+  .finance-scenario-grid { grid-template-columns:1fr; }
+  .finance-scenario-save { grid-template-columns:1fr; }
+  .finance-scenario-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .profile-directory-load-more { align-items:stretch; flex-direction:column; }
+}
