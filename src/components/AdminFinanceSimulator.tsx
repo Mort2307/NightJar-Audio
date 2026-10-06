@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react';
 import { Calculator, Coins, RefreshCw, ShieldCheck, SlidersHorizontal, UsersRound, WalletCards } from 'lucide-react';
 import type { CommercialSettings } from '../platform/firebase-commercial';
 
-type Props = { settings: CommercialSettings };
+type Props = {
+  settings: CommercialSettings;
+  currentPaidSubscribers?: number;
+  currentUsers?: number;
+};
 type RoleKey = 'creator' | 'writer' | 'editor' | 'artist';
 type RoleScenario = { label: string; allocationPercent: number; eligiblePeople: number; monthlyCap: number };
 
@@ -20,7 +24,7 @@ const defaultRoles = (): Record<RoleKey, RoleScenario> => ({
   artist: { label: 'Artists', allocationPercent: 8, eligiblePeople: 3, monthlyCap: 500 },
 });
 
-export default function AdminFinanceSimulator({ settings }: Props) {
+export default function AdminFinanceSimulator({ settings, currentPaidSubscribers = 0, currentUsers = 0 }: Props) {
   const [totalUsers, setTotalUsers] = useState(25000);
   const [paidSubscribers, setPaidSubscribers] = useState(10000);
   const [subscriptionPrice, setSubscriptionPrice] = useState(5);
@@ -59,6 +63,8 @@ export default function AdminFinanceSimulator({ settings }: Props) {
 
   const loadCommercialAssumptions = () => {
     if (settings.planningMonthlyPricePence != null) setSubscriptionPrice(settings.planningMonthlyPricePence / 100);
+    if (currentPaidSubscribers > 0) setPaidSubscribers(currentPaidSubscribers);
+    if (currentUsers > 0) setTotalUsers(Math.max(currentUsers, currentPaidSubscribers));
     setContributorPercent(settings.creatorPoolPercent);
     setAppPercent(settings.businessFundPercent);
     setOperatorPercent(settings.companyProfitPercent);
@@ -70,12 +76,13 @@ export default function AdminFinanceSimulator({ settings }: Props) {
     const baseSubscriptionRevenue = subscribers * clamp(subscriptionPrice);
     const vat = clamp(vatRate, 0, 100);
     const customerBillings = priceIncludesVat ? baseSubscriptionRevenue : baseSubscriptionRevenue * (1 + vat / 100);
-    const vatCollected = vat <= 0 ? 0 : priceIncludesVat
-      ? baseSubscriptionRevenue * (vat / (100 + vat))
-      : baseSubscriptionRevenue * (vat / 100);
-    const processorFees = Math.max(0, customerBillings * clamp(processorPercent, 0, 100) / 100 + subscribers * clamp(processorFixed));
     const refunds = Math.max(0, customerBillings * clamp(refundPercent, 0, 100) / 100);
-    const distributableNet = Math.max(0, customerBillings - vatCollected - processorFees - refunds);
+    const retainedCustomerSales = Math.max(0, customerBillings - refunds);
+    const vatCollected = vat <= 0 ? 0 : priceIncludesVat
+      ? retainedCustomerSales * (vat / (100 + vat))
+      : (retainedCustomerSales / (1 + vat / 100)) * (vat / 100);
+    const processorFees = Math.max(0, customerBillings * clamp(processorPercent, 0, 100) / 100 + subscribers * clamp(processorFixed));
+    const distributableNet = Math.max(0, retainedCustomerSales - vatCollected - processorFees);
 
     const primaryPercentTotal = contributorPercent + appPercent + operatorPercent;
     const contributorPot = distributableNet * contributorPercent / 100;
@@ -156,7 +163,7 @@ export default function AdminFinanceSimulator({ settings }: Props) {
         <p>Change subscribers, price, VAT, payment costs, the three main revenue pots and the share paid to each professional role. Every output recalculates immediately; nothing here changes live billing or payout policy.</p>
       </div>
       <div className="admin-finance-simulator-actions">
-        <button className="secondary-button" onClick={loadCommercialAssumptions}><WalletCards size={14}/> Load current commercial split</button>
+        <button className="secondary-button" onClick={loadCommercialAssumptions}><WalletCards size={14}/> Load current Nightjar assumptions</button>
         <button className="ghost-button" onClick={resetNightjarScenario}><RefreshCw size={14}/> Reset 10k / £5 scenario</button>
       </div>
     </div>
