@@ -63,15 +63,28 @@ export const checkNightjarUpdate = async (): Promise<NightjarUpdateStatus> => {
 
 export const applyNightjarUpdate = async () => {
   try {
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration();
-      if (registration) await registration.update();
+    try {
+      window.sessionStorage.setItem('nightjar.update-applied.v1', new Date().toISOString());
+    } catch {
+      // Update still proceeds if session storage is unavailable.
     }
+
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(async (registration) => {
+        try { await registration.update(); } catch { /* continue with forced reset */ }
+        try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch { /* optional */ }
+        try { await registration.unregister(); } catch { /* reload still continues */ }
+      }));
+    }
+
     if ('caches' in window) {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((key) => key.startsWith('nightjar-')).map((key) => caches.delete(key)));
+      await Promise.all(keys.map((key) => caches.delete(key)));
     }
   } finally {
-    window.location.reload();
+    const url = new URL(window.location.href);
+    url.searchParams.set('nightjar-refresh', Date.now().toString());
+    window.location.replace(url.toString());
   }
 };
