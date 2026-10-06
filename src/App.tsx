@@ -86,6 +86,7 @@ const CreatorSuggestionBox = lazy(() => import('./components/CreatorSuggestionBo
 const MessagingHub = lazy(() => import('./components/MessagingHub'));
 const ProfessionalRoleManager = lazy(() => import('./components/ProfessionalRoleManager'));
 const ArtistPortfolioManager = lazy(() => import('./components/ArtistPortfolioManager'));
+const ArtistStudio = lazy(() => import('./components/ArtistStudio'));
 const NightjarWalletPanel = lazy(() => import('./components/NightjarWalletPanel'));
 const UserProfileStudio = lazy(() => import('./components/UserProfileStudio'));
 const RoleProfileExtension = lazy(() => import('./components/RoleProfileExtension'));
@@ -93,7 +94,7 @@ const EditorStudio = lazy(() => import('./components/EditorStudio'));
 const AdminFinanceSimulator = lazy(() => import('./components/AdminFinanceSimulator'));
 
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile';
 type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -302,7 +303,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 });
 
 function App() {
-  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
+  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
   const [playing, setPlaying] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
@@ -665,7 +666,7 @@ function App() {
         setSimulationMode(false);
         setPreviewRole(null);
       }
-      setView((['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value) ? value : 'discover') as View);
+      setView((['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile'].includes(value) ? value : 'discover') as View);
     };
     window.addEventListener('popstate', onPop);
     void (async () => {
@@ -887,7 +888,7 @@ function App() {
     window.history.replaceState({}, '', returnPath);
     setPublicProfileUserId(null);
     const value = returnPath.replace(/^\/+|\/+$/g, '');
-    if (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value)) setView(value as View);
+    if (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile'].includes(value)) setView(value as View);
   };
 
   const recommendCreator = async (creator: PublicDirectoryProfile) => {
@@ -917,6 +918,7 @@ function App() {
         (view === 'creator' && perspective !== 'creator' && perspective !== 'admin') ||
         (view === 'writer' && perspective !== 'writer') ||
         (view === 'editor' && perspective !== 'editor') ||
+        (view === 'artist' && perspective !== 'artist') ||
         (view === 'messages' && !['creator','writer','editor','artist'].includes(String(perspective))) ||
         (view === 'library' && perspective !== 'listener')) {
       navigate(home);
@@ -3176,6 +3178,7 @@ function App() {
     ...(effectiveRole === 'creator' || adminOnly ? [{ id:'nav-creator', group:'Studio', label:'Creator Studio', detail:'Releases, catalogue and creator operations', keywords:['publish','audio'], icon:<Mic2 size={15}/>, action:()=>{ navigate('creator'); void loadCreatorDashboard(); } }] : []),
     ...(effectiveRole === 'writer' ? [{ id:'nav-writer', group:'Studio', label:'Writer Studio', detail:'Manuscripts, rights and collaborations', keywords:['script','write'], icon:<FileText size={15}/>, action:()=>{ navigate('writer'); void loadWriterScripts(); } }] : []),
     ...(effectiveRole === 'editor' ? [{ id:'nav-editor', group:'Studio', label:'Editor Studio', detail:'Professional profile, portfolio, projects and collaborations', keywords:['edit','review','portfolio','services'], icon:<FileCheck2 size={15}/>, action:()=>{ navigate('editor'); void loadEditorQueue(); void loadProfile(); } }] : []),
+    ...(effectiveRole === 'artist' ? [{ id:'nav-artist', group:'Studio', label:'Artist Studio', detail:'Portfolio, commissions and collaborations', keywords:['art','portfolio','commission','illustration'], icon:<ImagePlus size={15}/>, action:()=>{ navigate('artist'); void loadProfile(); } }] : []),
     { id:'nav-profile', group:'Account', label:'Profile', detail:'Identity, public showcase and preferences', keywords:['settings','bio'], icon:<UserCircle2 size={15}/>, action:openProfileEditor },
     { id:'nav-protection', group:'Account', label:'Protection Centre', detail:'Reports, evidence and account safety', keywords:['security','safety'], icon:<ShieldCheck size={15}/>, action:()=>{ navigate('protection'); void loadProtection(); } },
     ...(canAdmin && !simulationMode ? [{ id:'nav-admin', group:'Administration', label:'Owner Console', detail:'People, content, security and commercial operations', keywords:['admin','moderation'], icon:<Settings2 size={15}/>, action:()=>{ navigate('admin'); void loadAdminOverview(); } }] : []),
@@ -3231,6 +3234,11 @@ function App() {
     ...baseActions,
     ...(editorQueue.length > 0 ? [{ id:'editor-queue', title:`${editorQueue.length} manuscript${editorQueue.length === 1 ? '' : 's'} in your queue`, reason:'Assigned production work is ready for an editorial decision or handoff.', label:'Open queue', priority:'high' as const, onClick:()=>document.querySelector('.editorial-queue')?.scrollIntoView({behavior:'smooth'}) }] : []),
   ];
+  const artistActions: RoleDashboardAction[] = [
+    ...baseActions,
+    ...((profile.roleSpecialties ?? []).length === 0 ? [{ id:'artist-services', title:'Describe your Artist services', reason:'Creators cannot tell what you offer yet. Add cover art, character illustration, promotional work or other relevant services.', label:'Open Artist profile', priority:'high' as const, onClick:openProfileEditor }] : []),
+    ...(profilePortfolioOptions.length === 0 ? [{ id:'artist-portfolio', title:'Build your Artist portfolio', reason:'A strong public Artist profile needs moderated examples of your real human-created work.', label:'Add portfolio work', priority:'high' as const, onClick:()=>document.querySelector('.artist-portfolio-manager')?.scrollIntoView({behavior:'smooth'}) }] : []),
+  ];
   const adminActions: RoleDashboardAction[] = [
     ...(securityAlerts.filter((item:any)=>item.status === 'open').length ? [{ id:'security', title:'Review open security alerts', reason:'Protection signals require human review before any account action is taken.', label:'Review alerts', priority:'high' as const, onClick:()=>document.querySelector('.security-alert-panel')?.scrollIntoView({behavior:'smooth'}) }] : []),
     ...(imageModeration.length ? [{ id:'images', title:`${imageModeration.length} image${imageModeration.length === 1 ? '' : 's'} awaiting moderation`, reason:'Images remain private until an Administrator explicitly approves them.', label:'Moderate images', priority:'high' as const, onClick:()=>openAdminPanel('images') }] : []),
@@ -3255,6 +3263,7 @@ function App() {
           {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
+          {effectiveRole === 'artist' && <button className={view === 'artist' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('artist'); void loadProfile(); }}>Artist Studio</button>}
           {['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
@@ -3618,7 +3627,7 @@ function App() {
 
             <div className="premium-profile-support-grid">
               <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
-                <ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':next==='artist'?'profile':'discover'); void loadProfile(); }} />
+                <ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':next==='artist'?'artist':'discover'); void loadProfile(next==='admin'?'admin':next as PreviewRole); }} />
               </Suspense>
               {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel notify={notify} professional={['creator','writer','editor','artist'].includes(String(effectiveRole))} demoMode={demoMode} /></Suspense>}
             </div>
@@ -3737,6 +3746,27 @@ function App() {
           </Suspense>
         )}
 
+        {view === 'artist' && effectiveRole === 'artist' && (
+          <Suspense fallback={<NightjarSkeleton variant="page" count={5} label="Loading Artist Studio" />}>
+            <ArtistStudio
+              profile={profile}
+              portfolioCount={profilePortfolioOptions.length}
+              completedCollaborations={profileCompletedCollaborations}
+              messageUnreadCount={messageUnreadCount}
+              messageNeedsReplyCount={messageNeedsReplyCount}
+              messageAwaitingReplyCount={messageAwaitingReplyCount}
+              accountStatus={accountStatus}
+              actions={artistActions}
+              notify={notify}
+              demoMode={demoMode}
+              simulationMode={simulationMode}
+              demoSessionKey={demoSessionKey}
+              onOpenProfile={openProfileEditor}
+              onOpenMessages={()=>navigate('messages')}
+              onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }}
+            />
+          </Suspense>
+        )}
         {view === 'admin' && canAdmin && !simulationMode && (
           <section className="page-wrap admin-page">
             <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, VA Creator, Writer, Audio Editor and Artist accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
