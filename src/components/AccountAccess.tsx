@@ -72,7 +72,7 @@ export default function AccountAccess({
     const legacy = sessionStorage.getItem('nightjar.registrationRole');
     return ['creator','writer','editor','artist'].includes(String(legacy)) ? [legacy as RegistrationRole] : [];
   })();
-  const [mode, setMode] = useState<Mode>(identity && !identity.emailVerified ? 'verify' : requestedEntry === 'register' ? 'register' : 'signin');
+  const [mode, setMode] = useState<Mode>(identity && !identity.emailVerified ? 'verify' : requestedEntry === 'security' && identity?.emailVerified ? 'security' : requestedEntry === 'register' ? 'register' : 'signin');
   const [registrationRoles, setRegistrationRoles] = useState<RegistrationRole[]>(initialRegistrationRoles);
   const [email, setEmail] = useState(identity?.email ?? '');
   const [password, setPassword] = useState('');
@@ -86,7 +86,7 @@ export default function AccountAccess({
 
   useEffect(() => {
     const guestEntryMode: Mode = requestedEntry === 'register' ? 'register' : 'signin';
-    const normalEntryMode: Mode = identity && !identity.emailVerified ? 'verify' : identity ? 'signin' : guestEntryMode;
+    const normalEntryMode: Mode = identity && !identity.emailVerified ? 'verify' : requestedEntry === 'security' && identity?.emailVerified ? 'security' : identity ? 'signin' : guestEntryMode;
     setMode(normalEntryMode);
     setMessage('');
 
@@ -232,6 +232,7 @@ export default function AccountAccess({
           setCurrentPassword(''); setNextPassword(''); setNextConfirm('');
           setMessage('Password changed. Your Nightjar account is secured with the new password.');
         })}><KeyRound size={15} /> Change password</button>
+        <button className="secondary-button" disabled={busy} onClick={() => window.location.assign('/profile')}>Back to Nightjar</button>
         <button className="ghost-button" disabled={busy} onClick={() => void run(async () => { await nightjarAuth.signOut(); onSignedOut?.(); setMode('signin'); })}>Sign out</button>
       </div>
     </section>;
