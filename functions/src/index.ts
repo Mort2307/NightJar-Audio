@@ -1,5 +1,4 @@
 import { initializeApp } from 'firebase-admin/app';
-import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
@@ -5068,7 +5067,7 @@ export const recordAuthenticationSuccess = onCall({ region: REGION }, async (req
 
 export const revokeMyAuthenticationSessions = onCall({ region: REGION }, async (request) => {
   const identity = requireRegistrationIdentity(request);
-  await getAdminAuth().revokeRefreshTokens(identity.uid);
+  await getAuth().revokeRefreshTokens(identity.uid);
   await accountRef(identity.uid).set({
     authenticationSessionsRevokedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
