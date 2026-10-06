@@ -24,6 +24,9 @@ requireText(functions,"roles: ['listener', ...professionalRoles]",'Public profil
 requireText(functions,'publicRoleProfiles.listener?.featuredPortfolioIds','Detailed public profiles must use the Listener role slice for public playlists.');
 requireText(functions,'listenerProfile.featuredPortfolioIds ?? profileData.featuredPortfolioIds','Listener library must use Listener role curation rather than the active professional portfolio.');
 requireText(functions,'roleProfiles.listener = {','Listener playlist visibility must write to the Listener role slice.');
+requireText(functions,'releaseCreditMatchesProfileRole','Writer and Editor release credits must be isolated by professional role.');
+requireText(functions,'featuredWorkByRole','Public professional curation must remain role-addressable on multi-role accounts.');
+requireText(publicProfile,'roleFeaturedWork','Public profile tabs must render their own featured professional work.');
 requireText(accountPortal,"account.role === 'artist'",'Artist account portal routing is missing.');
 requireText(accountPortal,"chooseRole('artist')",'Legacy Artist workspace selection is missing.');
 requireText(functions,"roles: identity.admin ? ['admin'] : ['listener', ...professionalRolesForAccount",'Private profile payload must preserve Listener alongside professional roles.');
