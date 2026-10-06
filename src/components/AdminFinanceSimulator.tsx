@@ -201,7 +201,7 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
     operatorTaxablePercent, rollUnusedToApp, roles,
   ]);
 
-  const updateRole = (key: RoleKey, field: keyof RoleScenario, value: number) =>
+  const updateRole = (key: RoleKey, field: Exclude<keyof RoleScenario, 'label'>, value: number) =>
     setRoles((current) => ({ ...current, [key]: { ...current[key], [field]: value } }));
 
   const splitsValid = Math.abs(model.primaryPercentTotal - 100) < 0.001;
