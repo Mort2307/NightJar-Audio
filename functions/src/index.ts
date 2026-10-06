@@ -5039,6 +5039,7 @@ export const recordAuthenticationSuccess = onCall({ region: REGION }, async (req
       firstSeenAt: deviceSnapshot.exists ? (deviceSnapshot.data()?.firstSeenAt ?? FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
       lastSeenAt: FieldValue.serverTimestamp(),
       lastRoute: route,
+      retentionUntil: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
     }, { merge:true });
   }
 
