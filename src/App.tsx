@@ -361,6 +361,7 @@ function App() {
   const [securityAlertsLoading, setSecurityAlertsLoading] = useState(false);
   const [authenticationEvents, setAuthenticationEvents] = useState<AuthenticationSecurityEvent[]>([]);
   const [authenticationEventsLoading, setAuthenticationEventsLoading] = useState(false);
+  const [myAuthenticationEvents, setMyAuthenticationEvents] = useState<AuthenticationSecurityEvent[]>([]);
   const [securityEvidenceReview, setSecurityEvidenceReview] = useState<{ alert: any; evidence: any[] } | null>(null);
   const [securityEvidenceLoading, setSecurityEvidenceLoading] = useState(false);
   const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | null>(null);
@@ -2062,10 +2063,19 @@ function App() {
       if (demoMode) {
         setProtectionEvidence([{ id:'demo-evidence-1', eventType:'copy_blocked', createdAt:new Date().toISOString() }]);
         setProtectionReports([{ caseId:'DEMO-1042', category:'Feedback / feature request', status:'Closed' }]);
+        setMyAuthenticationEvents([
+          { id:'demo-signin-new', eventType:'signin_success', targetEmailMasked:'ja***@example.com', adminTarget:false, clientPlatform:'Chrome · Windows', evidenceQuality:'firebase_authenticated_client_observed', newDevice:true, createdAt:new Date().toISOString() },
+          { id:'demo-signin-failed', eventType:'signin_failed', targetEmailMasked:'ja***@example.com', adminTarget:false, firebaseCode:'auth/invalid-credential', clientPlatform:'Mobile browser', evidenceQuality:'nightjar_client_observed', createdAt:new Date(Date.now()-3600000).toISOString() },
+        ]);
       } else {
-        const [evidence, reports] = await Promise.all([nightjarProtection.evidence(), nightjarProtection.reports()]);
+        const [evidence, reports, signIns] = await Promise.all([
+          nightjarProtection.evidence(),
+          nightjarProtection.reports(),
+          nightjarAuthSecurity.myEvents().catch(() => ({ events: [] as AuthenticationSecurityEvent[] })),
+        ]);
         setProtectionEvidence(evidence.evidence ?? []);
         setProtectionReports(reports.reports ?? []);
+        setMyAuthenticationEvents(signIns.events ?? []);
       }
     } catch { notify('Protection records could not be loaded right now.'); }
   };
@@ -3640,6 +3650,20 @@ function App() {
               <div className="admin-panel"><span className="admin-icon"><ShieldAlert size={19} /></span><span className="mini-label">REPORT SOMETHING</span><h2>Tell Nightjar what happened</h2><select value={reportCategory} onChange={(event) => setReportCategory(event.target.value)}><option>Harassment or abuse</option><option>Fraud or scam</option><option>Impersonation</option><option>Copyright / script theft</option><option>Unauthorised sharing</option><option>Threats or coercion</option><option>Suspected illegal activity</option><option>Account security</option><option>Technical issue</option><option>Feedback / feature request</option><option>Something else</option></select><textarea value={reportSummary} onChange={(event) => setReportSummary(event.target.value)} placeholder="Describe what happened. Include dates, account names, content references or other useful detail." /><button className="primary-button" onClick={() => void submitProtectionReport()}>Submit protected report <ArrowRight size={15} /></button></div>
               <div className="admin-panel"><span className="admin-icon"><ClipboardX size={19} /></span><span className="mini-label">EVIDENCE LOG</span><h2>Quiet security record</h2><p>Blocked extraction, print and capture-related signals can be retained against a protected reader session. Browser screenshot signals are explicitly labelled as possible; native callbacks are recorded separately.</p><strong>{protectionEvidence.length} recorded signal{protectionEvidence.length === 1 ? '' : 's'}</strong><div className="protection-evidence-preview">{protectionEvidence.slice(0,5).map((item:any)=><div key={item.id}><span>{protectionEventLabel(item.eventType)}</span><small>{protectionConfidenceLabel(item.detectionConfidence) ?? 'Recorded interaction'}{item.createdAt ? ' · ' + new Date(item.createdAt).toLocaleString('en-GB') : ''}</small></div>)}{!protectionEvidence.length && <small>No protection signals recorded for this account yet.</small>}</div><button className="secondary-button" onClick={() => void loadProtection()}>Refresh evidence</button></div>
               <div className="admin-panel"><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">MY CASES</span><h2>Reports and support</h2><p>{protectionReports.length ? `${protectionReports.length} case${protectionReports.length === 1 ? '' : 's'} recorded on this account.` : 'No protection reports have been submitted from this account yet.'}</p><div className="evidence-list">{protectionReports.slice(0, 6).map((report) => <div key={report.caseId}><strong>{report.caseId}</strong><span>{report.category} · {report.status}</span></div>)}</div></div>
+              <div className="admin-panel account-signin-history">
+                <span className="admin-icon"><LockKeyhole size={19} /></span>
+                <span className="mini-label">ACCOUNT ACCESS</span>
+                <h2>Recent sign-ins</h2>
+                <p>Nightjar shows account-portal sign-ins and observed failed attempts linked to this account. Passwords and raw credential values are never stored.</p>
+                <div className="protection-evidence-preview">
+                  {myAuthenticationEvents.slice(0,6).map((event)=><div key={event.id}>
+                    <span>{event.eventType === 'signin_success' ? (event.newDevice ? 'New device sign-in' : 'Successful sign-in') : event.eventType === 'closed_beta_signin_denied' ? 'Private beta access denied' : 'Failed sign-in observed'}</span>
+                    <small>{event.clientPlatform || 'Client details unavailable'}{event.createdAt ? ' · ' + new Date(event.createdAt).toLocaleString('en-GB') : ''}</small>
+                  </div>)}
+                  {!myAuthenticationEvents.length && <small>No account-portal authentication events are available for this account yet.</small>}
+                </div>
+                <button className="secondary-button" onClick={() => void loadProtection()}>Refresh sign-in history</button>
+              </div>
               <div className="admin-panel"><span className="admin-icon"><Ban size={19} /></span><span className="mini-label">ACCOUNT CONTROL</span><h2>Block and disengage</h2><p>If a user is causing a problem, blocking is available from supported account surfaces. For serious incidents, block and report rather than relying on either action alone.</p><button className="secondary-button" onClick={() => notify('Open the relevant user profile to block that account.')}>How blocking works</button></div>
             </div>
             <div className="protection-footnote"><strong>Immediate danger?</strong><span>Nightjar is not emergency services. In the UK, call 999 for immediate danger. For platform incidents, use this report path so relevant Nightjar records can be reviewed.</span></div>
@@ -3754,7 +3778,7 @@ function App() {
                   ? <div className="people-empty"><ShieldCheck size={18}/><strong>No unauthorised sign-in attempts recorded.</strong><span>Observed failed account-portal attempts will appear here.</span></div>
                   : authenticationEvents.slice(0,60).map((event)=><article className="security-alert-row authentication-attempt-row" key={event.id}>
                     <div>
-                      <strong>{event.eventType === 'closed_beta_signin_denied' ? 'PRIVATE BETA ACCESS DENIED' : 'FAILED SIGN-IN'} · {event.targetEmailMasked}</strong>
+                      <strong>{event.eventType === 'signin_success' ? (event.newDevice ? 'NEW DEVICE SIGN-IN' : 'SUCCESSFUL SIGN-IN') : event.eventType === 'closed_beta_signin_denied' ? 'PRIVATE BETA ACCESS DENIED' : 'FAILED SIGN-IN'} · {event.targetEmailMasked}</strong>
                       <span>{event.firebaseCode ? String(event.firebaseCode).replace('auth/','').replaceAll('-',' ') : 'authentication failure'} · {event.createdAt ? new Date(event.createdAt).toLocaleString('en-GB') : 'time unavailable'}</span>
                       <div className="security-signal-meta">
                         {event.adminTarget && <span><strong>Owner administrator identity targeted</strong></span>}
