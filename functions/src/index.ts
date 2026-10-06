@@ -644,7 +644,8 @@ const cleanEditorSkillLevels = (value: unknown, selectedSkills: unknown) => {
 };
 
 const roleProfileSlice = (data: Record<string, any>, role: string) => {
-  const stored = data.roleProfiles && typeof data.roleProfiles === 'object' && data.roleProfiles[role] && typeof data.roleProfiles[role] === 'object'
+  const hasRoleProfiles = Boolean(data.roleProfiles && typeof data.roleProfiles === 'object' && Object.keys(data.roleProfiles).length);
+  const stored = hasRoleProfiles && data.roleProfiles[role] && typeof data.roleProfiles[role] === 'object'
     ? data.roleProfiles[role]
     : null;
   if (stored) {
@@ -668,6 +669,29 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
       editorSkillLevels: cleanEditorSkillLevels(stored.editorSkillLevels, stored.roleSpecialties),
     };
   }
+  if (hasRoleProfiles) {
+    return {
+      roleFocus: [],
+      roleSpecialties: [],
+      roleSecondary: [],
+      roleAvailability: '',
+      roleHeadline: '',
+      roleBio: '',
+      roleDetailOne: '',
+      roleDetailTwo: '',
+      portfolioNote: '',
+      featuredPortfolioIds: [],
+      editorSoftware: [],
+      editorProjectTypes: [],
+      editorDeliveryFormats: [],
+      editorCollaborationPreferences: [],
+      editorTurnaround: '',
+      editorExperienceYears: null,
+      editorSkillLevels: {},
+    };
+  }
+
+  // Legacy migration only: before roleProfiles existed, role-specific fields lived at profile root.
   return {
     roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
     roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
@@ -703,7 +727,7 @@ export const getMyProfile = onCall({ region: REGION }, async (request) => {
       ...data,
       ...roleProfileSlice(data, activeRole),
       activeRole,
-      roles: identity.admin ? ['admin'] : (professionalRolesForAccount(accountSnapshot.data() ?? {}).length ? professionalRolesForAccount(accountSnapshot.data() ?? {}) : ['listener']),
+      roles: identity.admin ? ['admin'] : ['listener', ...professionalRolesForAccount(accountSnapshot.data() ?? {})],
     },
   };
 });
@@ -1003,11 +1027,13 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
   const profile = await profileRef(account.id).get();
   const data = profile.data();
   if (!data || data.publicProfile === false) return null;
-  const roles = professionalRolesForAccount(account.data() ?? {});
+  const professionalRoles = professionalRolesForAccount(account.data() ?? {});
+  const roles = ['listener', ...professionalRoles];
+  const activeRole = cleanText(account.data().role, 30);
   return {
     userId: account.id,
-    role: roles[0] ?? account.data().role ?? null,
-    roles: roles.length ? roles : ['listener'],
+    role: roles.includes(activeRole) ? activeRole : (professionalRoles[0] ?? 'listener'),
+    roles,
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
     handle: data.handle ?? null,
