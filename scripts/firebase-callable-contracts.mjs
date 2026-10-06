@@ -32,9 +32,19 @@ const requiredRoleContracts=[
   ['postReleaseComment',"requireAccountRole(request, ['listener'])"],
   ['setReleaseReaction',"requireAccountRole(request, ['listener'])"],
   ['submitReleaseReview',"requireAccountRole(request, ['listener'])"],
+  ['createRelease',"requireAccountRole(request, ['creator'])"],
+  ['createWriterScript',"requireAccountRole(request, ['writer'])"],
+  ['updateWriterScript',"requireAccountRole(request, ['writer'])"],
+  ['deleteWriterScript',"requireAccountRole(request, ['writer'])"],
+  ['submitWriterScript',"requireAccountRole(request, ['writer'])"],
+  ['listEditorQueue',"requireAccountRole(request, ['editor', 'admin'])"],
+  ['reviewEditorScript',"requireAccountRole(request, ['editor'])"],
+  ['createArtistPortfolioItem',"requireAccountRole(request, ['artist'])"],
+  ['removeArtistPortfolioItem',"requireAccountRole(request, ['artist'])"],
   ['listMessageConversations',"requireCreativeMessagingIdentity(request)"],
   ['startDirectConversation',"requireCreativeMessagingIdentity(request)"],
   ['sendDirectMessage',"requireCreativeMessagingIdentity(request)"],
+  ['setScriptPermission',"requireAccountRole(request, ['writer'])"],
 ];
 
 for(const [name,guard] of requiredRoleContracts){
@@ -47,6 +57,40 @@ for(const [name,guard] of requiredRoleContracts){
   const block=functionsSource.slice(start,next<0?functionsSource.length:next);
   if(!block.includes(guard)){
     console.error('FIREBASE CALLABLE CONTRACT FAIL:',name,'is missing expected role guard:',guard);
+    process.exit(1);
+  }
+}
+
+const openScriptStart=functionsSource.indexOf('export const openProtectedScript');
+const openScriptEnd=functionsSource.indexOf('\nexport const ',openScriptStart+1);
+const openScriptBlock=functionsSource.slice(openScriptStart,openScriptEnd<0?functionsSource.length:openScriptEnd);
+for(const required of [
+  'script.writerUserId === identity.uid',
+  "script.editorUserId === identity.uid && identity.role === 'editor'",
+  'activePermissionFor(scriptId, identity.uid)',
+  "throw new HttpsError('permission-denied'",
+]){
+  if(!openScriptBlock.includes(required)){
+    console.error('FIREBASE CALLABLE CONTRACT FAIL: protected manuscript access is missing:',required);
+    process.exit(1);
+  }
+}
+if(openScriptBlock.includes("identity.role === 'admin'") && openScriptBlock.includes('permitted = true')) {
+  console.error('FIREBASE CALLABLE CONTRACT FAIL: administrator identity must not automatically bypass protected manuscript grants.');
+  process.exit(1);
+}
+
+for(const [name,guard] of [
+  ['listSecurityAlerts','requireAdminIdentity(request)'],
+  ['listAuthenticationEvents','requireAdminIdentity(request)'],
+  ['listAdminProtectionReports','requireAdminIdentity(request)'],
+  ['listProfessionalApplicationBank','requireAdminIdentity(request)'],
+]){
+  const start=functionsSource.indexOf('export const '+name);
+  const next=functionsSource.indexOf('\nexport const ',start+1);
+  const block=functionsSource.slice(start,next<0?functionsSource.length:next);
+  if(start<0||!block.includes(guard)){
+    console.error('FIREBASE CALLABLE CONTRACT FAIL:',name,'must remain Administrator-only.');
     process.exit(1);
   }
 }
