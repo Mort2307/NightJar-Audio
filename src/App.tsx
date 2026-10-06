@@ -181,6 +181,8 @@ type PublicDirectoryProfile = {
     roleSpecialties?: string[];
     roleSecondary?: string[];
     roleAvailability?: string | null;
+    roleHeadline?: string | null;
+    roleBio?: string | null;
     editorSoftware?: string[];
     editorProjectTypes?: string[];
     editorDeliveryFormats?: string[];
@@ -575,6 +577,8 @@ function App() {
         ...(profile.favouriteCategories ?? []),
         ...allRoleSlices.flatMap((slice) => [
           slice.roleAvailability,
+          slice.roleHeadline,
+          slice.roleBio,
           slice.editorTurnaround,
           ...(slice.roleFocus ?? []),
           ...(slice.roleSpecialties ?? []),
@@ -3454,8 +3458,9 @@ function App() {
                       ? (person.creditedReleaseCount ?? 0) + ' release credits'
                       : person.role === 'artist'
                         ? 'Visual artist profile'
-                        : 'Community profile';
-                return <article className="creator-profile profile-directory-card" key={person.userId}>
+                        : 'Curated Listener profile';
+                const primaryRoleSlice = person.roleProfiles?.[person.role] ?? {};
+                return <article className="creator-profile profile-directory-card premium-directory-card" key={person.userId}>
                   <div className="profile-number">{String(index + 1).padStart(2,'0')}</div>
                   <span className="avatar-xl">{person.avatarUrl ? <img className="avatar-approved-image" src={person.avatarUrl} alt="" loading="lazy" decoding="async" /> : person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>
                   <div className="profile-main">
@@ -3463,7 +3468,7 @@ function App() {
                       <div><div className="profile-role-chips directory-role-chips">{(person.roles?.length ? person.roles : [person.role]).filter((value,index,array)=>array.indexOf(value)===index).map((personRole)=><span className="directory-role-label" key={personRole}>{roleMeta[personRole].label}</span>)}</div><h2>{person.name}</h2><span>{person.handle ? '@' + person.handle.replace(/^@/,'') : 'Handle not set'}</span></div>
                       <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>
                     </div>
-                    <p>{person.headline || person.bio || roleMeta[person.role].description}</p>
+                    <p>{primaryRoleSlice.roleHeadline || person.headline || primaryRoleSlice.roleBio || person.bio || roleMeta[person.role].description}</p>
                     {person.roleAvailability && <span className="creator-availability-pill">{person.roleAvailability}</span>}
                     {!!person.activityBadges?.length && <div className="profile-activity-badges">{person.activityBadges.slice(0,3).map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={11}/>{badge.label}</span>)}</div>}
                     <div className="creator-directory-tags">{[...(person.roleSpecialties??[]),...(person.favouriteTags??[])].slice(0,5).map((item)=><span key={item}>{item}</span>)}</div>
