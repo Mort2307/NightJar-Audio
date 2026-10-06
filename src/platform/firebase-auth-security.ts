@@ -50,6 +50,7 @@ const successCall = httpsCallable<{
   clientAttemptId: string;
   clientPlatform?: string;
   route?: string;
+  evidenceQuality: typeof NIGHTJAR_AUTH_EVIDENCE_QUALITY;
 }, { recorded:boolean; newDevice:boolean }>(functions, 'recordAuthenticationSuccess');
 
 const myActivityCall = httpsCallable<void, { activity: SignInActivity[] }>(
