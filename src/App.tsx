@@ -59,6 +59,7 @@ import {
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
+import AppUpdateControl from './components/AppUpdateControl';
 import TransparencyPanel from './components/TransparencyPanel';
 import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
@@ -3619,12 +3620,23 @@ function App() {
               />
             </Suspense>
 
-            <div className="premium-profile-support-grid">
-              <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
-                <ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate(next==='creator'?'creator':next==='writer'?'writer':next==='editor'?'editor':next==='artist'?'profile':'discover'); void loadProfile(); }} />
-              </Suspense>
-              {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel notify={notify} professional={['creator','writer','editor','artist'].includes(String(effectiveRole))} demoMode={demoMode} /></Suspense>}
-            </div>
+            <section className="profile-account-hub">
+              <div className="profile-account-hub-head">
+                <div><span className="mini-label">ACCOUNT & SUPPORT</span><h2>Your Nightjar account, neatly in one place.</h2><p>App maintenance, role access and Nightjar support belong to the account — not to one creative identity. These tools stay consistent whichever profile role is active.</p></div>
+                <ShieldCheck size={20}/>
+              </div>
+              <div className="profile-account-hub-grid">
+                <article className="panel profile-account-tool-card">
+                  <div className="profile-account-tool-head"><div><span className="mini-label">APP & DEVICE</span><h3>Keep Nightjar current</h3></div><RefreshCw size={17}/></div>
+                  <p>Check the deployed build or clear stale app caches without touching your account or cloud data.</p>
+                  <AppUpdateControl compact />
+                </article>
+                <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
+                  <ProfessionalRoleManager compact notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate('profile'); void loadProfile(); }} />
+                </Suspense>
+              </div>
+              {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={['creator','writer','editor','artist'].includes(String(effectiveRole))} demoMode={demoMode} /></Suspense>}
+            </section>
 
             {effectiveRole && ['listener','creator','writer','artist'].includes(String(effectiveRole)) && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading role profile" />}>
               <RoleProfileExtension
