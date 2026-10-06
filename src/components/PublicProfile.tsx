@@ -65,6 +65,25 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         roleBio:person.role === 'writer' ? 'Character-led scripts with strong dialogue, clear emotional progression and room for performer interpretation.' : person.role === 'editor' ? 'Dialogue-first post-production with a clean, natural finish and careful restoration work.' : person.role === 'artist' ? 'Painterly visual storytelling for covers, character work and atmospheric promotional artwork.' : person.role === 'creator' ? 'Character-led voice performance with intimate delivery, cinematic pacing and collaborative production instincts.' : 'Long-form character stories, atmosphere, slow builds and independent creators are what make Nightjar feel like home.',
         roleDetailOne:person.role === 'writer' ? 'Dialogue-first work with strong character progression.' : person.role === 'editor' ? 'Organised remote handoff with labelled revisions, timestamped notes and non-destructive project delivery.' : person.role === 'artist' ? 'Painterly digital illustration with cinematic lighting and strong character silhouettes.' : person.role === 'creator' ? 'Character-led performance with restrained, intimate delivery and cinematic pacing.' : 'Late-night stories, atmosphere and independent creators.',
         roleDetailTwo:person.role === 'writer' ? 'Collaboration and licensing stay inside protected Nightjar workflows.' : person.role === 'editor' ? 'Dialogue-heavy, binaural and recurring series work are the sweet spot.' : person.role === 'artist' ? 'Open to cover, character and promotional commissions through Nightjar.' : person.role === 'creator' ? 'Broadcast-quality home setup with remote direction available.' : 'Always happy to discover smaller creators.',
+        ...(person.role === 'creator' ? {
+          creatorLanguages:['English · UK','Northern English'],
+          creatorDirectionModes:['Self-directed','Live direction','Written direction / notes'],
+          creatorDeliveryFormats:['Raw WAV','Cleaned dialogue','Multiple takes','Pickups included','Series continuity'],
+          creatorTurnaround:'3–5 days',
+          creatorEquipment:'Broadcast-quality home booth · BEACN microphone · remote direction available.',
+        } : person.role === 'writer' ? {
+          writerScriptLengths:['Short · 500–1,500 words','Medium · 1,500–4,000 words','Series / episodic'],
+          writerCollaborationPreferences:['VA-led commissions','Collaborative outlining','Long-running series','Licensing existing scripts'],
+          writerTurnaround:'1–2 weeks',
+          writerRightsNote:'Open to licensed catalogue work and commissioned originals through protected Nightjar workflows.',
+        } : person.role === 'artist' ? {
+          artistMediums:['Digital painting','Illustration','Typography'],
+          artistDeliveryFormats:['Cover artwork','Square social artwork','Portrait artwork','Series visual system'],
+          artistTurnaround:'1–2 weeks',
+          artistSoftware:['Procreate','Adobe Photoshop'],
+        } : person.role === 'listener' ? {
+          listenerCommunityStyle:['Recommendations welcome','Playlist curator','Independent-creator supporter','Series follower'],
+        } : {}),
         ...(person.role === 'editor' ? {
           editorSoftware:['Reaper','iZotope RX','Adobe Audition'],
           editorProjectTypes:['Single-voice roleplay','Multi-voice audio drama','ASMR / close-mic audio','Binaural / spatial scenes','Series / episodic production','Restoration / rescue edits'],
