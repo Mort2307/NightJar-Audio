@@ -1384,7 +1384,6 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     6,
   );
   const selectedPortfolioIds = rolePortfolioIds(role);
-  const hasPortfolioCuration = selectedPortfolioIds.length > 0 || Array.isArray(roleProfiles[role]?.featuredPortfolioIds);
   const orderForRole = <T extends { id: string }>(items: T[], targetRole: string) => {
     const ids = rolePortfolioIds(targetRole);
     if (!ids.length) return items.slice(0, 3);
