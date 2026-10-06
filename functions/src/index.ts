@@ -1380,11 +1380,6 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   );
   const selectedPortfolioIds = rolePortfolioIds(role);
   const hasPortfolioCuration = selectedPortfolioIds.length > 0 || Array.isArray(roleProfiles[role]?.featuredPortfolioIds);
-  const orderedFeatured = (items: ReturnType<typeof releasePayload>[]) => {
-    const byId = new Map(items.map((item) => [String(item.id), item]));
-    return selectedPortfolioIds.map((id) => byId.get(id)).filter((item): item is ReturnType<typeof releasePayload> => Boolean(item));
-  };
-  const activeRoleFeaturedIds = rolePortfolioIds(role);
   const orderForRole = <T extends { id: string }>(items: T[], targetRole: string) => {
     const ids = rolePortfolioIds(targetRole);
     if (!ids.length) return items.slice(0, 3);
