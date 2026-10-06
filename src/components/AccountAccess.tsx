@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AudioLines, Brush, Eye, EyeOff, FileText, Headphones, KeyRound, LockKeyhole, Mail, Mic2, ShieldCheck } from 'lucide-react';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount } from '../platform/firebase-account';
+import { nightjarAuthSecurity } from '../platform/firebase-auth-security';
 
 type Mode = 'signin' | 'register' | 'reset' | 'verify' | 'security';
 type RegistrationRole = 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
@@ -158,10 +159,28 @@ export default function AccountAccess({
       if (mode === 'signin') {
         const access = await nightjarAccount.registrationAccess(email);
         if (access.closedBeta && !access.allowed) {
+          void nightjarAuthSecurity.recordFailure({
+            email,
+            eventType:'closed_beta_signin_denied',
+            firebaseCode:'closed_beta_not_invited',
+          }).catch(() => { /* security telemetry must never block account UX */ });
           setMessage('Nightjar is currently in private testing. This email has not been invited by an administrator.');
           return;
         }
-        const next = await nightjarAuth.signIn(email, password);
+        let next;
+        try {
+          next = await nightjarAuth.signIn(email, password);
+        } catch (error) {
+          const code = firebaseErrorCode(error) || 'auth/unknown';
+          if (['auth/invalid-credential','auth/too-many-requests','auth/user-disabled','auth/invalid-email'].includes(code)) {
+            void nightjarAuthSecurity.recordFailure({
+              email,
+              eventType:'signin_failed',
+              firebaseCode:code,
+            }).catch(() => { /* security telemetry must never block account UX */ });
+          }
+          throw error;
+        }
         onAuthenticated(next);
         setMode(next.emailVerified ? 'signin' : 'verify');
         if (next.emailVerified) setMessage('Signed in. Opening Nightjar…');
