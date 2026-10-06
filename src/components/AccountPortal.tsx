@@ -61,9 +61,11 @@ export default function AccountPortal() {
     } catch (error) {
       setAccount(null);
       const detail = error instanceof Error ? error.message : String(error ?? '');
-      setMessage(detail.includes('Verify your email')
-        ? 'Your email is verified in the browser, but Firebase had not refreshed the backend identity token yet. Refresh this page once; Nightjar now forces a fresh token before retrying.'
-        : 'Nightjar could not reach the protected account service. The age-assurance bypass is not involved in this step. Try once more; if it persists, the Functions deployment needs checking.');
+      setMessage(!navigator.onLine
+        ? 'You are offline. Nightjar account state is never cached for offline access; reconnect and try again.'
+        : detail.includes('Verify your email')
+          ? 'Your email is verified in the browser, but Firebase had not refreshed the backend identity token yet. Refresh this page once; Nightjar now forces a fresh token before retrying.'
+          : 'Nightjar could not reach the protected account service. Try again; if it persists, the Functions deployment or Firebase connection needs checking.');
     } finally {
       setLoadingAccount(false);
     }
