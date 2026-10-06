@@ -6665,3 +6665,67 @@ select:disabled {
   .release-readiness-score { min-width:0; }
   .release-readiness-grid { grid-template-columns:1fr; }
 }
+
+
+/* Public role signatures */
+.public-role-signature {
+  --public-signature-accent:rgba(157,111,145,.22);
+  display:grid;
+  gap:13px;
+  padding:18px;
+  border:1px solid var(--public-signature-accent);
+  border-radius:16px;
+  background:
+    radial-gradient(circle at 0% 0%,color-mix(in srgb,var(--public-signature-accent) 34%,transparent),transparent 38%),
+    rgba(255,255,255,.009);
+}
+.public-role-signature-creator { --public-signature-accent:rgba(161,93,126,.24); }
+.public-role-signature-writer { --public-signature-accent:rgba(143,119,90,.23); }
+.public-role-signature-artist { --public-signature-accent:rgba(110,132,116,.23); }
+.public-role-signature-head {
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:flex-start;
+}
+.public-role-signature-head h3 {
+  margin:5px 0 4px;
+  font-family:Georgia,serif;
+  font-size:22px;
+  font-weight:400;
+}
+.public-role-signature-head p {
+  max-width:760px;
+  margin:0;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.6;
+}
+.public-role-signature-head > svg { color:#d3c5cf; flex:0 0 auto; }
+.public-role-signature-grid {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+.public-role-signature-grid > div {
+  min-width:0;
+  padding:11px;
+  border:1px solid var(--line-soft);
+  border-radius:11px;
+  background:rgba(0,0,0,.13);
+}
+.public-role-signature-grid > div > strong {
+  display:block;
+  margin:5px 0 7px;
+  font-size:9px;
+  color:#ded2da;
+}
+.public-role-signature-grid > div > p {
+  margin:5px 0 0;
+  color:var(--muted);
+  font-size:8px;
+  line-height:1.55;
+}
+@media (max-width:720px) {
+  .public-role-signature-grid { grid-template-columns:1fr; }
+}
