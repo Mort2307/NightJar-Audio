@@ -9,6 +9,21 @@ type Props = {
 };
 type RoleKey = 'creator' | 'writer' | 'editor' | 'artist';
 type RoleScenario = { label: string; allocationPercent: number; eligiblePeople: number; monthlyCap: number };
+type ScenarioSnapshot = {
+  id: string;
+  name: string;
+  savedAt: string;
+  assumptions: Record<string, any>;
+  summary: {
+    subscribers: number;
+    subscriptionPrice: number;
+    distributableNet: number;
+    contributorPaid: number;
+    appPotAfterTax: number;
+    operatorPotAfterTax: number;
+    estimatedCorporationTax: number;
+  };
+};
 
 const gbp = (value: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 })
@@ -44,6 +59,13 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
   const [hasSavedScenario, setHasSavedScenario] = useState(() => {
     try { return Boolean(window.localStorage.getItem('nightjar.admin.finance-scenario.v1')); }
     catch { return false; }
+  });
+  const [scenarioName, setScenarioName] = useState('');
+  const [scenarioLibrary, setScenarioLibrary] = useState<ScenarioSnapshot[]>(() => {
+    try {
+      const parsed=JSON.parse(window.localStorage.getItem('nightjar.admin.finance-scenarios.v2') ?? '[]');
+      return Array.isArray(parsed) ? parsed.slice(0,8) : [];
+    } catch { return []; }
   });
 
   const saveSandboxScenario = () => {
@@ -201,6 +223,61 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
     operatorTaxablePercent, rollUnusedToApp, roles,
   ]);
 
+  const snapshotAssumptions = () => ({
+    totalUsers, paidSubscribers, subscriptionPrice, vatRate, priceIncludesVat, processorPercent, processorFixed,
+    refundPercent, contributorPercent, appPercent, operatorPercent, corporationTaxRate, appTaxablePercent,
+    operatorTaxablePercent, rollUnusedToApp, roles,
+  });
+
+  const applyScenario = (snapshot: ScenarioSnapshot) => {
+    const saved=snapshot.assumptions ?? {};
+    setTotalUsers(Math.max(0,Number(saved.totalUsers)||0));
+    setPaidSubscribers(Math.max(0,Number(saved.paidSubscribers)||0));
+    setSubscriptionPrice(Math.max(0,Number(saved.subscriptionPrice)||0));
+    setVatRate(clamp(Number(saved.vatRate),0,100));
+    setPriceIncludesVat(saved.priceIncludesVat !== false);
+    setProcessorPercent(clamp(Number(saved.processorPercent),0,100));
+    setProcessorFixed(Math.max(0,Number(saved.processorFixed)||0));
+    setRefundPercent(clamp(Number(saved.refundPercent),0,100));
+    setContributorPercent(clamp(Number(saved.contributorPercent),0,100));
+    setAppPercent(clamp(Number(saved.appPercent),0,100));
+    setOperatorPercent(clamp(Number(saved.operatorPercent),0,100));
+    setCorporationTaxRate(clamp(Number(saved.corporationTaxRate),0,100));
+    setAppTaxablePercent(clamp(Number(saved.appTaxablePercent),0,100));
+    setOperatorTaxablePercent(clamp(Number(saved.operatorTaxablePercent),0,100));
+    setRollUnusedToApp(saved.rollUnusedToApp !== false);
+    if(saved.roles && typeof saved.roles === 'object') setRoles(saved.roles);
+  };
+
+  const saveNamedScenario = () => {
+    const name=scenarioName.trim() || 'Scenario ' + (scenarioLibrary.length + 1);
+    const next:ScenarioSnapshot={
+      id:'scenario-' + Date.now().toString(36),
+      name:name.slice(0,80),
+      savedAt:new Date().toISOString(),
+      assumptions:snapshotAssumptions(),
+      summary:{
+        subscribers:model.subscribers,
+        subscriptionPrice,
+        distributableNet:model.distributableNet,
+        contributorPaid:model.contributorPaid,
+        appPotAfterTax:model.appPotAfterTax,
+        operatorPotAfterTax:model.operatorPotAfterTax,
+        estimatedCorporationTax:model.estimatedCorporationTax,
+      },
+    };
+    const updated=[next,...scenarioLibrary].slice(0,8);
+    setScenarioLibrary(updated);
+    setScenarioName('');
+    try { window.localStorage.setItem('nightjar.admin.finance-scenarios.v2',JSON.stringify(updated)); } catch { /* optional local comparison library */ }
+  };
+
+  const removeScenario = (id:string) => {
+    const updated=scenarioLibrary.filter((item)=>item.id!==id);
+    setScenarioLibrary(updated);
+    try { window.localStorage.setItem('nightjar.admin.finance-scenarios.v2',JSON.stringify(updated)); } catch { /* optional local comparison library */ }
+  };
+
   const updateRole = (key: RoleKey, field: Exclude<keyof RoleScenario, 'label'>, value: number) =>
     setRoles((current) => ({ ...current, [key]: { ...current[key], [field]: value } }));
 
@@ -221,6 +298,28 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
         <button className="ghost-button" onClick={resetNightjarScenario}><RefreshCw size={14}/> Reset 10k / £5 scenario</button>
       </div>
     </div>
+
+    <section className="finance-scenario-library">
+      <div className="subscription-finance-heading">
+        <div><span className="mini-label">SCENARIO COMPARISON</span><h3>Save the models worth comparing.</h3><p className="panel-note">Store up to eight local planning snapshots such as Conservative, Fair, Growth or 10k subscribers. These stay on this browser and never change live commercial settings.</p></div>
+      </div>
+      <div className="finance-scenario-save">
+        <input value={scenarioName} maxLength={80} onChange={(event)=>setScenarioName(event.target.value)} placeholder="Scenario name — e.g. Fair baseline"/>
+        <button className="secondary-button" onClick={saveNamedScenario}>Save current model</button>
+      </div>
+      {!!scenarioLibrary.length && <div className="finance-scenario-grid">{scenarioLibrary.map((scenario)=><article key={scenario.id}>
+        <div><span className="mini-label">{scenario.name}</span><small>{new Date(scenario.savedAt).toLocaleString('en-GB')}</small></div>
+        <div className="finance-scenario-metrics">
+          <span><small>Subscribers</small><strong>{scenario.summary.subscribers.toLocaleString('en-GB')}</strong></span>
+          <span><small>Price</small><strong>{gbp(scenario.summary.subscriptionPrice)}</strong></span>
+          <span><small>Net</small><strong>{gbp(scenario.summary.distributableNet)}</strong></span>
+          <span><small>Professionals</small><strong>{gbp(scenario.summary.contributorPaid)}</strong></span>
+          <span><small>App after tax</small><strong>{gbp(scenario.summary.appPotAfterTax)}</strong></span>
+          <span><small>Owners after tax</small><strong>{gbp(scenario.summary.operatorPotAfterTax)}</strong></span>
+        </div>
+        <div className="finance-scenario-actions"><button className="ghost-button" onClick={()=>applyScenario(scenario)}>Load</button><button className="ghost-button" onClick={()=>removeScenario(scenario.id)}>Remove</button></div>
+      </article>)}</div>}
+    </section>
 
     <div className="finance-sim-status-row">
       <span className={splitsValid ? 'status-pill' : 'status-pill muted'}>{splitsValid ? 'Main pots = 100%' : 'Main pots = ' + model.primaryPercentTotal.toFixed(2) + '%'}</span>
