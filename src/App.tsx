@@ -60,8 +60,7 @@ import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
 import TransparencyPanel from './components/TransparencyPanel';
-import SearchableMultiSelect from './components/SearchableMultiSelect';
-import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS, PROFILE_CATEGORY_OPTIONS, ROLE_FOCUS_OPTIONS, ROLE_PROFILE_CONFIG, EDITOR_SOFTWARE_OPTIONS, EDITOR_PROJECT_TYPE_OPTIONS, EDITOR_DELIVERY_OPTIONS, EDITOR_COLLABORATION_OPTIONS, EDITOR_TURNAROUND_OPTIONS, EDITOR_PROFICIENCY_OPTIONS } from './data/nightjarTaxonomy';
+import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
 import { nightjarReferrals } from './platform/firebase-referrals';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
@@ -355,7 +354,6 @@ function App() {
   const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, publicProfile: true });
   const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
   const [profilePortfolioOptions, setProfilePortfolioOptions] = useState<any[]>([]);
-  const [profilePortfolioQuery, setProfilePortfolioQuery] = useState('');
   const [profileCompletedCollaborations, setProfileCompletedCollaborations] = useState(0);
   const [profileLoading, setProfileLoading] = useState(false);
   const [tasteVector, setTasteVector] = useState<any[]>([]);
@@ -613,11 +611,6 @@ function App() {
       return true;
     });
   }, [profileDirectory, directoryQuery, directoryRoleFilter, directoryTagFilter, directoryAvailabilityFilter]);
-  const filteredProfilePortfolioOptions = useMemo(() => {
-    const query = profilePortfolioQuery.trim().toLowerCase();
-    if (!query) return profilePortfolioOptions;
-    return profilePortfolioOptions.filter((item:any) => [item.title, item.subtitle, item.type].filter(Boolean).join(' ').toLowerCase().includes(query));
-  }, [profilePortfolioOptions, profilePortfolioQuery]);
 
   const filteredTracks = useMemo(() => {
     const query = catalogueQuery.trim().toLowerCase();
@@ -2071,7 +2064,6 @@ function App() {
 
   const accountLabel = role ? roleMeta[role].label : 'Signed out';
   const effectiveRole: AccountRole | null = role === 'admin' ? (previewRole ?? 'admin') : role;
-  const profileRoleConfig = ROLE_PROFILE_CONFIG[effectiveRole ?? 'listener'];
   const combinedProfileTagOptions = Array.from(new Set([...PROFILE_TAG_OPTIONS, ...profileTagCatalogue]));
   const canAdmin = role === 'admin';
   const canProtection = Boolean(user);
