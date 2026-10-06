@@ -35,6 +35,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
   const [giftOpen, setGiftOpen] = useState(false);
   const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(null);
 
@@ -43,6 +45,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadError('');
     if (demoMode) {
       const person = demoDirectory.find((item) => item.userId === userId);
       const creditedReleases = demoTracks.filter((release:any) => (release.contributors ?? []).some((credit:any) => credit.userId === userId));
@@ -94,12 +97,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     void nightjarCommunity.getPublicProfile(userId).then((data) => {
       if (!cancelled) setProfile(data.profile ?? null);
     }).catch(() => {
-      if (!cancelled) notify('Public profile could not be loaded.');
+      if (!cancelled) {
+        setProfile(null);
+        setLoadError(navigator.onLine
+          ? 'Nightjar could not load this public profile from the protected service.'
+          : 'You are offline. Public profiles need a connection because Nightjar does not cache protected account data.');
+        notify('Public profile could not be loaded.');
+      }
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [userId, demoMode]);
+  }, [userId, demoMode, retryKey]);
 
   const share = async () => {
     if (!profile) return;
@@ -182,6 +191,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         <button className="icon-button" onClick={onClose} aria-label="Close public profile"><X size={18}/></button>
       </header>
 
+      {!loading && loadError && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile temporarily unavailable</strong><p>{loadError}</p></div><button className="secondary-button" onClick={()=>setRetryKey((value)=>value+1)}>Try again</button></div>}
+      {!loading && !loadError && !profile && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile not available</strong><p>This profile is private, unavailable or no longer active.</p></div></div>}
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero">
           <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
