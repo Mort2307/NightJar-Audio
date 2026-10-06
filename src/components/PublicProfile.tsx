@@ -161,6 +161,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const roleDetails = profile?.roleProfiles && typeof profile.roleProfiles === 'object' && profile.roleProfiles[profileRole]
     ? profile.roleProfiles[profileRole]
     : profile ?? {};
+  const roleFeaturedWork = (profile?.featuredWorkByRole?.[profileRole] ?? profile?.featuredWork ?? []) as any[];
+  const roleCreditedReleases = (profile?.creditedReleasesByRole?.[profileRole] ?? profile?.creditedReleases ?? []) as any[];
   const profileMetrics = profile ? (
     profileRole === 'creator'
       ? [
@@ -428,9 +430,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                       : 'Listener profile'}</h3>
             </div>
           </div>
-          {profileRole === 'creator' && !!profile.featuredWork?.length && <div className="public-featured-work">
+          {profileRole === 'creator' && !!roleFeaturedWork.length && <div className="public-featured-work">
             <span className="mini-label">FEATURED</span>
-            {profile.featuredWork.map((release:any)=><article key={release.id}>
+            {roleFeaturedWork.map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? profile.displayName}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
               <div className="public-work-community-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div>
@@ -443,12 +445,19 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               {!!playlist.releases?.length && <div className="public-playlist-preview">{playlist.releases.slice(0,4).map((release:any)=><button type="button" key={release.id} onClick={()=>onCommunityRelease?.(release)} disabled={!onCommunityRelease}><span>{release.title}</span><small>{release.creatorName ?? 'Nightjar creator'} · Community</small></button>)}</div>}
             </article>)}
           </div>}
+          {(profileRole === 'writer' || profileRole === 'editor') && !!roleFeaturedWork.length && <div className="public-featured-work">
+            <span className="mini-label">FEATURED {profileRole === 'writer' ? 'WRITING' : 'PRODUCTION'} CREDITS</span>
+            {roleFeaturedWork.map((release:any)=><article key={'featured-'+release.id}>
+              <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
+              <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId && (profileRole==='writer' ? credit.role==='Writer' : ['Audio Editor','Sound Designer','Producer'].includes(credit.role))).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
+            </article>)}
+          </div>}
           {(profileRole === 'writer' || profileRole === 'editor') && <div className="public-credit-summary">
             <span>{profileRole === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
             <strong>{profile.creditedReleaseCount ?? 0} credited release{profile.creditedReleaseCount === 1 ? '' : 's'}</strong>
           </div>}
-          {(profileRole === 'writer' || profileRole === 'editor') && !!profile.creditedReleases?.length && <div className="public-credit-list">
-            {profile.creditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
+          {(profileRole === 'writer' || profileRole === 'editor') && !!roleCreditedReleases.length && <div className="public-credit-list">
+            {roleCreditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
               <div className="public-work-community-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div>
