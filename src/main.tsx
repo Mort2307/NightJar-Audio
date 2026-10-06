@@ -12,6 +12,16 @@ if (!root) throw new Error('Nightjar root missing');
 
 const isAccountPortal = window.location.pathname === '/account' || window.location.pathname.startsWith('/account/');
 
+try {
+  const cleanUrl = new URL(window.location.href);
+  if (cleanUrl.searchParams.has('nightjar-refresh')) {
+    cleanUrl.searchParams.delete('nightjar-refresh');
+    window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+  }
+} catch {
+  // URL cleanup is cosmetic and must never block Nightjar.
+}
+
 registerNightjarServiceWorker();
 
 createRoot(root).render(
