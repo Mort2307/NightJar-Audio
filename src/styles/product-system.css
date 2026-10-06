@@ -2370,3 +2370,80 @@ textarea {
     right: 10px;
   }
 }
+
+
+/* Mobile interaction hardening */
+.app-shell,
+main,
+.page-wrap,
+.page-section,
+.panel,
+.panel-card,
+.admin-panel,
+.admin-panel-modal > section,
+.creator-profile-modal,
+.people-drawer,
+.onboarding-card,
+.premium-user-profile,
+.editor-studio-page,
+.role-experience {
+  min-width:0;
+  max-width:100%;
+}
+p, span, strong, small, em, td, th, label {
+  overflow-wrap:anywhere;
+}
+img, video, audio, canvas, svg {
+  max-width:100%;
+}
+@media (max-width:700px) {
+  body {
+    overflow-x:clip;
+    padding-bottom:calc(78px + env(safe-area-inset-bottom, 0px));
+  }
+  .nj-mobile-nav {
+    bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  .page-wrap,
+  .page-section {
+    width:100%;
+    box-sizing:border-box;
+  }
+  .admin-panel-modal > section,
+  .creator-profile-modal,
+  .people-drawer,
+  .onboarding-card {
+    width:min(100%,calc(100vw - 16px));
+    box-sizing:border-box;
+  }
+  button,
+  .primary-button,
+  .secondary-button,
+  .ghost-button {
+    max-width:100%;
+  }
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    max-width:100%;
+    min-width:0;
+    font-size:16px !important;
+  }
+  .admin-data-actions,
+  .editor-actions,
+  .script-card-actions,
+  .writer-discovery-actions,
+  .editor-studio-hero-actions,
+  .app-update-actions {
+    flex-wrap:wrap;
+  }
+  .admin-data-actions > *,
+  .editor-actions > *,
+  .script-card-actions > * {
+    min-width:0;
+  }
+  .finance-role-table {
+    overscroll-behavior-x:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+}
