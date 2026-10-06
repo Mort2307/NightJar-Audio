@@ -666,6 +666,20 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
       editorTurnaround: cleanText(stored.editorTurnaround, 80),
       editorExperienceYears: cleanEditorExperienceYears(stored.editorExperienceYears),
       editorSkillLevels: cleanEditorSkillLevels(stored.editorSkillLevels, stored.roleSpecialties),
+      creatorLanguages: cleanStringList(stored.creatorLanguages, 12),
+      creatorDirectionModes: cleanStringList(stored.creatorDirectionModes, 12),
+      creatorDeliveryFormats: cleanStringList(stored.creatorDeliveryFormats, 12),
+      creatorTurnaround: cleanText(stored.creatorTurnaround, 80),
+      creatorEquipment: cleanText(stored.creatorEquipment, 300),
+      writerScriptLengths: cleanStringList(stored.writerScriptLengths, 12),
+      writerCollaborationPreferences: cleanStringList(stored.writerCollaborationPreferences, 12),
+      writerTurnaround: cleanText(stored.writerTurnaround, 80),
+      writerRightsNote: cleanText(stored.writerRightsNote, 500),
+      artistMediums: cleanStringList(stored.artistMediums, 12),
+      artistDeliveryFormats: cleanStringList(stored.artistDeliveryFormats, 12),
+      artistTurnaround: cleanText(stored.artistTurnaround, 80),
+      artistSoftware: cleanStringList(stored.artistSoftware, 12),
+      listenerCommunityStyle: cleanStringList(stored.listenerCommunityStyle, 12),
     };
   }
   return {
@@ -686,6 +700,20 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
     editorTurnaround: cleanText(data.editorTurnaround, 80),
     editorExperienceYears: cleanEditorExperienceYears(data.editorExperienceYears),
     editorSkillLevels: cleanEditorSkillLevels(data.editorSkillLevels, data.roleSpecialties),
+    creatorLanguages: cleanStringList(data.creatorLanguages, 12),
+    creatorDirectionModes: cleanStringList(data.creatorDirectionModes, 12),
+    creatorDeliveryFormats: cleanStringList(data.creatorDeliveryFormats, 12),
+    creatorTurnaround: cleanText(data.creatorTurnaround, 80),
+    creatorEquipment: cleanText(data.creatorEquipment, 300),
+    writerScriptLengths: cleanStringList(data.writerScriptLengths, 12),
+    writerCollaborationPreferences: cleanStringList(data.writerCollaborationPreferences, 12),
+    writerTurnaround: cleanText(data.writerTurnaround, 80),
+    writerRightsNote: cleanText(data.writerRightsNote, 500),
+    artistMediums: cleanStringList(data.artistMediums, 12),
+    artistDeliveryFormats: cleanStringList(data.artistDeliveryFormats, 12),
+    artistTurnaround: cleanText(data.artistTurnaround, 80),
+    artistSoftware: cleanStringList(data.artistSoftware, 12),
+    listenerCommunityStyle: cleanStringList(data.listenerCommunityStyle, 12),
   };
 };
 
@@ -703,7 +731,7 @@ export const getMyProfile = onCall({ region: REGION }, async (request) => {
       ...data,
       ...roleProfileSlice(data, activeRole),
       activeRole,
-      roles: identity.admin ? ['admin'] : (professionalRolesForAccount(accountSnapshot.data() ?? {}).length ? professionalRolesForAccount(accountSnapshot.data() ?? {}) : ['listener']),
+      roles: identity.admin ? ['admin'] : ['listener', ...professionalRolesForAccount(accountSnapshot.data() ?? {})],
     },
   };
 });
@@ -904,6 +932,20 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     editorTurnaround: cleanText(input.editorTurnaround, 80),
     editorExperienceYears: cleanEditorExperienceYears(input.editorExperienceYears),
     editorSkillLevels: cleanEditorSkillLevels(input.editorSkillLevels, input.roleSpecialties),
+    creatorLanguages: cleanStringList(input.creatorLanguages, 12),
+    creatorDirectionModes: cleanStringList(input.creatorDirectionModes, 12),
+    creatorDeliveryFormats: cleanStringList(input.creatorDeliveryFormats, 12),
+    creatorTurnaround: cleanText(input.creatorTurnaround, 80),
+    creatorEquipment: cleanText(input.creatorEquipment, 300),
+    writerScriptLengths: cleanStringList(input.writerScriptLengths, 12),
+    writerCollaborationPreferences: cleanStringList(input.writerCollaborationPreferences, 12),
+    writerTurnaround: cleanText(input.writerTurnaround, 80),
+    writerRightsNote: cleanText(input.writerRightsNote, 500),
+    artistMediums: cleanStringList(input.artistMediums, 12),
+    artistDeliveryFormats: cleanStringList(input.artistDeliveryFormats, 12),
+    artistTurnaround: cleanText(input.artistTurnaround, 80),
+    artistSoftware: cleanStringList(input.artistSoftware, 12),
+    listenerCommunityStyle: cleanStringList(input.listenerCommunityStyle, 12),
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
@@ -961,6 +1003,28 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
           editorExperienceYears: nextProfile.editorExperienceYears,
           editorSkillLevels: nextProfile.editorSkillLevels,
         } : {}),
+        ...(profileRole === 'creator' ? {
+          creatorLanguages: nextProfile.creatorLanguages,
+          creatorDirectionModes: nextProfile.creatorDirectionModes,
+          creatorDeliveryFormats: nextProfile.creatorDeliveryFormats,
+          creatorTurnaround: nextProfile.creatorTurnaround,
+          creatorEquipment: nextProfile.creatorEquipment,
+        } : {}),
+        ...(profileRole === 'writer' ? {
+          writerScriptLengths: nextProfile.writerScriptLengths,
+          writerCollaborationPreferences: nextProfile.writerCollaborationPreferences,
+          writerTurnaround: nextProfile.writerTurnaround,
+          writerRightsNote: nextProfile.writerRightsNote,
+        } : {}),
+        ...(profileRole === 'artist' ? {
+          artistMediums: nextProfile.artistMediums,
+          artistDeliveryFormats: nextProfile.artistDeliveryFormats,
+          artistTurnaround: nextProfile.artistTurnaround,
+          artistSoftware: nextProfile.artistSoftware,
+        } : {}),
+        ...(profileRole === 'listener' ? {
+          listenerCommunityStyle: nextProfile.listenerCommunityStyle,
+        } : {}),
       };
     }
 
@@ -1007,7 +1071,7 @@ const publicProfileForAccount = async (account: QueryDocumentSnapshot) => {
   return {
     userId: account.id,
     role: roles[0] ?? account.data().role ?? null,
-    roles: roles.length ? roles : ['listener'],
+    roles: ['listener', ...roles],
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
     handle: data.handle ?? null,
