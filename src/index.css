@@ -5673,3 +5673,365 @@ select:disabled {
   padding-top:10px;
   border-top:1px solid rgba(239,231,223,.06);
 }
+
+
+/* Admin Finance Lab */
+.admin-finance-simulator {
+  display:grid;
+  gap:16px;
+  margin-bottom:22px;
+}
+.admin-finance-simulator-hero {
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+  align-items:flex-start;
+  padding:20px;
+  border:1px solid rgba(203,181,204,.16);
+  border-radius:18px;
+  background:
+    radial-gradient(circle at 0% 0%,rgba(126,78,113,.12),transparent 36%),
+    rgba(255,255,255,.012);
+}
+.admin-finance-simulator-hero h3,
+.finance-sim-contributor-lab h3,
+.finance-sim-tax-lab h3,
+.finance-sim-summary h3,
+.admin-economics-existing-model h3 {
+  margin:5px 0;
+  font-family:Georgia,serif;
+  font-size:24px;
+  font-weight:400;
+}
+.admin-finance-simulator-hero p {
+  max-width:760px;
+  margin:0;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.65;
+}
+.admin-finance-simulator-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+}
+.finance-sim-status-row {
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+}
+.finance-sim-control-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.finance-sim-controls {
+  display:grid;
+  gap:11px;
+  padding:18px;
+}
+.finance-sim-controls-wide { grid-column:1/-1; }
+.finance-sim-card-head {
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+.finance-sim-card-head h4 {
+  margin:4px 0 0;
+  font-family:Georgia,serif;
+  font-size:20px;
+  font-weight:400;
+}
+.finance-sim-controls label,
+.finance-sim-three label {
+  display:grid;
+  gap:6px;
+  color:#d5cad2;
+  font-size:8px;
+}
+.finance-sim-controls input,
+.finance-sim-three input,
+.finance-role-row input {
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid var(--line-soft);
+  border-radius:10px;
+  padding:10px 11px;
+  background:rgba(0,0,0,.22);
+  color:var(--ivory);
+  outline:none;
+  font:inherit;
+  font-size:10px;
+}
+.finance-sim-mini-result {
+  display:grid;
+  gap:3px;
+  padding:11px;
+  border:1px solid rgba(203,181,204,.10);
+  border-radius:11px;
+  background:rgba(126,78,113,.06);
+}
+.finance-sim-mini-result span,
+.finance-sim-mini-result strong,
+.finance-sim-mini-result small {
+  display:block;
+}
+.finance-sim-mini-result span {
+  color:var(--muted-2);
+  font-size:7px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.finance-sim-mini-result strong {
+  font-family:Georgia,serif;
+  font-size:20px;
+  font-weight:400;
+}
+.finance-sim-mini-result small {
+  color:var(--muted);
+  font-size:7px;
+}
+.finance-sim-three {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.finance-sim-warning {
+  display:flex;
+  gap:8px;
+  align-items:flex-start;
+  padding:10px 12px;
+  border:1px solid rgba(220,171,134,.18);
+  border-radius:11px;
+  background:rgba(147,88,45,.08);
+  color:#ddc1a9;
+}
+.finance-sim-warning strong,
+.finance-sim-warning span {
+  display:block;
+}
+.finance-sim-warning strong { font-size:8px; }
+.finance-sim-warning span { margin-top:2px; color:#bda896; font-size:7px; }
+
+.finance-sim-waterfall {
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:8px;
+}
+.finance-sim-waterfall article {
+  display:grid;
+  gap:4px;
+  min-width:0;
+  padding:12px;
+  border:1px solid var(--line-soft);
+  border-radius:12px;
+  background:rgba(255,255,255,.01);
+}
+.finance-sim-waterfall article.primary {
+  border-color:rgba(203,181,204,.22);
+  background:rgba(126,78,113,.09);
+}
+.finance-sim-waterfall span,
+.finance-sim-waterfall strong,
+.finance-sim-waterfall small {
+  display:block;
+}
+.finance-sim-waterfall span {
+  color:var(--muted-2);
+  font-size:7px;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+}
+.finance-sim-waterfall strong {
+  font-family:Georgia,serif;
+  font-size:19px;
+  font-weight:400;
+}
+.finance-sim-waterfall small {
+  color:var(--muted);
+  font-size:7px;
+  line-height:1.45;
+}
+
+.finance-sim-pot-grid {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.finance-sim-pot {
+  display:grid;
+  gap:5px;
+  padding:16px;
+  border:1px solid rgba(203,181,204,.12);
+  border-radius:14px;
+  background:rgba(255,255,255,.012);
+}
+.finance-sim-pot span {
+  color:var(--muted-2);
+  font-size:7px;
+  font-weight:800;
+  letter-spacing:.09em;
+}
+.finance-sim-pot strong {
+  font-family:Georgia,serif;
+  font-size:25px;
+  font-weight:400;
+}
+.finance-sim-pot small {
+  color:var(--muted);
+  font-size:7px;
+  line-height:1.45;
+}
+.finance-sim-pot.contributor { background:linear-gradient(145deg,rgba(112,73,103,.10),rgba(255,255,255,.01)); }
+.finance-sim-pot.app { background:linear-gradient(145deg,rgba(73,88,112,.08),rgba(255,255,255,.01)); }
+.finance-sim-pot.operator { background:linear-gradient(145deg,rgba(96,82,61,.08),rgba(255,255,255,.01)); }
+
+.finance-sim-contributor-lab,
+.finance-sim-tax-lab,
+.finance-sim-summary,
+.admin-economics-existing-model {
+  display:grid;
+  gap:13px;
+  padding:18px;
+  border:1px solid var(--line-soft);
+  border-radius:16px;
+  background:rgba(255,255,255,.009);
+}
+.finance-role-table {
+  display:grid;
+  gap:5px;
+  overflow-x:auto;
+}
+.finance-role-table-head,
+.finance-role-row {
+  min-width:900px;
+  display:grid;
+  grid-template-columns:1.1fr .7fr .7fr .95fr .9fr .9fr 1fr;
+  gap:7px;
+  align-items:center;
+}
+.finance-role-table-head {
+  padding:0 8px 6px;
+  color:var(--muted-2);
+  font-size:6px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.finance-role-row {
+  padding:9px;
+  border:1px solid var(--line-soft);
+  border-radius:10px;
+  background:rgba(0,0,0,.13);
+}
+.finance-role-row > strong {
+  font-size:9px;
+  color:#e3d7df;
+}
+.finance-role-row label {
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.finance-role-row label small,
+.finance-role-row label span {
+  color:var(--muted);
+  font-size:7px;
+}
+.finance-role-row > span {
+  color:#d2c5ce;
+  font-size:8px;
+}
+.finance-role-row > span strong,
+.finance-role-row > span small {
+  display:block;
+}
+.finance-role-row > span strong {
+  font-size:9px;
+}
+.finance-role-row > span small {
+  margin-top:2px;
+  color:var(--muted);
+  font-size:6px;
+}
+.finance-rollover-check {
+  width:fit-content;
+  padding:10px 12px;
+  border:1px solid rgba(203,181,204,.10);
+  border-radius:11px;
+  background:rgba(126,78,113,.06);
+}
+
+.finance-sim-tax-grid,
+.finance-sim-summary-grid {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+}
+.finance-sim-summary-grid {
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.finance-sim-tax-grid > div,
+.finance-sim-summary-grid > div {
+  padding:12px;
+  border:1px solid var(--line-soft);
+  border-radius:11px;
+  background:rgba(0,0,0,.13);
+}
+.finance-sim-tax-grid span,
+.finance-sim-tax-grid strong,
+.finance-sim-tax-grid small,
+.finance-sim-summary-grid span,
+.finance-sim-summary-grid strong,
+.finance-sim-summary-grid small {
+  display:block;
+}
+.finance-sim-tax-grid span,
+.finance-sim-summary-grid span {
+  color:var(--muted-2);
+  font-size:7px;
+}
+.finance-sim-tax-grid strong,
+.finance-sim-summary-grid strong {
+  margin-top:4px;
+  font-family:Georgia,serif;
+  font-size:20px;
+  font-weight:400;
+}
+.finance-sim-tax-grid small,
+.finance-sim-summary-grid small {
+  margin-top:3px;
+  color:var(--muted);
+  font-size:7px;
+  line-height:1.45;
+}
+.admin-economics-existing-model {
+  margin-top:18px;
+  opacity:.92;
+}
+
+@media (max-width: 980px) {
+  .finance-sim-waterfall { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .finance-sim-waterfall article.primary { grid-column:1/-1; }
+  .finance-sim-tax-grid,
+  .finance-sim-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .admin-finance-simulator-hero,
+  .finance-sim-control-grid,
+  .finance-sim-pot-grid,
+  .finance-sim-three {
+    display:grid;
+    grid-template-columns:1fr;
+  }
+  .admin-finance-simulator-actions { justify-content:flex-start; }
+  .finance-sim-controls-wide { grid-column:auto; }
+}
+@media (max-width: 520px) {
+  .finance-sim-waterfall,
+  .finance-sim-tax-grid,
+  .finance-sim-summary-grid { grid-template-columns:1fr; }
+  .finance-sim-waterfall article.primary { grid-column:auto; }
+}
