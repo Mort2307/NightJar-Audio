@@ -21,6 +21,7 @@ const firestore=read('firestore.rules');
 const storage=read('storage.rules');
 const finance=read('src/components/AdminFinanceSimulator.tsx');
 const releaseGate=read('src/components/ReleaseReadinessDashboard.tsx');
+const manifest=JSON.parse(read('public/manifest.webmanifest'));
 
 const checks=[
   ['Artist is a routable application view', app.includes("'artist' | 'messages'") && app.includes("view === 'artist'")],
@@ -38,6 +39,7 @@ const checks=[
   ['manual update resets service-worker registrations', pwa.includes('getRegistrations()') && pwa.includes('registration.unregister()')],
   ['global update banner uses force-update flow', productExperience.includes('applyNightjarUpdate') && !productExperience.includes('window.location.reload()')],
   ['service worker supports explicit update activation', sw.includes("type === 'SKIP_WAITING'") && sw.includes("nightjar-shell-v10")],
+  ['PWA manifest includes a maskable app icon', manifest.icons?.some((icon)=>String(icon.purpose).includes('maskable')) === true && fs.existsSync(path.join(root,'public/nightjar-icon-maskable-512.png'))],
   ['crash recovery uses force-refresh repair', recovery.includes('applyNightjarUpdate') && recovery.includes('Repair & reload Nightjar')],
   ['Directory rendering is bounded', app.includes('directoryVisibleLimit') && app.includes('visibleDirectoryProfiles') && app.includes('Load 30 more')],
   ['Firestore remains deny-by-default', /match \/\{document=\*\*\}[\s\S]*allow read, write: if false/.test(firestore)],
