@@ -3870,7 +3870,11 @@ function App() {
 </div>}
 {adminPanel === 'economics' && <div>
   <Suspense fallback={<div className="people-empty">Loading Finance Lab…</div>}>
-    <AdminFinanceSimulator settings={commercialSettings} />
+    <AdminFinanceSimulator
+      settings={commercialSettings}
+      currentPaidSubscribers={commercialOverview?.activePaidSubscribers ?? 0}
+      currentUsers={(adminOverview?.people?.accounts?.length ?? 0) + (adminOverview?.people?.administrators?.length ?? 0)}
+    />
   </Suspense>
   <div className="admin-economics-existing-model">
   <div className="subscription-finance-heading"><div><span className="mini-label">CURRENT LIVE PLANNING MODEL</span><h3>Existing Creator-capacity assumptions</h3></div><span className="status-pill muted">Separate from simulator</span></div>
