@@ -4914,6 +4914,15 @@ export const recordAuthenticationAttempt = onCall({ region: REGION }, async (req
   const targetUserId = await resolveAuthenticationTarget(email);
   const clientAttemptId = cleanText(input.clientAttemptId, 120) || null;
 
+  const recentSnapshot = await db.collection('authenticationEvents').limit(750).get();
+  const now = Date.now();
+  const recentEvents = recentSnapshot.docs.map((doc) => doc.data()).filter((data) => now - authenticationEventMillis(data) < 15 * 60_000);
+  const sameTargetRecent = recentEvents.filter((data) => data.emailHash === emailHash);
+  const sameClientRecent = clientAttemptId ? recentEvents.filter((data) => data.clientAttemptId === clientAttemptId) : [];
+  if (sameTargetRecent.length >= 60 || sameClientRecent.length >= 120) {
+    return { recorded: false, throttled: true, alert: null };
+  }
+
   const record = {
     eventType,
     emailHash,
