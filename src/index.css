@@ -6073,3 +6073,111 @@ select:disabled {
 @media (max-width:760px) {
   .premium-role-positioning-grid { grid-template-columns:1fr; }
 }
+
+
+/* Manual app update controls */
+.app-update-card {
+  grid-column:1/-1;
+}
+.app-update-version-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.app-update-version-grid > div {
+  padding:12px;
+  border:1px solid var(--line-soft);
+  border-radius:12px;
+  background:rgba(0,0,0,.13);
+}
+.app-update-version-grid span,
+.app-update-version-grid strong,
+.app-update-version-grid small {
+  display:block;
+}
+.app-update-version-grid span {
+  color:var(--muted-2);
+  font-size:7px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.app-update-version-grid strong {
+  margin-top:4px;
+  color:#e8dfe5;
+  font-size:10px;
+}
+.app-update-version-grid small {
+  margin-top:3px;
+  color:var(--muted);
+  font-size:7px;
+}
+.app-update-actions,
+.app-update-control {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+.app-update-result {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  border:1px solid rgba(150,189,156,.14);
+  border-radius:11px;
+  background:rgba(75,112,81,.08);
+  color:#c8dec9;
+  font-size:8px;
+}
+.app-update-result.available {
+  border-color:rgba(203,181,204,.20);
+  background:rgba(126,78,113,.09);
+  color:#e2d5df;
+}
+.app-update-safety {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  color:var(--muted);
+  font-size:7px;
+  line-height:1.5;
+}
+.app-update-control.compact {
+  justify-content:flex-end;
+}
+.app-update-control.compact small {
+  flex-basis:100%;
+  color:var(--muted);
+  font-size:7px;
+  text-align:right;
+}
+.account-portal-header-tools {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.authentication-attempt-panel {
+  border-color:rgba(203,181,204,.13);
+}
+.authentication-attempt-row {
+  background:
+    linear-gradient(90deg,rgba(104,68,96,.06),rgba(255,255,255,.008));
+}
+.authentication-attempt-row em {
+  color:var(--muted);
+}
+@media (max-width:760px) {
+  .app-update-version-grid { grid-template-columns:1fr; }
+  .account-portal-header-tools {
+    justify-content:flex-start;
+    width:100%;
+  }
+  .app-update-control.compact {
+    justify-content:flex-start;
+  }
+  .app-update-control.compact small {
+    text-align:left;
+  }
+}
