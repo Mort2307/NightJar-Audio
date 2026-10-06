@@ -11,6 +11,7 @@ const authSecurity=read('src/platform/firebase-auth-security.ts');
 const pwa=read('src/platform/pwa.ts');
 const vite=read('vite.config.ts');
 const hosting=read('firebase.json');
+const firestoreIndexes=read('firestore.indexes.json');
 const failures=[];
 
 if (!sw.includes("url.pathname.startsWith('/assets/')")) failures.push('service worker must explicitly restrict static-asset caching');
@@ -34,6 +35,8 @@ if (!protection.includes("'nightjar-auth-client\\0'")) failures.push('authentica
 if (!protection.includes('revokeMyAuthenticationSessions') || !protection.includes('revokeRefreshTokens')) failures.push('member-triggered session revocation is missing');
 if (!authSecurity.includes('revokeMySessions')) failures.push('Account Security does not expose session revocation');
 if (!accountAccess.includes('Revoke all sessions')) failures.push('Account Security UI is missing the all-session revocation action');
+if (!protection.includes("retentionUntil: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000)")) failures.push('trusted authentication devices must expire after prolonged inactivity');
+if (!firestoreIndexes.includes('"collectionGroup": "trustedAuthDevices"') || !firestoreIndexes.includes('"ttl": true')) failures.push('trusted authentication device retention must be enforced by Firestore TTL');
 if (!pwa.includes('getRegistrations()') || !pwa.includes('registration.unregister()')) failures.push('force update must reset stale service-worker registrations');
 if (!pwa.includes('Promise.all(keys.map((key) => caches.delete(key)))')) failures.push('force update must clear legacy Cache Storage, not only one cache prefix');
 if (!sw.includes("type === 'SKIP_WAITING'")) failures.push('service worker must support explicit update activation');
