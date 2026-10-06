@@ -6,6 +6,12 @@
       "fieldPath": "retentionUntil",
       "ttl": true,
       "indexes": []
+    },
+    {
+      "collectionGroup": "signInActivity",
+      "fieldPath": "retentionUntil",
+      "ttl": true,
+      "indexes": []
     }
   ]
 }
