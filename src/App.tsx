@@ -431,6 +431,7 @@ function App() {
   const [profileDirectory, setProfileDirectory] = useState<PublicDirectoryProfile[]>([]);
   const [directoryQuery, setDirectoryQuery] = useState('');
   const [directoryRoleFilter, setDirectoryRoleFilter] = useState<'all' | 'creator' | 'writer' | 'editor' | 'artist' | 'listener'>('all');
+  const [directoryVisibleLimit, setDirectoryVisibleLimit] = useState(30);
   const [directoryTagFilter, setDirectoryTagFilter] = useState('all');
   const [directoryAvailabilityFilter, setDirectoryAvailabilityFilter] = useState('all');
   const [savedDirectoryViews, setSavedDirectoryViews] = useState<any[]>([]);
@@ -614,6 +615,15 @@ function App() {
       return true;
     });
   }, [profileDirectory, directoryQuery, directoryRoleFilter, directoryTagFilter, directoryAvailabilityFilter]);
+
+  const visibleDirectoryProfiles = useMemo(
+    () => filteredDirectoryProfiles.slice(0, directoryVisibleLimit),
+    [filteredDirectoryProfiles, directoryVisibleLimit],
+  );
+
+  useEffect(() => {
+    setDirectoryVisibleLimit(30);
+  }, [directoryQuery, directoryRoleFilter, directoryTagFilter, directoryAvailabilityFilter]);
 
   const filteredTracks = useMemo(() => {
     const query = catalogueQuery.trim().toLowerCase();
@@ -3473,7 +3483,7 @@ function App() {
             </div>
 
             <div className="creator-directory profile-directory-grid">
-              {filteredDirectoryProfiles.map((person, index) => {
+              {visibleDirectoryProfiles.map((person, index) => {
                 const workMetric = person.role === 'creator'
                   ? (person.releaseCount ?? 0) + ' releases'
                   : person.role === 'writer'
@@ -3510,6 +3520,10 @@ function App() {
                 </article>;
               })}
             </div>
+            {visibleDirectoryProfiles.length < filteredDirectoryProfiles.length && <div className="profile-directory-load-more">
+              <span>Showing {visibleDirectoryProfiles.length} of {filteredDirectoryProfiles.length} matching public profiles.</span>
+              <button className="secondary-button" onClick={()=>setDirectoryVisibleLimit((value)=>value+30)}>Load 30 more</button>
+            </div>}
             {!filteredDirectoryProfiles.length && <div className="people-empty"><Users size={18}/><strong>No public profiles match those filters.</strong><span>Try a different role, tag, availability setting or search term.</span></div>}
           </section>
         )}
