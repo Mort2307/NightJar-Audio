@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from 'vite';
+import react from '@vitejs/plugin-react';
 
 const buildId = String(Date.now());
 const builtAt = new Date(Number(buildId)).toISOString();
@@ -19,7 +20,7 @@ export default defineConfig({
     __NIGHTJAR_BUILD_ID__: JSON.stringify(buildId),
     __NIGHTJAR_BUILT_AT__: JSON.stringify(builtAt),
   },
-  plugins: [nightjarVersionManifest()],
+  plugins: [react(), nightjarVersionManifest()],
   base: './',
   build: {
     outDir: 'dist',
