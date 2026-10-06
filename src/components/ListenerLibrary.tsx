@@ -15,11 +15,13 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
   const [library, setLibrary] = useState<any>({ history: [], continueListening: [], favourites: [], playlists: [] });
   const [tab, setTab] = useState<'continue' | 'history' | 'favourites' | 'playlists'>('continue');
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [playlistTitle, setPlaylistTitle] = useState('');
   const [selectedReleaseIds, setSelectedReleaseIds] = useState<string[]>([]);
 
   const load = async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       if (demoMode) {
         setLibrary(readDemo('library', demoLibrary));
@@ -28,6 +30,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
         setLibrary(data);
       }
     } catch {
+      setLoadFailed(true);
       notify('Your listener library could not be loaded.');
     } finally {
       setLoading(false);
@@ -172,7 +175,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
       {tab === 'history' && (library.history ?? []).length > 0 && <button className="library-clear-history" onClick={() => void clearHistory()}><Trash2 size={13}/> Clear visible history</button>}
     </div>
 
-    {loading ? <div className="people-empty">Loading your library…</div> : tab !== 'playlists' ? <div className="library-list">
+    {loading ? <div className="people-empty">Loading your library…</div> : loadFailed ? <div className="people-empty"><ListMusic size={18}/><strong>Your library is temporarily unavailable.</strong><span>Your saved Nightjar data has not been removed. Retry the protected library service.</span><button className="secondary-button" onClick={()=>void load()}>Retry library</button></div> : tab !== 'playlists' ? <div className="library-list">
       {items.length === 0 ? <div className="people-empty"><ListMusic size={18}/><strong>Nothing here yet.</strong><span>Your library fills from real Nightjar listening and favourites.</span></div> : items.map((release: any) => <article className="library-row" key={release.id}>
         <button className="library-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><Play size={15} fill="currentColor"/></button>
         <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'} · {release.category ?? 'Audio'}</span>{release.positionSeconds > 0 && <small>{Math.floor(release.positionSeconds / 60)} min listened</small>}</div>
