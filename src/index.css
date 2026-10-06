@@ -5632,3 +5632,44 @@ select:disabled {
   .editor-featured-order > div { grid-template-columns:auto minmax(0,1fr); }
   .editor-featured-order > div > div:last-child { grid-column:2; flex-wrap:wrap; }
 }
+
+
+/* Premium directory cards */
+.premium-directory-card {
+  position:relative;
+  overflow:hidden;
+  border-color:rgba(203,181,204,.13);
+  background:
+    radial-gradient(circle at 0% 0%,rgba(126,78,113,.09),transparent 32%),
+    rgba(255,255,255,.012);
+  transition:transform .18s ease,border-color .18s ease,background .18s ease;
+}
+.premium-directory-card::after {
+  content:"";
+  position:absolute;
+  right:-90px;
+  bottom:-120px;
+  width:220px;
+  height:220px;
+  border:1px solid rgba(203,181,204,.045);
+  border-radius:50%;
+  pointer-events:none;
+}
+.premium-directory-card:hover {
+  transform:translateY(-2px);
+  border-color:rgba(203,181,204,.24);
+  background:
+    radial-gradient(circle at 0% 0%,rgba(126,78,113,.13),transparent 34%),
+    rgba(255,255,255,.018);
+}
+.premium-directory-card .avatar-xl {
+  box-shadow:0 12px 28px rgba(0,0,0,.25);
+}
+.premium-directory-card .profile-heading h2 {
+  font-family:Georgia,serif;
+  font-weight:400;
+}
+.premium-directory-card .profile-stats {
+  padding-top:10px;
+  border-top:1px solid rgba(239,231,223,.06);
+}
