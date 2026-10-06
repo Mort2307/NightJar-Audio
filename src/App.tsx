@@ -91,6 +91,7 @@ const UserProfileStudio = lazy(() => import('./components/UserProfileStudio'));
 const RoleProfileExtension = lazy(() => import('./components/RoleProfileExtension'));
 const EditorStudio = lazy(() => import('./components/EditorStudio'));
 const AdminFinanceSimulator = lazy(() => import('./components/AdminFinanceSimulator'));
+const AdminReleaseReadiness = lazy(() => import('./components/AdminReleaseReadiness'));
 
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
@@ -3743,6 +3744,14 @@ function App() {
               actions={adminActions}
               loading={adminOverviewLoading}
             />
+            <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Checking release readiness" />}>
+              <AdminReleaseReadiness
+                testing={adminOverview?.testing}
+                openSecurityAlerts={securityAlerts.filter((item:any)=>item.status==='open').length}
+                pendingImages={imageModeration.length}
+                pendingApplications={adminApplications.filter((item:any)=>item.status==='banked'||item.status==='pending_review').length}
+              />
+            </Suspense>
             <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">TESTING</span><strong>Demo & Simulation</strong><small>Safe fictional data and role-perspective testing · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
             <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">DEMO / SIMULATION</span><strong>See Nightjar populated, then step into every role.</strong><p>Demo records are fictional and isolated. Simulation actions stay local to this browser session and never become live subscriptions, payouts, manuscripts, reviews or user accounts.</p><div className="demo-state-line"><span className={demoMode ? 'status-pill' : 'status-pill muted'}>Demo data {demoMode ? 'ON' : 'OFF'}</span><span className={simulationMode ? 'status-pill' : 'status-pill muted'}>Simulation {simulationMode ? 'ON' : 'OFF'}</span></div></div><div className="admin-preview-buttons">{!demoMode && <button onClick={enableDemoMode}>Enable demo data</button>}{demoMode && !simulationMode && <button onClick={disableDemoMode}>Disable demo data</button>}<button onClick={() => startSimulation('listener')}>Simulate Listener</button><button onClick={() => startSimulation('creator')}>Simulate Creator</button><button onClick={() => startSimulation('writer')}>Simulate Writer</button><button onClick={() => startSimulation('editor')}>Simulate Audio Editor</button><button onClick={() => startSimulation('artist')}>Simulate Artist</button>{simulationMode && <button onClick={stopSimulation}>End simulation</button>}<button onClick={clearAdminPreview}>Return to Admin</button></div></div>
             <div className="admin-grid">
