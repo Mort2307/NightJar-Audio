@@ -49,6 +49,11 @@ const myEventsCall = httpsCallable<void, { events: AuthenticationSecurityEvent[]
   'listMyAuthenticationEvents',
 );
 
+const revokeMySessionsCall = httpsCallable<void, { revoked: boolean; revokedAt: string }>(
+  functions,
+  'revokeMyAuthenticationSessions',
+);
+
 const clientAttemptId = () => {
   const key = 'nightjar.auth-attempt-client.v1';
   try {
@@ -92,6 +97,10 @@ export const nightjarAuthSecurity = {
 
   async myEvents() {
     return (await myEventsCall()).data;
+  },
+
+  async revokeMySessions() {
+    return (await revokeMySessionsCall()).data;
   },
 
   async events() {
