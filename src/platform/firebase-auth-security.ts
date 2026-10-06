@@ -34,6 +34,26 @@ const listCall = httpsCallable<void, { events: AuthenticationSecurityEvent[] }>(
   'listAuthenticationEvents',
 );
 
+export type SignInActivity = {
+  id: string;
+  eventType: 'signin_success';
+  clientPlatform?: string | null;
+  route?: string | null;
+  newDevice: boolean;
+  createdAt?: string | null;
+};
+
+const successCall = httpsCallable<{
+  clientAttemptId: string;
+  clientPlatform?: string;
+  route?: string;
+}, { recorded:boolean; newDevice:boolean }>(functions, 'recordAuthenticationSuccess');
+
+const myActivityCall = httpsCallable<void, { activity: SignInActivity[] }>(
+  functions,
+  'listMySignInActivity',
+);
+
 const clientAttemptId = () => {
   const key = 'nightjar.auth-attempt-client.v1';
   try {
@@ -50,6 +70,19 @@ const clientAttemptId = () => {
 };
 
 export const nightjarAuthSecurity = {
+  async recordSuccess() {
+    const result = await successCall({
+      clientAttemptId: clientAttemptId(),
+      clientPlatform: navigator.userAgent.slice(0, 120),
+      route: window.location.pathname + window.location.search,
+    });
+    return result.data;
+  },
+
+  async myActivity() {
+    return (await myActivityCall()).data;
+  },
+
   async recordFailure(input: {
     email: string;
     eventType?: 'signin_failed' | 'closed_beta_signin_denied';
