@@ -17,7 +17,9 @@ const accountDestination = (account: NightjarAccountIdentity) => {
 };
 
 export default function AccountPortal() {
-  const [explicitSignIn] = useState(() => new URLSearchParams(window.location.search).get('entry') === 'signin');
+  const [entryMode] = useState(() => new URLSearchParams(window.location.search).get('entry'));
+  const explicitSignIn = entryMode === 'signin';
+  const explicitSecurity = entryMode === 'security';
   const [identity, setIdentity] = useState<NightjarIdentity | null>(() => nightjarAuth.current());
   const [account, setAccount] = useState<NightjarAccountIdentity | null>(null);
   const [loadingAccount, setLoadingAccount] = useState(false);
@@ -129,7 +131,7 @@ export default function AccountPortal() {
       <div className="account-portal-header-tools"><span>Secure account access</span><AppUpdateControl compact /></div>
     </header>
 
-    {!identity?.emailVerified && <AccountAccess
+    {(!identity?.emailVerified || explicitSecurity) && <AccountAccess
       key={(identity?.userId ?? 'guest') + ':' + String(identity?.emailVerified ?? false)}
       identity={identity}
       onAuthenticated={(next) => {
@@ -142,7 +144,7 @@ export default function AccountPortal() {
       }}
     />}
 
-    {identity?.emailVerified && <section className="account-backend-card">
+    {identity?.emailVerified && !explicitSecurity && <section className="account-backend-card">
       <div className="account-testing-notice"><ShieldCheck size={14}/><span><strong>TESTING BUILD</strong> Age assurance is temporarily disabled for controlled QA. Email verification and protected backend permissions remain active.</span></div>
       <div className="account-backend-heading">
         <ShieldCheck size={19} />
