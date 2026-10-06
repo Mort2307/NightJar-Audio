@@ -194,6 +194,100 @@ export const ROLE_FOCUS_OPTIONS: Record<ProfileRoleKey, readonly string[]> = {
   ],
 };
 
+
+export const CREATOR_DIRECTION_OPTIONS = [
+  'Self-directed',
+  'Live direction',
+  'Written direction / notes',
+  'Reference-audio direction',
+  'Async pickup notes',
+] as const;
+
+export const CREATOR_DELIVERY_OPTIONS = [
+  'Raw WAV',
+  'Cleaned dialogue',
+  'Processed / mastered voice',
+  'Multiple takes',
+  'Pickups included',
+  'Long-form sessions',
+  'Series continuity',
+] as const;
+
+export const CREATOR_TURNAROUND_OPTIONS = [
+  '1–2 days',
+  '2–4 days',
+  '3–5 days',
+  '5–7 days',
+  '1–2 weeks',
+  'Project dependent',
+] as const;
+
+export const WRITER_LENGTH_OPTIONS = [
+  'Micro scripts · under 500 words',
+  'Short · 500–1,500 words',
+  'Medium · 1,500–4,000 words',
+  'Long-form · 4,000+ words',
+  'Series / episodic',
+] as const;
+
+export const WRITER_COLLABORATION_OPTIONS = [
+  'VA-led commissions',
+  'Creator briefs',
+  'Collaborative outlining',
+  'Editing / rewrite partnerships',
+  'Long-running series',
+  'One-off commissions',
+  'Licensing existing scripts',
+] as const;
+
+export const WRITER_TURNAROUND_OPTIONS = [
+  '2–4 days',
+  '3–7 days',
+  '1–2 weeks',
+  '2–4 weeks',
+  'Project dependent',
+] as const;
+
+export const ARTIST_MEDIUM_OPTIONS = [
+  'Digital painting',
+  'Illustration',
+  'Graphic design',
+  'Typography',
+  'Photo compositing',
+  'Traditional media',
+  'Vector artwork',
+  'Mixed media',
+] as const;
+
+export const ARTIST_DELIVERY_OPTIONS = [
+  'Cover artwork',
+  'Square social artwork',
+  'Portrait artwork',
+  'Landscape promotional artwork',
+  'Transparent PNG assets',
+  'Print-ready artwork',
+  'Layered working file by agreement',
+  'Series visual system',
+] as const;
+
+export const ARTIST_TURNAROUND_OPTIONS = [
+  '2–4 days',
+  '3–7 days',
+  '1–2 weeks',
+  '2–4 weeks',
+  'Project dependent',
+] as const;
+
+export const LISTENER_COMMUNITY_OPTIONS = [
+  'Recommendations welcome',
+  'Happy to discuss releases',
+  'Playlist curator',
+  'Independent-creator supporter',
+  'Series follower',
+  'Quiet listener',
+  'Community regular',
+] as const;
+
 export type RoleProfileConfig = {
   title: string;
   description: string;
