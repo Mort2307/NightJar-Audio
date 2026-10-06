@@ -1032,6 +1032,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
 
   const saved = await targetProfileRef.get();
   const savedData = saved.data() ?? {};
+  publicDirectoryCache = null;
   return {
     profile: {
       ...savedData,
@@ -1170,9 +1171,15 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
   return { creators };
 });
 
+let publicDirectoryCache: { expiresAt: number; profiles: any[] } | null = null;
+
 export const listPublicProfiles = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
+
+  if (publicDirectoryCache && publicDirectoryCache.expiresAt > Date.now()) {
+    return { profiles: publicDirectoryCache.profiles, cached:true };
+  }
 
   const [accounts, profilesSnapshot, releases, scripts, collaborations] = await Promise.all([
     db.collection('accounts').limit(1000).get(),
@@ -1217,7 +1224,9 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       const data = profileByUser.get(doc.id);
       if (!data || data.publicProfile === false) return null;
       const professionalRoles = professionalRolesForAccount(doc.data() ?? {});
-      const role = professionalRoles[0] ?? String(doc.data().role ?? 'listener');
+      const roles = ['listener', ...professionalRoles];
+      const activeRole = cleanText(doc.data().role, 30);
+      const role = roles.includes(activeRole) ? activeRole : (professionalRoles[0] ?? 'listener');
       const releaseCount = releaseCountByCreator.get(doc.id) ?? 0;
       const publishedWorkCount = publishedScriptsByWriter.get(doc.id) ?? 0;
       const creditedReleaseCount = creditCountByUser.get(doc.id) ?? 0;
@@ -1225,7 +1234,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
-        roles: professionalRoles.length ? professionalRoles : ['listener'],
+        roles,
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
@@ -1264,7 +1273,8 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       };
     }))).filter(Boolean);
 
-  return { profiles };
+  publicDirectoryCache = { expiresAt:Date.now() + 60_000, profiles };
+  return { profiles, cached:false };
 });
 
 export const getPublicProfile = onCall({ region: REGION }, async (request) => {
@@ -7181,6 +7191,7 @@ export const setActiveNightjarRole = onCall({ region: REGION }, async (request) 
     role,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge:true });
+  publicDirectoryCache = null;
   return { activeRole: role, approvedProfessionalRoles: approved };
 });
 
