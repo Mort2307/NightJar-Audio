@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bird, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
+import { Bird, Brush, FileCheck2, FileText, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -311,6 +311,33 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <div><strong>Moods & tags</strong>{profile.favouriteTags?.length ? <div className="creator-profile-tags">{profile.favouriteTags.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>Still shaping their Nightjar world.</p>}</div>
             <div><strong>Categories</strong>{profile.favouriteCategories?.length ? <div className="creator-profile-tags">{profile.favouriteCategories.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>No public categories selected yet.</p>}</div>
             <div><strong>Tropes & themes</strong>{profile.favouriteTropes?.length ? <div className="creator-profile-tags">{profile.favouriteTropes.slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div> : <p>No public themes selected yet.</p>}</div>
+          </div>
+        </section>}
+
+        {profileRole === 'creator' && <section className="public-role-signature public-role-signature-creator">
+          <div className="public-role-signature-head"><div><span className="mini-label">VA PERFORMANCE PROFILE</span><h3>The voice behind the catalogue.</h3><p>Performance range, production strengths and collaboration style — separate from private account details and project conversations.</p></div><Mic2 size={20}/></div>
+          <div className="public-role-signature-grid">
+            <div><span className="mini-label">PERFORMANCE RANGE</span><strong>{roleDetails.roleAvailability || 'Availability not listed'}</strong><div className="creator-profile-tags">{(roleDetails.roleSpecialties ?? []).slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div></div>
+            <div><span className="mini-label">PRODUCTION STRENGTHS</span><strong>{(roleDetails.roleSecondary ?? []).length ? 'How they like to work' : 'Not listed yet'}</strong><div className="creator-profile-tags">{(roleDetails.roleSecondary ?? []).slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div></div>
+            <div><span className="mini-label">PERFORMANCE APPROACH</span><strong>Creative direction</strong><p>{roleDetails.roleDetailOne || 'No public performance note yet.'}</p></div>
+          </div>
+        </section>}
+
+        {profileRole === 'writer' && <section className="public-role-signature public-role-signature-writer">
+          <div className="public-role-signature-head"><div><span className="mini-label">WRITER DESK</span><h3>Craft in public. Manuscripts in private.</h3><p>Writing strengths, script formats and collaboration approach can be discovered without exposing protected drafts or private licensing terms.</p></div><FileText size={20}/></div>
+          <div className="public-role-signature-grid">
+            <div><span className="mini-label">WRITING CRAFT</span><strong>{roleDetails.roleAvailability || 'Availability not listed'}</strong><div className="creator-profile-tags">{(roleDetails.roleSpecialties ?? []).slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div></div>
+            <div><span className="mini-label">SCRIPT FORMATS</span><strong>{(roleDetails.roleSecondary ?? []).length ? 'Preferred formats' : 'Not listed yet'}</strong><div className="creator-profile-tags">{(roleDetails.roleSecondary ?? []).slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div></div>
+            <div><span className="mini-label">WRITING APPROACH</span><strong>How they build a script</strong><p>{roleDetails.roleDetailOne || 'No public writing-method note yet.'}</p></div>
+          </div>
+        </section>}
+
+        {profileRole === 'artist' && <section className="public-role-signature public-role-signature-artist">
+          <div className="public-role-signature-head"><div><span className="mini-label">ARTIST STUDIO</span><h3>Visual identity for an audio-first world.</h3><p>Public style, services and commission fit stay separate from private briefs, source files and licensing discussions.</p></div><Brush size={20}/></div>
+          <div className="public-role-signature-grid">
+            <div><span className="mini-label">VISUAL SERVICES</span><strong>{roleDetails.roleAvailability || 'Availability not listed'}</strong><div className="creator-profile-tags">{(roleDetails.roleSpecialties ?? []).slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div></div>
+            <div><span className="mini-label">CREATIVE STRENGTHS</span><strong>{(roleDetails.roleSecondary ?? []).length ? 'Style & collaboration fit' : 'Not listed yet'}</strong><div className="creator-profile-tags">{(roleDetails.roleSecondary ?? []).slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div></div>
+            <div><span className="mini-label">ARTIST APPROACH</span><strong>How they work</strong><p>{roleDetails.roleDetailOne || 'No public process note yet.'}</p></div>
           </div>
         </section>}
 
