@@ -5032,6 +5032,75 @@ export const recordAuthenticationAttempt = onCall({ region: REGION }, async (req
   return { recorded: true, eventId: ref.id, alert };
 });
 
+export const recordAuthenticationSuccess = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const clientAttemptId = cleanText(input.clientAttemptId, 120);
+  if (!clientAttemptId) return { recorded:false, newDevice:false };
+
+  const clientPlatform = cleanText(input.clientPlatform, 120) || null;
+  const route = cleanText(input.route, 160) || '/account';
+  const deviceKey = createHash('sha256').update(identity.uid + ':' + clientAttemptId).digest('hex').slice(0, 48);
+  const deviceRef = accountRef(identity.uid).collection('authDevices').doc(deviceKey);
+  const device = await deviceRef.get();
+  const newDevice = !device.exists;
+
+  await deviceRef.set({
+    deviceKey,
+    clientAttemptIdHash: createHash('sha256').update(clientAttemptId).digest('hex'),
+    clientPlatform,
+    firstSeenAt: device.exists ? device.data()?.firstSeenAt ?? FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
+    lastSeenAt: FieldValue.serverTimestamp(),
+    lastRoute: route,
+  }, { merge:true });
+
+  const activityRef = accountRef(identity.uid).collection('signInActivity').doc();
+  await activityRef.set({
+    eventType:'signin_success',
+    clientPlatform,
+    route,
+    newDevice,
+    passwordCaptured:false,
+    retentionUntil:new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    createdAt:FieldValue.serverTimestamp(),
+  });
+
+  if (newDevice) {
+    await createNotification(identity.uid, {
+      type:'account_security',
+      subtype:'new_signin_device',
+      title:'New Nightjar sign-in',
+      message:clientPlatform
+        ? 'Nightjar was signed into from a new app or browser profile: ' + clientPlatform + '.'
+        : 'Nightjar was signed into from a new app or browser profile.',
+      dedupeKey:'new-signin-device:' + deviceKey,
+      route:'/profile',
+    });
+  }
+
+  return { recorded:true, newDevice };
+});
+
+export const listMySignInActivity = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const snapshot = await accountRef(identity.uid).collection('signInActivity').limit(50).get();
+  const activity = snapshot.docs
+    .map((doc) => {
+      const data = doc.data() ?? {};
+      return {
+        id:doc.id,
+        eventType:'signin_success',
+        clientPlatform:cleanText(data.clientPlatform,120) || null,
+        route:cleanText(data.route,160) || null,
+        newDevice:data.newDevice === true,
+        createdAt:toIso(data.createdAt),
+      };
+    })
+    .sort((a,b)=>String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+    .slice(0,20);
+  return { activity };
+});
+
 export const listAuthenticationEvents = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('authenticationEvents').limit(500).get();
