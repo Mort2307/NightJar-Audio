@@ -4570,6 +4570,18 @@ const assessAuthenticationFailureFirebase = async (
     automaticAction: 'none',
     reviewRequired: true,
   });
+  if (record.targetUserId) {
+    const hourBucket = Math.floor(now / (60 * 60_000));
+    await createNotification(record.targetUserId, {
+      type:'security',
+      subtype:'signin_failures',
+      title:'Nightjar sign-in attempts detected',
+      message:'Several unsuccessful sign-in attempts were observed against your Nightjar account. If these were not you, open Account security to change your password and review Protection Centre.',
+      dedupeKey:'auth-failure-risk:' + record.emailHash + ':' + hourBucket,
+      authenticationAlertId:alertId,
+    });
+  }
+
   return { alertId, severity, riskScore: Math.min(score, 100) };
 };
 
