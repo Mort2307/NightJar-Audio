@@ -75,7 +75,7 @@
         ]
       },
       {
-        "source": "/nightjar-home-*.png",
+        "source": "/nightjar-*.png",
         "headers": [
           {
             "key": "Cache-Control",
