@@ -831,6 +831,13 @@ const publicActivityBadges = (
 };
 
 
+const releaseCreditMatchesProfileRole = (creditRole: unknown, profileRole: string) => {
+  const role = cleanText(creditRole, 80);
+  if (profileRole === 'writer') return role === 'Writer';
+  if (profileRole === 'editor') return ['Audio Editor','Sound Designer','Producer'].includes(role);
+  return false;
+};
+
 const profilePortfolioOptionsFor = async (userId: string, role: string) => {
   if (role === 'creator') {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
@@ -848,9 +855,11 @@ const profilePortfolioOptionsFor = async (userId: string, role: string) => {
   if (role === 'writer' || role === 'editor') {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     return releases.docs
-      .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
+      .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) =>
+        credit.userId === userId && releaseCreditMatchesProfileRole(credit.role, role)))
       .map((doc) => {
-        const credit = normaliseReleaseContributors(doc.data().contributors).find((item) => item.userId === userId);
+        const credit = normaliseReleaseContributors(doc.data().contributors).find((item) =>
+          item.userId === userId && releaseCreditMatchesProfileRole(item.role, role));
         return {
           id: doc.id,
           type: 'credit',
@@ -1395,6 +1404,20 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     : (role === 'writer' || role === 'editor')
       ? orderForRole(creditedReleases, role)
       : [];
+  const creditedReleasesByRole = {
+    writer: creditedReleases.filter((release: any) =>
+      (release.contributors ?? []).some((credit: any) =>
+        credit.userId === userId && releaseCreditMatchesProfileRole(credit.role, 'writer'))),
+    editor: creditedReleases.filter((release: any) =>
+      (release.contributors ?? []).some((credit: any) =>
+        credit.userId === userId && releaseCreditMatchesProfileRole(credit.role, 'editor'))),
+  };
+  const featuredWorkByRole = {
+    creator: orderForRole(creatorReleases, 'creator'),
+    writer: orderForRole(creditedReleasesByRole.writer, 'writer'),
+    editor: orderForRole(creditedReleasesByRole.editor, 'editor'),
+  };
+
   const [completedCollaborations, publicArtistPortfolio] = await Promise.all([
     professionalRoles.length > 0 ? completedCollaborationCountFor(userId) : Promise.resolve(0),
     professionalRoles.includes('artist') ? publicArtistPortfolioFor(userId) : Promise.resolve([]),
@@ -1436,6 +1459,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
+      featuredWorkByRole,
+      creditedReleasesByRole,
       artistPortfolio: publicArtistPortfolio,
       featuredArtistPortfolio: role === 'artist'
         ? (() => {
