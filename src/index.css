@@ -6035,3 +6035,41 @@ select:disabled {
   .finance-sim-summary-grid { grid-template-columns:1fr; }
   .finance-sim-waterfall article.primary { grid-column:auto; }
 }
+
+
+.premium-role-positioning {
+  display:grid;
+  gap:12px;
+  padding:20px;
+}
+.premium-role-positioning-grid {
+  display:grid;
+  grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);
+  gap:12px;
+}
+.premium-role-positioning-grid label {
+  display:grid;
+  gap:7px;
+  color:#d5cbd3;
+  font-size:8px;
+}
+.premium-role-positioning-grid input,
+.premium-role-positioning-grid textarea {
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid var(--line-soft);
+  border-radius:11px;
+  padding:11px 12px;
+  background:rgba(0,0,0,.23);
+  color:var(--ivory);
+  outline:none;
+  font:inherit;
+  font-size:10px;
+}
+.premium-role-positioning-grid textarea {
+  min-height:96px;
+  resize:vertical;
+}
+@media (max-width:760px) {
+  .premium-role-positioning-grid { grid-template-columns:1fr; }
+}
