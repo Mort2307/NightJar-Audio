@@ -866,8 +866,17 @@ function App() {
       if (cancelled) return;
       const nextProfile = data?.profile;
       if (nextProfile) {
-        setProfile((current: any) => ({ ...current, ...nextProfile }));
-        setProfileBaseline((current:any) => ({ ...(current ?? {}), ...nextProfile }));
+        const preferredRole: PreviewRole = ['listener','creator','writer','editor','artist'].includes(String(role))
+          ? role as PreviewRole
+          : 'listener';
+        const availableRoles = Array.isArray(nextProfile.roles)
+          ? nextProfile.roles.filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item))
+          : ['listener'];
+        const targetRole: PreviewRole = availableRoles.includes(preferredRole) ? preferredRole : 'listener';
+        const mergedProfile = applyProfileRoleDraft(nextProfile, targetRole);
+        setProfile(mergedProfile);
+        setProfileBaseline(structuredClone(mergedProfile));
+        setProfileEditRole(targetRole);
         setShowOnboarding(nextProfile.onboardingComplete !== true);
       } else {
         setShowOnboarding(true);
