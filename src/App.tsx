@@ -3335,6 +3335,10 @@ function App() {
     profile.avatarStatus === 'approved' || Boolean(profile.avatarUrl),
   ];
   const profileCompletion = Math.round((profileCompletionSignals.filter(Boolean).length / profileCompletionSignals.length) * 100);
+  const profileEditableRoles: PreviewRole[] = (Array.isArray(profile.roles) ? profile.roles : [effectiveRole ?? 'listener'])
+    .filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item));
+  const uniqueProfileEditableRoles = Array.from(new Set(profileEditableRoles.length ? profileEditableRoles : ['listener'] as PreviewRole[]));
+  const hasProfessionalProfileRole = uniqueProfileEditableRoles.some((item) => ['creator','writer','editor','artist'].includes(item));
 
   const openProfileEditor = () => {
     navigate('profile');
