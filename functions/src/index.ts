@@ -904,7 +904,14 @@ export const getMyProfilePortfolioOptions = onCall({ region: REGION }, async (re
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
   const account = await accountRef(identity.uid).get();
-  const role = identity.admin ? 'admin' : cleanText(account.data()?.role, 30);
+  const accountData = account.data() ?? {};
+  const requestedRole = cleanText((request.data as Record<string, unknown> | undefined)?.profileRole, 30);
+  const approvedRoles = professionalRolesForAccount(accountData);
+  const fallbackRole = cleanText(accountData.role, 30) || 'listener';
+  const role = identity.admin ? 'admin' : (requestedRole || fallbackRole);
+  if (!identity.admin && role !== 'listener' && !approvedRoles.includes(role as AccountRole)) {
+    throw new HttpsError('permission-denied', 'That professional profile role has not been approved for this account.');
+  }
   const [options, completedCollaborations] = await Promise.all([
     profilePortfolioOptionsFor(identity.uid, role),
     role === 'admin' ? Promise.resolve(0) : completedCollaborationCountFor(identity.uid),
@@ -918,8 +925,15 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const handle = cleanHandle(input.handle);
   if (handle) validateHandle(handle);
   const accountSnapshot = await accountRef(identity.uid).get();
-  const profileRole = identity.admin ? 'admin' : String(accountSnapshot.data()?.role ?? '');
-  const profileStatus = identity.admin ? 'active' : String(accountSnapshot.data()?.status ?? '');
+  const accountData = accountSnapshot.data() ?? {};
+  const approvedRoles = professionalRolesForAccount(accountData);
+  const requestedProfileRole = cleanText(input.profileRole, 30);
+  const fallbackProfileRole = cleanText(accountData.role, 30) || 'listener';
+  const profileRole = identity.admin ? 'admin' : (requestedProfileRole || fallbackProfileRole);
+  if (!identity.admin && profileRole !== 'listener' && !approvedRoles.includes(profileRole as AccountRole)) {
+    throw new HttpsError('permission-denied', 'That professional profile role has not been approved for this account.');
+  }
+  const profileStatus = identity.admin ? 'active' : String(accountData.status ?? '');
   const featuredPortfolioIds = await validatedPortfolioIdsFor(identity.uid, profileRole, input.featuredPortfolioIds);
 
   const nextProfile = {
@@ -1054,7 +1068,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     }, { merge: true });
   });
 
-  if (profileStatus === 'active' && professionalRolesForAccount(accountSnapshot.data() ?? {}).includes('creator')) {
+  if (profileStatus === 'active' && approvedRoles.includes('creator')) {
     await syncCreatorCustomTagUsage(identity.uid);
   }
 
@@ -1078,6 +1092,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
       ...savedData,
       ...roleProfileSlice(savedData, profileRole || 'listener'),
       activeRole: profileRole || 'listener',
+      roles: identity.admin ? ['admin'] : ['listener', ...approvedRoles],
     },
   };
 });
@@ -1089,9 +1104,13 @@ const publicProfilePayload = (
 ) => {
   if (!data || data.publicProfile === false) return null;
   const roles = professionalRolesForAccount(accountData);
+  const activeRole = cleanText(accountData.role, 30);
+  const publicRole = activeRole === 'listener' || roles.includes(activeRole as AccountRole)
+    ? activeRole
+    : (roles[0] ?? 'listener');
   return {
     userId,
-    role: roles[0] ?? accountData.role ?? null,
+    role: publicRole,
     roles: ['listener', ...roles],
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
