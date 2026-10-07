@@ -12,6 +12,7 @@ type Props = {
   userName?: string | null;
   userEmail?: string | null;
   role: AccountRole | null;
+  roles?: AccountRole[];
   profileCompletion: number;
   profileLoading: boolean;
   profileDirty: boolean;
@@ -35,12 +36,18 @@ const roleLabel = (role: AccountRole | null) => {
   return 'Listener';
 };
 
+const roleSummary = (roles: AccountRole[] | undefined, fallback: AccountRole | null) => {
+  const unique = Array.from(new Set((roles ?? []).filter(Boolean)));
+  return unique.length ? unique.map((item) => roleLabel(item)).join(' · ') : roleLabel(fallback);
+};
+
 export default function UserProfileStudio({
   profile,
   setProfile,
   userName,
   userEmail,
   role,
+  roles,
   profileCompletion,
   profileLoading,
   profileDirty,
@@ -78,7 +85,7 @@ export default function UserProfileStudio({
       <div className="premium-user-hero-copy">
         <span className="eyebrow"><Sparkles size={13}/> YOUR NIGHTJAR PROFILE</span>
         <h1>{displayName}</h1>
-        <div className="premium-user-handle-row"><span>{handle}</span>{profile.pronouns && <span>{profile.pronouns}</span>}<span>{roleLabel(role)}</span></div>
+        <div className="premium-user-handle-row"><span>{handle}</span>{profile.pronouns && <span>{profile.pronouns}</span>}<span>{roleSummary(roles, role)}</span></div>
         <p>{profile.headline || 'Your own corner of Nightjar — shaped by what you choose to share.'}</p>
         {!!topTags.length && <div className="creator-profile-tags premium-user-top-tags">{topTags.map((tag:string)=><span key={tag}>{tag}</span>)}</div>}
       </div>
