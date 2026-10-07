@@ -1812,6 +1812,8 @@ function App() {
         const demoRole = roleOverride ?? previewRole ?? 'admin';
         const demoProfile = readDemo('profile:' + demoRole, demoProfiles[demoRole]);
         setProfile(demoProfile);
+        setProfileBaseline(structuredClone(demoProfile));
+        if (demoRole !== 'admin') setProfileEditRole(demoRole);
         setTasteVector([{label:'Atmospheric',weight:0.92},{label:'Slow burn',weight:0.81},{label:'Story-led',weight:0.76},{label:'Cinematic',weight:0.69}]);
         const demoPortfolioOptions = demoRole === 'creator'
           ? demoTracks.filter((item:any)=>item.creatorUserId === 'demo-creator-aria').map((item:any)=>({ id:item.id, type:'release', title:item.title, subtitle:item.category }))
@@ -1828,15 +1830,30 @@ function App() {
         setProfileCompletedCollaborations(demoRole === 'creator' ? 4 : demoRole === 'writer' ? 3 : demoRole === 'editor' ? 5 : demoRole === 'artist' ? 2 : 0);
         return;
       }
+      const requestedEditRole: PreviewRole = roleOverride && roleOverride !== 'admin'
+        ? roleOverride
+        : role && role !== 'admin' && ['listener','creator','writer','editor','artist'].includes(role)
+          ? role as PreviewRole
+          : 'listener';
       const [profileData, tasteData, tagData, portfolioData] = await Promise.all([
         nightjarCommunity.getMyProfile(),
         nightjarListening.taste(),
         nightjarCommunity.profileTagCatalogue().catch(() => ({ tags: [] })),
-        nightjarCommunity.getMyProfilePortfolioOptions().catch(() => ({ options: [], completedCollaborations: 0 })),
+        nightjarCommunity.getMyProfilePortfolioOptions(requestedEditRole).catch(() => ({ role:requestedEditRole, options: [], completedCollaborations: 0 })),
       ]);
       if (profileData?.profile) {
-        setProfile((current: any) => ({ ...current, ...profileData.profile }));
-        setProfileBaseline((current:any) => ({ ...(current ?? {}), ...profileData.profile }));
+        const availableRoles = Array.isArray(profileData.profile.roles)
+          ? profileData.profile.roles.filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item))
+          : ['listener'];
+        const targetRole: PreviewRole = availableRoles.includes(requestedEditRole)
+          ? requestedEditRole
+          : availableRoles.includes(profileData.profile.activeRole)
+            ? profileData.profile.activeRole as PreviewRole
+            : 'listener';
+        const mergedProfile = applyProfileRoleDraft(profileData.profile, targetRole);
+        setProfile(mergedProfile);
+        setProfileBaseline(structuredClone(mergedProfile));
+        setProfileEditRole(targetRole);
       }
       setTasteVector(tasteData.vector ?? []);
       setProfileTagCatalogue(Array.isArray(tagData?.tags) ? tagData.tags : []);
@@ -1876,23 +1893,76 @@ function App() {
     if (!user) return;
     setProfileLoading(true);
     try {
+      const capturedProfile = captureProfileRoleDraft(profile, profileEditRole);
+      setProfile(capturedProfile);
       if (demoMode) {
-        if (simulationMode) writeDemo('profile:' + (previewRole ?? 'admin'), profile);
-        notify(simulationMode ? 'Simulation: profile saved for this testing session.' : 'Demo data is read-only. Profile changes were not written to your live account.');
+        if (simulationMode) writeDemo('profile:' + (previewRole ?? profileEditRole), capturedProfile);
+        setProfileBaseline(structuredClone(capturedProfile));
+        notify(simulationMode ? 'Simulation: the combined profile was saved for this testing session.' : 'Demo data is read-only. Profile changes were not written to your live account.');
         return;
       }
-      const data = await nightjarCommunity.saveMyProfile(profile);
-      if (data?.profile) {
-        setProfile((current: any) => ({ ...current, ...data.profile }));
-        setProfileBaseline((current:any) => ({ ...(current ?? {}), ...data.profile }));
-      } else {
-        setProfileBaseline(structuredClone(profile));
+
+      const editableRoles = (Array.isArray(capturedProfile.roles) ? capturedProfile.roles : [profileEditRole])
+        .filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item));
+      const rolesToSave = editableRoles.length ? Array.from(new Set(editableRoles)) : [profileEditRole];
+
+      for (const targetRole of rolesToSave) {
+        const payload = applyProfileRoleDraft(capturedProfile, targetRole);
+        await nightjarCommunity.saveMyProfile(payload, targetRole);
       }
-      notify('Your Nightjar profile has been saved.');
+
+      const refreshed = await nightjarCommunity.getMyProfile();
+      if (refreshed?.profile) {
+        const mergedProfile = applyProfileRoleDraft(refreshed.profile, profileEditRole);
+        setProfile(mergedProfile);
+        setProfileBaseline(structuredClone(mergedProfile));
+      } else {
+        setProfileBaseline(structuredClone(capturedProfile));
+      }
+      notify(rolesToSave.length > 1
+        ? 'Your full Nightjar profile has been saved across all of your roles.'
+        : 'Your Nightjar profile has been saved.');
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       notify(message.includes('already-exists') ? 'That @handle is already in use.' : 'Profile could not be saved.');
     } finally { setProfileLoading(false); }
+  };
+
+  const switchProfileEditRole = async (nextRole: PreviewRole) => {
+    if (nextRole === profileEditRole) return;
+    const availableRoles = (Array.isArray(profile.roles) ? profile.roles : ['listener'])
+      .filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item));
+    if (!availableRoles.includes(nextRole)) return;
+
+    setProfile((current:any) => applyProfileRoleDraft(captureProfileRoleDraft(current, profileEditRole), nextRole));
+    setProfileBaseline((current:any) => current ? applyProfileRoleDraft(current, nextRole) : current);
+    setProfileEditRole(nextRole);
+    setProfileLoading(true);
+    try {
+      if (demoMode) {
+        const demoPortfolio = nextRole === 'creator'
+          ? demoTracks.filter((item:any)=>item.creatorUserId === 'demo-creator-aria').map((item:any)=>({ id:item.id, type:'release', title:item.title, subtitle:item.category }))
+          : nextRole === 'listener'
+            ? (readDemo('library', demoLibrary).playlists ?? []).map((item:any)=>({ id:item.id, type:'playlist', title:item.title, subtitle:(item.releaseIds?.length ?? 0) + ' releases' }))
+            : nextRole === 'writer'
+              ? demoTracks.filter((item:any)=>(item.contributors ?? []).some((credit:any)=>credit.userId === 'demo-writer-mara')).map((item:any)=>({ id:item.id, type:'credit', title:item.title, subtitle:'Writer credit' }))
+              : nextRole === 'editor'
+                ? demoTracks.filter((item:any)=>(item.contributors ?? []).some((credit:any)=>credit.userId === 'demo-editor-sam')).map((item:any)=>({ id:item.id, type:'credit', title:item.title, subtitle:'Audio Editor credit' }))
+                : [];
+        setProfilePortfolioOptions(demoPortfolio);
+        setProfileCompletedCollaborations(nextRole === 'creator' ? 4 : nextRole === 'writer' ? 3 : nextRole === 'editor' ? 5 : nextRole === 'artist' ? 2 : 0);
+      } else {
+        const portfolioData = await nightjarCommunity.getMyProfilePortfolioOptions(nextRole);
+        setProfilePortfolioOptions(Array.isArray(portfolioData?.options) ? portfolioData.options : []);
+        setProfileCompletedCollaborations(Number(portfolioData?.completedCollaborations ?? 0));
+      }
+    } catch {
+      setProfilePortfolioOptions([]);
+      setProfileCompletedCollaborations(0);
+      notify('That role profile could not be loaded right now.');
+    } finally {
+      setProfileLoading(false);
+    }
   };
 
   const loadSecurityAlerts = async () => {
