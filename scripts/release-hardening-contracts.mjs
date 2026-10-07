@@ -39,6 +39,14 @@ for(const marker of ['VA CREATOR PROFILE','WRITER PROFILE','ARTIST PROFILE','LIS
   requireText(publicProfile,marker,'Bespoke public profile section missing: '+marker);
 }
 
+requireText(functions,'requestedProfileRole','Multi-role profile saves must support an explicit approved profile role.');
+requireText(functions,"That professional profile role has not been approved for this account.",'Role-targeted profile editing must enforce approved-role boundaries.');
+requireText(app,'captureProfileRoleDraft','Multi-role profile drafts must be isolated before role switching.');
+requireText(app,'profile-identity-tabs','Unified profile identity tabs are missing.');
+requireText(app,'saveMyProfile(payload, targetRole)','Save-all must persist each approved role slice independently.');
+requireText(app,'getMyProfilePortfolioOptions(nextRole)','Role switching must load role-specific showcase options without changing workspace.');
+requireText(roleProfile,"role === 'editor'",'Audio Editor must participate in the unified professional profile editor.');
+
 requireText(functions,'recordAuthenticationSuccess','Successful sign-in security telemetry is missing.');
 requireText(functions,'listMySignInActivity','Private sign-in activity endpoint is missing.');
 requireText(functions,"type:'account_security'",'New-device user notification is missing.');
