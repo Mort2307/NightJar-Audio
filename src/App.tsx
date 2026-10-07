@@ -100,6 +100,93 @@ type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'art
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type TestingMode = 'off' | 'demo' | 'simulation';
 
+const PROFILE_ROLE_DEFAULTS = {
+  roleFocus: [] as string[],
+  roleSpecialties: [] as string[],
+  roleSecondary: [] as string[],
+  roleAvailability: '',
+  roleHeadline: '',
+  roleBio: '',
+  roleDetailOne: '',
+  roleDetailTwo: '',
+  portfolioNote: '',
+  featuredPortfolioIds: [] as string[],
+  editorSoftware: [] as string[],
+  editorProjectTypes: [] as string[],
+  editorDeliveryFormats: [] as string[],
+  editorCollaborationPreferences: [] as string[],
+  editorTurnaround: '',
+  editorExperienceYears: '',
+  editorSkillLevels: {} as Record<string,string>,
+  creatorLanguages: [] as string[],
+  creatorDirectionModes: [] as string[],
+  creatorDeliveryFormats: [] as string[],
+  creatorTurnaround: '',
+  creatorEquipment: '',
+  writerScriptLengths: [] as string[],
+  writerCollaborationPreferences: [] as string[],
+  writerTurnaround: '',
+  writerRightsNote: '',
+  artistMediums: [] as string[],
+  artistDeliveryFormats: [] as string[],
+  artistTurnaround: '',
+  artistSoftware: [] as string[],
+  listenerCommunityStyle: [] as string[],
+};
+
+const profileRoleDraft = (profile: any) => ({
+  roleFocus: [...(profile.roleFocus ?? [])],
+  roleSpecialties: [...(profile.roleSpecialties ?? [])],
+  roleSecondary: [...(profile.roleSecondary ?? [])],
+  roleAvailability: profile.roleAvailability ?? '',
+  roleHeadline: profile.roleHeadline ?? '',
+  roleBio: profile.roleBio ?? '',
+  roleDetailOne: profile.roleDetailOne ?? '',
+  roleDetailTwo: profile.roleDetailTwo ?? '',
+  portfolioNote: profile.portfolioNote ?? '',
+  featuredPortfolioIds: [...(profile.featuredPortfolioIds ?? [])],
+  editorSoftware: [...(profile.editorSoftware ?? [])],
+  editorProjectTypes: [...(profile.editorProjectTypes ?? [])],
+  editorDeliveryFormats: [...(profile.editorDeliveryFormats ?? [])],
+  editorCollaborationPreferences: [...(profile.editorCollaborationPreferences ?? [])],
+  editorTurnaround: profile.editorTurnaround ?? '',
+  editorExperienceYears: profile.editorExperienceYears ?? '',
+  editorSkillLevels: { ...(profile.editorSkillLevels ?? {}) },
+  creatorLanguages: [...(profile.creatorLanguages ?? [])],
+  creatorDirectionModes: [...(profile.creatorDirectionModes ?? [])],
+  creatorDeliveryFormats: [...(profile.creatorDeliveryFormats ?? [])],
+  creatorTurnaround: profile.creatorTurnaround ?? '',
+  creatorEquipment: profile.creatorEquipment ?? '',
+  writerScriptLengths: [...(profile.writerScriptLengths ?? [])],
+  writerCollaborationPreferences: [...(profile.writerCollaborationPreferences ?? [])],
+  writerTurnaround: profile.writerTurnaround ?? '',
+  writerRightsNote: profile.writerRightsNote ?? '',
+  artistMediums: [...(profile.artistMediums ?? [])],
+  artistDeliveryFormats: [...(profile.artistDeliveryFormats ?? [])],
+  artistTurnaround: profile.artistTurnaround ?? '',
+  artistSoftware: [...(profile.artistSoftware ?? [])],
+  listenerCommunityStyle: [...(profile.listenerCommunityStyle ?? [])],
+});
+
+const captureProfileRoleDraft = (profile: any, role: PreviewRole) => ({
+  ...profile,
+  roleProfiles: {
+    ...(profile.roleProfiles ?? {}),
+    [role]: profileRoleDraft(profile),
+  },
+});
+
+const applyProfileRoleDraft = (profile: any, role: PreviewRole) => {
+  const stored = profile?.roleProfiles?.[role];
+  const fallback = profile?.activeRole === role ? profileRoleDraft(profile) : {};
+  return {
+    ...profile,
+    ...PROFILE_ROLE_DEFAULTS,
+    ...(stored && typeof stored === 'object' ? stored : fallback),
+  };
+};
+
+
 const TESTING_SESSION_KEY = 'nightjar.testing.session.v1';
 
 const readTestingSession = (): { mode: TestingMode; role: PreviewRole | null } => {
@@ -367,6 +454,7 @@ function App() {
   const [adminTesterEmail, setAdminTesterEmail] = useState('');
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'artist' | 'admin' | null>(null);
   const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, creatorLanguages: [], creatorDirectionModes: [], creatorDeliveryFormats: [], creatorTurnaround: '', creatorEquipment: '', writerScriptLengths: [], writerCollaborationPreferences: [], writerTurnaround: '', writerRightsNote: '', artistMediums: [], artistDeliveryFormats: [], artistTurnaround: '', artistSoftware: [], listenerCommunityStyle: [], publicProfile: true });
+  const [profileEditRole, setProfileEditRole] = useState<PreviewRole>('listener');
   const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
   const [profilePortfolioOptions, setProfilePortfolioOptions] = useState<any[]>([]);
   const [profileCompletedCollaborations, setProfileCompletedCollaborations] = useState(0);
