@@ -43,6 +43,9 @@ requireText(functions,'requestedProfileRole','Multi-role profile saves must supp
 requireText(functions,"That professional profile role has not been approved for this account.",'Role-targeted profile editing must enforce approved-role boundaries.');
 requireText(functions,'topLevelProfileWrite','Multi-role saves must not overwrite active-workspace compatibility fields from another role.');
 requireText(functions,"profileRole === activeWorkspaceRole",'Only the active workspace role may refresh legacy top-level role fields.');
+requireText(functions,"...roleProfileSlice(profileData, 'creator')",'Creator directory cards must read the Creator role slice on multi-role accounts.');
+requireText(functions,"role:'writer'",'Writer directory cards must remain explicitly Writer-scoped on multi-role accounts.');
+requireText(functions,"professionalRolesForAccount(target.data() ?? {}).includes('creator')",'Backward-compatible Creator follows must support multi-role Creator accounts.');
 requireText(app,'captureProfileRoleDraft','Multi-role profile drafts must be isolated before role switching.');
 requireText(app,'profile-identity-tabs','Unified profile identity tabs are missing.');
 requireText(app,'saveMyProfile(payload, targetRole)','Save-all must persist each approved role slice independently.');
