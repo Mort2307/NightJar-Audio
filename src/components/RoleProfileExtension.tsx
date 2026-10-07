@@ -1,4 +1,4 @@
-import { BookOpenText, Brush, Handshake, Headphones, Mic2, Search, Sparkles, UsersRound, WandSparkles } from 'lucide-react';
+import { BookOpenText, Brush, FileCheck2, Handshake, Headphones, Mic2, Search, Sparkles, UsersRound, WandSparkles, Wrench } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import {
@@ -8,6 +8,12 @@ import {
   CREATOR_DELIVERY_OPTIONS,
   CREATOR_DIRECTION_OPTIONS,
   CREATOR_TURNAROUND_OPTIONS,
+  EDITOR_COLLABORATION_OPTIONS,
+  EDITOR_DELIVERY_OPTIONS,
+  EDITOR_PROFICIENCY_OPTIONS,
+  EDITOR_PROJECT_TYPE_OPTIONS,
+  EDITOR_SOFTWARE_OPTIONS,
+  EDITOR_TURNAROUND_OPTIONS,
   LISTENER_COMMUNITY_OPTIONS,
   ROLE_FOCUS_OPTIONS,
   ROLE_PROFILE_CONFIG,
@@ -17,7 +23,7 @@ import {
   type ProfileRoleKey,
 } from '../data/nightjarTaxonomy';
 
-type SupportedRole = 'listener' | 'creator' | 'writer' | 'artist';
+type SupportedRole = 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
 
 type Props = {
   role: SupportedRole;
@@ -46,6 +52,12 @@ const roleMeta = {
     copy:'Present voice, formats, commission fit, turnaround and rights posture while drafts, private terms and protected scripts stay inside Writer Studio.',
     icon:BookOpenText,
   },
+  editor: {
+    eyebrow:'AUDIO EDITOR PROFILE',
+    title:'Present production skill with the same confidence as the work itself.',
+    copy:'Show services, tools, project fit, delivery capability and workflow without exposing private client files, manuscripts or revision notes.',
+    icon:FileCheck2,
+  },
   artist: {
     eyebrow:'ARTIST PORTFOLIO',
     title:'Make visual craft and commission fit obvious.',
@@ -71,16 +83,18 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
     return {...current,featuredPortfolioIds:checked?[...ids,id].slice(0,6):ids.filter((value:string)=>value!==id)};
   });
 
-  const displayName = profile.displayName || (role === 'listener' ? 'Nightjar Listener' : role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : 'Artist');
+  const displayName = profile.displayName || (role === 'listener' ? 'Nightjar Listener' : role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'editor' ? 'Audio Editor' : 'Artist');
   const initials = profile.avatarInitials || displayName.split(/\s+/).map((part:string)=>part[0]).join('').slice(0,2).toUpperCase() || 'NJ';
-  const roleName = role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'artist' ? 'Artist' : 'Listener';
+  const roleName = role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'editor' ? 'Audio Editor' : role === 'artist' ? 'Artist' : 'Listener';
   const turnaround = role === 'creator'
     ? profile.creatorTurnaround
     : role === 'writer'
       ? profile.writerTurnaround
-      : role === 'artist'
-        ? profile.artistTurnaround
-        : null;
+      : role === 'editor'
+        ? profile.editorTurnaround
+        : role === 'artist'
+          ? profile.artistTurnaround
+          : null;
   const sharedInterestCount = [
     ...(profile.roleFocus ?? []),
     ...(profile.roleSpecialties ?? []),
@@ -92,7 +106,9 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
       ? 'Performance, voice and recording craft.'
       : role === 'writer'
         ? 'Writing voice, formats and collaboration.'
-        : 'Visual craft, commissions and creative collaboration.');
+        : role === 'editor'
+          ? 'Production craft, technical delivery and collaboration.'
+          : 'Visual craft, commissions and creative collaboration.');
 
   const positioning=<article className={'panel premium-role-positioning premium-role-positioning-'+role}>
     <div className="premium-role-card-title"><span><Icon size={17}/></span><div><span className="mini-label">ROLE POSITIONING</span><h3>Give this role its own voice.</h3></div></div>
@@ -127,6 +143,17 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
           <label>Typical turnaround<select value={profile.writerTurnaround ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,writerTurnaround:event.target.value}))}><option value="">Project dependent / not stated</option>{WRITER_TURNAROUND_OPTIONS.map((option)=><option key={option}>{option}</option>)}</select></label>
           <label>Public rights / licensing note<textarea maxLength={500} value={profile.writerRightsNote ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,writerRightsNote:event.target.value}))} placeholder="e.g. Open to licensed catalogue scripts and commissioned originals. Keep rates and private deal terms inside Nightjar."/></label>
         </article>
+      : role === 'editor'
+        ? <article className="panel premium-role-extension-card premium-role-specialist-card editor">
+            <div className="premium-role-card-title"><span><Wrench size={17}/></span><div><span className="mini-label">SERVICES & CAPABILITY</span><h3>Production tools, project fit and delivery.</h3></div></div>
+            <SearchableMultiSelect label="DAWs & production tools" options={EDITOR_SOFTWARE_OPTIONS} values={profile.editorSoftware ?? []} onChange={(values)=>setProfile((current:any)=>({...current,editorSoftware:values}))}/>
+            <SearchableMultiSelect label="Project types I want to edit" options={EDITOR_PROJECT_TYPE_OPTIONS} values={profile.editorProjectTypes ?? []} onChange={(values)=>setProfile((current:any)=>({...current,editorProjectTypes:values}))}/>
+            <SearchableMultiSelect label="Delivery capabilities" options={EDITOR_DELIVERY_OPTIONS} values={profile.editorDeliveryFormats ?? []} onChange={(values)=>setProfile((current:any)=>({...current,editorDeliveryFormats:values}))}/>
+            <SearchableMultiSelect label="Best collaboration fit" options={EDITOR_COLLABORATION_OPTIONS} values={profile.editorCollaborationPreferences ?? []} onChange={(values)=>setProfile((current:any)=>({...current,editorCollaborationPreferences:values}))}/>
+            <label>Typical turnaround<select value={profile.editorTurnaround ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,editorTurnaround:event.target.value}))}><option value="">Project dependent / not stated</option>{EDITOR_TURNAROUND_OPTIONS.map((option)=><option key={option}>{option}</option>)}</select></label>
+            <label>Years actively editing<input type="number" min="0" max="60" inputMode="numeric" value={profile.editorExperienceYears ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,editorExperienceYears:event.target.value === '' ? '' : Math.min(60,Math.max(0,Number(event.target.value)))}))}/></label>
+            {(profile.roleSpecialties ?? []).length > 0 && <div className="editor-skill-matrix-editor"><span className="mini-label">SKILL MATRIX</span><div className="editor-skill-matrix-list">{(profile.roleSpecialties ?? []).map((skill:string)=><label key={skill}><span>{skill}</span><select value={profile.editorSkillLevels?.[skill] ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,editorSkillLevels:{...(current.editorSkillLevels??{}),[skill]:event.target.value}}))}><option value="">Not stated</option>{EDITOR_PROFICIENCY_OPTIONS.map((level)=><option key={level} value={level}>{level}</option>)}</select></label>)}</div></div>}
+          </article>
       : role === 'artist'
         ? <article className="panel premium-role-extension-card premium-role-specialist-card artist">
             <div className="premium-role-card-title"><span><WandSparkles size={17}/></span><div><span className="mini-label">VISUAL PRACTICE</span><h3>Medium, deliverables and commission fit.</h3></div></div>
@@ -186,7 +213,7 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
     </div>
 
     <article className="panel premium-role-extension-card premium-role-story-card">
-      <span className="mini-label">{role==='listener'?'YOUR NIGHTJAR NOTE':role==='creator'?'PERFORMANCE NOTES':role==='writer'?'WRITING & COLLABORATION':'STYLE & COMMISSION NOTES'}</span>
+      <span className="mini-label">{role==='listener'?'YOUR NIGHTJAR NOTE':role==='creator'?'PERFORMANCE NOTES':role==='writer'?'WRITING & COLLABORATION':role==='editor'?'WORKFLOW & COLLABORATION':'STYLE & COMMISSION NOTES'}</span>
       <div className="premium-role-story-grid">
         <label>{config.detailOneLabel}<textarea maxLength={600} value={profile.roleDetailOne ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,roleDetailOne:event.target.value}))} placeholder={config.detailOnePlaceholder}/></label>
         <label>{config.detailTwoLabel}<textarea maxLength={600} value={profile.roleDetailTwo ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,roleDetailTwo:event.target.value}))} placeholder={config.detailTwoPlaceholder}/></label>
@@ -196,7 +223,7 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
 
     <article className={'panel premium-role-showcase premium-role-showcase-'+role}>
       <div className="premium-role-showcase-head">
-        <div><span className="mini-label">{role === 'listener' ? 'CURATED PUBLIC SPACE' : 'VERIFIED SHOWCASE'}</span><h3>{role === 'listener' ? 'The playlists you choose to put your name on.' : role==='creator'?'Lead with the performances that represent you.':role==='writer'?'Lead with produced writing credits.':'Lead with the visual work that represents you.'}</h3><p>{role === 'listener' ? 'Public playlists create a meaningful Listener profile without exposing private behaviour.' : 'Feature up to six eligible Nightjar items. Verified work stays visually separate from self-description.'}</p></div>
+        <div><span className="mini-label">{role === 'listener' ? 'CURATED PUBLIC SPACE' : 'VERIFIED SHOWCASE'}</span><h3>{role === 'listener' ? 'The playlists you choose to put your name on.' : role==='creator'?'Lead with the performances that represent you.':role==='writer'?'Lead with produced writing credits.':role==='editor'?'Lead with credited production work.':'Lead with the visual work that represents you.'}</h3><p>{role === 'listener' ? 'Public playlists create a meaningful Listener profile without exposing private behaviour.' : 'Feature up to six eligible Nightjar items. Verified work stays visually separate from self-description.'}</p></div>
         {role !== 'listener' && <span className="profile-collaboration-badge"><Handshake size={13}/>{completedCollaborations} collaborations</span>}
       </div>
       <label>Showcase note <span className="optional-label">optional</span><textarea maxLength={400} value={profile.portfolioNote ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,portfolioNote:event.target.value}))} placeholder={role==='listener'?'A note about the playlists you choose to share.':'Introduce the work you want people to notice first.'}/></label>
