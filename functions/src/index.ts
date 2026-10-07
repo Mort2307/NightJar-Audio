@@ -985,6 +985,18 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     updatedAt: FieldValue.serverTimestamp(),
   };
 
+  const activeWorkspaceRole = identity.admin ? 'admin' : fallbackProfileRole;
+  const roleCompatibilityFields = new Set([
+    'roleFocus','roleSpecialties','roleSecondary','roleAvailability','roleHeadline','roleBio','roleDetailOne','roleDetailTwo',
+    'portfolioNote','featuredPortfolioIds','editorSoftware','editorProjectTypes','editorDeliveryFormats','editorCollaborationPreferences',
+    'editorTurnaround','editorExperienceYears','editorSkillLevels','creatorLanguages','creatorDirectionModes','creatorDeliveryFormats',
+    'creatorTurnaround','creatorEquipment','writerScriptLengths','writerCollaborationPreferences','writerTurnaround','writerRightsNote',
+    'artistMediums','artistDeliveryFormats','artistTurnaround','artistSoftware','listenerCommunityStyle',
+  ]);
+  const topLevelProfileWrite = Object.fromEntries(
+    Object.entries(nextProfile).filter(([key]) => profileRole === activeWorkspaceRole || !roleCompatibilityFields.has(key)),
+  );
+
   const targetProfileRef = profileRef(identity.uid);
   await db.runTransaction(async (transaction) => {
     const currentProfile = await transaction.get(targetProfileRef);
@@ -1062,7 +1074,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     }
 
     transaction.set(targetProfileRef, {
-      ...nextProfile,
+      ...topLevelProfileWrite,
       roleProfiles,
       ...(currentProfile.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
