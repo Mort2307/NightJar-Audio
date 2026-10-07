@@ -1578,7 +1578,12 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
       ...creatorRoleProfile,
       featuredReleases: (() => {
-        const hasPortfolioCuration = Array.isArray(creatorRoleProfile.featuredPortfolioIds);
+        const storedCreatorProfile = data.roleProfiles && typeof data.roleProfiles === 'object' && data.roleProfiles.creator && typeof data.roleProfiles.creator === 'object'
+          ? data.roleProfiles.creator
+          : null;
+        const hasPortfolioCuration = storedCreatorProfile
+          ? Array.isArray(storedCreatorProfile.featuredPortfolioIds)
+          : Array.isArray(data.featuredPortfolioIds);
         const selected = cleanStringList(creatorRoleProfile.featuredPortfolioIds, 6);
         const byId = new Map(releases.map((release) => [String(release.id), release]));
         return hasPortfolioCuration
