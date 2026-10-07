@@ -11,7 +11,7 @@ const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'li
 const listPublicProfilesCall = httpsCallable<void, { profiles: any[] }>(functions, 'listPublicProfiles');
 const getCreatorProfileCall = httpsCallable<{ userId: string }, { creator: any }>(functions, 'getCreatorProfile');
 const getPublicProfileCall = httpsCallable<{ userId: string }, { profile: any }>(functions, 'getPublicProfile');
-const getMyProfilePortfolioOptionsCall = httpsCallable<void, { role: string; options: any[]; completedCollaborations: number }>(functions, 'getMyProfilePortfolioOptions');
+const getMyProfilePortfolioOptionsCall = httpsCallable<{ profileRole?: string }, { role: string; options: any[]; completedCollaborations: number }>(functions, 'getMyProfilePortfolioOptions');
 const profileTagCatalogueCall = httpsCallable<void, { tags: string[] }>(functions, 'profileTagCatalogue');
 const adminProfileTagCatalogueCall = httpsCallable<void, { tags: any[]; promotionThreshold: number }>(functions, 'adminProfileTagCatalogue');
 const adminSetProfileTagStatusCall = httpsCallable<{ tagId: string; status: 'candidate' | 'promoted' | 'hidden' }, { tagId: string; status: string }>(functions, 'adminSetProfileTagStatus');
@@ -27,8 +27,8 @@ export const nightjarCommunity = {
     return (await getMyProfileCall()).data;
   },
 
-  async saveMyProfile(profile: Profile) {
-    return (await saveMyProfileCall(profile)).data;
+  async saveMyProfile(profile: Profile, profileRole?: string) {
+    return (await saveMyProfileCall({ ...profile, ...(profileRole ? { profileRole } : {}) })).data;
   },
 
   async listCreators() {
@@ -47,8 +47,8 @@ export const nightjarCommunity = {
     return (await getPublicProfileCall({ userId })).data;
   },
 
-  async getMyProfilePortfolioOptions() {
-    return (await getMyProfilePortfolioOptionsCall()).data;
+  async getMyProfilePortfolioOptions(profileRole?: string) {
+    return (await getMyProfilePortfolioOptionsCall(profileRole ? { profileRole } : {})).data;
   },
 
   async profileTagCatalogue() {
