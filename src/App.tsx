@@ -3803,6 +3803,23 @@ function App() {
               <div className="profile-identity-context"><span>Editing <strong>{roleMeta[profileEditRole].label}</strong></span><span>Workspace <strong>{effectiveRole ? roleMeta[effectiveRole].label : 'Listener'}</strong></span>{uniqueProfileEditableRoles.length>1&&<span><strong>{uniqueProfileEditableRoles.length}</strong> identities on one public profile</span>}</div>
             </section>}
 
+            {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading role profile" />}>
+              <RoleProfileExtension
+                role={profileEditRole}
+                profile={profile}
+                setProfile={setProfile}
+                portfolioOptions={profilePortfolioOptions}
+                completedCollaborations={profileCompletedCollaborations}
+              />
+            </Suspense>}
+
+            {profileEditRole === 'artist' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Artist portfolio" />}><ArtistPortfolioManager notify={notify} demoMode={demoMode} /></Suspense>}
+
+            {profileDirty && <div className="premium-profile-floating-save">
+              <span><strong>Profile changes waiting.</strong><small>Save once and the personal + role sections update together.</small></span>
+              <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}><Check size={14}/>{profileLoading?'Saving…':'Save all profile changes'}</button>
+            </div>}
+
             <section className="profile-account-hub">
               <div className="profile-account-hub-head">
                 <div><span className="mini-label">ACCOUNT & SUPPORT</span><h2>Your Nightjar account, neatly in one place.</h2><p>App maintenance, role access and Nightjar support belong to the account — not to one creative identity. These tools stay consistent whichever profile role is active.</p></div>
@@ -3820,23 +3837,6 @@ function App() {
               </div>
               {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={hasProfessionalProfileRole} demoMode={demoMode} /></Suspense>}
             </section>
-
-            {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading role profile" />}>
-              <RoleProfileExtension
-                role={profileEditRole}
-                profile={profile}
-                setProfile={setProfile}
-                portfolioOptions={profilePortfolioOptions}
-                completedCollaborations={profileCompletedCollaborations}
-              />
-            </Suspense>}
-
-            {profileEditRole === 'artist' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Artist portfolio" />}><ArtistPortfolioManager notify={notify} demoMode={demoMode} /></Suspense>}
-
-            {profileDirty && <div className="premium-profile-floating-save">
-              <span><strong>Profile changes waiting.</strong><small>Save once and the personal + role sections update together.</small></span>
-              <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}><Check size={14}/>{profileLoading?'Saving…':'Save all profile changes'}</button>
-            </div>}
 
             <div className="premium-profile-account-grid">
               <article className="panel nj-account-activity premium-account-activity">
