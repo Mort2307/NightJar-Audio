@@ -3776,6 +3776,7 @@ function App() {
                 userName={simulationMode ? simulationIdentity.name : user?.name}
                 userEmail={user?.email}
                 role={effectiveRole}
+                roles={uniqueProfileEditableRoles}
                 profileCompletion={profileCompletion}
                 profileLoading={profileLoading}
                 profileDirty={profileDirty}
@@ -3791,6 +3792,17 @@ function App() {
               />
             </Suspense>
 
+            {effectiveRole !== 'admin' && <section className="profile-identity-switcher panel">
+              <div className="profile-identity-switcher-head">
+                <div><span className="mini-label">ONE PROFILE · EVERY APPROVED ROLE</span><h2>Choose the identity you want to edit.</h2><p>Your name, avatar, handle and personal profile stay shared. Each professional identity keeps its own headline, services, availability, portfolio and working preferences.</p></div>
+                <ShieldCheck size={19}/>
+              </div>
+              <div className="profile-identity-tabs" role="tablist" aria-label="Profile identities">
+                {uniqueProfileEditableRoles.map((item)=><button type="button" role="tab" aria-selected={profileEditRole===item} className={profileEditRole===item?'active':''} key={item} onClick={()=>void switchProfileEditRole(item)}>{roleMeta[item].label}</button>)}
+              </div>
+              <div className="profile-identity-context"><span>Editing <strong>{roleMeta[profileEditRole].label}</strong></span><span>Workspace <strong>{effectiveRole ? roleMeta[effectiveRole].label : 'Listener'}</strong></span>{uniqueProfileEditableRoles.length>1&&<span><strong>{uniqueProfileEditableRoles.length}</strong> identities on one public profile</span>}</div>
+            </section>}
+
             <section className="profile-account-hub">
               <div className="profile-account-hub-head">
                 <div><span className="mini-label">ACCOUNT & SUPPORT</span><h2>Your Nightjar account, neatly in one place.</h2><p>App maintenance, role access and Nightjar support belong to the account — not to one creative identity. These tools stay consistent whichever profile role is active.</p></div>
@@ -3803,15 +3815,15 @@ function App() {
                   <AppUpdateControl compact />
                 </article>
                 <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
-                  <ProfessionalRoleManager compact notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate('profile'); void loadProfile(); }} />
+                  <ProfessionalRoleManager compact notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate('profile'); if(next!=='admin') void loadProfile(next as PreviewRole); }} />
                 </Suspense>
               </div>
-              {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={['creator','writer','editor','artist'].includes(String(effectiveRole))} demoMode={demoMode} /></Suspense>}
+              {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={hasProfessionalProfileRole} demoMode={demoMode} /></Suspense>}
             </section>
 
-            {effectiveRole && ['listener','creator','writer','artist'].includes(String(effectiveRole)) && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading role profile" />}>
+            {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading role profile" />}>
               <RoleProfileExtension
-                role={effectiveRole as 'listener'|'creator'|'writer'|'artist'}
+                role={profileEditRole}
                 profile={profile}
                 setProfile={setProfile}
                 portfolioOptions={profilePortfolioOptions}
@@ -3819,7 +3831,7 @@ function App() {
               />
             </Suspense>}
 
-            {effectiveRole === 'artist' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Artist portfolio" />}><ArtistPortfolioManager notify={notify} demoMode={demoMode} /></Suspense>}
+            {profileEditRole === 'artist' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Artist portfolio" />}><ArtistPortfolioManager notify={notify} demoMode={demoMode} /></Suspense>}
 
             {profileDirty && <div className="premium-profile-floating-save">
               <span><strong>Profile changes waiting.</strong><small>Save once and the personal + role sections update together.</small></span>
