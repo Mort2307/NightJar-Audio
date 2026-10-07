@@ -1149,6 +1149,7 @@ const publicProfilePayload = (
     portfolioNote: data.portfolioNote ?? null,
     roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
     featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
+    ...roleProfileSlice(data, publicRole),
   };
 };
 
@@ -1230,11 +1231,14 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
   const creators = accounts.docs
     .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
     .map((doc) => {
-      const base = publicProfilePayload(doc.id, doc.data() ?? {}, profileByUser.get(doc.id));
+      const profileData = profileByUser.get(doc.id) ?? {};
+      const base = publicProfilePayload(doc.id, doc.data() ?? {}, profileData);
       if (!base) return null;
       const seconds = verified.byCreator.get(doc.id) ?? 0;
       return {
         ...base,
+        ...roleProfileSlice(profileData, 'creator'),
+        role: 'creator',
         followerCount: Number((base as any).followerCount ?? 0),
         releaseCount: releaseCounts.get(doc.id) ?? 0,
         verifiedListeningMinutes: Math.round((seconds / 60) * 10) / 10,
@@ -1294,8 +1298,13 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
     .map(async (doc) => {
       const data = profileByUser.get(doc.id);
       if (!data || data.publicProfile === false) return null;
-      const professionalRoles = professionalRolesForAccount(doc.data() ?? {});
-      const role = professionalRoles[0] ?? String(doc.data().role ?? 'listener');
+      const accountData = doc.data() ?? {};
+      const professionalRoles = professionalRolesForAccount(accountData);
+      const activeRole = cleanText(accountData.role, 30);
+      const role = activeRole === 'listener' || professionalRoles.includes(activeRole as AccountRole)
+        ? activeRole
+        : (professionalRoles[0] ?? 'listener');
+      const roleSlice = roleProfileSlice(data, role);
       const releaseCount = releaseCountByCreator.get(doc.id) ?? 0;
       const publishedWorkCount = publishedScriptsByWriter.get(doc.id) ?? 0;
       const creditedReleaseCount = creditCountByUser.get(doc.id) ?? 0;
@@ -1329,6 +1338,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         portfolioNote: data.portfolioNote ?? null,
         featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
         roleProfiles,
+        ...roleSlice,
         releaseCount,
         publishedWorkCount,
         creditedReleaseCount,
@@ -1370,7 +1380,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   }
 
   const professionalRoles = professionalRolesForAccount(accountData ?? {});
-  const role = professionalRoles[0] ?? String(accountData?.role ?? 'listener');
+  const activePublicRole = cleanText(accountData?.role, 30);
+  const role = activePublicRole === 'listener' || professionalRoles.includes(activePublicRole as AccountRole)
+    ? activePublicRole
+    : (professionalRoles[0] ?? 'listener');
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
@@ -1544,6 +1557,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
     .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
   const completedCollaborations = await completedCollaborationCountFor(creatorUserId);
+  const creatorRoleProfile = roleProfileSlice(data, 'creator');
 
   return {
     creator: {
@@ -1562,17 +1576,10 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
       favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
       favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-      roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
-      roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
-      roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
-      roleAvailability: data.roleAvailability ?? null,
-      roleDetailOne: data.roleDetailOne ?? null,
-      roleDetailTwo: data.roleDetailTwo ?? null,
-      portfolioNote: data.portfolioNote ?? null,
-      featuredPortfolioIds: Array.isArray(data.featuredPortfolioIds) ? data.featuredPortfolioIds : [],
+      ...creatorRoleProfile,
       featuredReleases: (() => {
-        const hasPortfolioCuration = Array.isArray(data.featuredPortfolioIds);
-        const selected = cleanStringList(data.featuredPortfolioIds, 6);
+        const hasPortfolioCuration = Array.isArray(creatorRoleProfile.featuredPortfolioIds);
+        const selected = cleanStringList(creatorRoleProfile.featuredPortfolioIds, 6);
         const byId = new Map(releases.map((release) => [String(release.id), release]));
         return hasPortfolioCuration
           ? selected.flatMap((id) => {
@@ -1601,9 +1608,11 @@ export const listWriters = onCall({ region: REGION }, async (request) => {
       .map(async (doc) => {
         const base = await publicProfileForAccount(doc);
         if (!base) return null;
+        const writerProfile = await profileRef(doc.id).get();
+        const writerData = writerProfile.data() ?? {};
         const scripts = await db.collection('scripts').where('writerUserId', '==', doc.id).limit(500).get();
         const publishedWorkCount = scripts.docs.filter((script) => ['Approved','Published'].includes(String(script.data().status))).length;
-        return { ...base, publishedWorkCount };
+        return { ...base, ...roleProfileSlice(writerData, 'writer'), role:'writer', publishedWorkCount };
       }),
   )).filter(Boolean);
 
@@ -1706,7 +1715,7 @@ export const setCreatorFollow = onCall({ region: REGION }, async (request) => {
     accountRef(targetUserId).get(),
     profileRef(targetUserId).get(),
   ]);
-  if (!target.exists || target.data()?.status !== 'active' || target.data()?.role !== 'creator' || !profile.exists || profile.data()?.publicProfile === false) {
+  if (!target.exists || target.data()?.status !== 'active' || !professionalRolesForAccount(target.data() ?? {}).includes('creator') || !profile.exists || profile.data()?.publicProfile === false) {
     throw new HttpsError('not-found', 'Creator profile not found.');
   }
 
