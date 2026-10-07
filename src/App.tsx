@@ -3776,7 +3776,7 @@ function App() {
                 userName={simulationMode ? simulationIdentity.name : user?.name}
                 userEmail={user?.email}
                 role={effectiveRole}
-                roles={uniqueProfileEditableRoles}
+                roles={effectiveRole === 'admin' ? undefined : uniqueProfileEditableRoles}
                 profileCompletion={profileCompletion}
                 profileLoading={profileLoading}
                 profileDirty={profileDirty}
@@ -3831,9 +3831,9 @@ function App() {
                   <p>Check the deployed build or clear stale app caches without touching your account or cloud data.</p>
                   <AppUpdateControl compact />
                 </article>
-                <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
+                {effectiveRole !== 'admin' ? <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
                   <ProfessionalRoleManager compact notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate('profile'); if(next!=='admin') void loadProfile(next as PreviewRole); }} />
-                </Suspense>
+                </Suspense> : <article className="panel profile-account-tool-card"><div className="profile-account-tool-head"><div><span className="mini-label">ADMINISTRATOR</span><h3>Professional roles are member-facing</h3></div><ShieldCheck size={17}/></div><p>Administrator identity stays separate from Listener and professional role applications.</p></article>}
               </div>
               {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={hasProfessionalProfileRole} demoMode={demoMode} /></Suspense>}
             </section>
