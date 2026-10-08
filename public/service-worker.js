@@ -1,4 +1,4 @@
-const CACHE = 'nightjar-shell-v9';
+const CACHE = 'nightjar-shell-v10';
 const SHELL = ['/'];
 
 self.addEventListener('install', (event) => {
@@ -24,22 +24,37 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  if (url.pathname === '/version.json' || url.pathname === '/service-worker.js') {
+    event.respondWith(fetch(request, { cache: 'no-store' }));
+    return;
+  }
+
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/').then((cached) => cached || Response.error()))
+      fetch(request, { cache: 'no-store' })
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            void caches.open(CACHE).then((cache) => cache.put('/', clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match('/').then((cached) => cached || Response.error()))
     );
     return;
   }
 
   if (url.pathname.startsWith('/assets/')) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          void caches.open(CACHE).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      }))
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            void caches.open(CACHE).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || Response.error()))
     );
   }
 });
