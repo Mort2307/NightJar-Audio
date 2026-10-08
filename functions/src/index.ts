@@ -5,7 +5,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
-import { exchangeGoogleAuthorizationCode, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
+import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
 
 initializeApp();
 
@@ -7660,7 +7660,12 @@ const gmailAccessToken = async () => {
       clientSecret: config.clientSecret,
       refreshToken,
     });
-    return token.access_token as string;
+    const accessToken = token.access_token as string;
+    const tokenInfo = await getGoogleTokenInfo(accessToken);
+    if (!tokenInfo.scopes.includes('https://www.googleapis.com/auth/gmail.send')) {
+      throw new Error('The Google authorisation is missing the gmail.send permission.');
+    }
+    return accessToken;
   } catch (error) {
     throw new HttpsError(
       'failed-precondition',
@@ -7818,7 +7823,15 @@ export const adminGmailOAuthCallback = onRequest({
       throw new Error('Google did not return an offline refresh token. Re-authorise with consent.');
     }
 
-    const userInfo = await getGoogleUserInfo(token.access_token as string);
+    const accessToken = token.access_token as string;
+    const [userInfo, tokenInfo] = await Promise.all([
+      getGoogleUserInfo(accessToken),
+      getGoogleTokenInfo(accessToken),
+    ]);
+    if (!tokenInfo.scopes.includes('https://www.googleapis.com/auth/gmail.send')) {
+      await revokeGoogleToken(token.refresh_token).catch(() => undefined);
+      throw new Error('Google did not grant Nightjar the Gmail send permission. In Google Auth Platform → Data Access, add https://www.googleapis.com/auth/gmail.send, then reconnect and approve the send permission.');
+    }
     if (!userInfo.emailVerified || userInfo.email !== NIGHTJAR_GMAIL_SENDER_EMAIL) {
       await revokeGoogleToken(token.refresh_token).catch(() => undefined);
       throw new Error('The authorised Google account was ' + (userInfo.email || 'unknown') + ', not ' + NIGHTJAR_GMAIL_SENDER_EMAIL + '.');
