@@ -52,6 +52,7 @@ export default function AdminCommunications() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
+  const [manualTestEmails, setManualTestEmails] = useState('');
   const [sendingCampaign, setSendingCampaign] = useState(false);
   const [retryingCampaignId, setRetryingCampaignId] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -64,6 +65,19 @@ export default function AdminCommunications() {
   const selectedCategory = useMemo(
     () => CATEGORIES.find((item) => item.value === category) ?? CATEGORIES[0],
     [category],
+  );
+  const parsedManualTestEmails = useMemo(
+    () => Array.from(new Set(
+      manualTestEmails
+        .split(/[\n,;]+/)
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean),
+    )),
+    [manualTestEmails],
+  );
+  const invalidManualTestEmails = useMemo(
+    () => parsedManualTestEmails.filter((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)),
+    [parsedManualTestEmails],
   );
 
   const refreshPreview = async (nextAudience = audience) => {
@@ -99,13 +113,34 @@ export default function AdminCommunications() {
     void refreshCampaigns();
   }, []);
 
-  const sendTest = async () => {
+  const sendTest = async (recipientEmails: string[] = []) => {
     if (!subject.trim() || !body.trim()) return;
+    if (recipientEmails.length > 10) {
+      setNotice({ kind: 'error', text: 'Use no more than 10 manual test email addresses at once.' });
+      return;
+    }
+    if (recipientEmails.length && invalidManualTestEmails.length) {
+      setNotice({ kind: 'error', text: 'Fix the invalid manual test email address before sending.' });
+      return;
+    }
+
     setSendingTest(true);
     setNotice(null);
     try {
-      const result = await nightjarAdministration.sendEmailTest(subject.trim(), body.trim(), category);
-      setNotice({ kind: 'success', text: `Private test email sent to ${result.recipientEmail}. No campaign recipients were contacted.` });
+      const result = await nightjarAdministration.sendEmailTest(
+        subject.trim(),
+        body.trim(),
+        category,
+        recipientEmails,
+      );
+      setNotice({
+        kind: result.failedCount ? 'error' : 'success',
+        text: result.failedCount
+          ? `Test delivery finished: ${result.sentCount} sent, ${result.failedCount} failed. No live audience recipients were contacted.`
+          : recipientEmails.length
+            ? `${result.sentCount} separate private test email${result.sentCount === 1 ? '' : 's'} sent. No live audience recipients were contacted.`
+            : `Private test email sent to ${result.recipientEmail}. No live audience recipients were contacted.`,
+      });
     } catch (error) {
       setNotice({ kind: 'error', text: cleanError(error) });
     } finally {
@@ -260,6 +295,58 @@ export default function AdminCommunications() {
             <small>Optional. Nightjar resolves these separately for each delivery.</small>
           </div>
 
+          <div className="admin-mail-manual-test">
+            <div className="admin-mail-manual-test-head">
+              <div>
+                <span className="mini-label">TEST DELIVERY ONLY</span>
+                <strong>Manual test recipients</strong>
+                <small>Enter your own test inboxes one per line. These addresses are completely separate from the live audience above.</small>
+              </div>
+              <span className="status-pill muted">{parsedManualTestEmails.length}/10</span>
+            </div>
+            <textarea
+              value={manualTestEmails}
+              rows={4}
+              onChange={(event) => setManualTestEmails(event.target.value)}
+              placeholder={"mike-test@example.com\nmeg-test@example.com\nanother-inbox@example.com"}
+              disabled={sendingTest || sendingCampaign}
+              aria-label="Manual test email recipients"
+            />
+            {invalidManualTestEmails.length > 0 && (
+              <div className="admin-mail-test-validation">
+                <AlertTriangle size={14} />
+                <span>Invalid: {invalidManualTestEmails.join(', ')}</span>
+              </div>
+            )}
+            <div className="admin-mail-test-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void sendTest()}
+                disabled={!subject.trim() || !body.trim() || sendingTest || sendingCampaign}
+              >
+                <Mail size={15} /> {sendingTest ? 'Sending test…' : 'Send test to me'}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void sendTest(parsedManualTestEmails)}
+                disabled={
+                  !subject.trim()
+                  || !body.trim()
+                  || sendingTest
+                  || sendingCampaign
+                  || parsedManualTestEmails.length === 0
+                  || parsedManualTestEmails.length > 10
+                  || invalidManualTestEmails.length > 0
+                }
+              >
+                <Send size={15} /> {sendingTest ? 'Sending tests…' : `Send ${parsedManualTestEmails.length || ''} manual test${parsedManualTestEmails.length === 1 ? '' : 's'}`}
+              </button>
+            </div>
+            <small className="admin-mail-test-safety">Each address gets its own SMTP message with exactly one To recipient. Manual test addresses are never added to your Nightjar member or tester audience.</small>
+          </div>
+
           <div className="admin-mail-delivery-confirm">
             <input
               id="admin-mail-private-confirm"
@@ -276,20 +363,12 @@ export default function AdminCommunications() {
 
           <div className="admin-mail-actions">
             <button
-              className="secondary-button"
-              type="button"
-              onClick={() => void sendTest()}
-              disabled={!subject.trim() || !body.trim() || sendingTest || sendingCampaign}
-            >
-              <Mail size={15} /> {sendingTest ? 'Sending test…' : 'Send test to me'}
-            </button>
-            <button
               className="primary-button"
               type="button"
               onClick={() => void sendCampaign()}
               disabled={sendDisabled}
             >
-              <Send size={15} /> {sendingCampaign ? 'Sending private emails…' : `Send ${preview?.recipientCount ?? 0} separate emails`}
+              <Send size={15} /> {sendingCampaign ? 'Sending private emails…' : `Send ${preview?.recipientCount ?? 0} separate live emails`}
             </button>
           </div>
         </div>
