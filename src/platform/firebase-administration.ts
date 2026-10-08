@@ -63,7 +63,15 @@ const sendEmailTestCall = httpsCallable<{
   subject: string;
   body: string;
   category: AdminEmailCategory;
-}, { sent: boolean; recipientEmail: string }>(functions, 'adminSendEmailTest');
+  recipientEmails?: string[];
+}, {
+  sent: boolean;
+  recipientEmail: string | null;
+  recipientEmails: string[];
+  sentCount: number;
+  failedCount: number;
+  results: { email: string; status: 'sent' | 'failed'; error?: string }[];
+}>(functions, 'adminSendEmailTest');
 const sendEmailCampaignCall = httpsCallable<{
   subject: string;
   body: string;
@@ -112,8 +120,13 @@ export const nightjarAdministration = {
     return (await emailCampaignsCall()).data;
   },
 
-  async sendEmailTest(subject: string, body: string, category: AdminEmailCategory) {
-    return (await sendEmailTestCall({ subject, body, category })).data;
+  async sendEmailTest(subject: string, body: string, category: AdminEmailCategory, recipientEmails: string[] = []) {
+    return (await sendEmailTestCall({
+      subject,
+      body,
+      category,
+      ...(recipientEmails.length ? { recipientEmails } : {}),
+    })).data;
   },
 
   async sendEmailCampaign(input: {
