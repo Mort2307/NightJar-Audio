@@ -7483,7 +7483,7 @@ const adminEmailAudienceLabel = (audience: AdminEmailAudience) => ({
   writer: 'Writers',
   editor: 'Audio Editors',
   artist: 'Artists',
-  all_testers: 'Private-beta testers',
+  all_testers: 'Founding / private-beta testers',
   all_members: 'All active Nightjar members',
 }[audience]);
 
@@ -7523,13 +7523,15 @@ const resolveAdminEmailAudience = async (audience: AdminEmailAudience): Promise<
     .filter(({ data }) => !ADMIN_EMAILS.has(cleanEmail(data.email)))
     .filter(({ data }) => {
       const roles = professionalRolesForAccount(data);
+      const status = String(data.status ?? 'active');
+      if (audience === 'all_testers') return data.testAccess === true;
+      if (status !== 'active') return false;
       if (audience === 'all_members') return true;
       if (audience === 'all_professionals') return roles.length > 0;
       if (audience === 'creator') return roles.includes('creator');
       if (audience === 'writer') return roles.includes('writer');
       if (audience === 'editor') return roles.includes('editor');
       if (audience === 'artist') return roles.includes('artist');
-      if (audience === 'all_testers') return data.testAccess === true;
       return false;
     });
 
