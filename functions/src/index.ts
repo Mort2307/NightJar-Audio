@@ -4,6 +4,8 @@ import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
 import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
+import { SmtpSession, type SmtpConfig } from './smtp';
 
 initializeApp();
 
@@ -13,6 +15,8 @@ const AGE_ASSURANCE_CONFIGURED = false;
 const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
+const NIGHTJAR_SMTP_USER = defineSecret('NIGHTJAR_SMTP_USER');
+const NIGHTJAR_SMTP_PASSWORD = defineSecret('NIGHTJAR_SMTP_PASSWORD');
 
 const ADMIN_EMAILS = new Set([
   'mike.owen230792@gmail.com',
@@ -7427,5 +7431,571 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
     activeRole,
     applicationStatus: nextStatus,
     wave: wave || application.wave || null,
+  };
+});
+
+// NIGHTJAR_ADMIN_EMAIL_COMMUNICATIONS_V1
+
+type AdminEmailAudience =
+  | 'all_professionals'
+  | 'creator'
+  | 'writer'
+  | 'editor'
+  | 'artist'
+  | 'all_testers'
+  | 'all_members';
+
+type AdminEmailCategory =
+  | 'testing_update'
+  | 'creator_operations'
+  | 'account_service';
+
+type AdminEmailRecipient = {
+  email: string;
+  displayName: string;
+  firstName: string;
+  roleLabel: string;
+  userId: string | null;
+  source: 'account' | 'tester_allowlist';
+};
+
+const EMAIL_AUDIENCES = new Set<AdminEmailAudience>([
+  'all_professionals',
+  'creator',
+  'writer',
+  'editor',
+  'artist',
+  'all_testers',
+  'all_members',
+]);
+
+const EMAIL_CATEGORIES = new Set<AdminEmailCategory>([
+  'testing_update',
+  'creator_operations',
+  'account_service',
+]);
+
+const MAX_EMAIL_CAMPAIGN_RECIPIENTS = 250;
+
+const adminEmailAudienceLabel = (audience: AdminEmailAudience) => ({
+  all_professionals: 'All professional creators',
+  creator: 'VA Creators',
+  writer: 'Writers',
+  editor: 'Audio Editors',
+  artist: 'Artists',
+  all_testers: 'Private-beta testers',
+  all_members: 'All active Nightjar members',
+}[audience]);
+
+const adminEmailCategoryLabel = (category: AdminEmailCategory) => ({
+  testing_update: 'Private testing update',
+  creator_operations: 'Creator operations',
+  account_service: 'Account / service',
+}[category]);
+
+const professionalRoleLabel = (roles: string[]) => {
+  const labels = roles
+    .filter((role) => ['creator','writer','editor','artist'].includes(role))
+    .map((role) => role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role === 'writer' ? 'Writer' : 'Artist');
+  return labels.length ? labels.join(' · ') : 'Nightjar member';
+};
+
+const displayNameFromEmail = (email: string) => {
+  const local = email.split('@')[0] || 'Nightjar member';
+  const cleaned = local.replace(/[._+-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return 'Nightjar member';
+  return cleaned
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+    .slice(0, 80);
+};
+
+const firstNameFromDisplayName = (displayName: string) =>
+  cleanText(displayName, 80).split(/\s+/).filter(Boolean)[0] || 'there';
+
+const resolveAdminEmailAudience = async (audience: AdminEmailAudience): Promise<AdminEmailRecipient[]> => {
+  const accountSnapshot = await db.collection('accounts').limit(2000).get();
+  const candidates = accountSnapshot.docs
+    .map((doc) => ({ doc, data: doc.data() ?? {} }))
+    .filter(({ data }) => data.status !== 'suspended')
+    .filter(({ data }) => !ADMIN_EMAILS.has(cleanEmail(data.email)))
+    .filter(({ data }) => {
+      const roles = professionalRolesForAccount(data);
+      if (audience === 'all_members') return true;
+      if (audience === 'all_professionals') return roles.length > 0;
+      if (audience === 'creator') return roles.includes('creator');
+      if (audience === 'writer') return roles.includes('writer');
+      if (audience === 'editor') return roles.includes('editor');
+      if (audience === 'artist') return roles.includes('artist');
+      if (audience === 'all_testers') return data.testAccess === true;
+      return false;
+    });
+
+  const profileRefs = candidates.map(({ doc }) => profileRef(doc.id));
+  const profileSnapshots = profileRefs.length
+    ? await db.getAll(...profileRefs)
+    : [];
+  const profileById = new Map(profileSnapshots.map((snapshot) => [snapshot.id, snapshot.data() ?? {}]));
+
+  const recipients = new Map<string, AdminEmailRecipient>();
+
+  for (const { doc, data } of candidates) {
+    const email = cleanEmail(data.email);
+    if (!validEmailAddress(email)) continue;
+    const profile = profileById.get(doc.id) ?? {};
+    const displayName =
+      cleanText(profile.displayName, 80)
+      || cleanText(data.displayName, 80)
+      || displayNameFromEmail(email);
+    const roles = professionalRolesForAccount(data);
+    recipients.set(email, {
+      email,
+      displayName,
+      firstName: firstNameFromDisplayName(displayName),
+      roleLabel: professionalRoleLabel(roles),
+      userId: doc.id,
+      source: 'account',
+    });
+  }
+
+  if (audience === 'all_testers') {
+    const testerSnapshot = await db.collection(CLOSED_BETA_ALLOWLIST_COLLECTION)
+      .where('enabled', '==', true)
+      .limit(2000)
+      .get();
+
+    for (const doc of testerSnapshot.docs) {
+      const data = doc.data() ?? {};
+      const email = cleanEmail(data.email);
+      if (!validEmailAddress(email) || ADMIN_EMAILS.has(email) || recipients.has(email)) continue;
+      const displayName =
+        cleanText(data.displayName, 80)
+        || cleanText(data.name, 80)
+        || displayNameFromEmail(email);
+      recipients.set(email, {
+        email,
+        displayName,
+        firstName: firstNameFromDisplayName(displayName),
+        roleLabel: 'Private-beta tester',
+        userId: null,
+        source: 'tester_allowlist',
+      });
+    }
+  }
+
+  return [...recipients.values()].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, 'en-GB', { sensitivity: 'base' })
+    || a.email.localeCompare(b.email)
+  );
+};
+
+const escapeEmailHtml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const applyEmailPersonalisation = (template: string, recipient: AdminEmailRecipient) => template
+  .replace(/\{\{\s*firstName\s*\}\}/gi, recipient.firstName)
+  .replace(/\{\{\s*displayName\s*\}\}/gi, recipient.displayName)
+  .replace(/\{\{\s*role\s*\}\}/gi, recipient.roleLabel);
+
+const emailFooterText = (category: AdminEmailCategory) => {
+  if (category === 'testing_update') {
+    return "You are receiving this because you are participating in Nightjar's private testing.";
+  }
+  if (category === 'creator_operations') {
+    return 'This is a Nightjar creator-operations message about the platform or your creator participation.';
+  }
+  return 'This is a Nightjar account/service communication.';
+};
+
+const renderAdminEmail = (
+  subjectTemplate: string,
+  bodyTemplate: string,
+  category: AdminEmailCategory,
+  recipient: AdminEmailRecipient,
+) => {
+  const subject = applyEmailPersonalisation(subjectTemplate, recipient).replace(/[\r\n]+/g, ' ').trim();
+  const body = applyEmailPersonalisation(bodyTemplate, recipient).trim();
+  const footer = emailFooterText(category);
+  const text = body + '\n\n—\n' + footer + '\nNightjar — Audio, after dark. 🌙';
+  const htmlBody = escapeEmailHtml(body).replace(/\r?\n/g, '<br>');
+  const html = [
+    '<div style="font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#f5f0f7;background:#171119;padding:28px;border-radius:18px">',
+    '<div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#bfa8c9;margin-bottom:14px">Nightjar · ' + escapeEmailHtml(adminEmailCategoryLabel(category)) + '</div>',
+    '<div style="font-size:16px">' + htmlBody + '</div>',
+    '<div style="margin-top:28px;padding-top:18px;border-top:1px solid #3c2f41;color:#bfa8c9;font-size:12px">',
+    escapeEmailHtml(footer) + '<br>Nightjar — Audio, after dark. 🌙',
+    '</div></div>',
+  ].join('');
+  return { subject, text, html };
+};
+
+const smtpConfigForNightjar = (): SmtpConfig => {
+  const username = cleanEmail(NIGHTJAR_SMTP_USER.value());
+  const password = String(NIGHTJAR_SMTP_PASSWORD.value() ?? '').replace(/\s+/g, '');
+  if (!validEmailAddress(username) || !password) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Nightjar email transport is not configured. Set NIGHTJAR_SMTP_USER and NIGHTJAR_SMTP_PASSWORD first.',
+      { code: 'email_transport_not_configured' },
+    );
+  }
+  const host = cleanText(process.env.NIGHTJAR_SMTP_HOST, 255) || 'smtp.gmail.com';
+  const parsedPort = Number(process.env.NIGHTJAR_SMTP_PORT ?? 465);
+  const port = Number.isFinite(parsedPort) && parsedPort > 0 ? Math.floor(parsedPort) : 465;
+  return {
+    host,
+    port,
+    username,
+    password,
+    fromEmail: username,
+    fromName: 'Nightjar',
+    replyTo: username,
+  };
+};
+
+const publicCampaignSummary = (id: string, data: Record<string, any>) => ({
+  id,
+  subject: cleanText(data.subject, 180),
+  category: cleanText(data.category, 40),
+  categoryLabel: EMAIL_CATEGORIES.has(data.category as AdminEmailCategory)
+    ? adminEmailCategoryLabel(data.category as AdminEmailCategory)
+    : cleanText(data.category, 80),
+  audience: cleanText(data.audience, 40),
+  audienceLabel: EMAIL_AUDIENCES.has(data.audience as AdminEmailAudience)
+    ? adminEmailAudienceLabel(data.audience as AdminEmailAudience)
+    : cleanText(data.audience, 80),
+  status: cleanText(data.status, 40),
+  recipientCount: Number(data.recipientCount ?? 0),
+  sentCount: Number(data.sentCount ?? 0),
+  failedCount: Number(data.failedCount ?? 0),
+  createdAt: toIso(data.createdAt),
+  completedAt: toIso(data.completedAt),
+  createdBy: cleanEmail(data.createdBy),
+});
+
+export const adminEmailAudiencePreview = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const audience = cleanText((request.data as Record<string, unknown> | undefined)?.audience, 40) as AdminEmailAudience;
+  if (!EMAIL_AUDIENCES.has(audience)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid Nightjar email audience.');
+  }
+  const recipients = await resolveAdminEmailAudience(audience);
+  return {
+    audience,
+    audienceLabel: adminEmailAudienceLabel(audience),
+    recipientCount: recipients.length,
+    sendLimit: MAX_EMAIL_CAMPAIGN_RECIPIENTS,
+    overSendLimit: recipients.length > MAX_EMAIL_CAMPAIGN_RECIPIENTS,
+    recipients: recipients.slice(0, 100).map((recipient) => ({
+      email: recipient.email,
+      displayName: recipient.displayName,
+      roleLabel: recipient.roleLabel,
+      source: recipient.source,
+    })),
+    recipientPreviewTruncated: recipients.length > 100,
+  };
+});
+
+export const adminListEmailCampaigns = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('emailCampaigns')
+    .orderBy('createdAt', 'desc')
+    .limit(25)
+    .get();
+  return {
+    campaigns: snapshot.docs.map((doc) => publicCampaignSummary(doc.id, doc.data() ?? {})),
+  };
+});
+
+export const adminSendEmailTest = onCall({
+  region: REGION,
+  timeoutSeconds: 90,
+  secrets: [NIGHTJAR_SMTP_USER, NIGHTJAR_SMTP_PASSWORD],
+}, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const subjectTemplate = cleanText(input.subject, 180);
+  const bodyTemplate = cleanText(input.body, 12000);
+  const category = cleanText(input.category, 40) as AdminEmailCategory;
+  if (!subjectTemplate || !bodyTemplate) throw new HttpsError('invalid-argument', 'Subject and message are required.');
+  if (!EMAIL_CATEGORIES.has(category)) throw new HttpsError('invalid-argument', 'Choose a valid communication type.');
+
+  const recipient: AdminEmailRecipient = {
+    email: admin.email,
+    displayName: 'Nightjar Admin',
+    firstName: 'Nightjar',
+    roleLabel: 'Administrator',
+    userId: admin.uid,
+    source: 'account',
+  };
+  const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
+  const session = new SmtpSession(smtpConfigForNightjar());
+  try {
+    await session.send({
+      toEmail: recipient.email,
+      toName: recipient.displayName,
+      ...rendered,
+    });
+  } finally {
+    await session.quit();
+  }
+
+  await db.collection('emailAudit').add({
+    type: 'test',
+    adminUserId: admin.uid,
+    adminEmail: admin.email,
+    subject: rendered.subject,
+    category,
+    recipientEmail: recipient.email,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { sent: true, recipientEmail: recipient.email };
+});
+
+export const adminSendEmailCampaign = onCall({
+  region: REGION,
+  timeoutSeconds: 540,
+  memory: '512MiB',
+  secrets: [NIGHTJAR_SMTP_USER, NIGHTJAR_SMTP_PASSWORD],
+}, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const subjectTemplate = cleanText(input.subject, 180);
+  const bodyTemplate = cleanText(input.body, 12000);
+  const audience = cleanText(input.audience, 40) as AdminEmailAudience;
+  const category = cleanText(input.category, 40) as AdminEmailCategory;
+  const clientRequestId = cleanText(input.clientRequestId, 120);
+  const confirmed = input.confirmPrivateIndividualDelivery === true;
+
+  if (!subjectTemplate || !bodyTemplate) throw new HttpsError('invalid-argument', 'Subject and message are required.');
+  if (!EMAIL_AUDIENCES.has(audience)) throw new HttpsError('invalid-argument', 'Choose a valid Nightjar email audience.');
+  if (!EMAIL_CATEGORIES.has(category)) throw new HttpsError('invalid-argument', 'Choose a valid communication type.');
+  if (!confirmed) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Confirm that Nightjar will send one private email per recipient with no CC or BCC recipients.',
+      { code: 'individual_delivery_confirmation_required' },
+    );
+  }
+  if (!clientRequestId) throw new HttpsError('invalid-argument', 'A send request identifier is required.');
+
+  const campaignId = createHash('sha256')
+    .update(admin.uid + '\u0000' + clientRequestId)
+    .digest('hex')
+    .slice(0, 40);
+  const campaignRef = db.collection('emailCampaigns').doc(campaignId);
+  const existingCampaign = await campaignRef.get();
+  if (existingCampaign.exists) {
+    return { campaign: publicCampaignSummary(campaignId, existingCampaign.data() ?? {}), duplicateRequest: true };
+  }
+
+  const recipients = await resolveAdminEmailAudience(audience);
+  if (!recipients.length) throw new HttpsError('failed-precondition', 'That audience currently has no deliverable email addresses.');
+  if (recipients.length > MAX_EMAIL_CAMPAIGN_RECIPIENTS) {
+    throw new HttpsError(
+      'resource-exhausted',
+      'This campaign has ' + recipients.length + ' recipients. Nightjar currently limits a single SMTP campaign to ' + MAX_EMAIL_CAMPAIGN_RECIPIENTS + ' private deliveries.',
+      { code: 'email_campaign_too_large', recipientCount: recipients.length, sendLimit: MAX_EMAIL_CAMPAIGN_RECIPIENTS },
+    );
+  }
+
+  await campaignRef.create({
+    subject: subjectTemplate,
+    body: bodyTemplate,
+    category,
+    audience,
+    audienceLabel: adminEmailAudienceLabel(audience),
+    status: 'sending',
+    recipientCount: recipients.length,
+    sentCount: 0,
+    failedCount: 0,
+    createdByUserId: admin.uid,
+    createdBy: admin.email,
+    clientRequestId,
+    deliveryModel: 'one_recipient_per_message',
+    ccUsed: false,
+    bccUsed: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  const pendingBatch = db.batch();
+  for (const recipient of recipients) {
+    const deliveryId = createHash('sha256').update(recipient.email).digest('hex');
+    pendingBatch.set(campaignRef.collection('deliveries').doc(deliveryId), {
+      email: recipient.email,
+      displayName: recipient.displayName,
+      firstName: recipient.firstName,
+      roleLabel: recipient.roleLabel,
+      userId: recipient.userId,
+      source: recipient.source,
+      status: 'pending',
+      attempts: 0,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  await pendingBatch.commit();
+
+  const session = new SmtpSession(smtpConfigForNightjar());
+  let sentCount = 0;
+  let failedCount = 0;
+
+  try {
+    for (const recipient of recipients) {
+      const deliveryId = createHash('sha256').update(recipient.email).digest('hex');
+      const deliveryRef = campaignRef.collection('deliveries').doc(deliveryId);
+      const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
+      try {
+        await session.send({
+          toEmail: recipient.email,
+          toName: recipient.displayName,
+          ...rendered,
+        });
+        sentCount += 1;
+        await deliveryRef.set({
+          status: 'sent',
+          attempts: FieldValue.increment(1),
+          sentAt: FieldValue.serverTimestamp(),
+          lastError: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch (error) {
+        failedCount += 1;
+        await deliveryRef.set({
+          status: 'failed',
+          attempts: FieldValue.increment(1),
+          lastError: cleanText(error instanceof Error ? error.message : error, 600),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+    }
+  } finally {
+    await session.quit();
+  }
+
+  const status = failedCount === 0 ? 'completed' : sentCount === 0 ? 'failed' : 'partial_failure';
+  await campaignRef.set({
+    status,
+    sentCount,
+    failedCount,
+    completedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const finished = await campaignRef.get();
+  return { campaign: publicCampaignSummary(campaignId, finished.data() ?? {}), duplicateRequest: false };
+});
+
+export const adminRetryEmailCampaign = onCall({
+  region: REGION,
+  timeoutSeconds: 540,
+  memory: '512MiB',
+  secrets: [NIGHTJAR_SMTP_USER, NIGHTJAR_SMTP_PASSWORD],
+}, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const campaignId = cleanText((request.data as Record<string, unknown> | undefined)?.campaignId, 120);
+  if (!campaignId) throw new HttpsError('invalid-argument', 'Campaign is required.');
+
+  const campaignRef = db.collection('emailCampaigns').doc(campaignId);
+  const campaignSnapshot = await campaignRef.get();
+  if (!campaignSnapshot.exists) throw new HttpsError('not-found', 'Email campaign not found.');
+  const campaign = campaignSnapshot.data() ?? {};
+  const category = cleanText(campaign.category, 40) as AdminEmailCategory;
+  if (!EMAIL_CATEGORIES.has(category)) throw new HttpsError('failed-precondition', 'Campaign communication type is invalid.');
+
+  const failedSnapshot = await campaignRef.collection('deliveries')
+    .where('status', '==', 'failed')
+    .limit(MAX_EMAIL_CAMPAIGN_RECIPIENTS)
+    .get();
+  if (failedSnapshot.empty) {
+    return { campaign: publicCampaignSummary(campaignId, campaign), retried: 0 };
+  }
+
+  await campaignRef.set({
+    status: 'retrying',
+    retryStartedByUserId: admin.uid,
+    retryStartedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const session = new SmtpSession(smtpConfigForNightjar());
+  let recovered = 0;
+  let stillFailed = 0;
+
+  try {
+    for (const deliveryDoc of failedSnapshot.docs) {
+      const delivery = deliveryDoc.data() ?? {};
+      const email = cleanEmail(delivery.email);
+      if (!validEmailAddress(email)) {
+        stillFailed += 1;
+        continue;
+      }
+      const recipient: AdminEmailRecipient = {
+        email,
+        displayName: cleanText(delivery.displayName, 80) || displayNameFromEmail(email),
+        firstName: cleanText(delivery.firstName, 80) || firstNameFromDisplayName(cleanText(delivery.displayName, 80)),
+        roleLabel: cleanText(delivery.roleLabel, 120) || 'Nightjar member',
+        userId: cleanText(delivery.userId, 160) || null,
+        source: delivery.source === 'tester_allowlist' ? 'tester_allowlist' : 'account',
+      };
+      const rendered = renderAdminEmail(cleanText(campaign.subject, 180), cleanText(campaign.body, 12000), category, recipient);
+      try {
+        await session.send({
+          toEmail: recipient.email,
+          toName: recipient.displayName,
+          ...rendered,
+        });
+        recovered += 1;
+        await deliveryDoc.ref.set({
+          status: 'sent',
+          attempts: FieldValue.increment(1),
+          sentAt: FieldValue.serverTimestamp(),
+          lastError: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch (error) {
+        stillFailed += 1;
+        await deliveryDoc.ref.set({
+          attempts: FieldValue.increment(1),
+          lastError: cleanText(error instanceof Error ? error.message : error, 600),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+    }
+  } finally {
+    await session.quit();
+  }
+
+  const previousSent = Number(campaign.sentCount ?? 0);
+  const previousFailed = Number(campaign.failedCount ?? failedSnapshot.size);
+  const sentCount = previousSent + recovered;
+  const failedCount = Math.max(0, previousFailed - recovered);
+  const status = failedCount === 0 ? 'completed' : sentCount === 0 ? 'failed' : 'partial_failure';
+
+  await campaignRef.set({
+    status,
+    sentCount,
+    failedCount,
+    lastRetryRecovered: recovered,
+    lastRetryFailed: stillFailed,
+    lastRetryAt: FieldValue.serverTimestamp(),
+    completedAt: status === 'completed' ? FieldValue.serverTimestamp() : campaign.completedAt ?? null,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const refreshed = await campaignRef.get();
+  return {
+    campaign: publicCampaignSummary(campaignId, refreshed.data() ?? {}),
+    retried: failedSnapshot.size,
+    recovered,
+    stillFailed,
   };
 });
