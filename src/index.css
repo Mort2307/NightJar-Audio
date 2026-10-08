@@ -7578,3 +7578,62 @@ textarea { overflow-wrap:anywhere; }
 
 .admin-mail-manual-results .sent svg { color: #9fd0af; }
 .admin-mail-manual-results .failed svg { color: #d99eaa; }
+
+
+.admin-mail-build-check {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: rgba(255,255,255,.016);
+}
+
+.admin-mail-build-check.outdated {
+  border-color: rgba(219,145,155,.24);
+  background: rgba(142,60,76,.10);
+}
+
+.admin-mail-build-check > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-mail-build-check strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.admin-mail-build-check small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.admin-mail-build-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .admin-mail-build-check {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-mail-build-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-mail-build-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
