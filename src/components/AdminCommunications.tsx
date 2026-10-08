@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Mail, RefreshCw, Send, ShieldCheck, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, Link2, Mail, RefreshCw, Send, ShieldCheck, Unplug, Users } from 'lucide-react';
 import { applyNightjarUpdate, checkNightjarUpdate, type NightjarUpdateStatus } from '../platform/pwa';
 import {
   nightjarAdministration,
@@ -7,6 +7,7 @@ import {
   type AdminEmailAudiencePreview,
   type AdminEmailCampaign,
   type AdminEmailCategory,
+  type AdminGmailOAuthStatus,
 } from '../platform/firebase-administration';
 
 const AUDIENCES: { value: AdminEmailAudience; label: string; detail: string }[] = [
@@ -64,6 +65,10 @@ export default function AdminCommunications() {
   const [buildStatus, setBuildStatus] = useState<NightjarUpdateStatus | null>(null);
   const [checkingBuild, setCheckingBuild] = useState(false);
   const [refreshingBuild, setRefreshingBuild] = useState(false);
+  const [gmailStatus, setGmailStatus] = useState<AdminGmailOAuthStatus | null>(null);
+  const [gmailStatusLoading, setGmailStatusLoading] = useState(false);
+  const [gmailConnecting, setGmailConnecting] = useState(false);
+  const [gmailDisconnecting, setGmailDisconnecting] = useState(false);
 
   const selectedAudience = useMemo(
     () => AUDIENCES.find((item) => item.value === audience) ?? AUDIENCES[0],
@@ -99,6 +104,74 @@ export default function AdminCommunications() {
     }
   };
 
+  const refreshGmailStatus = async () => {
+    setGmailStatusLoading(true);
+    try {
+      const status = await nightjarAdministration.gmailOAuthStatus();
+      setGmailStatus(status);
+      return status;
+    } catch (error) {
+      setNotice({ kind: 'error', text: cleanError(error) });
+      return null;
+    } finally {
+      setGmailStatusLoading(false);
+    }
+  };
+
+  const connectGmail = async () => {
+    setGmailConnecting(true);
+    setNotice(null);
+    try {
+      const setup = await nightjarAdministration.beginGmailOAuth();
+      const popup = window.open(
+        setup.authorizationUrl,
+        'nightjar-gmail-oauth',
+        'popup=yes,width=620,height=760,resizable=yes,scrollbars=yes',
+      );
+      if (!popup) {
+        throw new Error('Your browser blocked the Google authorisation window. Allow pop-ups for Nightjar and try again.');
+      }
+
+      const startedAt = Date.now();
+      const timer = window.setInterval(() => {
+        void (async () => {
+          const status = await refreshGmailStatus();
+          if (status?.healthy) {
+            window.clearInterval(timer);
+            try { popup.close(); } catch { /* popup close is best effort */ }
+            setGmailConnecting(false);
+            setNotice({
+              kind: 'success',
+              text: 'Nightjar Mail is connected to ' + status.senderEmail + ' through Gmail API OAuth 2.0.',
+            });
+            return;
+          }
+          if (popup.closed || Date.now() - startedAt > 120000) {
+            window.clearInterval(timer);
+            setGmailConnecting(false);
+          }
+        })();
+      }, 1800);
+    } catch (error) {
+      setGmailConnecting(false);
+      setNotice({ kind: 'error', text: cleanError(error) });
+    }
+  };
+
+  const disconnectGmail = async () => {
+    setGmailDisconnecting(true);
+    setNotice(null);
+    try {
+      await nightjarAdministration.disconnectGmailOAuth();
+      await refreshGmailStatus();
+      setNotice({ kind: 'success', text: 'Nightjar Mail has been disconnected from Gmail.' });
+    } catch (error) {
+      setNotice({ kind: 'error', text: cleanError(error) });
+    } finally {
+      setGmailDisconnecting(false);
+    }
+  };
+
   const refreshCampaigns = async () => {
     setLoadingCampaigns(true);
     try {
@@ -118,6 +191,7 @@ export default function AdminCommunications() {
 
   useEffect(() => {
     void refreshCampaigns();
+    void refreshGmailStatus();
     void checkNightjarUpdate().then(setBuildStatus).catch(() => { /* mail remains usable if version check fails */ });
   }, []);
 
@@ -260,7 +334,59 @@ export default function AdminCommunications() {
         </div>
         <div className="admin-mail-privacy-badge">
           <ShieldCheck size={17} />
-          <div><strong>Nightjar → one user</strong><span>One SMTP transaction and one To address per person</span></div>
+          <div><strong>Nightjar → one user</strong><span>One Gmail API message and one To address per person</span></div>
+        </div>
+      </div>
+
+      <div className={gmailStatus?.healthy ? 'admin-mail-gmail-status connected' : gmailStatus?.reconnectRequired ? 'admin-mail-gmail-status warning' : 'admin-mail-gmail-status'}>
+        <div className="admin-mail-gmail-identity">
+          <span className="admin-mail-gmail-icon"><Link2 size={18} /></span>
+          <div>
+            <span className="mini-label">MAIL TRANSPORT · GMAIL API / OAUTH 2.0</span>
+            <strong>{gmailStatus?.senderEmail ?? 'nightjar.audio.app@gmail.com'}</strong>
+            <small>
+              {!gmailStatus?.configured
+                ? 'OAuth client credentials still need configuring in Firebase.'
+                : gmailStatusLoading
+                  ? 'Checking Gmail authorisation…'
+                  : gmailStatus?.healthy
+                    ? 'Connected · send-only Gmail permission · no inbox reading'
+                    : gmailStatus?.reconnectRequired
+                      ? 'Google authorisation needs reconnecting.'
+                      : 'Not connected yet. Authorise the Nightjar Gmail account once.'}
+            </small>
+          </div>
+        </div>
+        <div className="admin-mail-gmail-actions">
+          <span className={gmailStatus?.healthy ? 'status-pill' : 'status-pill muted'}>
+            {gmailStatus?.healthy ? 'CONNECTED' : gmailStatus?.reconnectRequired ? 'RECONNECT' : gmailStatus?.configured ? 'NOT CONNECTED' : 'SETUP REQUIRED'}
+          </span>
+          <button
+            className={gmailStatus?.healthy ? 'secondary-button' : 'primary-button'}
+            type="button"
+            disabled={gmailConnecting || gmailStatusLoading || !gmailStatus?.configured}
+            onClick={() => void connectGmail()}
+          >
+            <ExternalLink size={14} /> {gmailConnecting ? 'Waiting for Google…' : gmailStatus?.healthy ? 'Re-authorise Gmail' : 'Connect Gmail'}
+          </button>
+          {gmailStatus?.connected && (
+            <button
+              className="ghost-button"
+              type="button"
+              disabled={gmailDisconnecting}
+              onClick={() => void disconnectGmail()}
+            >
+              <Unplug size={14} /> {gmailDisconnecting ? 'Disconnecting…' : 'Disconnect'}
+            </button>
+          )}
+          <button
+            className="ghost-button"
+            type="button"
+            disabled={gmailStatusLoading}
+            onClick={() => void refreshGmailStatus()}
+          >
+            <RefreshCw size={14} /> Refresh
+          </button>
         </div>
       </div>
 
@@ -453,7 +579,7 @@ export default function AdminCommunications() {
                 ))}
               </div>
             )}
-            <small className="admin-mail-test-safety">Each address gets its own SMTP message with exactly one To recipient. Manual test addresses are never added to your Nightjar member or tester audience.</small>
+            <small className="admin-mail-test-safety">Each address gets its own Gmail API message with exactly one To recipient. Manual test addresses are never added to your Nightjar member or tester audience.</small>
           </div>
 
           <div className="admin-mail-delivery-confirm">
@@ -499,7 +625,7 @@ export default function AdminCommunications() {
           {preview?.overSendLimit && (
             <div className="admin-mail-limit-warning">
               <AlertTriangle size={16} />
-              <span>This audience exceeds the current {preview.sendLimit}-message SMTP safety limit. Nothing will send until the audience is reduced or the delivery layer is scaled.</span>
+              <span>This audience exceeds the current {preview.sendLimit}-message Gmail API safety limit. Nothing will send until the audience is reduced or the delivery layer is scaled.</span>
             </div>
           )}
 
