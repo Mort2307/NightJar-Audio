@@ -7383,3 +7383,19 @@ textarea { overflow-wrap:anywhere; }
   .admin-mail-campaign-stats { width: 100%; }
   .admin-mail-campaign-stats span { flex: 1; }
 }
+
+.admin-mail-policy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 13px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  color: var(--muted);
+  background: rgba(255,255,255,.014);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.admin-mail-policy-note svg { flex: 0 0 auto; color: var(--plum-soft); margin-top: 1px; }
+.admin-mail-policy-note strong { color: var(--ivory); }
