@@ -1912,9 +1912,14 @@ function App() {
         return;
       }
 
-      const editableRoles = (Array.isArray(capturedProfile.roles) ? capturedProfile.roles : [profileEditRole])
-        .filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item));
-      const rolesToSave = editableRoles.length ? Array.from(new Set(editableRoles)) : [profileEditRole];
+      const editableRoles: PreviewRole[] = (Array.isArray(capturedProfile.roles) ? capturedProfile.roles : [profileEditRole])
+        .filter((item: unknown): item is PreviewRole =>
+          typeof item === 'string'
+          && ['listener','creator','writer','editor','artist'].includes(item),
+        );
+      const rolesToSave: PreviewRole[] = editableRoles.length
+        ? Array.from(new Set<PreviewRole>(editableRoles))
+        : [profileEditRole];
 
       for (const targetRole of rolesToSave) {
         const payload = applyProfileRoleDraft(capturedProfile, targetRole);
