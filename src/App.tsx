@@ -870,8 +870,11 @@ function App() {
         const preferredRole: PreviewRole = ['listener','creator','writer','editor','artist'].includes(String(role))
           ? role as PreviewRole
           : 'listener';
-        const availableRoles = Array.isArray(nextProfile.roles)
-          ? nextProfile.roles.filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item))
+        const availableRoles: PreviewRole[] = Array.isArray(nextProfile.roles)
+          ? nextProfile.roles.filter((item: unknown): item is PreviewRole =>
+              typeof item === 'string'
+              && ['listener','creator','writer','editor','artist'].includes(item),
+            )
           : ['listener'];
         const targetRole: PreviewRole = availableRoles.includes(preferredRole) ? preferredRole : 'listener';
         const mergedProfile = applyProfileRoleDraft(nextProfile, targetRole);
@@ -1852,8 +1855,11 @@ function App() {
         nightjarCommunity.getMyProfilePortfolioOptions(requestedEditRole).catch(() => ({ role:requestedEditRole, options: [], completedCollaborations: 0 })),
       ]);
       if (profileData?.profile) {
-        const availableRoles = Array.isArray(profileData.profile.roles)
-          ? profileData.profile.roles.filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item))
+        const availableRoles: PreviewRole[] = Array.isArray(profileData.profile.roles)
+          ? profileData.profile.roles.filter((item: unknown): item is PreviewRole =>
+              typeof item === 'string'
+              && ['listener','creator','writer','editor','artist'].includes(item),
+            )
           : ['listener'];
         const targetRole: PreviewRole = availableRoles.includes(requestedEditRole)
           ? requestedEditRole
@@ -1945,8 +1951,11 @@ function App() {
 
   const switchProfileEditRole = async (nextRole: PreviewRole) => {
     if (nextRole === profileEditRole) return;
-    const availableRoles = (Array.isArray(profile.roles) ? profile.roles : ['listener'])
-      .filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item));
+    const availableRoles: PreviewRole[] = (Array.isArray(profile.roles) ? profile.roles : ['listener'])
+      .filter((item: unknown): item is PreviewRole =>
+        typeof item === 'string'
+        && ['listener','creator','writer','editor','artist'].includes(item),
+      );
     if (!availableRoles.includes(nextRole)) return;
 
     setProfile((current:any) => applyProfileRoleDraft(captureProfileRoleDraft(current, profileEditRole), nextRole));
@@ -3342,8 +3351,13 @@ function App() {
   ];
   const profileCompletion = Math.round((profileCompletionSignals.filter(Boolean).length / profileCompletionSignals.length) * 100);
   const profileEditableRoles: PreviewRole[] = (Array.isArray(profile.roles) ? profile.roles : [effectiveRole ?? 'listener'])
-    .filter((item:string): item is PreviewRole => ['listener','creator','writer','editor','artist'].includes(item));
-  const uniqueProfileEditableRoles = Array.from(new Set(profileEditableRoles.length ? profileEditableRoles : ['listener'] as PreviewRole[]));
+    .filter((item: unknown): item is PreviewRole =>
+      typeof item === 'string'
+      && ['listener','creator','writer','editor','artist'].includes(item),
+    );
+  const uniqueProfileEditableRoles: PreviewRole[] = Array.from(
+    new Set<PreviewRole>(profileEditableRoles.length ? profileEditableRoles : ['listener']),
+  );
   const hasProfessionalProfileRole = uniqueProfileEditableRoles.some((item) => ['creator','writer','editor','artist'].includes(item));
 
   const openProfileEditor = () => {
