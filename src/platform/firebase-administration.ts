@@ -23,7 +23,6 @@ const reviewProfessionalCall = httpsCallable<{
   wave: string | null;
 }>(functions, 'reviewProfessionalApplication');
 
-
 export type AdminEmailAudience = 'all_professionals' | 'creator' | 'writer' | 'editor' | 'artist' | 'all_testers' | 'all_members';
 export type AdminEmailCategory = 'testing_update' | 'creator_operations' | 'account_service';
 
@@ -33,35 +32,13 @@ export type AdminEmailAudiencePreview = {
   recipientCount: number;
   sendLimit: number;
   overSendLimit: boolean;
-  recipients: { email: string; displayName: string; roleLabel: string; source: 'account' | 'tester_allowlist' }[];
+  recipients: {
+    email: string;
+    displayName: string;
+    roleLabel: string;
+    source: 'account' | 'tester_allowlist';
+  }[];
   recipientPreviewTruncated: boolean;
-  async emailAudiencePreview(audience: AdminEmailAudience) {
-    return (await emailAudiencePreviewCall({ audience })).data;
-  },
-
-  async emailCampaigns() {
-    return (await emailCampaignsCall()).data;
-  },
-
-  async sendEmailTest(subject: string, body: string, category: AdminEmailCategory) {
-    return (await sendEmailTestCall({ subject, body, category })).data;
-  },
-
-  async sendEmailCampaign(input: {
-    subject: string;
-    body: string;
-    audience: AdminEmailAudience;
-    category: AdminEmailCategory;
-    clientRequestId: string;
-    confirmPrivateIndividualDelivery: boolean;
-  }) {
-    return (await sendEmailCampaignCall(input)).data;
-  },
-
-  async retryEmailCampaign(campaignId: string) {
-    return (await retryEmailCampaignCall({ campaignId })).data;
-  },
-
 };
 
 export type AdminEmailCampaign = {
@@ -127,4 +104,30 @@ export const nightjarAdministration = {
     return (await reviewProfessionalCall({ userId, decision, ...(roles.length ? { roles } : {}), ...(wave ? { wave } : {}) })).data;
   },
 
+  async emailAudiencePreview(audience: AdminEmailAudience) {
+    return (await emailAudiencePreviewCall({ audience })).data;
+  },
+
+  async emailCampaigns() {
+    return (await emailCampaignsCall()).data;
+  },
+
+  async sendEmailTest(subject: string, body: string, category: AdminEmailCategory) {
+    return (await sendEmailTestCall({ subject, body, category })).data;
+  },
+
+  async sendEmailCampaign(input: {
+    subject: string;
+    body: string;
+    audience: AdminEmailAudience;
+    category: AdminEmailCategory;
+    clientRequestId: string;
+    confirmPrivateIndividualDelivery: boolean;
+  }) {
+    return (await sendEmailCampaignCall(input)).data;
+  },
+
+  async retryEmailCampaign(campaignId: string) {
+    return (await retryEmailCampaignCall({ campaignId })).data;
+  },
 };
