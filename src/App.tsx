@@ -577,6 +577,7 @@ function App() {
   const [protectedReaderScript, setProtectedReaderScript] = useState<any | null>(null);
   const [writerPermissions, setWriterPermissions] = useState<any[]>([]);
   const [writerPermissionsLoading, setWriterPermissionsLoading] = useState(false);
+  const [writerUploadBusy, setWriterUploadBusy] = useState(false);
 
   useEffect(() => {
     if (!moderationPreviewAsset) return;
@@ -2959,6 +2960,68 @@ function App() {
     }
   };
 
+  const uploadWriterScript = async (file: File) => {
+    const extension = file.name.toLowerCase().split('.').pop() ?? '';
+    const allowed = new Set(['txt','md','markdown','rtf','doc','docx','pdf']);
+    if (!allowed.has(extension)) {
+      notify('Upload TXT, Markdown, RTF, DOC, DOCX or PDF manuscripts.');
+      return;
+    }
+    if (!file.size || file.size > 8 * 1024 * 1024) {
+      notify('Manuscript files must be 8 MB or smaller.');
+      return;
+    }
+
+    const titleFromFile = file.name.replace(/\.[^.]+$/, '').trim() || 'Untitled manuscript';
+    const title = writerDraftTitle.trim() || titleFromFile;
+    setWriterUploadBusy(true);
+
+    try {
+      if (simulationMode) {
+        const editableText = ['txt','md','markdown'].includes(extension) ? await file.text() : '';
+        const next = {
+          id:'demo-uploaded-script-' + Date.now(),
+          title,
+          status:'Draft',
+          access:'Private',
+          version:1,
+          content:editableText.slice(0,200000),
+          sourceFile:{
+            fileName:file.name,
+            contentType:file.type || 'application/octet-stream',
+            sizeBytes:file.size,
+            uploadedAt:new Date().toISOString(),
+          },
+          lastEditorialComment:null,
+          rights:{ copyrightOwner:'Demo Writer', writerRetainsCopyright:true, licenceType:'none', licenceLength:'', adaptationApprovalRequired:true, significantEditsApprovalRequired:true, castingApprovalRequired:false, finalAudioApprovalRequired:false, aiTrainingAllowed:false, commercialUse:false, withdrawalTerms:'' },
+          marketplace:{ visibility:'private', synopsis:'', genres:[], tropes:[], commissionPricePence:null, collaborationWanted:false, editorWanted:false },
+        };
+        setWriterScripts((items) => { const updated = [next, ...items]; writeDemo('writerScripts', updated); return updated; });
+        setWriterSelected(next);
+        setWriterDraftTitle('');
+        notify('Simulation: manuscript uploaded as a private draft.');
+        return;
+      }
+
+      const dataUrl = await readFileDataUrl(file);
+      const data = await nightjarScripts.upload({
+        title,
+        fileName:file.name,
+        contentType:file.type,
+        dataUrl,
+      });
+      setWriterDraftTitle('');
+      await loadWriterScripts();
+      setWriterSelected(data.script ?? null);
+      if (data.script?.id) await loadWriterPermissions(data.script.id);
+      notify('Manuscript uploaded privately. Rights, sharing and editorial controls are ready.');
+    } catch {
+      notify('The manuscript could not be uploaded.');
+    } finally {
+      setWriterUploadBusy(false);
+    }
+  };
+
   const saveWriterScript = async () => {
     if (!writerSelected) return;
     try {
@@ -3903,8 +3966,33 @@ function App() {
               ]}
               actions={writerActions}
             />
-            <div className="writer-create-card"><div><span className="mini-label">NEW SCRIPT</span><h2>Start a manuscript</h2><p>Every new script begins private.</p></div><div className="writer-create-form"><input value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title"/><button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button></div></div>
-            <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div><textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder="Begin writing…"/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
+            <div className="writer-create-card">
+              <div><span className="mini-label">NEW SCRIPT</span><h2>Start or upload a manuscript</h2><p>Every new script begins private. Write inside Nightjar or bring in an existing manuscript without retyping it.</p></div>
+              <div className="writer-create-stack">
+                <div className="writer-create-form">
+                  <input value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title · optional for uploads"/>
+                  <button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button>
+                </div>
+                <div className="writer-upload-row">
+                  <span className="writer-create-or">OR</span>
+                  <label className={writerUploadBusy ? 'secondary-button writer-upload-button disabled' : 'secondary-button writer-upload-button'}>
+                    <Upload size={15}/> {writerUploadBusy ? 'Uploading manuscript…' : 'Upload script'}
+                    <input
+                      type="file"
+                      accept=".txt,.md,.markdown,.rtf,.doc,.docx,.pdf,text/plain,text/markdown,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
+                      disabled={writerUploadBusy}
+                      onChange={(event)=>{
+                        const file=event.target.files?.[0];
+                        event.currentTarget.value='';
+                        if(file) void uploadWriterScript(file);
+                      }}
+                    />
+                  </label>
+                  <small>TXT · Markdown · RTF · Word · PDF · max 8 MB. Uploaded originals stay private and protected.</small>
+                </div>
+              </div>
+            </div>
+            <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div>{writerSelected.sourceFile&&<div className="writer-source-file"><div><Upload size={15}/><span><strong>{writerSelected.sourceFile.fileName}</strong><small>{Math.max(1,Math.round(Number(writerSelected.sourceFile.sizeBytes??0)/1024))} KB · protected source upload</small></span></div><span className="status-pill">PRIVATE SOURCE</span></div>}<textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder={writerSelected.sourceFile?'Optional editable text copy. Your uploaded source manuscript remains the protected original.':'Begin writing…'}/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
             {writerSelected && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights controls" />}><WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} /></Suspense>}
             <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer collaborations" />}><CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>
           </section>
