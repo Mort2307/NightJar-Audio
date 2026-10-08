@@ -196,6 +196,15 @@ export default function AdminCommunications() {
   }, []);
 
   const sendTest = async (recipientEmails: string[] = []) => {
+    if (!gmailStatus?.healthy) {
+      const message = 'Connect Nightjar Mail to Gmail before sending a test.';
+      setNotice({ kind: 'error', text: message });
+      if (recipientEmails.length) {
+        setManualTestStatus('error');
+        setManualTestMessage(message);
+      }
+      return;
+    }
     if (!subject.trim() || !body.trim()) {
       const message = 'Add a subject and message before sending a test.';
       setNotice({ kind: 'error', text: message });
@@ -314,7 +323,8 @@ export default function AdminCommunications() {
     }
   };
 
-  const sendDisabled = !subject.trim()
+  const sendDisabled = !gmailStatus?.healthy
+    || !subject.trim()
     || !body.trim()
     || !confirmed
     || !preview?.recipientCount
@@ -532,7 +542,7 @@ export default function AdminCommunications() {
                 className="secondary-button"
                 type="button"
                 onClick={() => void sendTest()}
-                disabled={!subject.trim() || !body.trim() || sendingTest || sendingCampaign}
+                disabled={!gmailStatus?.healthy || !subject.trim() || !body.trim() || sendingTest || sendingCampaign}
               >
                 <Mail size={15} /> {sendingTest ? 'Sending test…' : 'Send test to me'}
               </button>
@@ -541,7 +551,8 @@ export default function AdminCommunications() {
                 type="button"
                 onClick={() => void sendTest(parsedManualTestEmails)}
                 disabled={
-                  !subject.trim()
+                  !gmailStatus?.healthy
+                  || !subject.trim()
                   || !body.trim()
                   || sendingTest
                   || sendingCampaign
