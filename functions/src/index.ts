@@ -4404,7 +4404,7 @@ export const uploadWriterScriptFile = onCall({
     metadata: {
       contentType,
       cacheControl: 'private, no-store, max-age=0',
-      contentDisposition: 'attachment; filename="' + fileName.replace(/"/g, '') + '"',
+      contentDisposition: (extension === 'pdf' ? 'inline' : 'attachment') + '; filename="' + fileName.replace(/"/g, '') + '"',
       metadata: {
         writerUserId: identity.uid,
         scriptId: ref.id,
@@ -4507,6 +4507,7 @@ export const createWriterScriptVersion = onCall({ region: REGION }, async (reque
       version,
       title: data.title ?? 'Untitled manuscript',
       content: data.content ?? '',
+      sourceFile: writerUploadPublicMeta(data.originalUpload),
       createdAt: FieldValue.serverTimestamp(),
     });
     transaction.set(ref, { version, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
