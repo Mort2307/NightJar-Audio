@@ -5,6 +5,12 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 
 const listWriterCall = httpsCallable<void, { scripts: any[] }>(functions, 'listWriterScripts');
 const createWriterCall = httpsCallable<{ title: string; content?: string }, { script: any }>(functions, 'createWriterScript');
+const uploadWriterScriptCall = httpsCallable<{
+  title?: string;
+  fileName: string;
+  contentType?: string;
+  dataUrl: string;
+}, { script: any }>(functions, 'uploadWriterScriptFile');
 const updateWriterCall = httpsCallable<Record<string, unknown>, { script: any }>(functions, 'updateWriterScript');
 const deleteWriterCall = httpsCallable<{ scriptId: string }, { deleted: boolean }>(functions, 'deleteWriterScript');
 const versionCall = httpsCallable<{ scriptId: string }, { script: any; version: number }>(functions, 'createWriterScriptVersion');
@@ -28,6 +34,10 @@ export const nightjarScripts = {
 
   async create(title: string, content = '') {
     return (await createWriterCall({ title, content })).data;
+  },
+
+  async upload(input: { title?: string; fileName: string; contentType?: string; dataUrl: string }) {
+    return (await uploadWriterScriptCall(input)).data;
   },
 
   async update(scriptId: string, input: Record<string, unknown>) {
