@@ -179,3 +179,19 @@ export const revokeGoogleToken = async (token: string) => {
     throw new Error('Google token revocation failed: HTTP ' + response.status);
   }
 };
+
+
+export const getGoogleUserInfo = async (accessToken: string) => {
+  const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { Authorization: 'Bearer ' + accessToken },
+  });
+  const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error('Google account verification failed: HTTP ' + response.status);
+  }
+  return {
+    email: String(data.email ?? '').trim().toLowerCase(),
+    emailVerified: data.email_verified === true,
+    subject: String(data.sub ?? ''),
+  };
+};
