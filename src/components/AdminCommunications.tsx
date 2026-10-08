@@ -53,6 +53,9 @@ export default function AdminCommunications() {
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [manualTestEmails, setManualTestEmails] = useState('');
+  const [manualTestStatus, setManualTestStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [manualTestMessage, setManualTestMessage] = useState('');
+  const [manualTestResults, setManualTestResults] = useState<{ email: string; status: 'sent' | 'failed'; error?: string }[]>([]);
   const [sendingCampaign, setSendingCampaign] = useState(false);
   const [retryingCampaignId, setRetryingCampaignId] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -114,18 +117,38 @@ export default function AdminCommunications() {
   }, []);
 
   const sendTest = async (recipientEmails: string[] = []) => {
-    if (!subject.trim() || !body.trim()) return;
+    if (!subject.trim() || !body.trim()) {
+      const message = 'Add a subject and message before sending a test.';
+      setNotice({ kind: 'error', text: message });
+      if (recipientEmails.length) {
+        setManualTestStatus('error');
+        setManualTestMessage(message);
+      }
+      return;
+    }
     if (recipientEmails.length > 10) {
-      setNotice({ kind: 'error', text: 'Use no more than 10 manual test email addresses at once.' });
+      const message = 'Use no more than 10 manual test email addresses at once.';
+      setNotice({ kind: 'error', text: message });
+      setManualTestStatus('error');
+      setManualTestMessage(message);
       return;
     }
     if (recipientEmails.length && invalidManualTestEmails.length) {
-      setNotice({ kind: 'error', text: 'Fix the invalid manual test email address before sending.' });
+      const message = 'Fix the invalid manual test email address before sending.';
+      setNotice({ kind: 'error', text: message });
+      setManualTestStatus('error');
+      setManualTestMessage(message);
       return;
     }
 
     setSendingTest(true);
     setNotice(null);
+    if (recipientEmails.length) {
+      setManualTestStatus('sending');
+      setManualTestMessage(`Connecting to Nightjar Mail and sending ${recipientEmails.length} private test email${recipientEmails.length === 1 ? '' : 's'}…`);
+      setManualTestResults([]);
+    }
+
     try {
       const result = await nightjarAdministration.sendEmailTest(
         subject.trim(),
@@ -133,16 +156,28 @@ export default function AdminCommunications() {
         category,
         recipientEmails,
       );
-      setNotice({
-        kind: result.failedCount ? 'error' : 'success',
-        text: result.failedCount
-          ? `Test delivery finished: ${result.sentCount} sent, ${result.failedCount} failed. No live audience recipients were contacted.`
-          : recipientEmails.length
-            ? `${result.sentCount} separate private test email${result.sentCount === 1 ? '' : 's'} sent. No live audience recipients were contacted.`
-            : `Private test email sent to ${result.recipientEmail}. No live audience recipients were contacted.`,
-      });
+
+      const message = result.failedCount
+        ? `Test delivery finished: ${result.sentCount} sent, ${result.failedCount} failed. No live audience recipients were contacted.`
+        : recipientEmails.length
+          ? `${result.sentCount} separate private test email${result.sentCount === 1 ? '' : 's'} sent successfully. No live audience recipients were contacted.`
+          : `Private test email sent to ${result.recipientEmail}. No live audience recipients were contacted.`;
+
+      setNotice({ kind: result.failedCount ? 'error' : 'success', text: message });
+
+      if (recipientEmails.length) {
+        setManualTestResults(result.results ?? []);
+        setManualTestStatus(result.failedCount ? 'error' : 'success');
+        setManualTestMessage(message);
+      }
     } catch (error) {
-      setNotice({ kind: 'error', text: cleanError(error) });
+      const message = cleanError(error) || 'Nightjar Mail test failed before a delivery result was returned.';
+      setNotice({ kind: 'error', text: message });
+      if (recipientEmails.length) {
+        setManualTestStatus('error');
+        setManualTestMessage(message);
+        setManualTestResults([]);
+      }
     } finally {
       setSendingTest(false);
     }
@@ -307,7 +342,12 @@ export default function AdminCommunications() {
             <textarea
               value={manualTestEmails}
               rows={4}
-              onChange={(event) => setManualTestEmails(event.target.value)}
+              onChange={(event) => {
+                setManualTestEmails(event.target.value);
+                setManualTestStatus('idle');
+                setManualTestMessage('');
+                setManualTestResults([]);
+              }}
               placeholder={"mike-test@example.com\nmeg-test@example.com\nanother-inbox@example.com"}
               disabled={sendingTest || sendingCampaign}
               aria-label="Manual test email recipients"
@@ -344,6 +384,32 @@ export default function AdminCommunications() {
                 <Send size={15} /> {sendingTest ? 'Sending tests…' : `Send ${parsedManualTestEmails.length || ''} manual test${parsedManualTestEmails.length === 1 ? '' : 's'}`}
               </button>
             </div>
+            {manualTestStatus !== 'idle' && (
+              <div className={manualTestStatus === 'success' ? 'admin-mail-manual-status success' : manualTestStatus === 'error' ? 'admin-mail-manual-status error' : 'admin-mail-manual-status sending'}>
+                {manualTestStatus === 'sending'
+                  ? <RefreshCw className="admin-mail-spin" size={15} />
+                  : manualTestStatus === 'success'
+                    ? <CheckCircle2 size={15} />
+                    : <AlertTriangle size={15} />}
+                <div>
+                  <strong>{manualTestStatus === 'sending' ? 'Sending manual tests' : manualTestStatus === 'success' ? 'Manual test complete' : 'Manual test needs attention'}</strong>
+                  <span>{manualTestMessage}</span>
+                </div>
+              </div>
+            )}
+            {manualTestResults.length > 0 && (
+              <div className="admin-mail-manual-results">
+                {manualTestResults.map((result) => (
+                  <div key={result.email} className={result.status === 'sent' ? 'sent' : 'failed'}>
+                    {result.status === 'sent' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                    <div>
+                      <strong>{result.email}</strong>
+                      <span>{result.status === 'sent' ? 'Sent as an independent private message.' : result.error || 'Delivery failed.'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <small className="admin-mail-test-safety">Each address gets its own SMTP message with exactly one To recipient. Manual test addresses are never added to your Nightjar member or tester audience.</small>
           </div>
 
