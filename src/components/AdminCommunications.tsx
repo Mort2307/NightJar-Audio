@@ -9,7 +9,7 @@ import {
 } from '../platform/firebase-administration';
 
 const AUDIENCES: { value: AdminEmailAudience; label: string; detail: string }[] = [
-  { value: 'all_testers', label: 'Private-beta testers', detail: 'Includes approved tester emails even before they create a Nightjar account.' },
+  { value: 'all_testers', label: 'Founding / private-beta testers', detail: 'Includes approved tester emails even before they create a Nightjar account.' },
   { value: 'all_professionals', label: 'All professional creators', detail: 'Every active VA Creator, Writer, Audio Editor and Artist account.' },
   { value: 'creator', label: 'VA Creators', detail: 'Active accounts approved as VA Creators.' },
   { value: 'writer', label: 'Writers', detail: 'Active accounts approved as Writers.' },
@@ -222,6 +222,11 @@ export default function AdminCommunications() {
               </select>
               <small>{selectedCategory.detail}</small>
             </label>
+          </div>
+
+          <div className="admin-mail-policy-note">
+            <ShieldCheck size={15} />
+            <span><strong>Operational email only for now.</strong> Promotional marketing is intentionally disabled until Nightjar's consent, preference and unsubscribe controls are live.</span>
           </div>
 
           <label className="admin-mail-field">
