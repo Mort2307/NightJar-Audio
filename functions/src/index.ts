@@ -5,7 +5,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
-import { SmtpSession, type SmtpConfig } from './smtp';
+import { exchangeGoogleAuthorizationCode, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
 
 initializeApp();
 
@@ -15,8 +15,11 @@ const AGE_ASSURANCE_CONFIGURED = false;
 const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
-const NIGHTJAR_SMTP_USER = defineSecret('NIGHTJAR_SMTP_USER');
-const NIGHTJAR_SMTP_PASSWORD = defineSecret('NIGHTJAR_SMTP_PASSWORD');
+const NIGHTJAR_GMAIL_CLIENT_ID = defineSecret('NIGHTJAR_GMAIL_CLIENT_ID');
+const NIGHTJAR_GMAIL_CLIENT_SECRET = defineSecret('NIGHTJAR_GMAIL_CLIENT_SECRET');
+const NIGHTJAR_GMAIL_SENDER_EMAIL = 'nightjar.audio.app@gmail.com';
+const NIGHTJAR_GMAIL_SCOPE = 'openid email https://www.googleapis.com/auth/gmail.send';
+const NIGHTJAR_GMAIL_REDIRECT_URI = 'https://europe-west2-nightjar-audio.cloudfunctions.net/adminGmailOAuthCallback';
 
 const ADMIN_EMAILS = new Set([
   'mike.owen230792@gmail.com',
@@ -7621,28 +7624,53 @@ const renderAdminEmail = (
   return { subject, text, html };
 };
 
-const smtpConfigForNightjar = (): SmtpConfig => {
-  const username = cleanEmail(NIGHTJAR_SMTP_USER.value());
-  const password = String(NIGHTJAR_SMTP_PASSWORD.value() ?? '').replace(/\s+/g, '');
-  if (!validEmailAddress(username) || !password) {
+const gmailIntegrationRef = () => db.collection('systemIntegrations').doc('gmail');
+const gmailOAuthStateRef = (state: string) => db
+  .collection('gmailOAuthStates')
+  .doc(createHash('sha256').update(state).digest('hex'));
+
+const gmailOAuthConfig = () => {
+  const clientId = String(NIGHTJAR_GMAIL_CLIENT_ID.value() ?? '').trim();
+  const clientSecret = String(NIGHTJAR_GMAIL_CLIENT_SECRET.value() ?? '').trim();
+  if (!clientId || !clientSecret) {
     throw new HttpsError(
       'failed-precondition',
-      'Nightjar email transport is not configured. Set NIGHTJAR_SMTP_USER and NIGHTJAR_SMTP_PASSWORD first.',
-      { code: 'email_transport_not_configured' },
+      'Nightjar Gmail OAuth is not configured yet. Add the Google OAuth client ID and client secret first.',
+      { code: 'gmail_oauth_not_configured' },
     );
   }
-  const host = cleanText(process.env.NIGHTJAR_SMTP_HOST, 255) || 'smtp.gmail.com';
-  const parsedPort = Number(process.env.NIGHTJAR_SMTP_PORT ?? 465);
-  const port = Number.isFinite(parsedPort) && parsedPort > 0 ? Math.floor(parsedPort) : 465;
-  return {
-    host,
-    port,
-    username,
-    password,
-    fromEmail: username,
-    fromName: 'Nightjar',
-    replyTo: username,
-  };
+  return { clientId, clientSecret };
+};
+
+const gmailAccessToken = async () => {
+  const integration = await gmailIntegrationRef().get();
+  const refreshToken = String(integration.data()?.refreshToken ?? '').trim();
+  if (!refreshToken) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Nightjar Mail is not connected to Gmail. Open the owner console and connect the Nightjar Gmail account.',
+      { code: 'gmail_not_connected' },
+    );
+  }
+
+  const config = gmailOAuthConfig();
+  try {
+    const token = await refreshGoogleAccessToken({
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      refreshToken,
+    });
+    return token.access_token as string;
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Nightjar could not refresh Gmail authorisation. Reconnect the Nightjar Gmail account in the owner console.',
+      {
+        code: 'gmail_reconnect_required',
+        detail: cleanText(error instanceof Error ? error.message : error, 500),
+      },
+    );
+  }
 };
 
 const publicCampaignSummary = (id: string, data: Record<string, any>) => ({
@@ -7663,6 +7691,182 @@ const publicCampaignSummary = (id: string, data: Record<string, any>) => ({
   createdAt: toIso(data.createdAt),
   completedAt: toIso(data.completedAt),
   createdBy: cleanEmail(data.createdBy),
+});
+
+
+export const adminGmailOAuthStatus = onCall({
+  region: REGION,
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
+  requireAdminIdentity(request);
+  let configured = true;
+  try {
+    gmailOAuthConfig();
+  } catch {
+    configured = false;
+  }
+
+  const integration = await gmailIntegrationRef().get();
+  const connected = integration.exists && Boolean(String(integration.data()?.refreshToken ?? '').trim());
+  let healthy = false;
+  let reconnectRequired = false;
+
+  if (configured && connected) {
+    try {
+      await gmailAccessToken();
+      healthy = true;
+    } catch {
+      reconnectRequired = true;
+    }
+  }
+
+  return {
+    configured,
+    connected,
+    healthy,
+    reconnectRequired,
+    senderEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+    connectedAt: toIso(integration.data()?.connectedAt),
+    connectedBy: cleanEmail(integration.data()?.connectedBy),
+    scope: 'https://www.googleapis.com/auth/gmail.send',
+    transport: 'gmail_api_oauth2',
+  };
+});
+
+export const adminBeginGmailOAuth = onCall({
+  region: REGION,
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const { clientId } = gmailOAuthConfig();
+  const state = randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '');
+
+  await gmailOAuthStateRef(state).set({
+    adminUserId: admin.uid,
+    adminEmail: admin.email,
+    expiresAtMs: Date.now() + 15 * 60 * 1000,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  const query = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: NIGHTJAR_GMAIL_REDIRECT_URI,
+    response_type: 'code',
+    scope: NIGHTJAR_GMAIL_SCOPE,
+    access_type: 'offline',
+    prompt: 'consent select_account',
+    include_granted_scopes: 'true',
+    login_hint: NIGHTJAR_GMAIL_SENDER_EMAIL,
+    state,
+  });
+
+  return {
+    authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth?' + query.toString(),
+    senderEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+    redirectUri: NIGHTJAR_GMAIL_REDIRECT_URI,
+  };
+});
+
+export const adminGmailOAuthCallback = onRequest({
+  region: REGION,
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request, response) => {
+  const state = cleanText(request.query.state, 300);
+  const code = cleanText(request.query.code, 3000);
+  const oauthError = cleanText(request.query.error, 200);
+
+  const render = (ok: boolean, title: string, detail: string) => {
+    response.status(ok ? 200 : 400).send(
+      '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>Nightjar Mail</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0c0b0d;color:#eee7df;font-family:system-ui,sans-serif;padding:24px}.card{max-width:620px;border:1px solid #342c36;border-radius:22px;padding:30px;background:#151217}h1{font-family:Georgia,serif;font-weight:400}p{color:#afa4af;line-height:1.7}.ok{color:#cbb5cc}</style></head><body><main class="card"><div class="ok">NIGHTJAR · MAIL</div><h1>' +
+      title +
+      '</h1><p>' +
+      detail +
+      '</p><p>You can close this window and return to the Nightjar owner console.</p></main></body></html>',
+    );
+  };
+
+  if (oauthError) {
+    render(false, 'Google authorisation was cancelled.', 'Nightjar did not receive permission to send mail.');
+    return;
+  }
+  if (!state || !code) {
+    render(false, 'Authorisation could not be completed.', 'The Google callback was missing required information.');
+    return;
+  }
+
+  const stateRef = gmailOAuthStateRef(state);
+  const stateSnapshot = await stateRef.get();
+  const stateData = stateSnapshot.data() ?? {};
+  await stateRef.delete().catch(() => undefined);
+
+  if (!stateSnapshot.exists || Number(stateData.expiresAtMs ?? 0) < Date.now() || !ADMIN_EMAILS.has(cleanEmail(stateData.adminEmail))) {
+    render(false, 'This authorisation link has expired.', 'Start Gmail connection again from the Nightjar owner console.');
+    return;
+  }
+
+  try {
+    const config = gmailOAuthConfig();
+    const token = await exchangeGoogleAuthorizationCode({
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      code,
+      redirectUri: NIGHTJAR_GMAIL_REDIRECT_URI,
+    });
+
+    if (!token.refresh_token) {
+      throw new Error('Google did not return an offline refresh token. Re-authorise with consent.');
+    }
+
+    const userInfo = await getGoogleUserInfo(token.access_token as string);
+    if (!userInfo.emailVerified || userInfo.email !== NIGHTJAR_GMAIL_SENDER_EMAIL) {
+      await revokeGoogleToken(token.refresh_token).catch(() => undefined);
+      throw new Error('The authorised Google account was ' + (userInfo.email || 'unknown') + ', not ' + NIGHTJAR_GMAIL_SENDER_EMAIL + '.');
+    }
+
+    await gmailIntegrationRef().set({
+      provider: 'gmail',
+      transport: 'gmail_api_oauth2',
+      senderEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      refreshToken: token.refresh_token,
+      grantedScope: token.scope ?? NIGHTJAR_GMAIL_SCOPE,
+      googleSubject: userInfo.subject || null,
+      connectedByUserId: cleanText(stateData.adminUserId, 160),
+      connectedBy: cleanEmail(stateData.adminEmail),
+      connectedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    render(true, 'Nightjar Mail is connected.', 'Google authorised ' + NIGHTJAR_GMAIL_SENDER_EMAIL + ' with send-only Gmail access.');
+  } catch (error) {
+    await gmailIntegrationRef().set({
+      lastOAuthError: cleanText(error instanceof Error ? error.message : error, 600),
+      lastOAuthErrorAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    render(false, 'Nightjar could not finish Gmail authorisation.', 'Return to the owner console and try Connect Gmail again.');
+  }
+});
+
+export const adminDisconnectGmailOAuth = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const integration = await gmailIntegrationRef().get();
+  const refreshToken = String(integration.data()?.refreshToken ?? '').trim();
+
+  if (refreshToken) {
+    await revokeGoogleToken(refreshToken).catch(() => undefined);
+  }
+
+  await gmailIntegrationRef().set({
+    refreshToken: FieldValue.delete(),
+    googleSubject: FieldValue.delete(),
+    disconnectedAt: FieldValue.serverTimestamp(),
+    disconnectedByUserId: admin.uid,
+    disconnectedBy: admin.email,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { disconnected: true };
 });
 
 export const adminEmailAudiencePreview = onCall({ region: REGION }, async (request) => {
@@ -7702,7 +7906,7 @@ export const adminListEmailCampaigns = onCall({ region: REGION }, async (request
 export const adminSendEmailTest = onCall({
   region: REGION,
   timeoutSeconds: 120,
-  secrets: [NIGHTJAR_SMTP_USER, NIGHTJAR_SMTP_PASSWORD],
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
 }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -7738,50 +7942,53 @@ export const adminSendEmailTest = onCall({
     };
   });
 
-  const session = new SmtpSession(smtpConfigForNightjar());
   const results: { email: string; status: 'sent' | 'failed'; error?: string }[] = [];
-
+  let accessToken: string;
   try {
-    try {
-      await session.connect();
-    } catch (error) {
-      const detail = cleanText(error instanceof Error ? error.message : error, 600) || 'SMTP connection failed.';
-      throw new HttpsError(
-        'unavailable',
-        'Nightjar Mail could not connect or authenticate with the configured email account. ' + detail,
-        { code: 'email_transport_connection_failed' },
-      );
-    }
+    accessToken = await gmailAccessToken();
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError(
+      'unavailable',
+      'Nightjar Mail could not authorise with Gmail. Reconnect Gmail in the owner console.',
+      { code: 'gmail_authorisation_failed' },
+    );
+  }
 
-    for (const recipient of recipients) {
-      const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
-      try {
-        await session.send({
+  for (const recipient of recipients) {
+    const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
+    try {
+      const sent = await sendGmailApiMessage({
+        accessToken,
+        fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+        fromName: 'Nightjar',
+        replyTo: NIGHTJAR_GMAIL_SENDER_EMAIL,
+        message: {
           toEmail: recipient.email,
           toName: recipient.displayName,
           ...rendered,
-        });
-        results.push({ email: recipient.email, status: 'sent' });
-        await db.collection('emailAudit').add({
-          type: 'manual_test',
-          adminUserId: admin.uid,
-          adminEmail: admin.email,
-          subject: rendered.subject,
-          category,
-          recipientEmail: recipient.email,
-          deliveryModel: 'one_recipient_per_message',
-          createdAt: FieldValue.serverTimestamp(),
-        });
-      } catch (error) {
-        results.push({
-          email: recipient.email,
-          status: 'failed',
-          error: cleanText(error instanceof Error ? error.message : error, 600),
-        });
-      }
+        },
+      });
+      results.push({ email: recipient.email, status: 'sent' });
+      await db.collection('emailAudit').add({
+        type: 'manual_test',
+        adminUserId: admin.uid,
+        adminEmail: admin.email,
+        subject: rendered.subject,
+        category,
+        recipientEmail: recipient.email,
+        providerMessageId: sent.id || null,
+        transport: 'gmail_api_oauth2',
+        deliveryModel: 'one_recipient_per_message',
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (error) {
+      results.push({
+        email: recipient.email,
+        status: 'failed',
+        error: cleanText(error instanceof Error ? error.message : error, 600),
+      });
     }
-  } finally {
-    await session.quit();
   }
 
   const sentCount = results.filter((result) => result.status === 'sent').length;
@@ -7800,7 +8007,7 @@ export const adminSendEmailCampaign = onCall({
   region: REGION,
   timeoutSeconds: 540,
   memory: '512MiB',
-  secrets: [NIGHTJAR_SMTP_USER, NIGHTJAR_SMTP_PASSWORD],
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
 }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -7838,7 +8045,7 @@ export const adminSendEmailCampaign = onCall({
   if (recipients.length > MAX_EMAIL_CAMPAIGN_RECIPIENTS) {
     throw new HttpsError(
       'resource-exhausted',
-      'This campaign has ' + recipients.length + ' recipients. Nightjar currently limits a single SMTP campaign to ' + MAX_EMAIL_CAMPAIGN_RECIPIENTS + ' private deliveries.',
+      'This campaign has ' + recipients.length + ' recipients. Nightjar currently limits a single Gmail API campaign to ' + MAX_EMAIL_CAMPAIGN_RECIPIENTS + ' private deliveries.',
       { code: 'email_campaign_too_large', recipientCount: recipients.length, sendLimit: MAX_EMAIL_CAMPAIGN_RECIPIENTS },
     );
   }
@@ -7857,6 +8064,7 @@ export const adminSendEmailCampaign = onCall({
     createdBy: admin.email,
     clientRequestId,
     deliveryModel: 'one_recipient_per_message',
+    transport: 'gmail_api_oauth2',
     ccUsed: false,
     bccUsed: false,
     createdAt: FieldValue.serverTimestamp(),
@@ -7881,41 +8089,46 @@ export const adminSendEmailCampaign = onCall({
   }
   await pendingBatch.commit();
 
-  const session = new SmtpSession(smtpConfigForNightjar());
+  const accessToken = await gmailAccessToken();
   let sentCount = 0;
   let failedCount = 0;
 
-  try {
-    for (const recipient of recipients) {
-      const deliveryId = createHash('sha256').update(recipient.email).digest('hex');
-      const deliveryRef = campaignRef.collection('deliveries').doc(deliveryId);
-      const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
-      try {
-        await session.send({
+  for (const recipient of recipients) {
+    const deliveryId = createHash('sha256').update(recipient.email).digest('hex');
+    const deliveryRef = campaignRef.collection('deliveries').doc(deliveryId);
+    const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
+    try {
+      const sent = await sendGmailApiMessage({
+        accessToken,
+        fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+        fromName: 'Nightjar',
+        replyTo: NIGHTJAR_GMAIL_SENDER_EMAIL,
+        message: {
           toEmail: recipient.email,
           toName: recipient.displayName,
           ...rendered,
-        });
-        sentCount += 1;
-        await deliveryRef.set({
-          status: 'sent',
-          attempts: FieldValue.increment(1),
-          sentAt: FieldValue.serverTimestamp(),
-          lastError: null,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      } catch (error) {
-        failedCount += 1;
-        await deliveryRef.set({
-          status: 'failed',
-          attempts: FieldValue.increment(1),
-          lastError: cleanText(error instanceof Error ? error.message : error, 600),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
+        },
+      });
+      sentCount += 1;
+      await deliveryRef.set({
+        status: 'sent',
+        attempts: FieldValue.increment(1),
+        providerMessageId: sent.id || null,
+        transport: 'gmail_api_oauth2',
+        sentAt: FieldValue.serverTimestamp(),
+        lastError: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (error) {
+      failedCount += 1;
+      await deliveryRef.set({
+        status: 'failed',
+        attempts: FieldValue.increment(1),
+        transport: 'gmail_api_oauth2',
+        lastError: cleanText(error instanceof Error ? error.message : error, 600),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
     }
-  } finally {
-    await session.quit();
   }
 
   const status = failedCount === 0 ? 'completed' : sentCount === 0 ? 'failed' : 'partial_failure';
@@ -7935,7 +8148,7 @@ export const adminRetryEmailCampaign = onCall({
   region: REGION,
   timeoutSeconds: 540,
   memory: '512MiB',
-  secrets: [NIGHTJAR_SMTP_USER, NIGHTJAR_SMTP_PASSWORD],
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
 }, async (request) => {
   const admin = requireAdminIdentity(request);
   const campaignId = cleanText((request.data as Record<string, unknown> | undefined)?.campaignId, 120);
@@ -7963,52 +8176,57 @@ export const adminRetryEmailCampaign = onCall({
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  const session = new SmtpSession(smtpConfigForNightjar());
+  const accessToken = await gmailAccessToken();
   let recovered = 0;
   let stillFailed = 0;
 
-  try {
-    for (const deliveryDoc of failedSnapshot.docs) {
-      const delivery = deliveryDoc.data() ?? {};
-      const email = cleanEmail(delivery.email);
-      if (!validEmailAddress(email)) {
-        stillFailed += 1;
-        continue;
-      }
-      const recipient: AdminEmailRecipient = {
-        email,
-        displayName: cleanText(delivery.displayName, 80) || displayNameFromEmail(email),
-        firstName: cleanText(delivery.firstName, 80) || firstNameFromDisplayName(cleanText(delivery.displayName, 80)),
-        roleLabel: cleanText(delivery.roleLabel, 120) || 'Nightjar member',
-        userId: cleanText(delivery.userId, 160) || null,
-        source: delivery.source === 'tester_allowlist' ? 'tester_allowlist' : 'account',
-      };
-      const rendered = renderAdminEmail(cleanText(campaign.subject, 180), cleanText(campaign.body, 12000), category, recipient);
-      try {
-        await session.send({
+  for (const deliveryDoc of failedSnapshot.docs) {
+    const delivery = deliveryDoc.data() ?? {};
+    const email = cleanEmail(delivery.email);
+    if (!validEmailAddress(email)) {
+      stillFailed += 1;
+      continue;
+    }
+    const recipient: AdminEmailRecipient = {
+      email,
+      displayName: cleanText(delivery.displayName, 80) || displayNameFromEmail(email),
+      firstName: cleanText(delivery.firstName, 80) || firstNameFromDisplayName(cleanText(delivery.displayName, 80)),
+      roleLabel: cleanText(delivery.roleLabel, 120) || 'Nightjar member',
+      userId: cleanText(delivery.userId, 160) || null,
+      source: delivery.source === 'tester_allowlist' ? 'tester_allowlist' : 'account',
+    };
+    const rendered = renderAdminEmail(cleanText(campaign.subject, 180), cleanText(campaign.body, 12000), category, recipient);
+    try {
+      const sent = await sendGmailApiMessage({
+        accessToken,
+        fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+        fromName: 'Nightjar',
+        replyTo: NIGHTJAR_GMAIL_SENDER_EMAIL,
+        message: {
           toEmail: recipient.email,
           toName: recipient.displayName,
           ...rendered,
-        });
-        recovered += 1;
-        await deliveryDoc.ref.set({
-          status: 'sent',
-          attempts: FieldValue.increment(1),
-          sentAt: FieldValue.serverTimestamp(),
-          lastError: null,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      } catch (error) {
-        stillFailed += 1;
-        await deliveryDoc.ref.set({
-          attempts: FieldValue.increment(1),
-          lastError: cleanText(error instanceof Error ? error.message : error, 600),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
+        },
+      });
+      recovered += 1;
+      await deliveryDoc.ref.set({
+        status: 'sent',
+        attempts: FieldValue.increment(1),
+        providerMessageId: sent.id || null,
+        transport: 'gmail_api_oauth2',
+        sentAt: FieldValue.serverTimestamp(),
+        lastError: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (error) {
+      stillFailed += 1;
+      await deliveryDoc.ref.set({
+        attempts: FieldValue.increment(1),
+        transport: 'gmail_api_oauth2',
+        lastError: cleanText(error instanceof Error ? error.message : error, 600),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
     }
-  } finally {
-    await session.quit();
   }
 
   const previousSent = Number(campaign.sentCount ?? 0);
