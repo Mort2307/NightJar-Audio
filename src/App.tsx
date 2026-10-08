@@ -4418,6 +4418,7 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
 function ProtectedReader({ data, close, record, notify }: { data: any; close: () => void; record: (eventType: string, context?: Record<string, unknown>) => void; notify: (message: string) => void }) {
   const script = data.script ?? {};
   const content = String(script.content ?? '');
+  const sourceFile = data.sourceFile ?? null;
   const sessionId = String(data.readerSession?.sessionId ?? 'authorised');
   const accountId = String(data.readerSession?.accountId ?? data.readerSession?.userId ?? '');
   const watermark = ['NIGHTJAR', sessionId, accountId ? 'ACCOUNT ' + accountId.slice(-10) : '', script.id ? 'SCRIPT ' + String(script.id).slice(-10) : ''].filter(Boolean).join(' · ');
@@ -4558,6 +4559,20 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
     notify('Text selection is disabled for this protected manuscript.');
   };
 
+  const openProtectedSource = () => {
+    if (!sourceFile?.url) {
+      notify('The protected source file is not available for this reader session.');
+      return;
+    }
+    record('source_file_opened', {
+      readerSessionId: sessionId,
+      detectionSource: 'protected_source_link',
+      detectionConfidence: 'strong',
+    });
+    const opened = window.open(sourceFile.url, '_blank', 'noopener,noreferrer');
+    if (!opened) notify('Your browser blocked the protected source window. Allow pop-ups for Nightjar and try again.');
+  };
+
   const exportScript = () => {
     if (!data.exportAllowed) {
       record('export_blocked', { readerSessionId: sessionId });
@@ -4595,7 +4610,8 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
       <article className="reader-body">
         <div className="reader-watermark-field" aria-hidden="true">{Array.from({length: 12}).map((_, index) => <span key={index}>{watermark}</span>)}</div>
         <p className="reader-watermark">{watermark}</p>
-        {content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : <p>No manuscript content supplied.</p>}
+        {sourceFile?.url&&<div className="reader-source-file"><div><FileText size={19}/><span><strong>{sourceFile.fileName ?? 'Uploaded manuscript'}</strong><small>Protected original · link expires {sourceFile.expiresAt ? new Date(sourceFile.expiresAt).toLocaleTimeString('en-GB') : 'with this reader session'}</small></span></div><button type="button" className="secondary-button" onClick={openProtectedSource}><FileText size={14}/> Open protected source</button></div>}
+        {content ? content.split(/\n+/).filter(Boolean).map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>) : sourceFile?.url ? <p className="reader-source-note">This manuscript was uploaded as an original file. Open the protected source above to read the writer’s supplied document.</p> : <p>No manuscript content supplied.</p>}
       </article>
       <footer><span><LockKeyhole size={14} /> Copy {data.copyAllowed ? 'allowed by writer' : 'off'}</span><button className="reader-export-button" onClick={exportScript} disabled={!data.exportAllowed}><Download size={14} /> {data.exportAllowed ? 'Writer-authorised export' : 'Export off'}</button><span>Browser capture detection is best-effort · access logged</span></footer>
     </section>
