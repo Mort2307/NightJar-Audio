@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Mail, RefreshCw, Send, ShieldCheck, Users } from 'lucide-react';
+import { applyNightjarUpdate, checkNightjarUpdate, type NightjarUpdateStatus } from '../platform/pwa';
 import {
   nightjarAdministration,
   type AdminEmailAudience,
@@ -60,6 +61,9 @@ export default function AdminCommunications() {
   const [retryingCampaignId, setRetryingCampaignId] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [buildStatus, setBuildStatus] = useState<NightjarUpdateStatus | null>(null);
+  const [checkingBuild, setCheckingBuild] = useState(false);
+  const [refreshingBuild, setRefreshingBuild] = useState(false);
 
   const selectedAudience = useMemo(
     () => AUDIENCES.find((item) => item.value === audience) ?? AUDIENCES[0],
@@ -114,6 +118,7 @@ export default function AdminCommunications() {
 
   useEffect(() => {
     void refreshCampaigns();
+    void checkNightjarUpdate().then(setBuildStatus).catch(() => { /* mail remains usable if version check fails */ });
   }, []);
 
   const sendTest = async (recipientEmails: string[] = []) => {
@@ -256,6 +261,44 @@ export default function AdminCommunications() {
         <div className="admin-mail-privacy-badge">
           <ShieldCheck size={17} />
           <div><strong>Nightjar → one user</strong><span>One SMTP transaction and one To address per person</span></div>
+        </div>
+      </div>
+
+      <div className={buildStatus?.updateAvailable ? 'admin-mail-build-check outdated' : 'admin-mail-build-check'}>
+        <div>
+          <span className="mini-label">MAIL UI BUILD</span>
+          <strong>Running {buildStatus?.currentBuildId ?? __NIGHTJAR_BUILD_ID__}</strong>
+          <small>
+            {buildStatus?.latestBuildId
+              ? `Latest deployed ${buildStatus.latestBuildId}${buildStatus.updateAvailable ? ' · update required' : ' · current'}`
+              : 'Latest deployed build not checked yet'}
+          </small>
+        </div>
+        <div className="admin-mail-build-actions">
+          <button
+            className="ghost-button"
+            type="button"
+            disabled={checkingBuild || refreshingBuild}
+            onClick={() => {
+              setCheckingBuild(true);
+              void checkNightjarUpdate()
+                .then(setBuildStatus)
+                .finally(() => setCheckingBuild(false));
+            }}
+          >
+            <RefreshCw size={14} /> {checkingBuild ? 'Checking…' : 'Check build'}
+          </button>
+          <button
+            className={buildStatus?.updateAvailable ? 'primary-button' : 'secondary-button'}
+            type="button"
+            disabled={refreshingBuild}
+            onClick={() => {
+              setRefreshingBuild(true);
+              void applyNightjarUpdate();
+            }}
+          >
+            <RefreshCw size={14} /> {refreshingBuild ? 'Refreshing…' : buildStatus?.updateAvailable ? 'Load latest Nightjar' : 'Force refresh Nightjar Mail'}
+          </button>
         </div>
       </div>
 
