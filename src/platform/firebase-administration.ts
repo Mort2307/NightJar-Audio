@@ -26,6 +26,18 @@ const reviewProfessionalCall = httpsCallable<{
 export type AdminEmailAudience = 'all_professionals' | 'creator' | 'writer' | 'editor' | 'artist' | 'all_testers' | 'all_members';
 export type AdminEmailCategory = 'testing_update' | 'creator_operations' | 'account_service';
 
+export type AdminGmailOAuthStatus = {
+  configured: boolean;
+  connected: boolean;
+  healthy: boolean;
+  reconnectRequired: boolean;
+  senderEmail: string;
+  connectedAt: string | null;
+  connectedBy: string | null;
+  scope: string;
+  transport: 'gmail_api_oauth2';
+};
+
 export type AdminEmailAudiencePreview = {
   audience: AdminEmailAudience;
   audienceLabel: string;
@@ -57,6 +69,9 @@ export type AdminEmailCampaign = {
   createdBy: string;
 };
 
+const gmailOAuthStatusCall = httpsCallable<void, AdminGmailOAuthStatus>(functions, 'adminGmailOAuthStatus');
+const beginGmailOAuthCall = httpsCallable<void, { authorizationUrl: string; senderEmail: string; redirectUri: string }>(functions, 'adminBeginGmailOAuth');
+const disconnectGmailOAuthCall = httpsCallable<void, { disconnected: boolean }>(functions, 'adminDisconnectGmailOAuth');
 const emailAudiencePreviewCall = httpsCallable<{ audience: AdminEmailAudience }, AdminEmailAudiencePreview>(functions, 'adminEmailAudiencePreview');
 const emailCampaignsCall = httpsCallable<void, { campaigns: AdminEmailCampaign[] }>(functions, 'adminListEmailCampaigns');
 const sendEmailTestCall = httpsCallable<{
@@ -110,6 +125,18 @@ export const nightjarAdministration = {
 
   async reviewProfessionalApplication(userId: string, decision: 'banked' | 'approved' | 'rejected' | 'waitlist', roles: ('creator' | 'writer' | 'editor' | 'artist')[] = [], wave = '') {
     return (await reviewProfessionalCall({ userId, decision, ...(roles.length ? { roles } : {}), ...(wave ? { wave } : {}) })).data;
+  },
+
+  async gmailOAuthStatus() {
+    return (await gmailOAuthStatusCall()).data;
+  },
+
+  async beginGmailOAuth() {
+    return (await beginGmailOAuthCall()).data;
+  },
+
+  async disconnectGmailOAuth() {
+    return (await disconnectGmailOAuthCall()).data;
   },
 
   async emailAudiencePreview(audience: AdminEmailAudience) {
