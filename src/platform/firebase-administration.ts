@@ -23,6 +23,85 @@ const reviewProfessionalCall = httpsCallable<{
   wave: string | null;
 }>(functions, 'reviewProfessionalApplication');
 
+
+export type AdminEmailAudience = 'all_professionals' | 'creator' | 'writer' | 'editor' | 'artist' | 'all_testers' | 'all_members';
+export type AdminEmailCategory = 'testing_update' | 'creator_operations' | 'account_service';
+
+export type AdminEmailAudiencePreview = {
+  audience: AdminEmailAudience;
+  audienceLabel: string;
+  recipientCount: number;
+  sendLimit: number;
+  overSendLimit: boolean;
+  recipients: { email: string; displayName: string; roleLabel: string; source: 'account' | 'tester_allowlist' }[];
+  recipientPreviewTruncated: boolean;
+  async emailAudiencePreview(audience: AdminEmailAudience) {
+    return (await emailAudiencePreviewCall({ audience })).data;
+  },
+
+  async emailCampaigns() {
+    return (await emailCampaignsCall()).data;
+  },
+
+  async sendEmailTest(subject: string, body: string, category: AdminEmailCategory) {
+    return (await sendEmailTestCall({ subject, body, category })).data;
+  },
+
+  async sendEmailCampaign(input: {
+    subject: string;
+    body: string;
+    audience: AdminEmailAudience;
+    category: AdminEmailCategory;
+    clientRequestId: string;
+    confirmPrivateIndividualDelivery: boolean;
+  }) {
+    return (await sendEmailCampaignCall(input)).data;
+  },
+
+  async retryEmailCampaign(campaignId: string) {
+    return (await retryEmailCampaignCall({ campaignId })).data;
+  },
+
+};
+
+export type AdminEmailCampaign = {
+  id: string;
+  subject: string;
+  category: AdminEmailCategory;
+  categoryLabel: string;
+  audience: AdminEmailAudience;
+  audienceLabel: string;
+  status: string;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  createdAt: string | null;
+  completedAt: string | null;
+  createdBy: string;
+};
+
+const emailAudiencePreviewCall = httpsCallable<{ audience: AdminEmailAudience }, AdminEmailAudiencePreview>(functions, 'adminEmailAudiencePreview');
+const emailCampaignsCall = httpsCallable<void, { campaigns: AdminEmailCampaign[] }>(functions, 'adminListEmailCampaigns');
+const sendEmailTestCall = httpsCallable<{
+  subject: string;
+  body: string;
+  category: AdminEmailCategory;
+}, { sent: boolean; recipientEmail: string }>(functions, 'adminSendEmailTest');
+const sendEmailCampaignCall = httpsCallable<{
+  subject: string;
+  body: string;
+  audience: AdminEmailAudience;
+  category: AdminEmailCategory;
+  clientRequestId: string;
+  confirmPrivateIndividualDelivery: boolean;
+}, { campaign: AdminEmailCampaign; duplicateRequest: boolean }>(functions, 'adminSendEmailCampaign');
+const retryEmailCampaignCall = httpsCallable<{ campaignId: string }, {
+  campaign: AdminEmailCampaign;
+  retried: number;
+  recovered?: number;
+  stillFailed?: number;
+}>(functions, 'adminRetryEmailCampaign');
+
 export const nightjarAdministration = {
   async overview() {
     return (await overviewCall()).data;
