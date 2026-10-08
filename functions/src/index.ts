@@ -4249,6 +4249,44 @@ const toIso = (value: any) => {
 
 const scriptRef = (scriptId: string) => db.collection('scripts').doc(scriptId);
 
+const WRITER_SCRIPT_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+const WRITER_SCRIPT_UPLOAD_TYPES: Record<string, string> = {
+  txt: 'text/plain',
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  rtf: 'application/rtf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pdf: 'application/pdf',
+};
+
+const safeWriterUploadName = (value: unknown) => {
+  const cleaned = String(value ?? '')
+    .trim()
+    .replace(/[\\/]+/g, '-')
+    .replace(/[^a-zA-Z0-9._()\- ]+/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 180);
+  return cleaned || 'manuscript.txt';
+};
+
+const writerUploadExtension = (fileName: string) => {
+  const match = fileName.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match?.[1] ?? '';
+};
+
+const writerUploadPublicMeta = (value: unknown) => {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const fileName = cleanText(input.fileName, 180);
+  if (!fileName) return null;
+  return {
+    fileName,
+    contentType: cleanText(input.contentType, 160) || 'application/octet-stream',
+    sizeBytes: Math.max(0, Number(input.sizeBytes ?? 0)),
+    uploadedAt: toIso(input.uploadedAt),
+  };
+};
+
 const scriptPayload = (data: Record<string, any>, id: string, includeContent = true) => ({
   id,
   title: data.title ?? 'Untitled manuscript',
@@ -4259,6 +4297,7 @@ const scriptPayload = (data: Record<string, any>, id: string, includeContent = t
   writerUserId: data.writerUserId ?? null,
   editorUserId: data.editorUserId ?? null,
   lastEditorialComment: data.lastEditorialComment ?? null,
+  sourceFile: writerUploadPublicMeta(data.originalUpload),
   rights: normaliseScriptRights(data.rights),
   marketplace: normaliseScriptMarketplace(data.marketplace),
   createdAt: toIso(data.createdAt),
@@ -4295,6 +4334,112 @@ export const createWriterScript = onCall({ region: REGION }, async (request) => 
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  const saved = await ref.get();
+  return { script: scriptPayload(saved.data() ?? {}, ref.id, true) };
+});
+
+export const uploadWriterScriptFile = onCall({
+  region: REGION,
+  timeoutSeconds: 120,
+  memory: '512MiB',
+}, async (request) => {
+  const identity = await requireAccountRole(request, ['writer']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const fileName = safeWriterUploadName(input.fileName);
+  const extension = writerUploadExtension(fileName);
+  const contentType = WRITER_SCRIPT_UPLOAD_TYPES[extension];
+  if (!contentType) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Upload TXT, Markdown, RTF, DOC, DOCX or PDF manuscripts.',
+      { code: 'unsupported_script_file' },
+    );
+  }
+
+  const dataUrl = String(input.dataUrl ?? '');
+  const comma = dataUrl.indexOf(',');
+  if (comma < 0 || !/;base64$/i.test(dataUrl.slice(0, comma))) {
+    throw new HttpsError('invalid-argument', 'The manuscript upload was not encoded correctly.');
+  }
+
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(dataUrl.slice(comma + 1), 'base64');
+  } catch {
+    throw new HttpsError('invalid-argument', 'The manuscript upload could not be decoded.');
+  }
+  if (!bytes.length || bytes.length > WRITER_SCRIPT_UPLOAD_MAX_BYTES) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Manuscript files must be larger than 0 bytes and no more than 8 MB.',
+      { code: 'script_file_size_invalid', maxBytes: WRITER_SCRIPT_UPLOAD_MAX_BYTES },
+    );
+  }
+
+  if (extension === 'pdf' && bytes.subarray(0, 5).toString('ascii') !== '%PDF-') {
+    throw new HttpsError('invalid-argument', 'That file does not appear to be a valid PDF.');
+  }
+  if (extension === 'docx' && !(bytes[0] === 0x50 && bytes[1] === 0x4b)) {
+    throw new HttpsError('invalid-argument', 'That file does not appear to be a valid DOCX file.');
+  }
+  if (extension === 'doc') {
+    const oleHeader = Buffer.from([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1]);
+    if (!bytes.subarray(0, 8).equals(oleHeader)) {
+      throw new HttpsError('invalid-argument', 'That file does not appear to be a valid DOC file.');
+    }
+  }
+
+  const titleFromFile = fileName.replace(/\.[^.]+$/, '').trim();
+  const title = cleanText(input.title, 180) || cleanText(titleFromFile, 180) || 'Untitled manuscript';
+  const extractedContent = ['txt','md','markdown'].includes(extension)
+    ? bytes.toString('utf8').replace(/^\uFEFF/, '').slice(0, 200000)
+    : '';
+
+  const ref = db.collection('scripts').doc();
+  const storagePath = 'script-uploads/' + identity.uid + '/' + ref.id + '/' + randomUUID() + '-' + fileName;
+  const file = getStorage().bucket().file(storagePath);
+
+  await file.save(bytes, {
+    resumable: false,
+    metadata: {
+      contentType,
+      cacheControl: 'private, no-store, max-age=0',
+      contentDisposition: 'attachment; filename="' + fileName.replace(/"/g, '') + '"',
+      metadata: {
+        writerUserId: identity.uid,
+        scriptId: ref.id,
+        purpose: 'protected-manuscript-source',
+      },
+    },
+  });
+
+  try {
+    await ref.set({
+      title,
+      content: extractedContent,
+      status: 'Draft',
+      access: 'Private',
+      version: 1,
+      writerUserId: identity.uid,
+      editorUserId: null,
+      lastEditorialComment: null,
+      originalUpload: {
+        fileName,
+        contentType,
+        sizeBytes: bytes.length,
+        storagePath,
+        uploadedAt: FieldValue.serverTimestamp(),
+      },
+      rights: normaliseScriptRights(null),
+      marketplace: normaliseScriptMarketplace(null),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    await file.delete({ ignoreNotFound: true }).catch(() => undefined);
+    throw error;
+  }
+
   const saved = await ref.get();
   return { script: scriptPayload(saved.data() ?? {}, ref.id, true) };
 });
@@ -4337,8 +4482,12 @@ export const deleteWriterScript = onCall({ region: REGION }, async (request) => 
   const batch = db.batch();
   for (const doc of versions.docs) batch.delete(doc.ref);
   for (const doc of permissions.docs) batch.delete(doc.ref);
+  const originalStoragePath = cleanText(data.originalUpload?.storagePath, 500);
   batch.delete(ref);
   await batch.commit();
+  if (originalStoragePath) {
+    await getStorage().bucket().file(originalStoragePath).delete({ ignoreNotFound: true }).catch(() => undefined);
+  }
   return { deleted: true };
 });
 
@@ -4375,7 +4524,9 @@ export const submitWriterScript = onCall({ region: REGION }, async (request) => 
   const snapshot = await ref.get();
   const data = snapshot.data();
   if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
-  if (!cleanText(data.content, 200000)) throw new HttpsError('failed-precondition', 'Add manuscript content before submitting.');
+  if (!cleanText(data.content, 200000) && !cleanText(data.originalUpload?.storagePath, 500)) {
+    throw new HttpsError('failed-precondition', 'Add manuscript content or upload a source manuscript before submitting.');
+  }
   if (!['Draft','Revision requested','Rejected'].includes(String(data.status ?? 'Draft'))) {
     throw new HttpsError('failed-precondition', 'This manuscript is already in editorial workflow.');
   }
@@ -4867,8 +5018,26 @@ export const openProtectedScript = onCall({ region: REGION }, async (request) =>
 
   await assessProtectedActivityFirebase(identity.uid, { eventType: 'script_view', relatedId: scriptId });
 
+  let sourceFile: null | { fileName: string; contentType: string; sizeBytes: number; url: string; expiresAt: string } = null;
+  const originalStoragePath = cleanText(script.originalUpload?.storagePath, 500);
+  if (originalStoragePath) {
+    const sourceExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    const [url] = await getStorage().bucket().file(originalStoragePath).getSignedUrl({
+      action: 'read',
+      expires: sourceExpiresAt,
+    });
+    sourceFile = {
+      fileName: cleanText(script.originalUpload?.fileName, 180) || 'manuscript',
+      contentType: cleanText(script.originalUpload?.contentType, 160) || 'application/octet-stream',
+      sizeBytes: Math.max(0, Number(script.originalUpload?.sizeBytes ?? 0)),
+      url,
+      expiresAt: sourceExpiresAt.toISOString(),
+    };
+  }
+
   return {
     script: scriptPayload(script, scriptId, true),
+    sourceFile,
     readerSession: {
       sessionId: sessionRef.id,
       accountId: identity.uid,
