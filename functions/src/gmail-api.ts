@@ -195,3 +195,21 @@ export const getGoogleUserInfo = async (accessToken: string) => {
     subject: String(data.sub ?? ''),
   };
 };
+
+
+export const getGoogleTokenInfo = async (accessToken: string) => {
+  const response = await fetch(
+    'https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken),
+  );
+  const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error('Google token inspection failed: HTTP ' + response.status);
+  }
+  const scope = String(data.scope ?? '').trim();
+  return {
+    scope,
+    scopes: scope.split(/\s+/).filter(Boolean),
+    expiresIn: Number(data.expires_in ?? 0),
+    audience: String(data.aud ?? ''),
+  };
+};
