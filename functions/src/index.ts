@@ -7742,6 +7742,17 @@ export const adminSendEmailTest = onCall({
   const results: { email: string; status: 'sent' | 'failed'; error?: string }[] = [];
 
   try {
+    try {
+      await session.connect();
+    } catch (error) {
+      const detail = cleanText(error instanceof Error ? error.message : error, 600) || 'SMTP connection failed.';
+      throw new HttpsError(
+        'unavailable',
+        'Nightjar Mail could not connect or authenticate with the configured email account. ' + detail,
+        { code: 'email_transport_connection_failed' },
+      );
+    }
+
     for (const recipient of recipients) {
       const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
       try {
