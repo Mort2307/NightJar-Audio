@@ -7701,7 +7701,7 @@ export const adminListEmailCampaigns = onCall({ region: REGION }, async (request
 
 export const adminSendEmailTest = onCall({
   region: REGION,
-  timeoutSeconds: 90,
+  timeoutSeconds: 120,
   secrets: [NIGHTJAR_SMTP_USER, NIGHTJAR_SMTP_PASSWORD],
 }, async (request) => {
   const admin = requireAdminIdentity(request);
@@ -7709,40 +7709,80 @@ export const adminSendEmailTest = onCall({
   const subjectTemplate = cleanText(input.subject, 180);
   const bodyTemplate = cleanText(input.body, 12000);
   const category = cleanText(input.category, 40) as AdminEmailCategory;
+  const submittedEmails = Array.isArray(input.recipientEmails)
+    ? input.recipientEmails.map((value) => cleanEmail(value)).filter(Boolean)
+    : [];
+
   if (!subjectTemplate || !bodyTemplate) throw new HttpsError('invalid-argument', 'Subject and message are required.');
   if (!EMAIL_CATEGORIES.has(category)) throw new HttpsError('invalid-argument', 'Choose a valid communication type.');
 
-  const recipient: AdminEmailRecipient = {
-    email: admin.email,
-    displayName: 'Nightjar Admin',
-    firstName: 'Nightjar',
-    roleLabel: 'Administrator',
-    userId: admin.uid,
-    source: 'account',
-  };
-  const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
+  const uniqueEmails = Array.from(new Set(submittedEmails.length ? submittedEmails : [admin.email]));
+  if (uniqueEmails.length > 10) {
+    throw new HttpsError('invalid-argument', 'Nightjar allows up to 10 manual test recipients at a time.');
+  }
+  const invalidEmails = uniqueEmails.filter((email) => !validEmailAddress(email));
+  if (invalidEmails.length) {
+    throw new HttpsError('invalid-argument', 'One or more manual test email addresses are invalid.');
+  }
+
+  const recipients: AdminEmailRecipient[] = uniqueEmails.map((email) => {
+    const isAdminAddress = email === admin.email;
+    const displayName = isAdminAddress ? 'Nightjar Admin' : displayNameFromEmail(email);
+    return {
+      email,
+      displayName,
+      firstName: isAdminAddress ? 'Nightjar' : firstNameFromDisplayName(displayName),
+      roleLabel: isAdminAddress ? 'Administrator' : 'Test recipient',
+      userId: isAdminAddress ? admin.uid : null,
+      source: 'account',
+    };
+  });
+
   const session = new SmtpSession(smtpConfigForNightjar());
+  const results: { email: string; status: 'sent' | 'failed'; error?: string }[] = [];
+
   try {
-    await session.send({
-      toEmail: recipient.email,
-      toName: recipient.displayName,
-      ...rendered,
-    });
+    for (const recipient of recipients) {
+      const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
+      try {
+        await session.send({
+          toEmail: recipient.email,
+          toName: recipient.displayName,
+          ...rendered,
+        });
+        results.push({ email: recipient.email, status: 'sent' });
+        await db.collection('emailAudit').add({
+          type: 'manual_test',
+          adminUserId: admin.uid,
+          adminEmail: admin.email,
+          subject: rendered.subject,
+          category,
+          recipientEmail: recipient.email,
+          deliveryModel: 'one_recipient_per_message',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        results.push({
+          email: recipient.email,
+          status: 'failed',
+          error: cleanText(error instanceof Error ? error.message : error, 600),
+        });
+      }
+    }
   } finally {
     await session.quit();
   }
 
-  await db.collection('emailAudit').add({
-    type: 'test',
-    adminUserId: admin.uid,
-    adminEmail: admin.email,
-    subject: rendered.subject,
-    category,
-    recipientEmail: recipient.email,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-
-  return { sent: true, recipientEmail: recipient.email };
+  const sentCount = results.filter((result) => result.status === 'sent').length;
+  const failedCount = results.length - sentCount;
+  return {
+    sent: failedCount === 0,
+    recipientEmail: recipients.length === 1 ? recipients[0].email : null,
+    recipientEmails: recipients.map((recipient) => recipient.email),
+    sentCount,
+    failedCount,
+    results,
+  };
 });
 
 export const adminSendEmailCampaign = onCall({
