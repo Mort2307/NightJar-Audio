@@ -16,6 +16,9 @@ const db = getFirestore();
 const REGION = 'europe-west2';
 const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
+// While the closed beta runs, only administrators may initiate chargeable live Didit checks.
+// This flag must be false before public launch; existing tester bypass remains unchanged.
+const DIDIT_LIVE_PILOT_ADMINS_ONLY = true;
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
 const NIGHTJAR_GMAIL_CLIENT_ID = defineSecret('NIGHTJAR_GMAIL_CLIENT_ID');
 const NIGHTJAR_GMAIL_CLIENT_SECRET = defineSecret('NIGHTJAR_GMAIL_CLIENT_SECRET');
@@ -4911,6 +4914,10 @@ export const ageStatus = onCall({
   return {
     verified: persistentlyVerified || bypass.allowed,
     status: persistentlyVerified || bypass.allowed ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
+    // The actual provider decision is separate from temporary test access.
+    providerVerified: persistentlyVerified,
+    providerStatus: String(data.status ?? 'NOT_STARTED'),
+    livePilotAvailable: identity.admin && diditConfigured() && diditMode() === 'live',
     ageThreshold: 18,
     configured: diditConfigured(),
     provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
@@ -4930,7 +4937,19 @@ export const startAgeAssurance = onCall({
   const identity = await requireActiveIdentity(request);
   const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
   if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
-  if (diditConfigured()) return startDiditSession(identity.uid);
+  if (diditConfigured()) {
+    if (DIDIT_LIVE_PILOT_ADMINS_ONLY && diditMode() === 'live' && !identity.admin) {
+      // Never charge or prompt closed-beta testers until Nightjar explicitly ends the pilot.
+      const bypass = await temporaryAgeBypassFor(identity.uid);
+      if (bypass.allowed) return {
+        verified: true, status: 'COMPLETE', configured: true,
+        provider: 'temporary-test-access', environment: 'development',
+        temporaryBypass: true, temporaryBypassReason: bypass.reason,
+      };
+      throw new HttpsError('permission-denied', 'Live age verification is currently limited to Nightjar administrators.');
+    }
+    return startDiditSession(identity.uid);
+  }
   const bypass = await temporaryAgeBypassFor(identity.uid);
   if (bypass.allowed) return {
     verified: true, status: 'COMPLETE', configured: false,
