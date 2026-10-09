@@ -3510,6 +3510,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#nightjar-main-content">Skip to main content</a>
       <ProductExperience allowInstall={canAdmin && !simulationMode} />
       {ageVerified && ageProvider === 'temporary-test-access' && <div className="testing-age-bypass-banner" role="status"><ShieldCheck size={14}/><span><strong>APPROVED TEST ACCESS</strong> This account is using temporary QA age access. Production age assurance is still required before public launch.</span></div>}
       <header className="topbar">
@@ -3570,7 +3571,7 @@ function App() {
         </div>
       </div>}
 
-      <main className="nightjar-main">
+      <main id="nightjar-main-content" className="nightjar-main">
         {view === 'discover' && (
           <section className="page-wrap nj-animate">
             {effectiveRole === 'listener' && <RoleDashboard
