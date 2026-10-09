@@ -311,7 +311,7 @@ export const closedBetaRegistrationStatus = onCall({ region: REGION }, async (re
   return {
     closedBeta: CLOSED_BETA,
     allowed: access.allowed,
-    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED,
+    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && !Boolean(process.env.DIDIT_WORKFLOW_ID),
   };
 });
 
@@ -8237,7 +8237,7 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
       db.collection('ageAssurance').doc(doc.id).get(),
     ]);
     const accountData = account.data() ?? {};
-    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && accountData.testAccess === true;
+    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && !Boolean(process.env.DIDIT_WORKFLOW_ID) && accountData.testAccess === true;
     return {
       id: doc.id,
       userId: doc.id,
@@ -8287,7 +8287,7 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
   if (!applicationSnapshot.exists || !accountSnapshot.exists) throw new HttpsError('not-found', 'Professional application not found.');
 
   const applicantAccount = accountSnapshot.data() ?? {};
-  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && applicantAccount.testAccess === true;
+  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && !Boolean(process.env.DIDIT_WORKFLOW_ID) && applicantAccount.testAccess === true;
   if (decision === 'approved' && ageAssuranceSnapshot.data()?.verified !== true && !temporaryTestAccess) {
     throw new HttpsError('failed-precondition', 'This professional applicant must complete age assurance or be explicitly enabled as a controlled tester before approval.');
   }
