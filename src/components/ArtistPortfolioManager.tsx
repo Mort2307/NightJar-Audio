@@ -23,6 +23,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [commissionType, setCommissionType] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [humanCreated, setHumanCreated] = useState(false);
+  const [rightsConfirmed, setRightsConfirmed] = useState(false);
+  const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
@@ -46,13 +48,14 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
     if (!title.trim()) return notify('Give the artwork a title first.');
     if (!file) return notify('Choose the artwork image you want to submit.');
     if (!humanCreated) return notify('Confirm that this is your own human-created artwork before submitting.');
+    if (!rightsConfirmed || !permissionsConfirmed) return notify('Confirm your publication rights and any required client, subject or collaborator permissions.');
     if (!['image/png','image/jpeg','image/webp'].includes(file.type)) return notify('Use PNG, JPG or WebP artwork.');
     if (file.size > 5 * 1024 * 1024) return notify('Portfolio artwork must be 5 MB or smaller.');
     if (demoMode) {
       setItems((current)=>[{
         id:'demo-artist-piece-'+Date.now(),ownerUserId:'demo-artist-lena',title:title.trim(),description:description.trim(),tags:tags.split(',').map((tag)=>tag.trim()).filter(Boolean).slice(0,12),commissionType:commissionType.trim()||null,status:'draft',imageUrl:null,imageStatus:null,pendingImageAssetId:'demo-pending-'+Date.now(),pendingImageStatus:'pending',createdAt:new Date().toISOString(),publishedAt:null,updatedAt:new Date().toISOString(),
       },...current]);
-      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);
+      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       notify('Simulation: artwork entered the fictional image-moderation queue.');
       return;
     }
@@ -65,6 +68,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         tags:tags.split(',').map((tag)=>tag.trim()).filter(Boolean).slice(0,12),
         commissionType:commissionType.trim(),
         humanCreatedAttestation:true,
+        rightsConfirmed:true,
+        contributorPermissionsConfirmed:true,
       });
       const dataUrl = await readFileDataUrl(file);
       await nightjarMedia.submitImage({
@@ -74,7 +79,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         contentType:file.type,
         fileName:file.name,
       });
-      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);
+      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       await load();
       notify('Artwork submitted. It stays private until an administrator approves the image.');
     } catch {
@@ -115,7 +120,9 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <label>Tags<input value={tags} onChange={(e)=>setTags(e.target.value)} placeholder="Atmospheric, fantasy, painterly"/></label>
       <label>Artwork image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e)=>setFile(e.target.files?.[0] ?? null)}/></label>
       <label className="nightjar-anonymous-toggle artist-form-wide"><input type="checkbox" checked={humanCreated} onChange={(e)=>setHumanCreated(e.target.checked)}/><span>I confirm this is my own human-created artwork and is not AI-generated.</span></label>
-      <button className="primary-button artist-form-wide" disabled={busy || !humanCreated} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Submitting…</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
+      <label className="rights-check artist-form-wide"><input type="checkbox" checked={rightsConfirmed} onChange={(e)=>setRightsConfirmed(e.target.checked)}/><span>I own or control the rights needed to display this artwork publicly on Nightjar.</span></label>
+      <label className="rights-check artist-form-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have any required client, subject, model or collaborator permission for this public portfolio use.</span></label>
+      <button className="primary-button artist-form-wide" disabled={busy || !humanCreated || !rightsConfirmed || !permissionsConfirmed} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Submitting…</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
     </div>
 
     <div className="artist-portfolio-grid">
