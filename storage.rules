@@ -15,10 +15,7 @@ service firebase.storage {
         && accountData().status == 'active'
         && (
           accountData().role == role
-          || (
-            accountData().keys().hasAny(['approvedProfessionalRoles'])
-            && accountData().approvedProfessionalRoles.hasAny([role])
-          )
+          || accountData().get('approvedProfessionalRoles', []).hasAny([role])
         );
     }
 
