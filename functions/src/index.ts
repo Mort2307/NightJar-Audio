@@ -2568,8 +2568,13 @@ export const removeArtistPortfolioItem = onCall({ region: REGION }, async (reque
 });
 
 const publicArtistPortfolioFor = async (userId: string) => {
-
-
+  const snapshot = await db.collection('artistPortfolio').where('ownerUserId','==',userId).limit(40).get();
+  return snapshot.docs
+    .map((doc)=>artistPortfolioPayload(doc.data() ?? {}, doc.id))
+    .filter((item)=>item.status === 'published' && Boolean(item.imageUrl))
+    .sort((a,b)=>String(b.publishedAt ?? '').localeCompare(String(a.publishedAt ?? '')))
+    .slice(0,24);
+}; 
 const editorPortfolioPayload = (data: Record<string, any>, id: string) => ({
   id,
   ownerUserId: cleanText(data.ownerUserId, 160),
@@ -2786,13 +2791,6 @@ export const removeEditorPortfolioItem = onCall({ region: REGION }, async (reque
   await ref.delete();
   return { removed:true,itemId };
 });
-  const snapshot = await db.collection('artistPortfolio').where('ownerUserId','==',userId).limit(40).get();
-  return snapshot.docs
-    .map((doc)=>artistPortfolioPayload(doc.data() ?? {}, doc.id))
-    .filter((item)=>item.status === 'published' && Boolean(item.imageUrl))
-    .sort((a,b)=>String(b.publishedAt ?? '').localeCompare(String(a.publishedAt ?? '')))
-    .slice(0,24);
-};
 
 type CreatorRateBand = {
   minPaidSubscribers: number;
