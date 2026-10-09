@@ -1,4 +1,36 @@
-const CACHE = 'nightjar-shell-v10';
+try {
+  importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js');
+  importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging-compat.js');
+  firebase.initializeApp({
+    apiKey: 'AIzaSyBHgKqK9SRYJoWWrKH0DeMX4I35AVIoMJs',
+    authDomain: 'nightjar-audio.firebaseapp.com',
+    projectId: 'nightjar-audio',
+    storageBucket: 'nightjar-audio.firebasestorage.app',
+    messagingSenderId: '981039114349',
+    appId: '1:981039114349:web:80defbb59c7a56889af764',
+  });
+
+  const nightjarMessaging = firebase.messaging();
+  nightjarMessaging.onBackgroundMessage((payload) => {
+    const data = payload?.data ?? {};
+    const title = data.title || 'Nightjar update';
+    const body = data.body || 'Open Nightjar to view this update.';
+    const route = data.route || '/discover';
+
+    self.registration.showNotification(title, {
+      body,
+      icon: '/nightjar-home-192.png',
+      badge: '/nightjar-home-192.png',
+      tag: data.notificationId ? 'nightjar:' + data.notificationId : undefined,
+      renotify: false,
+      data: { route, notificationId: data.notificationId || null },
+    });
+  });
+} catch (error) {
+  // Core PWA behaviour remains available even if messaging SDK loading fails.
+}
+
+const CACHE = 'nightjar-shell-v11';
 const SHELL = ['/'];
 
 self.addEventListener('install', (event) => {
@@ -57,4 +89,22 @@ self.addEventListener('fetch', (event) => {
         .catch(() => caches.match(request).then((cached) => cached || Response.error()))
     );
   }
+});
+
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const route = event.notification?.data?.route || '/discover';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => 'focus' in client);
+      if (existing) {
+        try {
+          existing.postMessage({ type: 'NIGHTJAR_PUSH_OPEN', route });
+        } catch {}
+        return existing.focus();
+      }
+      return self.clients.openWindow(route);
+    })
+  );
 });
