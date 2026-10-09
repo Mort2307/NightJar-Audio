@@ -63,6 +63,11 @@ export async function startDiditAgeAssurance(uid: string) {
   if (old.provider === 'didit' && old.verified === true && old.environment === 'production' && old.reverifyRequired !== true) {
     return { verified: true, status: 'COMPLETE', provider: 'didit', configured: true, environment: 'production' };
   }
+  if (old.provider === 'didit' && old.status === 'SANDBOX_APPROVED'
+      && config.environment() === 'sandbox') {
+    return { verified: false, status: 'SANDBOX_APPROVED', provider: 'didit',
+      configured: true, environment: 'sandbox' };
+  }
   // A live, active session is reused across devices: no new paid session is created on refresh.
   if (old.provider === 'didit' && old.status === 'PENDING' && old.sessionEnvironment === config.environment()
       && typeof old.launchUrl === 'string' && launchUrlAllowed(old.launchUrl)
