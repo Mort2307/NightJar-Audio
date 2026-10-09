@@ -1006,6 +1006,11 @@ function App() {
     let cancelled = false;
     let unsubscribeForeground: (() => void) | undefined;
 
+    // Refresh an already-granted device token after app/service-worker updates without prompting again.
+    if (nightjarPush.configured() && nightjarPush.permission() === 'granted') {
+      void nightjarPush.enable().catch(() => { /* explicit device controls remain available in Profile */ });
+    }
+
     void nightjarPush.listenForeground((payload) => {
       const title = payload.data?.title || payload.notification?.title || 'Nightjar update';
       const body = payload.data?.body || payload.notification?.body || '';
