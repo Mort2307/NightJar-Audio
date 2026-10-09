@@ -7,6 +7,7 @@ import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 import { nightjarReferrals } from '../platform/firebase-referrals';
 import NightjarGiftPanel from './NightjarGiftPanel';
 import PublicEditorShowcase from './PublicEditorShowcase';
+import PublicWriterPortfolio from './PublicWriterPortfolio';
 
 type Props = {
   userId: string;
@@ -453,7 +454,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId && (profileRole==='writer' ? credit.role==='Writer' : ['Audio Editor','Sound Designer','Producer'].includes(credit.role))).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
             </article>)}
           </div>}
-          {profileRole === 'editor' && <PublicEditorShowcase items={profile.editorPortfolio ?? []} />}
+          {profileRole === 'writer' && <PublicWriterPortfolio items={profile.writerPortfolio ?? []} />}
+                    {profileRole === 'editor' && <PublicEditorShowcase items={profile.editorPortfolio ?? []} />}
           {(profileRole === 'writer' || profileRole === 'editor') && <div className="public-credit-summary">
             <span>{profileRole === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
             <strong>{profile.creditedReleaseCount ?? 0} credited release{profile.creditedReleaseCount === 1 ? '' : 's'}</strong>
