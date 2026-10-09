@@ -44,12 +44,12 @@ export function classifyProfessionalApplications<T extends ProfessionalApplicati
     if (OPEN_STATUSES.has(status) && remaining.length > 0) {
       // Only outstanding role decisions are counted as work awaiting approval.
       pending.push(application);
+    } else if (CLOSED_STATUSES.has(status)) {
+      // The final rejection/withdrawal decision wins, even for mixed-role accounts.
+      history.push(application);
     } else if (status === 'approved' || (remaining.length === 0 && approvedRoles.length > 0)) {
       // Separate approved applications, including completed legacy banked records.
       approved.push(application);
-    } else if (CLOSED_STATUSES.has(status)) {
-      // Rejects and withdrawals are retained for audit but never counted as new.
-      history.push(application);
     } else {
       // Orphaned/legacy records with no actionable role stay visible for diagnosis.
       attention.push(application);
