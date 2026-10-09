@@ -8400,7 +8400,7 @@ export const reviewProfessionalApplication = onCall({ region: REGION, secrets: [
             '',
             'Thank you for helping build Nightjar.',
             'The Nightjar team',
-          ].join('\\n').replaceAll('\\n','\n');
+          ].join('\n');
           const sent = await sendGmailApiMessage({
             accessToken,
             fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
@@ -8412,7 +8412,7 @@ export const reviewProfessionalApplication = onCall({ region: REGION, secrets: [
               subject: 'Welcome to Nightjar — your professional access is approved',
               text: msg,
               html: '<div style="font-family:Arial,Helvetica,sans-serif;background:#171119;color:#f5f0f7;padding:24px;border-radius:16px;line-height:1.7">'
-                + escapeEmailHtml(msg).replace(/\\n/g, '<br>') + '</div>',
+                + escapeEmailHtml(msg).replace(/\n/g, '<br>') + '</div>',
             },
           });
           await noticeRef.set({
