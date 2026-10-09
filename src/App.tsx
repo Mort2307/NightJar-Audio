@@ -3698,10 +3698,10 @@ function App() {
               title="Your Nightjar, right now."
               description="Useful account and discovery actions based on what you have explicitly saved, followed or left unfinished."
               metrics={[
-                {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness'},
-                {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases'},
-                {label:'Following',value:followingProfileIds.length,detail:'Public profiles'},
-                {label:'Updates',value:notificationUnreadCount,detail:'Unread activity'},
+                {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness',destination:'your profile',onClick:openProfileEditor},
+                {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases',destination:'your library',onClick:()=>navigate('library')},
+                {label:'Following',value:followingProfileIds.length,detail:'Public profiles',destination:'the professional directory',onClick:()=>navigate('creators')},
+                {label:'Updates',value:notificationUnreadCount,detail:'Unread activity',destination:'notifications',onClick:()=>{setNotificationsOpen(true);window.scrollTo({top:0,behavior:'smooth'});}},
               ]}
               actions={listenerActions}
             />}
@@ -3937,10 +3937,10 @@ function App() {
               title="What needs your attention."
               description="Publishing, profile and community actions surfaced from your current Nightjar state."
               metrics={[
-                {label:'Releases',value:creatorDashboard.releases.length,detail:'Current catalogue records'},
-                {label:'Featured',value:(profile.featuredPortfolioIds ?? []).length,detail:'Profile showcase'},
-                {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads'},
+                {label:'Releases',value:creatorDashboard.releases.length,detail:'Current catalogue records',destination:'the release pipeline',onClick:()=>document.getElementById('creator-pipeline')?.scrollIntoView({behavior:'smooth',block:'start'})},
+                {label:'Featured',value:(profile.featuredPortfolioIds ?? []).length,detail:'Profile showcase',destination:'your profile',onClick:openProfileEditor},
+                {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar',destination:'the collaboration workspace',onClick:()=>{const target=document.querySelector('.collaboration-hub');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});else navigate('profile');}},
+                {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads',destination:'messages',onClick:()=>navigate('messages')},
               ]}
               actions={creatorActions}
               loading={creatorDashboardLoading}
@@ -4085,10 +4085,10 @@ function App() {
               title="Your writing workflow."
               description="Nightjar prioritises manuscripts, revisions and identity tasks without exposing protected script text."
               metrics={[
-                {label:'Manuscripts',value:writerScripts.length,detail:'Your current library'},
-                {label:'Revisions',value:writerScripts.filter((item:any)=>String(item.status).toLowerCase().includes('revision')).length,detail:'Needs attention'},
-                {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar'},
-                {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads'},
+                {label:'Manuscripts',value:writerScripts.length,detail:'Your current library',destination:'the manuscript workspace',onClick:()=>document.querySelector('.writer-layout, .writer-create-card')?.scrollIntoView({behavior:'smooth',block:'start'})},
+                {label:'Revisions',value:writerScripts.filter((item:any)=>String(item.status).toLowerCase().includes('revision')).length,detail:'Needs attention',destination:'the manuscript workspace',onClick:()=>document.querySelector('.writer-layout, .writer-create-card')?.scrollIntoView({behavior:'smooth',block:'start'})},
+                {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar',destination:'the collaboration workspace',onClick:()=>{const target=document.querySelector('.collaboration-hub');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});else navigate('profile');}},
+                {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads',destination:'messages',onClick:()=>navigate('messages')},
               ]}
               actions={writerActions}
             />
@@ -4163,10 +4163,10 @@ function App() {
               title="Exceptions first."
               description="Nightjar surfaces items that require an owner decision before routine totals, so operational risk does not get buried in dashboards."
               metrics={[
-                {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts'},
-                {label:'Images',value:imageModeration.length,detail:'Awaiting moderation'},
-                {label:'Applications',value:applicationGroups.pending.length,detail:'New applications awaiting approval'},
-                {label:'Past due',value:commercialOverview?.subscriptions.pastDue ?? 0,detail:'Billing attention'},
+                {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts',destination:'administrator security alerts',onClick:()=>document.getElementById('admin-security-alerts')?.scrollIntoView({behavior:'smooth',block:'start'})},
+                {label:'Images',value:imageModeration.length,detail:'Awaiting moderation',destination:'image moderation',onClick:()=>openAdminPanel('images')},
+                {label:'Applications',value:applicationGroups.pending.length,detail:'New applications awaiting approval',destination:'professional application bank',onClick:()=>openAdminPanel('approvals')},
+                {label:'Past due',value:commercialOverview?.subscriptions.pastDue ?? 0,detail:'Billing attention',destination:'subscription ledger',onClick:()=>openAdminPanel('subscriptions')},
               ]}
               actions={adminActions}
               loading={adminOverviewLoading}
@@ -4645,11 +4645,18 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
   const watermark = ['NIGHTJAR', sessionId, accountId ? 'ACCOUNT ' + accountId.slice(-10) : '', script.id ? 'SCRIPT ' + String(script.id).slice(-10) : ''].filter(Boolean).join(' · ');
   const lastCaptureSignalAt = useRef(0);
 
+  // Keep the protected-reader body scroll lock independent of event listeners.
   useEffect(() => {
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     document.body.classList.add('nightjar-protected-reader-open');
+    return () => {
+      document.body.style.overflow = original;
+      document.body.classList.remove('nightjar-protected-reader-open');
+    };
+  }, []);
 
+  useEffect(() => {
     const eventContext = (detectionSource?: string, detectionConfidence?: string) => ({
       readerSessionId: sessionId,
       visibilityState: document.visibilityState,
@@ -4757,8 +4764,6 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
     window.addEventListener('nightjar:native-screen-capture', handleNativeScreenCapture as EventListener);
 
     return () => {
-      document.body.style.overflow = original;
-      document.body.classList.remove('nightjar-protected-reader-open');
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('beforeprint', handleBeforePrint);
