@@ -5,12 +5,14 @@ import './styles/product-system.css';
 import App from './App';
 import AccountPortal from './components/AccountPortal';
 import AppRecoveryBoundary from './components/AppRecoveryBoundary';
+import LegalDocumentPage from './components/LegalDocumentPage';
 import { registerNightjarServiceWorker } from './platform/pwa';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Nightjar root missing');
 
 const isAccountPortal = window.location.pathname === '/account' || window.location.pathname.startsWith('/account/');
+const isLegalDocument = window.location.pathname.startsWith('/legal/');
 
 try {
   const cleanUrl = new URL(window.location.href);
@@ -27,7 +29,7 @@ registerNightjarServiceWorker();
 createRoot(root).render(
   <StrictMode>
     <AppRecoveryBoundary>
-      {isAccountPortal ? <AccountPortal /> : <App />}
+      {isLegalDocument ? <LegalDocumentPage /> : isAccountPortal ? <AccountPortal /> : <App />}
     </AppRecoveryBoundary>
   </StrictMode>,
 );
