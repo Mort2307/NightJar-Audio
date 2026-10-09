@@ -45,6 +45,18 @@ assert.match(app, /applicationGroups\.pending\.length \?/, 'owner call-to-action
 assert.match(app, /\/admin\/['"] \+ panel/, 'admin tools use dedicated routes');
 assert.match(app, /\/admin\/people\//, 'people directories use dedicated routes');
 assert.match(app, /admin-detail-active/, 'owner subpage layout does not render the long dashboard behind an opened tool');
+assert.match(app, /adminPanel === 'operations' &&/, 'additional owner controls have a dedicated operations page');
+assert.match(app, /adminPanel === 'security' &&/, 'owner security has a dedicated routed page');
+assert.match(app, /openAdminPanel\('security'\)/, 'owner security summary opens the routed security workspace');
+assert.match(app, /openAdminPanel\('operations'\)/, 'owner operations are reachable directly from a tile');
+assert.match(app, /\{!adminPanel && !adminPeopleRole && <>/, 'heavy owner dashboard is not rendered inside a workpage');
+assert.equal((app.match(/className="admin-grid"/g) ?? []).length >= 2, true, 'owner navigation grid remains present');
+assert.doesNotMatch(app, /value:adminApplications\.length/, 'owner attention metrics cannot count historical application records');
+assert.doesNotMatch(app, /<div className="admin-preview-strip">/, 'global navigation no longer contains an expanded role-preview strip');
+const css = fs.readFileSync('src/index.css', 'utf8');
+assert.match(css, /\.admin-page \.admin-panel-modal\.admin-full-page > section/, 'owner details use normal full-page layout');
+assert.match(css, /\.nj-admin-operations-workpage/, 'operations workpage is styled for responsive reading');
+assert.match(css, /\.nj-admin-operations-role-preview/, 'role preview is styled in the owner operations workspace');
 assert.match(app, /adminApplicationBox === 'pending'/, 'pending queue remains accessible');
 assert.match(app, /adminApplicationBox === 'attention'/, 'orphan records are visible for attention');
 const backend = fs.readFileSync('functions/src/index.ts', 'utf8');
