@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Bell, Save, ShieldCheck } from 'lucide-react';
+import { Bell, RefreshCw, Save, Send, ShieldCheck, Smartphone } from 'lucide-react';
 import { nightjarNotifications } from '../platform/firebase-notifications';
+import { nightjarPush } from '../platform/firebase-push';
 
 type Props = { notify: (message: string) => void; simulationMode?: boolean };
 
@@ -18,6 +19,8 @@ const defaults = {
 export default function NotificationPreferences({ notify, simulationMode = false }: Props) {
   const [preferences, setPreferences] = useState<any>(defaults);
   const [saving, setSaving] = useState(false);
+  const [pushStatus, setPushStatus] = useState<any | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     if (simulationMode) {
@@ -26,6 +29,59 @@ export default function NotificationPreferences({ notify, simulationMode = false
     }
     void nightjarNotifications.preferences().then((data) => setPreferences({ ...defaults, ...(data.preferences ?? {}) })).catch(() => {});
   }, [simulationMode]);
+
+  const refreshPush = async () => {
+    if (simulationMode) {
+      setPushStatus({ configured:true, supported:true, browserPermission:'granted', activeDeviceCount:1, devices:[], standalone:true });
+      return;
+    }
+    try {
+      setPushStatus(await nightjarPush.status());
+    } catch {
+      setPushStatus({ configured:nightjarPush.configured(), supported:false, browserPermission:nightjarPush.permission(), activeDeviceCount:0, devices:[] });
+    }
+  };
+
+  useEffect(() => { void refreshPush(); }, [simulationMode]);
+
+  const enablePush = async () => {
+    setPushBusy(true);
+    try {
+      if (simulationMode) notify('Simulation: this device is now registered for push notifications.');
+      else {
+        await nightjarPush.enable();
+        notify('Push notifications enabled for this device.');
+      }
+      await refreshPush();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Push notifications could not be enabled.');
+    } finally { setPushBusy(false); }
+  };
+
+  const disablePush = async () => {
+    setPushBusy(true);
+    try {
+      if (!simulationMode) await nightjarPush.disable();
+      notify('Nightjar push disabled for this device.');
+      await refreshPush();
+    } catch {
+      notify('Nightjar could not disable push on this device.');
+    } finally { setPushBusy(false); }
+  };
+
+  const testPush = async () => {
+    setPushBusy(true);
+    try {
+      if (simulationMode) notify('Simulation: test push sent.');
+      else {
+        const result = await nightjarPush.test();
+        notify(result.sent ? 'Test push sent to your registered device.' : 'Test push was attempted but no device confirmed delivery.');
+      }
+      await refreshPush();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Nightjar could not send the test push.');
+    } finally { setPushBusy(false); }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -61,6 +117,47 @@ export default function NotificationPreferences({ notify, simulationMode = false
       ].map(([key,label]) => <label className="rights-check" key={key}><input type="checkbox" checked={preferences[key] !== false} onChange={() => toggle(key)}/>{label}</label>)}
     </div>
     <div className="rights-ai-lock"><ShieldCheck size={16}/><div><strong>Discreet by default</strong><span>New accounts default to discreet wording rather than exposing adult-content detail on a lock screen.</span></div></div>
+
+    <section className="push-device-panel">
+      <div className="push-device-head">
+        <Smartphone size={18}/>
+        <div>
+          <strong>Phone / device push</strong>
+          <span>
+            {!pushStatus ? 'Checking this device…'
+              : !pushStatus.configured ? 'Firebase Web Push still needs its VAPID public key configured.'
+              : !pushStatus.supported ? 'This browser does not support Nightjar web push.'
+              : pushStatus.browserPermission === 'denied' ? 'Notifications are blocked in this browser or device settings.'
+              : pushStatus.activeDeviceCount > 0 ? pushStatus.activeDeviceCount + ' active device' + (pushStatus.activeDeviceCount === 1 ? '' : 's') + ' registered.'
+              : 'This device is not registered for Nightjar push yet.'}
+          </span>
+        </div>
+        <span className={pushStatus?.activeDeviceCount > 0 ? 'status-pill' : 'status-pill muted'}>
+          {pushStatus?.activeDeviceCount > 0 ? 'PUSH ON' : 'PUSH OFF'}
+        </span>
+      </div>
+      <div className="push-device-actions">
+        <button className="secondary-button" disabled={pushBusy || !pushStatus?.configured || !pushStatus?.supported} onClick={() => void enablePush()}>
+          <Bell size={14}/> Enable on this device
+        </button>
+        <button className="secondary-button" disabled={pushBusy || !(pushStatus?.activeDeviceCount > 0)} onClick={() => void testPush()}>
+          <Send size={14}/> Send test push
+        </button>
+        <button className="ghost-button" disabled={pushBusy || !(pushStatus?.activeDeviceCount > 0)} onClick={() => void disablePush()}>
+          Disable this device
+        </button>
+        <button className="ghost-button" disabled={pushBusy} onClick={() => void refreshPush()}>
+          <RefreshCw size={14}/> Refresh status
+        </button>
+      </div>
+      {pushStatus?.devices?.length > 0 && <div className="push-device-list">
+        {pushStatus.devices.map((device:any)=><div key={device.id}>
+          <span><strong>{device.platform}</strong><small>{device.standalone ? 'Installed app' : 'Browser'} · {device.active ? 'Active' : 'Inactive'}</small></span>
+          <small>{device.lastDeliveredAt ? 'Last push ' + new Date(device.lastDeliveredAt).toLocaleString('en-GB') : device.lastError ? 'Last error: ' + device.lastError : 'No delivery recorded yet'}</small>
+        </div>)}
+      </div>}
+    </section>
+
     <button className="primary-button" disabled={saving} onClick={() => void save()}><Save size={14}/> {saving ? 'Saving…' : 'Save notification preferences'}</button>
   </section>;
 }
