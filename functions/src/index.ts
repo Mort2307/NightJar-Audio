@@ -8263,7 +8263,7 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
   return { applications, buckets, total: applications.length };
 });
 
-export const reviewProfessionalApplication = onCall({ region: REGION }, async (request) => {
+export const reviewProfessionalApplication = onCall({ region: REGION, secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET] }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const userId = cleanText(input.userId, 160);
@@ -8347,8 +8347,96 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
     createdAt: FieldValue.serverTimestamp(),
   });
 
+  // Approval is authoritative even if Gmail is unavailable. Never resend on a
+  // repeated approval call; only newly granted roles trigger the welcome email.
+  // Persist the attempt so failures remain visible for administrator follow-up.
+  let approvalEmailStatus: 'not_applicable' | 'sent' | 'failed' | 'already_processed' = 'not_applicable';
+  if (decision === 'approved' && rolesToApprove.length) {
+    const newlyApprovedRoles = rolesToApprove.filter((role) => !currentApproved.includes(role));
+    if (newlyApprovedRoles.length) {
+      const noticeKey = createHash('sha256')
+        .update(userId + ':' + [...newlyApprovedRoles].sort().join(','))
+        .digest('hex');
+      const noticeRef = db.collection('professionalApprovalNotices').doc(noticeKey);
+      const recipientEmail = cleanEmail(application.email ?? applicantAccount.email);
+      const profileSnapshot = await profileRef(userId).get().catch(() => null);
+      const recipientName = cleanText(profileSnapshot?.data()?.displayName, 80)
+        || cleanText(applicantAccount.displayName, 80)
+        || recipientEmail.split('@')[0] || 'Nightjar creator';
+      try {
+        await noticeRef.create({
+          userId, recipientEmail,
+          roles: newlyApprovedRoles,
+          wave: wave || application.wave || null,
+          status: 'sending',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch (error: any) {
+        // ALREADY_EXISTS means a concurrent/previous approval has already claimed this notification.
+        if (Number(error?.code) === 6 || String(error?.code) === 'already-exists') {
+          approvalEmailStatus = 'already_processed';
+        } else {
+          approvalEmailStatus = 'failed';
+          console.error('Nightjar could not claim approval email', { userId, error: String(error) });
+        }
+      }
+      if (approvalEmailStatus === 'not_applicable') {
+        try {
+          if (!validEmailAddress(recipientEmail)) throw new Error('Applicant account has no valid email address');
+          const accessToken = await gmailAccessToken();
+          const roleNames = newlyApprovedRoles.map((role) =>
+            role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor'
+              : role === 'artist' ? 'Artist' : 'Writer');
+          const roleSummary = roleNames.join(', ');
+          const msg = [
+            'Hello ' + recipientName + ',',
+            '',
+            'Your Nightjar professional application has been approved!',
+            '',
+            'Approved role' + (roleNames.length > 1 ? 's' : '') + ': ' + roleSummary + '.',
+            'You can now sign in to Nightjar and access your approved professional workspace and profile.',
+            '',
+            'Nightjar is currently in private testing. Approval is not a paid contract or a promise of earnings; any separate creator arrangement will be confirmed directly.',
+            '',
+            'Thank you for helping build Nightjar.',
+            'The Nightjar team',
+          ].join('\\n').replaceAll('\\n','\n');
+          const sent = await sendGmailApiMessage({
+            accessToken,
+            fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+            fromName: 'Nightjar',
+            replyTo: NIGHTJAR_GMAIL_SENDER_EMAIL,
+            message: {
+              toEmail: recipientEmail,
+              toName: recipientName,
+              subject: 'Welcome to Nightjar — your professional access is approved',
+              text: msg,
+              html: '<div style="font-family:Arial,Helvetica,sans-serif;background:#171119;color:#f5f0f7;padding:24px;border-radius:16px;line-height:1.7">'
+                + escapeEmailHtml(msg).replace(/\\n/g, '<br>') + '</div>',
+            },
+          });
+          await noticeRef.set({
+            status:'sent',
+            providerMessageId: cleanText((sent as any)?.messageId ?? (sent as any)?.id, 180) || null,
+            sentAt:FieldValue.serverTimestamp(),
+          }, { merge: true });
+          approvalEmailStatus = 'sent';
+        } catch (error) {
+          approvalEmailStatus = 'failed';
+          console.error('Nightjar professional approval email failed', { userId, reason:String(error) });
+          await noticeRef.set({
+            status:'failed',
+            failureReason:cleanText(error instanceof Error ? error.message : error, 300),
+            failedAt:FieldValue.serverTimestamp(),
+          }, { merge:true }).catch(() => {});
+        }
+      }
+    }
+  }
+
   await syncCreatorCustomTagUsage(userId);
   return {
+    approvalEmailStatus,
     userId,
     decision,
     approvedProfessionalRoles: nextApproved,
