@@ -37,4 +37,19 @@ assert.match(app, /classifyProfessionalApplications\(adminApplications\)/, 'dash
 assert.match(app, /adminApplicationBox === 'history'/, 'history is accessible in the console');
 assert.match(app, /adminApplicationBox === 'pending'/, 'pending queue remains accessible');
 assert.match(app, /adminApplicationBox === 'attention'/, 'orphan records are visible for attention');
+const backend = fs.readFileSync('functions/src/index.ts', 'utf8');
+assert.match(backend, /export const sendProfessionalApprovalEmail = onDocumentCreated/, 'approval event triggers automatic email');
+assert.match(backend, /decision: 'approved'/, 'backend has approved decision handling');
+assert.match(backend, /professionalApplications\/\{userId\}\/events\/\{eventId\}/, 'approval event path is exact');
+assert.match(backend, /if \(data\.decision !== 'approved'/, 'non-approvals must not send an email');
+assert.match(backend, /secrets: \[NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET\]/, 'Gmail secrets must be declared');
+assert.match(backend, /snapshot\.exists\) return false;/, 'an existing delivery is never automatically sent twice');
+assert.match(backend, /approvalEmailStatus: 'sending'/, 'approval email status is recorded');
+assert.match(backend, /export const adminRetryProfessionalApprovalEmail = onCall/, 'failed or legacy approvals can be emailed manually');
+assert.match(backend, /if \(snapshot\.data\(\)\?\.status !== 'failed'\) return false;/, 'already sent messages cannot be resent using retry');
+assert.match(backend, /type: 'professional_approval'/, 'successful sends produce an audit record');
+assert.match(backend, /approvalEmailStatus: cleanText\(data\.approvalEmailStatus/, 'history exposes email delivery status');
+assert.match(app, /Send existing approval email/, 'legacy approved profiles are offered an explicit owner action');
+assert.match(app, /Retry approval email/, 'failed sends can be retried by an administrator');
+
 console.log('Nightjar professional application inbox/history contracts passed.');
