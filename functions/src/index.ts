@@ -2202,6 +2202,42 @@ export const brandIcon192=onRequest({region:REGION},async(_r,res)=>{await stream
 export const brandIcon512=onRequest({region:REGION},async(_r,res)=>{await streamBrandingIcon('icon512Path',res);});
 export const brandIconMaskable512=onRequest({region:REGION},async(_r,res)=>{await streamBrandingIcon('maskable512Path',res);});
 
+// Nightjar install manifests follow the currently approved, generated brand
+// icons without requiring a new hosting release for each branding update.
+// Keep the existing packaged PNGs as fallback until an admin has generated
+// approved 192/512/maskable versions. Never point installers at 404 icons.
+export const brandInstallManifest = onRequest({region:REGION},async(_r,res)=>{
+  try {
+    const snap=await db.collection('settings').doc('branding').get();
+    const branding=snap.data()??{};
+    const ready=branding.logoStatus==='approved'
+      && Boolean(branding.icon192Path && branding.icon512Path && branding.maskable512Path);
+    const version=ready ? encodeURIComponent(String(branding.iconVersion??'1')) : 'legacy';
+    const icons=ready
+      ? [
+          {src:'/app-icons/nightjar-192.png?v='+version,sizes:'192x192',type:'image/png',purpose:'any'},
+          {src:'/app-icons/nightjar-512.png?v='+version,sizes:'512x512',type:'image/png',purpose:'any'},
+          {src:'/app-icons/nightjar-maskable-512.png?v='+version,sizes:'512x512',type:'image/png',purpose:'maskable'},
+        ]
+      : [
+          {src:'/nightjar-home-192.png',sizes:'192x192',type:'image/png',purpose:'any'},
+          {src:'/nightjar-home-512.png',sizes:'512x512',type:'image/png',purpose:'any'},
+        ];
+    res.setHeader('Content-Type','application/manifest+json; charset=utf-8');
+    res.setHeader('Cache-Control','no-store,max-age=0,must-revalidate');
+    res.setHeader('X-Content-Type-Options','nosniff');
+    res.status(200).json({
+      id:'/',name:'Nightjar',short_name:'Nightjar',
+      description:'Premium immersive audio for adults.',
+      start_url:'/',scope:'/',display:'standalone',
+      background_color:'#0c0b0d',theme_color:'#0c0b0d',
+      lang:'en-GB',prefer_related_applications:false,icons,
+    });
+  } catch {
+    res.status(503).send('Install manifest temporarily unavailable.');
+  }
+});
+
 export const syncBrandIconVariants = onCall({region:REGION},async(request)=>{
   const admin=requireAdminIdentity(request);
   const input=(request.data??{}) as Record<string,unknown>;
