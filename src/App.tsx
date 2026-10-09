@@ -1535,10 +1535,10 @@ function App() {
   };
 
   useEffect(() => {
-    if (!user || (ageStatus !== 'PENDING' && !(canAdmin && ageSessionActive))) return;
+    if (!user || (ageStatus !== 'PENDING' && !(role === 'admin' && ageSessionActive))) return;
     const timer = window.setInterval(() => { void refreshAgeStatus(); }, 5000);
     return () => window.clearInterval(timer);
-  }, [ageStatus, user, canAdmin, ageSessionActive]);
+  }, [ageStatus, user, role, ageSessionActive]);
 
   const signIn = async () => {
     window.location.assign('/account?entry=signin');
