@@ -34,8 +34,9 @@ async function main() {
     !beta.includes('const CLOSED_BETA = true;') ||
     !beta.includes('const DIDIT_LIVE_PILOT_ADMINS_ONLY = true;'))
     throw Error('Closed beta protections are not intact; refusing deployment.');
+  // TypeScript permits export const foo= without spaces; verify declarations, not formatting.
   for (const name of ['registerPushDevice','unregisterPushDevice','myPushNotificationStatus','sendTestPushNotification','brandInstallManifest','brandLogoImage','brandIcon192','brandIcon512','brandIconMaskable512','syncBrandIconVariants'])
-    if (!beta.includes('export const ' + name + ' =')) throw Error('Push function is missing: ' + name);
+    if (!new RegExp('\\bexport\\s+const\\s+' + name + '\\s*=').test(beta)) throw Error('Push function is missing: ' + name);
   console.log('Firebase push public key found; validating Nightjar...');
   run('npm',['run','validate']);
   run('npm',['run','validate:didit']);
