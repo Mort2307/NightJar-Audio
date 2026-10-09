@@ -3346,7 +3346,7 @@ function App() {
             <div><Check size={16} /><span>{ageTemporaryBypass ? 'Removing this email from the tester allowlist revokes the bypass immediately.' : 'Nightjar stores verification state and an opaque reference rather than raw identity documents.'}</span></div>
             {ageReverifyRequired && !ageTemporaryBypass && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
           </div>
-          <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
+          <button className="primary-button wide-button" disabled={ageLoading || ageStatus === 'SANDBOX_APPROVED' || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
             {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageStatus === 'SANDBOX_APPROVED' ? 'Sandbox test complete' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
           </button>
           <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a live Didit 18+ approval is securely recorded on your Nightjar account. Sandbox approval never unlocks production content.'}</p>
