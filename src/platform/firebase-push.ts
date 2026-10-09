@@ -1,6 +1,6 @@
 import { getMessaging, getToken, deleteToken, isSupported, onMessage, type MessagePayload } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { firebaseApp } from './firebase-auth';
+import { firebaseApp, firebaseAuth } from './firebase-auth';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
@@ -12,7 +12,7 @@ const registerCall = httpsCallable<{
   timezone?: string;
 }, { registered: boolean; deviceId: string }>(functions, 'registerPushDevice');
 
-const unregisterCall = httpsCallable<{ token: string }, { unregistered: boolean }>(functions, 'unregisterPushDevice');
+const unregisterCall = httpsCallable<{ token?: string; deviceId?: string }, { unregistered: boolean }>(functions, 'unregisterPushDevice');
 const statusCall = httpsCallable<void, {
   activeDeviceCount: number;
   devices: Array<{
@@ -46,9 +46,32 @@ const standalone = () =>
   window.matchMedia?.('(display-mode: standalone)').matches === true
   || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 
-const deviceTokenId = async (token: string) => {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 16);
+// A short device identifier, not a token, is kept on this browser after a
+// successful explicit registration. Status checks NEVER re-subscribe to FCM.
+const savedDeviceKey = () => {
+  const uid = firebaseAuth.currentUser?.uid;
+  return uid ? 'nightjar.push.device.v1.' + uid : null;
+};
+const rememberDevice = (id: string | null) => {
+  try {
+    const key = savedDeviceKey();
+    if (!key) return;
+    if (id) window.localStorage.setItem(key, id);
+    else window.localStorage.removeItem(key);
+  } catch { /* storage might be unavailable in private mode */ }
+};
+const savedDevice = () => {
+  try {
+    const key = savedDeviceKey();
+    return key ? window.localStorage.getItem(key) : null;
+  } catch { return null; }
+};
+const describeFcmError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error ?? 'Unknown messaging problem');
+  if (/messaging\/token-subscribe-failed|missing required authentication credential|UNAUTHENTICATED|\b401\b/i.test(message)) {
+    return new Error('Firebase Cloud Messaging rejected device registration (HTTP 401). Check the FCM Registration API, Web Push public key and Google Cloud API-key restrictions for project nightjar-audio. Nightjar remains usable without push.');
+  }
+  return error instanceof Error ? error : new Error('Nightjar could not register device notifications.');
 };
 
 export const nightjarPush = {
@@ -78,68 +101,54 @@ export const nightjarPush = {
 
     const registration = await getRegistration();
     const messaging = getMessaging(firebaseApp);
-    const token = await getToken(messaging, {
-      vapidKey,
-      serviceWorkerRegistration: registration,
-    });
-    if (!token) throw new Error('Firebase did not return a push token for this device.');
-
-    await registerCall({
-      token,
-      platform: platformLabel(),
-      userAgent: navigator.userAgent,
-      standalone: standalone(),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
-    return { token, permission };
+    try {
+      const token = await getToken(messaging, {
+        vapidKey,
+        serviceWorkerRegistration: registration,
+      });
+      if (!token) throw new Error('Firebase did not return a push token for this device.');
+      const registered = await registerCall({
+        token,
+        platform: platformLabel(),
+        userAgent: navigator.userAgent,
+        standalone: standalone(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      rememberDevice(registered.data.deviceId);
+      return { registered: true, permission };
+    } catch (error) {
+      throw describeFcmError(error);
+    }
   },
 
   async disable() {
-    if (!(await this.supported())) return { disabled: false };
-    const registration = await getRegistration();
-    const messaging = getMessaging(firebaseApp);
-    let token = '';
-    if (vapidKey) {
-      try {
-        token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
-      } catch {
-        token = '';
-      }
+    // Backend revocation works even if FCM is currently returning HTTP 401.
+    const deviceId = savedDevice();
+    if (deviceId) {
+      await unregisterCall({ deviceId });
+      rememberDevice(null);
     }
-    if (token) await unregisterCall({ token });
-    try { await deleteToken(messaging); } catch { /* backend token is already disabled */ }
-    return { disabled: true };
+    if (await this.supported()) {
+      try { await deleteToken(getMessaging(firebaseApp)); } catch { /* backend registration revoked */ }
+    }
+    return { disabled: Boolean(deviceId) };
   },
 
   async status() {
     const supported = await this.supported();
     const permission = this.permission();
     const backend = await statusCall();
-    let thisDeviceRegistered = false;
-    let thisDeviceError: string | null = null;
-    // Backend device count alone cannot tell if this particular phone is registered.
-    // Read the existing browser push token without requesting permission.
-    if (supported && vapidKey && permission === 'granted') {
-      try {
-        const registration = await getRegistration();
-        const token = await getToken(getMessaging(firebaseApp), {
-          vapidKey, serviceWorkerRegistration: registration,
-        });
-        if (token) {
-          const id = await deviceTokenId(token);
-          thisDeviceRegistered = backend.data.devices.some(device => device.id === id && device.active);
-        }
-      } catch (error) {
-        thisDeviceError = error instanceof Error ? error.message.slice(0, 200) : 'Device token lookup failed.';
-      }
-    }
+    const deviceId = savedDevice();
+    // No getToken() here. It performs a network subscription, not a read.
+    const thisDeviceRegistered = Boolean(deviceId && permission === 'granted'
+      && backend.data.devices.some(device => device.id === deviceId && device.active));
     return {
       configured: Boolean(vapidKey),
       supported,
       browserPermission: permission,
       activeDeviceCount: backend.data.activeDeviceCount,
       thisDeviceRegistered,
-      thisDeviceError,
+      thisDeviceError: null,
       devices: backend.data.devices,
       standalone: standalone(),
     };
