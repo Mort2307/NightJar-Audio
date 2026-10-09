@@ -4266,7 +4266,7 @@ function App() {
   <h2>Didit verification</h2>
   <p>Only approved Nightjar Administrators can start a Didit check during this pilot. Existing approved Listener and Creator testers keep their temporary access; the app will not ask them to pay or verify again during beta.</p>
   <div className="demo-state-line">
-    <span className={ageConfigured ? 'status-pill' : 'status-pill muted'}>{ageConfigured ? 'DIDIT CONNECTED' : 'DIDIT SETUP NEEDED'}</span>
+    <span className={ageConfigured ? 'status-pill' : 'status-pill muted'}>{ageLivePilotAvailable ? 'DIDIT LIVE PILOT ENABLED' : ageConfigured ? 'DIDIT CONNECTED' : 'DIDIT SETUP NEEDED'}</span>
     <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'DIDIT VERIFIED 18+' : ageProviderStatus.replaceAll('_',' ')}</span>
     <span className={ageEnvironment === 'live' ? 'status-pill warning' : 'status-pill'}>{ageEnvironment === 'live' ? 'LIVE · MAY INCUR FEES' : 'SANDBOX · TEST ONLY'}</span>
   </div>
