@@ -4274,10 +4274,10 @@ function App() {
                   ? 'Sent' + (application.approvalEmailSentAt ? ' · ' + new Date(application.approvalEmailSentAt).toLocaleString('en-GB') : '')
                   : application.approvalEmailStatus === 'failed' ? 'Delivery failed · retry available'
                   : application.approvalEmailStatus === 'sending' ? 'Sending'
-                  : 'Not recorded for this approval'}
+                  : 'No automated email recorded (existing approval)'}
               </small>}
               {adminApplicationBox === 'history' && application.approvalEmailStatus === 'failed' && application.approvalEmailError && <small className="nj-application-mail-error">Email error: {application.approvalEmailError}</small>}
-              {adminApplicationBox === 'history' && application.approvalEmailStatus === 'failed' && application.approvalEmailEventId && <button type="button" className="secondary-button" onClick={() => void retryProfessionalApprovalEmail(application)}>Retry approval email</button>}
+              {adminApplicationBox === 'history' && (application.approvalEmailStatus === 'failed' || !application.approvalEmailStatus) && application.approvalEmailEventId && <button type="button" className="secondary-button" onClick={() => void retryProfessionalApprovalEmail(application)}>{application.approvalEmailStatus === 'failed' ? 'Retry approval email' : 'Send existing approval email'}</button>}
               {application.updatedAt && <small>Last updated: {new Date(application.updatedAt).toLocaleString('en-GB')}</small>}
               {application.statement && <p>{application.statement}</p>}
               {application.experience && <small>{application.experience}</small>}
