@@ -38,7 +38,10 @@ const launchUrlAllowed = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && (url.hostname === 'didit.me' || url.hostname.endsWith('.didit.me'));
+    const customHost = String(process.env.DIDIT_VERIFICATION_HOST ?? '').trim().toLowerCase();
+    return url.protocol === 'https:' && (url.hostname === 'didit.me'
+      || url.hostname.endsWith('.didit.me')
+      || (customHost.length > 3 && url.hostname.toLowerCase() === customHost));
   } catch { return false; }
 };
 
