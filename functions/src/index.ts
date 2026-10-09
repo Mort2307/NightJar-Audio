@@ -42,6 +42,71 @@ const maskSecurityEmail = (value: unknown) => {
 const authenticationEventMillis = (data: Record<string, any>) => data.createdAt?.toMillis?.() ?? 0;
 
 const accountRef = (uid: string) => db.collection('accounts').doc(uid);
+
+const CURRENT_LEGAL_DOCUMENTS = {
+  platform_terms: {
+    id: 'platform_terms',
+    version: '2026-10-09.1',
+    title: 'Nightjar Terms of Use',
+    path: '/legal/terms',
+    requiredForAccount: true,
+    requiredForProfessional: true,
+  },
+  privacy_notice: {
+    id: 'privacy_notice',
+    version: '2026-10-09.1',
+    title: 'Nightjar Privacy Notice',
+    path: '/legal/privacy',
+    requiredForAccount: true,
+    requiredForProfessional: true,
+  },
+  professional_terms: {
+    id: 'professional_terms',
+    version: '2026-10-09.1',
+    title: 'Nightjar Professional & Content Terms',
+    path: '/legal/professional',
+    requiredForAccount: false,
+    requiredForProfessional: true,
+  },
+} as const;
+
+type LegalDocumentId = keyof typeof CURRENT_LEGAL_DOCUMENTS;
+
+const legalAcceptanceRef = (uid: string, documentId: LegalDocumentId) =>
+  accountRef(uid).collection('legalAcceptances').doc(documentId);
+
+const currentLegalAcceptanceFor = async (uid: string, documentId: LegalDocumentId) => {
+  const expected = CURRENT_LEGAL_DOCUMENTS[documentId];
+  const snapshot = await legalAcceptanceRef(uid, documentId).get();
+  const data = snapshot.data() ?? {};
+  return {
+    accepted: snapshot.exists && data.version === expected.version && data.withdrawnAt == null,
+    version: cleanText(data.version, 60) || null,
+    acceptedAt: toIso(data.acceptedAt),
+  };
+};
+
+const requireCurrentLegalAcceptance = async (uid: string, documentId: LegalDocumentId) => {
+  const status = await currentLegalAcceptanceFor(uid, documentId);
+  if (!status.accepted) {
+    const document = CURRENT_LEGAL_DOCUMENTS[documentId];
+    throw new HttpsError(
+      'failed-precondition',
+      'Accept the current ' + document.title + ' before continuing.',
+      { code:'legal_acceptance_required', documentId, version:document.version, path:document.path },
+    );
+  }
+  return status;
+};
+
+const requireProfessionalLegalTerms = async (uid: string) => {
+  await Promise.all([
+    requireCurrentLegalAcceptance(uid, 'platform_terms'),
+    requireCurrentLegalAcceptance(uid, 'privacy_notice'),
+    requireCurrentLegalAcceptance(uid, 'professional_terms'),
+  ]);
+};
+
 const validEmailAddress = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const testerAllowlistRef = (email: string) => db
   .collection(CLOSED_BETA_ALLOWLIST_COLLECTION)
@@ -99,10 +164,69 @@ const requireRegistrationIdentity = (request: { auth?: { uid: string; token: Rec
   return { uid: request.auth.uid, email };
 };
 
+export const getLegalAgreementStatus = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const entries = await Promise.all(
+    (Object.keys(CURRENT_LEGAL_DOCUMENTS) as LegalDocumentId[]).map(async (documentId) => {
+      const document = CURRENT_LEGAL_DOCUMENTS[documentId];
+      const acceptance = await currentLegalAcceptanceFor(identity.uid, documentId);
+      return {
+        ...document,
+        accepted: acceptance.accepted,
+        acceptedVersion: acceptance.version,
+        acceptedAt: acceptance.acceptedAt,
+      };
+    }),
+  );
+  return { documents: entries };
+});
+
+export const acceptLegalAgreements = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const requested = Array.isArray(input.documents) ? input.documents : [];
+  const source = cleanText(input.source, 60) || 'account';
+  if (!requested.length) throw new HttpsError('invalid-argument', 'Choose at least one Nightjar legal document to accept.');
+
+  const accepted: Array<{ id: LegalDocumentId; version: string }> = [];
+  const batch = db.batch();
+
+  for (const raw of requested) {
+    const entry = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const id = cleanText(entry.id, 60) as LegalDocumentId;
+    if (!(id in CURRENT_LEGAL_DOCUMENTS)) throw new HttpsError('invalid-argument', 'Unknown Nightjar legal document.');
+    const document = CURRENT_LEGAL_DOCUMENTS[id];
+    const version = cleanText(entry.version, 60);
+    if (version !== document.version) {
+      throw new HttpsError('failed-precondition', 'That Nightjar legal document has changed. Review the current version before accepting.', {
+        code:'legal_version_changed', documentId:id, currentVersion:document.version, path:document.path,
+      });
+    }
+    if (entry.accepted !== true) throw new HttpsError('invalid-argument', 'Legal acceptance must be an explicit positive action.');
+
+    batch.set(legalAcceptanceRef(identity.uid, id), {
+      documentId:id,
+      title:document.title,
+      version:document.version,
+      accepted:true,
+      acceptedAt:FieldValue.serverTimestamp(),
+      acceptedByUserId:identity.uid,
+      acceptedByEmail:identity.email,
+      source,
+      withdrawnAt:null,
+      updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+    accepted.push({ id, version:document.version });
+  }
+
+  await batch.commit();
+  return { accepted };
+});
+
 export const stageRegistrationIntent = onCall({ region: REGION }, async (request) => {
   const identity = requireRegistrationIdentity(request);
   await requireClosedBetaAccess(identity.email);
-  const input = (request.data ?? {}) as { role?: unknown; roles?: unknown; referralCode?: unknown };
+  const input = (request.data ?? {}) as { role?: unknown; roles?: unknown; referralCode?: unknown; legalAcceptances?: unknown };
   const legacyRole = String(input.role ?? '').trim();
   const submittedRoles = Array.isArray(input.roles)
     ? input.roles.map((value) => String(value ?? '').trim())
@@ -111,6 +235,29 @@ export const stageRegistrationIntent = onCall({ region: REGION }, async (request
     .filter((role): role is SelectableRole => ['creator','listener','writer','editor','artist'].includes(role));
   if (!roles.length) roles.push('listener');
   const professionalRoles = roles.filter((role): role is ProfessionalRole => ['creator','writer','editor','artist'].includes(role));
+  const legalInput = Array.isArray(input.legalAcceptances) ? input.legalAcceptances : [];
+  const legalVersions = new Map(
+    legalInput
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+      .filter((item) => item.accepted === true)
+      .map((item) => [cleanText(item.id, 60), cleanText(item.version, 60)]),
+  );
+  for (const documentId of ['platform_terms','privacy_notice'] as LegalDocumentId[]) {
+    const document = CURRENT_LEGAL_DOCUMENTS[documentId];
+    if (legalVersions.get(documentId) !== document.version) {
+      throw new HttpsError('failed-precondition', 'Review and accept the current ' + document.title + ' before creating a Nightjar account.', {
+        code:'registration_legal_acceptance_required', documentId, version:document.version, path:document.path,
+      });
+    }
+  }
+  if (professionalRoles.length) {
+    const document = CURRENT_LEGAL_DOCUMENTS.professional_terms;
+    if (legalVersions.get('professional_terms') !== document.version) {
+      throw new HttpsError('failed-precondition', 'Professional applicants must review and accept the current Nightjar Professional & Content Terms.', {
+        code:'registration_professional_terms_required', documentId:'professional_terms', version:document.version, path:document.path,
+      });
+    }
+  }
   const referralCode = String(input.referralCode ?? '').trim().slice(0,80);
   await db.collection('registrationIntents').doc(identity.uid).set({
     userId: identity.uid,
@@ -118,6 +265,8 @@ export const stageRegistrationIntent = onCall({ region: REGION }, async (request
     role: professionalRoles[0] ?? 'listener',
     roles: ['listener', ...professionalRoles],
     professionalRoles,
+    legalAcceptances: Array.from(legalVersions.entries()).map(([id,version]) => ({ id, version })),
+    legalAcceptedAt: FieldValue.serverTimestamp(),
     referralCode: professionalRoles.includes('creator') && referralCode ? referralCode : null,
     updatedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
@@ -265,7 +414,31 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     }
   }
 
-  if (registrationIntent.exists) await registrationIntent.ref.delete();
+  if (registrationIntent.exists) {
+    const stagedLegal = Array.isArray(intentData.legalAcceptances) ? intentData.legalAcceptances : [];
+    const legalBatch = db.batch();
+    for (const raw of stagedLegal) {
+      const item = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+      const id = cleanText(item.id, 60) as LegalDocumentId;
+      if (!(id in CURRENT_LEGAL_DOCUMENTS)) continue;
+      const document = CURRENT_LEGAL_DOCUMENTS[id];
+      if (cleanText(item.version, 60) !== document.version) continue;
+      legalBatch.set(legalAcceptanceRef(identity.uid, id), {
+        documentId:id,
+        title:document.title,
+        version:document.version,
+        accepted:true,
+        acceptedAt:FieldValue.serverTimestamp(),
+        acceptedByUserId:identity.uid,
+        acceptedByEmail:identity.email,
+        source:'registration',
+        withdrawnAt:null,
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+    }
+    await legalBatch.commit();
+    await registrationIntent.ref.delete();
+  }
 
   return {
     userId: identity.uid,
@@ -2490,13 +2663,19 @@ const artistPortfolioPayload = (data: Record<string, any>, id: string) => ({
 export const createArtistPortfolioItem = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['artist']);
   await requireAgeVerified(identity.uid);
+  await requireProfessionalLegalTerms(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const title = cleanText(input.title, 120);
   const description = cleanText(input.description, 600);
   const tags = cleanStringList(input.tags, 12);
   const commissionType = cleanText(input.commissionType, 80);
   const humanCreatedAttestation = input.humanCreatedAttestation === true;
+  const rightsConfirmed = input.rightsConfirmed === true;
+  const contributorPermissionsConfirmed = input.contributorPermissionsConfirmed === true;
   if (!title) throw new HttpsError('invalid-argument', 'Give the artwork a title.');
+  if (!rightsConfirmed || !contributorPermissionsConfirmed) {
+    throw new HttpsError('failed-precondition', 'Confirm that you control the rights to publish this artwork and have any required client, subject or collaborator permission.');
+  }
   if (!humanCreatedAttestation) throw new HttpsError('failed-precondition', 'Artist portfolio submissions must be your own human-created artwork, not AI-generated imagery.');
 
   const existing = await db.collection('artistPortfolio').where('ownerUserId','==',identity.uid).limit(40).get();
@@ -2513,6 +2692,9 @@ export const createArtistPortfolioItem = onCall({ region: REGION }, async (reque
     commissionType:commissionType || null,
     humanCreatedAttestation:true,
     humanCreatedAttestedAt:FieldValue.serverTimestamp(),
+    rightsConfirmed:true,
+    contributorPermissionsConfirmed:true,
+    rightsAttestedAt:FieldValue.serverTimestamp(),
     status:'draft',
     imageAssetId:null,
     imageUrl:null,
@@ -2621,6 +2803,7 @@ const requireEditorPortfolioOwner = async (identity: Awaited<ReturnType<typeof r
 
 export const createEditorPortfolioItem = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['editor']);
+  await requireProfessionalLegalTerms(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const title = cleanText(input.title, 140);
   if (!title) throw new HttpsError('invalid-argument', 'Give the showcase item a title.');
@@ -3793,6 +3976,9 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
 
 const releaseOwnerPayload = (data: Record<string, unknown>, id: string) => ({
   ...releasePayload(data, id),
+  rightsConfirmed: data.rightsConfirmed === true,
+  contributorPermissionsConfirmed: data.contributorPermissionsConfirmed === true,
+  rightsAttestedAt: toIso(data.rightsAttestedAt),
   transcriptText: cleanReleaseTranscript(data.transcriptText),
   transcriptUpdatedAt: toIso(data.transcriptUpdatedAt),
 });
@@ -3855,6 +4041,9 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     episodeNumber: cleanEpisodeNumber(input.episodeNumber),
     nightjarOriginal: false,
     productionNote: cleanText(input.productionNote, 1800) || null,
+    rightsConfirmed: input.rightsConfirmed === true,
+    contributorPermissionsConfirmed: input.contributorPermissionsConfirmed === true,
+    rightsAttestedAt: input.rightsConfirmed === true && input.contributorPermissionsConfirmed === true ? FieldValue.serverTimestamp() : null,
     transcriptText: cleanReleaseTranscript(input.transcriptText),
     transcriptLanguage: cleanTranscriptLanguage(input.transcriptLanguage),
     transcriptAccessibilityReviewed: input.transcriptAccessibilityReviewed === true,
@@ -3903,6 +4092,11 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     seriesTitle: typeof input.seriesTitle !== 'undefined' ? cleanText(input.seriesTitle, 160) || null : current.seriesTitle ?? null,
     episodeNumber: typeof input.episodeNumber !== 'undefined' ? cleanEpisodeNumber(input.episodeNumber) : cleanEpisodeNumber(current.episodeNumber),
     productionNote: typeof input.productionNote !== 'undefined' ? cleanText(input.productionNote, 1800) || null : current.productionNote ?? null,
+    rightsConfirmed: typeof input.rightsConfirmed !== 'undefined' ? input.rightsConfirmed === true : current.rightsConfirmed === true,
+    contributorPermissionsConfirmed: typeof input.contributorPermissionsConfirmed !== 'undefined' ? input.contributorPermissionsConfirmed === true : current.contributorPermissionsConfirmed === true,
+    rightsAttestedAt: input.rightsConfirmed === true && input.contributorPermissionsConfirmed === true
+      ? FieldValue.serverTimestamp()
+      : current.rightsAttestedAt ?? null,
     transcriptText: typeof input.transcriptText !== 'undefined' ? cleanReleaseTranscript(input.transcriptText) : cleanReleaseTranscript(current.transcriptText),
     transcriptLanguage: typeof input.transcriptLanguage !== 'undefined' ? cleanTranscriptLanguage(input.transcriptLanguage) : cleanTranscriptLanguage(current.transcriptLanguage),
     transcriptAccessibilityReviewed: typeof input.transcriptAccessibilityReviewed !== 'undefined'
@@ -4023,6 +4217,7 @@ export const removeReleaseAudio = onCall({ region: REGION }, async (request) => 
 
 export const submitReleaseForModeration = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
+  await requireProfessionalLegalTerms(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const ref = releaseRef(releaseId);
   const snapshot = await ref.get();
@@ -4030,6 +4225,13 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
   if (!data || data.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
   if (!data.title || !data.description || !data.category || !data.audioStoragePath) {
     throw new HttpsError('failed-precondition', 'Complete title, description, category and audio before submitting.');
+  }
+  if (data.rightsConfirmed !== true || data.contributorPermissionsConfirmed !== true) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Confirm that you control the rights needed to publish this release and have permission from every relevant performer, writer, artist or other contributor.',
+      { code:'content_rights_attestation_required' },
+    );
   }
   if (!cleanReleaseTranscript(data.transcriptText)) {
     throw new HttpsError(
@@ -5043,6 +5245,7 @@ export const createWriterScriptVersion = onCall({ region: REGION }, async (reque
 
 export const submitWriterScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
+  await requireProfessionalLegalTerms(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
   const snapshot = await ref.get();
@@ -5050,6 +5253,14 @@ export const submitWriterScript = onCall({ region: REGION }, async (request) => 
   if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
   if (!cleanText(data.content, 200000) && !cleanText(data.originalUpload?.storagePath, 500)) {
     throw new HttpsError('failed-precondition', 'Add manuscript content or upload a source manuscript before submitting.');
+  }
+  const rights = normaliseScriptRights(data.rights);
+  if (rights.ownershipAttested !== true || rights.contributorPermissionsConfirmed !== true) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Confirm manuscript ownership/authority and any contributor permissions in Rights & Licensing before submitting.',
+      { code:'content_rights_attestation_required' },
+    );
   }
   if (!['Draft','Revision requested','Rejected'].includes(String(data.status ?? 'Draft'))) {
     throw new HttpsError('failed-precondition', 'This manuscript is already in editorial workflow.');
@@ -6114,6 +6325,8 @@ const normaliseScriptRights = (value: unknown) => {
     finalAudioApprovalRequired: input.finalAudioApprovalRequired === true,
     aiTrainingAllowed: false,
     commercialUse: input.commercialUse === true,
+    ownershipAttested: input.ownershipAttested === true,
+    contributorPermissionsConfirmed: input.contributorPermissionsConfirmed === true,
     withdrawalTerms: cleanText(input.withdrawalTerms, 1200) || null,
   };
 };
@@ -7869,6 +8082,7 @@ export const myProfessionalRoles = onCall({ region: REGION }, async (request) =>
 
 export const submitProfessionalApplication = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
+  await requireProfessionalLegalTerms(identity.uid);
   if (identity.admin) throw new HttpsError('failed-precondition', 'Administrator accounts do not use professional applications.');
   await requireAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
