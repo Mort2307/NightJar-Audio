@@ -62,6 +62,6 @@ export default function LegalAgreementPanel() {
       <button className="primary-button" disabled={saving||!outstanding.some((doc)=>selected[doc.id])} onClick={()=>void acceptSelected()}><Check size={13}/>{saving?'Saving…':'Accept selected current documents'}</button>
     </div>
     {message&&<p className="panel-note" role="status">{message}</p>}
-    <div className="legal-beta-warning compact"><ShieldCheck size={15}/><div><strong>Private-beta documents</strong><span>Current beta terms are operationally versioned. Final public operator details, consumer terms and specialist UK legal review remain a launch requirement.</span></div></div>
+    <div className="legal-beta-warning compact"><ShieldCheck size={15}/><div><strong>Private-beta documents</strong><span>Current beta terms are operationally versioned. Final public operator details, applicable consumer terms and regulatory controls are still required; independent legal advice is recommended.</span></div></div>
   </article>;
 }
