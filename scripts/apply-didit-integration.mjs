@@ -2,15 +2,13 @@
 // Re-runnable and fails closed if a source anchor has changed.
 import fs from 'node:fs';
 
+// Only write once ALL patches succeed; older installer versions could leave partial work.
+const staged = new Map();
 const patch = (file, task) => {
   const original = fs.readFileSync(file, 'utf8');
   const updated = task(original);
-  if (updated !== original) {
-    fs.writeFileSync(file, updated);
-    console.log('Updated', file);
-  } else {
-    console.log('Already up to date', file);
-  }
+  if (updated !== original) staged.set(file, updated);
+  else console.log('Already up to date', file);
 };
 const replace = (body, before, after, label) => {
   if (after && body.includes(after)) return body;
@@ -27,7 +25,8 @@ patch('functions/src/index.ts', source => {
     "import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';",
     "import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';\nimport { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession } from './didit';\nexport { diditWebhook, processDiditWebhook } from './didit';",
     'Didit backend export');
-  s = replace(s, "const AGE_ASSURANCE_CONFIGURED = false;\n", '', 'remove retired age provider flag');
+  // Repair both the original Yoti flag and the invalid declaration created by v1.
+  s = s.replace(/^[ \t]*const\s+(?:AGE_ASSURANCE_CONFIGURED|diditConfigured\(\))\s*=\s*(?:true|false);[ \t]*\r?\n/gm, '');
   s = replaceAll(s, 'TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED', 'TESTING_AGE_ASSURANCE_BYPASS');
   s = replace(s, 'if (!TESTING_AGE_ASSURANCE_BYPASS || AGE_ASSURANCE_CONFIGURED) {',
     'if (!TESTING_AGE_ASSURANCE_BYPASS) {', 'test-access control');
@@ -111,7 +110,15 @@ patch('functions/src/nightjars.ts', source => {
 
 patch('src/platform/firebase-age.ts', source => {
   let s = source;
-  s = replace(s, '  testAvailable: boolean;', '  testAvailable: boolean;\n  sessionActive?: boolean;', 'age status result');
+  // Remove pre-existing or duplicated sessionActive before adding exactly one field.
+  const begin = s.indexOf('export type AgeStatus = {');
+  const finish = s.indexOf('};', begin);
+  if (begin < 0 || finish < 0) throw new Error('AgeStatus type not found');
+  let ageType = s.slice(begin, finish).replace(/^[ \t]*sessionActive\?: boolean;\r?\n/gm, '');
+  if (!ageType.includes('  testAvailable: boolean;')) throw new Error('AgeStatus testAvailable not found');
+  ageType = ageType.replace('  testAvailable: boolean;',
+    '  testAvailable: boolean;\n  sessionActive?: boolean;');
+  s = s.slice(0, begin) + ageType + s.slice(finish);
   return s;
 });
 
@@ -126,25 +133,34 @@ patch('src/App.tsx', source => {
     'reopen verification link');
   s = replaceAll(s, "setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');",
     "setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');");
-  s = replace(s, 'setAgeSessionActive(false);\n      setAgeStatus(data.status ===',
-    'setAgeSessionActive(data.sessionActive === true);\n      setAgeStatus(data.status ===',
-    'pending status');
-  s = replace(s,
-    "data.status === 'PENDING' || data.status === 'PROCESSING' || data.status === 'IN_PROGRESS'",
-    "data.status === 'PENDING' || data.status === 'PROCESSING' || data.status === 'IN_PROGRESS' || data.status === 'PENDING_REVIEW' || data.status === 'CREATING' || data.status === 'RESUBMITTED'",
-    'pending status values');
-  s = replace(s, '      } else if (data.launchUrl) {\n        setAgeStatus(\'PENDING\');',
-    "      } else if (data.launchUrl) {\n        setAgeLaunchUrl(String(data.launchUrl));\n        setAgeStatus('PENDING');",
-    'verification launch link');
-  s = replace(s, "setAgeProvider('yoti-sandbox');", "setAgeProvider('didit');", 'signout provider reset');
-  s = replace(s, "ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'",
-    "ageProvider === 'didit' ? 'Didit Age Verification' : 'Nightjar Private Testing'",
-    'Didit branding');
-  s = replaceAll(s, 'Yoti verification', 'Didit verification');
-  s = replaceAll(s, 'Yoti verified', 'Didit verified');
-  s = replace(s, "          <p className=\"access-fine\">{ageTemporaryBypass ?",
-    "          {ageLaunchUrl && !ageVerified && <p className=\"access-fine\"><a href={ageLaunchUrl} target=\"_blank\" rel=\"noopener noreferrer\">Open / resume Didit verification</a></p>}\n          <p className=\"access-fine\">{ageTemporaryBypass ?",
-    'verification link fallback');
+  // Only patch age-status refresh, regardless of whitespace or prior local changes.
+  const begin = s.indexOf('const refreshAgeStatus = async () => {');
+  const finish = s.indexOf('const openAgeCheck = async () => {', begin);
+  if (begin < 0 || finish < 0) throw new Error('Age refresh functions not found');
+  let refresh = s.slice(begin, finish);
+  if (!/setAgeSessionActive\([^;]+\);/.test(refresh)) throw new Error('Age session setter not found');
+  refresh = refresh.replace(/setAgeSessionActive\([^;]+\);/,
+    'setAgeSessionActive(data.sessionActive === true);');
+  if (!refresh.includes("data.status === 'PENDING_REVIEW'")) {
+    refresh = refresh.replace("data.status === 'IN_PROGRESS'",
+      "data.status === 'IN_PROGRESS' || data.status === 'PENDING_REVIEW' || data.status === 'CREATING' || data.status === 'RESUBMITTED'");
+  }
+  s = s.slice(0, begin) + refresh + s.slice(finish);
+  if (!s.includes('setAgeLaunchUrl(String(data.launchUrl));')) {
+    s = replace(s, '      } else if (data.launchUrl) {',
+      "      } else if (data.launchUrl) {\n        setAgeLaunchUrl(String(data.launchUrl));",
+      'verification launch link');
+  }
+  s = replaceAll(s, "setAgeProvider('yoti-sandbox');", "setAgeProvider('didit');");
+  s = replaceAll(s, "ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'",
+    "ageProvider === 'didit' ? 'Didit Age Verification' : 'Nightjar Private Testing'");
+  s = replaceAll(s, "ageProvider === 'yoti'", "ageProvider === 'didit'");
+  s = replaceAll(s, 'Yoti', 'Didit');
+  if (!s.includes('Open / resume Didit verification')) {
+    s = replace(s, '          <p className="access-fine">{ageTemporaryBypass ?',
+      '          {ageLaunchUrl && !ageVerified && <p className="access-fine"><a href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open / resume Didit verification</a></p>}\n          <p className="access-fine">{ageTemporaryBypass ?',
+      'verification link fallback');
+  }
   return s;
 });
 
@@ -171,4 +187,8 @@ patch('scripts/launch-readiness.mjs', source => {
     'launch success');
   return s;
 });
+for (const [name, value] of staged) {
+  fs.writeFileSync(name, value);
+  console.log('Updated', name);
+}
 console.log('Didit integration changes applied. Review git diff, run tests and deploy after secrets are configured.');
