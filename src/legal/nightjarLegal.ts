@@ -29,9 +29,10 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
         'You are responsible for keeping your account credentials secure and for activity carried out through your account. Tell Nightjar promptly if you believe your account has been compromised.',
         'Professional roles may require approval. Approval may be suspended or removed where reasonably necessary for safety, fraud prevention, rights disputes, serious policy breaches or platform integrity.'
       ]},
-      { heading:'3. Acceptable use', paragraphs:[
+      { heading:'3. Acceptable use and hard content boundaries', paragraphs:[
         'Do not use Nightjar to harass, threaten, exploit, impersonate, defraud or unlawfully target another person. Do not upload unlawful material or content you do not have the necessary rights or permissions to use.',
-        'Nightjar is an adults-only platform, but adult status does not make every form of content acceptable. Published content remains subject to Nightjar moderation, safety rules and applicable law.'
+        'Nightjar is an adults-only platform, but adult status does not make every form of content acceptable. Nightjar does not permit sexual content involving minors, anyone presented as under 18, sexualised age-play involving child presentation, incest content, sexual exploitation, or material whose creation or publication is unlawful. Content involving real people must respect applicable consent, privacy, performer and intellectual-property rights.',
+        'Nightjar may maintain additional safety and content standards as the platform develops. Published content remains subject to moderation, age-assurance controls, safety rules and applicable law.'
       ]},
       { heading:'4. Content and moderation', paragraphs:[
         'Nightjar may review, restrict, reject, remove or unpublish content where reasonably required for safety, legal compliance, rights protection, quality control or enforcement of these terms.',
