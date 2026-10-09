@@ -304,7 +304,8 @@ export const processDiditWebhookEvent = onDocumentCreated({
     };
     if (approved) {
       update.environment = 'production';
-      update.verifiedAt = FieldValue.serverTimestamp();
+      update.verifiedAt = age.verifiedSessionId === sessionId && age.verifiedAt
+        ? age.verifiedAt : FieldValue.serverTimestamp();
       update.verifiedSessionId = sessionId;
       update.ageThreshold = 18;
       update.testMode = false;
