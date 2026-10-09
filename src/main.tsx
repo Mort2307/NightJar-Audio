@@ -7,6 +7,7 @@ import AccountPortal from './components/AccountPortal';
 import AppRecoveryBoundary from './components/AppRecoveryBoundary';
 import LegalDocumentPage from './components/LegalDocumentPage';
 import { registerNightjarServiceWorker } from './platform/pwa';
+import { installNightjarScrollPolicy } from './platform/scroll-navigation';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Nightjar root missing');
@@ -24,6 +25,7 @@ try {
   // URL cleanup is cosmetic and must never block Nightjar.
 }
 
+installNightjarScrollPolicy();
 registerNightjarServiceWorker();
 
 createRoot(root).render(
