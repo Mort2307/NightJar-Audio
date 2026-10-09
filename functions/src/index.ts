@@ -7,12 +7,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
+import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession } from './didit';
+export { diditWebhook, processDiditWebhook } from './didit';
 
 initializeApp();
 
 const db = getFirestore();
 const REGION = 'europe-west2';
-const AGE_ASSURANCE_CONFIGURED = false;
 const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
@@ -309,7 +310,7 @@ export const closedBetaRegistrationStatus = onCall({ region: REGION }, async (re
   return {
     closedBeta: CLOSED_BETA,
     allowed: access.allowed,
-    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED,
+    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS,
   };
 });
 
@@ -3656,7 +3657,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
     },
     testing: {
       closedBeta: CLOSED_BETA,
-      ageAssuranceConfigured: AGE_ASSURANCE_CONFIGURED,
+      ageAssuranceConfigured: false /* use ageStatus for Didit configuration */,
       temporaryAgeBypassEnabled: TESTING_AGE_ASSURANCE_BYPASS,
       approvedTesters,
       approvedTesterCount: approvedTesters.length,
@@ -4288,7 +4289,7 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
-  if (!TESTING_AGE_ASSURANCE_BYPASS || AGE_ASSURANCE_CONFIGURED) {
+  if (!TESTING_AGE_ASSURANCE_BYPASS) {
     return { allowed: false, reason: null as string | null };
   }
   const snapshot = await accountRef(uid).get();
@@ -4304,7 +4305,7 @@ const temporaryAgeBypassFor = async (uid: string) => {
 const requireAgeVerified = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
-  const persistentVerified = data?.verified === true && data?.testMode !== true && data?.provider !== 'admin-test';
+  const persistentVerified = diditPass(data);
   if (persistentVerified) return data;
 
   const bypass = await temporaryAgeBypassFor(uid);
@@ -4900,43 +4901,43 @@ export const markNotificationRead = onCall({ region: REGION }, async (request) =
   return { read: true };
 });
 
-export const ageStatus = onCall({ region: REGION }, async (request) => {
+export const ageStatus = onCall({
+  region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+}, async request => {
   const identity = await requireActiveIdentity(request);
-  const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
-  const data = snapshot.data() ?? {};
-  const persistentVerified = data.verified === true && data.testMode !== true && data.provider !== 'admin-test';
-  const bypass = persistentVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
-  const verified = persistentVerified || bypass.allowed;
+  const data = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
+  const persistentlyVerified = diditPass(data);
+  const bypass = persistentlyVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
   return {
-    verified,
-    status: verified ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
+    verified: persistentlyVerified || bypass.allowed,
+    status: persistentlyVerified || bypass.allowed ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
     ageThreshold: 18,
-    configured: AGE_ASSURANCE_CONFIGURED,
-    provider: persistentVerified ? (data.provider ?? 'verified-provider') : (bypass.allowed ? 'temporary-test-access' : 'not-configured'),
-    environment: persistentVerified ? (data.environment ?? 'production') : (bypass.allowed ? 'development' : 'production'),
-    verifiedAt: persistentVerified ? (data.verifiedAt ?? null) : null,
-    reverifyRequired: persistentVerified && data.reverifyRequired === true,
-    testAvailable: identity.admin || bypass.allowed,
+    configured: diditConfigured(),
+    provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
+    environment: persistentlyVerified ? 'live' : bypass.allowed ? 'development' : diditMode(),
+    verifiedAt: persistentlyVerified ? toIso(data.verifiedAt) : null,
+    reverifyRequired: data.reverifyRequired === true,
+    sessionActive: ['PENDING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.status ?? '')),
     temporaryBypass: bypass.allowed,
     temporaryBypassReason: bypass.reason,
+    testAvailable: identity.admin || bypass.allowed,
   };
 });
 
-export const startAgeAssurance = onCall({ region: REGION }, async (request) => {
+export const startAgeAssurance = onCall({
+  region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+}, async request => {
   const identity = await requireActiveIdentity(request);
+  const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
+  if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
+  if (diditConfigured()) return startDiditSession(identity.uid);
   const bypass = await temporaryAgeBypassFor(identity.uid);
-  if (bypass.allowed) {
-    return {
-      verified: true,
-      status: 'COMPLETE',
-      configured: AGE_ASSURANCE_CONFIGURED,
-      provider: 'temporary-test-access',
-      environment: 'development',
-      temporaryBypass: true,
-      temporaryBypassReason: bypass.reason,
-    };
-  }
-  throw new HttpsError('failed-precondition', 'Production age-assurance provider credentials are not configured yet.');
+  if (bypass.allowed) return {
+    verified: true, status: 'COMPLETE', configured: false,
+    provider: 'temporary-test-access', environment: 'development',
+    temporaryBypass: true, temporaryBypassReason: bypass.reason,
+  };
+  throw new HttpsError('failed-precondition', 'Didit verification is not configured.');
 });
 
 export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
@@ -8232,12 +8233,12 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
       db.collection('ageAssurance').doc(doc.id).get(),
     ]);
     const accountData = account.data() ?? {};
-    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && accountData.testAccess === true;
+    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && accountData.testAccess === true;
     return {
       id: doc.id,
       userId: doc.id,
       email: data.email ?? accountData.email ?? null,
-      ageVerified: ageAssurance.data()?.verified === true,
+      ageVerified: diditPass(ageAssurance.data()),
       temporaryTestAccess,
       displayName: profile.data()?.displayName ?? null,
       requestedRoles: cleanProfessionalRoles(data.requestedRoles),
@@ -8282,8 +8283,8 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
   if (!applicationSnapshot.exists || !accountSnapshot.exists) throw new HttpsError('not-found', 'Professional application not found.');
 
   const applicantAccount = accountSnapshot.data() ?? {};
-  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && applicantAccount.testAccess === true;
-  if (decision === 'approved' && ageAssuranceSnapshot.data()?.verified !== true && !temporaryTestAccess) {
+  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && applicantAccount.testAccess === true;
+  if (decision === 'approved' && !diditPass(ageAssuranceSnapshot.data()) && !temporaryTestAccess) {
     throw new HttpsError('failed-precondition', 'This professional applicant must complete age assurance or be explicitly enabled as a controlled tester before approval.');
   }
 

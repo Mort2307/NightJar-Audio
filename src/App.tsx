@@ -420,11 +420,12 @@ function App() {
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
-  const [ageProvider, setAgeProvider] = useState('yoti-sandbox');
-  const [ageEnvironment, setAgeEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [ageProvider, setAgeProvider] = useState('didit');
+  const [ageEnvironment, setAgeEnvironment] = useState<'sandbox' | 'live'>('sandbox');
   const [ageVerifiedAt, setAgeVerifiedAt] = useState<string | null>(null);
   const [ageReverifyRequired, setAgeReverifyRequired] = useState(false);
   const [ageSessionActive, setAgeSessionActive] = useState(false);
+  const [ageLaunchUrl, setAgeLaunchUrl] = useState<string | null>(null);
   const [ageLoading, setAgeLoading] = useState(false);
   const [ageTemporaryBypass, setAgeTemporaryBypass] = useState(false);
   const [ageTemporaryBypassReason, setAgeTemporaryBypassReason] = useState<string | null>(null);
@@ -1461,13 +1462,13 @@ function App() {
       setAgeVerified(verified);
       setAgeConfigured(data.configured === true);
       setAgeProvider(String(data.provider ?? 'not-configured'));
-      setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+      setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
       setAgeVerifiedAt(data.verifiedAt ?? null);
       setAgeReverifyRequired(data.reverifyRequired === true);
       setAgeTemporaryBypass(data.temporaryBypass === true);
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
-      setAgeSessionActive(false);
-      setAgeStatus(data.status === 'COMPLETE' ? 'COMPLETE' : data.status === 'PENDING' || data.status === 'PROCESSING' || data.status === 'IN_PROGRESS' ? 'PENDING' : data.status === 'FAIL' || data.status === 'ERROR' || data.status === 'CANCELLED' ? 'FAIL' : 'NOT_STARTED');
+      setAgeSessionActive(data.sessionActive === true);
+      setAgeStatus(data.status === 'COMPLETE' ? 'COMPLETE' : data.status === 'PENDING' || data.status === 'PROCESSING' || data.status === 'IN_PROGRESS' || data.status === 'PENDING_REVIEW' || data.status === 'CREATING' || data.status === 'RESUBMITTED' ? 'PENDING' : data.status === 'FAIL' || data.status === 'ERROR' || data.status === 'CANCELLED' ? 'FAIL' : 'NOT_STARTED');
       if (verified) setAgeStage('app');
       return verified;
     } catch {
@@ -1490,7 +1491,7 @@ function App() {
       const data = await nightjarAge.start();
       setAgeConfigured(Boolean(data.configured));
       setAgeProvider(String(data.provider ?? 'not-configured'));
-      setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+      setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
       setAgeTemporaryBypass(data.temporaryBypass === true);
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(Boolean(data.sessionId && !data.verified));
@@ -1503,6 +1504,7 @@ function App() {
         setAgeStage('app');
         notify('Your Nightjar account is already age verified. No new check was required.');
       } else if (data.launchUrl) {
+        setAgeLaunchUrl(String(data.launchUrl));
         setAgeStatus('PENDING');
         window.open(String(data.launchUrl), '_blank', 'noopener,noreferrer');
         notify('Secure age verification opened. Complete it, then return to Nightjar.');
@@ -1541,7 +1543,7 @@ function App() {
     setAgeVerified(false);
     setAgeStatus('NOT_STARTED');
     setAgeConfigured(false);
-    setAgeProvider('yoti-sandbox');
+    setAgeProvider('didit');
     setAgeEnvironment('sandbox');
     setAgeVerifiedAt(null);
     setAgeReverifyRequired(false);
@@ -3321,10 +3323,10 @@ function App() {
           <div className="verification-panel">
             <div className="verification-icon"><ShieldCheck size={23} /></div>
             <div>
-              <strong>{ageTemporaryBypass ? 'Nightjar Private Test Access' : ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'}</strong>
+              <strong>{ageTemporaryBypass ? 'Nightjar Private Test Access' : ageProvider === 'didit' ? 'Didit Age Verification' : 'Nightjar Private Testing'}</strong>
               <span>
                 {ageTemporaryBypass
-                  ? `Approved QA account · temporary age-assurance bypass active${ageTemporaryBypassReason === 'administrator' ? ' for an administrator' : ''}. This is not a completed Yoti verification and automatically stops working when test bypass mode is disabled.`
+                  ? `Approved QA account · temporary age-assurance bypass active${ageTemporaryBypassReason === 'administrator' ? ' for an administrator' : ''}. This is not a completed Didit verification and automatically stops working when test bypass mode is disabled.`
                   : ageVerified
                     ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins use this stored verification state.`
                     : ageSessionActive
@@ -3347,7 +3349,8 @@ function App() {
           <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
             {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
           </button>
-          <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Yoti verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
+          {ageLaunchUrl && !ageVerified && <p className="access-fine"><a href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open / resume Didit verification</a></p>}
+          <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
         </div>
       </main>
     );
