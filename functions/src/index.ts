@@ -4290,7 +4290,7 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
-  if (!TESTING_AGE_ASSURANCE_BYPASS || AGE_ASSURANCE_CONFIGURED || diditConfigured()) {
+  if (!TESTING_AGE_ASSURANCE_BYPASS || AGE_ASSURANCE_CONFIGURED || Boolean(process.env.DIDIT_WORKFLOW_ID)) {
     return { allowed: false, reason: null as string | null };
   }
   const snapshot = await accountRef(uid).get();
