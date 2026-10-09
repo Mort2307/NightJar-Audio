@@ -33,6 +33,8 @@ type Release = {
   episodeNumber?: number | null;
   nightjarOriginal?: boolean;
   productionNote?: string | null;
+  rightsConfirmed?: boolean;
+  contributorPermissionsConfirmed?: boolean;
   transcriptText?: string;
   transcriptLanguage?: string;
   transcriptAvailable?: boolean;
@@ -130,6 +132,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     && current.description
     && current.audioAvailable
     && current.category
+    && current.rightsConfirmed
+    && current.contributorPermissionsConfirmed
     && current.transcriptText?.trim()
     && current.transcriptAccessibilityReviewed
   ), [current]);
@@ -440,6 +444,27 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <label>Episode number<input type="number" min="0" step="1" value={current.episodeNumber ?? ''} onChange={(event) => setRelease({ episodeNumber: event.target.value === '' ? null : Number(event.target.value) })} placeholder="Optional"/></label>
             <label className="pipeline-span-two">Production / behind-the-scenes note<textarea value={current.productionNote ?? ''} onChange={(event) => setRelease({ productionNote: event.target.value || null })} placeholder="Optional context about the people or process behind this release."/></label>
           </div>
+
+          <section className="release-rights-attestation">
+            <div className="release-transcript-head">
+              <div>
+                <span className="mini-label">RIGHTS & PERMISSIONS · REQUIRED TO PUBLISH</span>
+                <strong>Confirm you are allowed to put this release on Nightjar.</strong>
+                <p>These declarations are separate from credits. A credit names contributors; it does not by itself prove permission to publish their work or performance.</p>
+              </div>
+              <span className={current.rightsConfirmed && current.contributorPermissionsConfirmed ? 'status-pill' : 'status-pill muted'}>
+                {current.rightsConfirmed && current.contributorPermissionsConfirmed ? 'CONFIRMED' : 'REQUIRED'}
+              </span>
+            </div>
+            <label className="rights-check">
+              <input type="checkbox" checked={current.rightsConfirmed === true} onChange={(event)=>setRelease({ rightsConfirmed:event.target.checked })}/>
+              <span>I own or control the rights needed to upload, host and publish this release on Nightjar.</span>
+            </label>
+            <label className="rights-check">
+              <input type="checkbox" checked={current.contributorPermissionsConfirmed === true} onChange={(event)=>setRelease({ contributorPermissionsConfirmed:event.target.checked })}/>
+              <span>I have any required permission from performers, Writers, Artists, composers, Audio Editors or other contributors whose protected work appears in this release.</span>
+            </label>
+          </section>
 
           <section className="release-transcript-editor">
             <div className="release-transcript-head">
