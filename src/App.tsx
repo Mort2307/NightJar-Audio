@@ -799,6 +799,7 @@ function App() {
         setAdminPeopleRole(null);
       }
       setView((['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(topLevel) ? topLevel : 'discover') as View);
+      window.scrollTo({top:0,left:0,behavior:'instant'});
     };
     window.addEventListener('popstate', onPop);
     void (async () => {
@@ -4160,11 +4161,11 @@ function App() {
         {view === 'admin' && canAdmin && !simulationMode && (
           <section className={adminPanel || adminPeopleRole ? 'page-wrap admin-page admin-detail-active' : 'page-wrap admin-page'}>
             {!adminPanel && !adminPeopleRole && <>
-            <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, VA Creator, Writer, Audio Editor and Artist accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
+            <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Owner Console.</h1><p>Your private control centre. Choose a workspace below to open it directly—no scrolling through unrelated tools.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
             <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
-              title="Exceptions first."
-              description="Nightjar surfaces items that require an owner decision before routine totals, so operational risk does not get buried in dashboards."
+              title="Needs your decision."
+              description="These numbers show outstanding work, not decisions already made. Select a tile to open its own workspace."
               metrics={[
                 {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts',destination:'administrator security alerts',onClick:()=>openAdminPanel('security')},
                 {label:'Images',value:imageModeration.length,detail:'Awaiting moderation',destination:'image moderation',onClick:()=>openAdminPanel('images')},
