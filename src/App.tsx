@@ -10,6 +10,7 @@ import { nightjarCatalogue } from './platform/firebase-catalogue';
 import { nightjarListening } from './platform/firebase-listening';
 import { nightjarNotifications } from './platform/firebase-notifications';
 import { nightjarPush } from './platform/firebase-push';
+import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { nightjarAge } from './platform/firebase-age';
 import { nightjarScripts } from './platform/firebase-scripts';
 import { nightjarProtection } from './platform/firebase-protection';
@@ -999,7 +1000,7 @@ function App() {
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
     setView(nextView);
     setMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollNightjarToTop();
   };
 
   useEffect(() => {
@@ -1038,6 +1039,11 @@ function App() {
       navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
     };
   }, [user?.userId]);
+
+  // NIGHTJAR_ROUTE_SCROLL_RESET: reset only after the newly selected route/profile has rendered.
+  useEffect(() => {
+    scrollNightjarToTop();
+  }, [view, publicProfileUserId]);
 
   const openPublicProfile = (userId: string) => {
     if (!userId) return;
