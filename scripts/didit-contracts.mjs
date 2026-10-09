@@ -14,6 +14,8 @@ for (const [marker,label] of [
   ["text(request.get('X-Signature'))", 'Strong raw-body signature fallback'],
   ['timingSafeEqual','Constant-time HMAC comparison'],
   ['Math.abs(Date.now()/1000 - dispatched) > 300','Five-minute replay protection'],
+  ['const dispatched = Number(value.timestamp);', 'Replay clock comes from signed payload'],
+  ['headerTimestamp !== dispatched', 'Unsigned header must agree with signed timestamp'],
   ['diditWebhookEvents', 'Durable idempotent event ledger'],
   ['onDocumentCreated', 'Asynchronous webhook processor'],
   ["vendor_data: uid", 'Firebase UID binding'],
@@ -29,6 +31,9 @@ requireMarker(ui, 'Didit Age Verification', 'Didit user-facing age gate');
 const rewrite = hosting.hosting?.rewrites?.find(item => item.source === '/api/webhooks/didit');
 if (rewrite?.function?.functionId !== 'diditWebhook') failures.push('Didit Firebase Hosting route is missing');
 if (ui.includes('Yoti') || backend.includes('AGE_ASSURANCE_CONFIGURED')) failures.push('Retired age provider is still active');
+if (/const dispatched\s*=\s*Number\(request\.get\('X-Timestamp'\)\)/.test(didit)) {
+  failures.push('Replay clock must not come from the unsigned X-Timestamp header');
+}
 if (failures.length) {
   console.error('NIGHTJAR DIDIT CONTRACT FAIL');
   failures.forEach(item => console.error('-', item));
