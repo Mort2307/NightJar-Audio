@@ -21,7 +21,8 @@
     "validate:release-hardening": "node scripts/release-hardening-contracts.mjs && node scripts/finance-simulator-tests.mjs",
     "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs",
     "validate:didit": "node scripts/didit-contracts.mjs",
-    "setup:didit:live": "node scripts/setup-didit-live.mjs"
+    "setup:didit:live": "node scripts/setup-didit-live.mjs",
+    "setup:didit:sandbox": "node scripts/setup-didit-sandbox.mjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",
