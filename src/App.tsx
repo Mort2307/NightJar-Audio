@@ -2908,6 +2908,22 @@ function App() {
     }
   };
 
+  const retryProfessionalApprovalEmail = async (application: any) => {
+    if (!canAdmin || !application?.userId || !application?.approvalEmailEventId) return;
+    try {
+      const result = await nightjarAdministration.retryProfessionalApprovalEmail(
+        application.userId,
+        application.approvalEmailEventId,
+      );
+      await loadAdminApplications();
+      notify(result.outcome === 'sent'
+        ? 'Professional approval email sent.'
+        : 'Email could not be delivered. Check Gmail connection and retry from history.');
+    } catch (error: any) {
+      notify(error?.message || 'Approval email cannot be retried at this time.');
+    }
+  };
+
   const changeAccountRole = async (account: any, nextRole: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') => {
     if (!canAdmin || !account?.userId) return;
     try {
@@ -4253,6 +4269,15 @@ function App() {
               </span>
               {approvedRoles.length > 0 && <small>Approved professional roles: {approvedRoles.map(roleLabel).join(' · ')}</small>}
               {adminApplicationBox === 'history' && <small>Recorded decision: {status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : status === 'withdrawn' ? 'Withdrawn' : approvedRoles.length ? 'Roles approved; no outstanding requests' : status}</small>}
+              {adminApplicationBox === 'history' && approvedRoles.length > 0 && <small>
+                Approval email: {application.approvalEmailStatus === 'sent'
+                  ? 'Sent' + (application.approvalEmailSentAt ? ' · ' + new Date(application.approvalEmailSentAt).toLocaleString('en-GB') : '')
+                  : application.approvalEmailStatus === 'failed' ? 'Delivery failed · retry available'
+                  : application.approvalEmailStatus === 'sending' ? 'Sending'
+                  : 'Not recorded for this approval'}
+              </small>}
+              {adminApplicationBox === 'history' && application.approvalEmailStatus === 'failed' && application.approvalEmailError && <small className="nj-application-mail-error">Email error: {application.approvalEmailError}</small>}
+              {adminApplicationBox === 'history' && application.approvalEmailStatus === 'failed' && application.approvalEmailEventId && <button type="button" className="secondary-button" onClick={() => void retryProfessionalApprovalEmail(application)}>Retry approval email</button>}
               {application.updatedAt && <small>Last updated: {new Date(application.updatedAt).toLocaleString('en-GB')}</small>}
               {application.statement && <p>{application.statement}</p>}
               {application.experience && <small>{application.experience}</small>}
