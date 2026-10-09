@@ -39,7 +39,7 @@ assert.match(app, /adminApplicationBox === 'pending'/, 'pending queue remains ac
 assert.match(app, /adminApplicationBox === 'attention'/, 'orphan records are visible for attention');
 const backend = fs.readFileSync('functions/src/index.ts', 'utf8');
 assert.match(backend, /export const sendProfessionalApprovalEmail = onDocumentCreated/, 'approval event triggers automatic email');
-assert.match(backend, /decision: 'approved'/, 'backend has approved decision handling');
+assert.match(backend, /const rolesToApprove = decision === 'approved'/, 'backend has approved decision handling');
 assert.match(backend, /professionalApplications\/\{userId\}\/events\/\{eventId\}/, 'approval event path is exact');
 assert.match(backend, /if \(data\.decision !== 'approved'/, 'non-approvals must not send an email');
 assert.match(backend, /secrets: \[NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET\]/, 'Gmail secrets must be declared');
