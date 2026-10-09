@@ -3510,6 +3510,7 @@ function App() {
   const profileCompletion = Math.round((profileCompletionSignals.filter(Boolean).length / profileCompletionSignals.length) * 100);
   const applicationGroups = classifyProfessionalApplications(adminApplications);
   const visibleAdminApplications = filterProfessionalApplicationsByRole(applicationGroups[adminApplicationBox], adminApplicationRoleFilter);
+  const failedProfessionalApprovalEmailCount = adminApplications.filter((item:any) => item.approvalEmailStatus === 'failed').length;
   const profileEditableRoles: PreviewRole[] = (Array.isArray(profile.roles) ? profile.roles : [effectiveRole ?? 'listener'])
     .filter((item: unknown): item is PreviewRole =>
       typeof item === 'string'
@@ -4235,6 +4236,11 @@ function App() {
       <input value={adminApplicationWave} onChange={(event)=>setAdminApplicationWave(event.target.value)} placeholder="e.g. Launch Wave 1"/>
     </label>}
   </div>
+  {failedProfessionalApprovalEmailCount > 0 && <div className="nj-application-email-alert" role="status">
+    <strong>{failedProfessionalApprovalEmailCount} approval email{failedProfessionalApprovalEmailCount === 1 ? '' : 's'} require{failedProfessionalApprovalEmailCount === 1 ? 's' : ''} attention.</strong>
+    <span>Creator access remains approved. Open Decision history to review the Gmail delivery error and retry safely.</span>
+    <button className="ghost-button" type="button" onClick={()=>setAdminApplicationBox('history')}>Open email history</button>
+  </div>}
   <div className="nj-application-tabs" role="tablist" aria-label="Professional application workboxes">
     {([
       { id:'pending', label:'Needs approval', count:applicationGroups.pending.length },
