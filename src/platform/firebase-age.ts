@@ -8,6 +8,9 @@ export type AgeStatus = {
   status: string;
   ageThreshold: number;
   configured: boolean;
+  providerVerified: boolean;
+  providerStatus: string;
+  livePilotAvailable: boolean;
   provider: string;
   environment: string;
   verifiedAt: any;
