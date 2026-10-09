@@ -31,6 +31,8 @@ assert.match(backend, /DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity\.admin/,
   'Non-admins must not start live provider sessions');
 assert.ok(app.includes('Start my live Didit test') && app.includes('ageProviderVerified'),
   'Admin must have a clearly labelled real-provider pilot and distinct verification indicator');
+assert.ok(age.includes('providerVerified?: boolean') && age.includes('livePilotAvailable?: boolean'),
+  'Didit status distinguishes permanent provider evidence from temporary beta access');
 assert.ok(!app.includes('Yoti'), 'Old Yoti UI must not be shown once Didit integration is deployed');
 assert.ok(!backend.includes('AGE_ASSURANCE_CONFIGURED'), 'Legacy age flag must not overwrite Didit setup');
 assert.ok(hosting.hosting.rewrites.some(x=>x.source==='/api/webhooks/didit'&&x.function?.functionId==='diditWebhook'),
