@@ -79,6 +79,7 @@ export const startDiditSession = async (uid: string) => {
       if (diditPass(snap.data())) return;
       tx.create(sessionRef(sessionId), {
         uid, environment: env(), workflowId: DIDIT_WORKFLOW_ID.value(),
+        applicationId: text(session.application_id) || null,
         url, status: 'Not Started', createdAtMs: Date.now(), updatedAt: FieldValue.serverTimestamp(),
       });
       tx.set(ref, {
@@ -108,6 +109,27 @@ const canonicalJson = (value: any): string => {
     .map(key => JSON.stringify(key) + ':' + canonicalJson(value[key])).join(',') + '}';
   return JSON.stringify(value);
 };
+// Confirm adulthood from approved documentary KYC evidence without storing a birth date.
+// A generic Approved identity decision MUST NOT, on its own, unlock 18+ content.
+// Adaptive age-estimation workflows need a separate evidence adapter before use.
+const verifiedAdultFromDecision = (decision: unknown, at = new Date()) => {
+  const obj = decision && typeof decision === 'object' ? decision as Record<string, any> : {};
+  const checks = Array.isArray(obj.id_verifications) ? obj.id_verifications : [];
+  return checks.some((item: unknown) => {
+    if (!item || typeof item !== 'object') return false;
+    const id = item as Record<string, unknown>;
+    if (id.status !== 'Approved' || typeof id.date_of_birth !== 'string') return false;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(id.date_of_birth);
+    if (!match) return false;
+    const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    const dob = new Date(Date.UTC(year, month - 1, day));
+    if (dob.getUTCFullYear() !== year || dob.getUTCMonth() !== month - 1 ||
+        dob.getUTCDate() !== day || dob.getTime() > at.getTime()) return false;
+    const min = new Date(Date.UTC(at.getUTCFullYear() - 18, at.getUTCMonth(), at.getUTCDate()));
+    return dob.getTime() <= min.getTime();
+  });
+};
+
 const equalHmac = (message: string | Buffer, signature: string, secret: string) => {
   if (!/^[a-f\d]{64}$/i.test(signature)) return false;
   const expected = createHmac('sha256', secret).update(message).digest();
@@ -157,6 +179,9 @@ export const diditWebhook = onRequest({
   const hash = createHash('sha256').update(eventId).digest('hex');
   const record = {
     eventId, webhookType: type, status: text(value.status, 50),
+    // Derived boolean only: birth date, document data and biometric material are never stored.
+    adultEvidence: value.status === 'Approved' && verifiedAdultFromDecision(value.decision),
+    applicationId: text(value.application_id, 128) || null,
     sessionId: sessionId || null, vendorData: text(value.vendor_data, 256) || null,
     workflowId: text(value.workflow_id, 128) || null,
     sessionKind: text(value.session_kind, 50) || null,
@@ -218,6 +243,7 @@ export const processDiditWebhook = onDocumentCreated({
   const session = sessionSnapshot.data() ?? {};
   const uid = text(session.uid);
   if (!uid || session.environment !== payload.environment || session.workflowId !== payload.workflowId ||
+      (session.applicationId && session.applicationId !== payload.applicationId) ||
       uid !== payload.vendorData) {
     await doc.ref.set({ ignored: true, processedAt: FieldValue.serverTimestamp() }, { merge: true });
     return;
@@ -234,10 +260,11 @@ export const processDiditWebhook = onDocumentCreated({
       tx.set(doc.ref, { ignored: true, processedAt: FieldValue.serverTimestamp() }, { merge: true });
       return;
     }
-    const approved = status === 'Approved' && payload.environment === 'live';
+    const approved = status === 'Approved' && payload.environment === 'live' && payload.adultEvidence === true;
     tx.set(ref, {
       provider: 'didit', environment: payload.environment,
-      status: statuses[status], verified: approved,
+      status: approved ? 'COMPLETE' : status === 'Approved' ? 'PENDING_REVIEW' : statuses[status],
+      verified: approved,
       testMode: payload.environment !== 'live', reverifyRequired: !approved,
       verifiedAt: approved ? FieldValue.serverTimestamp() : (data.verifiedAt ?? null),
       diditEventCreatedAt: payload.createdAt, diditEventId: payload.eventId,
