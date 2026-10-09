@@ -3518,7 +3518,7 @@ function App() {
           {logoUrl ? <img className="brand-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<span>NIGHTJAR</span>
         </button>
 
-        <nav className={menuOpen ? 'nav open' : 'nav'}>
+        <nav className={menuOpen ? 'nav open' : 'nav'} aria-label="Primary navigation">
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'discover' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('discover')}>Discover</button>}
           <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Directory</button>
           {(effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && <button className={view === 'library' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('library')}>Library</button>}
