@@ -3,6 +3,7 @@ import { AudioLines, Brush, Eye, EyeOff, FileText, Headphones, KeyRound, LockKey
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount } from '../platform/firebase-account';
 import { nightjarAuthSecurity } from '../platform/firebase-auth-security';
+import { currentLegalAcceptancePayload, NIGHTJAR_LEGAL_DOCUMENTS } from '../legal/nightjarLegal';
 
 type Mode = 'signin' | 'register' | 'reset' | 'verify' | 'security';
 type RegistrationRole = 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
@@ -83,6 +84,9 @@ export default function AccountAccess({
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyRead, setPrivacyRead] = useState(false);
+  const [professionalTermsAccepted, setProfessionalTermsAccepted] = useState(false);
 
   useEffect(() => {
     const guestEntryMode: Mode = requestedEntry === 'register' ? 'register' : 'signin';
@@ -135,6 +139,14 @@ export default function AccountAccess({
       setMessage('Your password confirmation does not match.');
       return;
     }
+    if (mode === 'register' && (!termsAccepted || !privacyRead)) {
+      setMessage('Review and accept the Terms of Use and confirm you have read the Privacy Notice before creating your account.');
+      return;
+    }
+    if (mode === 'register' && registrationRoles.length > 0 && !professionalTermsAccepted) {
+      setMessage('Professional applicants must review and accept the Professional & Content Terms.');
+      return;
+    }
 
     void run(async () => {
       if (mode === 'register') {
@@ -148,7 +160,11 @@ export default function AccountAccess({
         const referralCode = entryParams.get('ref');
         if (referralCode && registrationRoles.includes('creator')) sessionStorage.setItem('nightjar.creatorReferralCode', referralCode);
         const result = await nightjarAuth.register(email, password);
-        await nightjarAccount.stageRegistration(['listener', ...registrationRoles], registrationRoles.includes('creator') ? referralCode ?? '' : '');
+        await nightjarAccount.stageRegistration(
+          ['listener', ...registrationRoles],
+          registrationRoles.includes('creator') ? referralCode ?? '' : '',
+          currentLegalAcceptancePayload(registrationRoles.length > 0),
+        );
         onAuthenticated(result.identity);
         setMode('verify');
         setMessage(result.verificationSent
@@ -297,8 +313,23 @@ export default function AccountAccess({
         <div className="account-access-field"><label>Confirm password</label><input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /><small>{confirm ? (password === confirm ? '✓ Passwords match' : 'Passwords do not match yet') : 'Re-enter your password'}</small></div>
       </>}
     </>}
+    {mode === 'register' && <div className="account-legal-consent">
+      <div className="account-legal-consent-head"><ShieldCheck size={15}/><div><strong>Terms, privacy & professional permissions</strong><span>Nightjar records the exact version you accept. Marketing and device push are separate choices and are not bundled into these terms.</span></div></div>
+      <label className="rights-check">
+        <input type="checkbox" checked={termsAccepted} onChange={(event)=>setTermsAccepted(event.target.checked)}/>
+        <span>I agree to the <a href={NIGHTJAR_LEGAL_DOCUMENTS.platform_terms.path} target="_blank" rel="noreferrer">Nightjar Terms of Use</a> · version {NIGHTJAR_LEGAL_DOCUMENTS.platform_terms.version}.</span>
+      </label>
+      <label className="rights-check">
+        <input type="checkbox" checked={privacyRead} onChange={(event)=>setPrivacyRead(event.target.checked)}/>
+        <span>I have read the <a href={NIGHTJAR_LEGAL_DOCUMENTS.privacy_notice.path} target="_blank" rel="noreferrer">Nightjar Privacy Notice</a>. This acknowledgement is not blanket consent to optional processing.</span>
+      </label>
+      {registrationRoles.length > 0 && <label className="rights-check">
+        <input type="checkbox" checked={professionalTermsAccepted} onChange={(event)=>setProfessionalTermsAccepted(event.target.checked)}/>
+        <span>I agree to the <a href={NIGHTJAR_LEGAL_DOCUMENTS.professional_terms.path} target="_blank" rel="noreferrer">Professional & Content Terms</a>, including the requirement to own/control rights and obtain contributor permissions for work I upload.</span>
+      </label>}
+    </div>}
     {message && <p className="account-access-message" role="status" aria-live="polite">{message}</p>}
-    <button type="button" className="primary-button account-access-submit" disabled={busy} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
+    <button type="button" className="primary-button account-access-submit" disabled={busy || (mode === 'register' && (!termsAccepted || !privacyRead || (registrationRoles.length > 0 && !professionalTermsAccepted)))} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
     <div className="account-access-switches">
       {mode !== 'signin' && <button onClick={() => { setMode('signin'); setMessage(''); }}>Already have an account?</button>}
       {mode !== 'register' && <button onClick={() => { setMode('register'); setMessage(''); }}>Create account</button>}
