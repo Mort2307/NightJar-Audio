@@ -3492,7 +3492,7 @@ function App() {
     profile.avatarStatus === 'approved' || Boolean(profile.avatarUrl),
   ];
   const profileCompletion = Math.round((profileCompletionSignals.filter(Boolean).length / profileCompletionSignals.length) * 100);
-  const applicationGroups = useMemo(() => classifyProfessionalApplications(adminApplications), [adminApplications]);
+  const applicationGroups = classifyProfessionalApplications(adminApplications);
   const visibleAdminApplications = filterProfessionalApplicationsByRole(applicationGroups[adminApplicationBox], adminApplicationRoleFilter);
   const profileEditableRoles: PreviewRole[] = (Array.isArray(profile.roles) ? profile.roles : [effectiveRole ?? 'listener'])
     .filter((item: unknown): item is PreviewRole =>
