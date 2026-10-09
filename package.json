@@ -22,7 +22,9 @@
     "setup:didit:sandbox": "node scripts/setup-didit-sandbox.mjs",
     "setup:didit:live": "node scripts/setup-didit-live.mjs",
     "deploy:didit:pilot": "node scripts/deploy-didit-pilot.mjs",
-    "validate:didit": "node scripts/didit-contracts.mjs"
+    "validate:didit": "node scripts/didit-contracts.mjs",
+    "setup:push": "node scripts/setup-nightjar-push.mjs",
+    "deploy:push": "node scripts/deploy-nightjar-push.mjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",
