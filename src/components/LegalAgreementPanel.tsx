@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, FileKey2, RefreshCw, ShieldCheck } from 'lucide-react';
-import { NIGHTJAR_LEGAL_DOCUMENTS, type NightjarLegalDocumentId } from '../legal/nightjarLegal';
+import { type NightjarLegalDocumentId } from '../legal/nightjarLegal';
 import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
 
 export default function LegalAgreementPanel() {
