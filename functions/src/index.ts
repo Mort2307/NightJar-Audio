@@ -3572,6 +3572,12 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   updatedAt: toIso(data.updatedAt),
 });
 
+const releaseOwnerPayload = (data: Record<string, unknown>, id: string) => ({
+  ...releasePayload(data, id),
+  transcriptText: cleanReleaseTranscript(data.transcriptText),
+  transcriptUpdatedAt: toIso(data.transcriptUpdatedAt),
+});
+
 const releaseSearchText = (data: Record<string, unknown>) => [
   data.title,
   data.description,
@@ -3650,7 +3656,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
   await ref.set(record);
   await syncCreatorCustomTagUsage(identity.uid);
   const saved = await ref.get();
-  return { release: releasePayload(saved.data() ?? record, ref.id) };
+  return { release: releaseOwnerPayload(saved.data() ?? record, ref.id) };
 });
 
 export const updateRelease = onCall({ region: REGION }, async (request) => {
@@ -3692,7 +3698,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
   await ref.set(update, { merge: true });
   await syncCreatorCustomTagUsage(identity.uid);
   const saved = await ref.get();
-  return { release: releasePayload(saved.data() ?? {}, releaseId) };
+  return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
 
 export const deleteRelease = onCall({ region: REGION }, async (request) => {
@@ -3770,7 +3776,7 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
   }
 
   const saved = await ref.get();
-  return { release: releasePayload(saved.data() ?? {}, releaseId) };
+  return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
 
 export const removeReleaseAudio = onCall({ region: REGION }, async (request) => {
@@ -3830,7 +3836,7 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   const saved = await ref.get();
-  return { release: releasePayload(saved.data() ?? {}, releaseId) };
+  return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
 
 export const creatorDashboard = onCall({ region: REGION }, async (request) => {
@@ -3840,7 +3846,7 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
     : cleanText((request.data as { creatorUserId?: unknown } | undefined)?.creatorUserId, 160) || identity.uid;
 
   const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', targetCreatorId).limit(500).get();
-  const releases = releasesSnapshot.docs.map((doc) => releasePayload(doc.data(), doc.id));
+  const releases = releasesSnapshot.docs.map((doc) => releaseOwnerPayload(doc.data(), doc.id));
   const listeningSnapshot = await db.collection('listeningEvents').where('creatorUserId', '==', targetCreatorId).limit(5000).get();
 
   const verified = calculateVerifiedListening(listeningSnapshot.docs.map((doc) => doc.data()));
@@ -3976,7 +3982,7 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
 export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('releases').where('status', '==', 'pending_review').limit(100).get();
-  return { releases: snapshot.docs.map((doc) => releasePayload(doc.data(), doc.id)) };
+  return { releases: snapshot.docs.map((doc) => releaseOwnerPayload(doc.data(), doc.id)) };
 });
 
 const createNotification = async (userId: string, payload: Record<string, unknown>) => {
