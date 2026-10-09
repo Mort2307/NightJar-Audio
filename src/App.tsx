@@ -410,6 +410,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value) ? value : 'discover') as View; });
   const [playing, setPlaying] = useState<string | null>(null);
+  const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
   const [ageVerified, setAgeVerified] = useState(false);
@@ -1744,6 +1745,7 @@ function App() {
   };
 
   const togglePlayback = (track: Track) => {
+    setTranscriptRequested(null);
     if (!track.audioAvailable && !track.audioUrl) {
       notify('This release has no playable audio attached yet.');
       return;
@@ -1758,6 +1760,24 @@ function App() {
       return;
     }
     setPlaying(playing === track.id ? null : track.id);
+  };
+
+  const openTranscript = (track: Track) => {
+    if (!track.transcriptAvailable && !demoMode) {
+      notify('A transcript has not been published for this release yet.');
+      return;
+    }
+    if (track.playbackAllowed === false || track.playbackAccessReason === 'subscription_required') {
+      const message = 'A Nightjar subscription is required for work you are not credited on. Your own credited releases remain included for you.';
+      if (listeningAccess?.subscriptionUrl) {
+        notifyWithAction(message, 'Subscribe', () => { window.location.href = listeningAccess.subscriptionUrl!; });
+      } else {
+        notify(message + ' Subscription checkout is not connected yet.');
+      }
+      return;
+    }
+    setTranscriptRequested(track.id);
+    setPlaying(track.id);
   };
 
   const loadAdminOverview = async () => {
@@ -3664,7 +3684,7 @@ function App() {
                 <select value={catalogueDuration} onChange={(event)=>setCatalogueDuration(event.target.value)} aria-label="Audio duration"><option value="all">Any length</option><option value="short">Under 10 min</option><option value="medium">10–24 min</option><option value="full">25–44 min</option><option value="long">45+ min</option></select>
               </div>
               <div className="track-grid">
-                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />)}
+                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />)}
                 {!filteredTracks.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
               </div>
             </section>
@@ -3680,7 +3700,7 @@ function App() {
 ].map(([value,label])=><button type="button" key={value || 'open'} className={currentIntent===value?'active':''} aria-pressed={currentIntent===value} onClick={()=>setCurrentIntent(value)}>{label}</button>)}</div></div>
               <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
               <div className="track-grid">
-                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
+                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
                 {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
               </div>
             </section>
@@ -3688,7 +3708,7 @@ function App() {
             <section className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
               <div className="track-grid">
-                {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />; })}
+                {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />; })}
                 {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
               </div>
             </section>
@@ -4345,7 +4365,16 @@ function App() {
       <GlobalCommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} commands={commandItems} />
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType, context) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, context)} notify={notify} />}
-      {playing && <NightjarPlayer track={tracks.find((track) => track.id === playing) ?? null} queue={tracks} onSelectTrack={(next) => togglePlayback(next as Track)} intent={currentIntent} onClose={() => setPlaying(null)} notify={notify} simulationMode={demoMode} />}
+      {playing && <NightjarPlayer
+        track={tracks.find((track) => track.id === playing) ?? null}
+        queue={tracks}
+        onSelectTrack={(next) => togglePlayback(next as Track)}
+        intent={currentIntent}
+        onClose={() => { setPlaying(null); setTranscriptRequested(null); }}
+        notify={notify}
+        simulationMode={demoMode}
+        initialTranscriptOpen={transcriptRequested === playing}
+      />}
       {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener'} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener'} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
@@ -4395,7 +4424,7 @@ function releaseToTrack(release: any): Track {
   };
 }
 
-function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, onFavourite, onReaction, onCommunity, reason }: { track: Track; playing: boolean; favourite: boolean; reaction: ReleaseReaction; canReact: boolean; onPlay: (track: Track) => void; onFavourite: () => void; onReaction: (reaction: Exclude<ReleaseReaction,null>) => void; onCommunity: () => void; reason?: string }) {
+function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, onRead, onFavourite, onReaction, onCommunity, reason }: { track: Track; playing: boolean; favourite: boolean; reaction: ReleaseReaction; canReact: boolean; onPlay: (track: Track) => void; onRead: (track: Track) => void; onFavourite: () => void; onReaction: (reaction: Exclude<ReleaseReaction,null>) => void; onCommunity: () => void; reason?: string }) {
   return <article className="track-card">
     <div className="track-cover" style={track.artworkUrl ? { backgroundImage: 'url("' + track.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       <span className="track-index">{track.category}</span>
@@ -4414,6 +4443,7 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
       <div className="track-footer">
         <span className={track.playbackAccessReason === 'subscription_required' ? 'creator-link track-access-state locked' : 'creator-link track-access-state'}>{!track.audioAvailable && !track.audioUrl ? 'Audio not connected' : track.playbackAccessReason === 'credited_work' ? 'Included · your credited work' : track.playbackAccessReason === 'subscription' ? 'Included with subscription' : track.playbackAccessReason === 'admin' ? 'Administrator access' : track.playbackAccessReason === 'subscription_required' ? 'Subscription required' : 'Age-gated audio ready'}</span>
         <div className="track-footer-actions">
+          {track.transcriptAvailable && <button className="text-button track-transcript-button" onClick={() => onRead(track)}><FileText size={14}/> Read transcript</button>}
           {canReact && <button className={reaction === 'like' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('like')} aria-pressed={reaction === 'like'} title="Like this published work"><ThumbsUp size={14} fill={reaction === 'like' ? 'currentColor' : 'none'}/> Like <span>{track.communityLikeCount ?? 0}</span></button>}
           {canReact && <button className={reaction === 'love' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('love')} aria-pressed={reaction === 'love'} title="Love this published work"><Heart size={14} fill={reaction === 'love' ? 'currentColor' : 'none'}/> Love <span>{track.communityLoveCount ?? 0}</span></button>}
           <button className="text-button track-community-button" onClick={onCommunity}><MessageCircle size={14}/> Comments <span>{track.communityCommentCount ?? 0}</span></button>
