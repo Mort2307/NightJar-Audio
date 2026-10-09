@@ -43,7 +43,7 @@ if (!pkg.scripts?.['validate:bundle']) fail('Package scripts do not expose valid
 const dashboardMetrics = read('src/components/RoleDashboard.tsx');
 const editorStudio = read('src/components/EditorStudio.tsx');
 const editorStyles = read('src/index.css');
-if (!/metric\\.onClick\\s*\\?/.test(dashboardMetrics) ||
+if (!/metric\.onClick\s*\?/.test(dashboardMetrics) ||
     !dashboardMetrics.includes('className="nj-role-metric-link"') ||
     !dashboardMetrics.includes('type="button"') ||
     !dashboardMetrics.includes('aria-label=')) {
