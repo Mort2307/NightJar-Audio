@@ -6,6 +6,7 @@ const backend = fs.readFileSync('functions/src/index.ts','utf8');
 const clientBypass = /const TESTING_AGE_ASSURANCE_BYPASS\s*=\s*true/.test(app);
 const backendBypass = /const TESTING_AGE_ASSURANCE_BYPASS\s*=\s*true/.test(backend);
 const closedBeta = /const CLOSED_BETA\s*=\s*true/.test(backend);
+const adminOnlyDiditPilot = /const DIDIT_LIVE_PILOT_ADMINS_ONLY\s*=\s*true/.test(backend);
 const diditIntegrationWired = backend.includes('startDiditSession(identity.uid)') && backend.includes('diditPass(data)');
 const liveConfigAcknowledged = process.env.DIDIT_LIVE_CONFIG_ACK === 'yes';
 const failures = [];
@@ -17,6 +18,8 @@ if (clientBypass || backendBypass) {
 if (closedBeta) {
   failures.push('Closed Beta registration is still enabled. Set CLOSED_BETA = false before public launch.');
 }
+
+if (adminOnlyDiditPilot) failures.push('Admin-only Didit pilot must be disabled before the public can verify their age.');
 
 if (!diditIntegrationWired) failures.push('Didit session and age-status functions are not wired.');
 if (!liveConfigAcknowledged) failures.push('Confirm the live Didit workflow, webhook, age threshold and production secrets: DIDIT_LIVE_CONFIG_ACK=yes npm run validate:launch');
