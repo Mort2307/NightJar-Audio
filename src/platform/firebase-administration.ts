@@ -21,6 +21,7 @@ const reviewProfessionalCall = httpsCallable<{
   activeRole: string;
   applicationStatus: string;
   wave: string | null;
+  approvalEmailStatus: 'not_applicable' | 'sent' | 'failed' | 'already_processed';
 }>(functions, 'reviewProfessionalApplication');
 
 export type AdminEmailAudience = 'all_professionals' | 'creator' | 'writer' | 'editor' | 'artist' | 'all_testers' | 'all_members';
