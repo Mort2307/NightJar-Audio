@@ -1462,9 +1462,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     editor: orderForRole(creditedReleasesByRole.editor, 'editor'),
   };
 
-  const [completedCollaborations, publicArtistPortfolio] = await Promise.all([
+  const [completedCollaborations, publicArtistPortfolio, publicEditorPortfolio] = await Promise.all([
     professionalRoles.length > 0 ? completedCollaborationCountFor(userId) : Promise.resolve(0),
     professionalRoles.includes('artist') ? publicArtistPortfolioFor(userId) : Promise.resolve([]),
+    professionalRoles.includes('editor') ? publicEditorPortfolioFor(userId) : Promise.resolve([]),
   ]);
   const activityBadges = publicActivityBadges(role, {
     releases: releaseCount,
@@ -1506,6 +1507,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       featuredWorkByRole,
       creditedReleasesByRole,
       artistPortfolio: publicArtistPortfolio,
+      editorPortfolio: publicEditorPortfolio,
       featuredArtistPortfolio: role === 'artist'
         ? (() => {
             const ids = rolePortfolioIds('artist');
@@ -2566,6 +2568,224 @@ export const removeArtistPortfolioItem = onCall({ region: REGION }, async (reque
 });
 
 const publicArtistPortfolioFor = async (userId: string) => {
+
+
+const editorPortfolioPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  ownerUserId: cleanText(data.ownerUserId, 160),
+  title: cleanText(data.title, 140),
+  description: cleanText(data.description, 1200),
+  services: cleanStringList(data.services, 16),
+  techniques: cleanStringList(data.techniques, 20),
+  status: cleanText(data.status, 40) || 'draft',
+  beforeAudioAvailable: Boolean(data.beforeAudioStoragePath),
+  afterAudioAvailable: Boolean(data.afterAudioStoragePath),
+  rightsConfirmed: data.rightsConfirmed === true,
+  contributorPermissionsConfirmed: data.contributorPermissionsConfirmed === true,
+  clientPermissionNote: cleanText(data.clientPermissionNote, 500) || null,
+  createdAt: toIso(data.createdAt),
+  submittedAt: toIso(data.submittedAt),
+  moderatedAt: toIso(data.moderatedAt),
+  publishedAt: toIso(data.publishedAt),
+  updatedAt: toIso(data.updatedAt),
+});
+
+const publicEditorPortfolioFor = async (userId: string) => {
+  const snapshot = await db.collection('editorPortfolio')
+    .where('ownerUserId', '==', userId)
+    .limit(100)
+    .get();
+  return snapshot.docs
+    .filter((doc) => doc.data()?.status === 'published')
+    .map((doc) => editorPortfolioPayload(doc.data(), doc.id))
+    .sort((a,b) => String(b.publishedAt ?? b.updatedAt ?? '').localeCompare(String(a.publishedAt ?? a.updatedAt ?? '')));
+};
+
+const requireEditorPortfolioOwner = async (identity: Awaited<ReturnType<typeof requireActiveIdentity>>, itemId: string) => {
+  const account = await accountRef(identity.uid).get();
+  const approved = professionalRolesForAccount(account.data() ?? {});
+  if (!identity.admin && (!approved.includes('editor') || account.data()?.status !== 'active')) {
+    throw new HttpsError('permission-denied', 'Approved Audio Editor access is required.');
+  }
+  const ref = db.collection('editorPortfolio').doc(itemId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || (!identity.admin && data.ownerUserId !== identity.uid)) throw new HttpsError('not-found', 'Editor showcase item not found.');
+  return { ref, snapshot, data };
+};
+
+export const createEditorPortfolioItem = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['editor']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const title = cleanText(input.title, 140);
+  if (!title) throw new HttpsError('invalid-argument', 'Give the showcase item a title.');
+  if (input.rightsConfirmed !== true || input.contributorPermissionsConfirmed !== true) {
+    throw new HttpsError('failed-precondition', 'Confirm ownership/rights and contributor/client permission before uploading showcase audio.');
+  }
+  const ref = db.collection('editorPortfolio').doc();
+  const record = {
+    ownerUserId: identity.uid,
+    title,
+    description: cleanText(input.description, 1200),
+    services: cleanStringList(input.services, 16),
+    techniques: cleanStringList(input.techniques, 20),
+    rightsConfirmed: true,
+    contributorPermissionsConfirmed: true,
+    clientPermissionNote: cleanText(input.clientPermissionNote, 500) || null,
+    beforeAudioStoragePath: null,
+    beforeAudioContentType: null,
+    beforeAudioByteSize: null,
+    afterAudioStoragePath: null,
+    afterAudioContentType: null,
+    afterAudioByteSize: null,
+    status: 'draft',
+    moderationNote: null,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(record);
+  return { item: editorPortfolioPayload(record, ref.id) };
+});
+
+export const myEditorPortfolio = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['editor']);
+  const snapshot = await db.collection('editorPortfolio').where('ownerUserId', '==', identity.uid).limit(100).get();
+  return {
+    items: snapshot.docs
+      .map((doc) => editorPortfolioPayload(doc.data(), doc.id))
+      .sort((a,b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))),
+  };
+});
+
+export const finalizeEditorPortfolioAudio = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['editor']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const itemId = cleanText(input.itemId, 160);
+  const slot = cleanText(input.slot, 20);
+  const storagePath = cleanText(input.storagePath, 600);
+  if (!itemId || !['before','after'].includes(slot) || !storagePath) throw new HttpsError('invalid-argument', 'Editor showcase audio upload is incomplete.');
+
+  const { ref, data } = await requireEditorPortfolioOwner(identity, itemId);
+  if (!['draft','changes','rejected'].includes(String(data.status ?? 'draft'))) {
+    throw new HttpsError('failed-precondition', 'This showcase item cannot be edited while moderation is active or after publication.');
+  }
+  const expectedPrefix = `editor-showcase/${identity.uid}/${itemId}/${slot}/`;
+  if (!storagePath.startsWith(expectedPrefix)) throw new HttpsError('permission-denied', 'Editor showcase upload path is invalid.');
+
+  const file = getStorage().bucket().file(storagePath);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError('not-found', 'Uploaded showcase audio was not found.');
+  const [metadata] = await file.getMetadata();
+  const size = Number(metadata.size ?? 0);
+  const contentType = String(metadata.contentType ?? '');
+  const allowed = ['audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/x-m4a','audio/ogg','audio/webm'];
+  if (!allowed.includes(contentType) || !size || size > 20 * 1024 * 1024) {
+    await file.delete({ ignoreNotFound:true }).catch(() => undefined);
+    throw new HttpsError('invalid-argument', 'Use MP3, WAV, M4A, OGG or WebM showcase audio up to 20 MB.');
+  }
+
+  const pathField = slot === 'before' ? 'beforeAudioStoragePath' : 'afterAudioStoragePath';
+  const oldPath = cleanText(data[pathField], 600);
+  await ref.set({
+    [pathField]: storagePath,
+    [slot === 'before' ? 'beforeAudioContentType' : 'afterAudioContentType']: contentType,
+    [slot === 'before' ? 'beforeAudioByteSize' : 'afterAudioByteSize']: size,
+    status: ['changes','rejected'].includes(String(data.status)) ? 'draft' : data.status ?? 'draft',
+    moderationNote: null,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+
+  if (oldPath && oldPath !== storagePath) {
+    await getStorage().bucket().file(oldPath).delete({ ignoreNotFound:true }).catch(() => undefined);
+  }
+  const saved = await ref.get();
+  return { item: editorPortfolioPayload(saved.data() ?? {}, itemId) };
+});
+
+export const submitEditorPortfolioItem = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['editor']);
+  const itemId = cleanText((request.data as Record<string, unknown> | undefined)?.itemId, 160);
+  const { ref, data } = await requireEditorPortfolioOwner(identity, itemId);
+  if (!data.afterAudioStoragePath) throw new HttpsError('failed-precondition', 'Attach the finished/after audio sample before submitting.');
+  if (data.rightsConfirmed !== true || data.contributorPermissionsConfirmed !== true) {
+    throw new HttpsError('failed-precondition', 'Rights and contributor/client permissions must be confirmed.');
+  }
+  await ref.set({
+    status:'pending_review',
+    submittedAt:FieldValue.serverTimestamp(),
+    moderationNote:null,
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+  const saved=await ref.get();
+  return { item:editorPortfolioPayload(saved.data() ?? {}, itemId) };
+});
+
+export const editorPortfolioModerationQueue = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot=await db.collection('editorPortfolio').where('status','==','pending_review').limit(100).get();
+  return { items:snapshot.docs.map((doc)=>editorPortfolioPayload(doc.data(),doc.id)) };
+});
+
+export const moderateEditorPortfolioItem = onCall({ region: REGION }, async (request) => {
+  const admin=requireAdminIdentity(request);
+  const input=(request.data ?? {}) as Record<string,unknown>;
+  const itemId=cleanText(input.itemId,160);
+  const decision=cleanText(input.decision,30);
+  const note=cleanText(input.note,1200);
+  if(!['approved','changes','rejected'].includes(decision)) throw new HttpsError('invalid-argument','Invalid moderation decision.');
+  const ref=db.collection('editorPortfolio').doc(itemId);
+  const snapshot=await ref.get();
+  const data=snapshot.data();
+  if(!data || data.status!=='pending_review') throw new HttpsError('failed-precondition','Editor showcase item is not awaiting moderation.');
+  const status=decision==='approved'?'published':decision==='changes'?'changes':'rejected';
+  await ref.set({
+    status,
+    moderationNote:note||null,
+    moderatedBy:admin.uid,
+    moderatedAt:FieldValue.serverTimestamp(),
+    publishedAt:decision==='approved'?FieldValue.serverTimestamp():data.publishedAt??null,
+    updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  if(data.ownerUserId){
+    await createNotification(String(data.ownerUserId),{
+      type:'content',subtype:'editor_portfolio',
+      title:decision==='approved'?'Your Editor showcase is live':decision==='changes'?'Changes requested for your Editor showcase':'Your Editor showcase was not approved',
+      message:decision==='approved'?'Your approved audio showcase is now visible on your public Audio Editor profile.':note||'Open Editor Studio to review the moderation result.',
+      portfolioItemId:itemId,
+    });
+  }
+  const saved=await ref.get();
+  return { item:editorPortfolioPayload(saved.data() ?? {},itemId) };
+});
+
+export const getEditorPortfolioAudioUrl = onCall({ region: REGION }, async (request) => {
+  const identity=await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input=(request.data ?? {}) as Record<string,unknown>;
+  const itemId=cleanText(input.itemId,160);
+  const slot=cleanText(input.slot,20);
+  if(!['before','after'].includes(slot)) throw new HttpsError('invalid-argument','Choose a valid Editor showcase audio sample.');
+  const snapshot=await db.collection('editorPortfolio').doc(itemId).get();
+  const data=snapshot.data();
+  if(!data || data.status!=='published') throw new HttpsError('not-found','Published Editor showcase item not found.');
+  const path=cleanText(data[slot==='before'?'beforeAudioStoragePath':'afterAudioStoragePath'],600);
+  if(!path) throw new HttpsError('not-found','That showcase audio sample is not available.');
+  const [url]=await getStorage().bucket().file(path).getSignedUrl({action:'read',expires:Date.now()+10*60*1000});
+  return { itemId,slot,url,expiresInSeconds:600 };
+});
+
+export const removeEditorPortfolioItem = onCall({ region: REGION }, async (request) => {
+  const identity=await requireAccountRole(request,['editor']);
+  const itemId=cleanText((request.data as Record<string,unknown>|undefined)?.itemId,160);
+  const {ref,data}=await requireEditorPortfolioOwner(identity,itemId);
+  if(data.status==='pending_review') throw new HttpsError('failed-precondition','Withdraw from moderation before deleting this showcase item.');
+  for(const path of [data.beforeAudioStoragePath,data.afterAudioStoragePath]){
+    const clean=cleanText(path,600);
+    if(clean) await getStorage().bucket().file(clean).delete({ignoreNotFound:true}).catch(()=>undefined);
+  }
+  await ref.delete();
+  return { removed:true,itemId };
+});
   const snapshot = await db.collection('artistPortfolio').where('ownerUserId','==',userId).limit(40).get();
   return snapshot.docs
     .map((doc)=>artistPortfolioPayload(doc.data() ?? {}, doc.id))
