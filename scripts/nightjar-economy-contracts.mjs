@@ -33,7 +33,7 @@ const checks = [
   ['Artist portfolios require human-created work attestation', functions.includes('humanCreatedAttestation') && functions.includes('not AI-generated imagery')],
   ['signup supports multiple professional selections', accountUi.includes('registrationRoles') && accountUi.includes("['listener', ...registrationRoles]")],
   ['gift UI lets multi-role recipients choose target profession', giftUi.includes('eligibleRoles.length > 1') && giftUi.includes('targetRole') && giftUi.includes('recipientRole: targetRole')],
-  ['role manager can add multiple professions', rolesUi.includes('setSelected((items)=>') && rolesUi.includes('applyForProfessionalRoles(selected')],
+  ['role manager can add multiple professions', /setSelected\(\(items\)\s*=>/.test(rolesUi) && rolesUi.includes('[...items, role]') && rolesUi.includes('applyForProfessionalRoles(selected')],
   ['creator compensation defaults to 50 percent', functions.includes('creatorPoolPercent') && functions.includes(': 50')],
   ['company profit allocation defaults to 30 percent', functions.includes('companyProfitPercent') && functions.includes(': 30')],
   ['core business fund defaults to 20 percent', functions.includes('businessFundPercent') && functions.includes(': 20')],
