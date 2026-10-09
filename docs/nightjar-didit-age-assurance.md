@@ -21,6 +21,51 @@ git diff --check
 
 Run the installer **before committing/merging**; `git diff` must show changes to `functions/src/index.ts`, `functions/src/nightjars.ts`, `src/App.tsx`, `src/platform/firebase-age.ts`, `firebase.json`, and `scripts/launch-readiness.mjs`. If an anchor changed, the installer fails without silently guessing; inspect the relevant file.
 
+## Closed-beta LIVE Didit pilot (October 2026)
+
+Nightjar's closed beta continues with `TESTING_AGE_ASSURANCE_BYPASS = true` and
+`CLOSED_BETA = true`. To safely exercise real Didit while those testers are
+using the app, `DIDIT_LIVE_PILOT_ADMINS_ONLY = true` denies chargeable session
+creation to all non-admins. Temporary access never becomes a Didit approval.
+
+One-command production configuration (credentials supplied privately in the local
+Windows terminal, never in chat or Git):
+
+```powershell
+git pull --ff-only origin didit-verification-integration
+npm run setup:didit:live
+```
+
+This connects the **NightJar Audio app** (not the separate sandbox Didit app)
+to the existing **nightjar-audio** Firebase project. It verifies the live Didit
+key using workflow/destination listing, lists real workflows without incorrectly
+requiring an API response `status: published`, and creates or reuses a V3
+destination at `https://nightjar-audio.web.app/api/webhooks/didit`. When an
+existing destination is reused its **current** signing secret is prompted for.
+The wizard requires operator confirmation that the workflow declines under-18s;
+it **does not prove the rule exists** and **does not create a chargeable session,
+deploy, modify tester access or disable beta flags**.
+
+The webhook additionally requires an approved V3 `id_verifications[]` result
+with a valid DOB showing at least 18 completed years (checked in memory,
+persisting only a yes/no adult-evidence flag). A generic KYC `Approved` event
+without documentary age evidence stays `PENDING_REVIEW` and never grants
+adult access. Adaptive age-estimation-only workflows require separate age
+evidence support and are **not** approved by this documentary-only adapter.
+Do not launch publicly without verifying the full UK age-assurance requirements
+and the provider's 18+ risk, fallback and document rules.
+
+An explicit button in the **Nightjar admin console** starts a potentially
+chargeable real Didit check for the administrator's own account. It is protected
+both in the UI and in the Cloud Function, so bypassed non-admin testers continue
+using Nightjar without being charged or prompted. Successful results are
+persisted on their Firebase account. Test invalid signatures, minors, incomplete
+checks, revocation, and second-device access before removing beta limits.
+
+Live secrets are stored in Firebase Secret Manager and only become active after
+redeploying the functions that bind them. Do not share API keys or webhook
+secrets with ChatGPT, in GitHub issues, logs, or documentation.
+
 ## Configure Didit Console
 
 Create and test a **User Verification / adaptive age verification workflow with a minimum age of 18** (with appropriate ID fallback and liveness/risk handling). Confirm the workflow is appropriate for UK adult-content age assurance and contractual platform requirements before production. Do not use a generic identity-only workflow.
