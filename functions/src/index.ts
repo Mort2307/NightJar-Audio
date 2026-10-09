@@ -8684,6 +8684,8 @@ const sendProfessionalApprovalEmailForEvent = async (
   });
   if (!claimed) return 'skipped';
 
+  let email = '';
+  try {
   // Preserve access on any notification failure; record it for safe admin retry.
   if (!retryFailed) {
     await professionalApplicationRef(userId).set({
@@ -8702,7 +8704,7 @@ const sendProfessionalApprovalEmailForEvent = async (
     professionalApplicationRef(userId).get(),
     profileRef(userId).get(),
   ]);
-  const email = cleanEmail(accountSnap.data()?.email || applicationSnap.data()?.email);
+  email = cleanEmail(accountSnap.data()?.email || applicationSnap.data()?.email);
   const displayName = cleanText(profileSnap.data()?.displayName, 80)
     || cleanText(accountSnap.data()?.displayName, 80)
     || displayNameFromEmail(email);
@@ -8733,7 +8735,6 @@ const sendProfessionalApprovalEmailForEvent = async (
     'The Nightjar Team',
   ].filter((line) => line !== '').join('\n\n');
 
-  try {
     if (!validEmailAddress(email)) throw new Error('Approved account is missing a valid email address.');
     const accessToken = await gmailAccessToken();
     const rendered = renderAdminEmail(subject, body, 'account_service', recipient);
