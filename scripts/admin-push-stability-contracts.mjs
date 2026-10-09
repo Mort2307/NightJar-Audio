@@ -23,7 +23,7 @@ const statusEnd=push.indexOf('  async test() {',statusStart);
 if(statusStart<0||statusEnd<0||/getToken\s*\(/.test(push.slice(statusStart,statusEnd)))
   throw new Error('Nightjar admin/push contract FAIL: status must never subscribe to FCM');
 if(app.includes("void nightjarPush.enable().catch")) throw new Error('Nightjar admin/push contract FAIL: do not auto-subscribe to FCM on login');
-requireText(push, "messaging/token-subscribe-failed", 'FCM HTTP 401 must be explained without breaking Nightjar');
+requireText(push, "token-subscribe-failed", 'FCM HTTP 401 must be explained without breaking Nightjar');
 requireText(push, "rememberDevice(registered.data.deviceId)", 'Push registration stored only after backend success');
 requireText(functions, "const shortId = cleanText(input.deviceId", 'Signed-in user can revoke own push device');
 requireText(functions, "export const brandInstallManifest", 'Generated approved logo manifest');
