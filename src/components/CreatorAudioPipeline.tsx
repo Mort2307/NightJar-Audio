@@ -3,7 +3,7 @@ import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarMedia } from '../platform/firebase-media';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
+import { BookOpenText, Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
 import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
@@ -33,6 +33,11 @@ type Release = {
   episodeNumber?: number | null;
   nightjarOriginal?: boolean;
   productionNote?: string | null;
+  transcriptText?: string;
+  transcriptLanguage?: string;
+  transcriptAvailable?: boolean;
+  transcriptWordCount?: number;
+  transcriptAccessibilityReviewed?: boolean;
 };
 
 type Props = {
@@ -120,7 +125,14 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         ? current.moderationNote
         : 'A complete release can be submitted for moderation.';
 
-  const complete = useMemo(() => Boolean(current?.title && current.description && current.audioAvailable && current.category), [current]);
+  const complete = useMemo(() => Boolean(
+    current?.title
+    && current.description
+    && current.audioAvailable
+    && current.category
+    && current.transcriptText?.trim()
+    && current.transcriptAccessibilityReviewed
+  ), [current]);
 
   const setRelease = (patch: Partial<Release>) => setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
 
@@ -357,7 +369,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const submit = async () => {
     if (!current?.id) return;
-    if (!complete) return notify('Add a title, description, category and audio before submitting.');
+    if (!complete) return notify('Add the release details, audio, final transcript and transcript accuracy confirmation before submitting.');
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator publishing stays locked until your account is approved.');
     try {
       if (simulationMode) {
@@ -428,6 +440,74 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <label>Episode number<input type="number" min="0" step="1" value={current.episodeNumber ?? ''} onChange={(event) => setRelease({ episodeNumber: event.target.value === '' ? null : Number(event.target.value) })} placeholder="Optional"/></label>
             <label className="pipeline-span-two">Production / behind-the-scenes note<textarea value={current.productionNote ?? ''} onChange={(event) => setRelease({ productionNote: event.target.value || null })} placeholder="Optional context about the people or process behind this release."/></label>
           </div>
+
+          <section className="release-transcript-editor">
+            <div className="release-transcript-head">
+              <div>
+                <span className="mini-label">ACCESSIBILITY · FINAL RELEASE TRANSCRIPT</span>
+                <strong><BookOpenText size={16}/> Give every release a readable version.</strong>
+                <p>
+                  This should reflect the finished audio, not simply the original script. Include meaningful non-speech cues where they affect the experience.
+                  Optional timestamps let Nightjar follow playback and create a true read-along experience.
+                </p>
+              </div>
+              <span className={current.transcriptText?.trim() && current.transcriptAccessibilityReviewed ? 'status-pill' : 'status-pill muted'}>
+                {current.transcriptText?.trim() && current.transcriptAccessibilityReviewed ? 'READY' : 'REQUIRED'}
+              </span>
+            </div>
+
+            <div className="release-transcript-meta">
+              <label>
+                Transcript language
+                <input
+                  value={current.transcriptLanguage ?? 'en'}
+                  maxLength={35}
+                  onChange={(event) => setRelease({ transcriptLanguage: event.target.value })}
+                  placeholder="en"
+                />
+                <small>Use a language tag such as en, en-GB, es or fr.</small>
+              </label>
+              <div className="release-transcript-format-help">
+                <strong>Optional timed format</strong>
+                <code>[00:18] Speaker: dialogue</code>
+                <code>[01:42] [door closes]</code>
+                <small>Use [mm:ss] or [hh:mm:ss] at the start of a line. Untimed transcripts are fully supported too.</small>
+              </div>
+            </div>
+
+            <label className="release-transcript-text">
+              Transcript
+              <textarea
+                rows={14}
+                maxLength={120000}
+                value={current.transcriptText ?? ''}
+                onChange={(event) => setRelease({
+                  transcriptText: event.target.value,
+                  transcriptAccessibilityReviewed: false,
+                })}
+                placeholder={"[00:00] Speaker: Opening line\n[00:08] [soft music]\n\nOr simply provide clean paragraphs without timestamps."}
+              />
+              <small>
+                {String(current.transcriptText ?? '').trim()
+                  ? String(current.transcriptText ?? '').trim().split(/\s+/).filter(Boolean).length.toLocaleString('en-GB') + ' words'
+                  : 'No transcript added yet'}
+                {' · '}{String(current.transcriptText ?? '').length.toLocaleString('en-GB')}/120,000 characters
+              </small>
+            </label>
+
+            <label className="release-transcript-confirm">
+              <input
+                type="checkbox"
+                checked={current.transcriptAccessibilityReviewed === true}
+                disabled={!current.transcriptText?.trim()}
+                onChange={(event) => setRelease({ transcriptAccessibilityReviewed: event.target.checked })}
+              />
+              <span>
+                <strong>I have checked this against the finished audio.</strong>
+                <small>Dialogue, meaningful sound cues and material changes from the original script are represented accurately.</small>
+              </span>
+            </label>
+          </section>
 
           <section className="release-credits-editor">
             <div className="release-credits-head"><div><span className="mini-label">PRODUCTION CREDITS</span><strong>Credit everyone involved.</strong><p>Voice Actors, Writers, Audio Editors and other collaborators stay attached to the release. Linking a Nightjar professional account also grants that credited person access to this release without needing a separate Listener subscription.</p></div><button className="secondary-button" type="button" onClick={addContributor}>Add credit</button></div>
