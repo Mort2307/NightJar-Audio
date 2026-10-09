@@ -98,6 +98,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastProgressEvent = useRef(0);
   const transcriptCueRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const transcriptRequestRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(1);
@@ -138,8 +139,10 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     }
   };
 
-  const loadTranscript = async () => {
-    if (!track?.id || transcriptBusy || transcriptText) return;
+  const loadTranscript = async (force = false) => {
+    if (!track?.id || transcriptBusy || (!force && transcriptText)) return;
+    const requestId = ++transcriptRequestRef.current;
+    const releaseId = track.id;
     if (simulationMode) {
       setTranscriptLanguage('en');
       setTranscriptText('[00:00] Nightjar transcript preview\n\n[00:08] This demonstration shows how timed text can follow playback while the listener reads.');
@@ -148,10 +151,12 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     setTranscriptBusy(true);
     setTranscriptError('');
     try {
-      const data = await nightjarCatalogue.transcript(track.id);
+      const data = await nightjarCatalogue.transcript(releaseId);
+      if (requestId !== transcriptRequestRef.current) return;
       setTranscriptText(data.transcript ?? '');
       setTranscriptLanguage(data.language || 'en');
     } catch (error) {
+      if (requestId !== transcriptRequestRef.current) return;
       const message = error instanceof Error ? error.message : '';
       setTranscriptError(message.includes('subscription')
         ? 'A Nightjar subscription is required to read this transcript.'
@@ -178,12 +183,13 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   }, [simulationMode]);
 
   useEffect(() => {
+    transcriptRequestRef.current += 1;
     setTranscriptText('');
     setTranscriptError('');
     setTranscriptLanguage(track?.transcriptLanguage || 'en');
     const shouldOpen = Boolean(track?.transcriptAvailable) && accessibility.transcriptMode === 'always_open';
     setTranscriptOpen(shouldOpen);
-    if (shouldOpen) void loadTranscript();
+    if (shouldOpen) void loadTranscript(true);
   }, [track?.id, track?.transcriptAvailable, accessibility.transcriptMode]);
 
   useEffect(() => {
