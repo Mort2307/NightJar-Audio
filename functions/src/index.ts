@@ -4573,27 +4573,28 @@ const createNotification = async (userId: string, payload: Record<string, unknow
   const account = await accountRef(userId).get();
   const preferences = account.data()?.notificationPreferences ?? {};
   const type = cleanText(payload.type, 40);
+  const subtype = cleanText(payload.subtype, 60);
   const preferenceKey =
-    type === 'message' ? 'messages'
-      : type === 'comment' ? 'comments'
+    type === 'message' || subtype === 'professional_message' || subtype === 'direct_message' ? 'messages'
+      : type === 'comment' || subtype === 'comment' || subtype === 'release_comment' || subtype === 'release_reaction' ? 'comments'
         : type === 'collaboration' ? 'collaborations'
-          : type === 'payment' ? 'payments'
-            : null;
+          : type === 'payment' || subtype === 'payment' ? 'payments'
+            : type === 'content' && subtype === 'release' ? 'newReleases'
+              : type === 'spotlight' || type === 'follow' || subtype === 'follow' ? 'followedProfiles'
+                : type === 'announcement' ? 'announcements'
+                  : null;
   if (preferenceKey && preferences[preferenceKey] === false) return;
 
   const displayMode = ['full','discreet','minimal'].includes(String(preferences.displayMode ?? ''))
     ? String(preferences.displayMode)
     : 'discreet';
   const safePayload = { ...payload };
-  if (displayMode === 'minimal' && ['message','comment','collaboration'].includes(type)) {
-    safePayload.title = 'Nightjar update';
-    safePayload.message = 'Open Nightjar to view this update.';
-  } else if (displayMode === 'discreet' && type === 'message') {
-    safePayload.title = 'New Nightjar message';
-    safePayload.message = 'A creative collaborator sent you a private message.';
-  } else if (displayMode === 'discreet' && type === 'comment') {
-    safePayload.title = 'New Nightjar comment';
-    safePayload.message = 'Someone commented on published work you are credited on.';
+  if (displayMode === 'minimal') {
+    safePayload.title = 'Nightjar';
+    safePayload.message = 'You have a new Nightjar notification.';
+  } else if (displayMode === 'discreet') {
+    safePayload.title = type === 'payment' || subtype === 'payment' ? 'Nightjar account update' : 'Nightjar update';
+    safePayload.message = 'There is a new update waiting for you in Nightjar.';
   }
 
   const dedupeKey = cleanText(payload.dedupeKey, 240);
