@@ -1,3 +1,20 @@
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const route = event.notification?.data?.route || '/discover';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => 'focus' in client);
+      if (existing) {
+        try {
+          existing.postMessage({ type: 'NIGHTJAR_PUSH_OPEN', route });
+        } catch {}
+        return existing.focus();
+      }
+      return self.clients.openWindow(route);
+    })
+  );
+});
+
 try {
   importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js');
   importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging-compat.js');
@@ -89,22 +106,4 @@ self.addEventListener('fetch', (event) => {
         .catch(() => caches.match(request).then((cached) => cached || Response.error()))
     );
   }
-});
-
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const route = event.notification?.data?.route || '/discover';
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const existing = clients.find((client) => 'focus' in client);
-      if (existing) {
-        try {
-          existing.postMessage({ type: 'NIGHTJAR_PUSH_OPEN', route });
-        } catch {}
-        return existing.focus();
-      }
-      return self.clients.openWindow(route);
-    })
-  );
 });
