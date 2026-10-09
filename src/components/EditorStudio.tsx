@@ -16,6 +16,7 @@ import {
 import SearchableMultiSelect from './SearchableMultiSelect';
 import CollaborationHub from './CollaborationHub';
 import RoleDashboard, { type RoleDashboardAction } from './RoleDashboard';
+import EditorShowcaseManager from './EditorShowcaseManager';
 import {
   EDITOR_COLLABORATION_OPTIONS,
   EDITOR_DELIVERY_OPTIONS,
@@ -308,20 +309,7 @@ export default function EditorStudio({
           </div>}
         </article>
 
-        <div className="editor-showcase-grid">
-          <article className="panel editor-showcase-card">
-            <Mic2 size={19}/>
-            <span className="mini-label">EDITOR REEL</span>
-            <h3>Showreel slot</h3>
-            <p>A short professional reel belongs here. Live upload is intentionally held until Nightjar has the rights/permission declaration and protected media flow in place.</p>
-          </article>
-          <article className="panel editor-showcase-card">
-            <Scissors size={19}/>
-            <span className="mini-label">BEFORE / AFTER</span>
-            <h3>Transformation samples</h3>
-            <p>Raw-versus-edited samples will require explicit permission from the performer or rights holder before they can be published publicly.</p>
-          </article>
-        </div>
+        <EditorShowcaseManager notify={notify} demoMode={demoMode} />
         {saveBar}
       </>}
 
