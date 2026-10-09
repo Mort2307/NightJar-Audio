@@ -4304,7 +4304,7 @@ function App() {
                 {application.wave ? ' · ' + application.wave : ''}
               </span>
               {approvedRoles.length > 0 && <small>Approved professional roles: {approvedRoles.map(roleLabel).join(' · ')}</small>}
-              {adminApplicationBox === 'approved' && <small>Recorded decision: {status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : status === 'withdrawn' ? 'Withdrawn' : approvedRoles.length ? 'Roles approved; no outstanding requests' : status}</small>}
+              {(adminApplicationBox === 'approved' || adminApplicationBox === 'history') && <small>Recorded decision: {status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : status === 'withdrawn' ? 'Withdrawn' : approvedRoles.length ? 'Roles approved; no outstanding requests' : status}</small>}
               {adminApplicationBox === 'approved' && approvedRoles.length > 0 && <small>
                 Approval email: {application.approvalEmailStatus === 'sent'
                   ? 'Sent' + (application.approvalEmailSentAt ? ' · ' + new Date(application.approvalEmailSentAt).toLocaleString('en-GB') : '')
