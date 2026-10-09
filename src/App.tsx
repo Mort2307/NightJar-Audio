@@ -4250,7 +4250,7 @@ function App() {
       <strong>Professional application bank</strong>
       <small>Only new applications are counted as needing approval. Completed approvals appear in Already Approved; rejected or withdrawn applications remain in Decision History.</small>
     </div>
-    <label>Application box
+    <label>Filter profession
       <select value={adminApplicationRoleFilter} onChange={(event)=>setAdminApplicationRoleFilter(event.target.value as 'all'|'creator'|'writer'|'editor'|'artist')}>
         <option value="all">All professionals</option>
         <option value="creator">VA Creators</option>
