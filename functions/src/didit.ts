@@ -113,10 +113,6 @@ export const diditWebhook = onRequest({
   if (request.method !== 'POST') { response.set('Allow','POST').status(405).end(); return; }
   if (!DIDIT_WEBHOOK_SECRET.value() || !validMode()) { response.status(503).end(); return; }
   const raw = request.rawBody;
-  const dispatched = Number(request.get('X-Timestamp'));
-  if (!Number.isSafeInteger(dispatched) || Math.abs(Date.now()/1000 - dispatched) > 300) {
-    response.status(401).end(); return;
-  }
   if (!raw || raw.length === 0 || raw.length > 1_000_000) { response.status(413).end(); return; }
   let value: Record<string, any>;
   try { value = JSON.parse(raw.toString('utf8')); }
@@ -128,6 +124,16 @@ export const diditWebhook = onRequest({
   // Do not trust deprecated X-Signature-Simple (it does not cover decision body).
   if (!verified) {
     console.warn('Rejected Didit signature', { bodySha256: createHash('sha256').update(raw).digest('hex') });
+    response.status(401).end(); return;
+  }
+  // Freshness must be taken from the HMAC-authenticated body, NOT the unsigned
+  // X-Timestamp header: otherwise a captured payload could be replayed with a
+  // forged fresh header while retaining its valid original signature.
+  const dispatched = Number(value.timestamp);
+  const headerTimestamp = Number(request.get('X-Timestamp'));
+  if (!Number.isSafeInteger(value.timestamp) || !Number.isSafeInteger(dispatched) ||
+      !Number.isSafeInteger(headerTimestamp) || headerTimestamp !== dispatched ||
+      Math.abs(Date.now()/1000 - dispatched) > 300) {
     response.status(401).end(); return;
   }
   const allowed = new Set(['status.updated','data.updated','user.status.updated','user.data.updated',
