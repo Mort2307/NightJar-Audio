@@ -2892,6 +2892,7 @@ function App() {
   // Load a selected workpage once, including deep links and browser Back/Forward.
   useEffect(() => {
     if (view !== 'admin' || !canAdmin || !adminPanel) return;
+    if (adminPanel === 'didit') void refreshAgeStatus();
     if (adminPanel === 'approvals') void loadAdminApplications();
     if (adminPanel === 'suggestions') void loadAdminCreatorSuggestions();
     if (adminPanel === 'reports') void loadAdminReports();
