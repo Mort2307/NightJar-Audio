@@ -25,16 +25,26 @@ const records = [
 ];
 const buckets = classifyProfessionalApplications(records);
 assert.deepEqual(buckets.pending.map((x) => x.id), ['new','partial','waitlisted']);
-assert.deepEqual(buckets.history.map((x) => x.id), ['approved','old-complete','rejected','withdrawn','deduped']);
+assert.deepEqual(buckets.approved.map((x) => x.id), ['approved','old-complete','deduped']);
+assert.deepEqual(buckets.history.map((x) => x.id), ['rejected','withdrawn']);
 assert.deepEqual(buckets.attention.map((x) => x.id), ['stale']);
 assert.deepEqual(pendingApplicationRoles(records[1]), ['editor']);
 assert.deepEqual(filterProfessionalApplicationsByRole(buckets.pending, 'writer').map((x) => x.id), ['new','partial']);
-assert.deepEqual(filterProfessionalApplicationsByRole(buckets.history, 'creator').map((x) => x.id), ['approved']);
-assert.equal(filterProfessionalApplicationsByRole(buckets.history, 'all').length, 5);
+assert.deepEqual(filterProfessionalApplicationsByRole(buckets.approved, 'creator').map((x) => x.id), ['approved']);
+assert.equal(filterProfessionalApplicationsByRole(buckets.approved, 'all').length, 3);
+assert.equal(buckets.pending.length, 3, 'approved and rejected accounts never inflate pending totals');
 
 const app = fs.readFileSync('src/App.tsx', 'utf8');
 assert.match(app, /classifyProfessionalApplications\(adminApplications\)/, 'dashboard uses the same bucketing policy');
-assert.match(app, /adminApplicationBox === 'history'/, 'history is accessible in the console');
+assert.match(app, /adminApplicationBox === 'history'/, 'rejected and withdrawn decision history remains accessible');
+assert.match(app, /adminApplicationBox === 'approved'/, 'approved professional accounts have their own section');
+assert.match(app, /label:'Already Approved'/, 'explicit Already Approved tab exists');
+assert.match(app, /value:applicationGroups\.pending\.length/, 'owner metric shows only new applications');
+assert.match(app, /pendingApplications=\{applicationGroups\.pending\.length\}/, 'release-readiness count excludes approved accounts');
+assert.match(app, /applicationGroups\.pending\.length \?/, 'owner call-to-action is hidden when nothing awaits approval');
+assert.match(app, /\/admin\/['"] \+ panel/, 'admin tools use dedicated routes');
+assert.match(app, /\/admin\/people\//, 'people directories use dedicated routes');
+assert.match(app, /admin-detail-active/, 'owner subpage layout does not render the long dashboard behind an opened tool');
 assert.match(app, /adminApplicationBox === 'pending'/, 'pending queue remains accessible');
 assert.match(app, /adminApplicationBox === 'attention'/, 'orphan records are visible for attention');
 const backend = fs.readFileSync('functions/src/index.ts', 'utf8');
@@ -52,4 +62,4 @@ assert.match(backend, /approvalEmailStatus: cleanText\(data\.approvalEmailStatus
 assert.match(app, /Send existing approval email/, 'legacy approved profiles are offered an explicit owner action');
 assert.match(app, /Retry approval email/, 'failed sends can be retried by an administrator');
 
-console.log('Nightjar professional application inbox/history contracts passed.');
+console.log('Nightjar professional approval counts, Already Approved archive and routed owner workpages contracts passed.');
