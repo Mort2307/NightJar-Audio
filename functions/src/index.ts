@@ -7,6 +7,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
+import { DIDIT_API_KEY, diditConfigured, diditEnvironment, startDiditAgeAssurance } from './didit';
+export { diditWebhook, processDiditWebhookEvent } from './didit';
 
 initializeApp();
 
@@ -4288,7 +4290,7 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
-  if (!TESTING_AGE_ASSURANCE_BYPASS || AGE_ASSURANCE_CONFIGURED) {
+  if (!TESTING_AGE_ASSURANCE_BYPASS || AGE_ASSURANCE_CONFIGURED || diditConfigured()) {
     return { allowed: false, reason: null as string | null };
   }
   const snapshot = await accountRef(uid).get();
@@ -4304,7 +4306,7 @@ const temporaryAgeBypassFor = async (uid: string) => {
 const requireAgeVerified = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
-  const persistentVerified = data?.verified === true && data?.testMode !== true && data?.provider !== 'admin-test';
+  const persistentVerified = data?.verified === true && data?.provider === 'didit' && data?.environment === 'production' && data?.reverifyRequired !== true && data?.testMode !== true;
   if (persistentVerified) return data;
 
   const bypass = await temporaryAgeBypassFor(uid);
@@ -4900,43 +4902,46 @@ export const markNotificationRead = onCall({ region: REGION }, async (request) =
   return { read: true };
 });
 
-export const ageStatus = onCall({ region: REGION }, async (request) => {
+export const ageStatus = onCall({ region: REGION, secrets: [DIDIT_API_KEY] }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
   const data = snapshot.data() ?? {};
-  const persistentVerified = data.verified === true && data.testMode !== true && data.provider !== 'admin-test';
+  const persistentVerified = data.verified === true && data.provider === 'didit'
+    && data.environment === 'production' && data.reverifyRequired !== true && data.testMode !== true;
   const bypass = persistentVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
   const verified = persistentVerified || bypass.allowed;
   return {
     verified,
     status: verified ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
     ageThreshold: 18,
-    configured: AGE_ASSURANCE_CONFIGURED,
-    provider: persistentVerified ? (data.provider ?? 'verified-provider') : (bypass.allowed ? 'temporary-test-access' : 'not-configured'),
-    environment: persistentVerified ? (data.environment ?? 'production') : (bypass.allowed ? 'development' : 'production'),
-    verifiedAt: persistentVerified ? (data.verifiedAt ?? null) : null,
-    reverifyRequired: persistentVerified && data.reverifyRequired === true,
+    configured: diditConfigured(),
+    provider: persistentVerified ? 'didit' : (bypass.allowed ? 'temporary-test-access' : 'didit'),
+    environment: persistentVerified ? 'production' : diditEnvironment(),
+    verifiedAt: persistentVerified ? toIso(data.verifiedAt) : null,
+    reverifyRequired: data.reverifyRequired === true,
     testAvailable: identity.admin || bypass.allowed,
     temporaryBypass: bypass.allowed,
     temporaryBypassReason: bypass.reason,
   };
 });
 
-export const startAgeAssurance = onCall({ region: REGION }, async (request) => {
+export const startAgeAssurance = onCall({ region: REGION, secrets: [DIDIT_API_KEY] }, async (request) => {
   const identity = await requireActiveIdentity(request);
+  // Production Didit pass persists on the Firebase account. Never re-bill a verified user.
+  if (diditConfigured()) {
+    try { return await startDiditAgeAssurance(identity.uid); }
+    catch (error) {
+      console.error('Didit age session unavailable', error instanceof Error ? error.message : 'unknown');
+      throw new HttpsError('unavailable', 'Secure age verification is unavailable. Please try again.');
+    }
+  }
   const bypass = await temporaryAgeBypassFor(identity.uid);
   if (bypass.allowed) {
-    return {
-      verified: true,
-      status: 'COMPLETE',
-      configured: AGE_ASSURANCE_CONFIGURED,
-      provider: 'temporary-test-access',
-      environment: 'development',
-      temporaryBypass: true,
-      temporaryBypassReason: bypass.reason,
-    };
+    return { verified: true, status: 'COMPLETE', configured: false,
+      provider: 'temporary-test-access', environment: 'development',
+      temporaryBypass: true, temporaryBypassReason: bypass.reason };
   }
-  throw new HttpsError('failed-precondition', 'Production age-assurance provider credentials are not configured yet.');
+  throw new HttpsError('failed-precondition', 'The Didit age-assurance service has not been configured.');
 });
 
 export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
