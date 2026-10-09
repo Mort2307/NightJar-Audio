@@ -8194,3 +8194,47 @@ textarea:focus-visible,
     transition-duration: .001ms !important;
   }
 }
+
+
+.moderation-transcript-review {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid rgba(203,181,204,.14);
+  border-radius: 14px;
+  background: rgba(168,138,171,.045);
+}
+.moderation-transcript-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.moderation-transcript-head > div {
+  display: grid;
+  gap: 4px;
+}
+.moderation-transcript-head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.moderation-transcript-copy {
+  max-height: 300px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  color: #ddd4dc;
+  background: rgba(0,0,0,.18);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.moderation-transcript-review > small {
+  color: var(--muted-2);
+  font-size: 10px;
+}
