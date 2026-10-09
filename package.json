@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "build:firebase": "vite build",
     "typecheck": "tsc --noEmit --pretty false",
-    "validate": "npm run typecheck && npm run build && npm run validate:contracts && npm run validate:professional-intake && npm run validate:nightjar-economy && npm run validate:community && npm run validate:security && npm run validate:release-hardening && npm run validate:bundle",
+    "validate": "npm run typecheck && npm run build && npm run validate:contracts && npm run validate:scroll && npm run validate:professional-intake && npm run validate:nightjar-economy && npm run validate:community && npm run validate:security && npm run validate:release-hardening && npm run validate:bundle",
     "validate:contracts": "node scripts/product-contracts.mjs && node scripts/accessibility-contracts.mjs && node scripts/security-contracts.mjs && node scripts/firebase-callable-contracts.mjs",
     "validate:bundle": "node scripts/bundle-budget.mjs",
     "validate:community": "node scripts/community-contracts.mjs",
@@ -19,7 +19,8 @@
     "validate:launch": "node scripts/launch-readiness.mjs",
     "validate:nightjar-economy": "node scripts/nightjar-economy-contracts.mjs",
     "validate:release-hardening": "node scripts/release-hardening-contracts.mjs && node scripts/finance-simulator-tests.mjs",
-    "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs"
+    "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs",
+    "validate:scroll": "node scripts/scroll-navigation-contracts.mjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",
