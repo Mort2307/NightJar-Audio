@@ -8233,6 +8233,18 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
       db.collection('ageAssurance').doc(doc.id).get(),
     ]);
     const accountData = account.data() ?? {};
+    // Resolve a pre-feature approval event only when no email status has ever
+    // been recorded. Existing approvals are NOT emailed retroactively on deploy.
+    let historicalApprovedEmailEventId: string | null = null;
+    if (!data.approvalEmailEventId && cleanProfessionalRoles(data.approvedRoles).length > 0) {
+      const pastEvents = await doc.ref.collection('events')
+        .where('decision', '==', 'approved')
+        .limit(50)
+        .get();
+      const latest = pastEvents.docs.sort((a, b) =>
+        (b.data().createdAt?.toMillis?.() ?? 0) - (a.data().createdAt?.toMillis?.() ?? 0))[0];
+      historicalApprovedEmailEventId = latest?.id ?? null;
+    }
     const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && accountData.testAccess === true;
     return {
       id: doc.id,
@@ -8254,7 +8266,7 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
       bankedAt: toIso(data.bankedAt),
       updatedAt: toIso(data.updatedAt),
       approvalEmailStatus: cleanText(data.approvalEmailStatus, 30) || null,
-      approvalEmailEventId: cleanText(data.approvalEmailEventId, 160) || null,
+      approvalEmailEventId: cleanText(data.approvalEmailEventId, 160) || historicalApprovedEmailEventId,
       approvalEmailSentAt: toIso(data.approvalEmailSentAt),
       approvalEmailError: cleanText(data.approvalEmailError, 600) || null,
     };
@@ -8660,13 +8672,26 @@ const sendProfessionalApprovalEmailForEvent = async (
   const claimed = await db.runTransaction(async (tx) => {
     const snapshot = await tx.get(deliveryRef);
     if (retryFailed) {
-      if (!snapshot.exists || snapshot.data()?.status !== 'failed') return false;
-      tx.set(deliveryRef, {
-        status: 'sending',
-        attempts: FieldValue.increment(1),
-        lastError: null,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+      if (!snapshot.exists) {
+        tx.create(deliveryRef, {
+          userId,
+          eventId,
+          roles,
+          status: 'sending',
+          attempts: 1,
+          transport: 'gmail_api_oauth2',
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        if (snapshot.data()?.status !== 'failed') return false;
+        tx.set(deliveryRef, {
+          status: 'sending',
+          attempts: FieldValue.increment(1),
+          lastError: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
     } else {
       if (snapshot.exists) return false;
       tx.create(deliveryRef, {
@@ -8687,7 +8712,7 @@ const sendProfessionalApprovalEmailForEvent = async (
   let email = '';
   try {
   // Preserve access on any notification failure; record it for safe admin retry.
-  if (!retryFailed) {
+  if (!retryFailed || !(await professionalApplicationRef(userId).get()).data()?.approvalEmailEventId) {
     await professionalApplicationRef(userId).set({
       approvalEmailEventId: eventId,
       approvalEmailStatus: 'sending',
