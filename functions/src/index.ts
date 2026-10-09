@@ -1635,10 +1635,11 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     editor: orderForRole(creditedReleasesByRole.editor, 'editor'),
   };
 
-  const [completedCollaborations, publicArtistPortfolio, publicEditorPortfolio] = await Promise.all([
+  const [completedCollaborations, publicArtistPortfolio, publicEditorPortfolio, publicWriterPortfolio] = await Promise.all([
     professionalRoles.length > 0 ? completedCollaborationCountFor(userId) : Promise.resolve(0),
     professionalRoles.includes('artist') ? publicArtistPortfolioFor(userId) : Promise.resolve([]),
     professionalRoles.includes('editor') ? publicEditorPortfolioFor(userId) : Promise.resolve([]),
+    professionalRoles.includes('writer') ? publicWriterPortfolioFor(userId) : Promise.resolve([]),
   ]);
   const activityBadges = publicActivityBadges(role, {
     releases: releaseCount,
@@ -1681,6 +1682,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       creditedReleasesByRole,
       artistPortfolio: publicArtistPortfolio,
       editorPortfolio: publicEditorPortfolio,
+      writerPortfolio: publicWriterPortfolio,
       featuredArtistPortfolio: role === 'artist'
         ? (() => {
             const ids = rolePortfolioIds('artist');
@@ -5011,6 +5013,34 @@ const writerUploadPublicMeta = (value: unknown) => {
     sizeBytes: Math.max(0, Number(input.sizeBytes ?? 0)),
     uploadedAt: toIso(input.uploadedAt),
   };
+};
+
+const publicWriterPortfolioFor = async (userId: string) => {
+  const snapshot = await db.collection('scripts').where('writerUserId', '==', userId).limit(500).get();
+  return snapshot.docs
+    .filter((doc) => ['Approved','Published'].includes(String(doc.data()?.status ?? '')))
+    .map((doc) => {
+      const data = doc.data() ?? {};
+      const marketplace = normaliseScriptMarketplace(data.marketplace);
+      const rights = normaliseScriptRights(data.rights);
+      return {
+        id:doc.id,
+        title:cleanText(data.title,180) || 'Untitled manuscript',
+        synopsis:marketplace.synopsis,
+        genres:marketplace.genres,
+        tropes:marketplace.tropes,
+        visibility:marketplace.visibility,
+        collaborationWanted:marketplace.collaborationWanted,
+        editorWanted:marketplace.editorWanted,
+        licenceType:rights.licenceType,
+        commercialUse:rights.commercialUse,
+        status:cleanText(data.status,40),
+        updatedAt:toIso(data.updatedAt),
+      };
+    })
+    .filter((item) => ['marketplace','licensed'].includes(item.visibility) && Boolean(item.synopsis))
+    .sort((a,b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+    .slice(0,24);
 };
 
 const scriptPayload = (data: Record<string, any>, id: string, includeContent = true) => ({
