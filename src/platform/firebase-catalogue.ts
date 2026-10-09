@@ -14,6 +14,15 @@ const removeAudioCall = httpsCallable<{ releaseId: string }, { removed: boolean 
 const submitReleaseCall = httpsCallable<{ releaseId: string }, { release: any }>(functions, 'submitReleaseForModeration');
 const dashboardCall = httpsCallable<{ creatorUserId?: string }, { releases: any[]; metrics: any }>(functions, 'creatorDashboard');
 const playbackCall = httpsCallable<{ releaseId: string }, { releaseId: string; url: string; expiresInSeconds: number; accessReason: 'admin' | 'credited_work' | 'subscription' }>(functions, 'getReleasePlaybackUrl');
+const transcriptCall = httpsCallable<{ releaseId: string }, {
+  releaseId: string;
+  title: string;
+  transcript: string;
+  language: string;
+  wordCount: number;
+  accessibilityReviewed: boolean;
+  accessReason: 'admin' | 'credited_work' | 'subscription';
+}>(functions, 'getReleaseTranscript');
 const moderationQueueCall = httpsCallable<void, { releases: any[] }>(functions, 'releaseModerationQueue');
 const adminPreviewCall = httpsCallable<{ releaseId: string }, { releaseId: string; url: string; expiresInSeconds: number }>(functions, 'getAdminReleasePreviewUrl');
 const moderateReleaseCall = httpsCallable<{ releaseId: string; decision: 'approved' | 'changes' | 'rejected'; note?: string; nightjarOriginal?: boolean }, { release: any }>(functions, 'moderateRelease');
@@ -65,6 +74,10 @@ export const nightjarCatalogue = {
 
   async playback(releaseId: string) {
     return (await playbackCall({ releaseId })).data;
+  },
+
+  async transcript(releaseId: string) {
+    return (await transcriptCall({ releaseId })).data;
   },
 
   async moderationQueue() {
