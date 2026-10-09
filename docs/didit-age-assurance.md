@@ -40,6 +40,8 @@ DIDIT_ENVIRONMENT=sandbox
 DIDIT_RETURN_URL=https://nightjar-audio.web.app/
 DIDIT_PRODUCTION_APPROVED=false
 DIDIT_ADULT_WORKFLOW_CONFIRMED=false
+# Optional only if Didit uses a branded hosted-verification domain:
+# DIDIT_VERIFICATION_HOST=verify.your-approved-domain.example
 ```
 
 The environment vars above are **configuration identifiers, not secrets**; retain them in the local Firebase Functions env file. `DIDIT_RETURN_URL` must be an allowed Didit callback/return URL.
