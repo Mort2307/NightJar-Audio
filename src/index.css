@@ -8755,3 +8755,104 @@ textarea:focus-visible,
 .nj-application-email-alert strong { font-size: 11px; }
 .nj-application-email-alert span { flex: 1 1 190px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .nj-application-mail-error { color: #f0cb91; overflow-wrap: anywhere; }
+
+
+/* OWNER WORKPAGES — each tile opens a real /admin/... route. The long
+   Owner Console is not in the layout while a specific tool is open. */
+.admin-page.admin-detail-active > :not(.admin-panel-modal):not(.people-drawer) {
+  display: none !important;
+}
+.admin-page.admin-detail-active {
+  min-height: 72dvh;
+}
+.admin-page .admin-panel-modal.admin-full-page {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+.admin-page .admin-panel-modal.admin-full-page > section {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  overflow: visible;
+  overscroll-behavior: auto;
+  padding: clamp(16px, 2.7vw, 28px);
+  box-shadow: none;
+}
+.admin-page .people-drawer.admin-full-page {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  overflow: visible;
+  overscroll-behavior: auto;
+  padding: clamp(16px, 2.7vw, 28px);
+  box-shadow: none;
+}
+.admin-page .people-drawer.admin-full-page::before { content: none; }
+.admin-page .admin-full-page .admin-modal-head,
+.admin-page .admin-full-page .people-drawer-head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.admin-page .admin-full-page .admin-modal-head > .secondary-button,
+.admin-page .admin-full-page .people-drawer-head > .secondary-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.nj-application-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.nj-application-tabs > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 10px 13px;
+  background: rgba(255,255,255,.02);
+  color: var(--ivory);
+  cursor: pointer;
+}
+.nj-application-tabs > button.active,
+.nj-application-tabs > button:focus-visible {
+  border-color: rgba(203,181,204,.5);
+  background: rgba(126,78,113,.19);
+}
+.nj-application-tabs > button > span {
+  min-width: 20px;
+  border-radius: 30px;
+  padding: 3px 7px;
+  text-align: center;
+  background: rgba(255,255,255,.07);
+}
+@media (max-width: 760px) {
+  .admin-page .admin-panel-modal.admin-full-page,
+  .admin-page .people-drawer.admin-full-page {
+    padding: 0;
+  }
+  .admin-page .admin-panel-modal.admin-full-page > section,
+  .admin-page .people-drawer.admin-full-page {
+    max-width: 100%;
+    max-height: none;
+    width: 100%;
+    overflow: visible;
+  }
+  .nj-application-tabs > button { flex: 1 1 135px; justify-content: space-between; }
+}

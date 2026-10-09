@@ -2,7 +2,7 @@
  * A completed application stays in the returned bank as history; never delete it.
  */
 export type ProfessionalApplicationRole = 'creator' | 'writer' | 'editor' | 'artist';
-export type ProfessionalApplicationBox = 'pending' | 'history' | 'attention';
+export type ProfessionalApplicationBox = 'pending' | 'approved' | 'history' | 'attention';
 
 export type ProfessionalApplicationRecord = {
   status?: string | null;
@@ -12,7 +12,7 @@ export type ProfessionalApplicationRecord = {
 
 const PROFESSIONAL_ROLES: readonly ProfessionalApplicationRole[] = ['creator', 'writer', 'editor', 'artist'];
 const OPEN_STATUSES = new Set(['banked', 'waitlist']);
-const FINAL_STATUSES = new Set(['approved', 'rejected', 'withdrawn']);
+const CLOSED_STATUSES = new Set(['rejected', 'withdrawn']);
 
 const normaliseRoles = (input: unknown): ProfessionalApplicationRole[] =>
   Array.isArray(input)
@@ -27,29 +27,35 @@ export function pendingApplicationRoles(application: ProfessionalApplicationReco
 
 export function classifyProfessionalApplications<T extends ProfessionalApplicationRecord>(applications: readonly T[]): {
   pending: T[];
+  approved: T[];
   history: T[];
   attention: T[];
 } {
   const pending: T[] = [];
+  const approved: T[] = [];
   const history: T[] = [];
   const attention: T[] = [];
 
   for (const application of applications) {
     const status = String(application.status ?? 'banked').toLowerCase();
     const remaining = pendingApplicationRoles(application);
-    const approved = normaliseRoles(application.approvedRoles);
+    const approvedRoles = normaliseRoles(application.approvedRoles);
 
-    if (FINAL_STATUSES.has(status) || (remaining.length === 0 && approved.length > 0)) {
-      // Includes legacy "banked" records whose final role was already approved.
-      history.push(application);
-    } else if (OPEN_STATUSES.has(status) && remaining.length > 0) {
+    if (OPEN_STATUSES.has(status) && remaining.length > 0) {
+      // Only outstanding role decisions are counted as work awaiting approval.
       pending.push(application);
+    } else if (CLOSED_STATUSES.has(status)) {
+      // The final rejection/withdrawal decision wins, even for mixed-role accounts.
+      history.push(application);
+    } else if (status === 'approved' || (remaining.length === 0 && approvedRoles.length > 0)) {
+      // Separate approved applications, including completed legacy banked records.
+      approved.push(application);
     } else {
-      // Inconsistent/stale records must remain visible, but must not have approval buttons.
+      // Orphaned/legacy records with no actionable role stay visible for diagnosis.
       attention.push(application);
     }
   }
-  return { pending, history, attention };
+  return { pending, approved, history, attention };
 }
 
 export function filterProfessionalApplicationsByRole<T extends ProfessionalApplicationRecord>(
