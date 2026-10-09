@@ -6,10 +6,24 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function activeCreator() {
+    function accountData() {
+      return firestore.get(/databases/(default)/documents/accounts/$(request.auth.uid)).data;
+    }
+
+    function activeProfessional(role) {
       return signedIn()
-        && firestore.get(/databases/(default)/documents/accounts/$(request.auth.uid)).data.role == 'creator'
-        && firestore.get(/databases/(default)/documents/accounts/$(request.auth.uid)).data.status == 'active';
+        && accountData().status == 'active'
+        && (
+          accountData().role == role
+          || (
+            accountData().keys().hasAny(['approvedProfessionalRoles'])
+            && accountData().approvedProfessionalRoles.hasAny([role])
+          )
+        );
+    }
+
+    function activeCreator() {
+      return activeProfessional('creator');
     }
 
     function ownsEditableRelease(releaseId) {
@@ -39,6 +53,22 @@ service firebase.storage {
       allow create: if activeCreator()
         && request.auth.uid == userId
         && ownsEditableRelease(releaseId)
+        && supportedAudio();
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /editor-showcase/{userId}/{itemId}/{slot}/{fileId} {
+      allow read: if false;
+      allow create: if activeProfessional('editor')
+        && request.auth.uid == userId
+        && (slot == 'before' || slot == 'after')
+        && firestore.get(/databases/(default)/documents/editorPortfolio/$(itemId)).data.ownerUserId == request.auth.uid
+        && (
+          firestore.get(/databases/(default)/documents/editorPortfolio/$(itemId)).data.status == 'draft'
+          || firestore.get(/databases/(default)/documents/editorPortfolio/$(itemId)).data.status == 'changes'
+          || firestore.get(/databases/(default)/documents/editorPortfolio/$(itemId)).data.status == 'rejected'
+        )
         && supportedAudio();
       allow update: if false;
       allow delete: if signedIn() && request.auth.uid == userId;
