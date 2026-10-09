@@ -418,9 +418,9 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
   const [ageVerified, setAgeVerified] = useState(false);
-  const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
+  const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL' | 'SANDBOX_APPROVED'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
-  const [ageProvider, setAgeProvider] = useState('yoti-sandbox');
+  const [ageProvider, setAgeProvider] = useState('didit');
   const [ageEnvironment, setAgeEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [ageVerifiedAt, setAgeVerifiedAt] = useState<string | null>(null);
   const [ageReverifyRequired, setAgeReverifyRequired] = useState(false);
@@ -1467,7 +1467,7 @@ function App() {
       setAgeTemporaryBypass(data.temporaryBypass === true);
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(false);
-      setAgeStatus(data.status === 'COMPLETE' ? 'COMPLETE' : data.status === 'PENDING' || data.status === 'PROCESSING' || data.status === 'IN_PROGRESS' ? 'PENDING' : data.status === 'FAIL' || data.status === 'ERROR' || data.status === 'CANCELLED' ? 'FAIL' : 'NOT_STARTED');
+      setAgeStatus(data.status === 'SANDBOX_APPROVED' ? 'SANDBOX_APPROVED' : data.status === 'COMPLETE' ? 'COMPLETE' : ['PENDING', 'PROCESSING', 'IN_PROGRESS', 'PENDING_REVIEW'].includes(data.status) ? 'PENDING' : ['FAIL', 'ERROR', 'CANCELLED', 'EXPIRED', 'BLOCKED'].includes(data.status) ? 'FAIL' : 'NOT_STARTED');
       if (verified) setAgeStage('app');
       return verified;
     } catch {
@@ -1541,7 +1541,7 @@ function App() {
     setAgeVerified(false);
     setAgeStatus('NOT_STARTED');
     setAgeConfigured(false);
-    setAgeProvider('yoti-sandbox');
+    setAgeProvider('didit');
     setAgeEnvironment('sandbox');
     setAgeVerifiedAt(null);
     setAgeReverifyRequired(false);
@@ -3321,20 +3321,22 @@ function App() {
           <div className="verification-panel">
             <div className="verification-icon"><ShieldCheck size={23} /></div>
             <div>
-              <strong>{ageTemporaryBypass ? 'Nightjar Private Test Access' : ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'}</strong>
+              <strong>{ageTemporaryBypass ? 'Nightjar Private Test Access' : ageEnvironment === 'production' ? 'Didit Age Verification' : 'Didit Age Verification · Sandbox'}</strong>
               <span>
                 {ageTemporaryBypass
-                  ? `Approved QA account · temporary age-assurance bypass active${ageTemporaryBypassReason === 'administrator' ? ' for an administrator' : ''}. This is not a completed Yoti verification and automatically stops working when test bypass mode is disabled.`
+                  ? `Approved QA account · temporary age-assurance bypass active${ageTemporaryBypassReason === 'administrator' ? ' for an administrator' : ''}. This is not a completed Didit verification and automatically stops working when test bypass mode is disabled.`
                   : ageVerified
                     ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins use this stored verification state.`
-                    : ageSessionActive
+                    : ageStatus === 'SANDBOX_APPROVED'
+                      ? 'Your Didit sandbox session was approved. This is a test result only, not a production 18+ verification pass.'
+                      : ageSessionActive
                       ? 'A verification session is in progress. Finish it and return to Nightjar; the account state will update automatically.'
                       : ageConfigured
                         ? `Secure ${ageEnvironment} provider connected and ready for a verification session.`
                         : 'Verification integration is ready; provider credentials still need to be added.'}
               </span>
             </div>
-            <span className="status-pill">{ageTemporaryBypass ? 'TEST ACCESS' : ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
+            <span className="status-pill">{ageTemporaryBypass ? 'TEST ACCESS' : ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageStatus === 'SANDBOX_APPROVED' ? 'SANDBOX TEST PASSED' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
           </div>
           <div className="verification-list">
             {ageTemporaryBypass
@@ -3345,9 +3347,9 @@ function App() {
             {ageReverifyRequired && !ageTemporaryBypass && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
           </div>
           <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
-            {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
+            {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageStatus === 'SANDBOX_APPROVED' ? 'Sandbox test complete' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
           </button>
-          <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Yoti verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
+          <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a live Didit 18+ approval is securely recorded on your Nightjar account. Sandbox approval never unlocks production content.'}</p>
         </div>
       </main>
     );
