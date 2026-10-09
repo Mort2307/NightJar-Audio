@@ -1510,8 +1510,10 @@ function App() {
           notify('Only approved administrators can start the Didit pilot.'); return;
         }
         if (ageProviderVerified) { notify('Didit already verified this administrator.'); return; }
-        if (ageEnvironment === 'live' && !window.confirm(
-          'Start a REAL Didit verification for your administrator account? Provider charges may apply. Testers keep their existing bypass.'
+        if (!window.confirm(
+          ageEnvironment === 'live'
+            ? 'Start a REAL Didit verification for your administrator account? Provider charges may apply. Existing testers keep their bypass.'
+            : 'Start a Didit sandbox pilot check? This should be unbilled ONLY if the configured Didit key and workflow are genuinely sandbox. Existing testers keep their bypass.'
         )) return;
       } else {
         const alreadyVerified = await refreshAgeStatus();
