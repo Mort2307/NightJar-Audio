@@ -33,6 +33,7 @@ type Props = {
   onClose: () => void;
   notify: (message: string) => void;
   simulationMode?: boolean;
+  initialTranscriptOpen?: boolean;
 };
 
 type TranscriptCue = {
@@ -94,7 +95,7 @@ const parseTranscript = (transcript: string): TranscriptCue[] => {
   return cues;
 };
 
-export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify, simulationMode = false }: Props) {
+export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify, simulationMode = false, initialTranscriptOpen = false }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastProgressEvent = useRef(0);
   const transcriptCueRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -187,10 +188,11 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     setTranscriptText('');
     setTranscriptError('');
     setTranscriptLanguage(track?.transcriptLanguage || 'en');
-    const shouldOpen = Boolean(track?.transcriptAvailable) && accessibility.transcriptMode === 'always_open';
+    const shouldOpen = Boolean(track?.transcriptAvailable || simulationMode)
+      && (initialTranscriptOpen || accessibility.transcriptMode === 'always_open');
     setTranscriptOpen(shouldOpen);
     if (shouldOpen) void loadTranscript(true);
-  }, [track?.id, track?.transcriptAvailable, accessibility.transcriptMode]);
+  }, [track?.id, track?.transcriptAvailable, accessibility.transcriptMode, initialTranscriptOpen, simulationMode]);
 
   useEffect(() => {
     if (!transcriptOpen || !accessibility.transcriptFollowPlayback || !activeTranscriptCueId) return;
@@ -257,10 +259,12 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     setPosition(0);
     setDuration(1);
     setIsPlaying(false);
-    void node.play().catch(() => notify('Press play to start this release.'));
-    void nightjarListening.record({ releaseId: track.id, eventType: 'start', positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent }).catch(() => {});
+    if (!initialTranscriptOpen) {
+      void node.play().catch(() => notify('Press play to start this release.'));
+      void nightjarListening.record({ releaseId: track.id, eventType: 'start', positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent }).catch(() => {});
+    }
     return () => { node.pause(); };
-  }, [track?.id, playbackUrl, simulationMode]);
+  }, [track?.id, playbackUrl, simulationMode, initialTranscriptOpen]);
 
   useEffect(() => {
     if (simulationMode) return;
