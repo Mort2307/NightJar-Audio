@@ -7,7 +7,6 @@ import {
   Handshake,
   Headphones,
   MessageCircle,
-  Mic2,
   Scissors,
   ShieldCheck,
   Sparkles,
