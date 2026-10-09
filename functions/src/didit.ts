@@ -54,7 +54,13 @@ export const startDiditSession = async (uid: string) => {
     const result = await fetch('https://verification.didit.me/v3/session/', {
       method: 'POST',
       headers: { 'x-api-key': DIDIT_API_KEY.value(), 'content-type': 'application/json' },
-      body: JSON.stringify({ workflow_id: DIDIT_WORKFLOW_ID.value(), vendor_data: uid }),
+      // Didit rejects sandbox_scenario when the API key belongs to a live application.
+      // Always send this in sandbox mode so an accidentally configured live key
+      // cannot start billable real-world verification during Nightjar QA.
+      body: JSON.stringify({
+        workflow_id: DIDIT_WORKFLOW_ID.value(), vendor_data: uid,
+        ...(env() === 'sandbox' ? { sandbox_scenario: 'approve' } : {}),
+      }),
       signal: AbortSignal.timeout(15000),
     });
     if (!result.ok) throw new Error('Didit session request failed with status ' + result.status);
@@ -64,7 +70,8 @@ export const startDiditSession = async (uid: string) => {
     let hostname = '';
     try { hostname = new URL(url).hostname; } catch { /* invalid */ }
     if (!sessionId || !['verify.didit.me','verification.didit.me'].includes(hostname) ||
-        !url.startsWith('https://') || session.session_kind === 'business' ||
+        !url.startsWith('https://') || session.session_kind !== 'user' ||
+        text(session.vendor_data) !== uid ||
         text(session.workflow_id) !== DIDIT_WORKFLOW_ID.value()) throw new Error('Invalid Didit session response');
     await db().runTransaction(async tx => {
       const ref = ageRef(uid);
