@@ -4920,7 +4920,7 @@ export const ageStatus = onCall({
     ageThreshold: 18,
     configured: diditConfigured(),
     provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
-    environment: persistentlyVerified ? 'live' : bypass.allowed ? 'development' : diditMode(),
+    environment: diditMode(), // Report ACTUAL configured provider mode even when tester bypass is active. Prevents chargeable live sessions being mislabelled as sandbox.
     verifiedAt: persistentlyVerified ? toIso(data.verifiedAt) : null,
     reverifyRequired: data.reverifyRequired === true,
     sessionActive: ['PENDING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.status ?? '')),
