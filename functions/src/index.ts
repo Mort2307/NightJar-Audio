@@ -2772,7 +2772,7 @@ export const getEditorPortfolioAudioUrl = onCall({ region: REGION }, async (requ
   if(!['before','after'].includes(slot)) throw new HttpsError('invalid-argument','Choose a valid Editor showcase audio sample.');
   const snapshot=await db.collection('editorPortfolio').doc(itemId).get();
   const data=snapshot.data();
-  if(!data || data.status!=='published') throw new HttpsError('not-found','Published Editor showcase item not found.');
+  if(!data || (data.status!=='published' && !identity.admin)) throw new HttpsError('not-found','Published Editor showcase item not found.');
   const path=cleanText(data[slot==='before'?'beforeAudioStoragePath':'afterAudioStoragePath'],600);
   if(!path) throw new HttpsError('not-found','That showcase audio sample is not available.');
   const [url]=await getStorage().bucket().file(path).getSignedUrl({action:'read',expires:Date.now()+10*60*1000});
