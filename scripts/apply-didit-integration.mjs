@@ -165,11 +165,28 @@ patch('src/App.tsx', source => {
 });
 
 patch('firebase.json', source => {
-  let s = source;
-  const needle = '    "rewrites": [\n';
-  const newEntry = '    "rewrites": [\n      {\n        "source": "/api/webhooks/didit",\n        "function": { "functionId": "diditWebhook", "region": "europe-west2" }\n      },\n';
-  s = replace(s, needle, newEntry, 'Firebase webhook rewrite');
-  return s;
+  // Firebase rewrites are JSON, not stable text templates. Previous installs
+  // may already include an equivalent rule formatted differently.
+  const config = JSON.parse(source);
+  const sites = Array.isArray(config.hosting) ? config.hosting : [config.hosting];
+  if (sites.some(site => !site || typeof site !== 'object')) {
+    throw new Error('Expected Firebase Hosting configuration in firebase.json');
+  }
+  let changed = false;
+  for (const site of sites) {
+    const rules = Array.isArray(site.rewrites) ? site.rewrites : [];
+    const matches = rules.filter(rule => rule?.source === '/api/webhooks/didit');
+    const correct = matches.length === 1 && rules[0] === matches[0] &&
+      matches[0].function?.functionId === 'diditWebhook' &&
+      matches[0].function?.region === 'europe-west2';
+    if (correct) continue;
+    site.rewrites = [
+      { source: '/api/webhooks/didit', function: { functionId: 'diditWebhook', region: 'europe-west2' } },
+      ...rules.filter(rule => rule?.source !== '/api/webhooks/didit'),
+    ];
+    changed = true;
+  }
+  return changed ? JSON.stringify(config, null, 2) + '\n' : source;
 });
 
 patch('scripts/launch-readiness.mjs', source => {
