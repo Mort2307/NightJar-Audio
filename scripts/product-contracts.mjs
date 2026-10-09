@@ -39,5 +39,37 @@ else pass('Skeleton system present.');
 if (!pkg.scripts?.['validate:contracts']) fail('Package scripts do not expose validate:contracts.');
 if (!pkg.scripts?.['validate:bundle']) fail('Package scripts do not expose validate:bundle.');
 
+// Dashboard summary tiles are navigation controls, not decorative counters.
+const dashboardMetrics = read('src/components/RoleDashboard.tsx');
+const editorStudio = read('src/components/EditorStudio.tsx');
+const editorStyles = read('src/index.css');
+if (!/metric\\.onClick\\s*\\?/.test(dashboardMetrics) ||
+    !dashboardMetrics.includes('className="nj-role-metric-link"') ||
+    !dashboardMetrics.includes('type="button"') ||
+    !dashboardMetrics.includes('aria-label=')) {
+  fail('Role dashboard metric tiles must render accessible actionable buttons.');
+} else pass('Role dashboard metric tiles are keyboard and touch accessible.');
+
+for (const destination of [
+  "destination:'administrator security alerts'",
+  "destination:'image moderation'",
+  "destination:'professional application bank'",
+  "destination:'subscription ledger'",
+  "destination:'your profile'",
+  "destination:'your library'",
+  "destination:'the professional directory'",
+  "destination:'notifications'",
+  "destination:'the release pipeline'",
+  "destination:'the manuscript workspace'",
+  "destination:'messages'",
+]) {
+  if (!app.includes(destination)) fail('Dashboard metric lacks route to ' + destination);
+}
+if (!app.includes('id="admin-security-alerts"')) fail('Admin security metric has no corresponding anchor.');
+if (!["selectTab('portfolio')", "selectTab('collaborations')", "selectTab('profile')", "selectTab('projects')"]
+  .every((call) => editorStudio.includes(call))) fail('Editor top tiles must open their relevant tabs.');
+if (!editorStyles.includes('.editor-studio-metrics > button')) fail('Editor summary buttons lack visible interaction affordance.');
+else pass('Editor summary tiles navigate to corresponding sections.');
+
 if (process.exitCode) process.exit(process.exitCode);
 console.log('Nightjar product contracts passed.');
