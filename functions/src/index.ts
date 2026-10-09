@@ -6,6 +6,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
 
 initializeApp();
@@ -8252,6 +8253,10 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
       createdAt: toIso(data.createdAt),
       bankedAt: toIso(data.bankedAt),
       updatedAt: toIso(data.updatedAt),
+      approvalEmailStatus: cleanText(data.approvalEmailStatus, 30) || null,
+      approvalEmailEventId: cleanText(data.approvalEmailEventId, 160) || null,
+      approvalEmailSentAt: toIso(data.approvalEmailSentAt),
+      approvalEmailError: cleanText(data.approvalEmailError, 600) || null,
     };
   }));
   const statusOrder: Record<string, number> = { banked:0, waitlist:1, approved:2, rejected:3, withdrawn:4 };
@@ -8615,6 +8620,205 @@ const gmailAccessToken = async () => {
     );
   }
 };
+
+// Approval emails are transactionally claimed per approval event. Do not run
+// external Gmail calls inside an application approval transaction: a mail
+// outage must never revoke or rollback a creator's successfully approved roles.
+const professionalApprovalEmailRef = (userId: string, eventId: string) =>
+  professionalApplicationRef(userId).collection('approvalEmails').doc(eventId);
+
+const approvalEmailSummary = async (
+  userId: string,
+  eventId: string,
+  status: 'sending' | 'sent' | 'failed',
+  error: string | null = null,
+) => {
+  const ref = professionalApplicationRef(userId);
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    // A later role approval may have superseded this email in the UI.
+    if (snapshot.data()?.approvalEmailEventId !== eventId) return;
+    tx.set(ref, {
+      approvalEmailStatus: status,
+      approvalEmailError: error,
+      approvalEmailStatusUpdatedAt: FieldValue.serverTimestamp(),
+      ...(status === 'sent' ? { approvalEmailSentAt: FieldValue.serverTimestamp() } : {}),
+    }, { merge: true });
+  });
+};
+
+const sendProfessionalApprovalEmailForEvent = async (
+  userId: string,
+  eventId: string,
+  decisionEvent: Record<string, unknown>,
+  retryFailed: boolean,
+): Promise<'sent' | 'failed' | 'skipped'> => {
+  const roles = cleanProfessionalRoles(decisionEvent.roles);
+  if (decisionEvent.decision !== 'approved' || roles.length === 0) return 'skipped';
+
+  const deliveryRef = professionalApprovalEmailRef(userId, eventId);
+  const claimed = await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(deliveryRef);
+    if (retryFailed) {
+      if (!snapshot.exists || snapshot.data()?.status !== 'failed') return false;
+      tx.set(deliveryRef, {
+        status: 'sending',
+        attempts: FieldValue.increment(1),
+        lastError: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } else {
+      if (snapshot.exists) return false;
+      tx.create(deliveryRef, {
+        userId,
+        eventId,
+        roles,
+        status: 'sending',
+        attempts: 1,
+        transport: 'gmail_api_oauth2',
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    return true;
+  });
+  if (!claimed) return 'skipped';
+
+  // Preserve access on any notification failure; record it for safe admin retry.
+  if (!retryFailed) {
+    await professionalApplicationRef(userId).set({
+      approvalEmailEventId: eventId,
+      approvalEmailStatus: 'sending',
+      approvalEmailError: null,
+      approvalEmailSentAt: null,
+      approvalEmailStatusUpdatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } else {
+    await approvalEmailSummary(userId, eventId, 'sending');
+  }
+
+  const [accountSnap, applicationSnap, profileSnap] = await Promise.all([
+    accountRef(userId).get(),
+    professionalApplicationRef(userId).get(),
+    profileRef(userId).get(),
+  ]);
+  const email = cleanEmail(accountSnap.data()?.email || applicationSnap.data()?.email);
+  const displayName = cleanText(profileSnap.data()?.displayName, 80)
+    || cleanText(accountSnap.data()?.displayName, 80)
+    || displayNameFromEmail(email);
+  const roleLabel = professionalRoleLabel(roles);
+  const wave = cleanText(decisionEvent.wave, 80);
+  const recipient: AdminEmailRecipient = {
+    email,
+    displayName,
+    firstName: firstNameFromDisplayName(displayName),
+    roleLabel,
+    userId,
+    source: 'account',
+  };
+  const subject = 'Your Nightjar professional application has been approved';
+  const body = [
+    'Hi {{firstName}},',
+    '',
+    'Welcome to Nightjar! Your application has been approved for the following professional role' + (roles.length > 1 ? 's' : '') + ': {{role}}.',
+    wave ? 'Intake wave: ' + wave + '.' : '',
+    '',
+    'Sign in to Nightjar with the same account you used to apply. Your approved professional workspace is now available, and you can complete your profile and prepare for collaboration.',
+    '',
+    'Nightjar is still in controlled testing. Approval does not mean the public platform has launched, guarantee publication, or promise a payment. Future releases and creator arrangements remain subject to the applicable professional terms, launch readiness and safety requirements.',
+    '',
+    'For questions, reply to this email.',
+    '',
+    'Welcome aboard,',
+    'The Nightjar Team',
+  ].filter((line) => line !== '').join('\\n\\n');
+
+  try {
+    if (!validEmailAddress(email)) throw new Error('Approved account is missing a valid email address.');
+    const accessToken = await gmailAccessToken();
+    const rendered = renderAdminEmail(subject, body, 'account_service', recipient);
+    // Gmail has no true idempotency key. Never automatically resend a
+    // previously claimed delivery whose outcome is unknown.
+    const result = await sendGmailApiMessage({
+      accessToken,
+      fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      fromName: 'Nightjar',
+      replyTo: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      message: { toEmail: email, toName: displayName, ...rendered },
+    });
+    await deliveryRef.set({
+      status: 'sent',
+      providerMessageId: result.id || null,
+      recipientEmail: email,
+      subject: rendered.subject,
+      sentAt: FieldValue.serverTimestamp(),
+      lastError: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await approvalEmailSummary(userId, eventId, 'sent').catch((error) =>
+      console.error('Nightjar approval mail sent but summary update failed', eventId, error));
+    await db.collection('emailAudit').add({
+      type: 'professional_approval',
+      userId,
+      eventId,
+      recipientEmail: email,
+      roles,
+      subject: rendered.subject,
+      transport: 'gmail_api_oauth2',
+      providerMessageId: result.id || null,
+      createdAt: FieldValue.serverTimestamp(),
+    }).catch((error) => console.error('Nightjar approval mail audit write failed', eventId, error));
+    return 'sent';
+  } catch (error) {
+    const detail = cleanText(error instanceof Error ? error.message : error, 600) || 'Unknown notification error';
+    await deliveryRef.set({
+      status: 'failed',
+      lastError: detail,
+      recipientEmail: email || null,
+      failedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await approvalEmailSummary(userId, eventId, 'failed', detail).catch((summaryError) =>
+      console.error('Nightjar approval mail failure summary update failed', eventId, summaryError));
+    console.error('Nightjar creator approval mail failed', eventId, detail);
+    return 'failed';
+  }
+};
+
+export const sendProfessionalApprovalEmail = onDocumentCreated({
+  document: 'professionalApplications/{userId}/events/{eventId}',
+  region: REGION,
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+  retry: false,
+}, async (event) => {
+  const userId = event.params.userId;
+  const eventId = event.params.eventId;
+  const data = event.data?.data() ?? {};
+  if (data.decision !== 'approved' || cleanProfessionalRoles(data.roles).length === 0) return;
+  await sendProfessionalApprovalEmailForEvent(userId, eventId, data, false);
+});
+
+export const adminRetryProfessionalApprovalEmail = onCall({
+  region: REGION,
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
+  requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const eventId = cleanText(input.eventId, 160);
+  if (!userId || !eventId || userId.includes('/') || eventId.includes('/')) {
+    throw new HttpsError('invalid-argument', 'Select a valid approval email to retry.');
+  }
+  const decision = await professionalApplicationRef(userId).collection('events').doc(eventId).get();
+  if (!decision.exists || decision.data()?.decision !== 'approved') {
+    throw new HttpsError('failed-precondition', 'Only original approved-role notifications may be retried.');
+  }
+  const outcome = await sendProfessionalApprovalEmailForEvent(userId, eventId, decision.data() ?? {}, true);
+  if (outcome === 'skipped') {
+    throw new HttpsError('failed-precondition', 'This email has already been sent or is currently being processed.');
+  }
+  return { userId, eventId, outcome };
+});
 
 const publicCampaignSummary = (id: string, data: Record<string, any>) => ({
   id,
