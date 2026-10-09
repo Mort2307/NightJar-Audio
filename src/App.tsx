@@ -9,6 +9,7 @@ import { nightjarAdministration } from './platform/firebase-administration';
 import { nightjarCatalogue } from './platform/firebase-catalogue';
 import { nightjarListening } from './platform/firebase-listening';
 import { nightjarNotifications } from './platform/firebase-notifications';
+import { nightjarPush } from './platform/firebase-push';
 import { nightjarAge } from './platform/firebase-age';
 import { nightjarScripts } from './platform/firebase-scripts';
 import { nightjarProtection } from './platform/firebase-protection';
@@ -998,6 +999,38 @@ function App() {
     setMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    if (!user?.userId) return;
+    let cancelled = false;
+    let unsubscribeForeground: (() => void) | undefined;
+
+    void nightjarPush.listenForeground((payload) => {
+      const title = payload.data?.title || payload.notification?.title || 'Nightjar update';
+      const body = payload.data?.body || payload.notification?.body || '';
+      notify(body ? title + ' — ' + body : title);
+      void loadNotifications();
+    }).then((unsubscribe) => {
+      if (cancelled) unsubscribe();
+      else unsubscribeForeground = unsubscribe;
+    }).catch(() => { /* foreground push enhancement remains non-blocking */ });
+
+    const onWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'NIGHTJAR_PUSH_OPEN') return;
+      const route = String(event.data.route ?? '/discover').replace(/^\//, '');
+      const target = (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(route)
+        ? route
+        : 'discover') as View;
+      navigate(target);
+    };
+
+    navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
+    return () => {
+      cancelled = true;
+      unsubscribeForeground?.();
+      navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
+    };
+  }, [user?.userId]);
 
   const openPublicProfile = (userId: string) => {
     if (!userId) return;
