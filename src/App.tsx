@@ -1017,7 +1017,7 @@ function App() {
       const title = payload.data?.title || payload.notification?.title || 'Nightjar update';
       const body = payload.data?.body || payload.notification?.body || '';
       notify(body ? title + ' — ' + body : title);
-      void loadNotifications();
+      void loadNotifications(productLoadEpoch.current);
     }).then((unsubscribe) => {
       if (cancelled) unsubscribe();
       else unsubscribeForeground = unsubscribe;
