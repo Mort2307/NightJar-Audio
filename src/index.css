@@ -8886,3 +8886,40 @@ textarea:focus-visible,
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+
+.nj-admin-operations-role-preview {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+}
+.nj-admin-operations-role-preview .admin-preview-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  position: static;
+  inset: auto;
+  width: auto;
+}
+.nj-admin-operations-role-preview .admin-preview-strip > span {
+  width: 100%;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 9px;
+  color: var(--muted);
+}
+.nj-admin-operations-role-preview .admin-preview-strip > button {
+  padding: 9px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  color: var(--ivory);
+  background: rgba(255,255,255,.03);
+  cursor: pointer;
+}
+.nj-admin-operations-role-preview .admin-preview-strip > button.active {
+  border-color: rgba(203,181,204,.45);
+}
