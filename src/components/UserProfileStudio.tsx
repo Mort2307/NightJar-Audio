@@ -3,6 +3,7 @@ import { Bell, Check, Heart, ImagePlus, ShieldCheck, Sparkles, Star, UserCircle2
 import SearchableMultiSelect from './SearchableMultiSelect';
 import AccountSecurityActivity from './AccountSecurityActivity';
 import AccessibilityPreferences from './AccessibilityPreferences';
+import LegalAgreementPanel from './LegalAgreementPanel';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -158,6 +159,7 @@ export default function UserProfileStudio({
       </article>
 
       <AccessibilityPreferences />
+      <LegalAgreementPanel />
       <AccountSecurityActivity />
     </div>
 
