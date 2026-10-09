@@ -10,6 +10,10 @@ const failures = [];
 const requireMarker = (value, marker, label) => { if (!value.includes(marker)) failures.push(label); };
 for (const [marker,label] of [
   ['request.rawBody', 'Didit raw webhook bytes'],
+  ['verifiedAdultFromDecision(value.decision)', 'Approved KYC requires verified 18+ ID evidence'],
+  ["id.status !== 'Approved'", 'Only approved ID checks count as adult evidence'],
+  ['payload.adultEvidence === true', 'Adult evidence checked before any live verified pass'],
+  ['(session.applicationId && session.applicationId !== payload.applicationId)', 'Provider application bound on webhooks'],
   ['X-Signature-V2','Signed V2 webhook verification'],
   ["text(request.get('X-Signature'))", 'Strong raw-body signature fallback'],
   ['timingSafeEqual','Constant-time HMAC comparison'],
@@ -29,8 +33,13 @@ for (const [marker,label] of [
 ]) requireMarker(didit, marker, label);
 requireMarker(backend, 'diditPass(data)', 'Protected audio checks Didit status');
 requireMarker(backend, 'startDiditSession(identity.uid)', 'Didit session callable');
+requireMarker(backend, 'DIDIT_LIVE_PILOT_ADMINS_ONLY = true', 'Private admin-only Didit live pilot is enforced');
+requireMarker(backend, "!identity.admin", 'Only Nightjar admins can start paid live Didit sessions');
+requireMarker(backend, 'providerVerified: persistentlyVerified', 'Real Didit age pass is never conflated with tester bypass');
 requireMarker(nightjars, 'diditPass(age.data())', 'Gift checks Didit status');
 requireMarker(ui, 'Didit Age Verification', 'Didit user-facing age gate');
+requireMarker(ui, 'Start my live Didit test', 'Admin has an in-app Didit test button');
+requireMarker(ui, 'openAgeCheck(true)', 'Admin Didit test invokes real verified session start');
 const rewrite = hosting.hosting?.rewrites?.find(item => item.source === '/api/webhooks/didit');
 if (rewrite?.function?.functionId !== 'diditWebhook') failures.push('Didit Firebase Hosting route is missing');
 if (ui.includes('Yoti') || backend.includes('AGE_ASSURANCE_CONFIGURED')) failures.push('Retired age provider is still active');
