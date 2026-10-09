@@ -171,10 +171,10 @@ export default function EditorStudio({
     </div>
 
     <div className="editor-studio-metrics">
-      <div><span>Verified credits</span><strong>{verifiedCredits}</strong><small>Nightjar release credits</small></div>
-      <div><span>Collaborations</span><strong>{completedCollaborations}</strong><small>Completed on Nightjar</small></div>
-      <div><span>Specialist skills</span><strong>{specialistSkills}</strong><small>Self-described</small></div>
-      <div><span>Turnaround</span><strong>{profile.editorTurnaround || '—'}</strong><small>Typical estimate</small></div>
+      <button type="button" onClick={() => selectTab('portfolio')} aria-label="Open Editor portfolio and verified credits"><span>Verified credits</span><strong>{verifiedCredits}</strong><small>Nightjar release credits</small><ArrowRight size={14} aria-hidden="true"/></button>
+      <button type="button" onClick={() => selectTab('collaborations')} aria-label="Open Editor collaborations"><span>Collaborations</span><strong>{completedCollaborations}</strong><small>Completed on Nightjar</small><ArrowRight size={14} aria-hidden="true"/></button>
+      <button type="button" onClick={() => selectTab('profile')} aria-label="Open professional profile and specialist skills"><span>Specialist skills</span><strong>{specialistSkills}</strong><small>Self-described</small><ArrowRight size={14} aria-hidden="true"/></button>
+      <button type="button" onClick={() => selectTab('profile')} aria-label="Open professional profile and turnaround settings"><span>Turnaround</span><strong>{profile.editorTurnaround || '—'}</strong><small>Typical estimate</small><ArrowRight size={14} aria-hidden="true"/></button>
     </div>
 
     <nav className="editor-studio-tabs" aria-label="Editor Studio sections">
@@ -191,10 +191,10 @@ export default function EditorStudio({
           title="Your production work, profile and opportunities."
           description="Editor Studio keeps your public professional identity and private assigned work in the same role workspace without exposing client material."
           metrics={[
-            {label:'Assigned',value:editorQueue.length,detail:'Current project queue'},
-            {label:'In review',value:editorQueue.filter((item:any)=>String(item.status).toLowerCase().includes('review')).length,detail:'Active decisions'},
-            {label:'Collaborations',value:completedCollaborations,detail:'Completed on Nightjar'},
-            {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads'},
+            {label:'Assigned',value:editorQueue.length,detail:'Current project queue',destination:'Editor projects',onClick:()=>selectTab('projects')},
+            {label:'In review',value:editorQueue.filter((item:any)=>String(item.status).toLowerCase().includes('review')).length,detail:'Active decisions',destination:'Editor projects',onClick:()=>selectTab('projects')},
+            {label:'Collaborations',value:completedCollaborations,detail:'Completed on Nightjar',destination:'Editor collaborations',onClick:()=>selectTab('collaborations')},
+            {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads',destination:'professional messages',onClick:onOpenMessages},
           ]}
           actions={actions}
         />
