@@ -15,7 +15,7 @@ export default function LegalCentrePage() {
 
   return <main className="legal-document-shell nj-legal-centre-shell">
     <article className="legal-document nj-legal-centre">
-      <a className="legal-back" href="/account"><ArrowLeft size={15}/> Back to Nightjar</a>
+      <a className="legal-back" href="/discover"><ArrowLeft size={15}/> Back to Nightjar</a>
       <div className="legal-document-head">
         <span className="mini-label">NIGHTJAR · YOUR AGREEMENTS</span>
         <h1>Terms & Conditions.</h1>
