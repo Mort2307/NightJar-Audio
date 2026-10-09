@@ -137,8 +137,15 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
 export const legalDocumentForPath = (pathname: string) =>
   Object.values(NIGHTJAR_LEGAL_DOCUMENTS).find((document) => document.path === pathname) ?? null;
 
-export const currentLegalAcceptancePayload = (professional: boolean) => [
-  { id:'platform_terms' as const, version:NIGHTJAR_LEGAL_VERSION, accepted:true },
-  { id:'privacy_notice' as const, version:NIGHTJAR_LEGAL_VERSION, accepted:true },
-  ...(professional ? [{ id:'professional_terms' as const, version:NIGHTJAR_LEGAL_VERSION, accepted:true }] : []),
-];
+export const currentLegalAcceptancePayload = (
+  professional: boolean,
+): Array<{ id: NightjarLegalDocumentId; version: string; accepted: true }> => {
+  const documents: Array<{ id: NightjarLegalDocumentId; version: string; accepted: true }> = [
+    { id:'platform_terms', version:NIGHTJAR_LEGAL_VERSION, accepted:true },
+    { id:'privacy_notice', version:NIGHTJAR_LEGAL_VERSION, accepted:true },
+  ];
+  if (professional) {
+    documents.push({ id:'professional_terms', version:NIGHTJAR_LEGAL_VERSION, accepted:true });
+  }
+  return documents;
+};
