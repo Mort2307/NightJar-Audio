@@ -17,7 +17,7 @@ export default function LegalDocumentPage() {
         <p>{document.summary}</p>
         <div><span>Version {document.version}</span><span>Effective for private beta · 9 October 2026</span></div>
       </div>
-      <div className="legal-beta-warning"><ShieldCheck size={17}/><div><strong>Beta document</strong><span>This is the operational private-beta version. Nightjar requires UK solicitor review, final operator details and launch-specific compliance review before commercial public launch.</span></div></div>
+      <div className="legal-beta-warning"><ShieldCheck size={17}/><div><strong>Beta document</strong><span>This is the operational private-beta version. Before commercial launch Nightjar must finalise operator details, legally applicable consumer terms, safeguards and privacy records. Targeted solicitor advice is recommended but is not a statutory condition of launch.</span></div></div>
       <div className="legal-document-sections">
         {document.sections.map((section)=><section key={section.heading}>
           <h2>{section.heading}</h2>
