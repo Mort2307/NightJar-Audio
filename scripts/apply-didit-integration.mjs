@@ -98,6 +98,9 @@ export const startAgeAssurance = onCall({
 
 patch('functions/src/nightjars.ts', source => {
   let s = source;
+  // Older installer runs can leave two or more identical Didit imports.
+  // Remove any existing identical imports before inserting exactly one.
+  s = s.replace(/^import\s*\{\s*diditPass\s*\}\s*from\s*['"]\.\/didit['"];?\r?\n/gm, '');
   s = replace(s, "import { onSchedule } from 'firebase-functions/v2/scheduler';",
     "import { onSchedule } from 'firebase-functions/v2/scheduler';\nimport { diditPass } from './didit';",
     'Nightjar gift verification import');
@@ -105,6 +108,8 @@ patch('functions/src/nightjars.ts', source => {
     'if (age.data()?.verified !== true && !temporaryTestAccess) {',
     'if (!diditPass(age.data()) && !temporaryTestAccess) {',
     'Nightjar gift verification guard');
+  const importCount = (s.match(/^import\s*\{\s*diditPass\s*\}\s*from\s*['"]\.\/didit['"];?/gm) ?? []).length;
+  if (importCount !== 1) throw new Error('Expected one Didit import, got ' + importCount);
   return s;
 });
 
