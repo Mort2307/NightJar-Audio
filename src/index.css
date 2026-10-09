@@ -8643,3 +8643,21 @@ textarea:focus-visible,
   }
   .editor-showcase-list > article { flex-direction: column; }
 }
+
+.footer-legal-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.footer-legal-links a {
+  color: var(--muted);
+  font-size: 10px;
+  text-decoration: none;
+}
+.footer-legal-links a:hover,
+.footer-legal-links a:focus-visible {
+  color: var(--ivory);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
