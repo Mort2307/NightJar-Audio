@@ -8717,3 +8717,18 @@ textarea:focus-visible,
 @media (max-width:760px) {
   .public-writer-portfolio-grid { grid-template-columns:1fr; }
 }
+
+.nj-application-email-alert {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 15px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(235,170,142,.35);
+  border-radius: 12px;
+  background: rgba(111,51,38,.18);
+}
+.nj-application-email-alert strong { font-size: 11px; }
+.nj-application-email-alert span { flex: 1 1 190px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.nj-application-mail-error { color: #f0cb91; overflow-wrap: anywhere; }

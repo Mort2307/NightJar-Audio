@@ -8,6 +8,7 @@ const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator'
 const setClosedBetaTesterCall = httpsCallable<{ email: string; enabled: boolean; note?: string }, { email: string; enabled: boolean; matchedAccounts: number }>(functions, 'adminSetClosedBetaTester');
 const setTestAccessCall = httpsCallable<{ userId: string; enabled: boolean }, { userId: string; testAccess: boolean }>(functions, 'adminSetTestAccess');
 const professionalBankCall = httpsCallable<void, { applications: any[]; buckets: Record<string, number>; total: number }>(functions, 'listProfessionalApplicationBank');
+const retryApprovalEmailCall = httpsCallable<{ userId: string; eventId: string }, { userId: string; eventId: string; outcome: 'sent' | 'failed' }>(functions, 'adminRetryProfessionalApprovalEmail');
 const reviewProfessionalCall = httpsCallable<{
   userId: string;
   decision: 'banked' | 'approved' | 'rejected' | 'waitlist';
@@ -121,6 +122,10 @@ export const nightjarAdministration = {
 
   async professionalApplicationBank() {
     return (await professionalBankCall()).data;
+  },
+
+  async retryProfessionalApprovalEmail(userId: string, eventId: string) {
+    return (await retryApprovalEmailCall({ userId, eventId })).data;
   },
 
   async reviewProfessionalApplication(userId: string, decision: 'banked' | 'approved' | 'rejected' | 'waitlist', roles: ('creator' | 'writer' | 'editor' | 'artist')[] = [], wave = '') {
