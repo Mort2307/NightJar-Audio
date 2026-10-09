@@ -352,13 +352,39 @@ textarea {
   gap:8px;
   margin:16px 0;
 }
-.nj-role-dashboard-metrics > div {
+.nj-role-dashboard-metrics > :is(div, button) {
   min-width:0;
   padding:11px;
   border:1px solid var(--nj-line-subtle);
   border-radius:11px;
   background:rgba(0,0,0,.12);
 }
+.nj-role-dashboard-metrics > button.nj-role-metric-link {
+  position:relative;
+  width:100%;
+  display:block;
+  appearance:none;
+  font:inherit;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+  touch-action:pan-x pan-y;
+  padding-right:30px;
+  transition:border-color .16s ease, background-color .16s ease;
+}
+.nj-role-dashboard-metrics > button.nj-role-metric-link:hover,
+.nj-role-dashboard-metrics > button.nj-role-metric-link:focus-visible {
+  border-color:var(--nj-line-strong);
+  background:var(--nj-accent-soft);
+}
+.nj-role-metric-arrow {
+  position:absolute;
+  top:11px;
+  right:10px;
+  color:var(--nj-accent);
+  pointer-events:none;
+}
+#admin-security-alerts { scroll-margin-top:88px; }
 .nj-role-dashboard-metrics span,
 .nj-role-dashboard-metrics strong,
 .nj-role-dashboard-metrics small { display:block; }
