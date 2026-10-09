@@ -8661,3 +8661,57 @@ textarea:focus-visible,
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+
+.public-writer-portfolio {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(203,181,204,.14);
+  border-radius: 16px;
+  background: rgba(168,138,171,.035);
+}
+.public-writer-portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.public-writer-portfolio-grid > article {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: rgba(255,255,255,.014);
+}
+.public-writer-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.public-writer-card-head > div {
+  display: grid;
+  gap: 4px;
+}
+.public-writer-portfolio-grid p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.public-writer-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  color: var(--muted-2);
+  font-size: 9px;
+}
+.public-writer-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+@media (max-width:760px) {
+  .public-writer-portfolio-grid { grid-template-columns:1fr; }
+}
