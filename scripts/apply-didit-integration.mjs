@@ -82,7 +82,18 @@ export const startAgeAssurance = onCall({
     "ageAssuranceConfigured: false /* use ageStatus for Didit configuration */");
   s = replaceAll(s, 'ageAssurance.data()?.verified === true', 'diditPass(ageAssurance.data())');
   s = replaceAll(s, 'ageAssuranceSnapshot.data()?.verified !== true', '!diditPass(ageAssuranceSnapshot.data())');
-  if (s.includes('AGE_ASSURANCE_CONFIGURED')) throw new Error('Stale age provider constant remains');
+  // Additional references can exist in newer Nightjar code. Replace this retired
+  // static flag with a Didit runtime check instead of breaking the entire installer.
+  if (s.includes('AGE_ASSURANCE_CONFIGURED')) {
+    const remaining = s.split('\n')
+      .map((line, i) => ({ line: i + 1, text: line.trim() }))
+      .filter(entry => entry.text.includes('AGE_ASSURANCE_CONFIGURED'));
+    console.warn('Updating additional legacy age-configuration references:', remaining);
+    s = s.replace(/\bAGE_ASSURANCE_CONFIGURED\b/g, 'diditConfigured()');
+  }
+  if (s.includes('AGE_ASSURANCE_CONFIGURED')) {
+    throw new Error('Legacy age-provider configuration could not be retired.');
+  }
   return s;
 });
 
