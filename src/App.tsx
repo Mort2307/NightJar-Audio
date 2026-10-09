@@ -2890,7 +2890,7 @@ function App() {
         notify(decision === 'approved' ? `Demo roles approved for ${adminApplicationWave}.` : `Demo professional application ${decision} locally.`);
         return;
       }
-      await nightjarAdministration.reviewProfessionalApplication(
+      const approvalResult = await nightjarAdministration.reviewProfessionalApplication(
         application.userId,
         decision,
         roles,
@@ -2899,7 +2899,7 @@ function App() {
       await loadAdminApplications();
       await loadAdminOverview();
       notify(decision === 'approved'
-        ? `${roles.map((role)=>roleMeta[role].label).join(' + ')} approved for ${adminApplicationWave}.`
+        ? `${roles.map((role)=>roleMeta[role].label).join(' + ')} approved for ${adminApplicationWave}. ${approvalResult.approvalEmailStatus === 'sent' ? 'Approval email sent.' : approvalResult.approvalEmailStatus === 'failed' ? 'Email delivery failed — check Nightjar Gmail.' : approvalResult.approvalEmailStatus === 'already_processed' ? 'Approval email already processed.' : 'No new email needed.'}`
         : `Professional application ${decision}.`);
     } catch {
       notify('Professional application decision could not be saved.');
