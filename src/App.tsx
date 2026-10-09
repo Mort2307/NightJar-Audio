@@ -5,6 +5,7 @@ import { nightjarAuth } from './platform/firebase-auth';
 import { nightjarAccount } from './platform/firebase-account';
 import { nightjarCommunity } from './platform/firebase-community';
 import { nightjarMedia } from './platform/firebase-media';
+import { syncApprovedNightjarIcons } from './platform/branding-icons';
 import { nightjarCommercial, type CommercialOverview, type CommercialSettings } from './platform/firebase-commercial';
 import { nightjarAdministration } from './platform/firebase-administration';
 import { nightjarCatalogue } from './platform/firebase-catalogue';
@@ -450,6 +451,8 @@ function App() {
   const [testingSessionHydrated, setTestingSessionHydrated] = useState(false);
   const [demoSessionKey, setDemoSessionKey] = useState(0);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [installIconsReady, setInstallIconsReady] = useState(false);
+  const [installIconBusy, setInstallIconBusy] = useState(false);
   const [pendingLogoPreviewUrl, setPendingLogoPreviewUrl] = useState<string | null>(null);
   const [demoLogoPreviewUrl, setDemoLogoPreviewUrl] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -480,7 +483,7 @@ function App() {
   const [authenticationEventsLoading, setAuthenticationEventsLoading] = useState(false);
   const [securityEvidenceReview, setSecurityEvidenceReview] = useState<{ alert: any; evidence: any[] } | null>(null);
   const [securityEvidenceLoading, setSecurityEvidenceLoading] = useState(false);
-  const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'didit' | 'notifications' | 'security' | null>(null);
+  const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'didit' | 'notifications' | 'security' | 'branding' | null>(null);
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
   const [adminApplicationWave, setAdminApplicationWave] = useState('Wave 1');
   const [adminApplicationRoleFilter, setAdminApplicationRoleFilter] = useState<'all'|'creator'|'writer'|'editor'|'artist'>('all');
@@ -794,6 +797,7 @@ function App() {
         const data = await nightjarMedia.getBranding();
         const nextLogo = data.logoUrl ?? null;
         setLogoUrl(nextLogo);
+        setInstallIconsReady(data.installIconsReady === true);
       } catch { /* branded wordmark remains available */ }
     })();
     let cancelled = false;
@@ -2407,7 +2411,6 @@ function App() {
           : { name: 'Nightjar Admin', initials: 'NJ', label: 'Administrator' };
 
   const applyRuntimeLogo = (nextLogo: string | null) => {
-    // In-app branding is intentionally separate from the fixed PWA/home-screen identity.
     setLogoUrl(nextLogo);
   };
 
@@ -2419,7 +2422,25 @@ function App() {
       }
       const data = await nightjarMedia.getBranding();
       applyRuntimeLogo(data.logoUrl ?? null);
+      setInstallIconsReady(data.installIconsReady === true);
     } catch { /* wordmark fallback remains available */ }
+  };
+
+  const updateNightjarInstallIcon = async () => {
+    if (!canAdmin || demoMode || !logoUrl) {
+      notify('Approve the Nightjar logo before updating the app icon.');
+      return;
+    }
+    setInstallIconBusy(true);
+    try {
+      await syncApprovedNightjarIcons();
+      setInstallIconsReady(true);
+      notify('Nightjar install icons generated from the approved logo. Reinstall the old shortcut to replace its cached icon.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not generate Nightjar install icons.');
+    } finally {
+      setInstallIconBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -2874,7 +2895,7 @@ function App() {
     }
   };
 
-  const openAdminPanel = (panel: 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'didit' | 'notifications' | 'security') => {
+  const openAdminPanel = (panel: 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'didit' | 'notifications' | 'security' | 'branding') => {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
     setAdminPanel(panel);
@@ -4170,6 +4191,13 @@ function App() {
             <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">TESTING</span><strong>Demo & Simulation</strong><small>Safe fictional data and role-perspective testing · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
             <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">DEMO / SIMULATION</span><strong>See Nightjar populated, then step into every role.</strong><p>Demo records are fictional and isolated. Simulation actions stay local to this browser session and never become live subscriptions, payouts, manuscripts, reviews or user accounts.</p><div className="demo-state-line"><span className={demoMode ? 'status-pill' : 'status-pill muted'}>Demo data {demoMode ? 'ON' : 'OFF'}</span><span className={simulationMode ? 'status-pill' : 'status-pill muted'}>Simulation {simulationMode ? 'ON' : 'OFF'}</span></div></div><div className="admin-preview-buttons">{!demoMode && <button onClick={enableDemoMode}>Enable demo data</button>}{demoMode && !simulationMode && <button onClick={disableDemoMode}>Disable demo data</button>}<button onClick={() => startSimulation('listener')}>Simulate Listener</button><button onClick={() => startSimulation('creator')}>Simulate Creator</button><button onClick={() => startSimulation('writer')}>Simulate Writer</button><button onClick={() => startSimulation('editor')}>Simulate Audio Editor</button><button onClick={() => startSimulation('artist')}>Simulate Artist</button>{simulationMode && <button onClick={stopSimulation}>End simulation</button>}<button onClick={clearAdminPreview}>Return to Admin</button></div></div>
             <div className="admin-grid">
+              <button className="admin-panel admin-tile admin-priority-tile" onClick={() => openAdminPanel('branding')}>
+                <span className="admin-icon"><ImagePlus size={22}/></span>
+                <span className="mini-label">APP INSTALL · NIGHTJAR LOGO</span>
+                <h2>Fix install icon</h2>
+                <p>Replace the generic W displayed by Google/Android with Nightjar's approved logo.</p>
+                <strong>{installIconsReady ? 'Branded icons generated' : 'Branded icons need generating'} <ArrowRight size={16}/></strong>
+              </button>
               <button className="admin-panel admin-tile admin-priority-tile" onClick={() => openAdminPanel('didit')}>
                 <span className="admin-icon"><ShieldCheck size={22}/></span>
                 <span className="mini-label">AGE ASSURANCE · DIDIT</span>
@@ -4236,7 +4264,7 @@ function App() {
             </section>}
 
             {adminPeopleRole && createPortal(<div className="admin-page admin-portal-root"><div className="people-drawer" role="dialog" aria-modal="true" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button admin-workspace-back" onClick={() => { setAdminPeopleRole(null); scrollNightjarToTop(); }} aria-label="Back to admin tiles"><ChevronRight size={16} className="rotate-back"/> Back to Admin</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <div className="people-row-controls"><select value={account.role ?? 'listener'} onChange={(e)=>void changeAccountRole(account,e.target.value as 'listener'|'creator'|'writer'|'editor'|'artist')}><option value="listener">Listener</option>{(account.roles ?? []).filter((professionalRole:string)=>['creator','writer','editor','artist'].includes(professionalRole)).map((professionalRole:'creator'|'writer'|'editor'|'artist')=><option key={professionalRole} value={professionalRole}>{professionalRole === 'creator' ? 'VA Creator' : professionalRole === 'editor' ? 'Audio Editor' : professionalRole === 'artist' ? 'Artist' : 'Writer'}</option>)}</select><select value={account.status ?? 'active'} onChange={(e)=>void changeAccountStatus(account,e.target.value as 'active'|'pending_review'|'suspended')}><option value="active">Active</option><option value="pending_review">Pending review</option><option value="suspended">Suspended</option></select><button className={account.testAccess ? 'secondary-button' : 'ghost-button'} onClick={()=>void changeTestAccess(account, !account.testAccess)}>{account.testAccess ? 'Remove tester access' : 'Enable tester access'}</button></div>}</article>)}{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).length === 0 && <div className="people-empty"><Users size={18} /><strong>No accounts in this role yet</strong><span>The live directory will populate as accounts are created or approved.</span></div>}</div></div></div>, document.body)}
-            {adminPanel && createPortal(<div className="admin-page admin-portal-root"><div className="admin-panel-modal admin-workspace" role="dialog" aria-modal="true" aria-label="Nightjar administrator workspace"><section><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Professional approval queue' : adminPanel === 'suggestions' ? 'Creator suggestions' : adminPanel === 'reports' ? 'Reports & feedback' : adminPanel === 'reviews' ? 'Review moderation' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : adminPanel === 'editorial' ? 'Editorial assignments' : adminPanel === 'images' ? 'Image moderation' : adminPanel === 'tags' ? 'Tag catalogue governance' : adminPanel === 'didit' ? 'Didit live age verification' : adminPanel === 'notifications' ? 'Phone and device notifications' : adminPanel === 'security' ? 'Security and owner alerts' : 'Finance simulator & creator economics'}</h2><p>{adminPanel === 'approvals' ? 'Review banked VA Creator, Writer, Audio Editor and Artist applications. Approve whole applications or individual roles into a named intake wave.' : adminPanel === 'suggestions' ? 'Review Creators recommended by Nightjar members. Suggestions never auto-approve a professional account.' : adminPanel === 'reports' ? 'Review user-submitted safety reports, technical issues and feedback. Reporter identity is shown by profile name and handle.' : adminPanel === 'reviews' ? 'Listener ratings and written reviews are moderated before public display.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : adminPanel === 'editorial' ? 'Assign live manuscripts to active Audio Editor accounts.' : adminPanel === 'images' ? 'Every uploaded image stays private until an administrator explicitly approves it.' : adminPanel === 'tags' ? 'Review creator-made discovery tags. Explicit adult terminology is allowed; administrators can promote useful terms or hide unsuitable catalogue entries.' : 'Adjust the complete Nightjar finance model safely: audience, subscription price, taxes and fees, contributor role shares, app funding and operator income. The simulator never changes live billing.'}</p></div><button className="secondary-button admin-workspace-back" onClick={() => { setAdminPanel(null); scrollNightjarToTop(); }} aria-label="Back to admin tiles"><ChevronRight size={16} className="rotate-back"/> Back to Admin</button></div>
+            {adminPanel && createPortal(<div className="admin-page admin-portal-root"><div className="admin-panel-modal admin-workspace" role="dialog" aria-modal="true" aria-label="Nightjar administrator workspace"><section><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Professional approval queue' : adminPanel === 'suggestions' ? 'Creator suggestions' : adminPanel === 'reports' ? 'Reports & feedback' : adminPanel === 'reviews' ? 'Review moderation' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : adminPanel === 'editorial' ? 'Editorial assignments' : adminPanel === 'images' ? 'Image moderation' : adminPanel === 'tags' ? 'Tag catalogue governance' : adminPanel === 'didit' ? 'Didit live age verification' : adminPanel === 'notifications' ? 'Phone and device notifications' : adminPanel === 'security' ? 'Security and owner alerts' : adminPanel === 'branding' ? 'Nightjar app install icon' : 'Finance simulator & creator economics'}</h2><p>{adminPanel === 'approvals' ? 'Review banked VA Creator, Writer, Audio Editor and Artist applications. Approve whole applications or individual roles into a named intake wave.' : adminPanel === 'suggestions' ? 'Review Creators recommended by Nightjar members. Suggestions never auto-approve a professional account.' : adminPanel === 'reports' ? 'Review user-submitted safety reports, technical issues and feedback. Reporter identity is shown by profile name and handle.' : adminPanel === 'reviews' ? 'Listener ratings and written reviews are moderated before public display.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : adminPanel === 'editorial' ? 'Assign live manuscripts to active Audio Editor accounts.' : adminPanel === 'images' ? 'Every uploaded image stays private until an administrator explicitly approves it.' : adminPanel === 'tags' ? 'Review creator-made discovery tags. Explicit adult terminology is allowed; administrators can promote useful terms or hide unsuitable catalogue entries.' : 'Adjust the complete Nightjar finance model safely: audience, subscription price, taxes and fees, contributor role shares, app funding and operator income. The simulator never changes live billing.'}</p></div><button className="secondary-button admin-workspace-back" onClick={() => { setAdminPanel(null); scrollNightjarToTop(); }} aria-label="Back to admin tiles"><ChevronRight size={16} className="rotate-back"/> Back to Admin</button></div>
             {adminPanel === 'didit' && <div className="admin-panel" aria-label="Didit age verification pilot">
               <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
               <h2>Didit live verification</h2>
@@ -4261,6 +4289,22 @@ function App() {
               <small>Only an actual approved Didit decision with valid documentary evidence of age 18+ can be stored as permanent verification. Test bypasses are never counted as Didit approval.</small>
             </div>}
             {adminPanel === 'notifications' && <NotificationPreferences notify={notify} simulationMode={demoMode} />}
+            {adminPanel === 'branding' && <section className="admin-panel" aria-label="Nightjar approved install icon management">
+              <span className="mini-label">INSTALL IDENTITY · NIGHTJAR</span>
+              <h2>Your logo. On every phone.</h2>
+              <p>Google and Android read Nightjar's web app manifest, not the logo displayed inside the app. Generate properly sized PNG icons from the approved Nightjar logo here.</p>
+              <div className="logo-preview-box" style={{maxWidth:220,aspectRatio:'1/1'}}>
+                <img src={logoUrl ?? '/brand-logo'} alt="Nightjar approved logo preview"/>
+              </div>
+              <div className="demo-state-line"><span className={installIconsReady ? 'status-pill' : 'status-pill muted'}>{installIconsReady ? 'BRANDED ICONS READY' : 'INSTALL ICONS NOT READY'}</span></div>
+              <div className="admin-preview-buttons">
+                <button type="button" className="primary-button" disabled={installIconBusy || !logoUrl || demoMode}
+                  onClick={() => void updateNightjarInstallIcon()}>
+                  {installIconBusy ? 'Generating icons…' : 'Use approved Nightjar logo as install icon'}
+                </button>
+              </div>
+              <small>After saving, uninstall your old Nightjar shortcut and install Nightjar again. Android and Chrome cache previously installed icons. This does not delete your Nightjar account or its data.</small>
+            </section>}
             {adminPanel === 'security' && <section className="security-alert-panel">
               <span className="mini-label">NIGHTJAR OWNER / SECURITY EVIDENCE</span>
               <h2>Security alerts</h2>
