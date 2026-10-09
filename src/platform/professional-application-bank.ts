@@ -39,12 +39,12 @@ export function classifyProfessionalApplications<T extends ProfessionalApplicati
   for (const application of applications) {
     const status = String(application.status ?? 'banked').toLowerCase();
     const remaining = pendingApplicationRoles(application);
-    const approved = normaliseRoles(application.approvedRoles);
+    const approvedRoles = normaliseRoles(application.approvedRoles);
 
     if (OPEN_STATUSES.has(status) && remaining.length > 0) {
       // Only outstanding role decisions are counted as work awaiting approval.
       pending.push(application);
-    } else if (status === 'approved' || (remaining.length === 0 && approved.length > 0)) {
+    } else if (status === 'approved' || (remaining.length === 0 && approvedRoles.length > 0)) {
       // Separate approved applications, including completed legacy banked records.
       approved.push(application);
     } else if (CLOSED_STATUSES.has(status)) {
