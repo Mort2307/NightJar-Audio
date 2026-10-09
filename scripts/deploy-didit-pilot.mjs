@@ -54,6 +54,7 @@ async function main() {
   run('npm', ['run', 'validate']);
   run('npm', ['--prefix', 'functions', 'run', 'check']);
   run('npm', ['--prefix', 'functions', 'run', 'build']);
+  run('npm', ['run', 'validate:didit']);
   run('npm', ['run', 'build']);
   run('npm', ['run', 'validate:contracts']);
   run('npm', ['run', 'validate:release-hardening']);
@@ -70,7 +71,11 @@ async function main() {
   try { confirm = (await rl.question('\nType DEPLOY PILOT to continue, anything else to cancel: ')).trim(); }
   finally { rl.close(); }
   if (confirm !== 'DEPLOY PILOT') { console.log('Cancelled; no deployment.'); return; }
-  run('firebase', ['deploy', '--only', 'functions,hosting', '--project', project]);
+  // Deploy only age-assurance callables, the two webhook functions and updated UI.
+  // The rest of production Functions are deliberately left untouched during beta QA.
+  run('firebase', ['deploy', '--only',
+    'functions:ageStatus,functions:startAgeAssurance,functions:diditWebhook,functions:processDiditWebhook,hosting',
+    '--project', project]);
   console.log('\nPilot deployed. Sign in as Nightjar admin, open the admin console,',
     'and use Didit live verification. Confirm webhook delivery and Firestore state.');
 }
