@@ -10,7 +10,7 @@ export default function LegalDocumentPage() {
 
   return <main className="legal-document-shell">
     <article className="legal-document">
-      <a className="legal-back" href="/account"><ArrowLeft size={14}/> Back to Nightjar</a>
+      <a className="legal-back" href="/legal"><ArrowLeft size={14}/> Back to Nightjar</a>
       <div className="legal-document-head">
         <span className="mini-label">NIGHTJAR · PRIVATE BETA LEGAL</span>
         <h1>{document.title}</h1>
