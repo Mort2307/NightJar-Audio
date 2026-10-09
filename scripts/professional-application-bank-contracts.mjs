@@ -52,7 +52,8 @@ assert.match(app, /openAdminPanel\('operations'\)/, 'owner operations are reacha
 assert.match(app, /\{!adminPanel && !adminPeopleRole && <>/, 'heavy owner dashboard is not rendered inside a workpage');
 assert.equal((app.match(/className="admin-grid"/g) ?? []).length >= 2, true, 'owner navigation grid remains present');
 assert.doesNotMatch(app, /value:adminApplications\.length/, 'owner attention metrics cannot count historical application records');
-assert.doesNotMatch(app, /<div className="admin-preview-strip">/, 'global navigation no longer contains an expanded role-preview strip');
+const topbar = app.slice(app.indexOf('<header className="topbar">'), app.indexOf('</header>'));
+assert.doesNotMatch(topbar, /className="admin-preview-strip"/, 'global navigation no longer contains an expanded role-preview strip');
 const css = fs.readFileSync('src/index.css', 'utf8');
 assert.match(css, /\.admin-page \.admin-panel-modal\.admin-full-page > section/, 'owner details use normal full-page layout');
 assert.match(css, /\.nj-admin-operations-workpage/, 'operations workpage is styled for responsive reading');
