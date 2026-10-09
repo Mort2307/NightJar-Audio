@@ -9,7 +9,7 @@ export type RoleDashboardAction = {
   priority?: 'high' | 'normal';
 };
 
-type Metric = { label: string; value: string | number; detail?: string };
+type Metric = { label: string; value: string | number; detail?: string; onClick?: () => void; destination?: string };
 
 type Props = {
   eyebrow: string;
@@ -27,7 +27,16 @@ export default function RoleDashboard({ eyebrow, title, description, metrics, ac
       <Sparkles size={19}/>
     </div>
     <div className="nj-role-dashboard-metrics">
-      {metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong>{loading ? '…' : metric.value}</strong>{metric.detail && <small>{metric.detail}</small>}</div>)}
+      {metrics.map((metric) => {
+        const content = <><span>{metric.label}</span><strong>{loading ? '…' : metric.value}</strong>{metric.detail && <small>{metric.detail}</small>}</>;
+        return metric.onClick
+          ? <button type="button" className="nj-role-metric-link" key={metric.label} onClick={metric.onClick}
+              aria-label={metric.destination ? `${metric.label}: ${metric.value}. Open ${metric.destination}` : `Open ${metric.label}`}
+              title={metric.destination ? `Open ${metric.destination}` : `Open ${metric.label}`}>
+              {content}<ArrowRight className="nj-role-metric-arrow" size={15} aria-hidden="true"/>
+            </button>
+          : <div key={metric.label}>{content}</div>;
+      })}
     </div>
     <div className="nj-next-actions">
       <div className="nj-next-actions-head"><div><span className="mini-label">NEXT ACTIONS</span><strong>Useful things to do next</strong></div><Bell size={15}/></div>
