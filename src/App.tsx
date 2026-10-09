@@ -93,6 +93,7 @@ const RoleProfileExtension = lazy(() => import('./components/RoleProfileExtensio
 const EditorStudio = lazy(() => import('./components/EditorStudio'));
 const AdminFinanceSimulator = lazy(() => import('./components/AdminFinanceSimulator'));
 const AdminReleaseReadiness = lazy(() => import('./components/AdminReleaseReadiness'));
+const AdminLegalReadiness = lazy(() => import('./components/AdminLegalReadiness'));
 const AdminCommunications = lazy(() => import('./components/AdminCommunications'));
 const EditorShowcaseModeration = lazy(() => import('./components/EditorShowcaseModeration'));
 
@@ -4118,6 +4119,9 @@ function App() {
                 pendingImages={imageModeration.length}
                 pendingApplications={adminApplications.filter((item:any)=>item.status==='banked'||item.status==='pending_review').length}
               />
+            </Suspense>
+            <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
+              <AdminLegalReadiness />
             </Suspense>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Mail" />}>
               <AdminCommunications />
