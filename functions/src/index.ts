@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
+import { getMessaging } from 'firebase-admin/messaging';
 import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
@@ -3985,6 +3986,169 @@ export const releaseModerationQueue = onCall({ region: REGION }, async (request)
   return { releases: snapshot.docs.map((doc) => releaseOwnerPayload(doc.data(), doc.id)) };
 });
 
+const notificationRouteFor = (payload: Record<string, unknown>) => {
+  const type = cleanText(payload.type, 40);
+  const subtype = cleanText(payload.subtype, 60);
+  if (type === 'message' || subtype === 'professional_message' || subtype === 'direct_message') return '/messages';
+  if (type === 'collaboration') return '/messages';
+  if (type === 'payment' || subtype === 'payment') return '/profile';
+  if (subtype === 'release' || subtype === 'release_comment' || subtype === 'release_reaction') return '/discover';
+  return '/discover';
+};
+
+const deliverPushNotification = async (
+  userId: string,
+  payload: Record<string, unknown>,
+  displayMode: string,
+  notificationId: string,
+) => {
+  const devices = await accountRef(userId).collection('pushDevices').where('active', '==', true).limit(20).get();
+  if (devices.empty) return { attempted: 0, sent: 0, failed: 0 };
+
+  const title = cleanText(payload.title, 120) || 'Nightjar update';
+  const message = cleanText(payload.message, 240) || 'Open Nightjar to view this update.';
+  const tokens = devices.docs
+    .map((doc) => cleanText(doc.data()?.token, 4096))
+    .filter(Boolean);
+
+  if (!tokens.length) return { attempted: 0, sent: 0, failed: 0 };
+
+  const response = await getMessaging().sendEachForMulticast({
+    tokens,
+    data: {
+      title,
+      body: message,
+      notificationId,
+      type: cleanText(payload.type, 40),
+      subtype: cleanText(payload.subtype, 60),
+      route: notificationRouteFor(payload),
+      displayMode,
+    },
+    webpush: {
+      headers: { Urgency: ['message','payment','collaboration'].includes(cleanText(payload.type, 40)) ? 'high' : 'normal' },
+    },
+  });
+
+  const invalidCodes = new Set([
+    'messaging/registration-token-not-registered',
+    'messaging/invalid-registration-token',
+  ]);
+  const writes: Promise<unknown>[] = [];
+
+  response.responses.forEach((item, index) => {
+    const doc = devices.docs.find((candidate) => cleanText(candidate.data()?.token, 4096) === tokens[index]);
+    if (!doc) return;
+    if (item.success) {
+      writes.push(doc.ref.set({
+        lastDeliveredAt: FieldValue.serverTimestamp(),
+        lastError: null,
+        deliverySuccessCount: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge:true }));
+      return;
+    }
+    const errorCode = item.error?.code ?? 'messaging/unknown-error';
+    writes.push(doc.ref.set({
+      lastFailedAt: FieldValue.serverTimestamp(),
+      lastError: cleanText(errorCode, 160),
+      deliveryFailureCount: FieldValue.increment(1),
+      active: invalidCodes.has(errorCode) ? false : true,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge:true }));
+  });
+
+  await Promise.allSettled(writes);
+  return { attempted: tokens.length, sent: response.successCount, failed: response.failureCount };
+};
+
+export const registerPushDevice = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const token = cleanText(input.token, 4096);
+  if (!token || token.length < 32) throw new HttpsError('invalid-argument', 'A valid push device token is required.');
+
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const ref = accountRef(identity.uid).collection('pushDevices').doc(tokenHash);
+  const existing = await ref.get();
+
+  await ref.set({
+    token,
+    tokenHash,
+    platform: cleanText(input.platform, 80) || 'web',
+    userAgent: cleanText(input.userAgent, 500) || null,
+    standalone: input.standalone === true,
+    timezone: cleanText(input.timezone, 80) || null,
+    active: true,
+    permission: 'granted',
+    lastRegisteredAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge:true });
+
+  return { registered:true, deviceId: tokenHash.slice(0, 16) };
+});
+
+export const unregisterPushDevice = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const token = cleanText((request.data as Record<string, unknown> | undefined)?.token, 4096);
+  if (!token) return { unregistered:false };
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  await accountRef(identity.uid).collection('pushDevices').doc(tokenHash).set({
+    active:false,
+    disabledAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { unregistered:true };
+});
+
+export const myPushNotificationStatus = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await accountRef(identity.uid).collection('pushDevices').limit(20).get();
+  const devices = snapshot.docs.map((doc) => {
+    const data = doc.data() ?? {};
+    return {
+      id: doc.id.slice(0, 16),
+      active: data.active === true,
+      platform: cleanText(data.platform, 80) || 'web',
+      standalone: data.standalone === true,
+      lastRegisteredAt: toIso(data.lastRegisteredAt),
+      lastDeliveredAt: toIso(data.lastDeliveredAt),
+      lastFailedAt: toIso(data.lastFailedAt),
+      lastError: cleanText(data.lastError, 160) || null,
+    };
+  });
+  return {
+    activeDeviceCount: devices.filter((device) => device.active).length,
+    devices,
+  };
+});
+
+export const sendTestPushNotification = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const account = await accountRef(identity.uid).get();
+  const stored = account.data()?.notificationPreferences ?? {};
+  const displayMode = ['full','discreet','minimal'].includes(String(stored.displayMode ?? ''))
+    ? String(stored.displayMode)
+    : 'discreet';
+
+  const ref = accountRef(identity.uid).collection('notifications').doc();
+  const payload = displayMode === 'minimal'
+    ? { type:'announcement', subtype:'push_test', title:'Nightjar update', message:'Open Nightjar to view this update.' }
+    : { type:'announcement', subtype:'push_test', title:'Nightjar push test', message:'Push notifications are reaching this device successfully.' };
+
+  await ref.set({
+    ...payload,
+    read:false,
+    createdAt:FieldValue.serverTimestamp(),
+  });
+
+  const result = await deliverPushNotification(identity.uid, payload, displayMode, ref.id);
+  if (!result.attempted) {
+    throw new HttpsError('failed-precondition', 'No active Nightjar push device is registered for this account.', { code:'no_push_device' });
+  }
+  return result;
+});
+
 const createNotification = async (userId: string, payload: Record<string, unknown>) => {
   const account = await accountRef(userId).get();
   const preferences = account.data()?.notificationPreferences ?? {};
@@ -4023,6 +4187,14 @@ const createNotification = async (userId: string, payload: Record<string, unknow
     read: false,
     createdAt: FieldValue.serverTimestamp(),
   }, { merge: Boolean(dedupeKey) });
+
+  await deliverPushNotification(userId, safePayload, displayMode, ref.id).catch((error) => {
+    console.warn('Nightjar push delivery failed', {
+      userId,
+      notificationId: ref.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 };
 
 export const moderateRelease = onCall({ region: REGION }, async (request) => {
