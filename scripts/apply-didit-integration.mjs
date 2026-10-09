@@ -190,6 +190,19 @@ patch('firebase.json', source => {
 });
 
 patch('scripts/launch-readiness.mjs', source => {
+  // The Didit launch guard is already committed on this branch. A re-run must
+  // accept it as complete rather than searching for a removed Yoti-era flag.
+  const alreadyMigrated =
+    source.includes("const diditIntegrationWired = backend.includes('startDiditSession(identity.uid)')") &&
+    source.includes("const liveConfigAcknowledged = process.env.DIDIT_LIVE_CONFIG_ACK === 'yes'") &&
+    source.includes('if (!diditIntegrationWired) failures.push(') &&
+    source.includes('if (!liveConfigAcknowledged) failures.push(');
+  if (alreadyMigrated) {
+    if (source.includes('const ageAssuranceConfigured')) {
+      throw new Error('Conflicting legacy and Didit launch guards; manual inspection required.');
+    }
+    return source;
+  }
   let s = source;
   s = replace(s,
     "const ageAssuranceConfigured = /const AGE_ASSURANCE_CONFIGURED\\s*=\\s*true/.test(backend);",
