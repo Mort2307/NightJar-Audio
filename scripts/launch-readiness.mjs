@@ -6,7 +6,8 @@ const backend = fs.readFileSync('functions/src/index.ts','utf8');
 const clientBypass = /const TESTING_AGE_ASSURANCE_BYPASS\s*=\s*true/.test(app);
 const backendBypass = /const TESTING_AGE_ASSURANCE_BYPASS\s*=\s*true/.test(backend);
 const closedBeta = /const CLOSED_BETA\s*=\s*true/.test(backend);
-const ageAssuranceConfigured = /const AGE_ASSURANCE_CONFIGURED\s*=\s*true/.test(backend);
+const diditIntegrationWired = backend.includes('startDiditSession(identity.uid)') && backend.includes('diditPass(data)');
+const liveConfigAcknowledged = process.env.DIDIT_LIVE_CONFIG_ACK === 'yes';
 const failures = [];
 
 if (clientBypass || backendBypass) {
@@ -17,9 +18,8 @@ if (closedBeta) {
   failures.push('Closed Beta registration is still enabled. Set CLOSED_BETA = false before public launch.');
 }
 
-if (!ageAssuranceConfigured) {
-  failures.push('Production age assurance is not configured. AGE_ASSURANCE_CONFIGURED must be true only after the live provider is genuinely configured.');
-}
+if (!diditIntegrationWired) failures.push('Didit session and age-status functions are not wired.');
+if (!liveConfigAcknowledged) failures.push('Confirm the live Didit workflow, webhook, age threshold and production secrets: DIDIT_LIVE_CONFIG_ACK=yes npm run validate:launch');
 
 if (failures.length) {
   console.error('LAUNCH READINESS FAIL');
@@ -29,5 +29,5 @@ if (failures.length) {
 
 console.log('✓ Testing age-assurance bypass disabled.');
 console.log('✓ Closed Beta registration disabled.');
-console.log('✓ Production age assurance configured.');
+console.log('✓ Didit integration wired and operator attestation supplied.');
 console.log('Nightjar launch-readiness access gates passed.');

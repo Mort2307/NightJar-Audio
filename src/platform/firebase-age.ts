@@ -13,6 +13,7 @@ export type AgeStatus = {
   verifiedAt: any;
   reverifyRequired: boolean;
   testAvailable: boolean;
+  sessionActive?: boolean;
   temporaryBypass?: boolean;
   temporaryBypassReason?: string | null;
 };

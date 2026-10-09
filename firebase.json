@@ -18,6 +18,10 @@
     "trailingSlash": false,
     "rewrites": [
       {
+        "source": "/api/webhooks/didit",
+        "function": { "functionId": "diditWebhook", "region": "europe-west2" }
+      },
+      {
         "source": "/brand-logo",
         "function": {
           "functionId": "brandLogoImage",

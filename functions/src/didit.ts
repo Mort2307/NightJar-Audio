@@ -183,12 +183,12 @@ export const processDiditWebhook = onDocumentCreated({
   if (!['status.updated','data.updated'].includes(kind)) {
     // Entity/business/transaction events are durably recorded without granting adult access.
     // A blocked user entity can revoke an existing Didit age pass.
-    if (kind === 'user.status.updated' && ['BLOCKED','FLAGGED'].includes(status)) {
+    if (kind === 'user.status.updated' && payload.environment === 'live' && ['BLOCKED','FLAGGED'].includes(status)) {
       const uid = text(payload.vendorData);
       if (uid) await db().runTransaction(async tx => {
         const ref = ageRef(uid);
         const snap = await tx.get(ref);
-        if (snap.data()?.provider === 'didit') tx.set(ref, {
+        if (snap.data()?.provider === 'didit' && snap.data()?.environment === 'live') tx.set(ref, {
           verified: false, reverifyRequired: true, status: 'PENDING_REVIEW',
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -216,7 +216,8 @@ export const processDiditWebhook = onDocumentCreated({
     const data = current.data() ?? {};
     const lastTime = Number(data.diditEventCreatedAt ?? 0);
     // Older or superseded sessions cannot override the account's newest verification.
-    if (data.sessionId !== sessionId || Number(payload.createdAt) < lastTime) {
+    if (data.sessionId !== sessionId || Number(payload.createdAt) < lastTime ||
+        (Number(payload.createdAt) === lastTime && status === 'Approved')) {
       tx.set(doc.ref, { ignored: true, processedAt: FieldValue.serverTimestamp() }, { merge: true });
       return;
     }
