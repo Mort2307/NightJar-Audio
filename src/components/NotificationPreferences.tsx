@@ -21,6 +21,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
   const [saving, setSaving] = useState(false);
   const [pushStatus, setPushStatus] = useState<any | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
 
   useEffect(() => {
     if (simulationMode) {
@@ -33,12 +34,15 @@ export default function NotificationPreferences({ notify, simulationMode = false
   const refreshPush = async () => {
     if (simulationMode) {
       setPushStatus({ configured:true, supported:true, browserPermission:'granted', activeDeviceCount:1, thisDeviceRegistered:true, devices:[], standalone:true });
+      setPushError(null);
       return;
     }
     try {
       setPushStatus(await nightjarPush.status());
-    } catch {
-      setPushStatus({ configured:nightjarPush.configured(), supported:false, browserPermission:nightjarPush.permission(), activeDeviceCount:0, devices:[] });
+      setPushError(null);
+    } catch (error) {
+      setPushError(error instanceof Error ? error.message.slice(0, 200) : 'A Nightjar push service call failed.');
+      setPushStatus({ configured:nightjarPush.configured(), supported:await nightjarPush.supported().catch(()=>false), browserPermission:nightjarPush.permission(), activeDeviceCount:0, thisDeviceRegistered:false, devices:[] });
     }
   };
 
@@ -125,6 +129,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
           <strong>Phone / device push</strong>
           <span>
             {!pushStatus ? 'Checking this device…'
+              : pushError ? 'Nightjar push service error: ' + pushError
               : !pushStatus.configured ? 'Firebase Web Push still needs its VAPID public key configured.'
               : !pushStatus.supported ? 'This browser does not support Nightjar web push.'
               : pushStatus.browserPermission === 'denied' ? 'Notifications are blocked in this browser or device settings.'
