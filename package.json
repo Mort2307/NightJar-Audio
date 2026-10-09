@@ -20,7 +20,8 @@
     "validate:nightjar-economy": "node scripts/nightjar-economy-contracts.mjs",
     "validate:release-hardening": "node scripts/release-hardening-contracts.mjs && node scripts/finance-simulator-tests.mjs",
     "setup:didit:sandbox": "node scripts/setup-didit-sandbox.mjs",
-    "setup:didit:live": "node scripts/setup-didit-live.mjs"
+    "setup:didit:live": "node scripts/setup-didit-live.mjs",
+    "deploy:didit:pilot": "node scripts/deploy-didit-pilot.mjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",
