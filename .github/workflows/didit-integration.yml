@@ -1,0 +1,34 @@
+name: Didit integration validation
+
+on:
+  push:
+    branches: [didit-verification-integration]
+  workflow_dispatch:
+
+jobs:
+  didit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix functions ci --no-audit --no-fund
+      - name: Apply and validate integration installer
+        run: |
+          node scripts/apply-didit-integration.mjs
+          node scripts/apply-didit-integration.mjs
+          node scripts/didit-contracts.mjs
+          git diff --check
+      - name: Typecheck Nightjar frontend
+        run: npm run typecheck
+      - name: Typecheck Firebase Functions
+        run: npm --prefix functions run check
+      - name: Build frontend and functions
+        run: |
+          npm run build
+          npm --prefix functions run build
