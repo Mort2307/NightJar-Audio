@@ -1050,6 +1050,7 @@ function App() {
     const returnPath = window.location.pathname.startsWith('/people/') ? '/creators' : window.location.pathname;
     window.history.pushState({ nightjarOverlay:'public-profile', returnPath }, '', '/people/' + encodeURIComponent(userId));
     setPublicProfileUserId(userId);
+    scrollNightjarToTop();
   };
 
   const closePublicProfile = () => {
@@ -2034,6 +2035,7 @@ function App() {
     setProfile((current:any) => applyProfileRoleDraft(captureProfileRoleDraft(current, profileEditRole), nextRole));
     setProfileBaseline((current:any) => current ? applyProfileRoleDraft(current, nextRole) : current);
     setProfileEditRole(nextRole);
+    scrollNightjarToTop();
     setProfileLoading(true);
     try {
       if (demoMode) {
@@ -2442,6 +2444,7 @@ function App() {
       await nightjarMedia.submitImage({ kind: 'brand_logo', dataUrl, contentType: file.type, fileName: file.name });
       await loadPendingImages();
       setAdminPanel('images');
+      scrollNightjarToTop();
       notify('Replacement logo uploaded. The preview is shown in Admin; approve it in Image Moderation to make it live.');
     } catch {
       setPendingLogoPreviewUrl(null);
@@ -2684,6 +2687,7 @@ function App() {
     if (!canAdmin) return;
     setAdminPanel(null);
     setAdminPeopleRole(nextRole);
+    scrollNightjarToTop();
   };
 
   const loadAdminApplications = async () => {
@@ -2848,6 +2852,7 @@ function App() {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
     setAdminPanel(panel);
+    scrollNightjarToTop();
     if (panel === 'approvals') void loadAdminApplications();
     if (panel === 'suggestions') void loadAdminCreatorSuggestions();
     if (panel === 'reports') void loadAdminReports();
