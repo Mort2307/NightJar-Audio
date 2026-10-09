@@ -8715,3 +8715,132 @@ textarea:focus-visible,
 @media (max-width:760px) {
   .public-writer-portfolio-grid { grid-template-columns:1fr; }
 }
+
+
+/* NIGHTJAR ADMIN DEDICATED WORKSPACES V1
+   Selecting an administrator tile opens a complete workspace from its own top,
+   not another section below an extremely long dashboard. */
+.admin-page .admin-priority-tile {
+  border-color: rgba(203,181,204,.48);
+  background: linear-gradient(145deg, rgba(68,39,71,.70), rgba(20,16,25,.97));
+}
+.admin-page .admin-tile {
+  min-height: 188px;
+  align-content: start;
+  gap: 12px;
+  padding: clamp(18px,2.3vw,26px);
+}
+.admin-page .admin-tile .mini-label {
+  font-size: clamp(13px,1.1vw,16px);
+  font-weight: 800;
+  line-height: 1.4;
+  color: #ead6ec;
+  letter-spacing: .055em;
+  overflow-wrap: anywhere;
+}
+.admin-page .admin-tile h2 {
+  font-size: clamp(29px,2.7vw,38px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.admin-page .admin-tile p {
+  font-size: clamp(13px,1vw,15px);
+  line-height: 1.6;
+  max-width: none;
+}
+.admin-page .admin-tile > strong {
+  font-size: 13px;
+  line-height: 1.5;
+  flex-wrap: wrap;
+}
+.admin-page .admin-tile:focus-visible,
+.admin-workspace-back:focus-visible { outline: 3px solid #d6b9da; outline-offset: 3px; }
+
+.admin-page .admin-workspace {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  padding: 0;
+  place-items: stretch;
+  background: #100e13;
+  backdrop-filter: none;
+}
+.admin-page .admin-workspace > section {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 clamp(16px,5vw,72px) max(70px,env(safe-area-inset-bottom));
+  border: none;
+  border-radius: 0;
+  background: #100e13;
+  box-shadow: none;
+}
+.admin-page .admin-workspace .admin-modal-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 24px;
+  padding: max(18px,env(safe-area-inset-top)) 0 18px;
+  background: #100e13;
+}
+.admin-page .admin-workspace .admin-modal-head h2 {
+  font-size: clamp(26px,4vw,42px);
+  line-height: 1.2;
+}
+.admin-page .admin-workspace .admin-modal-head p {
+  font-size: clamp(12px,1.1vw,15px);
+  line-height: 1.5;
+}
+.admin-workspace-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.admin-page .people-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  width: 100%;
+  max-width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0 clamp(16px,5vw,72px) max(64px,env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 0;
+  background: #100e13;
+  overscroll-behavior: contain;
+}
+.admin-page .people-drawer::before { display: none; }
+.admin-page .people-drawer .people-drawer-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: max(18px,env(safe-area-inset-top)) 0 18px;
+  background: #100e13;
+}
+.admin-page .people-drawer-head h2 { font-size: clamp(27px,4vw,40px); }
+.admin-page .people-drawer-head p { font-size: clamp(12px,1vw,15px); }
+.admin-page .admin-workspace .notification-preferences {
+  width: min(1040px,100%);
+  margin: 0 auto;
+}
+.admin-page .admin-workspace .notification-preferences h2 { font-size: clamp(24px,3vw,36px); }
+.admin-page .admin-workspace .admin-panel { max-width: 1100px; }
+@media (max-width: 660px) {
+  .admin-page .admin-tile { min-height: 0; }
+  .admin-page .admin-grid { margin-top: 16px; }
+  .admin-page .admin-workspace .admin-modal-head,
+  .admin-page .people-drawer-head { gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .admin-workspace-back { width: 100%; justify-content: flex-start; }
+  .admin-page .admin-workspace > section { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
