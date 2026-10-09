@@ -32,7 +32,22 @@ const vapidKey = String(import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '').trim();
 
 const getRegistration = async () => {
   if (!('serviceWorker' in navigator)) throw new Error('Push notifications are not supported by this browser.');
-  return navigator.serviceWorker.ready;
+  // Register explicitly if the app has not installed its worker yet; avoid an
+  // indefinitely pending Enable button if the worker cannot activate.
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const ready = navigator.serviceWorker.ready;
+    const registration = navigator.serviceWorker.getRegistration('/').then(async existing =>
+      existing || navigator.serviceWorker.register('/service-worker.js', { scope: '/' }));
+    return await Promise.race([
+      Promise.all([ready, registration]).then(([active]) => active),
+      new Promise<ServiceWorkerRegistration>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('Nightjar could not activate its notification service worker. Reload the app and try again.')), 12000);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 };
 
 const platformLabel = () => {
