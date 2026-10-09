@@ -141,10 +141,6 @@ export const diditWebhook = onRequest({
 }, async (request, response) => {
   if (request.method !== 'POST') { response.set('Allow','POST').status(405).end(); return; }
   if (!DIDIT_WEBHOOK_SECRET.value() || !validMode()) { response.status(503).end(); return; }
-  // Signed provider test deliveries must never mutate a real account or satisfy age assurance.
-  if (request.get('X-Didit-Test-Webhook')?.toLowerCase() === 'true') {
-    response.status(200).json({ accepted: true, test: true }); return;
-  }
   const raw = request.rawBody;
   if (!raw || raw.length === 0 || raw.length > 1_000_000) { response.status(413).end(); return; }
   let value: Record<string, any>;
@@ -158,6 +154,10 @@ export const diditWebhook = onRequest({
   if (!verified) {
     console.warn('Rejected Didit signature', { bodySha256: createHash('sha256').update(raw).digest('hex') });
     response.status(401).end(); return;
+  }
+  // Authenticated provider test deliveries must never mutate a real account.
+  if (request.get('X-Didit-Test-Webhook')?.toLowerCase() === 'true') {
+    response.status(200).json({ accepted: true, test: true }); return;
   }
   // Freshness must be taken from the HMAC-authenticated body, NOT the unsigned
   // X-Timestamp header: otherwise a captured payload could be replayed with a
