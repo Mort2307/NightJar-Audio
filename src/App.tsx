@@ -420,6 +420,9 @@ function App() {
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
+  const [ageProviderVerified, setAgeProviderVerified] = useState(false);
+  const [ageProviderStatus, setAgeProviderStatus] = useState('NOT_STARTED');
+  const [ageLivePilotAvailable, setAgeLivePilotAvailable] = useState(false);
   const [ageProvider, setAgeProvider] = useState('didit');
   const [ageEnvironment, setAgeEnvironment] = useState<'sandbox' | 'live'>('sandbox');
   const [ageVerifiedAt, setAgeVerifiedAt] = useState<string | null>(null);
@@ -1461,6 +1464,9 @@ function App() {
       const verified = data.verified === true;
       setAgeVerified(verified);
       setAgeConfigured(data.configured === true);
+      setAgeProviderVerified(data.providerVerified === true);
+      setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
+      setAgeLivePilotAvailable(data.livePilotAvailable === true);
       setAgeProvider(String(data.provider ?? 'not-configured'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
       setAgeVerifiedAt(data.verifiedAt ?? null);
@@ -1476,7 +1482,13 @@ function App() {
     }
   };
 
-  const openAgeCheck = async () => {
+  const openAgeCheck = async (adminPilot = false) => {
+    if (adminPilot) {
+      if (!canAdmin || !ageLivePilotAvailable || ageProviderVerified) {
+        notify('Live Didit testing is limited to approved Nightjar administrators.'); return;
+      }
+      if (!window.confirm('Start a REAL Didit identity check for your own administrator account? This may incur a provider charge. Tester bypass access will remain enabled.')) return;
+    }
     setAgeLoading(true);
     try {
       if (!nightjarAuth.current()) {
@@ -1484,8 +1496,12 @@ function App() {
         return;
       }
       const alreadyVerified = await refreshAgeStatus();
-      if (alreadyVerified) {
-        notify('Your Nightjar account is already age verified. No new check is needed.');
+      if (alreadyVerified && !adminPilot) {
+        notify('Your Nightjar account already has access. No new check is needed.');
+        return;
+      }
+      if (adminPilot && ageProviderVerified) {
+        notify('Didit already verified this administrator. No new check is needed.');
         return;
       }
       const data = await nightjarAge.start();
@@ -1495,6 +1511,7 @@ function App() {
       setAgeTemporaryBypass(data.temporaryBypass === true);
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(Boolean(data.sessionId && !data.verified));
+      if (adminPilot && data.sessionId) setAgeProviderStatus('PENDING');
       if (data.verified === true) {
         setAgeVerified(true);
         setAgeStatus('COMPLETE');
@@ -1518,10 +1535,10 @@ function App() {
   };
 
   useEffect(() => {
-    if (!user || ageStatus !== 'PENDING') return;
+    if (!user || (ageStatus !== 'PENDING' && !(canAdmin && ageSessionActive))) return;
     const timer = window.setInterval(() => { void refreshAgeStatus(); }, 5000);
     return () => window.clearInterval(timer);
-  }, [ageStatus, user]);
+  }, [ageStatus, user, canAdmin, ageSessionActive]);
 
   const signIn = async () => {
     window.location.assign('/account?entry=signin');
@@ -4113,6 +4130,29 @@ function App() {
         {view === 'admin' && canAdmin && !simulationMode && (
           <section className="page-wrap admin-page">
             <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, VA Creator, Writer, Audio Editor and Artist accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
+            <div className="admin-panel" aria-label="Didit age verification pilot">
+              <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
+              <h2>Didit live verification</h2>
+              <p>Existing approved testers retain temporary access. Only a Nightjar administrator can start a real, potentially chargeable verification during the pilot.</p>
+              <div className="demo-state-line">
+                <span className={ageLivePilotAvailable ? 'status-pill' : 'status-pill muted'}>
+                  {ageLivePilotAvailable ? 'LIVE PROVIDER CONNECTED' : 'PROVIDER SETUP REQUIRED'}
+                </span>
+                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>
+                  {ageProviderVerified ? 'DIDIT VERIFIED 18+' : 'DIDIT: ' + ageProviderStatus.replaceAll('_', ' ')}
+                </span>
+              </div>
+              <div className="admin-preview-buttons">
+                <button type="button" disabled={ageLoading || !ageLivePilotAvailable || ageProviderVerified}
+                  onClick={() => void openAgeCheck(true)}>
+                  {ageLoading ? 'Opening Didit…' : ageProviderVerified ? 'Verified — no repeat needed' : ageSessionActive ? 'Resume live verification' : 'Start my live Didit test'}
+                </button>
+                <button type="button" onClick={() => void refreshAgeStatus()}>Check verification result</button>
+                {ageLaunchUrl && !ageProviderVerified &&
+                  <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open existing Didit session</a>}
+              </div>
+              <small>Only an actual approved Didit decision with valid documentary evidence of age 18+ can be stored as permanent verification. Test bypasses are never counted as Didit approval.</small>
+            </div>
             <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
               title="Exceptions first."
