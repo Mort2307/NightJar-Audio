@@ -8731,7 +8731,7 @@ const sendProfessionalApprovalEmailForEvent = async (
     '',
     'Welcome aboard,',
     'The Nightjar Team',
-  ].filter((line) => line !== '').join('\\n\\n');
+  ].filter((line) => line !== '').join('\n\n');
 
   try {
     if (!validEmailAddress(email)) throw new Error('Approved account is missing a valid email address.');
