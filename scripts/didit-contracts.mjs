@@ -25,6 +25,7 @@ for (const [marker,label] of [
   ["vendor_data: uid", 'Firebase UID binding'],
   ["sandbox_scenario: 'approve'", 'Sandbox-only Didit scenario forces failure on a live application key'],
   ["session.session_kind !== 'user'", 'Reject non-user Didit sessions'],
+  ["request.get('X-Didit-Test-Webhook')", 'Signed Didit test deliveries cannot change a real account'],
   ["text(session.vendor_data) !== uid", 'Didit session must echo authenticated Firebase UID'],
   ['session.workflowId !== payload.workflowId', 'Workflow scope check'],
   ["session.environment !== payload.environment", 'Environment scope check'],
