@@ -18,6 +18,7 @@ import CollaborationHub from './CollaborationHub';
 import RoleDashboard, { type RoleDashboardAction } from './RoleDashboard';
 import EditorShowcaseManager from './EditorShowcaseManager';
 import {
+import { scrollNightjarToTop } from '../platform/scroll-navigation';
   EDITOR_COLLABORATION_OPTIONS,
   EDITOR_DELIVERY_OPTIONS,
   EDITOR_PROFICIENCY_OPTIONS,
@@ -111,7 +112,7 @@ export default function EditorStudio({
 
   const selectTab = (next: EditorStudioTab) => {
     setTab(next);
-    window.requestAnimationFrame(() => document.getElementById('editor-studio-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    scrollNightjarToTop();
   };
 
   const toggleFeatured = (id: string, checked: boolean) => {
