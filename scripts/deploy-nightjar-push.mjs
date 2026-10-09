@@ -34,7 +34,7 @@ async function main() {
     !beta.includes('const CLOSED_BETA = true;') ||
     !beta.includes('const DIDIT_LIVE_PILOT_ADMINS_ONLY = true;'))
     throw Error('Closed beta protections are not intact; refusing deployment.');
-  for (const name of ['registerPushDevice','unregisterPushDevice','myPushNotificationStatus','sendTestPushNotification'])
+  for (const name of ['registerPushDevice','unregisterPushDevice','myPushNotificationStatus','sendTestPushNotification','brandInstallManifest','brandLogoImage','brandIcon192','brandIcon512','brandIconMaskable512','syncBrandIconVariants'])
     if (!beta.includes('export const ' + name + ' =')) throw Error('Push function is missing: ' + name);
   console.log('Firebase push public key found; validating Nightjar...');
   run('npm',['run','validate']);
@@ -42,7 +42,7 @@ async function main() {
   run('npm',['--prefix','functions','run','check']);
   run('npm',['--prefix','functions','run','build']);
   run('npm',['run','build']);
-  console.log('\nThis updates ONLY live Nightjar Hosting and device-push functions.',
+  console.log('\nThis updates ONLY live Nightjar Hosting, device-push functions and brand-icon endpoints.',
     '\nDidit API secrets and the closed-beta access flags are unchanged.');
   const rl=createInterface({input:process.stdin,output:process.stdout});
   let answer;
@@ -50,7 +50,7 @@ async function main() {
   finally { rl.close(); }
   if(answer!=='DEPLOY PUSH'){console.log('Cancelled, nothing deployed.');return;}
   run('firebase',['deploy','--only',
-    'functions:registerPushDevice,functions:unregisterPushDevice,functions:myPushNotificationStatus,functions:sendTestPushNotification,hosting',
+    'functions:registerPushDevice,functions:unregisterPushDevice,functions:myPushNotificationStatus,functions:sendTestPushNotification,functions:brandInstallManifest,functions:brandLogoImage,functions:brandIcon192,functions:brandIcon512,functions:brandIconMaskable512,functions:syncBrandIconVariants,hosting',
     '--project',project]);
   console.log('Deployment complete. Open Nightjar Admin > Phone notifications on the DEVICE, enable, then send a test.');
 }
