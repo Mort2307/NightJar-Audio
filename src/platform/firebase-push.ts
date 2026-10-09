@@ -154,7 +154,7 @@ export const nightjarPush = {
     const permission = this.permission();
     const backend = await statusCall();
     const deviceId = savedDevice();
-    // No getToken() here. It performs a network subscription, not a read.
+    // Never start an FCM network registration from a passive status check.
     const thisDeviceRegistered = Boolean(deviceId && permission === 'granted'
       && backend.data.devices.some(device => device.id === deviceId && device.active));
     return {
