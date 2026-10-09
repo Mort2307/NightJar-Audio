@@ -70,7 +70,7 @@ export const startDiditSession = async (uid: string) => {
     let hostname = '';
     try { hostname = new URL(url).hostname; } catch { /* invalid */ }
     if (!sessionId || !['verify.didit.me','verification.didit.me'].includes(hostname) ||
-        !url.startsWith('https://') || session.session_kind !== 'user' ||
+        !url.startsWith('https://') || (session.session_kind && session.session_kind !== 'user') ||
         text(session.vendor_data) !== uid ||
         text(session.workflow_id) !== DIDIT_WORKFLOW_ID.value()) throw new Error('Invalid Didit session response');
     await db().runTransaction(async tx => {
@@ -141,6 +141,10 @@ export const diditWebhook = onRequest({
 }, async (request, response) => {
   if (request.method !== 'POST') { response.set('Allow','POST').status(405).end(); return; }
   if (!DIDIT_WEBHOOK_SECRET.value() || !validMode()) { response.status(503).end(); return; }
+  // Signed provider test deliveries must never mutate a real account or satisfy age assurance.
+  if (request.get('X-Didit-Test-Webhook')?.toLowerCase() === 'true') {
+    response.status(200).json({ accepted: true, test: true }); return;
+  }
   const raw = request.rawBody;
   if (!raw || raw.length === 0 || raw.length > 1_000_000) { response.status(413).end(); return; }
   let value: Record<string, any>;
