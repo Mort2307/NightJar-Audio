@@ -46,6 +46,11 @@ const standalone = () =>
   window.matchMedia?.('(display-mode: standalone)').matches === true
   || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 
+const deviceTokenId = async (token: string) => {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 16);
+};
+
 export const nightjarPush = {
   configured() {
     return Boolean(vapidKey);
@@ -107,12 +112,34 @@ export const nightjarPush = {
   },
 
   async status() {
+    const supported = await this.supported();
+    const permission = this.permission();
     const backend = await statusCall();
+    let thisDeviceRegistered = false;
+    let thisDeviceError: string | null = null;
+    // Backend device count alone cannot tell if this particular phone is registered.
+    // Read the existing browser push token without requesting permission.
+    if (supported && vapidKey && permission === 'granted') {
+      try {
+        const registration = await getRegistration();
+        const token = await getToken(getMessaging(firebaseApp), {
+          vapidKey, serviceWorkerRegistration: registration,
+        });
+        if (token) {
+          const id = await deviceTokenId(token);
+          thisDeviceRegistered = backend.data.devices.some(device => device.id === id && device.active);
+        }
+      } catch (error) {
+        thisDeviceError = error instanceof Error ? error.message.slice(0, 200) : 'Device token lookup failed.';
+      }
+    }
     return {
       configured: Boolean(vapidKey),
-      supported: await this.supported(),
-      browserPermission: this.permission(),
+      supported,
+      browserPermission: permission,
       activeDeviceCount: backend.data.activeDeviceCount,
+      thisDeviceRegistered,
+      thisDeviceError,
       devices: backend.data.devices,
       standalone: standalone(),
     };
