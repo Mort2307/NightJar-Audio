@@ -140,7 +140,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   };
 
   const loadTranscript = async (force = false) => {
-    if (!track?.id || transcriptBusy || (!force && transcriptText)) return;
+    if (!track?.id || (!force && (transcriptBusy || transcriptText))) return;
     const requestId = ++transcriptRequestRef.current;
     const releaseId = track.id;
     if (simulationMode) {
@@ -162,7 +162,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         ? 'A Nightjar subscription is required to read this transcript.'
         : 'This transcript could not be opened.');
     } finally {
-      setTranscriptBusy(false);
+      if (requestId === transcriptRequestRef.current) setTranscriptBusy(false);
     }
   };
 
