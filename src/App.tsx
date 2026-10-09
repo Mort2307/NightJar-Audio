@@ -232,6 +232,9 @@ type Track = {
   audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
+  transcriptAvailable?: boolean;
+  transcriptLanguage?: string;
+  transcriptWordCount?: number;
   creatorUserId?: string;
   genre?: string;
   tags?: string[];
@@ -1094,6 +1097,9 @@ function App() {
         audioAvailable: release.audioAvailable === true,
         audioUrl: null,
         artworkUrl: release.artworkUrl ?? null,
+        transcriptAvailable: release.transcriptAvailable === true,
+        transcriptLanguage: release.transcriptLanguage ?? 'en',
+        transcriptWordCount: Math.max(0, Number(release.transcriptWordCount ?? 0)),
         creatorUserId: release.creatorUserId,
         genre: release.genre ?? '',
         tags: release.tags ?? [],
@@ -4366,6 +4372,9 @@ function releaseToTrack(release: any): Track {
     audioAvailable: release.audioAvailable === true,
     audioUrl: null,
     artworkUrl: release.artworkUrl ?? null,
+    transcriptAvailable: release.transcriptAvailable === true,
+    transcriptLanguage: release.transcriptLanguage ?? 'en',
+    transcriptWordCount: Math.max(0, Number(release.transcriptWordCount ?? 0)),
     creatorUserId: release.creatorUserId,
     genre: release.genre ?? '',
     tags: release.tags ?? [],
