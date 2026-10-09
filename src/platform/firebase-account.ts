@@ -58,7 +58,7 @@ const setActiveRoleCall = httpsCallable<{ role: 'listener' | NightjarProfessiona
   approvedProfessionalRoles: NightjarProfessionalRole[];
 }>(functions, 'setActiveNightjarRole');
 
-const stageRoleCall = httpsCallable<{ role?: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles?: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; referralCode?: string }, { role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; professionalRoles: NightjarProfessionalRole[]; staged: boolean }>(functions, 'stageRegistrationIntent');
+const stageRoleCall = httpsCallable<{ role?: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles?: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; referralCode?: string; legalAcceptances?: Array<{ id: string; version: string; accepted: true }> }, { role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; professionalRoles: NightjarProfessionalRole[]; staged: boolean }>(functions, 'stageRegistrationIntent');
 
 export const nightjarAccount = {
   async registrationAccess(email: string) {
@@ -70,9 +70,13 @@ export const nightjarAccount = {
     return result.data;
   },
 
-  async stageRegistration(roleOrRoles: 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[], referralCode = '') {
+  async stageRegistration(
+    roleOrRoles: 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[],
+    referralCode = '',
+    legalAcceptances: Array<{ id: string; version: string; accepted: true }> = [],
+  ) {
     const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles];
-    const result = await stageRoleCall({ roles, ...(referralCode ? { referralCode } : {}) });
+    const result = await stageRoleCall({ roles, legalAcceptances, ...(referralCode ? { referralCode } : {}) });
     return result.data;
   },
 
