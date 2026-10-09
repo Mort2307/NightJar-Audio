@@ -4521,11 +4521,20 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
   const watermark = ['NIGHTJAR', sessionId, accountId ? 'ACCOUNT ' + accountId.slice(-10) : '', script.id ? 'SCRIPT ' + String(script.id).slice(-10) : ''].filter(Boolean).join(' · ');
   const lastCaptureSignalAt = useRef(0);
 
+  // The only intentional body scroll lock is the active protected reader.
+  // Keep it independent of logging/notification callback changes, so a
+  // routine re-render cannot tear down and recreate the document scroll lock.
   useEffect(() => {
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     document.body.classList.add('nightjar-protected-reader-open');
+    return () => {
+      document.body.style.overflow = original;
+      document.body.classList.remove('nightjar-protected-reader-open');
+    };
+  }, []);
 
+  useEffect(() => {
     const eventContext = (detectionSource?: string, detectionConfidence?: string) => ({
       readerSessionId: sessionId,
       visibilityState: document.visibilityState,
@@ -4633,8 +4642,6 @@ function ProtectedReader({ data, close, record, notify }: { data: any; close: ()
     window.addEventListener('nightjar:native-screen-capture', handleNativeScreenCapture as EventListener);
 
     return () => {
-      document.body.style.overflow = original;
-      document.body.classList.remove('nightjar-protected-reader-open');
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('beforeprint', handleBeforePrint);

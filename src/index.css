@@ -43,7 +43,9 @@ button:focus-visible {
 
 .app-shell {
   min-height: 100vh;
-  overflow-x: hidden;
+  /* Clip horizontal artwork without creating an accidental vertical scroll container. */
+  overflow-x: clip;
+  overflow-y: visible;
   background:
     radial-gradient(circle at 74% 0%, rgba(100, 47, 83, 0.16), transparent 28%),
     radial-gradient(circle at 10% 56%, rgba(75, 54, 88, 0.09), transparent 26%),
