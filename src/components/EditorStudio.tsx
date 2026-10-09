@@ -17,8 +17,8 @@ import SearchableMultiSelect from './SearchableMultiSelect';
 import CollaborationHub from './CollaborationHub';
 import RoleDashboard, { type RoleDashboardAction } from './RoleDashboard';
 import EditorShowcaseManager from './EditorShowcaseManager';
-import {
 import { scrollNightjarToTop } from '../platform/scroll-navigation';
+import {
   EDITOR_COLLABORATION_OPTIONS,
   EDITOR_DELIVERY_OPTIONS,
   EDITOR_PROFICIENCY_OPTIONS,
