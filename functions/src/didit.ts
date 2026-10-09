@@ -113,9 +113,17 @@ export async function startDiditAgeAssurance(uid: string) {
       || (result.session_kind && result.session_kind !== 'user')) {
       throw new Error('Didit returned an unexpected session configuration.');
     }
-    await sessions().doc(result.session_id).create({
-      userId: uid, workflowId: config.workflow(), environment: config.environment(),
-      status: 'Not Started', createdAt: FieldValue.serverTimestamp(),
+    const sessionDoc = sessions().doc(result.session_id);
+    await db().runTransaction(async (tx) => {
+      const prior = await tx.get(sessionDoc);
+      if (prior.exists && prior.data()?.userId !== uid) {
+        throw new Error('Didit attempted to reuse a session for another account.');
+      }
+      tx.set(sessionDoc, {
+        userId: uid, workflowId: config.workflow(), environment: config.environment(),
+        status: 'Not Started', updatedAt: FieldValue.serverTimestamp(),
+        ...(prior.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+      }, { merge: true });
     });
     await ref.set({
       provider: 'didit', sessionId: result.session_id, sessionEnvironment: config.environment(),
