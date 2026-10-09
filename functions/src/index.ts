@@ -3427,6 +3427,41 @@ const decorateReleaseAccess = (
   };
 };
 
+type TranscriptPreferenceMode = 'on_demand' | 'always_open';
+
+const cleanTranscriptPreferenceMode = (value: unknown): TranscriptPreferenceMode =>
+  value === 'always_open' ? 'always_open' : 'on_demand';
+
+const cleanTranscriptTextSize = (value: unknown) =>
+  ['standard','large','extra_large'].includes(String(value)) ? String(value) : 'standard';
+
+const accessibilityPreferencesPayload = (data: Record<string, any>) => ({
+  transcriptMode: cleanTranscriptPreferenceMode(data.transcriptMode),
+  transcriptFollowPlayback: data.transcriptFollowPlayback !== false,
+  transcriptTextSize: cleanTranscriptTextSize(data.transcriptTextSize),
+  transcriptHighContrast: data.transcriptHighContrast === true,
+});
+
+export const getAccessibilityPreferences = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const account = await accountRef(identity.uid).get();
+  return {
+    preferences: accessibilityPreferencesPayload(account.data()?.accessibilityPreferences ?? {}),
+  };
+});
+
+export const saveAccessibilityPreferences = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const preferences = accessibilityPreferencesPayload(input);
+  await accountRef(identity.uid).set({
+    accessibilityPreferences: preferences,
+    accessibilityPreferencesUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { preferences };
+});
+
 export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -3480,6 +3515,23 @@ const requireAccountRole = async (
   return { ...identity, role: allowedRole as AccountRole, activeRole: activeRole || 'listener', approvedProfessionalRoles, status };
 };
 
+const cleanReleaseTranscript = (value: unknown) =>
+  String(value ?? '')
+    .replace(/\u0000/g, '')
+    .replace(/\r\n?/g, '\n')
+    .trim()
+    .slice(0, 120000);
+
+const cleanTranscriptLanguage = (value: unknown) => {
+  const language = cleanText(value, 35).replace(/[^A-Za-z0-9-]/g, '');
+  return language || 'en';
+};
+
+const transcriptWordCount = (value: unknown) => {
+  const text = cleanReleaseTranscript(value);
+  return text ? text.split(/\s+/).filter(Boolean).length : 0;
+};
+
 const releasePayload = (data: Record<string, unknown>, id: string) => ({
   id,
   creatorUserId: data.creatorUserId ?? null,
@@ -3507,6 +3559,10 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   episodeNumber: typeof data.episodeNumber === 'number' ? Math.max(0, Math.round(data.episodeNumber)) : null,
   nightjarOriginal: data.nightjarOriginal === true,
   productionNote: cleanText(data.productionNote, 1800) || null,
+  transcriptAvailable: Boolean(cleanReleaseTranscript(data.transcriptText)),
+  transcriptLanguage: cleanTranscriptLanguage(data.transcriptLanguage),
+  transcriptWordCount: transcriptWordCount(data.transcriptText),
+  transcriptAccessibilityReviewed: data.transcriptAccessibilityReviewed === true,
   communityLikeCount: Math.max(0, Number(data.communityLikeCount ?? 0)),
   communityLoveCount: Math.max(0, Number(data.communityLoveCount ?? 0)),
   communityReactionCount: Math.max(0, Number(data.communityReactionCount ?? 0)),
@@ -3574,6 +3630,10 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     episodeNumber: cleanEpisodeNumber(input.episodeNumber),
     nightjarOriginal: false,
     productionNote: cleanText(input.productionNote, 1800) || null,
+    transcriptText: cleanReleaseTranscript(input.transcriptText),
+    transcriptLanguage: cleanTranscriptLanguage(input.transcriptLanguage),
+    transcriptAccessibilityReviewed: input.transcriptAccessibilityReviewed === true,
+    transcriptUpdatedAt: cleanReleaseTranscript(input.transcriptText) ? FieldValue.serverTimestamp() : null,
     durationMinutes: 0,
     audioStoragePath: null,
     artworkAssetId: null,
@@ -3618,6 +3678,12 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     seriesTitle: typeof input.seriesTitle !== 'undefined' ? cleanText(input.seriesTitle, 160) || null : current.seriesTitle ?? null,
     episodeNumber: typeof input.episodeNumber !== 'undefined' ? cleanEpisodeNumber(input.episodeNumber) : cleanEpisodeNumber(current.episodeNumber),
     productionNote: typeof input.productionNote !== 'undefined' ? cleanText(input.productionNote, 1800) || null : current.productionNote ?? null,
+    transcriptText: typeof input.transcriptText !== 'undefined' ? cleanReleaseTranscript(input.transcriptText) : cleanReleaseTranscript(current.transcriptText),
+    transcriptLanguage: typeof input.transcriptLanguage !== 'undefined' ? cleanTranscriptLanguage(input.transcriptLanguage) : cleanTranscriptLanguage(current.transcriptLanguage),
+    transcriptAccessibilityReviewed: typeof input.transcriptAccessibilityReviewed !== 'undefined'
+      ? input.transcriptAccessibilityReviewed === true
+      : current.transcriptAccessibilityReviewed === true,
+    transcriptUpdatedAt: typeof input.transcriptText !== 'undefined' ? FieldValue.serverTimestamp() : current.transcriptUpdatedAt ?? null,
     durationMinutes: typeof input.durationMinutes === 'number' && Number.isFinite(input.durationMinutes)
       ? Math.max(0, Math.min(1440, input.durationMinutes))
       : current.durationMinutes ?? 0,
@@ -3740,6 +3806,20 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
   if (!data.title || !data.description || !data.category || !data.audioStoragePath) {
     throw new HttpsError('failed-precondition', 'Complete title, description, category and audio before submitting.');
   }
+  if (!cleanReleaseTranscript(data.transcriptText)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Add a final-release transcript before submitting. Nightjar requires a text alternative for prerecorded audio.',
+      { code:'transcript_required' },
+    );
+  }
+  if (data.transcriptAccessibilityReviewed !== true) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Confirm that the transcript reflects the finished audio, including meaningful non-speech sound cues where relevant.',
+      { code:'transcript_review_required' },
+    );
+  }
   if (data.pendingArtworkAssetId && data.pendingArtworkStatus === 'pending') {
     throw new HttpsError('failed-precondition', 'Artwork moderation must finish before release submission.');
   }
@@ -3844,6 +3924,53 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
     expires: Date.now() + 15 * 60 * 1000,
   });
   return { releaseId, url, expiresInSeconds: 900, accessReason:access.reason };
+});
+
+export const getReleaseTranscript = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+
+  const snapshot = await releaseRef(releaseId).get();
+  const data = snapshot.data();
+  if (!data) throw new HttpsError('not-found', 'Release transcript not found.');
+
+  const transcriptText = cleanReleaseTranscript(data.transcriptText);
+  if (!transcriptText) throw new HttpsError('not-found', 'This release does not have a transcript yet.');
+
+  const ownDraft = data.creatorUserId === identity.uid;
+  const adminPreview = identity.admin === true;
+  if (data.status !== 'released' && !ownDraft && !adminPreview) {
+    throw new HttpsError('not-found', 'Release transcript not found.');
+  }
+
+  let accessReason: 'admin' | 'credited_work' | 'subscription' = identity.admin
+    ? 'admin'
+    : 'credited_work';
+
+  if (data.status === 'released' && !identity.admin) {
+    const subscription = await activeListeningSubscriptionFor(identity.uid);
+    const access = playbackAccessFor(data, identity.uid, { subscription });
+    if (!access.allowed) {
+      throw new HttpsError(
+        'failed-precondition',
+        'A Nightjar subscription is required to read transcripts for catalogue work you are not credited on.',
+        { code:'subscription_required', releaseId },
+      );
+    }
+    accessReason = access.reason as 'credited_work' | 'subscription';
+  }
+
+  return {
+    releaseId,
+    title: cleanText(data.title, 160),
+    transcript: transcriptText,
+    language: cleanTranscriptLanguage(data.transcriptLanguage),
+    wordCount: transcriptWordCount(transcriptText),
+    accessibilityReviewed: data.transcriptAccessibilityReviewed === true,
+    accessReason,
+  };
 });
 
 export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
