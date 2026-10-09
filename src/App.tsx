@@ -4407,7 +4407,7 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
     <div className="track-body">
       <div className="track-type"><span>{track.creator}</span><span>{track.duration}</span></div>
       <h3>{track.title}</h3>
-      {(track.seriesTitle || track.contentRating || track.nightjarOriginal) && <div className="track-meta-line">{track.nightjarOriginal && <span>NIGHTJAR ORIGINAL</span>}{track.seriesTitle && <span>{track.seriesTitle}{track.episodeNumber != null ? ' · Episode ' + track.episodeNumber : ''}</span>}<span>{String(track.contentRating ?? 'adult').toUpperCase()}</span></div>}
+      {(track.seriesTitle || track.contentRating || track.nightjarOriginal || track.transcriptAvailable) && <div className="track-meta-line">{track.nightjarOriginal && <span>NIGHTJAR ORIGINAL</span>}{track.transcriptAvailable && <span>TRANSCRIPT AVAILABLE</span>}{track.seriesTitle && <span>{track.seriesTitle}{track.episodeNumber != null ? ' · Episode ' + track.episodeNumber : ''}</span>}<span>{String(track.contentRating ?? 'adult').toUpperCase()}</span></div>}
       <p>{track.descriptor}</p>
       {track.productionNote && <p className="track-production-note"><strong>Behind the scenes:</strong> {track.productionNote}</p>}
       {!!track.contributors?.length && <div className="track-credit-line">{track.contributors.slice(0,4).map((credit)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}
