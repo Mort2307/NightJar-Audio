@@ -8855,3 +8855,34 @@ textarea:focus-visible,
   }
   .nj-application-tabs > button { flex: 1 1 135px; justify-content: space-between; }
 }
+
+
+/* Consolidated Nightjar Owner Console: navigation first, separate workpages. */
+.admin-page:not(.admin-detail-active) .admin-grid { margin-top: 20px; }
+.admin-page:not(.admin-detail-active) .admin-grid .admin-tile {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.nj-admin-operations-workpage,
+.nj-admin-security-workpage {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+.nj-admin-operations-workpage > *,
+.nj-admin-security-workpage > * {
+  min-width: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.nj-admin-operations-workpage .admin-owner-summary {
+  width: 100%;
+}
+.admin-page .admin-full-page .admin-data-list {
+  max-width: 100%;
+}
+.admin-page .admin-full-page .admin-data-row,
+.admin-page .admin-full-page .professional-application-row {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
