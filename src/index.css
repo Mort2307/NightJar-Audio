@@ -5302,11 +5302,34 @@ select:disabled {
   grid-template-columns:repeat(4,minmax(0,1fr));
   gap:8px;
 }
-.editor-studio-metrics > div {
+.editor-studio-metrics > :is(div,button) {
   padding:13px;
   border:1px solid var(--line-soft);
   border-radius:14px;
   background:rgba(255,255,255,.012);
+}
+.editor-studio-metrics > button {
+  position:relative;
+  width:100%;
+  appearance:none;
+  font:inherit;
+  text-align:left;
+  color:inherit;
+  cursor:pointer;
+  padding-right:31px;
+  transition:border-color .16s ease, background-color .16s ease;
+}
+.editor-studio-metrics > button:hover,
+.editor-studio-metrics > button:focus-visible {
+  border-color:rgba(203,181,204,.4);
+  background:rgba(203,181,204,.08);
+}
+.editor-studio-metrics > button > svg {
+  position:absolute;
+  right:11px;
+  top:11px;
+  color:var(--plum-soft);
+  pointer-events:none;
 }
 .editor-studio-metrics span,
 .editor-studio-metrics strong,
