@@ -2,7 +2,7 @@
   "repository": "Mort2307/NightJar-Audio",
   "auditedOn": "2026-10-10",
   "candidateBranch": "fix/nightjar-release-reconciliation-20261010",
-  "notice": "Decisions require an evidence-backed review. 'Included' means verified in candidate Git ancestry, not production deployment or owner approval. Pending PRs remain release blockers; do not merge unrelated changes automatically.",
+  "notice": "All listed PRs have a documented technical integration disposition. 'Superseded' means source-level replacement, not deployed or legally approved. 'Deferred' means unique work remains unshipped and must not be dropped or automatically merged. Public and beta release decisions remain subject to real CI, provider, legal, mobile, and owner acceptance gates.",
   "items": [
     {
       "number": 40,
@@ -39,10 +39,10 @@
     {
       "number": 36,
       "branch": "feature/legal-centre-didit-beta-pilot-20261009",
-      "decision": "pending_review",
-      "reason": "Legal centre and Didit beta requires explicit age-compliance approval",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "superseded",
+      "reason": "Technical source review: PR #40 contains the same Didit verification adapter (functions/src/didit.ts), supporting nightjars gate, live/sandbox setup scripts and Legal Centre, and adds beta legal/Didit regression coverage. Earlier legal document working drafts are not approved public terms. Source branch is superseded, NOT a certification of UK Online Safety Act compliance, adult workflow adequacy, signed live webhooks or legal terms. Public release remains blocked by independent legal and Didit production acceptance gates.",
+      "reviewedBy": "Nightjar consolidated technical source review (ChatGPT; not owner/legal approval)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 35,
@@ -63,50 +63,50 @@
     {
       "number": 29,
       "branch": "didit-verification-integration",
-      "decision": "pending_review",
-      "reason": "Draft; do not automatically combine age-provider backends",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "superseded",
+      "reason": "Technical source review: PR #40 now includes byte-identical approved-logo icon generation, Firebase push client, device-specific notification UI, guarded Didit adapter and live setup script; has separate AdminInstallBranding UI, branded manifest/image endpoints and explicit opt-in FCM/401 handling. The original patcher and push-only deploy scripts are branch-specific and intentionally not merged. Admin portal/layout and install/push device behaviour still require real-device acceptance; production Didit configuration remains an independent launch gate.",
+      "reviewedBy": "Nightjar consolidated technical source review (ChatGPT; not owner/legal approval)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 28,
       "branch": "feature/didit-age-assurance-20261009",
-      "decision": "pending_review",
-      "reason": "Draft; reconcile overlapping Didit implementation",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "superseded",
+      "reason": "Earlier draft Didit backend overlaps and conflicts with the more recent guarded implementation in PR #40. Its production/sandbox field semantics and processing code differ; combining both would create competing webhook/session paths. PR #40 has explicit live environment pass, signed webhook/event validation, documentary adult evidence and anti-replay contracts. Draft PR #28 is technically superseded, not merged; genuine provider testing and UK age assurance legal signoff are still mandatory.",
+      "reviewedBy": "Nightjar consolidated technical source review (ChatGPT; not owner/legal approval)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 14,
       "branch": "codex/production-access-mobile-pass",
-      "decision": "pending_review",
-      "reason": "Draft; assess entitlement/player and production launch safety",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "deferred",
+      "reason": "Distinct draft production billing and mobile-player proposal. PR #40 now includes the PR #14 verified, unexpired, account-owned subscription helper and its unit tests to close an identified status-only playback entitlement gap; the remaining production payment-provider integration and mobile-player changes are NOT declared shipped. Defer that commercial scope until processor verification, transcript/audio protected access integration tests, device QA and explicit launch approval. Credited work and administrator access remain unchanged.",
+      "reviewedBy": "Nightjar consolidated technical source review (ChatGPT; not owner/legal approval)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 9,
       "branch": "improvement/full-system-hardening-2026-09",
-      "decision": "pending_review",
-      "reason": "Legacy hardening PR; require supersession review",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "deferred",
+      "reason": "Older wide hardening/intelligence branch is based on a retired appdeploy client/shim and backend layout, and contains legacy RecommendationFeedback, FollowingList, SecurityReviewPanel and test work not present byte-for-byte in the current Firebase architecture. An automatic merge would overwrite newer security and role contracts. This branch's unique feedback/security ideas are deferred for a separately scoped Firebase-native parity and security review; they are NOT claimed implemented or safe to discard.",
+      "reviewedBy": "Nightjar consolidated technical source review (ChatGPT; not owner/legal approval)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 8,
       "branch": "improvement/full-app-pass-2026-09-27",
-      "decision": "pending_review",
-      "reason": "Older intelligence PR; require supersession review",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "deferred",
+      "reason": "Legacy recommendation/listening intelligence and local appdeploy shim/test plan differ from the current Firebase app. Newer Nightjar recommendations and reactions exist, but parity with the old RecommendationFeedback API and listener telemetry is unverified. Defer the old implementation to a separate Firebase-native feature parity exercise; do not merge stale local-shim code or claim identical functionality.",
+      "reviewedBy": "Nightjar consolidated technical source review (ChatGPT; not owner/legal approval)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 7,
       "branch": "full-app-improvement-pass",
-      "decision": "pending_review",
-      "reason": "Older feedback/telemetry PR; require supersession review",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "deferred",
+      "reason": "Earlier feedback, CreatorDirectory, LiveReleaseCard and listening intelligence components remain distinct from current Firebase catalogue discovery and live track cards. Older appdeploy/local-shim APIs are not compatible with the controlled multi-role/age-gated candidate as-is. Defer these independent UX/telemetry prototypes for a documented Firebase-native migration; no functionality is claimed merged solely because newer UI exists.",
+      "reviewedBy": "Nightjar consolidated technical source review (ChatGPT; not owner/legal approval)",
+      "reviewedAt": "2026-10-10"
     }
   ]
 }
