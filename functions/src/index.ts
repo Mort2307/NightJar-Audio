@@ -4839,6 +4839,38 @@ export const trendingReleases = onCall({ region: REGION }, async (request) => {
   return { trending };
 });
 
+const adminActionNotifications = async () => {
+  const [intake, imageCount, releaseCount, reviewCount] = await Promise.all([
+    db.collection('professionalApplications').where('status', 'in', ['banked','waitlist']).limit(250).get(),
+    db.collection('imageAssets').where('status', '==', 'pending').count().get(),
+    db.collection('releases').where('status', '==', 'pending_review').count().get(),
+    db.collection('releaseReviews').where('status', '==', 'pending').count().get(),
+  ]);
+  const professionalCount = intake.docs.filter((doc) => {
+    const item = doc.data() ?? {};
+    const approved = new Set(cleanProfessionalRoles(item.approvedRoles));
+    return cleanProfessionalRoles(item.requestedRoles).some((role) => !approved.has(role));
+  }).length;
+  const counts = [
+    { id:'admin_action_professionals', subtype:'professional_approval', count:professionalCount, label:'professional role application', route:'/admin/approvals' },
+    { id:'admin_action_images', subtype:'image_verification', count:imageCount.data().count, label:'image awaiting verification', route:'/admin/images' },
+    { id:'admin_action_releases', subtype:'release_verification', count:releaseCount.data().count, label:'release awaiting moderation', route:'/admin?work=release-moderation' },
+    { id:'admin_action_reviews', subtype:'review_verification', count:reviewCount.data().count, label:'review awaiting moderation', route:'/admin/reviews' },
+  ];
+  return counts.filter((item) => item.count > 0).map((item) => ({
+    id:item.id,
+    type:'admin_action',
+    subtype:item.subtype,
+    title:item.count + ' ' + item.label + (item.count === 1 ? '' : 's'),
+    message:'Administrator action required. Open the relevant Nightjar review queue.',
+    count:item.count,
+    route:item.route,
+    actionRequired:true,
+    read:false,
+    createdAt:new Date().toISOString(),
+  }));
+};
+
 export const listNotifications = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, account] = await Promise.all([
@@ -4882,13 +4914,22 @@ export const listNotifications = onCall({ region: REGION }, async (request) => {
     };
   };
 
-  const notifications = snapshot.docs
+  const regularNotifications = snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
     .filter((item: any) => enabled(item))
     .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
     .slice(0, 30)
     .map((item: any) => present(item));
-  return { notifications, unreadCount: notifications.filter((item: any) => item.read !== true).length };
+  const ownerActions = identity.admin ? await adminActionNotifications().catch((error) => {
+    console.warn('Nightjar owner action summary temporarily unavailable', error);
+    return [] as Array<Record<string, unknown>>;
+  }) : [];
+  const notifications = [...ownerActions, ...regularNotifications].slice(0, 34);
+  return {
+    notifications,
+    unreadCount: notifications.filter((item: any) => item.read !== true).length,
+    ownerActionCount: ownerActions.length,
+  };
 });
 
 export const markNotificationRead = onCall({ region: REGION }, async (request) => {
