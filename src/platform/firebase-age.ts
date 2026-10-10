@@ -16,6 +16,7 @@ export type AgeStatus = {
   providerVerified?: boolean;
   providerStatus?: string;
   livePilotAvailable?: boolean;
+  diditPilotEligible?: boolean;
   sessionActive?: boolean;
   temporaryBypass?: boolean;
   temporaryBypassReason?: string | null;
