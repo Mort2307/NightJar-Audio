@@ -119,7 +119,8 @@ export default function UserProfileStudio({
             {profile.avatarUrl ? <img src={profile.avatarUrl} alt="Approved profile" loading="lazy" decoding="async"/> : initials}
           </span>
           <div>
-            <label className="secondary-button upload-label"><ImagePlus size={14}/> {profileImageBusy ? 'Working…' : profile.avatarUrl ? 'Replace portrait' : 'Add portrait'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file) void onUploadAvatar(file); event.currentTarget.value='';}}/></label>
+            <label className="secondary-button upload-label"><ImagePlus size={14}/> {profileImageBusy ? 'Optimising photo…' : profile.avatarUrl ? 'Replace portrait' : 'Add portrait'}<input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file) void onUploadAvatar(file); event.currentTarget.value='';}}/></label>
+             <small className="profile-photo-optimisation-note">Nightjar automatically resizes photos to 768 px or less and compresses them to about 224 KB before uploading. Photos can be up to 20 MB.</small>
             {(profile.avatarUrl || profile.pendingAvatarAssetId) && <button className="ghost-button" disabled={profileImageBusy} onClick={()=>void onRemoveAvatar()}>Remove</button>}
             {profile.pendingAvatarStatus === 'pending' && <small>New portrait awaiting moderation.</small>}
             {profile.pendingAvatarStatus === 'rejected' && <small>The submitted portrait was not approved.</small>}
