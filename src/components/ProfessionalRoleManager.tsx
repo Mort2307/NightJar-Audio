@@ -27,17 +27,29 @@ export default function ProfessionalRoleManager({
   const [portfolioUrl, setPortfolioUrl] = useState('');
   const [socialUrl, setSocialUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState<NightjarProfessionalRole | null>(null);
 
   const load = async () => {
+    setLoading(true);
+    setLoadError('');
     try {
       setState(await nightjarAccount.professionalRoles());
     } catch {
-      notify('Professional role access could not be loaded.');
+      setLoadError('Your roles could not be loaded. Please retry.');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     void load();
+    const refreshWhenActive = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', refreshWhenActive);
+    return () => document.removeEventListener('visibilitychange', refreshWhenActive);
   }, []);
 
   const toggle = (role: NightjarProfessionalRole) =>
@@ -62,6 +74,7 @@ export default function ProfessionalRoleManager({
         socialUrl,
       });
       notify(result.message);
+      setConfirmRemove(null);
       setSelected([]);
       setStatement('');
       setExperience('');
@@ -80,6 +93,7 @@ export default function ProfessionalRoleManager({
     try {
       await nightjarAccount.removeProfessionalRole(role);
       notify(labels[role] + ' removed from this account.');
+      setConfirmRemove(null);
       await load();
     } catch {
       notify('That professional role could not be removed.');
@@ -183,16 +197,40 @@ export default function ProfessionalRoleManager({
     </>
   );
 
+  if (!state) {
+    return (
+      <article className={compact ? 'panel professional-role-manager compact' : 'panel professional-role-manager'} aria-busy={loading}>
+        <h2>My Roles</h2>
+        <p role={loadError ? 'alert' : 'status'}>{loadError || 'Loading your approved and pending roles…'}</p>
+        {loadError && <button type="button" className="secondary-button" onClick={() => void load()}>Retry loading roles</button>}
+      </article>
+    );
+  }
+
   return (
     <article className={compact ? 'panel professional-role-manager compact' : 'panel professional-role-manager'}>
       <div className="professional-role-head">
         <div>
           <span className="mini-label">ONE ACCOUNT · MULTIPLE CREATIVE ROLES</span>
-          <h2>Your Nightjar roles</h2>
+          <h2>My Roles</h2>
           <p>Listener access is always available. Professional roles are approved separately and can be combined on one account.</p>
         </div>
         <ShieldCheck size={20} />
       </div>
+
+      <div className="professional-role-status-summary">
+        <p className="panel-note" aria-live="polite">
+          {state.approvedProfessionalRoles.length} approved professional role{state.approvedProfessionalRoles.length === 1 ? '' : 's'}
+          {' / '}
+          {state.pendingProfessionalRoles.length} awaiting review.
+          Your Listener role is always available.
+        </p>
+        <button type="button" className="secondary-button" onClick={() => void load()} disabled={busy || loading}>
+          {loading ? 'Checking…' : 'Check for updates'}
+        </button>
+      </div>
+      {loadError && <p role="alert">{loadError}</p>}
+      {state.applicationStatus === 'rejected' && <p className="panel-note">Your previous professional application was not approved. You can apply again for any available role.</p>}
 
       <div className="professional-role-list">
         <div className="professional-role-row">
@@ -224,13 +262,22 @@ export default function ProfessionalRoleManager({
               >
                 {state.activeRole === role ? 'Active' : 'Use role'}
               </button>
-              <button
-                className="ghost-button"
-                disabled={busy}
-                onClick={() => void remove(role)}
-              >
-                <X size={14} /> Remove
-              </button>
+              {confirmRemove === role ? (
+                <div className="professional-role-confirm">
+                  <small>Removing an approved role removes access to its workspace. Continue?</small>
+                  <button type="button" className="ghost-button" disabled={busy} onClick={() => void remove(role)}>Confirm removal</button>
+                  <button type="button" className="secondary-button" disabled={busy} onClick={() => setConfirmRemove(null)}>Cancel</button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={busy}
+                  onClick={() => setConfirmRemove(role)}
+                >
+                  <X size={14} /> Remove
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -240,7 +287,7 @@ export default function ProfessionalRoleManager({
             <span>{icon(role)}</span>
             <div>
               <strong>{labels[role]}</strong>
-              <small>Stored in the application bank for a future intake wave.</small>
+              <small>Pending Nightjar review. This workspace will be available only after approval.</small>
             </div>
             <button
               className="ghost-button"
@@ -264,6 +311,7 @@ export default function ProfessionalRoleManager({
         ) : (
           <div className="professional-application-box">
             {applicationPicker}
+            <p className="panel-note">Select one or several professions. Your request goes to Nightjar administrators for review; no professional access is granted automatically.</p>
           </div>
         )
       )}

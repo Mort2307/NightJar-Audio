@@ -62,4 +62,40 @@ assert.match(backend, /approvalEmailStatus: cleanText\(data\.approvalEmailStatus
 assert.match(app, /Send existing approval email/, 'legacy approved profiles are offered an explicit owner action');
 assert.match(app, /Retry approval email/, 'failed sends can be retried by an administrator');
 
+
+const roleManager = fs.readFileSync('src/components/ProfessionalRoleManager.tsx', 'utf8');
+// Keep self-service application management on a dedicated, refresh-safe page.
+assert.match(app, /profileRolesPage, setProfileRolesPage/, 'My Roles has explicit route state');
+assert.match(app, /profile\/roles/, 'My Roles exposes a deep link');
+assert.match(app, /setProfileRolesPage\(value === 'profile\/roles'\)/, 'browser back/forward restores My Roles');
+assert.match(app, /view === 'profile' && profileRolesPage && !canAdmin/, 'My Roles is a member-facing page');
+assert.match(app, /onClick=\{openMyRoles\}>My Roles<\/button>/, 'top navigation has a direct My Roles action');
+assert.match(app, /My Roles · Apply or switch/, 'profile hero exposes My Roles');
+assert.match(app, /<ProfessionalRoleManager/, 'dedicated My Roles page loads role manager');
+assert.match(roleManager, /applyForProfessionalRoles\(selected/, 'members can request several professional roles');
+assert.match(roleManager, /setActiveRole\(role\)/, 'members can activate an approved role');
+assert.match(roleManager, /removeProfessionalRole\(role\)/, 'members can withdraw a pending application');
+assert.match(roleManager, /approvedProfessionalRoles\.includes\(role\)/, 'approved roles cannot be requested twice');
+assert.match(roleManager, /pendingProfessionalRoles\.includes\(role\)/, 'pending roles cannot be requested twice');
+assert.match(roleManager, /Pending Nightjar review/, 'pending roles clearly show their real status');
+assert.match(roleManager, /Retry loading roles/, 'failed role fetches have an accessible retry');
+assert.match(app, /decideCreatorApplication\(application, 'approved', \[role\]\)/, 'owners can approve individual requested roles');
+assert.match(app, /decideCreatorApplication\(application, 'approved'\)/, 'owners can approve all requested roles');
+assert.match(app, /decideCreatorApplication\(application, 'rejected'\)/, 'owners can reject outstanding roles');
+assert.match(app, /application\.ageVerified !== true && application\.temporaryTestAccess !== true/, 'approval respects age-assurance or explicit QA access');
+
+assert.match(roleManager, /Check for updates/, 'users can refresh role approval statuses without restarting');
+assert.match(roleManager, /visibilitychange/, 'returning to app checks for new approvals');
+assert.match(roleManager, /Confirm removal/, 'approved-role removal requires confirmation');
+assert.match(app, /Approved - No pending roles/, 'archived approval labels are consistent for legacy records');
+assert.match(app, /approvedRoles\.map\(roleLabel\)\.join\(' \/ '\)/, 'approved roles use reliable ASCII separators');
+assert.match(app, />Approval email<\/span>/, 'approval delivery has a distinct labelled field');
+assert.match(app, /Application last updated:/, 'application timestamp is distinct from email delivery timestamp');
+assert.doesNotMatch(app, /Approved · no pending role/, 'legacy malformed separator no longer appears in approval archive');
+assert.match(app, /className="nj-application-summary"/, 'approval summaries have separated fields instead of a concatenated line');
+assert.match(app, /className="nj-application-field-label"/, 'approval information uses labelled fields');
+assert.match(app, /Application last updated:/, 'activity timestamps are labelled distinctly from approval email timestamps');
+assert.doesNotMatch(app, /Approved · no pending role/, 'old ambiguous composite approval label is removed');
+console.log('Nightjar self-service multi-role request, review and routed workspace contracts passed.');
+
 console.log('Nightjar professional approval counts, Already Approved archive and routed owner workpages contracts passed.');

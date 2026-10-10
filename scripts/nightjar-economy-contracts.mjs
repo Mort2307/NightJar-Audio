@@ -12,7 +12,7 @@ const commercialUi = read('src/components/CreatorCapacityBank.tsx');
 const commercialClient = read('src/platform/firebase-commercial.ts');
 
 const checks = [
-  ['Nightjar creator value is exactly Â£1', gifts.includes('const NIGHTJAR_VALUE_PENCE = 100')],
+  ['Nightjar creator value is exactly GBP 1', gifts.includes('const NIGHTJAR_VALUE_PENCE = 100')],
   ['pack sizes include 1/5/10/15/20', [1,5,10,15,20].every((count) => gifts.includes(`count: ${count},`))],
   ['gifts support all professional roles', ["'creator'","'writer'","'editor'","'artist'"].every((role) => gifts.includes(role))],
   ['gift ledger records one recipient user', gifts.includes('recipientUserId,') && gifts.includes("type: 'gift'")],
@@ -38,7 +38,7 @@ const checks = [
   ['company profit allocation defaults to 30 percent', functions.includes('companyProfitPercent') && functions.includes(': 30')],
   ['core business fund defaults to 20 percent', functions.includes('businessFundPercent') && functions.includes(': 20')],
   ['commercial allocations must total 100 percent', functions.includes('allocations must total 100%')],
-  ['current Creator monthly cap defaults to Â£3,000', functions.includes('creatorMonthlyCapPence') && functions.includes(': 300000')],
+  ['current Creator monthly cap defaults to GBP 3,000', functions.includes('creatorMonthlyCapPence') && functions.includes(': 300000')],
   ['safe Creator utilisation defaults to 70 percent', functions.includes('safeCreatorUtilizationPercent') && functions.includes(': 70')],
   ['Creator revenue uses a 90 day rolling window', functions.includes('revenueAveragingDays') && functions.includes(': 90')],
   ['Creator capacity includes a 20 percent downturn stress test', functions.includes('subscriberStressTestPercent') && functions.includes(': 20')],
@@ -58,5 +58,5 @@ if (failed.length) {
   process.exit(1);
 }
 
-for (const [label] of checks) console.log('âœ“', label);
+for (const [label] of checks) console.log('PASS', label);
 console.log('Nightjar economy and professional-role contracts passed:', checks.length);

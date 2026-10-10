@@ -1,0 +1,104 @@
+{
+  "repository": "Mort2307/NightJar-Audio",
+  "auditedOn": "2026-10-10",
+  "candidateBranch": "feature/self-service-professional-roles-20261010",
+  "notice": "Set a decision only after manually reviewing the PR diff and verifying equivalent shipped code. Deferrals or supersession require a meaningful reason and reviewer.",
+  "items": [
+    {
+      "number": 39,
+      "branch": "feature/self-service-professional-roles-20261010",
+      "decision": "current_candidate",
+      "reason": "Current release candidate; not yet merged or deployed",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 38,
+      "branch": "fix/nightjar-refresh-owner-roles-20261010",
+      "decision": "pending_review",
+      "reason": "Check unmerged Owner People role editor, notifications and refresh recovery",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 37,
+      "branch": "fix/nightjar-refresh-stability-20261010",
+      "decision": "pending_review",
+      "reason": "Refresh core copied; verify remaining parity and device behaviour",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 36,
+      "branch": "feature/legal-centre-didit-beta-pilot-20261009",
+      "decision": "pending_review",
+      "reason": "Legal centre and Didit beta requires explicit age-compliance approval",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 35,
+      "branch": "release/nightjar-clean-owner-ux-20261009",
+      "decision": "pending_review",
+      "reason": "Reconcile separate Owner UX and approved-role intake work",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 32,
+      "branch": "feature/approval-welcome-email",
+      "decision": "pending_review",
+      "reason": "Reconcile welcome email event and retry semantics",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 29,
+      "branch": "didit-verification-integration",
+      "decision": "pending_review",
+      "reason": "Draft; do not automatically combine age-provider backends",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 28,
+      "branch": "feature/didit-age-assurance-20261009",
+      "decision": "pending_review",
+      "reason": "Draft; reconcile overlapping Didit implementation",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 14,
+      "branch": "codex/production-access-mobile-pass",
+      "decision": "pending_review",
+      "reason": "Draft; assess entitlement/player and production launch safety",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 9,
+      "branch": "improvement/full-system-hardening-2026-09",
+      "decision": "pending_review",
+      "reason": "Legacy hardening PR; require supersession review",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 8,
+      "branch": "improvement/full-app-pass-2026-09-27",
+      "decision": "pending_review",
+      "reason": "Older intelligence PR; require supersession review",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
+    {
+      "number": 7,
+      "branch": "full-app-improvement-pass",
+      "decision": "pending_review",
+      "reason": "Older feedback/telemetry PR; require supersession review",
+      "reviewedBy": null,
+      "reviewedAt": null
+    }
+  ]
+}

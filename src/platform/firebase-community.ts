@@ -1,5 +1,6 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { firebaseApp } from './firebase-auth';
+import { repairMojibakeDisplayData } from './text-integrity';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
@@ -24,7 +25,7 @@ const setFavouriteReleaseCall = httpsCallable<{ releaseId: string; favourite: bo
 
 export const nightjarCommunity = {
   async getMyProfile() {
-    return (await getMyProfileCall()).data;
+    return repairMojibakeDisplayData((await getMyProfileCall()).data);
   },
 
   async saveMyProfile(profile: Profile, profileRole?: string) {
@@ -32,41 +33,41 @@ export const nightjarCommunity = {
   },
 
   async listCreators() {
-    return (await listCreatorsCall()).data;
+    return repairMojibakeDisplayData((await listCreatorsCall()).data);
   },
 
   async listPublicProfiles() {
-    return (await listPublicProfilesCall()).data;
+    return repairMojibakeDisplayData((await listPublicProfilesCall()).data);
   },
 
   async getCreatorProfile(userId: string) {
-    return (await getCreatorProfileCall({ userId })).data;
+    return repairMojibakeDisplayData((await getCreatorProfileCall({ userId })).data);
   },
 
   async getPublicProfile(userId: string) {
-    return (await getPublicProfileCall({ userId })).data;
+    return repairMojibakeDisplayData((await getPublicProfileCall({ userId })).data);
   },
 
   async getMyProfilePortfolioOptions(profileRole?: string) {
-    return (await getMyProfilePortfolioOptionsCall(profileRole ? { profileRole } : {})).data;
+    return repairMojibakeDisplayData((await getMyProfilePortfolioOptionsCall(profileRole ? { profileRole } : {})).data);
   },
 
   async profileTagCatalogue() {
-    return (await profileTagCatalogueCall()).data;
+    return repairMojibakeDisplayData((await profileTagCatalogueCall()).data);
   },
   async adminProfileTagCatalogue() {
-    return (await adminProfileTagCatalogueCall()).data;
+    return repairMojibakeDisplayData((await adminProfileTagCatalogueCall()).data);
   },
   async adminSetProfileTagStatus(tagId: string, status: 'candidate' | 'promoted' | 'hidden') {
     return (await adminSetProfileTagStatusCall({ tagId, status })).data;
   },
 
   async listWriters() {
-    return (await listWritersCall()).data;
+    return repairMojibakeDisplayData((await listWritersCall()).data);
   },
 
   async spotlightState() {
-    return (await spotlightStateCall()).data;
+    return repairMojibakeDisplayData((await spotlightStateCall()).data);
   },
 
   async state() {

@@ -3,3 +3,4 @@
 
 declare const __NIGHTJAR_BUILD_ID__: string;
 declare const __NIGHTJAR_BUILT_AT__: string;
+declare const __NIGHTJAR_SOURCE_COMMIT__: string | null;

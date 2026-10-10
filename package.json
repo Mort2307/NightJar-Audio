@@ -10,7 +10,7 @@
     "build:firebase": "vite build",
     "typecheck": "tsc --noEmit --pretty false",
     "validate": "npm run typecheck && npm run build && npm run validate:contracts && npm run validate:scroll && npm run validate:professional-intake && npm run validate:nightjar-economy && npm run validate:community && npm run validate:security && npm run validate:release-hardening && npm run validate:bundle",
-    "validate:contracts": "node scripts/product-contracts.mjs && node scripts/accessibility-contracts.mjs && node scripts/security-contracts.mjs && node scripts/firebase-callable-contracts.mjs",
+    "validate:contracts": "node scripts/product-contracts.mjs && node scripts/accessibility-contracts.mjs && node scripts/security-contracts.mjs && node scripts/firebase-callable-contracts.mjs && node scripts/profile-image-optimizer-contracts.mjs && node scripts/mobile-touch-layout-contracts.mjs && node scripts/text-integrity-contracts.mjs && node scripts/install-experience-contracts.mjs && node scripts/mojibake-source-audit.mjs && node scripts/admin-multi-role-live-preview-contracts.mjs && node scripts/nested-route-recovery-contracts.mjs",
     "validate:bundle": "node scripts/bundle-budget.mjs",
     "validate:community": "node scripts/community-contracts.mjs",
     "install-scripts:review": "npm install-scripts ls",
@@ -20,7 +20,9 @@
     "validate:nightjar-economy": "node scripts/nightjar-economy-contracts.mjs",
     "validate:release-hardening": "node scripts/release-hardening-contracts.mjs && node scripts/finance-simulator-tests.mjs",
     "validate:scroll": "node scripts/scroll-navigation-contracts.mjs",
-    "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs"
+    "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs",
+    "release:inventory": "node scripts/release-work-inventory.mjs",
+    "release:preflight": "npm run validate && npm audit && npm --prefix functions run check && npm --prefix functions run build && npm --prefix functions run audit:guard && node scripts/release-work-inventory.mjs --strict"
   },
   "dependencies": {
     "firebase": "^12.19.0",
@@ -29,12 +31,12 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.3.0",
-    "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0",
-    "tailwindcss": "^3.4.0",
+    "tailwindcss": "4.3.3",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"
   },

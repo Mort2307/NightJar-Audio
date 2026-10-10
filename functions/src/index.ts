@@ -6433,6 +6433,38 @@ export const updateScriptRightsAndListing = onCall({ region: REGION }, async (re
   return { script: scriptPayload(saved.data() ?? {}, scriptId, true) };
 });
 
+// Admin-only, read-only visibility diagnostic using the SAME public listing
+// eligibility rule as listScriptMarketplace. No manuscript contents, protected
+// reader tokens, permissions or private source-file paths are returned.
+export const adminPreviewScriptMarketplace = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('scripts').limit(1000).get();
+  const diagnostics = snapshot.docs.map((doc) => {
+    const data = doc.data() ?? {};
+    const listing = normaliseScriptMarketplace(data.marketplace);
+    const status = cleanText(data.status, 50) || 'Draft';
+    const visible = listing.visibility === 'marketplace' && ['Approved','Published'].includes(status);
+    const reasons = [
+      ...(!['Approved','Published'].includes(status) ? ['Not approved or published'] : []),
+      ...(listing.visibility !== 'marketplace' ? ['Not listed in the marketplace'] : []),
+    ];
+    return {
+      id: doc.id,
+      title: cleanText(data.title, 200) || 'Untitled manuscript',
+      status,
+      visibility: listing.visibility,
+      visibleToProfessionals: visible,
+      reasons,
+    };
+  }).sort((a,b) => a.title.localeCompare(b.title));
+  return {
+    diagnostics,
+    eligible: diagnostics.filter((entry) => entry.visibleToProfessionals).length,
+    total: diagnostics.length,
+    rule: 'Approved or Published AND marketplace visibility. No protected script text is included.',
+  };
+});
+
 export const listScriptMarketplace = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -8278,6 +8310,114 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
     applications.filter((item) => item.requestedRoles.includes(role) && !item.approvedRoles.includes(role)).length,
   ]));
   return { applications, buckets, total: applications.length };
+});
+
+// Administrator-only multi-profession access editor. Unlike adminSetAccountRole,
+// this manages all approved professions on one identity, not its active workspace.
+// Profiles and role-specific portfolio slices are deliberately never rewritten.
+export const adminManageProfessionalRoles = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  if (!userId || userId.includes('/')) throw new HttpsError('invalid-argument', 'Choose a Nightjar member.');
+  if (!Array.isArray(input.approvedRoles) || !Array.isArray(input.expectedApprovedRoles)
+    || input.approvedRoles.some((value) => typeof value !== 'string' || !PROFESSIONAL_ROLE_KEYS.includes(value as ProfessionalRole))
+    || input.expectedApprovedRoles.some((value) => typeof value !== 'string' || !PROFESSIONAL_ROLE_KEYS.includes(value as ProfessionalRole))) {
+    throw new HttpsError('invalid-argument', 'Select any combination of VA Creator, Writer, Audio Editor and Artist.');
+  }
+  const selected = cleanProfessionalRoles(input.approvedRoles);
+  const expected = cleanProfessionalRoles(input.expectedApprovedRoles);
+  const accountDocument = accountRef(userId);
+  const applicationDocument = professionalApplicationRef(userId);
+  const ageDocument = db.collection('ageAssurance').doc(userId);
+  const eventDocument = applicationDocument.collection('events').doc();
+
+  const result = await db.runTransaction(async (tx) => {
+    const [accountSnapshot, applicationSnapshot, ageSnapshot] = await Promise.all([
+      tx.get(accountDocument),
+      tx.get(applicationDocument),
+      tx.get(ageDocument),
+    ]);
+    if (!accountSnapshot.exists) throw new HttpsError('not-found', 'Nightjar member account not found.');
+    const account = accountSnapshot.data() ?? {};
+    if (ADMIN_EMAILS.has(cleanEmail(account.email)) || cleanText(account.role, 30) === 'admin') {
+      throw new HttpsError('permission-denied', 'Administrator permissions cannot be granted or changed from the member role editor.');
+    }
+
+    const previouslyApproved = professionalRolesForAccount(account) as ProfessionalRole[];
+    const sameRoles = (left: ProfessionalRole[], right: ProfessionalRole[]) =>
+      left.length === right.length && left.every((role) => right.includes(role));
+    if (!sameRoles(previouslyApproved, expected)) {
+      throw new HttpsError('aborted', 'This member\'s roles have changed. Refresh the directory before saving.');
+    }
+    const addedRoles = selected.filter((role) => !previouslyApproved.includes(role));
+    const removedRoles = previouslyApproved.filter((role) => !selected.includes(role));
+    const currentRole = cleanText(account.role, 30);
+    const activeRole = currentRole === 'listener' || selected.includes(currentRole as ProfessionalRole)
+      ? currentRole
+      : 'listener';
+
+    if (!addedRoles.length && !removedRoles.length) {
+      return { userId, approvedProfessionalRoles: previouslyApproved, pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles), activeRole, addedRoles, removedRoles, unchanged: true };
+    }
+    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && account.testAccess === true;
+    if (addedRoles.length && ageSnapshot.data()?.verified !== true && !temporaryTestAccess) {
+      throw new HttpsError('failed-precondition', 'This member needs completed age assurance or explicitly enabled temporary tester access before professional roles can be granted.');
+    }
+
+    const application = applicationSnapshot.data() ?? {};
+    const priorStatus = cleanText(application.status, 30);
+    const previouslyRequested = ['banked','waitlist'].includes(priorStatus)
+      ? cleanProfessionalRoles(application.requestedRoles)
+      : [];
+    const stillPending = previouslyRequested.filter((role) => !selected.includes(role));
+    const applicationStatus = stillPending.length
+      ? 'banked'
+      : selected.length ? 'approved' : 'withdrawn';
+    const now = FieldValue.serverTimestamp();
+
+    tx.set(accountDocument, {
+      approvedProfessionalRoles: selected,
+      pendingProfessionalRoles: stillPending,
+      role: activeRole,
+      professionalAccessUpdatedBy: admin.uid,
+      professionalAccessUpdatedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    tx.set(applicationDocument, {
+      userId,
+      email: cleanEmail(account.email) || null,
+      requestedRoles: stillPending,
+      approvedRoles: selected,
+      status: applicationStatus,
+      wave: application.wave || 'Administrator access management',
+      reviewedBy: admin.uid,
+      reviewedAt: now,
+      updatedAt: now,
+      ...(applicationSnapshot.exists ? {} : { createdAt: now }),
+    }, { merge: true });
+    tx.create(eventDocument, {
+      userId,
+      decision: addedRoles.length ? 'approved' : 'admin_roles_updated',
+      source: 'admin_multi_role_editor',
+      roles: addedRoles,
+      removedRoles,
+      previousApprovedRoles: previouslyApproved,
+      approvedRolesAfter: selected,
+      pendingRolesAfter: stillPending,
+      previousStatus: priorStatus || 'none',
+      resultingStatus: applicationStatus,
+      activeRole,
+      reviewedBy: admin.uid,
+      createdAt: now,
+    });
+    return {
+      userId, approvedProfessionalRoles: selected, pendingProfessionalRoles: stillPending,
+      activeRole, addedRoles, removedRoles, unchanged: false,
+    };
+  });
+  if (!result.unchanged) await syncCreatorCustomTagUsage(userId);
+  return result;
 });
 
 export const reviewProfessionalApplication = onCall({ region: REGION }, async (request) => {

@@ -1,8 +1,14 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { execFileSync } from 'node:child_process';
 
 const buildId = String(Date.now());
 const builtAt = new Date(Number(buildId)).toISOString();
+// Reconcile installed-app assets to an exact Git revision, not only a timestamp.
+const sourceCommit = (() => {
+  try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() || null; }
+  catch { return null; }
+})();
 
 const nightjarVersionManifest = (): Plugin => ({
   name: 'nightjar-version-manifest',
@@ -10,7 +16,7 @@ const nightjarVersionManifest = (): Plugin => ({
     this.emitFile({
       type: 'asset',
       fileName: 'version.json',
-      source: JSON.stringify({ buildId, builtAt }),
+      source: JSON.stringify({ buildId, builtAt, sourceCommit }),
     });
   },
 });
@@ -19,9 +25,11 @@ export default defineConfig({
   define: {
     __NIGHTJAR_BUILD_ID__: JSON.stringify(buildId),
     __NIGHTJAR_BUILT_AT__: JSON.stringify(builtAt),
+    __NIGHTJAR_SOURCE_COMMIT__: JSON.stringify(sourceCommit),
   },
   plugins: [react(), nightjarVersionManifest()],
-  base: './',
+  // All installed-app and nested URLs must load assets from the site root.
+  base: '/',
   build: {
     outDir: 'dist',
     sourcemap: false,

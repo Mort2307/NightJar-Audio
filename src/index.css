@@ -1,6 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
+@source "../index.html";
+@source "./";
 
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -23,7 +24,7 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: auto; }
 
 body {
   margin: 0;
@@ -8855,4 +8856,426 @@ textarea:focus-visible,
     overflow: visible;
   }
   .nj-application-tabs > button { flex: 1 1 135px; justify-content: space-between; }
+}
+
+/* Self-service professional roles: one concise page, not another long profile scroll. */
+.profile-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.profile-heading-actions > button,
+.professional-roles-page .page-heading > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.professional-roles-page {
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
+}
+.professional-roles-page .page-heading {
+  gap: 16px;
+  align-items: flex-start;
+}
+.professional-roles-page .professional-role-manager {
+  margin: 0;
+}
+.professional-roles-page .professional-role-manager .professional-role-picker button {
+  min-height: 48px;
+}
+@media (max-width: 720px) {
+  .profile-heading-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .profile-heading-actions > button {
+    flex: 1 1 100%;
+  }
+  .professional-roles-page .page-heading > button {
+    width: 100%;
+  }
+  .professional-roles-page .professional-role-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+.professional-role-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 6px;
+}
+.professional-role-status-summary .panel-note {
+  margin: 0;
+}
+.professional-role-status-summary .secondary-button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.professional-role-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.professional-role-confirm small {
+  flex-basis: 100%;
+}
+.professional-role-confirm button {
+  min-height: 40px;
+}
+@media (max-width: 720px) {
+  .professional-role-status-summary .secondary-button { width: 100%; }
+  .professional-role-confirm { width: 100%; }
+}
+
+
+/* Approval cards: structured fields prevent concatenated status/role/email copy. */
+.nj-application-summary {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  margin: 8px 0 12px;
+  min-width: 0;
+}
+.nj-application-summary .nj-application-status {
+  display: inline-flex;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.nj-application-wave {
+  font-size: .78rem;
+  color: var(--muted);
+}
+.nj-application-field {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.nj-application-field-label {
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nj-application-field strong {
+  font-size: .91rem;
+  font-weight: 600;
+  color: var(--ivory);
+  overflow-wrap: anywhere;
+}
+
+/* Profile photo optimisation: readable guidance on phone and desktop. */
+.premium-avatar-editor .profile-photo-optimisation-note {
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: normal;
+  color: var(--muted);
+}
+
+
+/* PROFILE SAVE ACTION: float above the mobile navigation dock, never beneath it.
+   The account role chip is hidden on mobile; the header avatar keeps account access. */
+.nj-save-label-mobile { display: none; }
+.premium-profile-floating-save .primary-button {
+  min-height: 48px;
+  flex: 0 0 auto;
+  white-space: normal;
+  text-align: center;
+}
+.premium-profile-floating-save .nj-save-loading-icon {
+  animation: nj-save-spin 1s linear infinite;
+}
+@keyframes nj-save-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 700px) {
+  .premium-profile-floating-save {
+    /* The dock remains at the bottom; this sticky action remains fully tappable. */
+    position: sticky;
+    bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px));
+    z-index: 64;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    justify-items: stretch;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    margin: 8px 0 12px;
+    border-color: rgba(203,181,204,.38);
+    border-radius: 16px;
+    background: rgba(20,16,22,.98);
+    box-shadow: 0 12px 42px rgba(0,0,0,.5);
+  }
+  .premium-profile-floating-save > span { min-width: 0; }
+  .premium-profile-floating-save > span strong {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  .premium-profile-floating-save > span small {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .premium-profile-floating-save .primary-button {
+    width: 100%;
+    min-height: 50px;
+    padding: 12px 16px;
+    font-size: 14px;
+    box-shadow: 0 3px 14px rgba(197,154,190,.18);
+  }
+  .premium-profile-floating-save .nj-save-label-full { display: none; }
+  .premium-profile-floating-save .nj-save-label-mobile { display: inline; }
+  /* Put focus/scroll targets above the fixed dock when an input is selected. */
+  .premium-profile-page input,
+  .premium-profile-page textarea,
+  .premium-profile-page select,
+  .professional-roles-page button {
+    scroll-margin-bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px) + 20px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .premium-profile-floating-save .nj-save-loading-icon {
+    animation: none;
+  }
+}
+
+
+/* Viewport-anchored save dock for mobile. Mounted outside the page-enter
+   animation so a transformed parent cannot trap position:fixed. */
+.nj-mobile-profile-save { display: none; }
+@media (max-width: 700px) {
+  .premium-profile-page .premium-profile-floating-save {
+    /* The desktop sticky copy is not shown alongside the mobile fixed copy. */
+    display: none;
+  }
+  .nj-mobile-profile-save {
+    position: fixed;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+    z-index: 82; /* Above content/toasts, below emergency overlays and dock. */
+    left: 12px;
+    right: 12px;
+    bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px));
+    padding: 12px;
+    border: 1px solid rgba(203,181,204,.44);
+    border-radius: 18px;
+    background: rgba(18,14,19,.98);
+    box-shadow: 0 18px 55px rgba(0,0,0,.65);
+  }
+  .nj-mobile-profile-save-text {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+  .nj-mobile-profile-save-text strong { font-size: 13px; line-height: 1.25; }
+  .nj-mobile-profile-save-text small {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .nj-mobile-profile-save .primary-button {
+    width: 100%;
+    min-height: 50px;
+    font-size: 14px;
+    font-weight: 800;
+    border-radius: 13px;
+  }
+  .app-shell.has-mobile-profile-save {
+    /* Allows controls at the foot of the page to scroll clear of both bars. */
+    padding-bottom: 148px;
+  }
+  .has-mobile-profile-save .nj-toast {
+    /* Error/success confirmations stay visible above the Save and navigation bars. */
+    bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px) + 146px);
+    z-index: 92;
+  }
+}
+@media (max-width: 350px) {
+  .nj-mobile-profile-save-text small { display: none; }
+}
+
+
+/* Match progress feedback on the separate mobile save dock. */
+.nj-mobile-profile-save .nj-save-loading-icon {
+  animation: nj-save-spin 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nj-mobile-profile-save .nj-save-loading-icon { animation: none; }
+}
+
+
+/* ADMIN ACCOUNT ACCESS: one Listener identity with independently selectable roles. */
+.people-row-role-management {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+.people-row-current-roles {
+  display: grid;
+  gap: 6px;
+}
+.people-row-role-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.people-row-role-badges > span {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid rgba(203, 181, 204, .24);
+  border-radius: 999px;
+  background: rgba(203, 181, 204, .1);
+  color: #e9dbea;
+  font-size: 12px;
+}
+.people-row-role-management .people-row-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+.people-row-role-management .people-row-controls > label {
+  display: grid;
+  flex: 1 1 160px;
+  gap: 5px;
+  min-width: 155px;
+  font-size: 12px;
+}
+.people-row-role-management .people-row-controls > label select {
+  width: 100%;
+  min-height: 44px;
+}
+.admin-member-multi-role-editor {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(203,181,204,.36);
+  border-radius: 16px;
+  background: rgba(31,23,32,.96);
+}
+.admin-member-multi-role-heading {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+}
+.admin-member-multi-role-heading div { display: grid; gap: 4px; }
+.admin-member-multi-role-heading strong { font-size: 15px; }
+.admin-member-multi-role-heading small,
+.admin-member-multi-role-editor > p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.admin-member-multi-role-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(175px,1fr));
+  gap: 9px;
+}
+.admin-member-multi-role-options label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 11px 12px;
+  border: 1px solid rgba(203,181,204,.23);
+  border-radius: 12px;
+  background: rgba(0,0,0,.12);
+  cursor: pointer;
+  font-size: 14px;
+}
+.admin-member-multi-role-options label.selected {
+  background: rgba(176,126,174,.2);
+  border-color: rgba(203,181,204,.6);
+}
+.admin-member-multi-role-options label.role-always-on { cursor: default; }
+.admin-member-multi-role-options input { accent-color: #cdadd1; width: 19px; height: 19px; flex: 0 0 auto; }
+.admin-member-multi-role-options small { margin-left: auto; font-size: 10px; color: var(--muted); }
+.admin-member-multi-role-options label:focus-within { outline: 2px solid #cdadd1; outline-offset: 2px; }
+.admin-member-multi-role-actions {
+  display: flex;
+  justify-content: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.admin-member-multi-role-actions button { min-height: 46px; }
+.nj-role-save-error {
+  padding: 11px 14px;
+  border: 1px solid rgba(255,147,147,.6);
+  border-radius: 10px;
+  color: #ffcbcb;
+}
+@media (max-width: 700px) {
+  .admin-member-multi-role-options { grid-template-columns: 1fr; }
+  .people-row-role-management .people-row-controls > label { flex-basis: 100%; }
+  .admin-member-multi-role-actions button { flex: 1 1 140px; }
+}
+
+
+/* Owner live-preview workpage. This is never the fictional demo dataset. */
+.admin-live-preview { display:grid; gap:18px; min-width:0; }
+.admin-live-preview-heading {
+  display:flex; flex-wrap:wrap; align-items:start; gap:14px;
+  padding:19px; border-radius:17px; border:1px solid rgba(203,181,204,.34);
+  background:linear-gradient(110deg,rgba(67,43,65,.53),rgba(23,21,26,.9));
+}
+.admin-live-preview-heading-icon {
+  display:grid;place-items:center;width:48px;height:48px;flex:0 0 auto;
+  color:#e8d0e3; border-radius:14px;background:rgba(203,181,204,.15);
+}
+.admin-live-preview-heading > div:nth-child(2) { flex:1 1 280px; min-width:0; }
+.admin-live-preview-heading h2 {font-size:clamp(23px,3vw,31px);margin:4px 0 8px;}
+.admin-live-preview-heading p {font-size:13px;line-height:1.6;max-width:740px;color:var(--muted);}
+.admin-live-preview-heading > button {min-height:46px;}
+.admin-live-preview-roles {display:flex; flex-wrap:wrap;gap:8px;}
+.admin-live-preview-roles button {min-height:44px;flex:1 1 130px;}
+.admin-live-preview-context,.admin-live-preview-safety {
+  display:flex;gap:12px;align-items:flex-start;padding:15px;border-radius:14px;
+  border:1px solid rgba(203,181,204,.25);background:rgba(255,255,255,.025);
+}
+.admin-live-preview-context > div {min-width:0;}
+.admin-live-preview-context p,.admin-live-preview-safety span {font-size:12px;line-height:1.55;color:var(--muted);margin-top:5px;}
+.admin-live-preview-stats {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.admin-live-preview-stats > div {
+  display:grid;gap:7px;padding:16px;
+  border:1px solid rgba(203,181,204,.22);border-radius:13px;
+  background:rgba(255,255,255,.03);
+}
+.admin-live-preview-stats strong {font-size:28px;}
+.admin-live-preview-stats span {font-size:12px;line-height:1.4;color:var(--muted);}
+.admin-live-preview-marketplace {min-width:0;}
+.admin-live-preview-diagnostics {display:grid;gap:12px;padding:16px;border:1px solid rgba(203,181,204,.25);border-radius:16px;}
+.admin-live-preview-diagnostic-list {display:grid;gap:9px;}
+.admin-live-preview-diagnostic {
+  display:flex;align-items:flex-start;gap:12px;padding:12px;
+  border:1px solid rgba(203,181,204,.19);border-radius:12px;
+}
+.admin-live-preview-diagnostic > div {min-width:0;flex:1;display:grid;gap:4px;}
+.admin-live-preview-diagnostic small {font-size:11px;color:var(--muted);overflow-wrap:anywhere;}
+.admin-live-preview-diagnostic .status-pill {white-space:nowrap;}
+@media(max-width:700px) {
+  .admin-live-preview-stats {grid-template-columns:1fr;}
+  .admin-live-preview-roles button {flex:1 1 44%;}
+  .admin-live-preview-heading {padding:14px;}
+  .admin-live-preview-diagnostic {flex-wrap:wrap;}
 }
