@@ -23,10 +23,10 @@
     {
       "number": 38,
       "branch": "fix/nightjar-refresh-owner-roles-20261010",
-      "decision": "pending_review",
-      "reason": "Check unmerged Owner People role editor, notifications and refresh recovery",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "superseded",
+      "reason": "Superseded at source-integration level by PR #40 after reviewing all 14 changed paths: recovery entrypoint and HTML match, root assets and service worker use newer versioning, Owner alerts are present with an imported regression contract, Owner People now has a transactional multi-role approval selector plus separate pending-only queue and preserved member status, and Listener upgrades include versioned personal consent. The PR #38 startup recovery test was imported. Local source contracts passed at prior candidate commit; the newly imported test and all real-device/backend staging behaviours remain separate release gates. No separate PR #38 merge or production deployment.",
+      "reviewedBy": "Nightjar technical source review (ChatGPT)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 37,
