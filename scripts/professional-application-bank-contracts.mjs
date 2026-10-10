@@ -51,7 +51,7 @@ assert.match(app, /nightjarAdministration\.manageProfessionalRoles\(account\.use
 assert.match(app, /Queue for approval/, 'owners can bank additional requested roles without granting them');
 assert.match(app, /Approve selected roles/, 'owners can approve multiple roles after backend eligibility checks');
 assert.match(app, /adminMemberSearch/, 'owner account directory supports member search');
-assert.match(app, /Your Nightjar roles/, 'professional workspace switching remains discoverable');
+assert.match(fs.readFileSync('src/components/ProfessionalRoleManager.tsx', 'utf8'), /Your Nightjar roles/, 'professional workspace switching remains discoverable');
 const adminBackend = fs.readFileSync('functions/src/index.ts', 'utf8');
 assert.match(adminBackend, /export const adminManageProfessionalRoles = onCall/, 'role additions require an administrator callable');
 assert.match(adminBackend, /await requireProfessionalLegalTerms\(userId\)/, 'role approval preserves professional consent');
