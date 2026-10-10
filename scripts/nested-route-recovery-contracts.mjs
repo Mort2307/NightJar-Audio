@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 const read = (path) => fs.readFileSync(path, 'utf8');
 
 const vite = read('vite.config.ts');
@@ -8,6 +9,8 @@ const recovery = read('public/recover.html');
 const sw = read('public/service-worker.js');
 const css = read('src/index.css');
 const hosting = JSON.parse(read('firebase.json'));
+assert.match(vite, /sourceCommit/, 'build manifest must record an exact source revision');
+assert.match(read('src/platform/pwa.ts'), /latestSourceCommit/, 'app compares deployed source revision');
 
 assert.match(vite, /base:\s*['"]\/['"]/, 'Vite bundle must be rooted at / for deep-linked pages');
 assert.match(index, /src="\/src\/main\.tsx"/, 'rooted bootstrap prevents nested route imports failing');
@@ -20,6 +23,11 @@ assert.match(sw, /url\.pathname === '\/recover\.html'/, 'standalone repair bypas
 assert.ok(hosting.hosting.rewrites.some((rule) => rule.source === '**' && rule.destination === '/index.html'), 'deep links have an SPA rewrite');
 assert.match(css, /html\s*\{\s*scroll-behavior:\s*auto;/, 'routine navigation does not cause long smooth-scroll animation');
 
+if (fs.existsSync('dist/version.json')) {
+  const version = JSON.parse(read('dist/version.json'));
+  const currentSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  assert.equal(version.sourceCommit, currentSha, 'production build must identify the Git source being shipped');
+}
 if (fs.existsSync('dist/index.html')) {
   const rendered = read('dist/index.html');
   assert.match(rendered, /src="\/assets\/[^"]+\.js"/, 'production HTML loads JS from absolute site root');
