@@ -68,7 +68,8 @@ const roleManager = fs.readFileSync('src/components/ProfessionalRoleManager.tsx'
 assert.match(app, /profileRolesPage, setProfileRolesPage/, 'My Roles has explicit route state');
 assert.match(app, /profile\/roles/, 'My Roles exposes a deep link');
 assert.match(app, /setProfileRolesPage\(value === 'profile\/roles'\)/, 'browser back/forward restores My Roles');
-assert.match(app, /view === 'profile' && profileRolesPage && !canAdmin/, 'My Roles is a member-facing page');
+assert.match(app, /view === 'profile' && profileRolesPage && \(!canAdmin \|\| interactiveRoleTest\)/, 'My Roles remains member-only except for isolated Owner role QA');
+assert.match(app, /const interactiveRoleTest = role === 'admin' && simulationMode && Boolean\(previewRole\)/, 'the Owner can see member My Roles only while explicitly simulating');
 assert.match(app, /onClick=\{openMyRoles\}>My Roles<\/button>/, 'top navigation has a direct My Roles action');
 assert.match(app, /My Roles · Apply or switch/, 'profile hero exposes My Roles');
 assert.match(app, /<ProfessionalRoleManager/, 'dedicated My Roles page loads role manager');
