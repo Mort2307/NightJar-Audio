@@ -92,6 +92,10 @@ assert.match(app, /Approved professional roles: \{approvedRoles\.map\(roleLabel\
 assert.match(app, /Approval email:/, 'approval delivery remains visible');
 assert.match(app, /Application last updated:/, 'application timestamp is distinct from email delivery timestamp');
 assert.doesNotMatch(app, /Approved · no pending role/, 'legacy malformed separator no longer appears in approval archive');
+assert.match(app, /className="nj-application-summary"/, 'approval summaries have separated fields instead of a concatenated line');
+assert.match(app, /className="nj-application-field-label"/, 'approval information uses labelled fields');
+assert.match(app, /Application last updated:/, 'activity timestamps are labelled distinctly from approval email timestamps');
+assert.doesNotMatch(app, /Approved · no pending role/, 'old ambiguous composite approval label is removed');
 console.log('Nightjar self-service multi-role request, review and routed workspace contracts passed.');
 
 console.log('Nightjar professional approval counts, Already Approved archive and routed owner workpages contracts passed.');
