@@ -795,7 +795,7 @@ function App() {
       if (topLevel === 'admin') {
         setSimulationMode(false);
         setPreviewRole(null);
-        const panelFromPath = value.match(/^admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags)$/)?.[1];
+        const panelFromPath = value.match(/^admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|live-preview)$/)?.[1];
         const peopleFromPath = value.match(/^admin\/people\/(listener|creator|writer|editor|artist|admin)$/)?.[1];
         setAdminPanel((panelFromPath ?? null) as typeof adminPanel);
         setAdminPeopleRole((peopleFromPath ?? null) as typeof adminPeopleRole);
