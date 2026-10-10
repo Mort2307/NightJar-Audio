@@ -1524,6 +1524,7 @@ function App() {
       setAgeProvider(String(data.provider ?? 'didit'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
       setAgeProviderVerified(data.providerVerified === true);
+      if (data.providerVerified === true) setAgeLaunchUrl(null);
       setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
       setAgeLivePilotAvailable(data.livePilotAvailable === true);
       setAgeVerifiedAt(data.verifiedAt ?? null);
@@ -1613,6 +1614,10 @@ function App() {
     setAgeVerifiedAt(null);
     setAgeReverifyRequired(false);
     setAgeSessionActive(false);
+    setAgeProviderVerified(false);
+    setAgeProviderStatus('NOT_STARTED');
+    setAgeLivePilotAvailable(false);
+    setAgeLaunchUrl(null);
     setView('discover');
     setRolePicker(false);
     notify('Signed out of Nightjar.');
