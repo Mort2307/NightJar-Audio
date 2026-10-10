@@ -74,6 +74,7 @@ import { installNativeProtectionBridge } from './platform/native-protection';
 import { nightjarReferrals } from './platform/firebase-referrals';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
 import MobileNavigation from './components/MobileNavigation';
+import NightjarSettings from './components/NightjarSettings';
 import ProductExperience from './components/ProductExperience';
 import AdminMemberRoleEditor from './components/AdminMemberRoleEditor';
 import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
@@ -108,7 +109,7 @@ const AdminLiveMarketplacePreview = lazy(() => import('./components/AdminLiveMar
 const EditorShowcaseModeration = lazy(() => import('./components/EditorShowcaseModeration'));
 
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
 type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -428,7 +429,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 });
 
 function App() {
-  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(topLevel) ? topLevel : 'discover') as View; });
+  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
   const [playing, setPlaying] = useState<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
@@ -842,7 +843,7 @@ function App() {
         setAdminPanel(null);
         setAdminPeopleRole(null);
       }
-      setView((['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(topLevel) ? topLevel : 'discover') as View);
+      setView((['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View);
     };
     window.addEventListener('popstate', onPop);
     void (async () => {
@@ -1108,7 +1109,7 @@ function App() {
     const onWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'NIGHTJAR_PUSH_OPEN') return;
       const route = String(event.data.route ?? '/discover').replace(/^\//, '');
-      const target = (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(route)
+      const target = (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(route)
         ? route
         : 'discover') as View;
       navigate(target);
@@ -1140,7 +1141,7 @@ function App() {
     window.history.replaceState({}, '', returnPath);
     setPublicProfileUserId(null);
     const value = returnPath.replace(/^\/+|\/+$/g, '');
-    if (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value)) setView(value as View);
+    if (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(value)) setView(value as View);
   };
 
   const recommendCreator = async (creator: PublicDirectoryProfile) => {
@@ -3919,6 +3920,7 @@ function App() {
           {canProtection && (!canAdmin || interactiveRoleTest) && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && !liveRolePreview && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
+          {user && !liveRolePreview && <button className={view === 'settings' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('settings')}>Settings</button>}
         </nav>
 
         <div className="top-actions">
@@ -4301,6 +4303,20 @@ function App() {
               simulationMode={simulationMode}
             /></Suspense>
           </section>
+        )}
+
+        {view === 'settings' && (
+          <NightjarSettings
+            email={simulationMode ? undefined : user?.email}
+            administrator={effectiveRole === 'admin' && canAdmin}
+            simulationMode={demoMode}
+            notify={notify}
+            onProfile={() => { navigate('profile'); void loadProfile(); }}
+            onRoles={openMyRoles}
+            onProtection={() => { navigate('protection'); void loadProtection(); }}
+            onAdmin={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}
+            onSignOut={() => { void signOut(); }}
+          />
         )}
 
         {view === 'profile' && !profileRolesPage && (
