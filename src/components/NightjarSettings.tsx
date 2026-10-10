@@ -1,4 +1,4 @@
-import { Accessibility, ArrowRight, Bell, BookOpenText, CreditCard, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2, Users } from 'lucide-react';
+import { Accessibility, ArrowRight, Bell, BookOpenText, CreditCard, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import AppUpdateControl from './AppUpdateControl';
 import NotificationPreferences from './NotificationPreferences';
