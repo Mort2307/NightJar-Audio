@@ -76,7 +76,7 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
       {filtered.map((script) => <article className="marketplace-card" key={script.id}>
         <div className="marketplace-card-head"><span>{script.rights?.licenceType && script.rights.licenceType !== 'none' ? script.rights.licenceType : 'Licence to discuss'}</span><Filter size={15}/></div>
         <h3>{script.title}</h3>
-        {onOpenWriter ? <button className="marketplace-writer" type="button" disabled={!script.writerUserId} onClick={()=>script.writerUserId && onOpenWriter(script.writerUserId)}>{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</button> : <span className="marketplace-writer">{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</span>}
+        {onOpenWriter ? <button className="marketplace-writer" type="button" data-nj-preview-safe={readOnlyPreview ? "true" : undefined} disabled={!script.writerUserId} onClick={()=>script.writerUserId && onOpenWriter(script.writerUserId)}>{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</button> : <span className="marketplace-writer">{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</span>}
         <p>{script.marketplace?.synopsis || 'Writer has not added a public synopsis yet.'}</p>
         <div className="marketplace-tags">{[...(script.marketplace?.genres ?? []), ...(script.marketplace?.tropes ?? [])].slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div>
         <dl className="marketplace-rights">
