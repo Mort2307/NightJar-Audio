@@ -9920,3 +9920,107 @@ textarea:focus-visible,
   .studio-page-live-preview .marketplace-empty-state { flex-wrap: wrap; }
   .studio-page-live-preview .marketplace-empty-state button { width: 100%; }
 }
+
+
+/* DIDIT · ADMIN-ENROLLED ONE-ACCOUNT PILOT
+   A premium, clearly separated QA surface; not a public verification prompt. */
+.nj-didit-pilot-manager {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .9fr);
+  gap: 22px;
+  align-items: start;
+  min-width: 0;
+  margin-top: 23px;
+  padding: 19px;
+  border: 1px solid rgba(222, 187, 217, .2);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(129, 89, 128, .12), rgba(20, 16, 23, .5));
+}
+.nj-didit-pilot-manager > div:first-child { display: grid; gap: 9px; min-width: 0; }
+.nj-didit-pilot-manager .mini-label { color: #d8bada; font-size: 10px; }
+.nj-didit-pilot-manager strong { color: #f9edf6; font-size: 15px; line-height: 1.4; }
+.nj-didit-pilot-manager p { margin: 0; color: #d1c2d0; font-size: 12px; line-height: 1.6; }
+.nj-didit-pilot-manager-controls { display: grid; gap: 9px; min-width: 0; }
+.nj-didit-pilot-manager-controls > label { color: #e3d3e1; font-size: 12px; font-weight: 650; }
+.nj-didit-pilot-manager-controls > input {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 13px;
+  border: 1px solid rgba(219, 186, 217, .3);
+  border-radius: 10px;
+  background: rgba(14, 12, 17, .6);
+  color: #f5ebf3;
+  font-size: 13px;
+}
+.nj-didit-pilot-manager-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.nj-didit-pilot-manager-actions > button { min-height: 43px; padding-inline: 14px; }
+.nj-didit-pilot-manager .nj-didit-pilot-feedback { color: #e3cfe0; font-size: 12px; }
+.nj-didit-member-pilot {
+  display: grid;
+  gap: 15px;
+  margin: 18px 0 27px;
+  padding: clamp(18px, 2.7vw, 28px);
+  border: 1px solid rgba(231, 195, 226, .3);
+  border-radius: 18px;
+  background: linear-gradient(120deg, rgba(120, 75, 118, .19), rgba(18, 14, 23, .77));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .13);
+}
+.nj-didit-member-pilot-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+.nj-didit-member-pilot-heading > svg { flex: 0 0 auto; color: #e8cde3; }
+.nj-didit-member-pilot-heading > div { flex: 1 1 auto; display: grid; gap: 7px; min-width: 0; }
+.nj-didit-member-pilot-heading .mini-label { font-size: 10px; color: #dbbdda; letter-spacing: .08em; }
+.nj-didit-member-pilot-heading h2 { color: #faf0f7; margin: 0; font: normal clamp(24px, 2.5vw, 32px)/1.15 Georgia, serif; }
+.nj-didit-member-pilot-heading p { max-width: 760px; margin: 0; color: #d2c3d0; font-size: 12px; line-height: 1.65; }
+.nj-didit-member-pilot-heading .status-pill { flex: 0 0 auto; }
+.nj-didit-member-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 15px;
+  border: 1px solid rgba(235, 211, 226, .2);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .025);
+  color: #e8dce5;
+  font-size: 12px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.nj-didit-member-consent > input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: #b588af;
+}
+.nj-didit-member-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.nj-didit-member-actions > button,
+.nj-didit-member-actions > a { min-height: 45px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding-inline: 14px; }
+.nj-didit-member-pilot .nj-didit-member-notice,
+.nj-didit-member-pilot .nj-didit-member-footnote {
+  margin: 0;
+  color: #c5b6c4;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.nj-didit-member-pilot .nj-didit-member-footnote {
+  border-top: 1px solid rgba(235, 211, 226, .16);
+  padding-top: 13px;
+}
+@media (max-width: 790px) {
+  .nj-didit-pilot-manager { grid-template-columns: minmax(0, 1fr); }
+  .nj-didit-member-pilot-heading { flex-wrap: wrap; }
+  .nj-didit-member-pilot-heading .status-pill { margin-left: 35px; }
+}
+@media (max-width: 520px) {
+  .nj-didit-pilot-manager { padding: 15px; }
+  .nj-didit-pilot-manager-actions { display: grid; grid-template-columns: 1fr; }
+  .nj-didit-member-actions { display: grid; grid-template-columns: 1fr; }
+  .nj-didit-member-actions > button,
+  .nj-didit-member-actions > a { width: 100%; }
+}
