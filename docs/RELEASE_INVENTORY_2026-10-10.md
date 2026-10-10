@@ -18,17 +18,28 @@
 | [#39](https://github.com/Mort2307/NightJar-Audio/pull/39) | Full pass: profiles, multi-role, compression, touch UX, text integrity, PWA invitation, admin preview | **Included by verified Git ancestry in #40 (source only)** | Still not deployed; preserve in eventual reviewed integration |
 | [#38](https://github.com/Mort2307/NightJar-Audio/pull/38) | Refresh recovery, Owner People roles, account alerts | **Technically superseded by PR #40** | Source-integrated; imported refresh contracts, multi-role queuing, active-workspace status protection; staging/device acceptance remains mandatory |
 | [#37](https://github.com/Mort2307/NightJar-Audio/pull/37) | Deep-link refresh and white-screen repair | **Technically superseded by PR #40** | Equivalent recovery source present; installed-PWA QA remains |
-| [#36](https://github.com/Mort2307/NightJar-Audio/pull/36) | Legal Centre and guarded Didit beta pilot | **Separate release / conflict** | Reconcile Legal Centre; Do **not** promote age-provider sandbox configuration or chargeable live testing without explicit owner and compliance approval |
+| [#36](https://github.com/Mort2307/NightJar-Audio/pull/36) | Legal Centre and guarded Didit beta pilot | **Technically superseded** | Provider/live 18+ workflow and UK legal/privacy review remain mandatory |
 | [#35](https://github.com/Mort2307/NightJar-Audio/pull/35) | Owner Console, accurate intake, navigation and Editor Studio | **Technically superseded by PR #40** | Equivalent source present; device interaction QA remains |
 | [#32](https://github.com/Mort2307/NightJar-Audio/pull/32) | Automatic approval emails | **Technically superseded by PR #40** | Audited event delivery and retry in candidate; live Gmail delivery test remains |
-| [#29](https://github.com/Mort2307/NightJar-Audio/pull/29) | Didit integration draft and push fixes | **Draft — not release-ready** | Required patcher, secrets, signed webhook and live workflow safety validations are outstanding |
-| [#28](https://github.com/Mort2307/NightJar-Audio/pull/28) | Earlier Didit integration draft | **Draft — overlap** | Compare to #29/#36 and do not combine competing webhook implementations blindly |
-| [#14](https://github.com/Mort2307/NightJar-Audio/pull/14) | Production entitlements and mobile player | **Draft — not release-ready** | Review production subscription entitlements, adult gating and device player tests separately |
-| [#9](https://github.com/Mort2307/NightJar-Audio/pull/9) | Older consolidated hardening | **Legacy review** | Confirm supersession of unique security changes, do not overwrite newer backend |
-| [#8](https://github.com/Mort2307/NightJar-Audio/pull/8) | Earlier app intelligence | **Legacy review** | Compare for unique unshipped work or formally supersede |
-| [#7](https://github.com/Mort2307/NightJar-Audio/pull/7) | Earlier feedback/telemetry improvements | **Legacy review** | Compare for unique unshipped work or formally supersede |
+| [#29](https://github.com/Mort2307/NightJar-Audio/pull/29) | Didit source, FCM repair and branded PWA icon | **Technically superseded** | Source incorporated; old branch deploy scripts omitted. Device/provider QA required |
+| [#28](https://github.com/Mort2307/NightJar-Audio/pull/28) | Earlier, conflicting Didit session/webhook draft | **Technically superseded; do not merge** | Preserve the single current Didit adapter; test real signed 18+ workflow |
+| [#14](https://github.com/Mort2307/NightJar-Audio/pull/14) | Verified entitlements and proposed mobile player | **Deferred; verified entitlement helper ported** | Run entitlement unit tests; billing/processor and alternate player need separate commercial QA |
+| [#9](https://github.com/Mort2307/NightJar-Audio/pull/9) | Legacy hardening and recommendation intelligence | **Deferred** | Unique old feedback/security ideas require Firebase-native parity review |
+| [#8](https://github.com/Mort2307/NightJar-Audio/pull/8) | Legacy recommendation/telemetry | **Deferred** | Old appdeploy API is not integrated; migrate deliberately |
+| [#7](https://github.com/Mort2307/NightJar-Audio/pull/7) | Earlier feedback and creator discovery | **Deferred** | Unique old UX components remain separately reviewable, not deleted or installed |
 
-PR #39 is included by verified Git ancestry in draft PR #40. PRs #38, #37, #35 and #32 are documented as technically superseded after source review; **seven other PRs remain pending**. None of these pull requests was automatically merged or closed.
+PR #39 is included by Git ancestry. All seven formerly unresolved PRs (#36, #29, #28, #14, #9, #8, #7) now have documented technical dispositions. **Deferred features remain unshipped and available in their separate branches. No PR was automatically merged or closed.**
+
+## Consolidated seven-PR source review — COMPLETE
+
+**Review-only result: zero PRs left with a `pending_review` decision.** PRs #36, #29 and #28 are technically superseded by safer, later source implementations. PRs #14, #9, #8 and #7 are explicitly **deferred**, not merged, released or discarded. The commercial entitlement safety helper from PR #14 has been ported to the active backend, with unit tests awaiting a local run.
+
+See [the evidence, retained differences and release gates for all seven PRs](RELEASE_SEVEN_PR_BATCH_REVIEW_2026-10-10.md) and `docs/release-pr-review.json`.
+
+**This is not a green deployment gate.** GitHub Actions still fails early, the final commit has not been CI-validated, real PWA installs and FCM delivery need device tests, and public 18+ provider/legal and payment-processor acceptance are unresolved. Draft PR #40 is not merged into `main` or deployed.
+
+### Prior reconciliation observations (historical)
+The following paragraphs describe earlier stages; where they refer to an item as pending, the consolidated review above supplies the current disposition.
 
 ## Reconciliation progress — source review, 10 October 2026
 
