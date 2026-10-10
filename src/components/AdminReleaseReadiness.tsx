@@ -53,6 +53,11 @@ export default function AdminReleaseReadiness({
 
   useEffect(() => { void refreshBuild(); }, []);
 
+  // Turn the dashboard into a concise workpage without a long scroll through other cards.
+  useEffect(() => {
+    if (selected) document.querySelector<HTMLElement>('.admin-release-readiness')?.scrollIntoView({ behavior: 'instant', block: 'start' });
+  }, [selected]);
+
   // Secret Manager write != deployed Function binding != a passed real age check.
   // The backend launch-attestation marker is deliberately separate from provider connectivity.
   const liveDiditConnected = provider?.configured === true && provider.environment === 'live';
@@ -199,7 +204,7 @@ export default function AdminReleaseReadiness({
       </div>
     </div>
 
-    <div className="release-readiness-grid">
+    {!active && <div className="release-readiness-grid">
       {gates.map(gate => <button
         type="button" key={gate.id}
         className={`release-readiness-gate ${gate.state}${selected === gate.id ? ' selected' : ''}`}
@@ -213,12 +218,12 @@ export default function AdminReleaseReadiness({
         <span className="release-readiness-copy"><strong>{gate.label}</strong><small>{gate.detail}</small><span className="release-readiness-open">View next steps <ChevronDown size={14} aria-hidden="true"/></span></span>
         <em>{gate.state === 'pass' ? 'PASS' : gate.state === 'blocker' ? 'LAUNCH BLOCKER' : 'REVIEW'}</em>
       </button>)}
-    </div>
+    </div>}
 
     {active && <section id="nightjar-release-next-steps" className="release-readiness-next" aria-live="polite" aria-labelledby="nightjar-release-next-title">
       <div className="release-readiness-next-heading">
         <div><span className="mini-label">WHAT HAPPENS NEXT</span><h3 id="nightjar-release-next-title">{active.label}</h3><p>{active.detail}</p></div>
-        <button className="ghost-button" type="button" onClick={() => setSelected(null)} aria-label="Close next steps">Close</button>
+        <button className="ghost-button" type="button" onClick={() => setSelected(null)} aria-label="Back to release checks">Back to all checks</button>
       </div>
       <ol>{active.next.map(step => <li key={step}>{step}</li>)}</ol>
       {active.action && <button className="primary-button" type="button" onClick={active.action}>{active.actionLabel}<ArrowRight size={15} aria-hidden="true"/></button>}
