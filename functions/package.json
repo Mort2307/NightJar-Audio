@@ -13,7 +13,8 @@
     "deploy": "firebase deploy --only functions",
     "audit:prod": "npm audit --omit=dev --audit-level=moderate",
     "install-scripts:review": "npm install-scripts ls",
-    "audit:guard": "node scripts/audit-known-advisories.mjs"
+    "audit:guard": "node scripts/audit-known-advisories.mjs",
+    "test:entitlements": "npm run build && node --test lib/entitlements.test.js"
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",
