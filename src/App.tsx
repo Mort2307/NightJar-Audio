@@ -4059,9 +4059,13 @@ function App() {
 
             {profileEditRole === 'artist' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Artist portfolio" />}><ArtistPortfolioManager notify={notify} demoMode={demoMode} /></Suspense>}
 
-            {profileDirty && <div className="premium-profile-floating-save">
-              <span><strong>Profile changes waiting.</strong><small>Save once and the personal + role sections update together.</small></span>
-              <button className="primary-button" disabled={profileLoading} onClick={()=>void saveProfile()}><Check size={14}/>{profileLoading?'Saving…':'Save all profile changes'}</button>
+            {profileDirty && <div className="premium-profile-floating-save" role="region" aria-label="Unsaved profile changes" aria-busy={profileLoading}>
+              <span><strong>{profileLoading ? 'Saving your profile…' : 'Profile changes waiting.'}</strong><small>Save your personal and professional changes together.</small></span>
+              <button type="button" className="primary-button" disabled={profileLoading} aria-label={profileLoading ? 'Saving profile changes' : 'Save all profile changes'} onClick={()=>void saveProfile()}>
+                {profileLoading ? <RefreshCw size={17} className="nj-save-loading-icon" aria-hidden="true"/> : <Check size={17} aria-hidden="true"/>}
+                <span className="nj-save-label-full">{profileLoading ? 'Saving…' : 'Save all profile changes'}</span>
+                <span className="nj-save-label-mobile">{profileLoading ? 'Saving…' : 'Save changes'}</span>
+              </button>
             </div>}
 
             <section className="profile-account-hub">
@@ -4640,7 +4644,7 @@ function App() {
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
-      {user && !rolePicker && (
+      {user && !rolePicker && !(view === 'profile' && profileDirty) && (
         <button className="floating-account" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)} aria-label="Open account information">
           <UserCircle2 size={16} /><span>{simulationMode ? simulationIdentity.label + ' simulation' : roleMeta[role ?? 'listener'].label}</span>
         </button>
