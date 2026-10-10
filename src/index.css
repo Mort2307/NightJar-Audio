@@ -9124,3 +9124,109 @@ textarea:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .nj-mobile-profile-save .nj-save-loading-icon { animation: none; }
 }
+
+
+/* ADMIN ACCOUNT ACCESS: one Listener identity with independently selectable roles. */
+.people-row-role-management {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+.people-row-current-roles {
+  display: grid;
+  gap: 6px;
+}
+.people-row-role-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.people-row-role-badges > span {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid rgba(203, 181, 204, .24);
+  border-radius: 999px;
+  background: rgba(203, 181, 204, .1);
+  color: #e9dbea;
+  font-size: 12px;
+}
+.people-row-role-management .people-row-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+.people-row-role-management .people-row-controls > label {
+  display: grid;
+  flex: 1 1 160px;
+  gap: 5px;
+  min-width: 155px;
+  font-size: 12px;
+}
+.people-row-role-management .people-row-controls > label select {
+  width: 100%;
+  min-height: 44px;
+}
+.admin-member-multi-role-editor {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(203,181,204,.36);
+  border-radius: 16px;
+  background: rgba(31,23,32,.96);
+}
+.admin-member-multi-role-heading {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+}
+.admin-member-multi-role-heading div { display: grid; gap: 4px; }
+.admin-member-multi-role-heading strong { font-size: 15px; }
+.admin-member-multi-role-heading small,
+.admin-member-multi-role-editor > p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.admin-member-multi-role-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(175px,1fr));
+  gap: 9px;
+}
+.admin-member-multi-role-options label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 11px 12px;
+  border: 1px solid rgba(203,181,204,.23);
+  border-radius: 12px;
+  background: rgba(0,0,0,.12);
+  cursor: pointer;
+  font-size: 14px;
+}
+.admin-member-multi-role-options label.selected {
+  background: rgba(176,126,174,.2);
+  border-color: rgba(203,181,204,.6);
+}
+.admin-member-multi-role-options label.role-always-on { cursor: default; }
+.admin-member-multi-role-options input { accent-color: #cdadd1; width: 19px; height: 19px; flex: 0 0 auto; }
+.admin-member-multi-role-options small { margin-left: auto; font-size: 10px; color: var(--muted); }
+.admin-member-multi-role-options label:focus-within { outline: 2px solid #cdadd1; outline-offset: 2px; }
+.admin-member-multi-role-actions {
+  display: flex;
+  justify-content: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.admin-member-multi-role-actions button { min-height: 46px; }
+.nj-role-save-error {
+  padding: 11px 14px;
+  border: 1px solid rgba(255,147,147,.6);
+  border-radius: 10px;
+  color: #ffcbcb;
+}
+@media (max-width: 700px) {
+  .admin-member-multi-role-options { grid-template-columns: 1fr; }
+  .people-row-role-management .people-row-controls > label { flex-basis: 100%; }
+  .admin-member-multi-role-actions button { flex: 1 1 140px; }
+}
