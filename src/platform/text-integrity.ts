@@ -16,14 +16,23 @@ const readableFields = new Set([
 ]);
 
 const utf8 = new TextEncoder();
-const windows1252 = new TextDecoder('windows-1252');
+const cp1252Extensions = [
+  '€', '\u0081', '‚', 'ƒ', '„', '…', '†', '‡',
+  'ˆ', '‰', 'Š', '‹', 'Œ', '\u008D', 'Ž', '\u008F',
+  '\u0090', '‘', '’', '“', '”', '•', '–', '—',
+  '˜', '™', 'š', '›', 'œ', '\u009D', 'ž', 'Ÿ',
+];
+const decode1252 = (byte: number) =>
+  byte >= 0x80 && byte < 0xa0
+    ? cp1252Extensions[byte - 0x80]
+    : String.fromCharCode(byte);
 const recovered = new Map<string, string>();
 
 // Construct the verified mojibake sequences from UTF-8 bytes interpreted as
 // Windows-1252. Covers common accents and typographic characters.
 const add = (codepoint: number) => {
   const character = String.fromCodePoint(codepoint);
-  const mangled = windows1252.decode(utf8.encode(character));
+  const mangled = Array.from(utf8.encode(character), decode1252).join('');
   if (/^[ÂÃâï]/.test(mangled) && !mangled.includes('\uFFFD') && mangled !== character) {
     recovered.set(mangled, character);
   }
