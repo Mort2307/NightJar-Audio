@@ -29,5 +29,20 @@ This one-pass technical review covers the seven branches previously marked `REVI
 5. **Devices and permissions:** run multi-role grants and queue with test accounts, signed-in and denied testers, scripts visible to VAs, mobile PWA icon/update/recovery, age-gated playback and Firebase push.
 6. **Owner acceptance:** approve which deferred #7–#9 intelligence features and #14 commercial features should be brought forward in later scoped work. They have **not** been silently removed.
 
+## Post-batch validation correction
+
+At commit `b2ea9dd`, Windows validation reached the community contract but stopped on
+`Active/trialing subscription playback rule is missing`. The release correctly
+replaced the old, unsafe status-only gate with `hasPaidEntitlement(doc.data(), userId)`,
+which requires provider-verified, paid, unexpired, account-owned **active** access.
+The community test had not been updated to this stricter policy. PR #40 now checks
+the secure helper and individual requirements instead of searching for the
+obsolete active/trialing text; the listener-facing rule is also aligned.
+
+This correction is committed, but **the full validation has not yet been rerun
+on the corrected commit**. The remaining GitHub-hosted CI execution failure is
+independent and remains a release blocker. None of these changes authorises
+a production or public-beta deployment.
+
 ## One combined validation after this batch
 From the existing local PR #40 branch, pull latest and run `npm run validate`, `npm --prefix functions run check`, `npm --prefix functions run test:entitlements`, `npm --prefix functions run audit:guard`, `npm run release:inventory`, `git diff --check`, and `git status -sb`. The entitlement runtime tests are new; do not label these changes validated until those commands complete. **Do not deploy yet.**
