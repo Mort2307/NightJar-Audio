@@ -45,6 +45,19 @@ assert.match(app, /applicationGroups\.pending\.length \?/, 'owner call-to-action
 assert.match(app, /\/admin\/['"] \+ panel/, 'admin tools use dedicated routes');
 assert.match(app, /\/admin\/people\//, 'people directories use dedicated routes');
 assert.match(app, /admin-detail-active/, 'owner subpage layout does not render the long dashboard behind an opened tool');
+
+assert.match(app, /manageAccountProfessionalRoles/, 'owners can repair professional roles on an existing account');
+assert.match(app, /nightjarAdministration\.manageProfessionalRoles\(account\.userId, additions, action\)/, 'role grants use backend permissions, not client-only changes');
+assert.match(app, /Queue for approval/, 'owners can bank additional requested roles without granting them');
+assert.match(app, /Approve selected roles/, 'owners can approve multiple roles after backend eligibility checks');
+assert.match(app, /adminMemberSearch/, 'owner account directory supports member search');
+assert.match(app, /Your Nightjar roles/, 'professional workspace switching remains discoverable');
+const adminBackend = fs.readFileSync('functions/src/index.ts', 'utf8');
+assert.match(adminBackend, /export const adminManageProfessionalRoles = onCall/, 'role additions require an administrator callable');
+assert.match(adminBackend, /await requireProfessionalLegalTerms\(userId\)/, 'role approval preserves professional consent');
+assert.match(adminBackend, /await requireAgeVerified\(userId\)/, 'role approval preserves age assurance');
+assert.match(adminBackend, /approvedProfessionalRoles: approved/, 'role additions preserve existing approved roles');
+
 assert.match(app, /adminApplicationBox === 'pending'/, 'pending queue remains accessible');
 assert.match(app, /adminApplicationBox === 'attention'/, 'orphan records are visible for attention');
 const backend = fs.readFileSync('functions/src/index.ts', 'utf8');
