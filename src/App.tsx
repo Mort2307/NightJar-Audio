@@ -4,6 +4,7 @@ import { nightjarAuth } from './platform/firebase-auth';
 import { nightjarAccount } from './platform/firebase-account';
 import { nightjarCommunity } from './platform/firebase-community';
 import { nightjarMedia } from './platform/firebase-media';
+import { optimiseProfileImage, formatProfileImageBytes } from './platform/profile-image-optimizer';
 import { nightjarCommercial, type CommercialOverview, type CommercialSettings } from './platform/firebase-commercial';
 import { nightjarAdministration } from './platform/firebase-administration';
 import { classifyProfessionalApplications, filterProfessionalApplicationsByRole, pendingApplicationRoles, type ProfessionalApplicationBox } from './platform/professional-application-bank';
@@ -2506,28 +2507,35 @@ function App() {
   };
 
   const uploadProfileAvatar = async (file: File) => {
-    if (!user) return;
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      notify('Use PNG, JPG or WebP for profile images.');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      notify('Profile image must be 5 MB or smaller.');
-      return;
-    }
-    if (demoMode) {
-      setProfile((current: any) => ({ ...current, pendingAvatarStatus:'pending', pendingAvatarAssetId:'demo-avatar-' + Date.now() }));
-      notify('Simulation: profile image passed local validation and entered the fictional moderation queue. Nothing was uploaded.');
-      return;
-    }
+    if (!user || profileImageBusy) return;
     setProfileImageBusy(true);
     try {
-      const dataUrl = await readFileDataUrl(file);
-      const result = await nightjarMedia.submitImage({ kind: 'profile_avatar', dataUrl, contentType: file.type, fileName: file.name });
+      // Decode, downscale, re-encode and strip embedded metadata before any upload.
+      // The original full-resolution file never reaches Firebase Storage.
+      const resultImage = await optimiseProfileImage(file);
+      const sizeNote = formatProfileImageBytes(resultImage.originalBytes) + ' to '
+        + formatProfileImageBytes(resultImage.outputBytes);
+
+      if (demoMode) {
+        setProfile((current: any) => ({ ...current, pendingAvatarStatus:'pending', pendingAvatarAssetId:'demo-avatar-' + Date.now() }));
+        notify('Simulation: photo compressed (' + sizeNote + ') and added to a fictional moderation queue. Nothing was uploaded.');
+        return;
+      }
+
+      const dataUrl = await readFileDataUrl(resultImage.file);
+      const result = await nightjarMedia.submitImage({
+        kind: 'profile_avatar',
+        dataUrl,
+        contentType: resultImage.file.type,
+        fileName: resultImage.file.name,
+      });
       setProfile((current: any) => ({ ...current, pendingAvatarStatus: result.status, pendingAvatarAssetId: result.assetId }));
-      notify('Profile image submitted for administrator approval. Your current approved image stays live until the replacement is approved.');
-    } catch { notify('Profile image could not be uploaded.'); }
-    finally { setProfileImageBusy(false); }
+      notify('Photo resized and compressed (' + sizeNote + '). Submitted for review; your approved portrait remains live until accepted.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Profile photo could not be processed. Please try another JPG or PNG.');
+    } finally {
+      setProfileImageBusy(false);
+    }
   };
 
   const removeProfileImage = async () => {
