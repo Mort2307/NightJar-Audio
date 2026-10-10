@@ -9332,3 +9332,23 @@ textarea:focus-visible,
   .professional-terms-upgrade { padding: 13px; }
   .professional-terms-upgrade .secondary-button { width: 100%; justify-self: stretch; }
 }
+
+
+/* Owner People: queue additional professions separately from live access grants. */
+.admin-member-queue-roles {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(221, 198, 215, .25);
+  background: rgba(155, 117, 149, .055);
+}
+.admin-member-queue-roles p { margin: 0; line-height: 1.55; }
+.admin-member-queue-roles .admin-member-multi-role-options { max-width: 100%; }
+.admin-member-queue-roles .secondary-button { justify-self: start; min-height: 44px; }
+@media (max-width: 600px) {
+  .admin-member-queue-roles { padding: 12px; }
+  .admin-member-queue-roles .secondary-button { width: 100%; justify-self: stretch; white-space: normal; }
+}
