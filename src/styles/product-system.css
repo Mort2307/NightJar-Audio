@@ -2797,3 +2797,98 @@ textarea {
   .nj-settings-tools { margin-top: 22px; }
   .nj-settings-page { padding-bottom: calc(var(--nj-mobile-dock-clearance, 76px) + 30px); }
 }
+
+
+/* Visual audit 02: the owner console uses compact, distinct workpages rather
+   than mounting every admin control in a single endless mobile column. */
+.nj-owner-workspaces {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin: 4px 0 22px;
+}
+.nj-owner-workspace {
+  min-width: 0;
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--nj-line-default);
+  border-radius: 13px;
+  background: rgba(255,255,255,.018);
+  color: var(--nj-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .14s, border-color .14s;
+}
+.nj-owner-workspace.active {
+  border-color: rgba(203,181,204,.42);
+  background: rgba(203,181,204,.10);
+}
+.nj-owner-workspace:focus-visible { outline: 2px solid var(--nj-accent); outline-offset: 2px; }
+.nj-owner-workspace-icon {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--nj-line-subtle);
+  border-radius: 10px;
+  color: var(--nj-text-secondary);
+}
+.nj-owner-workspace.active .nj-owner-workspace-icon { color: var(--nj-text-primary); }
+.nj-owner-workspace-copy { display: grid; min-width: 0; gap: 3px; }
+.nj-owner-workspace-copy strong { font-size: 14px; line-height: 1.2; }
+.nj-owner-workspace-copy small { font-size: 11px; line-height: 1.3; color: var(--nj-text-secondary); }
+.nj-owner-workspace-count {
+  display: grid;
+  min-width: 23px;
+  height: 23px;
+  padding: 0 5px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(203,181,204,.18);
+  font-size: 12px;
+  font-weight: 750;
+}
+.nj-owner-workspace-arrow, .nj-owner-workspace-selected { margin-left: auto; flex: 0 0 auto; opacity: .7; }
+.nj-admin-focused-grid { margin-top: 10px; align-items: start; }
+.nj-admin-focused-grid .admin-panel { gap: 9px; padding: 18px; }
+.nj-admin-focused-grid .admin-icon { width: 36px; height: 36px; }
+.nj-admin-focused-grid .admin-panel h2 { font-size: clamp(23px, 2.5vw, 31px); line-height: 1.12; overflow-wrap: anywhere; }
+.nj-admin-focused-grid .admin-panel p { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.nj-admin-focused-grid .admin-panel > strong { font-size: 12px; letter-spacing: normal; line-height: 1.4; }
+.admin-page .nj-role-dashboard-head p { font-size: 13px; line-height: 1.5; }
+.admin-page .nj-next-actions-head strong { font-size: 13px; }
+.admin-page .nj-next-action strong { font-size: 13px; }
+.admin-page .nj-next-action small { font-size: 12px; }
+.admin-page .security-alert-panel p { font-size: 13px; line-height: 1.5; }
+.admin-page .security-alert-row strong { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.admin-page .security-alert-row span { font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; text-overflow: clip; }
+.admin-page .security-alert-row em { font-size: 11px; line-height: 1.4; letter-spacing: normal; overflow-wrap: anywhere; }
+.admin-page .security-alert-panel > strong { font-size: 12px; line-height: 1.5; }
+.admin-page .admin-owner-heading h1 { max-width: 800px; }
+@media (max-width: 900px) {
+  .nj-owner-workspaces { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .admin-page .admin-owner-heading { gap: 14px; margin-bottom: 18px; }
+  .admin-page .admin-owner-heading h1 { font-size: clamp(34px, 9vw, 44px); line-height: 1.05; }
+  .admin-page .admin-owner-heading p { font-size: 13px; line-height: 1.5; }
+  .admin-page .admin-owner-heading .secondary-button { min-height: 41px; width: auto; }
+  .nj-owner-workspaces { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 6px 0 18px; }
+  .nj-owner-workspace { min-height: 64px; padding: 9px; gap: 8px; }
+  .nj-owner-workspace-icon { width: 29px; height: 29px; flex-basis: 29px; }
+  .nj-owner-workspace-copy strong { font-size: 13px; }
+  .nj-owner-workspace-copy small { font-size: 10.5px; }
+  .nj-owner-workspace-arrow, .nj-owner-workspace-selected { display: none; }
+  .nj-admin-focused-grid { grid-template-columns: minmax(0,1fr); gap: 10px; }
+  .nj-admin-focused-grid .admin-panel { padding: 16px; border-radius: 15px; }
+  .nj-admin-focused-grid .admin-panel h2 { font-size: 25px; }
+  .admin-page .nj-role-dashboard { padding: 14px; }
+  .admin-page .nj-role-dashboard-head h2 { font-size: 25px; }
+  .admin-page .nj-role-dashboard-metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .admin-page .security-alert-panel { padding: 15px; margin: 12px 0; }
+}
