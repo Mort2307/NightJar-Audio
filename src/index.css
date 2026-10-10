@@ -9310,3 +9310,25 @@ textarea:focus-visible,
   .nj-legal-centre-card { grid-template-columns: 36px minmax(0,1fr) auto; gap: 10px; padding: 13px; }
   .nj-legal-centre-icon { width: 36px; height: 36px; }
 }
+
+
+/* PROFESSIONAL ROLE UPGRADE: versioned self-service consent on mobile and desktop. */
+.professional-terms-upgrade {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid rgba(221, 198, 215, .32);
+  border-radius: 16px;
+  background: rgba(155, 117, 149, .085);
+}
+.professional-terms-upgrade p { margin: 0; line-height: 1.5; }
+.professional-terms-upgrade a { overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 3px; }
+.professional-terms-consent { display: flex; align-items: flex-start; gap: 12px; line-height: 1.45; }
+.professional-terms-consent input { flex: 0 0 auto; width: 19px; height: 19px; margin: 2px 0 0; }
+.professional-terms-upgrade .secondary-button { justify-self: start; min-height: 44px; max-width: 100%; white-space: normal; }
+@media (max-width: 600px) {
+  .professional-terms-upgrade { padding: 13px; }
+  .professional-terms-upgrade .secondary-button { width: 100%; justify-self: stretch; }
+}
