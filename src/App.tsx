@@ -4573,7 +4573,7 @@ function App() {
             <section className="panel nj-didit-pilot" aria-label="Administrator Didit verification pilot">
               <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
               <h2>Didit Age Verification</h2>
-              <p>See the real provider state without switching to fictional demo data. Only an authorised administrator may initiate a check, and a live session may incur provider charges.</p>
+              <p>Test Didit as an administrator, or invite one registered beta tester to initiate their own voluntary check. Live verification can incur provider charges; other testers keep their normal bypass.</p>
               <div className="demo-state-line">
                 <span className={ageConfigured ? 'status-pill' : 'status-pill muted'}>{ageLivePilotAvailable ? 'LIVE PILOT ENABLED' : ageConfigured ? 'DIDIT CONNECTED' : 'DIDIT SETUP REQUIRED'}</span>
                 <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'VERIFIED 18+' : ageProviderStatus.replaceAll('_', ' ')}</span>
