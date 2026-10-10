@@ -52,7 +52,11 @@ service firebase.storage {
         && ownsEditableRelease(releaseId)
         && supportedAudio();
       allow update: if false;
-      allow delete: if signedIn() && request.auth.uid == userId;
+      // Published masters must be withdrawn through the protected backend
+      // workflow, not deleted accidentally from the client storage SDK.
+      allow delete: if signedIn()
+        && request.auth.uid == userId
+        && ownsEditableRelease(releaseId);
     }
 
     match /editor-showcase/{userId}/{itemId}/{slot}/{fileId} {
