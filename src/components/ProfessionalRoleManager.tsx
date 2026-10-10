@@ -67,9 +67,10 @@ export default function ProfessionalRoleManager({
     setLoadError('');
     if (simulationMode) {
       const prior = readDemo('professionalRoleQa', demoInitialState);
-      const approved = initialRole === 'listener' || prior.approvedProfessionalRoles.includes(initialRole)
+      const requestedRole: NightjarProfessionalRole | null = initialRole === 'listener' ? null : initialRole;
+      const approved: NightjarProfessionalRole[] = !requestedRole || prior.approvedProfessionalRoles.includes(requestedRole)
         ? prior.approvedProfessionalRoles
-        : [...prior.approvedProfessionalRoles, initialRole];
+        : [...prior.approvedProfessionalRoles, requestedRole];
       const next = { ...prior, approvedProfessionalRoles: approved, activeRole: initialRole };
       persistDemoRoles(next);
       setLegalDocuments(readDemo('professionalRoleQaTerms', demoInitialTerms));
