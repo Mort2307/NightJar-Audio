@@ -9590,3 +9590,53 @@ textarea:focus-visible,
   .nj-live-switcher-trigger,
   .nj-switcher-chevron { transition: none; }
 }
+
+
+/* Consistent Owner workpage treatment: role view buttons are cards, not a text run. */
+.admin-preview-control {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 1.3fr);
+  gap: 18px;
+  align-items: start;
+  min-width: 0;
+  padding: clamp(16px, 2vw, 26px);
+  border: 1px solid rgba(229, 201, 224, .2);
+  border-radius: 18px;
+  background: rgba(231, 203, 225, .035);
+}
+.admin-preview-control > div { min-width: 0; }
+.admin-preview-control > div:first-child { display: grid; gap: 10px; }
+.admin-preview-control > div:first-child > strong { font-size: clamp(16px, 1.5vw, 22px); color: #f4e9f1; }
+.admin-preview-control p { margin: 0; color: #d0c2cd; line-height: 1.6; font-size: 12px; }
+.admin-preview-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.admin-preview-buttons button {
+  min-width: 0;
+  min-height: 47px;
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 194, 217, .27);
+  border-radius: 12px;
+  color: #f7eaf2;
+  background: rgba(214, 168, 206, .075);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.admin-preview-buttons button:hover,
+.admin-preview-buttons button:focus-visible {
+  border-color: rgba(219, 194, 217, .6);
+  background: rgba(214, 168, 206, .17);
+}
+.nightjar-read-only-preview [data-nj-preview-safe="true"] { cursor: pointer; }
+@media (max-width: 900px) {
+  .admin-preview-control { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 440px) {
+  .admin-preview-buttons { grid-template-columns: minmax(0, 1fr); }
+}
