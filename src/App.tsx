@@ -467,8 +467,6 @@ function App() {
   const [adminOverview, setAdminOverview] = useState<any | null>(null);
   const [adminOverviewLoading, setAdminOverviewLoading] = useState(false);
   const [adminTesterEmail, setAdminTesterEmail] = useState('');
-  const [adminRoleSelections, setAdminRoleSelections] = useState<Record<string, ('creator'|'writer'|'editor'|'artist')[]>>({});
-  const [adminRoleBusyId, setAdminRoleBusyId] = useState<string | null>(null);
   const [adminMemberSearch, setAdminMemberSearch] = useState('');
   const [adminPeopleRole, setAdminPeopleRole] = useState<'listener' | 'creator' | 'writer' | 'editor' | 'artist' | 'admin' | null>(() => {
     const roleFromPath = window.location.pathname.match(/^\/admin\/people\/(listener|creator|writer|editor|artist|admin)\/?$/)?.[1];
@@ -2967,63 +2965,6 @@ function App() {
     }
   };
 
-  const manageAccountProfessionalRoles = async (account: any, action: 'queue' | 'approve') => {
-    if (!canAdmin || !account?.userId || account.role === 'admin') return;
-    const selected = adminRoleSelections[account.userId] ?? [];
-    const approved = new Set<string>(account.approvedProfessionalRoles ?? []);
-    const pending = new Set<string>(account.pendingProfessionalRoles ?? []);
-    const additions = selected.filter((role) => !approved.has(role) && (action === 'approve' || !pending.has(role)));
-    if (!additions.length) {
-      notify('Select one or more professional roles that are not already enabled.');
-      return;
-    }
-    setAdminRoleBusyId(account.userId);
-    try {
-      if (demoMode) {
-        setAdminOverview((current:any) => {
-          const accounts = (current?.people?.accounts ?? []).map((item:any) => {
-            if (item.userId !== account.userId) return item;
-            const existingApproved: string[] = item.approvedProfessionalRoles ?? [];
-            const existingPending: string[] = item.pendingProfessionalRoles ?? [];
-            return {
-              ...item,
-              approvedProfessionalRoles: action === 'approve' ? Array.from(new Set([...existingApproved, ...additions])) : existingApproved,
-              pendingProfessionalRoles: action === 'queue'
-                ? Array.from(new Set([...existingPending, ...additions]))
-                : existingPending.filter((role:string) => !additions.includes(role as typeof additions[number])),
-            };
-          });
-          const updated = {...current, people:{...current?.people, accounts}};
-          writeDemo('adminOverview', updated);
-          return updated;
-        });
-      } else {
-        const result = await nightjarAdministration.manageProfessionalRoles(account.userId, additions, action);
-        if (result.changedRoles.length === 0) {
-          notify('The selected roles were already present. Refresh the account directory.');
-          await loadAdminOverview();
-          return;
-        }
-        await loadAdminOverview();
-      }
-      setAdminRoleSelections((current) => ({...current, [account.userId]: []}));
-      notify(action === 'queue'
-        ? 'Roles added to the approval bank. The member keeps Listener access while approval is pending.'
-        : 'Professional roles approved. The member can switch to these workspaces on their existing account.');
-    } catch (error:any) {
-      notify(error?.message ?? 'Professional roles could not be updated. Verify member consent and age assurance before approving.');
-    } finally {
-      setAdminRoleBusyId(null);
-    }
-  };
-
-  const toggleAdminRoleSelection = (userId:string, role:'creator'|'writer'|'editor'|'artist') => {
-    setAdminRoleSelections((current) => {
-      const selected = current[userId] ?? [];
-      return {...current, [userId]: selected.includes(role) ? selected.filter((value) => value !== role) : [...selected,role]};
-    });
-  };
-
   const changeAccountRole = async (account: any, nextRole: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') => {
     if (!canAdmin || !account?.userId) return;
     try {
@@ -4341,22 +4282,7 @@ function App() {
               <strong>{authenticationEvents.length} retained authentication event{authenticationEvents.length === 1 ? '' : 's'} shown · repeated attempts can escalate into Owner Alerts above</strong>
             </section>}
 
-            {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><label className="admin-member-search">Find member by name, handle or email<input type="search" value={adminMemberSearch} onChange={(event)=>setAdminMemberSearch(event.target.value)} placeholder="Search Nightjar members"/></label><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => (adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole)) && (!adminMemberSearch.trim() || [account.name,account.email,account.handle].some((field:string|undefined)=>String(field ?? '').toLowerCase().includes(adminMemberSearch.trim().toLowerCase()))))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <div className="people-row-controls"><select value={account.role ?? 'listener'} onChange={(e)=>void changeAccountRole(account,e.target.value as 'listener'|'creator'|'writer'|'editor'|'artist')}><option value="listener">Listener</option>{(account.roles ?? []).filter((professionalRole:string)=>['creator','writer','editor','artist'].includes(professionalRole)).map((professionalRole:'creator'|'writer'|'editor'|'artist')=><option key={professionalRole} value={professionalRole}>{professionalRole === 'creator' ? 'VA Creator' : professionalRole === 'editor' ? 'Audio Editor' : professionalRole === 'artist' ? 'Artist' : 'Writer'}</option>)}</select><div className="admin-professional-access">
-  <strong>Professional roles (add without replacing Listener)</strong>
-  <small>Approved: {(account.approvedProfessionalRoles ?? []).map((r:string)=>r === 'creator' ? 'VA Creator' : r === 'editor' ? 'Audio Editor' : r).join(' · ') || 'None'} · Pending: {(account.pendingProfessionalRoles ?? []).join(' · ') || 'None'}</small>
-  <div className="admin-professional-role-options">{(['creator','writer','editor','artist'] as const).map((professionalRole)=><label key={professionalRole}>
-    <input type="checkbox"
-      checked={(adminRoleSelections[account.userId] ?? []).includes(professionalRole)}
-      disabled={adminRoleBusyId === account.userId || (account.approvedProfessionalRoles ?? []).includes(professionalRole)}
-      onChange={()=>toggleAdminRoleSelection(account.userId,professionalRole)}/>
-    {professionalRole === 'creator' ? 'VA Creator' : professionalRole === 'editor' ? 'Audio Editor' : professionalRole === 'writer' ? 'Writer' : 'Artist'}
-  </label>)}</div>
-  <div className="admin-professional-role-actions">
-    <button type="button" className="secondary-button" disabled={adminRoleBusyId === account.userId || !(adminRoleSelections[account.userId] ?? []).length} onClick={()=>void manageAccountProfessionalRoles(account,'queue')}>Queue for approval</button>
-    <button type="button" className="primary-button" disabled={adminRoleBusyId === account.userId || !(adminRoleSelections[account.userId] ?? []).length} onClick={()=>void manageAccountProfessionalRoles(account,'approve')}>Approve selected roles</button>
-  </div>
-  <small>Approval requires this member's accepted professional terms and verified age or authorised private-beta testing access. No other role or profile is overwritten.</small>
-</div><select value={account.status ?? 'active'} onChange={(e)=>void changeAccountStatus(account,e.target.value as 'active'|'pending_review'|'suspended')}><option value="active">Active</option><option value="pending_review">Pending review</option><option value="suspended">Suspended</option></select><button className={account.testAccess ? 'secondary-button' : 'ghost-button'} onClick={()=>void changeTestAccess(account, !account.testAccess)}>{account.testAccess ? 'Remove tester access' : 'Enable tester access'}</button></div>}{adminPeopleRole !== 'admin' && <AdminMemberRoleManager
+            {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><label className="admin-member-search">Find member by name, handle or email<input type="search" value={adminMemberSearch} onChange={(event)=>setAdminMemberSearch(event.target.value)} placeholder="Search Nightjar members"/></label><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => (adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole)) && (!adminMemberSearch.trim() || [account.name,account.email,account.handle].some((field:string|undefined)=>String(field ?? '').toLowerCase().includes(adminMemberSearch.trim().toLowerCase()))))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <div className="people-row-controls"><select value={account.role ?? 'listener'} onChange={(e)=>void changeAccountRole(account,e.target.value as 'listener'|'creator'|'writer'|'editor'|'artist')}><option value="listener">Listener</option>{(account.roles ?? []).filter((professionalRole:string)=>['creator','writer','editor','artist'].includes(professionalRole)).map((professionalRole:'creator'|'writer'|'editor'|'artist')=><option key={professionalRole} value={professionalRole}>{professionalRole === 'creator' ? 'VA Creator' : professionalRole === 'editor' ? 'Audio Editor' : professionalRole === 'artist' ? 'Artist' : 'Writer'}</option>)}</select><select value={account.status ?? 'active'} onChange={(e)=>void changeAccountStatus(account,e.target.value as 'active'|'pending_review'|'suspended')}><option value="active">Active</option><option value="pending_review">Pending review</option><option value="suspended">Suspended</option></select><button className={account.testAccess ? 'secondary-button' : 'ghost-button'} onClick={()=>void changeTestAccess(account, !account.testAccess)}>{account.testAccess ? 'Remove tester access' : 'Enable tester access'}</button></div>}{adminPeopleRole !== 'admin' && <AdminMemberRoleManager
                 account={account}
                 demoMode={demoMode}
                 notify={notify}
