@@ -2511,3 +2511,19 @@ textarea {
     transform: none;
   }
 }
+
+
+/* Temporary QA notices must scroll normally instead of covering the sticky
+   Nightjar header and its notification/account/menu controls. */
+.testing-age-bypass-banner {
+  position: relative;
+  top: auto;
+  z-index: auto;
+}
+@media (max-width: 760px) {
+  .testing-age-bypass-banner {
+    padding: 10px 14px;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}
