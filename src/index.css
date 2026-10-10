@@ -8870,3 +8870,24 @@ textarea:focus-visible,
   .nj-admin-member-role-options { grid-template-columns: 1fr; }
   .nj-admin-member-role-actions > button { flex: 1 1 170px; }
 }
+
+
+/* Owner-managed multi-role access: keep selections and permissions readable on phones. */
+.admin-professional-access {
+  display:grid;
+  gap:8px;
+  width:100%;
+  flex-basis:100%;
+  padding:12px;
+  border:1px solid var(--line-soft);
+  border-radius:12px;
+  background:rgba(203,181,204,.035);
+}
+.admin-professional-access > strong { font-size:11px; }
+.admin-professional-access > small { color:var(--muted); font-size:9px; line-height:1.5; }
+.admin-professional-role-options,
+.admin-professional-role-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.admin-professional-role-options label { display:inline-flex; align-items:center; gap:6px; padding:7px 9px; border:1px solid var(--line-soft); border-radius:9px; font-size:10px; }
+.admin-professional-role-options input { accent-color:#bca5ba; }
+.admin-professional-role-actions button { flex:1 1 145px; }
+@media(max-width:560px){ .admin-professional-role-options label { flex:1 1 130px; } }
