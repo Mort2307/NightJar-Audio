@@ -28,10 +28,11 @@ assert.match(styles, /\.nj-mobile-profile-save\s*\{[^]*?bottom: calc\(var\(--nj-
 assert.match(styles, /\.app-shell\.has-mobile-profile-save\s*\{[^]*?padding-bottom: 148px;/, 'remaining page buttons can scroll above fixed save CTA');
 assert.match(styles, /\.nj-mobile-profile-save \.primary-button\s*\{[^]*?min-height: 50px;/, 'mobile save is a comfortable touch target');
 
-assert.match(product, /--nj-mobile-dock-clearance: 96px;/, 'dock clearance is centrally defined');
-assert.match(product, /\.nj-mobile-nav\s*\{[^]*?bottom: calc\(8px \+ env\(safe-area-inset-bottom/, 'dock respects home-indicator safe area');
+assert.match(product, /--nj-mobile-dock-clearance: 76px;/, 'compact dock clearance is centrally defined');
+assert.match(product, /\.nj-mobile-nav\s*\{[^]*?bottom: calc\(6px \+ env\(safe-area-inset-bottom/, 'compact dock respects home-indicator safe area');
 assert.match(product, /body\s*\{\s*padding-bottom: calc\(var\(--nj-mobile-dock-clearance\)/, 'bottom content clears fixed navigation');
-assert.match(product, /\.nj-mobile-nav button\s*\{[^]*?min-height: 58px;/, 'mobile nav has sufficient tap height');
+assert.match(product, /\.nj-mobile-nav\s*\{[^]*?height: 61px;/, 'mobile dock remains one compact row');
+assert.match(product, /\.nj-mobile-nav button\s*\{[^]*?height: 100%;/, 'mobile nav fills its single row');
 assert.match(product, /\.nj-mobile-nav button:active/, 'nav buttons have visible pressed states');
 assert.match(product, /:where\(button:not\(:disabled\)\):active/, 'all ordinary buttons have pressed-state feedback');
 assert.match(product, /:focus-visible/, 'keyboard focus remains visible');
@@ -40,4 +41,11 @@ assert.match(product, /\.floating-account\s*\{\s*display: none;/, 'floating role
 assert.match(product, /\.testing-age-bypass-banner\s*\{\s*position: relative;/, 'QA notice does not cover the sticky header and its buttons');
 
 assert.match(mobileNav, /aria-current=\{active \? 'page' : undefined\}/, 'active destination remains announced');
+assert.match(mobileNav, /const settings: Item = \{ view: 'settings'/, 'settings is an actual mobile destination');
+assert.match(mobileNav, /Exactly five unique destinations/, 'mobile navigation explicitly prevents duplicates');
+assert.doesNotMatch(mobileNav, /roleHome/, 'duplicate Admin home/destination is removed');
+assert.match(app, /view === 'settings' &&/, 'settings view is rendered as a distinct page');
+assert.match(app, /import NightjarSettings from/, 'settings hub is integrated with app routing');
+assert.match(product, /grid-template-rows: minmax\(0, 1fr\)/, 'mobile dock cannot form an extra row');
+
 console.log('Nightjar mobile dock, save-bar visibility and responsive touch-feedback contracts passed.');
