@@ -1,6 +1,7 @@
 import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { diditPass } from './didit';
 
 const db = () => getFirestore();
 const REGION = 'europe-west2';
@@ -34,7 +35,7 @@ const requireIdentity = async (request: { auth?: { uid: string; token: Record<st
   if (data.status === 'suspended') throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
   const age = await db().collection('ageAssurance').doc(uid).get();
   const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && (data.testAccess === true || data.role === 'admin');
-  if (age.data()?.verified !== true && !temporaryTestAccess) {
+  if (!diditPass(age.data()) && !temporaryTestAccess) {
     throw new HttpsError('permission-denied', 'Age assurance is required before using Nightjar gifts.');
   }
   return { uid, account: data };
