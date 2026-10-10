@@ -60,8 +60,8 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
     </div>
     <p className="panel-note">Use this if your installed app looks behind the website or you suspect an old cached build. Nightjar compares the build you are running with the latest deployed build before offering an update.</p>
     <div className="app-update-version-grid">
-      <div><span>Running build</span><strong>{status?.currentBuiltAt ? new Date(status.currentBuiltAt).toLocaleString('en-GB') : new Date(__NIGHTJAR_BUILT_AT__).toLocaleString('en-GB')}</strong><small>Build ID {status?.currentBuildId ?? __NIGHTJAR_BUILD_ID__}</small></div>
-      <div><span>Latest deployed</span><strong>{status?.latestBuiltAt ? new Date(status.latestBuiltAt).toLocaleString('en-GB') : 'Check to compare'}</strong><small>{status?.latestBuildId ? 'Build ID ' + status.latestBuildId : 'No comparison made yet'}</small></div>
+      <div><span>Running build</span><strong>{status?.currentBuiltAt ? new Date(status.currentBuiltAt).toLocaleString('en-GB') : new Date(__NIGHTJAR_BUILT_AT__).toLocaleString('en-GB')}</strong><small>Build ID {status?.currentBuildId ?? __NIGHTJAR_BUILD_ID__}</small><small>Source revision {(status?.currentSourceCommit ?? __NIGHTJAR_SOURCE_COMMIT__)?.slice(0,12) ?? 'unavailable'}</small></div>
+      <div><span>Latest deployed</span><strong>{status?.latestBuiltAt ? new Date(status.latestBuiltAt).toLocaleString('en-GB') : 'Check to compare'}</strong><small>{status?.latestBuildId ? 'Build ID ' + status.latestBuildId : 'No comparison made yet'}</small><small>Source revision {status?.latestSourceCommit?.slice(0,12) ?? 'Check to compare'}</small></div>
     </div>
     {message && <div className={status?.updateAvailable ? 'app-update-result available' : 'app-update-result'}>{status?.updateAvailable ? <Download size={16}/> : <CheckCircle2 size={16}/>}<span>{message}</span></div>}
     <div className="app-update-actions">
