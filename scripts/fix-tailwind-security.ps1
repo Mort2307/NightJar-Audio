@@ -53,7 +53,8 @@ try {
                  '@config "../tailwind.config.js";' + "`n" +
                  '@source "../index.html";' + "`n" +
                  '@source "./";' + "`n`n"
-    $css = [regex]::Replace($css, $legacyHeader, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $newHeader }, 1)
+    $headerMatch = [regex]::Match($css, $legacyHeader)
+    $css = $newHeader + $css.Substring($headerMatch.Length)
     [System.IO.File]::WriteAllText($cssFile, $css, $writer)
 
     $postcssFile = Join-Path $root 'postcss.config.js'
