@@ -3473,11 +3473,16 @@ function App() {
     setRolePicker(false);
     setAdminPanel(null);
     setAdminPeopleRole(null);
+    setModerationOpen(false);
     setPlaying(null);
+    setReviewTrack(null);
     setProtectedReaderOpen(false);
     setProtectedReaderScript(null);
     setCreatorProfileUserId(null);
     setPublicProfileUserId(null);
+    setMessageRecipientUserId(null);
+    setMessageConversationId(null);
+    setMessageCollaborationId(null);
     setNotificationsOpen(false);
     setCommandOpen(false);
     const destination: View = next === 'creator' ? 'creator' : next === 'listener' ? 'discover' : 'creators';
@@ -3878,7 +3883,7 @@ function App() {
         </div>
       </div>}
 
-      {liveRolePreview && <div className="nightjar-live-role-banner" role="status"><ShieldCheck size={18}/><div><strong>LIVE NIGHTJAR · {previewRole ? roleMeta[previewRole].label : 'Member'}</strong><span>Real public content, not simulation. Read-only administrator perspective — no impersonation of a Creator or Listener account.</span></div><button className="secondary-button" onClick={clearAdminPreview}>Return to Admin</button></div>}
+      {liveRolePreview && <div className="nightjar-live-role-banner" role="status"><ShieldCheck size={18}/><div><strong>LIVE NIGHTJAR · {previewRole ? roleMeta[previewRole].label : 'Member'}</strong><span>Real catalogue and public listings, not simulation. This remains your Administrator account: personalised data belongs to you, never an impersonated Creator or Listener.</span></div><button className="secondary-button" onClick={clearAdminPreview}>Return to Admin</button></div>}
       <main id="nightjar-main-content" className={liveRolePreview ? 'nightjar-main nightjar-read-only-preview' : 'nightjar-main'}
         onClickCapture={(event) => { if (liveRolePreview && (event.target as HTMLElement).closest('button,a,input,select,textarea,summary,[role="button"],[contenteditable]')) { event.preventDefault(); event.stopPropagation(); } }}
         onKeyDownCapture={(event) => { if (liveRolePreview && event.key !== 'Tab' && (event.target as HTMLElement).closest('button,a,input,select,textarea,summary,[role="button"],[contenteditable]')) { event.preventDefault(); event.stopPropagation(); } }}
