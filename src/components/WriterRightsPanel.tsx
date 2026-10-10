@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileKey2, Save, ShieldCheck } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
+import { parseListingTags } from '../platform/listing-tags';
 
 type Props = {
   script: any;
@@ -24,9 +25,6 @@ const defaultRights = {
   contributorPermissionsConfirmed: false,
   withdrawalTerms: '',
 };
-
-export const parseListingTags = (draft: string, limit: number) =>
-  Array.from(new Set(draft.split(',').map((part) => part.trim().replace(/\s+/g, ' ')).filter(Boolean))).slice(0, limit);
 
 const defaultMarketplace = {
   visibility: 'private',
