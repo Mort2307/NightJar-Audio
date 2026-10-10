@@ -2396,3 +2396,118 @@ textarea {
     right: 10px;
   }
 }
+
+
+/* NIGHTJAR TOUCH FEEDBACK + MOBILE DOCK CLEARANCE
+   The dock is fixed. Content and sticky action panels must be offset above it. */
+:root {
+  --nj-mobile-dock-clearance: 96px; /* 74px dock + 8px bottom inset + 14px breathing room */
+}
+
+/* Give users immediate visual confirmation on touch and keyboard, not only hover. */
+:where(button:not(:disabled), [role="button"], .upload-label) {
+  -webkit-tap-highlight-color: rgba(203, 181, 204, .18);
+  touch-action: manipulation;
+}
+:where(button:not(:disabled)):active {
+  filter: brightness(1.17);
+}
+:where(
+  .primary-button,
+  .secondary-button,
+  .ghost-button,
+  .back-button,
+  .nav-link,
+  .icon-button,
+  .account-chip,
+  .floating-account,
+  .nj-next-action
+):not(:disabled) {
+  transition:
+    transform 110ms ease-out,
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out,
+    filter 110ms ease-out,
+    box-shadow 150ms ease-out;
+}
+:where(
+  .primary-button,
+  .secondary-button,
+  .ghost-button,
+  .back-button,
+  .nav-link,
+  .icon-button,
+  .account-chip,
+  .floating-account,
+  .nj-next-action
+):not(:disabled):active {
+  transform: scale(.975);
+}
+:where(button:disabled, button[aria-busy="true"]) {
+  opacity: .64;
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(.primary-button, .secondary-button, .ghost-button, .nj-next-action, .nav-link):not(:disabled):hover {
+    filter: brightness(1.11);
+  }
+}
+@media (max-width: 700px) {
+  /* Extra scroll space means even the last action on a page can sit above the dock. */
+  body {
+    padding-bottom: calc(var(--nj-mobile-dock-clearance) + env(safe-area-inset-bottom, 0px));
+  }
+  .nj-mobile-nav {
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: 7px;
+    gap: 4px;
+    border-radius: 19px;
+  }
+  .nj-mobile-nav button {
+    min-height: 58px;
+    gap: 4px;
+    padding: 7px 2px;
+    touch-action: manipulation;
+    transition: background-color 125ms ease-out, color 125ms ease-out, transform 110ms ease-out, filter 110ms ease-out;
+  }
+  .nj-mobile-nav button .nj-mobile-nav-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+  .nj-mobile-nav button > span:last-child {
+    font-size: 10.5px;
+    font-weight: 650;
+    line-height: 1.2;
+    max-width: 100%;
+  }
+  .nj-mobile-nav button:active {
+    transform: scale(.92);
+    background: rgba(203, 181, 204, .24);
+    color: var(--nj-text-primary);
+  }
+  .nj-mobile-nav button.active {
+    background: rgba(203, 181, 204, .14);
+    box-shadow: inset 0 0 0 1px rgba(203, 181, 204, .12);
+  }
+  .nj-mobile-nav button:focus-visible {
+    outline: 2px solid var(--nj-accent);
+    outline-offset: -3px;
+  }
+  /* Account switching is available from the header avatar and Profile.
+     Remove the second floating chip that obscures content on small screens. */
+  .floating-account {
+    display: none;
+  }
+}
+@media (max-width: 350px) {
+  .nj-mobile-nav button > span:last-child { font-size: 9.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, [role="button"], .upload-label) {
+    transition-duration: 0.01ms !important;
+  }
+  :where(.primary-button, .secondary-button, .ghost-button, .back-button, .nav-link, .icon-button, .account-chip, .nj-next-action):active,
+  .nj-mobile-nav button:active {
+    transform: none;
+  }
+}
