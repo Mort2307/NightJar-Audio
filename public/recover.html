@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0c0b0d" />
+  <title>Repair Nightjar</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100dvh; display:grid; place-items:center; padding:20px; font:16px/1.6 system-ui,sans-serif; background:#0c0b0d; color:#efe7df; }
+    main { width:min(460px,100%); padding:28px; border:1px solid #554452; border-radius:18px; background:#171318; }
+    h1 { margin:0 0 8px; font:normal 32px Georgia,serif; }
+    p { color:#dbccd8; }
+    button { cursor:pointer; width:100%; border:1px solid #bba3b7; border-radius:11px; padding:13px 16px; background:#392538; color:#fff; font:600 16px system-ui,sans-serif; }
+    button:disabled { opacity:.65; cursor:wait; }
+    a { display:inline-block; margin-top:16px; color:#e9cce3; }
+    small { display:block; margin-top:12px; color:#c6bcc4; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Repair Nightjar</h1>
+    <p>If Nightjar freezes or shows a white screen after an update, this tool clears <strong>app-only cached files and old service workers</strong>, then reopens Nightjar.</p>
+    <p>Your account, uploaded work, approvals and cloud records are not removed.</p>
+    <button id="repair" type="button">Clear app cache and reopen</button>
+    <small id="status" role="status" aria-live="polite">A connection is needed to reload the current version.</small>
+    <a href="/discover">Open Nightjar without clearing the cache</a>
+  </main>
+  <script>
+    document.getElementById('repair').addEventListener('click', async function () {
+      const button = this;
+      const status = document.getElementById('status');
+      button.disabled = true;
+      status.textContent = 'Removing old Nightjar app files…';
+      try {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister().catch(() => false)));
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((key) => caches.delete(key).catch(() => false)));
+        }
+        status.textContent = 'Opening the latest Nightjar version…';
+        window.location.replace('/discover?nightjar-refresh=' + Date.now());
+      } catch {
+        status.textContent = 'Cache repair could not finish automatically. Please reopen Nightjar in your browser and try again.';
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
