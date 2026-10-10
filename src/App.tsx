@@ -4339,6 +4339,23 @@ function App() {
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
               <AdminLegalReadiness />
             </Suspense>
+            <section className="panel nj-didit-pilot" aria-label="Administrator Didit verification pilot">
+              <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
+              <h2>Didit Age Verification</h2>
+              <p>See the real provider state without switching to fictional demo data. Only an authorised administrator may initiate a check, and a live session may incur provider charges.</p>
+              <div className="demo-state-line">
+                <span className={ageConfigured ? 'status-pill' : 'status-pill muted'}>{ageLivePilotAvailable ? 'LIVE PILOT ENABLED' : ageConfigured ? 'DIDIT CONNECTED' : 'DIDIT SETUP REQUIRED'}</span>
+                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'VERIFIED 18+' : ageProviderStatus.replaceAll('_', ' ')}</span>
+                <span className={ageEnvironment === 'live' ? 'status-pill warning' : 'status-pill'}>{ageEnvironment === 'live' ? 'LIVE · MAY INCUR FEES' : 'SANDBOX / UNCONFIGURED'}</span>
+              </div>
+              <div className="admin-member-multi-role-actions">
+                <button type="button" className="primary-button" disabled={ageLoading || !ageConfigured || ageProviderVerified}
+                  onClick={() => void openAgeCheck(true)}>{ageLoading ? 'Opening Didit…' : ageProviderVerified ? 'Verified · no repeat needed' : ageEnvironment === 'live' ? 'Start my live Didit test' : 'Start sandbox Didit test'}</button>
+                <button type="button" className="secondary-button" onClick={() => void refreshAgeStatus()}>Refresh Didit status</button>
+                {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open existing Didit session</a>}
+              </div>
+              <small>Sandbox checks never count as production adult verification. All approved private-beta testers retain their separate temporary test-access status.</small>
+            </section>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Mail" />}>
               <AdminCommunications />
             </Suspense>
