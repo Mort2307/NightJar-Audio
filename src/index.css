@@ -9352,3 +9352,20 @@ textarea:focus-visible,
   .admin-member-queue-roles { padding: 12px; }
   .admin-member-queue-roles .secondary-button { width: 100%; justify-self: stretch; white-space: normal; }
 }
+
+
+/* Installed Nightjar icon repair: distinct administrator-only workpage. */
+.nj-install-branding { display: grid; gap: 16px; min-width: 0; }
+.nj-install-branding-status {
+  display: grid; gap: 9px; padding: 15px;
+  border: 1px solid rgba(221,198,215,.25); border-radius: 14px;
+  background: rgba(155,117,149,.06);
+}
+.nj-install-branding-status > div { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.nj-install-branding-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.nj-install-branding-actions button { min-height: 44px; }
+.nj-install-branding a { overflow-wrap: anywhere; text-decoration: underline; }
+@media(max-width: 600px) {
+  .nj-install-branding-actions { display: grid; grid-template-columns: minmax(0,1fr); }
+  .nj-install-branding-actions button { width: 100%; white-space: normal; }
+}
