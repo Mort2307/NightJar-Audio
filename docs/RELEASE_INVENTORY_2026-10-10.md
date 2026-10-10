@@ -43,6 +43,14 @@ PR #39 is included by verified Git ancestry in draft PR #40. The other eleven un
 
 Only PR #39 is included by ancestry. The three technically superseded PRs above are **not** merged, closed or deployed. Their source dispositions are recorded in `docs/release-pr-review.json`. Remaining records are intentionally pending.
 
+## Additional source reconciliation — 10 October 2026
+
+- **PR #38 queued access recovered in candidate:** a new `adminQueueProfessionalRoles` callable allows an Owner to add multiple professional roles to **pending review** without granting access, accepting terms for the user, unlocking workspaces, or sending professional-approval emails. It writes account, application and audit event transactionally. Admin People can stage several roles on a distinct touch-friendly selector; real and demo modes are separated. Existing full-set approved-role editor remains authoritative. **New validation contract must pass locally and behaviour must pass staging QA before #38 can be closed/superseded.**
+- **PR #36 beta legal checks strengthened:** restored contract coverage for the public Legal Centre, individually readable versioned terms, closed beta, retained allowlisted tester access and administrator-only live Didit pilot. This protects the **existing** beta policy; it does not authorise live age-verification charges or certify UK legal compliance.
+- **PR #29 is not safe to blanket-supersede:** source comparison found a separate FCM/push repair workflow, `branding-icons.ts` and push stability contracts not in #40. Its legacy Didit patcher must **not** be merged over #40's guarded provider code. Evaluate notification and PWA-branding fixes as an isolated follow-up after account-level CI is operational.
+- **PRs #7–#9 are not confirmed superseded:** older `RecommendationFeedback.tsx`, `LiveReleaseCard.tsx`, `CreatorDirectory.tsx`, `FollowingList.tsx` and the original `appdeploy-local-shim.ts` are not present at those paths in the candidate. This may reflect legitimate consolidation/retirement, but exact feature parity remains unproved; do not silently mark these reviews complete.
+- **PR #14 production entitlements** and **PRs #28/#29 alternate age providers** are still isolated. Release the guarded beta candidate only after explicit safety review; do not infer billing readiness or live Didit approval from successful source contracts.
+
 ## Release gates
 
 1. **Branch scope:** `main` is the production source. Confirm the candidate contains all owner-approved work; review outstanding PRs one by one. Preserve data and avoid automatic conflict resolution of overlapping Firebase Functions.
