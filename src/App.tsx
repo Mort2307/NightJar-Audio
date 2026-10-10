@@ -4691,7 +4691,7 @@ function App() {
       )}
       {user && ageVerified && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} messageUnreadCount={messageUnreadCount} messageNeedsReplyCount={messageNeedsReplyCount} />}
 
-      <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
+      <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal">T&Cs Centre</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
       {securityEvidenceReview && <div className="security-evidence-backdrop" role="dialog" aria-modal="true" aria-label="Security alert evidence review" onClick={()=>setSecurityEvidenceReview(null)}>
         <section className="security-evidence-modal" onClick={(event)=>event.stopPropagation()}>
