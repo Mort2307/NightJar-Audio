@@ -8484,6 +8484,84 @@ export const adminManageProfessionalRoles = onCall({ region: REGION }, async (re
   return result;
 });
 
+// An owner can add a prospective profession to the approval bank without
+// granting a role or recording consent on the member's behalf. The member must
+// separately accept current terms and pass authorised age access before approval.
+export const adminQueueProfessionalRoles = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const roles = cleanProfessionalRoles(input.roles);
+  if (!userId || userId.includes('/') || !Array.isArray(input.roles)
+    || input.roles.some((value) => typeof value !== 'string' || !PROFESSIONAL_ROLE_KEYS.includes(value as ProfessionalRole))
+    || !roles.length) {
+    throw new HttpsError('invalid-argument', 'Select a member and one or more professional roles to queue.');
+  }
+  const accountDocument = accountRef(userId);
+  const applicationDocument = professionalApplicationRef(userId);
+  const eventDocument = applicationDocument.collection('events').doc();
+
+  return db.runTransaction(async (tx) => {
+    const [accountSnapshot, applicationSnapshot] = await Promise.all([
+      tx.get(accountDocument),
+      tx.get(applicationDocument),
+    ]);
+    if (!accountSnapshot.exists) throw new HttpsError('not-found', 'Nightjar member not found.');
+    const account = accountSnapshot.data() ?? {};
+    if (ADMIN_EMAILS.has(cleanEmail(account.email)) || cleanText(account.role, 30) === 'admin') {
+      throw new HttpsError('permission-denied', 'Administrator accounts cannot enter the professional application bank.');
+    }
+    if (account.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'Suspended members cannot be queued for professional approval.');
+    }
+    const application = applicationSnapshot.data() ?? {};
+    const approved = professionalRolesForAccount(account) as ProfessionalRole[];
+    const priorStatus = cleanText(application.status, 30);
+    const previousPending = Array.from(new Set([
+      ...cleanProfessionalRoles(account.pendingProfessionalRoles),
+      ...(['banked', 'waitlist'].includes(priorStatus) ? cleanProfessionalRoles(application.requestedRoles) : []),
+    ])).filter((role) => !approved.includes(role));
+    const addedRoles = roles.filter((role) => !approved.includes(role) && !previousPending.includes(role));
+    if (!addedRoles.length) return {
+      userId, queuedRoles: [] as ProfessionalRole[], approvedProfessionalRoles: approved,
+      pendingProfessionalRoles: previousPending, unchanged: true,
+    };
+    const pending = [...previousPending, ...addedRoles];
+    const now = FieldValue.serverTimestamp();
+    tx.set(accountDocument, {
+      pendingProfessionalRoles: pending,
+      professionalAccessUpdatedBy: admin.uid,
+      professionalAccessUpdatedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    tx.set(applicationDocument, {
+      userId,
+      email: cleanEmail(account.email) || null,
+      requestedRoles: pending,
+      approvedRoles: approved,
+      status: 'banked',
+      source: 'administrator_role_queue',
+      wave: application.wave || 'Administrator role suggestions',
+      updatedAt: now,
+      ...(applicationSnapshot.exists ? {} : { createdAt: now }),
+    }, { merge: true });
+    tx.create(eventDocument, {
+      userId,
+      decision: 'banked',
+      source: 'administrator_role_queue',
+      roles: addedRoles,
+      approvedRolesAfter: approved,
+      pendingRolesAfter: pending,
+      reviewedBy: admin.uid,
+      createdAt: now,
+    });
+    return {
+      userId, queuedRoles: addedRoles, approvedProfessionalRoles: approved,
+      pendingProfessionalRoles: pending, unchanged: false,
+    };
+  });
+});
+
 export const reviewProfessionalApplication = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
