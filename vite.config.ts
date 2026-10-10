@@ -21,7 +21,8 @@ export default defineConfig({
     __NIGHTJAR_BUILT_AT__: JSON.stringify(builtAt),
   },
   plugins: [react(), nightjarVersionManifest()],
-  base: './',
+  // All installed-app and nested URLs must load assets from the site root.
+  base: '/',
   build: {
     outDir: 'dist',
     sourcemap: false,
