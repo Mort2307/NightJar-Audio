@@ -70,7 +70,7 @@ export default function ProfessionalRoleManager({
 
   const apply = async () => {
     if (!selected.length) {
-      notify('Choose at least one professional role.');
+      notify('Select at least one professional role to request approval for.');
       return;
     }
 
@@ -83,7 +83,7 @@ export default function ProfessionalRoleManager({
         portfolioUrl,
         socialUrl,
       });
-      notify(result.message);
+      notify('Your role request has been sent to the Nightjar administrators. You can keep listening while it is reviewed. Professional workspaces remain locked until approved.');
       setSelected([]);
       setStatement('');
       setExperience('');
@@ -124,11 +124,11 @@ export default function ProfessionalRoleManager({
   };
 
   const roles: NightjarProfessionalRole[] = ['creator', 'writer', 'editor', 'artist'];
-  const available = roles.filter(
+  const available = state ? roles.filter(
     (role) =>
       !state?.approvedProfessionalRoles.includes(role)
       && !state?.pendingProfessionalRoles.includes(role),
-  );
+  ) : [];
 
   const icon = (role: NightjarProfessionalRole) =>
     role === 'creator'
@@ -178,7 +178,7 @@ export default function ProfessionalRoleManager({
         disabled={busy}
         onClick={() => void apply()}
       >
-        {busy ? 'Saving…' : 'Store application'}
+        {busy ? 'Sending request…' : 'Send roles for approval'}
       </button>
     </>
   ) : null;
@@ -186,7 +186,8 @@ export default function ProfessionalRoleManager({
   const applicationPicker = (
     <>
       <span className="mini-label">ADD PROFESSIONAL ROLES</span>
-      <h3>Apply for another role</h3>
+      <h3>Request additional professional roles</h3>
+      <p>Choose one or more roles. This sends an application for Administrator review; it does not unlock access.</p>
       <div className="professional-role-picker">
         {available.map((role) => (
           <button
@@ -210,8 +211,8 @@ export default function ProfessionalRoleManager({
       <div className="professional-role-head">
         <div>
           <span className="mini-label">ONE ACCOUNT · MULTIPLE CREATIVE ROLES</span>
-          <h2>Your Nightjar roles</h2>
-          <p>Listener access is always available. Professional roles are approved separately and can be combined on one account.</p>
+          <h2>My Roles</h2>
+          <p>You control which professional roles to request. Every new professional role needs Nightjar Administrator approval before it can be used. Once approved, switch freely between your approved workspaces.</p>
         </div>
         <ShieldCheck size={20} />
       </div>
@@ -236,7 +237,7 @@ export default function ProfessionalRoleManager({
             <span>{icon(role)}</span>
             <div>
               <strong>{labels[role]}</strong>
-              <small>Approved professional role.</small>
+              <small>Approved by Nightjar · you can switch to this workspace.</small>
             </div>
             <div className="professional-role-actions">
               <button
@@ -262,7 +263,7 @@ export default function ProfessionalRoleManager({
             <span>{icon(role)}</span>
             <div>
               <strong>{labels[role]}</strong>
-              <small>Stored in the application bank for a future intake wave.</small>
+              <small>Awaiting Administrator approval · workspace locked.</small>
             </div>
             <button
               className="ghost-button"
@@ -276,7 +277,7 @@ export default function ProfessionalRoleManager({
       </div>
 
       {missingProfessionalTerms.length > 0 && <div className="professional-terms-upgrade">
-        <strong>Professional consent needed</strong>
+        <strong>Professional terms required before requesting or using new roles</strong>
         <p>Before Nightjar can approve a Writer, VA Creator, Editor or Artist role, you must accept the current professional terms. This does not change your Listener profile.</p>
         {missingProfessionalTerms.map((document) => <a key={document.id} href={document.path} target="_blank" rel="noreferrer">{document.title} · version {document.version}</a>)}
         <label><input type="checkbox" checked={termsConfirmed} onChange={(event) => setTermsConfirmed(event.target.checked)}/>
@@ -291,7 +292,7 @@ export default function ProfessionalRoleManager({
       {available.length > 0 && (
         compact ? (
           <details className="professional-application-box compact-disclosure">
-            <summary>Apply for another professional role</summary>
+            <summary>Request a new professional role</summary>
             <div className="compact-disclosure-body">
               {applicationPicker}
             </div>
