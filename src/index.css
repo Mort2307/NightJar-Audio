@@ -9059,3 +9059,59 @@ textarea:focus-visible,
     animation: none;
   }
 }
+
+
+/* Viewport-anchored save dock for mobile. Mounted outside the page-enter
+   animation so a transformed parent cannot trap position:fixed. */
+.nj-mobile-profile-save { display: none; }
+@media (max-width: 700px) {
+  .premium-profile-page .premium-profile-floating-save {
+    /* The desktop sticky copy is not shown alongside the mobile fixed copy. */
+    display: none;
+  }
+  .nj-mobile-profile-save {
+    position: fixed;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+    z-index: 82; /* Above content/toasts, below emergency overlays and dock. */
+    left: 12px;
+    right: 12px;
+    bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px));
+    padding: 12px;
+    border: 1px solid rgba(203,181,204,.44);
+    border-radius: 18px;
+    background: rgba(18,14,19,.98);
+    box-shadow: 0 18px 55px rgba(0,0,0,.65);
+  }
+  .nj-mobile-profile-save-text {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+  .nj-mobile-profile-save-text strong { font-size: 13px; line-height: 1.25; }
+  .nj-mobile-profile-save-text small {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .nj-mobile-profile-save .primary-button {
+    width: 100%;
+    min-height: 50px;
+    font-size: 14px;
+    font-weight: 800;
+    border-radius: 13px;
+  }
+  .app-shell.has-mobile-profile-save {
+    /* Allows controls at the foot of the page to scroll clear of both bars. */
+    padding-bottom: 148px;
+  }
+  .has-mobile-profile-save .nj-toast {
+    /* Error/success confirmations stay visible above the Save and navigation bars. */
+    bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px) + 146px);
+    z-index: 92;
+  }
+}
+@media (max-width: 350px) {
+  .nj-mobile-profile-save-text small { display: none; }
+}
