@@ -29,10 +29,13 @@ assert.match(backend, /const admin = requireAdminIdentity\(request\)/, 'role mut
 assert.match(backend, /approvedProfessionalRoles: selected/, 'all approved professions persist atomically');
 assert.match(backend, /tx\.create\(eventDocument/, 'admin role grant\/removal is audit logged');
 assert.match(backend, /sameRoles\(previouslyApproved, expected\)/, 'parallel updates are conflict checked');
-assert.match(backend, /ageSnapshot\.data\(\)\?\.verified !== true && !temporaryTestAccess/, 'professional grants remain gated by verified age or tester access');
+assert.match(backend, /await requireProfessionalLegalTerms\(userId\)/, 'professional role grants require current contributor agreements');
+assert.match(backend, /await requireAgeVerified\(userId\)/, 'role grants require authoritative live age evidence or explicitly allowlisted QA access');
+assert.match(backend, /addedRoles\.length && account\.status === 'suspended'/, 'suspended accounts cannot be granted professional roles');
 assert.match(backend, /: 'listener';/, 'removing an active profession returns to Listener');
 const roleMutation = backend.split('export const adminManageProfessionalRoles = onCall')[1]?.split('export const reviewProfessionalApplication = onCall')[0] ?? '';
 assert.ok(roleMutation, 'admin multi-role callable is present');
+assert.match(roleMutation, /db\.runTransaction/, 'multi-role updates must be transactional');
 assert.doesNotMatch(roleMutation, /tx\.set\(profileRef/, 'role grants must never rewrite saved role-specific profile data');
 
 // Admin real-data preview must NOT impersonate a member, disclose manuscript
