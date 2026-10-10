@@ -37,6 +37,7 @@ assert.match(product, /:where\(button:not\(:disabled\)\):active/, 'all ordinary 
 assert.match(product, /:focus-visible/, 'keyboard focus remains visible');
 assert.match(product, /prefers-reduced-motion: reduce/, 'pressed feedback respects reduced-motion setting');
 assert.match(product, /\.floating-account\s*\{\s*display: none;/, 'floating role chip does not hide bottom controls on phones');
+assert.match(product, /\.testing-age-bypass-banner\s*\{\s*position: relative;/, 'QA notice does not cover the sticky header and its buttons');
 
 assert.match(mobileNav, /aria-current=\{active \? 'page' : undefined\}/, 'active destination remains announced');
 console.log('Nightjar mobile dock, save-bar visibility and responsive touch-feedback contracts passed.');
