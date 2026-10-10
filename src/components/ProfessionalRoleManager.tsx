@@ -27,12 +27,18 @@ export default function ProfessionalRoleManager({
   const [portfolioUrl, setPortfolioUrl] = useState('');
   const [socialUrl, setSocialUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const load = async () => {
+    setLoading(true);
+    setLoadError('');
     try {
       setState(await nightjarAccount.professionalRoles());
     } catch {
-      notify('Professional role access could not be loaded.');
+      setLoadError('Your roles could not be loaded. Please retry.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -183,17 +189,28 @@ export default function ProfessionalRoleManager({
     </>
   );
 
+  if (!state) {
+    return (
+      <article className={compact ? 'panel professional-role-manager compact' : 'panel professional-role-manager'} aria-busy={loading}>
+        <h2>My Roles</h2>
+        <p role={loadError ? 'alert' : 'status'}>{loadError || 'Loading your approved and pending roles…'}</p>
+        {loadError && <button type="button" className="secondary-button" onClick={() => void load()}>Retry loading roles</button>}
+      </article>
+    );
+  }
+
   return (
     <article className={compact ? 'panel professional-role-manager compact' : 'panel professional-role-manager'}>
       <div className="professional-role-head">
         <div>
           <span className="mini-label">ONE ACCOUNT · MULTIPLE CREATIVE ROLES</span>
-          <h2>Your Nightjar roles</h2>
+          <h2>My Roles</h2>
           <p>Listener access is always available. Professional roles are approved separately and can be combined on one account.</p>
         </div>
         <ShieldCheck size={20} />
       </div>
 
+      <p className="panel-note" aria-live="polite">{state.approvedProfessionalRoles.length} approved professional role{state.approvedProfessionalRoles.length === 1 ? '' : 's'} · {state.pendingProfessionalRoles.length} awaiting review. Your Listener role is always available.</p>
       <div className="professional-role-list">
         <div className="professional-role-row">
           <div>
@@ -240,7 +257,7 @@ export default function ProfessionalRoleManager({
             <span>{icon(role)}</span>
             <div>
               <strong>{labels[role]}</strong>
-              <small>Stored in the application bank for a future intake wave.</small>
+              <small>Pending Nightjar review. This workspace will be available only after approval.</small>
             </div>
             <button
               className="ghost-button"
@@ -264,6 +281,7 @@ export default function ProfessionalRoleManager({
         ) : (
           <div className="professional-application-box">
             {applicationPicker}
+            <p className="panel-note">Select one or several professions. Your request goes to Nightjar administrators for review; no professional access is granted automatically.</p>
           </div>
         )
       )}
