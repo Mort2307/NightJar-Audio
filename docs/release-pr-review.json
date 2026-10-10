@@ -31,10 +31,10 @@
     {
       "number": 37,
       "branch": "fix/nightjar-refresh-stability-20261010",
-      "decision": "pending_review",
-      "reason": "Refresh core copied; verify remaining parity and device behaviour",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "superseded",
+      "reason": "Superseded by PR #40 after source comparison: index.html and recover.html are byte-identical; service-worker difference is a comment; Vite retains absolute-root assets plus source-commit versioning. Nested-route and recovery contracts passed locally. Installed-device refresh QA remains a separate release gate.",
+      "reviewedBy": "Nightjar technical source review (ChatGPT)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 36,
@@ -55,10 +55,10 @@
     {
       "number": 32,
       "branch": "feature/approval-welcome-email",
-      "decision": "pending_review",
-      "reason": "Reconcile welcome email event and retry semantics",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "superseded",
+      "reason": "Superseded by PR #40's later approval-email implementation: candidate contains onDocumentCreated professionalApplications event trigger, idempotent delivery state, explicit admin failed-send retry, status/audit records and front-end approval history; existing professional-intake contracts passed locally. Gmail integration delivery still requires staging QA.",
+      "reviewedBy": "Nightjar technical source review (ChatGPT)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 29,
