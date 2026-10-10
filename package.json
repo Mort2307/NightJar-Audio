@@ -20,7 +20,7 @@
     "validate:nightjar-economy": "node scripts/nightjar-economy-contracts.mjs",
     "validate:release-hardening": "node scripts/release-hardening-contracts.mjs && node scripts/finance-simulator-tests.mjs",
     "validate:scroll": "node scripts/scroll-navigation-contracts.mjs && node scripts/refresh-route-contracts.mjs",
-    "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs && node scripts/admin-professional-role-contracts.mjs"
+    "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs && node scripts/admin-professional-role-contracts.mjs && node scripts/admin-action-notification-contracts.mjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",
