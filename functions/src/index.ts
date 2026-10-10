@@ -3776,6 +3776,46 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   return { userId, role, status };
 });
 
+// Workspace selection is not account reinstatement. Never let an Owner's
+// role dropdown silently unsuspend or activate a restricted member.
+export const adminSetAccountWorkspace = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const role = cleanText(input.role, 30);
+  if (!userId || userId.includes('/') ||
+      !['listener', 'creator', 'writer', 'editor', 'artist'].includes(role)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid Nightjar member and approved workspace.');
+  }
+  const ref = accountRef(userId);
+  const result = await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar member not found.');
+    const account = snapshot.data() ?? {};
+    if (ADMIN_EMAILS.has(cleanEmail(account.email)) || account.role === 'admin') {
+      throw new HttpsError('permission-denied', 'Administrator accounts cannot be reassigned.');
+    }
+    if (account.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'Resolve the member suspension separately before changing their workspace.');
+    }
+    const approved = professionalRolesForAccount(account);
+    if (role !== 'listener' && !approved.includes(role as AccountRole)) {
+      throw new HttpsError('failed-precondition', 'Approve this professional role before making it the active workspace.');
+    }
+    const status = cleanText(account.status, 30) || 'active';
+    if (cleanText(account.role, 30) === role) return { userId, role, status, unchanged: true };
+    tx.set(ref, {
+      role,
+      roleUpdatedBy: admin.uid,
+      roleUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { userId, role, status, unchanged: false };
+  });
+  if (!result.unchanged) await syncCreatorCustomTagUsage(userId);
+  return result;
+});
+
 export const listBillingSubscriptions = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('subscriptions').limit(1000).get();
