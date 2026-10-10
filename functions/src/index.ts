@@ -3962,7 +3962,7 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
     planningMonthlyPricePence: settings.planningMonthlyPricePence,
     subscriptionUrl: settings.listenerSubscriptionUrl,
     creditedWorkIncluded: true,
-    rule: 'Work credited to your Nightjar account is included for you. Listening to unrelated paid catalogue work requires an active or trialing Listener subscription.',
+    rule: 'Work credited to your Nightjar account is included for you. Listening to unrelated paid catalogue work requires a currently active subscription verified by the payment provider.',
   };
 });
 
