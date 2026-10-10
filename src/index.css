@@ -10151,3 +10151,43 @@ textarea:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .release-readiness-gate, .release-readiness-gate .release-readiness-open svg { transition: none; }
 }
+
+
+/* Nightjar owner role-QA: full member flows remain visually distinct from production identity. */
+.nightjar-role-qa-banner {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 15px clamp(18px, 4vw, 56px);
+  border-top: 1px solid rgba(209, 175, 207, .36);
+  border-bottom: 1px solid rgba(209, 175, 207, .36);
+  background: linear-gradient(100deg, rgba(100, 58, 97, .35), rgba(32, 21, 34, .85));
+  color: #f1e5ed;
+}
+.nightjar-role-qa-banner > svg { flex: 0 0 auto; color: #e6c2e2; }
+.nightjar-role-qa-banner > div { display: grid; gap: 4px; flex: 1 1 300px; min-width: 0; }
+.nightjar-role-qa-banner strong { font-size: 12px; letter-spacing: .11em; }
+.nightjar-role-qa-banner span { font-size: 12px; line-height: 1.5; color: #dac8d6; }
+.nightjar-role-qa-banner > button { flex: 0 0 auto; min-height: 44px; }
+.nj-role-qa-inline {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(213, 181, 208, .35);
+  border-radius: 13px;
+  background: rgba(137, 90, 128, .11);
+}
+.nj-role-qa-inline strong { font-size: 12px; color: #f1e4ef; letter-spacing: .07em; }
+.nj-role-qa-inline span { color: #d6c9d3; font-size: 12px; line-height: 1.6; }
+.nj-live-switcher-heading small { font-size: 12px; line-height: 1.5; }
+@media (max-width: 680px) {
+  .nightjar-role-qa-banner { align-items: flex-start; flex-wrap: wrap; gap: 11px; padding: 13px 16px; }
+  .nightjar-role-qa-banner > button { width: 100%; }
+}
+
+.nightjar-role-qa-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nightjar-role-qa-actions button { min-height: 44px; }
+@media (max-width: 680px) { .nightjar-role-qa-actions { flex: 1 1 100%; } .nightjar-role-qa-actions button { flex: 1 1 130px; } }
