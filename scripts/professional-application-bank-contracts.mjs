@@ -88,8 +88,8 @@ assert.match(roleManager, /Check for updates/, 'users can refresh role approval 
 assert.match(roleManager, /visibilitychange/, 'returning to app checks for new approvals');
 assert.match(roleManager, /Confirm removal/, 'approved-role removal requires confirmation');
 assert.match(app, /Approved - No pending roles/, 'archived approval labels are consistent for legacy records');
-assert.match(app, /Approved professional roles: \{approvedRoles\.map\(roleLabel\)\.join\(' \/ '\)\}/, 'approval labels use reliable ASCII separators');
-assert.match(app, /Approval email:/, 'approval delivery remains visible');
+assert.match(app, /approvedRoles\.map\(roleLabel\)\.join\(' \/ '\)/, 'approved roles use reliable ASCII separators');
+assert.match(app, />Approval email<\/span>/, 'approval delivery has a distinct labelled field');
 assert.match(app, /Application last updated:/, 'application timestamp is distinct from email delivery timestamp');
 assert.doesNotMatch(app, /Approved · no pending role/, 'legacy malformed separator no longer appears in approval archive');
 assert.match(app, /className="nj-application-summary"/, 'approval summaries have separated fields instead of a concatenated line');
