@@ -3659,7 +3659,7 @@ function App() {
   ];
 
   return (
-    <div className="app-shell">
+    <div className={view === 'profile' && !profileRolesPage && profileDirty ? 'app-shell has-mobile-profile-save' : 'app-shell'}>
       <a className="skip-link" href="#nightjar-main-content">Skip to main content</a>
       <ProductExperience allowInstall={canAdmin && !simulationMode} />
       {ageVerified && ageProvider === 'temporary-test-access' && <div className="testing-age-bypass-banner" role="status"><ShieldCheck size={14}/><span><strong>APPROVED TEST ACCESS</strong> This account is using temporary QA age access. Production age assurance is still required before public launch.</span></div>}
@@ -4581,6 +4581,18 @@ function App() {
         )}
       </main>
 
+      {user && ageVerified && view === 'profile' && !profileRolesPage && profileDirty && (
+        <div className="nj-mobile-profile-save" role="region" aria-label="Unsaved profile changes" aria-busy={profileLoading}>
+          <div className="nj-mobile-profile-save-text">
+            <strong>{profileLoading ? 'Saving your profile…' : 'Unsaved profile changes'}</strong>
+            <small>Save your changes before leaving.</small>
+          </div>
+          <button type="button" className="primary-button" disabled={profileLoading} onClick={() => void saveProfile()} aria-label={profileLoading ? 'Saving profile changes' : 'Save all profile changes'}>
+            {profileLoading ? <RefreshCw size={17} className="nj-save-loading-icon" aria-hidden="true" /> : <Check size={17} aria-hidden="true" />}
+            {profileLoading ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      )}
       {user && ageVerified && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} messageUnreadCount={messageUnreadCount} messageNeedsReplyCount={messageNeedsReplyCount} />}
 
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
