@@ -453,6 +453,7 @@ function App() {
   const [demoMode, setDemoMode] = useState(false);
   const productLoadEpoch = useRef(0);
   const [simulationMode, setSimulationMode] = useState(false);
+  const liveRolePreview = role === 'admin' && Boolean(previewRole) && !simulationMode && !demoMode;
   const [testingSessionHydrated, setTestingSessionHydrated] = useState(false);
   const [demoSessionKey, setDemoSessionKey] = useState(0);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -2455,7 +2456,6 @@ function App() {
 
   const accountLabel = role ? roleMeta[role].label : 'Signed out';
   const effectiveRole: AccountRole | null = role === 'admin' ? (previewRole ?? 'admin') : role;
-  const liveRolePreview = role === 'admin' && Boolean(previewRole) && !simulationMode && !demoMode;
   const combinedProfileTagOptions = Array.from(new Set([...PROFILE_TAG_OPTIONS, ...profileTagCatalogue]));
   const canAdmin = role === 'admin';
   const canProtection = Boolean(user);
@@ -2943,6 +2943,7 @@ function App() {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
     setView('admin');
+    if (previewRole && !simulationMode) setPreviewRole(null);
     if (panel === 'live-preview' && demoMode) {
       setSimulationMode(false);
       setPreviewRole(null);
