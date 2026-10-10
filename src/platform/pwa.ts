@@ -2,6 +2,8 @@ export type NightjarUpdateStatus = {
   supported: boolean;
   currentBuildId: string;
   currentBuiltAt: string;
+  currentSourceCommit: string | null;
+  latestSourceCommit: string | null;
   latestBuildId: string | null;
   latestBuiltAt: string | null;
   updateAvailable: boolean;
@@ -36,6 +38,8 @@ export const checkNightjarUpdate = async (): Promise<NightjarUpdateStatus> => {
     supported: 'serviceWorker' in navigator,
     currentBuildId: __NIGHTJAR_BUILD_ID__,
     currentBuiltAt: __NIGHTJAR_BUILT_AT__,
+    currentSourceCommit: __NIGHTJAR_SOURCE_COMMIT__,
+    latestSourceCommit: null,
     latestBuildId: null,
     latestBuiltAt: null,
     updateAvailable: false,
@@ -47,14 +51,17 @@ export const checkNightjarUpdate = async (): Promise<NightjarUpdateStatus> => {
       headers: { 'cache-control': 'no-cache' },
     });
     if (!response.ok) return base;
-    const data = await response.json() as { buildId?: unknown; builtAt?: unknown };
+    const data = await response.json() as { buildId?: unknown; builtAt?: unknown; sourceCommit?: unknown };
     const latestBuildId = typeof data.buildId === 'string' ? data.buildId : null;
     const latestBuiltAt = typeof data.builtAt === 'string' ? data.builtAt : null;
+    const latestSourceCommit = typeof data.sourceCommit === 'string' ? data.sourceCommit : null;
     return {
       ...base,
       latestBuildId,
       latestBuiltAt,
-      updateAvailable: Boolean(latestBuildId && latestBuildId !== __NIGHTJAR_BUILD_ID__),
+      latestSourceCommit,
+      updateAvailable: Boolean((latestBuildId && latestBuildId !== __NIGHTJAR_BUILD_ID__) ||
+        (latestSourceCommit && __NIGHTJAR_SOURCE_COMMIT__ && latestSourceCommit !== __NIGHTJAR_SOURCE_COMMIT__)),
     };
   } catch {
     return base;
