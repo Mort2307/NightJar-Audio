@@ -9,6 +9,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
 import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession } from './didit';
+import { hasPaidEntitlement } from './entitlements';
 export { diditWebhook, processDiditWebhook } from './didit';
 
 initializeApp();
@@ -3877,8 +3878,11 @@ const releaseWorkAccess = (data: Record<string, any>, userId: string) => {
 
 const activeListeningSubscriptionFor = async (userId: string) => {
   const snapshot = await db.collection('subscriptions').where('userId', '==', userId).limit(20).get();
-  const eligible = snapshot.docs.find((doc) => ['active','trialing'].includes(String(doc.data()?.status ?? '')));
-  return eligible ? { id: eligible.id, status: String(eligible.data()?.status ?? '') } : null;
+  // Never unlock paid audio from a planning row, unverified trial or a
+  // browser redirect. Only the processor-confirmed account-owned active
+  // subscription with an unexpired paid period constitutes an entitlement.
+  const eligible = snapshot.docs.find((doc) => hasPaidEntitlement(doc.data(), userId));
+  return eligible ? { id: eligible.id, status: 'active' as const } : null;
 };
 
 const playbackAccessFor = (
