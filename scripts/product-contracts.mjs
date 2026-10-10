@@ -15,6 +15,15 @@ for (const file of ['src/App.tsx','src/main.tsx','src/styles/product-system.css'
   if (/<<<<<<<|=======|>>>>>>>/.test(read(file))) fail(file + ' contains merge-conflict markers.');
 }
 
+const adminIdentity = app.indexOf("const canAdmin = role === 'admin'");
+const initialRole = app.indexOf("const [role, setRole]");
+if (initialRole < 0 || adminIdentity < initialRole || adminIdentity > app.indexOf('  useEffect(() => {')) {
+  fail('Admin eligibility must be defined immediately after role state, before effects evaluate it.');
+}
+if (app.includes('className="admin-professional-access"')) {
+  fail('Duplicate member role management UI reintroduced into the Owner Console.');
+}
+
 if (!main.includes('AppRecoveryBoundary')) fail('App recovery boundary is not mounted.');
 else pass('App recovery boundary mounted.');
 
