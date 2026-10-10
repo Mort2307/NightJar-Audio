@@ -114,11 +114,11 @@ type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'art
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type TestingMode = 'off' | 'demo' | 'simulation' | 'live';
 const LIVE_PREVIEW_ROLES: { id: PreviewRole; label: string; detail: string }[] = [
-  { id: 'listener', label: 'Listener', detail: 'Catalogue, discovery and public profiles' },
-  { id: 'creator', label: 'VA Creator', detail: 'Creator view and approved scripts' },
-  { id: 'writer', label: 'Writer', detail: 'Public professional discovery' },
-  { id: 'editor', label: 'Audio Editor', detail: 'Public professional discovery' },
-  { id: 'artist', label: 'Artist', detail: 'Public professional discovery' },
+  { id: 'listener', label: 'Listener', detail: 'Discover, library, playlists, favourites and profile' },
+  { id: 'creator', label: 'VA Creator', detail: 'Studio, release drafts, marketplace and collaborations' },
+  { id: 'writer', label: 'Writer', detail: 'Scripts, submissions, permissions and collaboration' },
+  { id: 'editor', label: 'Audio Editor', detail: 'Studio, assignments, portfolio and review' },
+  { id: 'artist', label: 'Artist', detail: 'Profile, artwork portfolio and professional roles' },
 ];
 
 const PROFILE_ROLE_DEFAULTS = {
@@ -3977,7 +3977,7 @@ function App() {
         </div>
       </header>
 
-      {demoMode && <div className={simulationMode ? 'simulation-banner active' : 'simulation-banner'}>
+      {demoMode && !simulationMode && <div className={simulationMode ? 'simulation-banner active' : 'simulation-banner'}>
         <div><strong>{simulationMode ? 'SIMULATION MODE' : 'DEMO DATA'}</strong><span>{simulationMode ? `Viewing Nightjar as ${previewRole ? roleMeta[previewRole].label : 'Administrator'} · no simulated actions write to production` : 'Populated fictional records · live production data is not being changed'}</span></div>
         <div className="simulation-banner-actions">
           {simulationMode && <><button onClick={() => startSimulation('listener')}>Listener</button><button onClick={() => startSimulation('creator')}>Creator</button><button onClick={() => startSimulation('writer')}>Writer</button><button onClick={() => startSimulation('editor')}>Audio Editor</button><button onClick={() => startSimulation('artist')}>Artist</button><button onClick={resetSimulation}>Reset simulation</button><button onClick={stopSimulation}>Return to Admin</button></>}
@@ -3986,7 +3986,7 @@ function App() {
         </div>
       </div>}
 
-      {interactiveRoleTest && <div className="nightjar-role-qa-banner" role="status"><ShieldCheck size={17} aria-hidden="true"/><div><strong>INTERACTIVE {previewRole ? roleMeta[previewRole].label.toUpperCase() : 'MEMBER'} TEST ACCOUNT</strong><span>Actual role screens with local fictional records. Applications, messages and profile changes do not write to Firebase. Use an approved separate tester login for real authentication, permissions and email testing.</span></div><button className="secondary-button" type="button" onClick={disableDemoMode}>Exit role test</button></div>}
+      {interactiveRoleTest && <div className="nightjar-role-qa-banner" role="status"><ShieldCheck size={17} aria-hidden="true"/><div><strong>INTERACTIVE {previewRole ? roleMeta[previewRole].label.toUpperCase() : 'MEMBER'} TEST ACCOUNT</strong><span>Actual role screens with local fictional records. Applications, messages and profile changes do not write to Firebase. Use an approved separate tester login for real authentication, permissions and email testing.</span></div><div className="nightjar-role-qa-actions"><button type="button" className="ghost-button" onClick={resetSimulation}>Reset local test</button><button className="secondary-button" type="button" onClick={disableDemoMode}>Exit role test</button></div></div>}
       {liveRolePreview && <div className="nightjar-live-role-banner" role="status"><ShieldCheck size={16} aria-hidden="true"/><span><strong>{previewRole ? roleMeta[previewRole].label : 'Member'} preview</strong> · Live public data · Read only</span><button className="secondary-button" type="button" onClick={clearAdminPreview}>Exit preview <ArrowRight size={14} aria-hidden="true"/></button></div>}
       <main id="nightjar-main-content" className={liveRolePreview ? 'nightjar-main nightjar-read-only-preview' : 'nightjar-main'}
         onClickCapture={(event) => {
@@ -4346,7 +4346,7 @@ function App() {
                 profile={profile}
                 setProfile={setProfile}
                 userName={simulationMode ? simulationIdentity.name : user?.name}
-                userEmail={user?.email}
+                userEmail={simulationMode ? (previewRole ?? 'listener') + '.qa@nightjar.invalid' : user?.email}
                 role={effectiveRole}
                 roles={effectiveRole === 'admin' ? undefined : uniqueProfileEditableRoles}
                 profileCompletion={profileCompletion}
