@@ -4307,6 +4307,34 @@ function App() {
               </div>
             </div>
 
+            {agePilotEligible && effectiveRole !== 'admin' && <section className="nj-didit-member-pilot" aria-label="Voluntary identity verification pilot">
+              <div className="nj-didit-member-pilot-heading">
+                <ShieldCheck size={22} aria-hidden="true"/>
+                <div><span className="mini-label">AGE ASSURANCE · AUTHORISED TEST ACCOUNT</span>
+                  <h2>Didit ID verification</h2>
+                  <p>{ageProviderVerified
+                    ? 'Your account has a completed, provider-confirmed 18+ check. The result is saved securely by Nightjar and reused when you sign in on another device.'
+                    : 'Nightjar has invited this account to test ID verification. Your existing private-beta access remains active while you test. Verification is optional during this pilot.'}</p>
+                </div>
+                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'VERIFIED 18+' : ageEnvironment === 'live' ? 'LIVE PILOT' : 'SANDBOX'}</span>
+              </div>
+              {!ageProviderVerified && <>
+                <label className="nj-didit-member-consent"><input type="checkbox" checked={agePilotConsent} onChange={(event) => setAgePilotConsent(event.target.checked)} />
+                  <span>I understand that Didit may request identification, that live checks may incur a charge to Nightjar, and that I can retain my current tester access without starting this check.</span>
+                </label>
+                <div className="nj-didit-member-actions">
+                  <button type="button" className="primary-button" disabled={!ageConfigured || !agePilotConsent || ageLoading} onClick={() => void openAgeCheck(false, true)}>
+                    <LockKeyhole size={15} aria-hidden="true"/>{ageLoading ? 'Opening Didit…' : ageSessionActive ? 'Continue existing Didit check' : ageEnvironment === 'live' ? 'Start my Didit ID check' : 'Start sandbox check'}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => void refreshAgeStatus()} disabled={ageLoading}><RefreshCw size={15}/> Refresh status</button>
+                  {ageLaunchUrl && <a href={ageLaunchUrl} className="secondary-button" target="_blank" rel="noopener noreferrer">Open verification session <ArrowRight size={15}/></a>}
+                </div>
+                {!ageConfigured && <p className="nj-didit-member-notice">Didit has not yet been configured for this Firebase environment. No verification can start.</p>}
+                {ageEnvironment !== 'live' && <p className="nj-didit-member-notice">Sandbox tests do not grant permanent 18+ verification. Live approval must be confirmed by Didit.</p>}
+                {ageStatus === 'PENDING' && <p className="nj-didit-member-notice">Your verification is in progress. Nightjar will check the provider result and update this account automatically.</p>}
+              </>}
+              <p className="nj-didit-member-footnote">Nightjar keeps only the server-verified age-assurance result and provider reference—not your raw identity images or a reusable login token stored in your browser. A new ID check is requested only if verification is revoked or a valid recheck is required.</p>
+            </section>}
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
               <UserProfileStudio
                 profile={profile}
@@ -4558,6 +4586,21 @@ function App() {
                 {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open existing Didit session</a>}
               </div>
               <small>Sandbox checks never count as production adult verification. All approved private-beta testers retain their separate temporary test-access status.</small>
+              <div className="nj-didit-pilot-manager">
+                <div><span className="mini-label">CONTROLLED TEST COHORT · ONE ACCOUNT AT A TIME</span><strong>Invite one tester to verify with Didit</strong>
+                <p>A voluntary test invitation does not remove that tester's existing bypass, start a chargeable session, or affect any other member. Only registered, email-verified and allowlisted test accounts can join.</p></div>
+                <div className="nj-didit-pilot-manager-controls">
+                  <label htmlFor="nj-didit-pilot-email">Registered tester email</label>
+                  <input id="nj-didit-pilot-email" type="email" autoComplete="off" placeholder="tester@example.com"
+                    value={diditPilotEmail} onChange={(event) => { setDiditPilotEmail(event.target.value); setDiditPilotFeedback(''); }}
+                    disabled={diditPilotBusy} />
+                  <div className="nj-didit-pilot-manager-actions">
+                    <button type="button" className="primary-button" disabled={diditPilotBusy} onClick={() => void updateDiditPilotAccess(true)}>Enable Didit pilot</button>
+                    <button type="button" className="secondary-button" disabled={diditPilotBusy} onClick={() => void updateDiditPilotAccess(false)}>Disable pilot</button>
+                  </div>
+                  {diditPilotFeedback && <p className="nj-didit-pilot-feedback" role="status">{diditPilotFeedback}</p>}
+                </div>
+              </div>
             </section>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Mail" />}>
               <AdminCommunications />
