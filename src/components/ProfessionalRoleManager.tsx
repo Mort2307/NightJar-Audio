@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brush, FileText, Mic2, Scissors, ShieldCheck, X } from 'lucide-react';
 import { nightjarAccount, type NightjarProfessionalRole, type ProfessionalRoleState } from '../platform/firebase-account';
+import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
 
 type Props = {
   notify: (message: string) => void;
@@ -27,10 +28,17 @@ export default function ProfessionalRoleManager({
   const [portfolioUrl, setPortfolioUrl] = useState('');
   const [socialUrl, setSocialUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [legalDocuments, setLegalDocuments] = useState<LegalAgreementStatus[]>([]);
+  const [termsConfirmed, setTermsConfirmed] = useState(false);
+  const missingProfessionalTerms = legalDocuments.filter((document) => document.requiredForProfessional && !document.accepted);
 
   const load = async () => {
     try {
-      setState(await nightjarAccount.professionalRoles());
+      const roles = await nightjarAccount.professionalRoles();
+      setState(roles);
+      // A temporary legal-status service failure must not hide approved workspaces.
+      const legal = await nightjarLegal.status().catch(() => null);
+      if (legal) setLegalDocuments(legal.documents);
     } catch {
       notify('Professional role access could not be loaded.');
     }
@@ -47,6 +55,19 @@ export default function ProfessionalRoleManager({
         : [...items, role],
     );
 
+  const acceptProfessionalTerms = async () => {
+    if (!missingProfessionalTerms.length) return true;
+    if (!termsConfirmed) {
+      notify('Read and accept the current Nightjar professional terms before applying or activating professional access.');
+      return false;
+    }
+    await nightjarLegal.accept(missingProfessionalTerms.map(({id, version}) => ({id, version, accepted:true as const})), 'professional-role-upgrade');
+    setTermsConfirmed(false);
+    const legal = await nightjarLegal.status();
+    setLegalDocuments(legal.documents);
+    return true;
+  };
+
   const apply = async () => {
     if (!selected.length) {
       notify('Choose at least one professional role.');
@@ -55,6 +76,7 @@ export default function ProfessionalRoleManager({
 
     setBusy(true);
     try {
+      if (!(await acceptProfessionalTerms())) return;
       const result = await nightjarAccount.applyForProfessionalRoles(selected, {
         statement,
         experience,
@@ -68,8 +90,8 @@ export default function ProfessionalRoleManager({
       setPortfolioUrl('');
       setSocialUrl('');
       await load();
-    } catch {
-      notify('Professional application could not be stored.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Professional application could not be stored.');
     } finally {
       setBusy(false);
     }
@@ -252,6 +274,19 @@ export default function ProfessionalRoleManager({
           </div>
         ))}
       </div>
+
+      {missingProfessionalTerms.length > 0 && <div className="professional-terms-upgrade">
+        <strong>Professional consent needed</strong>
+        <p>Before Nightjar can approve a Writer, VA Creator, Editor or Artist role, you must accept the current professional terms. This does not change your Listener profile.</p>
+        {missingProfessionalTerms.map((document) => <a key={document.id} href={document.path} target="_blank" rel="noreferrer">{document.title} · version {document.version}</a>)}
+        <label><input type="checkbox" checked={termsConfirmed} onChange={(event) => setTermsConfirmed(event.target.checked)}/>
+          <span>I have read and agree to the Nightjar professional terms and applicable account documents.</span>
+        </label>
+        <button type="button" className="secondary-button" disabled={!termsConfirmed || busy}
+          onClick={() => { void (async () => { setBusy(true); try { if (await acceptProfessionalTerms()) notify('Professional terms recorded. Your pending roles can now be reviewed for approval.'); } catch (error) { notify(error instanceof Error ? error.message : 'Professional terms could not be accepted.'); } finally { setBusy(false); } })(); }}>
+          Accept professional terms
+        </button>
+      </div>}
 
       {available.length > 0 && (
         compact ? (
