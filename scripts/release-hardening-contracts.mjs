@@ -63,7 +63,14 @@ requireText(updater,'navigator.serviceWorker.getRegistrations()','Force update m
 requireText(updater,'await Promise.all(keys.map((key) => caches.delete(key)))','Force update must clear legacy Cache Storage.');
 requireText(updateUi,'Force refresh app','Manual force-refresh control is missing.');
 requireText(productExperience,'applyNightjarUpdate','Automatic update banner must use hardened updater.');
-requireText(app,'allowInstall={canAdmin && !simulationMode}','Install prompt must remain admin-only during testing.');
+// Installation is now open to every signed-in, age-cleared Nightjar member.
+// This replaces the old administrator-only beta restriction. The browser still
+// controls whether native installation is offered, and members may dismiss it.
+requireText(app,'allowInstall={Boolean(user && ageVerified)}','All signed-in, age-cleared members must have access to Nightjar installation.');
+requireText(productExperience,'nightjar.install-dismiss-until.v1','Install invitation must remain dismissible across sessions.');
+requireText(productExperience,'display-mode: standalone','Installed PWA must not keep showing the installation invitation.');
+requireText(productExperience,'beforeinstallprompt','Native install must be gated by browser support.');
+if (app.includes('allowInstall={canAdmin && !simulationMode}')) failures.push('Obsolete admin-only Nightjar installation restriction is still present.');
 requireText(mobileNav,'Editor Studio','Mobile Editor navigation must not regress to legacy Editorial label.');
 
 requireText(firestore,'allow read, write: if false','Firestore client access must remain deny-by-default.');
