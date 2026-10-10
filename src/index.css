@@ -9115,3 +9115,12 @@ textarea:focus-visible,
 @media (max-width: 350px) {
   .nj-mobile-profile-save-text small { display: none; }
 }
+
+
+/* Match progress feedback on the separate mobile save dock. */
+.nj-mobile-profile-save .nj-save-loading-icon {
+  animation: nj-save-spin 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nj-mobile-profile-save .nj-save-loading-icon { animation: none; }
+}
