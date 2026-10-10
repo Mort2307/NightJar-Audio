@@ -10187,3 +10187,7 @@ textarea:focus-visible,
   .nightjar-role-qa-banner { align-items: flex-start; flex-wrap: wrap; gap: 11px; padding: 13px 16px; }
   .nightjar-role-qa-banner > button { width: 100%; }
 }
+
+.nightjar-role-qa-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nightjar-role-qa-actions button { min-height: 44px; }
+@media (max-width: 680px) { .nightjar-role-qa-actions { flex: 1 1 100%; } .nightjar-role-qa-actions button { flex: 1 1 130px; } }
