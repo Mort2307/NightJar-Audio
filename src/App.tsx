@@ -4353,25 +4353,34 @@ function App() {
           return <article className="admin-data-row professional-application-row" key={application.id}>
             <div>
               <strong>{application.displayName ?? application.email ?? 'Professional applicant'}</strong>
-              <span className={'nj-application-status nj-application-status-' + adminApplicationBox}>
-                {adminApplicationBox === 'pending'
-                  ? remainingRoles.map(roleLabel).join(' / ') + ' | ' + status
-                  : hasFinishedApproval
-                    ? 'Approved - No pending roles'
-                    : adminApplicationBox === 'history'
-                      ? status.replaceAll('_',' ')
-                      : 'No roles awaiting a decision - ' + status}
-                {application.wave ? ' | ' + application.wave : ''}
-              </span>
-              {approvedRoles.length > 0 && <small>Approved professional roles: {approvedRoles.map(roleLabel).join(' / ')}</small>}
-              {(adminApplicationBox === 'approved' || adminApplicationBox === 'history') && <small>Recorded decision: {hasFinishedApproval || status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : status === 'withdrawn' ? 'Withdrawn' : status}</small>}
-              {adminApplicationBox === 'approved' && approvedRoles.length > 0 && <small>
-                Approval email: {application.approvalEmailStatus === 'sent'
-                  ? 'Sent' + (readableDate(application.approvalEmailSentAt) ? ' on ' + readableDate(application.approvalEmailSentAt) : '')
-                  : application.approvalEmailStatus === 'failed' ? 'Delivery failed - retry available'
-                  : application.approvalEmailStatus === 'sending' ? 'Sending'
-                  : 'No automated email recorded (existing approval)'}
-              </small>}
+              <div className="nj-application-summary">
+                <span className={'nj-application-status nj-application-status-' + adminApplicationBox}>
+                  {adminApplicationBox === 'pending'
+                    ? remainingRoles.map(roleLabel).join(' / ') + ' - ' + status
+                    : hasFinishedApproval
+                      ? 'Approved - No pending roles'
+                      : adminApplicationBox === 'history'
+                        ? status.replaceAll('_', ' ')
+                        : 'No roles awaiting a decision - ' + status}
+                </span>
+                {application.wave && <span className="nj-application-wave">Intake: {application.wave}</span>}
+                {approvedRoles.length > 0 && <div className="nj-application-field">
+                  <span className="nj-application-field-label">Approved roles</span>
+                  <strong>{approvedRoles.map(roleLabel).join(' / ')}</strong>
+                </div>}
+                {(adminApplicationBox === 'approved' || adminApplicationBox === 'history') && <div className="nj-application-field">
+                  <span className="nj-application-field-label">Decision</span>
+                  <strong>{hasFinishedApproval || status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : status === 'withdrawn' ? 'Withdrawn' : status.replaceAll('_', ' ')}</strong>
+                </div>}
+                {adminApplicationBox === 'approved' && approvedRoles.length > 0 && <div className="nj-application-field">
+                  <span className="nj-application-field-label">Approval email</span>
+                  <strong>{application.approvalEmailStatus === 'sent'
+                    ? 'Sent' + (readableDate(application.approvalEmailSentAt) ? ' on ' + readableDate(application.approvalEmailSentAt) : '')
+                    : application.approvalEmailStatus === 'failed' ? 'Delivery failed - retry available'
+                    : application.approvalEmailStatus === 'sending' ? 'Sending'
+                    : 'No automated email recorded (existing approval)'}</strong>
+                </div>}
+              </div>
               {adminApplicationBox === 'approved' && application.approvalEmailStatus === 'failed' && application.approvalEmailError && <small className="nj-application-mail-error">Email error: {application.approvalEmailError}</small>}
               {adminApplicationBox === 'approved' && (application.approvalEmailStatus === 'failed' || !application.approvalEmailStatus) && application.approvalEmailEventId && <button type="button" className="secondary-button" onClick={() => void retryProfessionalApprovalEmail(application)}>{application.approvalEmailStatus === 'failed' ? 'Retry approval email' : 'Send existing approval email'}</button>}
               {application.updatedAt && <small>Application last updated: {readableDate(application.updatedAt) ?? 'Date unavailable'}</small>}
