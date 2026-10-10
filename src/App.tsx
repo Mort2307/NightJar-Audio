@@ -1038,6 +1038,13 @@ function App() {
   }, [user?.userId, ageVerified, role, accountStatus, previewRole, demoMode, liveRolePreview]);
 
 
+  // Rehydrate the fictional role-specific profile only after React has enabled demo data.
+  // Calling loadProfile synchronously inside startSimulation would use a stale live-mode closure.
+  useEffect(() => {
+    if (!interactiveRoleTest || !user?.userId || !ageVerified) return;
+    void loadProfile(previewRole!);
+  }, [interactiveRoleTest, previewRole, user?.userId, ageVerified]);
+
   const clearToastTimer = () => {
     if (toastTimer.current != null) window.clearTimeout(toastTimer.current);
     toastTimer.current = null;
