@@ -48,4 +48,21 @@ assert.match(app, /view === 'settings' &&/, 'settings view is rendered as a dist
 assert.match(app, /import NightjarSettings from/, 'settings hub is integrated with app routing');
 assert.match(product, /grid-template-rows: minmax\(0, 1fr\)/, 'mobile dock cannot form an extra row');
 
+
+const workspaceTabs = fs.readFileSync('src/components/AdminWorkspaceTabs.tsx', 'utf8');
+assert.match(app, /import AdminWorkspaceTabs/, 'Owner workspaces are implemented as a shared component');
+assert.match(app, /adminWorkspace === 'overview' && <RoleDashboard/, 'Owner overview stays focused on active priorities');
+assert.match(app, /adminWorkspace === 'launch' && <>/, 'launch readiness is kept out of routine dashboard scroll');
+assert.match(app, /adminWorkspace === 'people' && <>/, 'People workpage keeps account-role management');
+assert.match(app, /adminWorkspace === 'content' && <>/, 'Content workpage keeps moderation and approvals');
+assert.match(app, /adminWorkspace === 'finance' && <>/, 'Finance has a separate workpage');
+assert.match(app, /adminWorkspace === 'security' && <section/, 'Security alerts require the Safety workpage');
+assert.match(app, /adminWorkspace === 'tools' && <Suspense/, 'Mail tools are not mounted until requested');
+assert.match(app, /\/admin\/workspace\//, 'admin workspace navigation uses dedicated deep links');
+assert.match(app, /setAdminWorkspace\(\(workspaceFromPath/, 'browser Back restores admin workpage');
+assert.match(workspaceTabs, /'overview' \| 'people' \| 'content' \| 'launch' \| 'finance' \| 'security' \| 'tools'/, 'all admin workspaces are present');
+assert.match(workspaceTabs, /aria-current=\{active === section\.id \? 'page' : undefined\}/, 'current admin workspace is accessible');
+assert.match(product, /\.nj-owner-workspaces\s*\{/, 'compact workspace navigation has CSS');
+assert.match(product, /\.nj-admin-focused-grid \.admin-panel p\s*\{ font-size: 13px;/, 'Admin cards have readable body text');
+
 console.log('Nightjar mobile dock, save-bar visibility and responsive touch-feedback contracts passed.');
