@@ -3104,7 +3104,7 @@ function App() {
     try {
       if (demoMode) {
         setAdminOverview((current:any) => {
-          const accounts = (current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, role:nextRole, status:'active' } : item);
+          const accounts = (current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, role:nextRole } : item);
           const counts = { ...(current?.people?.counts ?? {}) };
           const previousRole = account.role;
           if (previousRole && previousRole !== nextRole && typeof counts[previousRole] === 'number') counts[previousRole] = Math.max(0, counts[previousRole] - 1);
@@ -3116,7 +3116,7 @@ function App() {
         notify(`Demo account role changed to ${roleMeta[nextRole].label} locally.`);
         return;
       }
-      await nightjarAdministration.setAccountRole(account.userId, nextRole, 'active');
+      await nightjarAdministration.setAccountWorkspace(account.userId, nextRole);
       await loadAdminOverview();
       if (nextRole === 'editor') {
         notify('Account saved as Audio Editor and is now eligible for the public Audio Editor Spotlight when its profile is public.');
