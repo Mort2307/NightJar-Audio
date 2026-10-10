@@ -51,6 +51,14 @@ Only PR #39 is included by ancestry. The three technically superseded PRs above 
 - **PRs #7–#9 are not confirmed superseded:** older `RecommendationFeedback.tsx`, `LiveReleaseCard.tsx`, `CreatorDirectory.tsx`, `FollowingList.tsx` and the original `appdeploy-local-shim.ts` are not present at those paths in the candidate. This may reflect legitimate consolidation/retirement, but exact feature parity remains unproved; do not silently mark these reviews complete.
 - **PR #14 production entitlements** and **PRs #28/#29 alternate age providers** are still isolated. Release the guarded beta candidate only after explicit safety review; do not infer billing readiness or live Didit approval from successful source contracts.
 
+## Approved-logo install and push reconciliation (10 October 2026)
+
+- **Validated baseline:** the operator's Windows local `npm run validate`, Functions TypeScript check/build, Functions advisory guard and working-tree checks passed at `4b9818d3fce4`. The branch's subsequent icon changes have **not** been locally validated.
+- **PR #29 FCM subset:** current source uses explicit opt-in push registration, prevents automatic FCM token resubscription on login, explains 401 credential problems without crashing Nightjar, reports actual per-device status, and permits a signed-in member to revoke their own recorded device without requesting a new FCM token. This passed source regression checks at `4b9818d`; actual FCM provider credentials and device delivery still require QA.
+- **PR #29 install-icon subset newly integrated, awaiting validation:** approved Nightjar logo can be rendered as 192px, 512px and 512px maskable app icons through an Owner-only confirmation workpage at `/admin/branding`. Firebase Hosting rewrites `/app-manifest.webmanifest` and the three icon routes to restricted-safe read endpoints. The dynamic manifest selects only previously generated, approved icons, falling back to packaged icons before generation. The original rooted HTML bootstrap, service-worker update and offline recovery flow are retained.
+- Existing installed Android/iOS PWAs may retain the old launcher icon in OS caches. **Do not claim icon correction is complete until a real approved logo has been used to generate icons, a preview deployment has been tested, and fresh/old installed apps have been checked.** Staging and normal mobile QA are needed.
+- **PR #29 remains pending:** its earlier Didit installer and push-only deploy helper should not be blindly merged into the reconciliation branch; no production provider migration or backend deployment has been made. The launch-blocking finance, age, terms and entitlement reviews remain independent.
+
 ## Release gates
 
 1. **Branch scope:** `main` is the production source. Confirm the candidate contains all owner-approved work; review outstanding PRs one by one. Preserve data and avoid automatic conflict resolution of overlapping Firebase Functions.
