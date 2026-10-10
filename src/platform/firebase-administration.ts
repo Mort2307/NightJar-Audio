@@ -6,6 +6,24 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 
 const overviewCall = httpsCallable<void, { people: any }>(functions, 'adminAccountOverview');
 const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist'; status: 'active' | 'pending_review' | 'suspended' }, { userId: string; role: string; status: string }>(functions, 'adminSetAccountRole');
+export type NightjarManagedProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
+
+export type NightjarManagedRolesResult = {
+  userId: string;
+  approvedProfessionalRoles: NightjarManagedProfessionalRole[];
+  pendingProfessionalRoles: NightjarManagedProfessionalRole[];
+  activeRole: string;
+  addedRoles: NightjarManagedProfessionalRole[];
+  removedRoles: NightjarManagedProfessionalRole[];
+  unchanged: boolean;
+};
+
+const manageProfessionalRolesCall = httpsCallable<{
+  userId: string;
+  approvedRoles: NightjarManagedProfessionalRole[];
+  expectedApprovedRoles: NightjarManagedProfessionalRole[];
+}, NightjarManagedRolesResult>(functions, 'adminManageProfessionalRoles');
+
 const setClosedBetaTesterCall = httpsCallable<{ email: string; enabled: boolean; note?: string }, { email: string; enabled: boolean; matchedAccounts: number }>(functions, 'adminSetClosedBetaTester');
 const setTestAccessCall = httpsCallable<{ userId: string; enabled: boolean }, { userId: string; testAccess: boolean }>(functions, 'adminSetTestAccess');
 const professionalBankCall = httpsCallable<void, { applications: any[]; buckets: Record<string, number>; total: number }>(functions, 'listProfessionalApplicationBank');
@@ -111,6 +129,14 @@ export const nightjarAdministration = {
 
   async setAccountRole(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist', status: 'active' | 'pending_review' | 'suspended' = 'active') {
     return (await setRoleCall({ userId, role, status })).data;
+  },
+
+  async manageProfessionalRoles(
+    userId: string,
+    approvedRoles: NightjarManagedProfessionalRole[],
+    expectedApprovedRoles: NightjarManagedProfessionalRole[],
+  ) {
+    return (await manageProfessionalRolesCall({ userId, approvedRoles, expectedApprovedRoles })).data;
   },
 
   async setClosedBetaTester(email: string, enabled: boolean, note = '') {
