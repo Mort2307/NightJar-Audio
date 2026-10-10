@@ -1,6 +1,6 @@
-import { Brush, Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, UserCircle2, FileText, type LucideIcon } from 'lucide-react';
+import { Brush, Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, FileText, type LucideIcon } from 'lucide-react';
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
 type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | null;
 
 type Props = {
@@ -17,50 +17,66 @@ type Item = { view?: View; label: string; icon: LucideIcon; search?: boolean };
 export default function MobileNavigation({ view, role, onNavigate, onSearch, messageUnreadCount = 0, messageNeedsReplyCount = 0 }: Props) {
   if (!role) return null;
 
-  const roleHome: Item = role === 'creator'
-    ? { view:'creator', label:'Studio', icon:Mic2 }
+  const workspace: Item = role === 'creator'
+    ? { view: 'creator', label: 'Studio', icon: Mic2 }
     : role === 'writer'
-      ? { view:'writer', label:'Write', icon:FileText }
+      ? { view: 'writer', label: 'Write', icon: FileText }
       : role === 'editor'
-        ? { view:'editor', label:'Editor Studio', icon:FileText }
-        : role === 'artist'
-          ? { view:'profile', label:'Artist', icon:Brush }
-        : role === 'admin'
-          ? { view:'admin', label:'Admin', icon:Settings2 }
-          : { view:'discover', label:'Discover', icon:Home };
+        ? { view: 'editor', label: 'Editor', icon: FileText }
+        : { view: 'profile', label: 'Artist', icon: Brush };
 
+  const settings: Item = { view: 'settings', label: 'Settings', icon: Settings2 };
+  const search: Item = { label: 'Search', icon: Search, search: true };
+
+  // Exactly five unique destinations. Previously Admin appeared twice, and
+  // the duplicate could make the mobile dock appear crowded or wrapped.
   const items: Item[] = role === 'listener'
     ? [
-        roleHome,
-        { view:'library', label:'Library', icon:Library },
-        { label:'Search', icon:Search, search:true },
-        { view:'creators', label:'Directory', icon:Headphones },
-        { view:'profile', label:'Profile', icon:UserCircle2 },
+        { view: 'discover', label: 'Home', icon: Home },
+        { view: 'library', label: 'Library', icon: Library },
+        { view: 'creators', label: 'Directory', icon: Headphones },
+        search,
+        settings,
       ]
     : role === 'admin'
       ? [
-          roleHome,
-          { view:'creators', label:'Directory', icon:Headphones },
-          { label:'Search', icon:Search, search:true },
-          { view:'profile', label:'Profile', icon:UserCircle2 },
-          { view:'admin', label:'Admin', icon:Settings2 },
+          { view: 'discover', label: 'Home', icon: Home },
+          { view: 'creators', label: 'Directory', icon: Headphones },
+          { view: 'admin', label: 'Admin', icon: Settings2 },
+          search,
+          settings,
         ]
       : [
-          roleHome,
-          { view:'creators', label:'Directory', icon:Headphones },
-          { label:'Search', icon:Search, search:true },
-          { view:'messages', label:'Messages', icon:MessageCircle },
-          { view:'profile', label:'Profile', icon:UserCircle2 },
+          workspace,
+          { view: 'creators', label: 'Directory', icon: Headphones },
+          { view: 'messages', label: 'Inbox', icon: MessageCircle },
+          search,
+          settings,
         ];
 
-  return <nav className="nj-mobile-nav" aria-label="Nightjar mobile navigation">
-    {items.map((item) => {
-      const Icon = item.icon;
-      const active = item.view ? view === item.view : false;
-      return <button key={item.label} className={active ? 'active' : ''} onClick={() => item.search ? onSearch() : item.view && onNavigate(item.view)} aria-current={active ? 'page' : undefined}>
-        <span className="nj-mobile-nav-icon"><Icon size={18}/>{item.view === 'messages' && messageUnreadCount > 0 && <em>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</em>}{item.view === 'messages' && messageUnreadCount === 0 && messageNeedsReplyCount > 0 && <em className="needs-reply" title={messageNeedsReplyCount + ' conversation(s) need your reply'}>!</em>}</span>
-        <span>{item.label}</span>
-      </button>;
-    })}
-  </nav>;
+  return (
+    <nav className="nj-mobile-nav" aria-label="Nightjar mobile navigation">
+      {items.map((item) => {
+        const Icon = item.icon;
+        const active = item.view ? view === item.view : false;
+        return (
+          <button
+            type="button"
+            key={item.view ?? 'search'}
+            className={active ? 'active' : ''}
+            onClick={() => item.search ? onSearch() : item.view && onNavigate(item.view)}
+            aria-current={active ? 'page' : undefined}
+            aria-label={item.label}
+          >
+            <span className="nj-mobile-nav-icon">
+              <Icon size={19} aria-hidden="true" />
+              {item.view === 'messages' && messageUnreadCount > 0 && <em>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</em>}
+              {item.view === 'messages' && messageUnreadCount === 0 && messageNeedsReplyCount > 0 && <em className="needs-reply" title={messageNeedsReplyCount + ' conversation(s) need your reply'}>!</em>}
+            </span>
+            <span className="nj-mobile-nav-label">{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
 }
