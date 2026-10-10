@@ -47,7 +47,7 @@ try {
   // Core PWA behaviour remains available even if messaging SDK loading fails.
 }
 
-const CACHE = 'nightjar-shell-v11';
+const CACHE = 'nightjar-shell-v12';
 const SHELL = ['/'];
 
 self.addEventListener('install', (event) => {
@@ -73,7 +73,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (url.pathname === '/version.json' || url.pathname === '/service-worker.js') {
+  // Recovery is standalone: never replace the offline SPA shell with the repair page.
+  if (url.pathname === '/recover.html' || url.pathname === '/version.json' || url.pathname === '/service-worker.js') {
     event.respondWith(fetch(request, { cache: 'no-store' }));
     return;
   }
