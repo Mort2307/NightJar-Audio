@@ -155,7 +155,12 @@ requireText(app,'CreatorSuggestionBox','Directory Creator suggestion experience 
 requireText(app,'recommendCreator(person)','Existing Creator recommendation action is missing');
 
 requireText(functions,'releaseWorkAccess','Credited-work playback entitlement helper is missing');
-requireText(functions,"['active','trialing']", 'Active/trialing subscription playback rule is missing');
+// PR #14 hardening replaced the unsafe status-only active/trialing rule.
+const verifiedEntitlements=read('functions/src/entitlements.ts');
+requireText(functions,"hasPaidEntitlement(doc.data(), userId)",'Server playback must use the verified paid entitlement helper');
+requireText(verifiedEntitlements,"subscription.status === 'active'",'Paid listening requires a confirmed active subscription');
+requireText(verifiedEntitlements,"subscription.providerVerified === true",'Unverified billing records cannot unlock paid audio');
+requireText(verifiedEntitlements,"periodEndMillis(subscription.currentPeriodEnd) > now",'Expired subscriptions cannot unlock paid audio');
 requireText(functions,"reason:'credited_work'",'Credited contributor free-access reason is missing');
 requireText(functions,"reason:'subscription_required'",'Unrelated paid-work subscription boundary is missing');
 requireText(functions,"collection('playbackGrants')",'Verified listening is not bound to server-issued playback access');
