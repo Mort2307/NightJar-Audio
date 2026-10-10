@@ -34,9 +34,11 @@ export default function ProfessionalRoleManager({
 
   const load = async () => {
     try {
-      const [roles, legal] = await Promise.all([nightjarAccount.professionalRoles(), nightjarLegal.status()]);
+      const roles = await nightjarAccount.professionalRoles();
       setState(roles);
-      setLegalDocuments(legal.documents);
+      // A temporary legal-status service failure must not hide approved workspaces.
+      const legal = await nightjarLegal.status().catch(() => null);
+      if (legal) setLegalDocuments(legal.documents);
     } catch {
       notify('Professional role access could not be loaded.');
     }
