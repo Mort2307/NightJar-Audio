@@ -81,6 +81,7 @@ import NightjarSkeleton from './components/NightjarSkeleton';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipeline'));
+const CreatorLivePreviewOverview = lazy(() => import('./components/CreatorLivePreviewOverview'));
 const CreatorProfile = lazy(() => import('./components/CreatorProfile'));
 const ContentModeration = lazy(() => import('./components/ContentModeration'));
 const NightjarOnboarding = lazy(() => import('./components/NightjarOnboarding'));
@@ -4188,17 +4189,25 @@ function App() {
         )}
 
         {view === 'creator' && (creatorOnly || adminOnly || (liveRolePreview && previewRole === 'creator')) && (
-          <section className="page-wrap studio-page">
+          <section className={liveRolePreview ? 'page-wrap studio-page studio-page-live-preview' : 'page-wrap studio-page'}>
             <div className="page-heading studio-page-heading">
               <div>
                 <p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p>
-                <h1>Your audience. Your catalogue. Fair, transparent pay.</h1>
-                <p>{liveRolePreview ? 'Approved real manuscripts and public VA discovery, using the live Nightjar backend. Private release management requires an authorised Creator account.' : accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Your real release pipeline, from upload through moderation to live catalogue.'}</p>
+                <h1>{liveRolePreview ? 'Welcome to Creator Studio.' : 'Your audience. Your catalogue. Fair, transparent pay.'}</h1>
+                <p>{liveRolePreview ? 'A complete look at the VA experience, connected to real Nightjar public records. Protected account work remains visible only to its owner.' : accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Your real release pipeline, from upload through moderation to live catalogue.'}</p>
               </div>
               {!liveRolePreview && <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: 'smooth' })}>
                 <Upload size={16} /> New release
               </button>}
             </div>
+            {liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading real Creator workspace preview" />}>
+              <CreatorLivePreviewOverview
+                publicReleases={tracks}
+                publicProfiles={profileDirectory}
+                onOpenPublicProfile={openPublicProfile}
+                onOpenScriptAudit={() => openAdminPanel('live-preview')}
+              />
+            </Suspense>}
             {!liveRolePreview && <RoleDashboard
               eyebrow="CREATOR COMMAND CENTRE"
               title="What needs your attention."
@@ -4217,11 +4226,15 @@ function App() {
             {!liveRolePreview && <div className="dashboard-metric-grid">
               {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
             </div>}
-            <div id="creator-pipeline">
+            {!liveRolePreview && <div id="creator-pipeline">
               {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
-            </div>
-            {(creatorOnly || (canAdmin && !demoMode)) && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading script marketplace" />}><ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={openPublicProfile} demoMode={demoMode} simulationMode={simulationMode} readOnlyPreview={canAdmin && !demoMode} /></Suspense>}
-            {canAdmin && !demoMode && <div className="admin-note"><ShieldCheck size={18}/><div><strong>REAL CREATOR MARKETPLACE · READ ONLY</strong><span>These are actual approved scripts with Marketplace visibility. No fictional entries are shown, and you cannot send interest as another user. For unpublished tester uploads, use Admin → Live Role Preview to see why they are hidden.</span></div></div>}
+            </div>}
+            {(creatorOnly || (canAdmin && !demoMode)) && <div className={liveRolePreview ? 'nj-creator-preview-marketplace' : undefined}>
+              <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading live script marketplace" />}>
+                <ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={openPublicProfile} demoMode={demoMode} simulationMode={simulationMode} readOnlyPreview={canAdmin && !demoMode} onAdminAudit={liveRolePreview ? () => openAdminPanel('live-preview') : undefined} />
+              </Suspense>
+            </div>}
+            {canAdmin && !demoMode && !liveRolePreview && <div className="admin-note"><ShieldCheck size={18}/><div><strong>REAL CREATOR MARKETPLACE · READ ONLY</strong><span>These are actual approved scripts with Marketplace visibility. No fictional entries are shown, and you cannot send interest as another user. For unpublished tester uploads, use Admin → Live Role Preview to see why they are hidden.</span></div></div>}
             {creatorOnly && accountStatus !== 'pending_review' && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>}
             {canAdmin && !liveRolePreview && <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS · ADMIN PREVIEW</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Administrator planning preview only. This compensation model is not shown on member or professional profiles and should not be treated as a contractual earnings promise.</p></article>}
           </section>
