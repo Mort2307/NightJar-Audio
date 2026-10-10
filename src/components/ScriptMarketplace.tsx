@@ -9,9 +9,10 @@ type Props = {
   onOpenWriter?: (userId: string) => void;
   demoMode?: boolean;
   simulationMode?: boolean;
+  readOnlyPreview?: boolean;
 };
 
-export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = false, simulationMode = false }: Props) {
+export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = false, simulationMode = false, readOnlyPreview = false }: Props) {
   const [scripts, setScripts] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -49,6 +50,7 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
   const expressInterest = async (script: any) => {
     const message = window.prompt('Optional message to the Writer about why this script interests you.') ?? '';
     try {
+      if (readOnlyPreview) { notify('Live preview is read-only. Sign in as an authorised professional to submit a real enquiry.'); return; }
       if (demoMode && !simulationMode) {
         notify('Demo data is read-only. Start Creator Simulation to express interest.');
         return;
@@ -66,7 +68,7 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
 
   return <section className="research-panel script-marketplace">
     <div className="research-panel-head">
-      <div><span className="mini-label">SCRIPT MARKETPLACE</span><h2>Find the story before it becomes an audio.</h2><p>Only approved scripts intentionally listed by their Writer appear here. Full manuscripts remain protected.</p></div>
+      <div><span className="mini-label">{readOnlyPreview ? 'LIVE SCRIPT MARKETPLACE · ADMIN READ-ONLY' : 'SCRIPT MARKETPLACE'}</span><h2>Find the story before it becomes an audio.</h2><p>Only approved scripts intentionally listed by their Writer appear here. Full manuscripts remain protected.</p></div>
       <BookOpen size={22}/>
     </div>
     <label className="marketplace-search"><Search size={15}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search Writer, title, genre or trope"/></label>
@@ -82,7 +84,7 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
           <div><dt>AI training</dt><dd>Not permitted</dd></div>
           <div><dt>Indicative fee</dt><dd>{script.marketplace?.commissionPricePence == null ? 'Discuss' : new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(script.marketplace.commissionPricePence/100)}</dd></div>
         </dl>
-        <button className="primary-button" type="button" onClick={()=>void expressInterest(script)}>I’m interested <ArrowRight size={14}/></button>
+        {readOnlyPreview ? <span className="status-pill muted">Preview only — enquiry disabled</span> : <button className="primary-button" type="button" onClick={()=>void expressInterest(script)}>I’m interested <ArrowRight size={14}/></button>}
       </article>)}
       {!filtered.length && <div className="people-empty"><BookOpen size={18}/><strong>No matching scripts.</strong><span>Approved Writer listings will appear here when they are made available.</span></div>}
     </div>}
