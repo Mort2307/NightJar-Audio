@@ -47,10 +47,10 @@
     {
       "number": 35,
       "branch": "release/nightjar-clean-owner-ux-20261009",
-      "decision": "pending_review",
-      "reason": "Reconcile separate Owner UX and approved-role intake work",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "superseded",
+      "reason": "Superseded by later PR #39/#40 source: EditorStudio, RoleDashboard, scroll-navigation utility and scroll-navigation regression tests are byte-identical to PR #35; candidate includes newer approval-bank/archive and owner navigation contracts, validated locally. End-user navigation and phone acceptance remain required before release.",
+      "reviewedBy": "Nightjar technical source review (ChatGPT)",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 32,
