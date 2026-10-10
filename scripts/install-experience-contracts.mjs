@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const read = (file) => fs.readFileSync(file, 'utf8');
 const app = read('src/App.tsx');
 const install = read('src/components/ProductExperience.tsx');
+const accountDevice = read('src/components/AppUpdateControl.tsx');
 const css = read('src/styles/product-system.css');
 const manifest = JSON.parse(read('public/manifest.webmanifest'));
 
@@ -19,6 +20,9 @@ assert.match(install, /aria-label="Remind me about installing Nightjar later"/, 
 assert.match(install, /How to install/, 'browser-menu install help available without native prompt');
 assert.match(install, /Add to Home screen/, 'manual installation for unsupported browsers');
 assert.match(install, /nj-install-invitation/, 'installation shown as prominent dedicated card');
+assert.match(install, /nightjar:show-install/, 'members can explicitly reopen dismissed invitation');
+assert.match(accountDevice, /nightjar:show-install/, 'account device controls expose permanent installer entry');
+assert.match(accountDevice, /Install Nightjar/, 'installer clearly labelled in account controls');
 assert.match(css, /\.nj-install-invitation\s*\{[^]*?position: relative;/, 'install invitation does not float over live controls');
 assert.match(css, /\.has-mobile-profile-save \.nj-product-status\s*\{[^]*?bottom: calc/, 'status notices clear the profile Save bar');
 assert.equal(manifest.display, 'standalone');
