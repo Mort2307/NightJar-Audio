@@ -13,7 +13,12 @@ check(app, "Live public data (read-only)", 'The user can still inspect actual pu
 check(app, "INTERACTIVE {previewRole ? roleMeta[previewRole].label.toUpperCase()", 'QA must be visibly labelled');
 check(app, "nightjar-role-qa-banner", 'Always show clear QA context');
 check(app, "simulationMode={interactiveRoleTest}", 'Multi-role manager must receive explicit sandbox mode');
-check(app, "if (interactiveRoleTest) {\n                    setPreviewRole(next);", 'Role switches never overwrite the actual administrator account role');
+// Match the guarded handler structurally: Windows Git may check out CRLF line endings.
+assert.match(
+  app,
+  /onRoleChanged=\{\(nextRole\)\s*=>\s*\{[\s\S]*?if\s*\(interactiveRoleTest\)\s*\{\s*setPreviewRole\(next\);\s*navigate\([\s\S]*?\);\s*return;\s*\}\s*setRole\(next\);/,
+  'Role switches never overwrite the actual administrator account role',
+);
 check(app, "if (!interactiveRoleTest || !user?.userId || !ageVerified) return;", 'Simulated profile hydration requires authenticated owner and real QA flag');
 check(app, "if (!user?.userId || (canAdmin && !simulationMode)) return;", 'My Roles must be usable only by genuine members or the explicit owner sandbox');
 check(app, "view === 'profile' && profileRolesPage && (!canAdmin || interactiveRoleTest)", 'Member role application page must open in QA');
