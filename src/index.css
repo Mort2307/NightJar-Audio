@@ -9369,3 +9369,30 @@ textarea:focus-visible,
   .nj-install-branding-actions { display: grid; grid-template-columns: minmax(0,1fr); }
   .nj-install-branding-actions button { width: 100%; white-space: normal; }
 }
+
+
+/* Owner live role perspective: read-only, with genuine public Firebase records. */
+.nightjar-live-role-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin: 0 auto;
+  padding: 14px clamp(16px, 3vw, 32px);
+  width: 100%;
+  border-block: 1px solid rgba(221, 198, 215, .4);
+  background: rgba(93, 52, 83, .2);
+}
+.nightjar-live-role-banner > div { display: grid; flex: 1 1 260px; gap: 4px; min-width: 0; }
+.nightjar-live-role-banner strong { font-weight: 750; letter-spacing: .05em; }
+.nightjar-live-role-banner span { font-size: .88rem; line-height: 1.45; }
+.nightjar-live-role-banner > button { flex: 0 0 auto; min-height: 44px; }
+.nightjar-read-only-preview button,
+.nightjar-read-only-preview input,
+.nightjar-read-only-preview select,
+.nightjar-read-only-preview textarea,
+.nightjar-read-only-preview [role="button"] { cursor: not-allowed; }
+@media (max-width: 640px) {
+  .nightjar-live-role-banner { gap: 10px; }
+  .nightjar-live-role-banner > button { width: 100%; }
+}
