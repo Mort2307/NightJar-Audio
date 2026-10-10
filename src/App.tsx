@@ -28,6 +28,8 @@ import {
   BarChart3,
   Check,
   ChevronRight,
+  ChevronDown,
+  Eye,
   Heart,
   Bookmark,
   ThumbsUp,
@@ -79,6 +81,7 @@ import NightjarSkeleton from './components/NightjarSkeleton';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipeline'));
+const CreatorLivePreviewOverview = lazy(() => import('./components/CreatorLivePreviewOverview'));
 const CreatorProfile = lazy(() => import('./components/CreatorProfile'));
 const ContentModeration = lazy(() => import('./components/ContentModeration'));
 const NightjarOnboarding = lazy(() => import('./components/NightjarOnboarding'));
@@ -109,7 +112,14 @@ type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor
 type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
-type TestingMode = 'off' | 'demo' | 'simulation';
+type TestingMode = 'off' | 'demo' | 'simulation' | 'live';
+const LIVE_PREVIEW_ROLES: { id: PreviewRole; label: string; detail: string }[] = [
+  { id: 'listener', label: 'Listener', detail: 'Catalogue, discovery and public profiles' },
+  { id: 'creator', label: 'VA Creator', detail: 'Creator view and approved scripts' },
+  { id: 'writer', label: 'Writer', detail: 'Public professional discovery' },
+  { id: 'editor', label: 'Audio Editor', detail: 'Public professional discovery' },
+  { id: 'artist', label: 'Artist', detail: 'Public professional discovery' },
+];
 
 const PROFILE_ROLE_DEFAULTS = {
   roleFocus: [] as string[],
@@ -205,9 +215,9 @@ const readTestingSession = (): { mode: TestingMode; role: PreviewRole | null } =
     const raw = window.sessionStorage.getItem(TESTING_SESSION_KEY);
     if (!raw) return { mode: 'off', role: null };
     const parsed = JSON.parse(raw);
-    const mode: TestingMode = parsed?.mode === 'simulation' ? 'simulation' : parsed?.mode === 'demo' ? 'demo' : 'off';
+    const mode: TestingMode = parsed?.mode === 'live' ? 'live' : parsed?.mode === 'simulation' ? 'simulation' : parsed?.mode === 'demo' ? 'demo' : 'off';
     const role: PreviewRole | null = ['listener', 'creator', 'writer', 'editor', 'artist'].includes(parsed?.role) ? parsed.role : null;
-    return mode === 'simulation' && role ? { mode, role } : mode === 'demo' ? { mode, role: null } : { mode: 'off', role: null };
+    return (mode === 'simulation' || mode === 'live') && role ? { mode, role } : mode === 'demo' ? { mode, role: null } : { mode: 'off', role: null };
   } catch {
     return { mode: 'off', role: null };
   }
@@ -215,7 +225,7 @@ const readTestingSession = (): { mode: TestingMode; role: PreviewRole | null } =
 
 const writeTestingSession = (mode: TestingMode, role: PreviewRole | null = null) => {
   try {
-    window.sessionStorage.setItem(TESTING_SESSION_KEY, JSON.stringify({ mode, role: mode === 'simulation' ? role : null }));
+    window.sessionStorage.setItem(TESTING_SESSION_KEY, JSON.stringify({ mode, role: mode === 'simulation' || mode === 'live' ? role : null }));
   } catch { /* session persistence is an enhancement, never a blocker */ }
 };
 
@@ -423,6 +433,8 @@ function App() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [liveRoleMenuOpen, setLiveRoleMenuOpen] = useState(false);
+  const liveRoleMenuRef = useRef<HTMLDivElement | null>(null);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
@@ -435,6 +447,11 @@ function App() {
   const [ageProviderVerified, setAgeProviderVerified] = useState(false);
   const [ageProviderStatus, setAgeProviderStatus] = useState('NOT_STARTED');
   const [ageLivePilotAvailable, setAgeLivePilotAvailable] = useState(false);
+  const [agePilotEligible, setAgePilotEligible] = useState(false);
+  const [agePilotConsent, setAgePilotConsent] = useState(false);
+  const [diditPilotEmail, setDiditPilotEmail] = useState('');
+  const [diditPilotBusy, setDiditPilotBusy] = useState(false);
+  const [diditPilotFeedback, setDiditPilotFeedback] = useState('');
   const [ageLaunchUrl, setAgeLaunchUrl] = useState<string | null>(null);
   const [ageLoading, setAgeLoading] = useState(false);
   const [ageTemporaryBypass, setAgeTemporaryBypass] = useState(false);
@@ -453,6 +470,7 @@ function App() {
   const [demoMode, setDemoMode] = useState(false);
   const productLoadEpoch = useRef(0);
   const [simulationMode, setSimulationMode] = useState(false);
+  const liveRolePreview = role === 'admin' && Boolean(previewRole) && !simulationMode && !demoMode;
   const [testingSessionHydrated, setTestingSessionHydrated] = useState(false);
   const [demoSessionKey, setDemoSessionKey] = useState(0);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -614,6 +632,21 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [moderationPreviewAsset]);
 
+  useEffect(() => {
+    if (!liveRoleMenuOpen) return;
+    const onOutside = (event: PointerEvent) => {
+      if (!liveRoleMenuRef.current?.contains(event.target as Node)) setLiveRoleMenuOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLiveRoleMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [liveRoleMenuOpen]);
   useEffect(() => installNativeProtectionBridge(), []);
 
   useEffect(() => {
@@ -862,8 +895,10 @@ function App() {
       return;
     }
 
-    const testing = readTestingSession();
-    const ownerConsoleRequested = window.location.pathname.replace(/\/+$/, '') === '/admin';
+    const savedTesting = readTestingSession();
+    // Retire persisted fictional sessions from the ordinary Owner experience.
+    const testing = savedTesting.mode === 'live' ? savedTesting : { mode: 'off' as TestingMode, role: null };
+    const ownerConsoleRequested = /^\/admin(?:\/|$)/.test(window.location.pathname);
 
     if (ownerConsoleRequested) {
       setDemoMode(testing.mode === 'demo' || testing.mode === 'simulation');
@@ -871,6 +906,16 @@ function App() {
       setPreviewRole(null);
       setView('admin');
       writeTestingSession(testing.mode === 'off' ? 'off' : 'demo', null);
+    } else if (testing.mode === 'live' && testing.role) {
+      setDemoMode(false);
+      setSimulationMode(false);
+      setPreviewRole(testing.role);
+      const current = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      const home: View = testing.role === 'creator' ? 'creator' : testing.role === 'listener' ? 'discover' : 'creators';
+      const allowed = testing.role === 'creator' ? ['creator', 'creators', 'discover'] : testing.role === 'listener' ? ['discover', 'library', 'creators'] : ['creators', 'discover'];
+      const destination: View = allowed.includes(current) ? current as View : home;
+      if (current !== destination) window.history.replaceState({}, '', '/' + destination);
+      setView(destination);
     } else if (testing.mode === 'simulation' && testing.role) {
       setDemoMode(true);
       setSimulationMode(true);
@@ -893,7 +938,7 @@ function App() {
 
   useEffect(() => {
     if (role !== 'admin' || !testingSessionHydrated) return;
-    writeTestingSession(simulationMode ? 'simulation' : demoMode ? 'demo' : 'off', simulationMode ? previewRole : null);
+    writeTestingSession(simulationMode ? 'simulation' : demoMode ? 'demo' : previewRole ? 'live' : 'off', previewRole);
   }, [role, testingSessionHydrated, demoMode, simulationMode, previewRole]);
 
   useEffect(() => {
@@ -928,9 +973,9 @@ function App() {
   useEffect(() => {
     if (!user || !ageVerified || (role === 'admin' && !testingSessionHydrated)) return;
     void loadLiveProductData();
-    if ((role === 'creator' && accountStatus === 'active') || canAdmin) { void loadCreatorDashboard(); void loadProtectedScripts(); }
-    if (role === 'writer' || (canAdmin && previewRole === 'writer')) void loadWriterScripts();
-    if ((role === 'editor' && accountStatus === 'active') || (canAdmin && previewRole === 'editor')) void loadEditorQueue();
+    if ((role === 'creator' && accountStatus === 'active') || (canAdmin && !liveRolePreview)) { void loadCreatorDashboard(); void loadProtectedScripts(); }
+    if (role === 'writer') void loadWriterScripts();
+    if (role === 'editor' && accountStatus === 'active') void loadEditorQueue();
     if (canAdmin) {
       void loadAdminOverview();
       void loadSecurityAlerts();
@@ -949,7 +994,7 @@ function App() {
     const messageRole = role === 'admin' ? previewRole : role;
     const professional = ['creator','writer','editor','artist'].includes(String(messageRole));
     const professionalActive = role === 'admin' || accountStatus === 'active' || demoMode;
-    if (!user || !ageVerified || !professional || !professionalActive) {
+    if (!user || !ageVerified || !professional || !professionalActive || liveRolePreview) {
       setMessageUnreadCount(0);
       setMessageNeedsReplyCount(0);
       setMessageAwaitingReplyCount(0);
@@ -989,7 +1034,7 @@ function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [user?.userId, ageVerified, role, accountStatus, previewRole, demoMode]);
+  }, [user?.userId, ageVerified, role, accountStatus, previewRole, demoMode, liveRolePreview]);
 
 
   const clearToastTimer = () => {
@@ -1021,6 +1066,7 @@ function App() {
     setProfileRolesPage(false);
     setAdminPanel(null);
     setAdminPeopleRole(null);
+    setLiveRoleMenuOpen(false);
     if (nextView === 'admin' && canAdmin) {
       setPreviewRole(null);
       setSimulationMode(false);
@@ -1110,7 +1156,7 @@ function App() {
 
   useEffect(() => {
     if (accountLoading || !role) return;
-    const perspective = role === 'admin' ? (simulationMode ? previewRole : 'admin') : role;
+    const perspective = role === 'admin' ? (previewRole ?? 'admin') : role;
     const home: View = perspective === 'creator' ? 'creator' : perspective === 'writer' ? 'writer' : perspective === 'editor' ? 'editor' : perspective === 'artist' ? 'profile' : 'discover';
     if ((view === 'admin' && (role !== 'admin' || simulationMode)) ||
         (view === 'creator' && perspective !== 'creator' && perspective !== 'admin') ||
@@ -1526,23 +1572,39 @@ function App() {
       if (data.providerVerified === true) setAgeLaunchUrl(null);
       setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
       setAgeLivePilotAvailable(data.livePilotAvailable === true);
+      setAgePilotEligible(data.diditPilotEligible === true);
       setAgeVerifiedAt(data.verifiedAt ?? null);
       setAgeReverifyRequired(data.reverifyRequired === true);
       setAgeTemporaryBypass(data.temporaryBypass === true);
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(data.sessionActive === true);
-      setAgeStatus(verified ? 'COMPLETE'
-        : ['PENDING','PROCESSING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(data.status) ? 'PENDING'
-        : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(data.status) ? 'FAIL' : 'NOT_STARTED');
+      const diditPending = ['PENDING','PROCESSING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.providerStatus ?? data.status));
+      setAgeStatus(data.providerVerified === true ? 'COMPLETE'
+        : diditPending && data.diditPilotEligible === true ? 'PENDING'
+        : verified ? 'COMPLETE'
+        : diditPending ? 'PENDING'
+        : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
       if (verified) setAgeStage('app');
       return verified;
     } catch { return false; }
   };
 
-  const openAgeCheck = async (adminPilot = false) => {
+  const openAgeCheck = async (adminPilot = false, memberPilot = false) => {
     setAgeLoading(true);
     try {
       if (!nightjarAuth.current()) { window.location.assign('/account'); return; }
+      if (memberPilot) {
+        if (!agePilotEligible || role === 'admin' || !ageConfigured || simulationMode || demoMode) {
+          notify('Didit is only available to testers explicitly enrolled by a Nightjar administrator.'); return;
+        }
+        if (ageProviderVerified) { notify('Your Nightjar account is already verified by Didit. No further identity check is required.'); return; }
+        if (!agePilotConsent) { notify('Please acknowledge the live ID verification notice first.'); return; }
+        if (!window.confirm(
+          ageEnvironment === 'live'
+            ? 'Start the REAL Didit 18+ ID check for this test account? You may need to show a government ID. A charge may apply to Nightjar. Your existing beta access will remain available.'
+            : 'Start the Didit SANDBOX check? This does not count as verified age and your existing beta access remains available.'
+        )) return;
+      }
       if (adminPilot) {
         if (role !== 'admin' || simulationMode || !ageConfigured) {
           notify('Only approved administrators can start the Didit pilot.'); return;
@@ -1553,7 +1615,7 @@ function App() {
             ? 'Start a REAL Didit verification for your administrator account? Provider charges may apply. Existing testers keep their bypass.'
             : 'Start a Didit sandbox pilot check? This should be unbilled ONLY if the configured Didit key and workflow are genuinely sandbox. Existing testers keep their bypass.'
         )) return;
-      } else {
+      } else if (!memberPilot) {
         const alreadyVerified = await refreshAgeStatus();
         if (alreadyVerified) { notify('Test access or permanent verification is already active. No paid Didit check was created.'); return; }
       }
@@ -1587,6 +1649,30 @@ function App() {
     const timer = window.setInterval(() => { void refreshAgeStatus(); }, 5000);
     return () => window.clearInterval(timer);
   }, [ageStatus, user]);
+
+  const updateDiditPilotAccess = async (enabled: boolean) => {
+    if (!canAdmin || simulationMode || demoMode) return;
+    const email = diditPilotEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setDiditPilotFeedback('Enter the email address of one registered, verified beta tester.');
+      return;
+    }
+    if (enabled && !window.confirm(
+      'Permit ' + email + ' to start a Didit ID-verification pilot voluntarily? This does not remove their beta bypass or start a paid session. The tester must explicitly consent and press Start themselves.'
+    )) return;
+    setDiditPilotBusy(true);
+    setDiditPilotFeedback('');
+    try {
+      const result = await nightjarAdministration.setDiditPilotAccess(email, enabled);
+      setDiditPilotFeedback(result.enabled
+        ? 'This registered test account can now start Didit voluntarily. Ask them to refresh Nightjar and open Profile → Account & Support.'
+        : 'Didit pilot access disabled for this account. Their existing beta-test access is unchanged.');
+    } catch (error) {
+      setDiditPilotFeedback(error instanceof Error ? error.message : 'Could not change Didit pilot enrolment.');
+    } finally {
+      setDiditPilotBusy(false);
+    }
+  };
 
   const signIn = async () => {
     window.location.assign('/account?entry=signin');
@@ -2931,7 +3017,9 @@ function App() {
   const openAdminPanel = (panel: 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview') => {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
+    setLiveRoleMenuOpen(false);
     setView('admin');
+    if (previewRole && !simulationMode) setPreviewRole(null);
     if (panel === 'live-preview' && demoMode) {
       setSimulationMode(false);
       setPreviewRole(null);
@@ -3376,14 +3464,6 @@ function App() {
     }
   };
 
-  const enableDemoMode = () => {
-    if (!canAdmin) return;
-    resetDemo();
-    productLoadEpoch.current++;
-    setDemoMode(true);
-    notify('Demo data enabled. All demo records are isolated from live Nightjar data.');
-  };
-
   const disableDemoMode = () => {
     if (!canAdmin) return;
     if (demoLogoPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(demoLogoPreviewUrl);
@@ -3456,13 +3536,38 @@ function App() {
     notify('Demo / simulation state reset to the original fictional dataset.');
   };
 
+  // No account impersonation or role grant. Display public live data under
+  // the signed-in administrator's identity with interactions disabled.
   const selectPreviewRole = (next: PreviewRole) => {
     if (!canAdmin) return;
-    startSimulation(next);
+    if (demoMode) { resetDemo(); productLoadEpoch.current++; }
+    setDemoMode(false);
+    setSimulationMode(false);
+    setPreviewRole(next);
+    setRolePicker(false);
+    setAdminPanel(null);
+    setAdminPeopleRole(null);
+    setModerationOpen(false);
+    setPlaying(null);
+    setReviewTrack(null);
+    setProtectedReaderOpen(false);
+    setProtectedReaderScript(null);
+    setCreatorProfileUserId(null);
+    setPublicProfileUserId(null);
+    setMessageRecipientUserId(null);
+    setMessageConversationId(null);
+    setMessageCollaborationId(null);
+    setNotificationsOpen(false);
+    setCommandOpen(false);
+    const destination: View = next === 'creator' ? 'creator' : next === 'listener' ? 'discover' : 'creators';
+    navigate(destination);
+    notify('Viewing real Nightjar public content as ' + roleMeta[next].label + ' · read only.');
   };
 
   const clearAdminPreview = () => {
     if (!canAdmin) return;
+    setDemoMode(false);
+    setSimulationMode(false);
     setPreviewRole(null);
     navigate('admin');
     void loadAdminOverview();
@@ -3619,7 +3724,7 @@ function App() {
     );
   }
 
-  const creatorOnly = effectiveRole === 'creator';
+  const creatorOnly = effectiveRole === 'creator' && !liveRolePreview;
   const updateSimulatedRelease = (release: any | null, deletedId?: string) => {
     if (!simulationMode) return;
     const current = readDemo('creatorDashboard', demoCreatorDashboard);
@@ -3630,7 +3735,7 @@ function App() {
     writeDemo('creatorDashboard', next);
     setCreatorDashboard(next);
   };
-  const adminOnly = canAdmin && !simulationMode;
+  const adminOnly = canAdmin && !simulationMode && !liveRolePreview;
 
   const persistDirectoryViews = (views:any[]) => {
     setSavedDirectoryViews(views);
@@ -3802,20 +3907,44 @@ function App() {
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'discover' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('discover')}>Discover</button>}
           <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Directory</button>
           {(effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && <button className={view === 'library' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('library')}>Library</button>}
-          {(creatorOnly || adminOnly) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
-          {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
-          {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
-          {['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
-          {canProtection && <button className={view === 'profile' && !profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
+          {(creatorOnly || adminOnly || (liveRolePreview && previewRole === 'creator')) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
+          {effectiveRole === 'writer' && !liveRolePreview && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
+          {effectiveRole === 'editor' && !liveRolePreview && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
+          {!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
+          {canProtection && !liveRolePreview && <button className={view === 'profile' && !profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && !canAdmin && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
-          {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
+          {canProtection && !liveRolePreview && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
-          {canAdmin && !simulationMode && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> DEMO SIMULATION · FICTIONAL DATA</span><button className="primary-button" type="button" onClick={() => openAdminPanel('live-preview')}>Live Script Preview</button><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button onClick={() => selectPreviewRole('artist')}>Artist</button><button className="active" onClick={clearAdminPreview}>Admin</button></div>}
         </nav>
 
         <div className="top-actions">
-          {user && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
-          {user && <div className="notification-wrap">
+          {canAdmin && !simulationMode && <div className="nj-live-switcher" ref={liveRoleMenuRef}>
+            <button type="button" className={liveRolePreview ? 'nj-live-switcher-trigger active' : 'nj-live-switcher-trigger'}
+              aria-expanded={liveRoleMenuOpen} aria-haspopup="dialog" aria-controls="nj-live-switcher-menu"
+              onClick={() => { setMenuOpen(false); setLiveRoleMenuOpen((open) => !open); }}>
+              <Eye size={17} aria-hidden="true" />
+              <span className="nj-live-switcher-label"><strong>View as</strong><small>{liveRolePreview && previewRole ? roleMeta[previewRole].label : 'Live app'}</small></span>
+              <ChevronDown size={15} className={liveRoleMenuOpen ? 'nj-switcher-chevron rotated' : 'nj-switcher-chevron'} aria-hidden="true" />
+            </button>
+            {liveRoleMenuOpen && <section className="nj-live-switcher-popover" id="nj-live-switcher-menu" role="dialog" aria-modal="false" aria-label="Live role viewing controls">
+              <header className="nj-live-switcher-heading"><span className="mini-label"><ShieldCheck size={14} /> ADMINISTRATOR ONLY</span><strong>View Nightjar as…</strong><small>Real public data · Read-only · No simulation</small></header>
+              <div className="nj-live-switcher-options" role="group" aria-label="Select a live member perspective">
+                {LIVE_PREVIEW_ROLES.map((option) => <button key={option.id} type="button"
+                  aria-pressed={liveRolePreview && previewRole === option.id}
+                  className={liveRolePreview && previewRole === option.id ? 'nj-live-switcher-option selected' : 'nj-live-switcher-option'}
+                  onClick={() => selectPreviewRole(option.id)}>
+                  <span><strong>{option.label}</strong><small>{option.detail}</small></span>
+                  {liveRolePreview && previewRole === option.id ? <Check size={16} aria-hidden="true"/> : <ChevronRight size={16} aria-hidden="true" />}
+                </button>)}
+              </div>
+              <div className="nj-live-switcher-footer">
+                <button type="button" onClick={() => openAdminPanel('live-preview')}><FileText size={15} aria-hidden="true"/> Script visibility audit</button>
+                <button type="button" onClick={clearAdminPreview}><ShieldCheck size={15} aria-hidden="true"/> Return to Admin</button>
+              </div>
+            </section>}
+          </div>}
+          {user && !liveRolePreview && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
+          {user && !liveRolePreview && <div className="notification-wrap">
             <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) void loadNotifications(productLoadEpoch.current); setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
               <Bell size={17} />
               {notificationUnreadCount > 0 && <span className="notification-badge">{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</span>}
@@ -3832,14 +3961,14 @@ function App() {
             <button className="primary-button" disabled={accountLoading} onClick={() => void signIn()}>Sign in <ArrowRight size={15} /></button>
           ) : (
             <>
-              <button className="account-chip" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)}>
+              <button className="account-chip" onClick={() => liveRolePreview ? clearAdminPreview() : simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)}>
                 <span className="account-chip-avatar">{simulationMode ? simulationIdentity.initials : profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : (user.name ?? user.email ?? 'N').slice(0, 1).toUpperCase()}</span>
-                <span><strong>{simulationMode ? simulationIdentity.name : user.name ?? 'Nightjar account'}</strong><em>{simulationMode ? simulationIdentity.label + ' · Simulation' : canAdmin && previewRole ? `Administrator · previewing ${roleMeta[previewRole].label}` : accountLabel}</em></span>
+                <span><strong>{simulationMode ? simulationIdentity.name : user.name ?? 'Nightjar account'}</strong><em>{simulationMode ? simulationIdentity.label + ' · Simulation' : canAdmin && previewRole ? `Administrator · ${liveRolePreview ? 'live' : 'simulation'} ${roleMeta[previewRole].label} view` : accountLabel}</em></span>
               </button>
               <button className="ghost-button desktop-only" onClick={() => void signOut()}><LogOut size={15} /></button>
             </>
           )}
-          <button className="menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Open navigation menu">{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+          <button className="menu-button" onClick={() => { setLiveRoleMenuOpen(false); setMenuOpen((open) => !open); }} aria-label="Open navigation menu" aria-expanded={menuOpen}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </header>
 
@@ -3852,10 +3981,32 @@ function App() {
         </div>
       </div>}
 
-      <main id="nightjar-main-content" className="nightjar-main">
+      {liveRolePreview && <div className="nightjar-live-role-banner" role="status"><ShieldCheck size={16} aria-hidden="true"/><span><strong>{previewRole ? roleMeta[previewRole].label : 'Member'} preview</strong> · Live public data · Read only</span><button className="secondary-button" type="button" onClick={clearAdminPreview}>Exit preview <ArrowRight size={14} aria-hidden="true"/></button></div>}
+      <main id="nightjar-main-content" className={liveRolePreview ? 'nightjar-main nightjar-read-only-preview' : 'nightjar-main'}
+        onClickCapture={(event) => {
+          if (!liveRolePreview) return;
+          const target = event.target as HTMLElement;
+          if (target.closest('[data-nj-preview-safe="true"],input,select')) return;
+          if (target.closest('button,a,textarea,summary,[role="button"],[contenteditable]')) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onKeyDownCapture={(event) => {
+          if (!liveRolePreview || event.key === 'Tab') return;
+          const target = event.target as HTMLElement;
+          if (target.closest('[data-nj-preview-safe="true"],input,select')) return;
+          if (target.closest('button,a,textarea,summary,[role="button"],[contenteditable]')) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onSubmitCapture={(event) => { if (liveRolePreview) { event.preventDefault(); event.stopPropagation(); } }}
+        onDropCapture={(event) => { if (liveRolePreview) { event.preventDefault(); event.stopPropagation(); } }}
+      >
         {view === 'discover' && (
           <section className="page-wrap nj-animate">
-            {effectiveRole === 'listener' && <RoleDashboard
+            {effectiveRole === 'listener' && !liveRolePreview && <RoleDashboard
               eyebrow="LISTENER HOME"
               title="Your Nightjar, right now."
               description="Useful account and discovery actions based on what you have explicitly saved, followed or left unfinished."
@@ -3877,8 +4028,8 @@ function App() {
                 <h1>Premium immersive<span> audio for adults.</span></h1>
                 <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
                 <div className="hero-actions">
-                  <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
-                  <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
+                  <button data-nj-preview-safe="true" className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
+                  <button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
                 </div>
                 <div className="hero-signals">
                   <span><Headphones size={15} /> Headphone-first</span>
@@ -3938,14 +4089,14 @@ function App() {
             <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} />
 
             <section id="catalogue" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
+              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
               <div className="catalogue-filter-bar">
                 <label className="catalogue-search"><Search size={15}/><input value={catalogueQuery} onChange={(event)=>setCatalogueQuery(event.target.value)} placeholder="Search title, VA, Writer, Audio Editor, Artist, trope or genre"/></label>
                 <select value={catalogueRating} onChange={(event)=>setCatalogueRating(event.target.value)} aria-label="Content level"><option value="all">All content levels</option><option value="sfw">SFW</option><option value="suggestive">Suggestive</option><option value="adult">Adult</option><option value="explicit">Explicit</option></select>
                 <select value={catalogueDuration} onChange={(event)=>setCatalogueDuration(event.target.value)} aria-label="Audio duration"><option value="all">Any length</option><option value="short">Under 10 min</option><option value="medium">10–24 min</option><option value="full">25–44 min</option><option value="long">45+ min</option></select>
               </div>
               <div className="track-grid">
-                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />)}
+                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />)}
                 {!filteredTracks.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
               </div>
             </section>
@@ -3961,7 +4112,7 @@ function App() {
 ].map(([value,label])=><button type="button" key={value || 'open'} className={currentIntent===value?'active':''} aria-pressed={currentIntent===value} onClick={()=>setCurrentIntent(value)}>{label}</button>)}</div></div>
               <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
               <div className="track-grid">
-                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
+                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
                 {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
               </div>
             </section>
@@ -3969,7 +4120,7 @@ function App() {
             <section className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
               <div className="track-grid">
-                {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener'} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />; })}
+                {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />; })}
                 {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
               </div>
             </section>
@@ -3977,14 +4128,14 @@ function App() {
             <TransparencyPanel demoMode={demoMode} />
 
             <section className="creator-band section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
-              <div className="creator-grid">{profileDirectory.filter((person) => person.role === 'creator').slice(0, 5).map((creator) => <button className="creator-card" key={creator.userId} onClick={() => openPublicProfile(creator.userId)}><span className="avatar-large">{creator.avatarUrl ? <img className="avatar-approved-image" src={creator.avatarUrl} alt="" loading="lazy" decoding="async" /> : creator.avatarInitials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.headline || creator.bio || 'Nightjar creator profile.'}</em><small>{creator.releaseCount ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
+              <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
+              <div className="creator-grid">{profileDirectory.filter((person) => person.role === 'creator').slice(0, 5).map((creator) => <button data-nj-preview-safe="true" className="creator-card" key={creator.userId} onClick={() => openPublicProfile(creator.userId)}><span className="avatar-large">{creator.avatarUrl ? <img className="avatar-approved-image" src={creator.avatarUrl} alt="" loading="lazy" decoding="async" /> : creator.avatarInitials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.headline || creator.bio || 'Nightjar creator profile.'}</em><small>{creator.releaseCount ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
               {!profileDirectory.some((person) => person.role === 'creator') && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
             </section>
 
             <section className="studio-feature section-wrap">
-              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>Clear work. Clear rates. Real analytics.</h2><p>Nightjar separates the equal capped standard creator rate from listening analytics. Commercial records stay grounded in confirmed billing rather than fabricated earnings.</p><button className="primary-button" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
-              <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>PAID SUBSCRIPTIONS</span><ChevronRight size={12}/><span>PUBLISHED RATE BAND</span><ChevronRight size={12}/><span>CAPPED EQUAL RATE</span></div></div>
+              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>Clear work. Clear rates. Real analytics.</h2><p>Nightjar separates the equal capped standard creator rate from listening analytics. Commercial records stay grounded in confirmed billing rather than fabricated earnings.</p><button data-nj-preview-safe="true" className="primary-button" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
+              {!liveRolePreview && <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>PAID SUBSCRIPTIONS</span><ChevronRight size={12}/><span>PUBLISHED RATE BAND</span><ChevronRight size={12}/><span>CAPPED EQUAL RATE</span></div></div>}
             </section>
           </section>
         )}
@@ -4019,14 +4170,14 @@ function App() {
             </div>
             <div className="nj-directory-viewbar">
               <div className="nj-directory-view-actions">
-                <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>
-                <button className="ghost-button" onClick={clearDirectoryFilters}>Clear filters</button>
-                <span>Saved views stay on this signed-in account’s browser only.</span>
+                {!liveRolePreview && <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>}
+                <button data-nj-preview-safe="true" className="ghost-button" onClick={clearDirectoryFilters}>Clear filters</button>
+                {!liveRolePreview && <span>Saved views stay on this signed-in account’s browser only.</span>}
               </div>
-              {!!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
+              {!liveRolePreview && !!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
             </div>
 
-            <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
+            {!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>}
 
             <div className="profile-directory-summary">
               <span><strong>{filteredDirectoryProfiles.length}</strong> matching profile{filteredDirectoryProfiles.length === 1 ? '' : 's'}</span>
@@ -4051,7 +4202,7 @@ function App() {
                   <div className="profile-main">
                     <div className="profile-heading">
                       <div><div className="profile-role-chips directory-role-chips">{(person.roles?.length ? person.roles : [person.role]).filter((value,index,array)=>array.indexOf(value)===index).map((personRole)=><span className="directory-role-label" key={personRole}>{roleMeta[personRole].label}</span>)}</div><h2>{person.name}</h2><span>{person.handle ? '@' + person.handle.replace(/^@/,'') : 'Handle not set'}</span></div>
-                      <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>
+                      {!liveRolePreview && <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>}
                     </div>
                     <p>{primaryRoleSlice.roleHeadline || person.headline || primaryRoleSlice.roleBio || person.bio || roleMeta[person.role].description}</p>
                     {person.roleAvailability && <span className="creator-availability-pill">{person.roleAvailability}</span>}
@@ -4064,9 +4215,9 @@ function App() {
                     </div>
                   </div>
                   <div className="profile-directory-actions">
-                    {person.role === 'creator' && <button className="ghost-button" onClick={() => void recommendCreator(person)}><Share2 size={13}/> Recommend</button>}
-                    {['creator','writer','editor','artist'].includes(String(effectiveRole)) && ['creator','writer','editor','artist'].includes(String(person.role)) && person.userId !== user?.userId && <button className="ghost-button" onClick={() => { setMessageRecipientUserId(person.userId); setMessageCollaborationId(null); navigate('messages'); }}><MessageCircle size={13}/> Message</button>}
-                    <button className="round-arrow" onClick={() => openPublicProfile(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
+                    {person.role === 'creator' && !liveRolePreview && <button className="ghost-button" onClick={() => void recommendCreator(person)}><Share2 size={13}/> Recommend</button>}
+                    {!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && ['creator','writer','editor','artist'].includes(String(person.role)) && person.userId !== user?.userId && <button className="ghost-button" onClick={() => { setMessageRecipientUserId(person.userId); setMessageCollaborationId(null); navigate('messages'); }}><MessageCircle size={13}/> Message</button>}
+                    <button data-nj-preview-safe="true" className="round-arrow" onClick={() => openPublicProfile(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
                   </div>
                 </article>;
               })}
@@ -4075,26 +4226,34 @@ function App() {
           </section>
         )}
 
-        {view === 'messages' && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && (
+        {view === 'messages' && !liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && (
           <section className="page-wrap messages-page">
             <div className="page-heading"><div><p className="eyebrow"><MessageCircle size={14}/> PRIVATE MESSAGING</p><h1>Keep creative conversations moving.</h1><p>VA Creators, Writers, Audio Editors and Artists can communicate directly inside Nightjar without changing rights, credits or access permissions.</p></div></div>
             <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading private messages" />}><MessagingHub role={effectiveRole as 'creator'|'writer'|'editor'|'artist'} currentUserId={user?.userId} initialRecipientUserId={messageRecipientUserId} initialConversationId={messageConversationId} initialCollaborationId={messageCollaborationId} onRecipientHandled={()=>{setMessageRecipientUserId(null);setMessageConversationId(null);setMessageCollaborationId(null);}} onUnreadChange={setMessageUnreadCount} onStatusChange={({unread,needsReply,awaitingReply})=>{setMessageUnreadCount(unread);setMessageNeedsReplyCount(needsReply);setMessageAwaitingReplyCount(awaitingReply);}} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
           </section>
         )}
 
-        {view === 'creator' && (creatorOnly || adminOnly) && (
-          <section className="page-wrap studio-page">
+        {view === 'creator' && (creatorOnly || adminOnly || (liveRolePreview && previewRole === 'creator')) && (
+          <section className={liveRolePreview ? 'page-wrap studio-page studio-page-live-preview' : 'page-wrap studio-page'}>
             <div className="page-heading studio-page-heading">
               <div>
                 <p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p>
-                <h1>Your audience. Your catalogue. Fair, transparent pay.</h1>
-                <p>{accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Your real release pipeline, from upload through moderation to live catalogue.'}</p>
+                <h1>{liveRolePreview ? 'Welcome to Creator Studio.' : 'Your audience. Your catalogue. Fair, transparent pay.'}</h1>
+                <p>{liveRolePreview ? 'A complete look at the VA experience, connected to real Nightjar public records. Protected account work remains visible only to its owner.' : accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Your real release pipeline, from upload through moderation to live catalogue.'}</p>
               </div>
-              <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: 'smooth' })}>
+              {!liveRolePreview && <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: 'smooth' })}>
                 <Upload size={16} /> New release
-              </button>
+              </button>}
             </div>
-            <RoleDashboard
+            {liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading real Creator workspace preview" />}>
+              <CreatorLivePreviewOverview
+                publicReleases={tracks}
+                publicProfiles={profileDirectory}
+                onOpenPublicProfile={openPublicProfile}
+                onOpenScriptAudit={() => openAdminPanel('live-preview')}
+              />
+            </Suspense>}
+            {!liveRolePreview && <RoleDashboard
               eyebrow="CREATOR COMMAND CENTRE"
               title="What needs your attention."
               description="Publishing, profile and community actions surfaced from your current Nightjar state."
@@ -4106,19 +4265,23 @@ function App() {
               ]}
               actions={creatorActions}
               loading={creatorDashboardLoading}
-            />
+            />}
             {creatorDashboardLoading && <NightjarSkeleton variant="cards" count={4} label="Loading Creator Studio data" />}
             {accountStatus === 'pending_review' && creatorOnly && <div className="admin-note"><Sparkles size={17} /><div><strong>CREATOR ACCOUNT / PENDING REVIEW</strong><span>Your account is created, but publishing stays locked until an administrator approves the application.</span></div></div>}
-            <div className="dashboard-metric-grid">
+            {!liveRolePreview && <div className="dashboard-metric-grid">
               {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
-            </div>
-            <div id="creator-pipeline">
+            </div>}
+            {!liveRolePreview && <div id="creator-pipeline">
               {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
-            </div>
-            {(creatorOnly || (canAdmin && !demoMode)) && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading script marketplace" />}><ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={openPublicProfile} demoMode={demoMode} simulationMode={simulationMode} readOnlyPreview={canAdmin && !demoMode} /></Suspense>}
-            {canAdmin && !demoMode && <div className="admin-note"><ShieldCheck size={18}/><div><strong>REAL CREATOR MARKETPLACE · READ ONLY</strong><span>These are actual approved scripts with Marketplace visibility. No fictional entries are shown, and you cannot send interest as another user. For unpublished tester uploads, use Admin → Live Role Preview to see why they are hidden.</span></div></div>}
+            </div>}
+            {(creatorOnly || (canAdmin && !demoMode)) && <div className={liveRolePreview ? 'nj-creator-preview-marketplace' : undefined}>
+              <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading live script marketplace" />}>
+                <ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={openPublicProfile} demoMode={demoMode} simulationMode={simulationMode} readOnlyPreview={canAdmin && !demoMode} onAdminAudit={liveRolePreview ? () => openAdminPanel('live-preview') : undefined} />
+              </Suspense>
+            </div>}
+            {canAdmin && !demoMode && !liveRolePreview && <div className="admin-note"><ShieldCheck size={18}/><div><strong>REAL CREATOR MARKETPLACE · READ ONLY</strong><span>These are actual approved scripts with Marketplace visibility. No fictional entries are shown, and you cannot send interest as another user. For unpublished tester uploads, use Admin → Live Role Preview to see why they are hidden.</span></div></div>}
             {creatorOnly && accountStatus !== 'pending_review' && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>}
-            {canAdmin && <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS · ADMIN PREVIEW</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Administrator planning preview only. This compensation model is not shown on member or professional profiles and should not be treated as a contractual earnings promise.</p></article>}
+            {canAdmin && !liveRolePreview && <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS · ADMIN PREVIEW</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Administrator planning preview only. This compensation model is not shown on member or professional profiles and should not be treated as a contractual earnings promise.</p></article>}
           </section>
         )}
 
@@ -4144,6 +4307,34 @@ function App() {
               </div>
             </div>
 
+            {agePilotEligible && effectiveRole !== 'admin' && <section className="nj-didit-member-pilot" aria-label="Voluntary identity verification pilot">
+              <div className="nj-didit-member-pilot-heading">
+                <ShieldCheck size={22} aria-hidden="true"/>
+                <div><span className="mini-label">AGE ASSURANCE · AUTHORISED TEST ACCOUNT</span>
+                  <h2>Didit ID verification</h2>
+                  <p>{ageProviderVerified
+                    ? 'Your account has a completed, provider-confirmed 18+ check. The result is saved securely by Nightjar and reused when you sign in on another device.'
+                    : 'Nightjar has invited this account to test ID verification. Your existing private-beta access remains active while you test. Verification is optional during this pilot.'}</p>
+                </div>
+                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'VERIFIED 18+' : ageEnvironment === 'live' ? 'LIVE PILOT' : 'SANDBOX'}</span>
+              </div>
+              {!ageProviderVerified && <>
+                <label className="nj-didit-member-consent"><input type="checkbox" checked={agePilotConsent} onChange={(event) => setAgePilotConsent(event.target.checked)} />
+                  <span>I understand that Didit may request identification, that live checks may incur a charge to Nightjar, and that I can retain my current tester access without starting this check.</span>
+                </label>
+                <div className="nj-didit-member-actions">
+                  <button type="button" className="primary-button" disabled={!ageConfigured || !agePilotConsent || ageLoading} onClick={() => void openAgeCheck(false, true)}>
+                    <LockKeyhole size={15} aria-hidden="true"/>{ageLoading ? 'Opening Didit…' : ageSessionActive ? 'Continue existing Didit check' : ageEnvironment === 'live' ? 'Start my Didit ID check' : 'Start sandbox check'}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => void refreshAgeStatus()} disabled={ageLoading}><RefreshCw size={15}/> Refresh status</button>
+                  {ageLaunchUrl && <a href={ageLaunchUrl} className="secondary-button" target="_blank" rel="noopener noreferrer">Open verification session <ArrowRight size={15}/></a>}
+                </div>
+                {!ageConfigured && <p className="nj-didit-member-notice">Didit has not yet been configured for this Firebase environment. No verification can start.</p>}
+                {ageEnvironment !== 'live' && <p className="nj-didit-member-notice">Sandbox tests do not grant permanent 18+ verification. Live approval must be confirmed by Didit.</p>}
+                {ageStatus === 'PENDING' && <p className="nj-didit-member-notice">Your verification is in progress. Nightjar will check the provider result and update this account automatically.</p>}
+              </>}
+              <p className="nj-didit-member-footnote">Nightjar keeps only the server-verified age-assurance result and provider reference—not your raw identity images or a reusable login token stored in your browser. A new ID check is requested only if verification is revoked or a valid recheck is required.</p>
+            </section>}
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
               <UserProfileStudio
                 profile={profile}
@@ -4274,7 +4465,7 @@ function App() {
           </section>
         )}
 
-        {view === 'writer' && effectiveRole === 'writer' && (
+        {view === 'writer' && effectiveRole === 'writer' && !liveRolePreview && (
           <section className="page-wrap role-studio-page">
             <div className="page-heading"><div><p className="eyebrow"><FileText size={14}/> WRITER STUDIO</p><h1>Write it. Protect it.</h1><p>Live manuscripts, version history and editorial handoff.</p></div></div>
             <RoleDashboard
@@ -4321,7 +4512,7 @@ function App() {
           </section>
         )}
 
-        {view === 'editor' && effectiveRole === 'editor' && (
+        {view === 'editor' && effectiveRole === 'editor' && !liveRolePreview && (
           <Suspense fallback={<NightjarSkeleton variant="page" count={5} label="Loading Editor Studio" />}>
             <EditorStudio
               profile={profile}
@@ -4371,18 +4562,25 @@ function App() {
             <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Checking release readiness" />}>
               <AdminReleaseReadiness
                 testing={adminOverview?.testing}
+                provider={{ configured: ageConfigured, environment: ageEnvironment, providerVerified: ageProviderVerified }}
                 openSecurityAlerts={securityAlerts.filter((item:any)=>item.status==='open').length}
                 pendingImages={imageModeration.length}
                 pendingApplications={applicationGroups.pending.length}
+                onOpenDidit={() => document.getElementById('nightjar-admin-didit')?.scrollIntoView({ behavior:'instant', block:'start' })}
+                onOpenTesters={() => document.getElementById('nightjar-admin-testers')?.scrollIntoView({ behavior:'instant', block:'start' })}
+                onOpenSecurityAlerts={() => document.getElementById('admin-security-alerts')?.scrollIntoView({ behavior:'instant', block:'start' })}
+                onOpenImages={() => openAdminPanel('images')}
+                onOpenApplications={() => openAdminPanel('approvals')}
+                onOpenAppUpdates={() => { navigate('profile'); void loadProfile(); }}
               />
             </Suspense>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
               <AdminLegalReadiness />
             </Suspense>
-            <section className="panel nj-didit-pilot" aria-label="Administrator Didit verification pilot">
+            <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Administrator Didit verification pilot">
               <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
               <h2>Didit Age Verification</h2>
-              <p>See the real provider state without switching to fictional demo data. Only an authorised administrator may initiate a check, and a live session may incur provider charges.</p>
+              <p>Test Didit as an administrator, or invite one registered beta tester to initiate their own voluntary check. Live verification can incur provider charges; other testers keep their normal bypass.</p>
               <div className="demo-state-line">
                 <span className={ageConfigured ? 'status-pill' : 'status-pill muted'}>{ageLivePilotAvailable ? 'LIVE PILOT ENABLED' : ageConfigured ? 'DIDIT CONNECTED' : 'DIDIT SETUP REQUIRED'}</span>
                 <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'VERIFIED 18+' : ageProviderStatus.replaceAll('_', ' ')}</span>
@@ -4395,6 +4593,21 @@ function App() {
                 {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open existing Didit session</a>}
               </div>
               <small>Sandbox checks never count as production adult verification. All approved private-beta testers retain their separate temporary test-access status.</small>
+              <div className="nj-didit-pilot-manager">
+                <div><span className="mini-label">CONTROLLED TEST COHORT · ONE ACCOUNT AT A TIME</span><strong>Invite one tester to verify with Didit</strong>
+                <p>A voluntary test invitation does not remove that tester's existing bypass, start a chargeable session, or affect any other member. Only registered, email-verified and allowlisted test accounts can join.</p></div>
+                <div className="nj-didit-pilot-manager-controls">
+                  <label htmlFor="nj-didit-pilot-email">Registered tester email</label>
+                  <input id="nj-didit-pilot-email" type="email" autoComplete="off" placeholder="tester@example.com"
+                    value={diditPilotEmail} onChange={(event) => { setDiditPilotEmail(event.target.value); setDiditPilotFeedback(''); }}
+                    disabled={diditPilotBusy} />
+                  <div className="nj-didit-pilot-manager-actions">
+                    <button type="button" className="primary-button" disabled={diditPilotBusy} onClick={() => void updateDiditPilotAccess(true)}>Enable Didit pilot</button>
+                    <button type="button" className="secondary-button" disabled={diditPilotBusy} onClick={() => void updateDiditPilotAccess(false)}>Disable pilot</button>
+                  </div>
+                  {diditPilotFeedback && <p className="nj-didit-pilot-feedback" role="status">{diditPilotFeedback}</p>}
+                </div>
+              </div>
             </section>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Mail" />}>
               <AdminCommunications />
@@ -4402,8 +4615,8 @@ function App() {
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Editor showcase moderation" />}>
               <EditorShowcaseModeration />
             </Suspense>
-            <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">TESTING</span><strong>Demo & Simulation</strong><small>Safe fictional data and role-perspective testing · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
-            <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">DEMO / SIMULATION</span><strong>See Nightjar populated, then step into every role.</strong><p>Demo records are fictional and isolated. Simulation actions stay local to this browser session and never become live subscriptions, payouts, manuscripts, reviews or user accounts.</p><div className="demo-state-line"><span className={demoMode ? 'status-pill' : 'status-pill muted'}>Demo data {demoMode ? 'ON' : 'OFF'}</span><span className={simulationMode ? 'status-pill' : 'status-pill muted'}>Simulation {simulationMode ? 'ON' : 'OFF'}</span></div></div><div className="admin-preview-buttons">{!demoMode && <button onClick={enableDemoMode}>Enable demo data</button>}{demoMode && !simulationMode && <button onClick={disableDemoMode}>Disable demo data</button>}<button onClick={() => startSimulation('listener')}>Simulate Listener</button><button onClick={() => startSimulation('creator')}>Simulate Creator</button><button onClick={() => startSimulation('writer')}>Simulate Writer</button><button onClick={() => startSimulation('editor')}>Simulate Audio Editor</button><button onClick={() => startSimulation('artist')}>Simulate Artist</button>{simulationMode && <button onClick={stopSimulation}>End simulation</button>}<button onClick={clearAdminPreview}>Return to Admin</button></div></div>
+            <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">LIVE PREVIEW</span><strong>Live role view</strong><small>Real Nightjar content · read-only · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
+            <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">LIVE APP VIEW · NO DEMO DATA</span><strong>See Nightjar with the actual public content.</strong><p>See the real Listener catalogue and Creator marketplace. Other roles show public discovery only. Preview cannot change users, scripts, payments or permissions; private workspaces require an approved tester account.</p><div className="demo-state-line"><span className="status-pill">Real Firebase content</span><span className="status-pill muted">Read-only</span></div></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>View live Listener</button><button onClick={() => selectPreviewRole('creator')}>View live VA Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer public discovery</button><button onClick={() => selectPreviewRole('editor')}>Editor public discovery</button><button onClick={() => selectPreviewRole('artist')}>Artist public discovery</button><button onClick={() => openAdminPanel('live-preview')}>Audit script visibility</button></div></div>
             <div className="admin-grid">
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('listener')}><span className="admin-icon"><Headphones size={19} /></span><span className="mini-label">PEOPLE · LISTENERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.listener ?? 0}</h2><p>Listener accounts with access to the catalogue and listening surfaces.</p><strong>Open listener profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('creator')}><span className="admin-icon"><Mic2 size={19} /></span><span className="mini-label">PEOPLE · CREATORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.creator ?? 0}</h2><p>Creator accounts and their current onboarding status.</p><strong>Open creator profiles <ArrowRight size={13} /></strong></button>
@@ -4440,7 +4653,7 @@ function App() {
               <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">FINANCE LAB</span><h2>Model the whole split</h2><p>Simulate users, subscribers, price, VAT, fees, professional-role payouts, app funding, tax reserve and operator income.</p><strong>Open finance simulator <ArrowRight size={13} /></strong></button>
               <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>{demoMode ? 'Preview a replacement logo locally while Demo Mode is active. Nothing is uploaded or changed in production.' : 'Upload or replace the logo used across Nightjar. A replacement stays pending until an administrator approves it in Image Moderation.'}</p><div className="logo-preview-grid"><div><span className="mini-label">CURRENT APPROVED</span><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt={demoMode ? 'Nightjar demo logo preview' : 'Current approved Nightjar logo'} /> : <img src="/brand-logo" alt="Default Nightjar logo" />}</div></div>{!demoMode && pendingLogoPreviewUrl && <div><span className="mini-label">PENDING REPLACEMENT</span><div className="logo-preview-box pending-logo-preview"><img src={pendingLogoPreviewUrl} alt="Pending Nightjar logo replacement" /></div></div>}</div><div className="admin-data-actions"><label className="secondary-button upload-label"><Upload size={15} /> {demoMode ? 'Preview logo' : logoUploading ? 'Working…' : 'Replace logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label>{logoUrl && <button className="ghost-button" onClick={()=>void removeLogo()}>{demoMode ? 'Clear preview' : 'Remove logo'}</button>}</div><strong>{demoMode ? 'Local preview only · PNG / JPG / WebP · max 5 MB' : pendingLogoPreviewUrl ? 'Replacement uploaded · open Image Moderation to approve it' : 'Approved logo is used inside Nightjar. The home-screen/PWA icon is the fixed official Nightjar mark shipped with the app release.'}</strong></div>
             </div>
-            {canAdmin && <section className="security-alert-panel"><div><span className="mini-label">PRIVATE TESTING / EMAIL ALLOWLIST</span><h2>Approved tester emails</h2><p>Only the owner accounts and emails listed here can enter Nightjar while Closed Beta is enabled. Approved testers still verify their Firebase email normally; the temporary age bypass is clearly marked as test access.</p></div><div className="admin-application-wavebar"><label>Tester email<input type="email" value={adminTesterEmail} onChange={(event)=>setAdminTesterEmail(event.target.value)} placeholder="tester@example.com" /></label><button className="primary-button" disabled={!adminTesterEmail.trim()} onClick={()=>void changeClosedBetaTester(adminTesterEmail,true)}>Approve tester email</button></div><div className="security-alert-list">{(adminOverview?.testing?.approvedTesters ?? []).length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No tester emails approved</strong><span>Owner administrator emails remain allowed automatically.</span></div> : (adminOverview?.testing?.approvedTesters ?? []).map((tester:any)=><article className="security-alert-row" key={tester.email}><div><strong>{tester.email}</strong><span>Private beta account access · temporary age-assurance bypass while test mode is enabled</span><em>Removing access blocks Nightjar backend use even if a Firebase Auth identity already exists.</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={()=>void changeClosedBetaTester(tester.email,false)}>Remove tester access</button></div></article>)}</div><strong>{adminOverview?.testing?.approvedTesterCount ?? 0} approved tester email{(adminOverview?.testing?.approvedTesterCount ?? 0) === 1 ? '' : 's'} · Closed Beta {adminOverview?.testing?.closedBeta === false ? 'OFF' : 'ON'}</strong></section>}
+            {canAdmin && <section className="security-alert-panel" id="nightjar-admin-testers"><div><span className="mini-label">PRIVATE TESTING / EMAIL ALLOWLIST</span><h2>Approved tester emails</h2><p>Only the owner accounts and emails listed here can enter Nightjar while Closed Beta is enabled. Approved testers still verify their Firebase email normally; the temporary age bypass is clearly marked as test access.</p></div><div className="admin-application-wavebar"><label>Tester email<input type="email" value={adminTesterEmail} onChange={(event)=>setAdminTesterEmail(event.target.value)} placeholder="tester@example.com" /></label><button className="primary-button" disabled={!adminTesterEmail.trim()} onClick={()=>void changeClosedBetaTester(adminTesterEmail,true)}>Approve tester email</button></div><div className="security-alert-list">{(adminOverview?.testing?.approvedTesters ?? []).length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No tester emails approved</strong><span>Owner administrator emails remain allowed automatically.</span></div> : (adminOverview?.testing?.approvedTesters ?? []).map((tester:any)=><article className="security-alert-row" key={tester.email}><div><strong>{tester.email}</strong><span>Private beta account access · temporary age-assurance bypass while test mode is enabled</span><em>Removing access blocks Nightjar backend use even if a Firebase Auth identity already exists.</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={()=>void changeClosedBetaTester(tester.email,false)}>Remove tester access</button></div></article>)}</div><strong>{adminOverview?.testing?.approvedTesterCount ?? 0} approved tester email{(adminOverview?.testing?.approvedTesterCount ?? 0) === 1 ? '' : 's'} · Closed Beta {adminOverview?.testing?.closedBeta === false ? 'OFF' : 'ON'}</strong></section>}
             <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>
             {canAdmin && <section id="admin-security-alerts" className="security-alert-panel"><div><span className="mini-label">SECURITY / OWNER ALERTS</span><h2>Suspicious activity</h2><p>Every qualifying alert is addressed to all three Nightjar owners and retained in the audit trail.</p></div><button className="secondary-button" onClick={() => void loadSecurityAlerts()}>{securityAlertsLoading ? 'Refreshing…' : 'Refresh alerts'}</button><div className="security-alert-list">{securityAlerts.length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No open security alerts</strong><span>Signals remain evidence, not accusations. Alerts are retained for review.</span></div> : securityAlerts.map((alert:any) => <article className="security-alert-row" key={alert.id}><div><strong>{alert.severity?.toUpperCase() ?? 'MEDIUM'} · Risk {alert.riskScore ?? '—'} · {alert.reason ?? 'Suspicious protected-content activity'}</strong><span>{alert.category === 'authentication' ? 'Target: ' + (alert.targetEmailMasked ?? alert.userEmail ?? 'Nightjar account') : 'User: ' + (alert.userName ?? 'Nightjar account') + (alert.userHandle ? ' · @' + String(alert.userHandle).replace(/^@/, '') : '') + ' · Script: ' + (alert.relatedId ?? '—')} · {new Date(alert.createdAt).toLocaleString('en-GB')}</span>{alert.signal && <div className="security-signal-meta"><span><strong>{protectionEventLabel(alert.signal.eventType)}</strong>{protectionConfidenceLabel(alert.signal.detectionConfidence) ? ' · ' + protectionConfidenceLabel(alert.signal.detectionConfidence) : ''}</span>{alert.signal.detectionSource && <span>Source: {String(alert.signal.detectionSource).replaceAll('_',' ')}</span>}{Number(alert.signal.possibleCaptureEvents ?? 0) > 0 && <span>Possible capture signals / 10 min: {alert.signal.possibleCaptureEvents}</span>}{Number(alert.signal.nativeCaptureEvents ?? 0) > 0 && <span>Native capture callbacks / 10 min: {alert.signal.nativeCaptureEvents}</span>}</div>}<em>Delivered to all three owners · evidence requires human review · no automatic freeze</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={() => void openSecurityAlertEvidence(alert)}>{securityEvidenceLoading ? 'Loading evidence…' : 'Review evidence'}</button><button className="ghost-button" disabled={alert.status !== 'open'} onClick={() => void closeSecurityAlertBenign(alert)}>Benign</button>{alert.category !== 'authentication' && <><button className="secondary-button" disabled={alert.status !== 'open'} onClick={() => void revokeSessionsFromSecurityAlert(alert)}>Revoke reader sessions</button><button className="secondary-button" disabled={alert.status === 'actioned'} onClick={() => void suspendFromSecurityAlert(alert)}>{alert.status === 'actioned' ? 'Account suspended' : 'Suspend account'}</button></>}</div></article>)}</div></section>}
             {canAdmin && <section className="security-alert-panel authentication-attempt-panel">
@@ -4764,7 +4977,7 @@ function App() {
           </button>
         </div>
       )}
-      {user && ageVerified && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} messageUnreadCount={messageUnreadCount} messageNeedsReplyCount={messageNeedsReplyCount} />}
+      {user && ageVerified && !liveRolePreview && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} messageUnreadCount={messageUnreadCount} messageNeedsReplyCount={messageNeedsReplyCount} />}
 
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal">T&Cs Centre</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
@@ -4807,7 +5020,7 @@ function App() {
         </div>
       </div>}
 
-      <GlobalCommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} commands={commandItems} />
+      <GlobalCommandPalette open={commandOpen && !liveRolePreview} onClose={() => setCommandOpen(false)} commands={commandItems} />
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType, context) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, context)} notify={notify} />}
       {playing && <NightjarPlayer
@@ -4820,15 +5033,15 @@ function App() {
         simulationMode={demoMode}
         initialTranscriptOpen={transcriptRequested === playing}
       />}
-      {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener'} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
-      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener'} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
+      {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onPlayRelease={liveRolePreview ? () => notify('Playback requires an authorised Listener account.') : playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
+      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
-      {user && !rolePicker && !(view === 'profile' && profileDirty) && (
-        <button className="floating-account" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)} aria-label="Open account information">
+      {user && !rolePicker && !liveRolePreview && !(view === 'profile' && profileDirty) && (
+        <button className="floating-account" onClick={() => liveRolePreview ? clearAdminPreview() : simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)} aria-label="Open account information">
           <UserCircle2 size={16} /><span>{simulationMode ? simulationIdentity.label + ' simulation' : roleMeta[role ?? 'listener'].label}</span>
         </button>
       )}

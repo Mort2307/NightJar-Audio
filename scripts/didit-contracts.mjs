@@ -34,8 +34,13 @@ for (const [marker,label] of [
 ]) requireMarker(didit, marker, label);
 requireMarker(backend, 'diditPass(data)', 'Protected audio checks Didit status');
 requireMarker(backend, 'startDiditSession(identity.uid)', 'Didit session callable');
-requireMarker(backend, 'DIDIT_LIVE_PILOT_ADMINS_ONLY = true', 'Private admin-only Didit live pilot is enforced');
-requireMarker(backend, "!identity.admin", 'Only Nightjar admins can start paid live Didit sessions');
+requireMarker(backend, 'DIDIT_LIVE_PILOT_ADMINS_ONLY = true', 'Live Didit remains restricted to approved pilot accounts');
+requireMarker(backend, "DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity.admin && !individuallyApprovedPilot", 'Only admins or explicitly enrolled pilot members can launch Didit');
+requireMarker(backend, "export const adminSetDiditPilotAccess", 'Authenticated administrator controls Didit pilot cohort');
+requireMarker(backend, "diditPilotEnabled: enabled", 'Pilot enrolment is stored on the correct Firebase account');
+requireMarker(backend, "const bypass = await temporaryAgeBypassFor(identity.uid)", 'Existing tester bypass is retained');
+requireMarker(backend, "providerVerified: persistentlyVerified", 'Permanent provider pass remains distinct from temporary tester bypass');
+requireMarker(backend, "diditPilotEligible: pilotAccess", 'Account-scoped verification invitation is communicated to the app');
 requireMarker(backend, 'providerVerified: persistentlyVerified', 'Real Didit age pass is never conflated with tester bypass');
 requireMarker(nightjars, 'diditPass(age.data())', 'Gift checks Didit status');
 requireMarker(ui, 'Didit Age Verification', 'Didit user-facing age gate');

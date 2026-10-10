@@ -95,7 +95,13 @@ requireText(app,"'suspended'","Administrator report escalation no longer targets
 requireText(app,'messageUnreadCount','Unread professional message state is missing');
 requireText(app,'onStatusChange={({unread,needsReply,awaitingReply})=>','App shell does not receive live Inbox responsibility changes');
 requireText(app,'communityByRelease={communityByRelease}','Public profile community counts are not bound to live release state');
-requireText(app,"canReact={effectiveRole==='listener'}",'Public profile direct reaction role guard is missing');
+// The direct reaction controls must remain Listener-only AND disabled while an
+// administrator views a real-data read-only Listener preview. Both profile
+// components are mounted independently, so protect both render paths.
+const publicProfileReactionGuard = "canReact={effectiveRole==='listener' && !liveRolePreview}";
+const guardedProfileCount = app.split(publicProfileReactionGuard).length - 1;
+if (guardedProfileCount !== 2) failures.push('Both public profile reaction controls must be Listener-only and disabled in live admin preview; found '+guardedProfileCount);
+if (app.includes("canReact={effectiveRole==='listener'}")) failures.push('Unguarded public profile reaction control can leak into live admin preview');
 requireText(app,'<MessageCircle size={14}/> Comments','Published-work comments are not directly discoverable on release cards');
 requireText(app,'openNotification(item)','Activity rows no longer deep-link to their target');
 const navMessageCommands=(app.match(/id:'nav-messages'/g)??[]).length;

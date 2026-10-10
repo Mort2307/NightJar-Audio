@@ -15,7 +15,7 @@ assert.match(app, /aria-busy=\{profileLoading\}/, 'saving progress exposed');
 assert.match(app, /disabled=\{profileLoading\}/, 'double-submit prevented');
 assert.match(app, /has-mobile-profile-save/, 'page can reserve room for both fixed docks');
 
-const mainEnd = app.indexOf('      {user && ageVerified && <MobileNavigation');
+const mainEnd = app.search(/ {6}\{user && ageVerified && (?:!liveRolePreview && )?<MobileNavigation/);
 const mobileSave = app.indexOf('className="nj-mobile-profile-save"');
 const mainStart = app.indexOf('<main id="nightjar-main-content"');
 assert.ok(mainEnd > mainStart && mobileSave > mainStart && mobileSave < mainEnd, 'mobile save mounts near bottom navigation');

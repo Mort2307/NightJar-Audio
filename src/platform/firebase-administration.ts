@@ -59,6 +59,7 @@ const previewScriptMarketplaceCall = httpsCallable<void, {
 
 const setClosedBetaTesterCall = httpsCallable<{ email: string; enabled: boolean; note?: string }, { email: string; enabled: boolean; matchedAccounts: number }>(functions, 'adminSetClosedBetaTester');
 const setTestAccessCall = httpsCallable<{ userId: string; enabled: boolean }, { userId: string; testAccess: boolean }>(functions, 'adminSetTestAccess');
+const setDiditPilotAccessCall = httpsCallable<{ email: string; enabled: boolean }, { email: string; enabled: boolean; unchanged: boolean }>(functions, 'adminSetDiditPilotAccess');
 const professionalBankCall = httpsCallable<void, { applications: any[]; buckets: Record<string, number>; total: number }>(functions, 'listProfessionalApplicationBank');
 const retryApprovalEmailCall = httpsCallable<{ userId: string; eventId: string }, { userId: string; eventId: string; outcome: 'sent' | 'failed' }>(functions, 'adminRetryProfessionalApprovalEmail');
 const reviewProfessionalCall = httpsCallable<{
@@ -190,6 +191,10 @@ export const nightjarAdministration = {
 
   async setTestAccess(userId: string, enabled: boolean) {
     return (await setTestAccessCall({ userId, enabled })).data;
+  },
+
+  async setDiditPilotAccess(email: string, enabled: boolean) {
+    return (await setDiditPilotAccessCall({ email: email.trim().toLowerCase(), enabled })).data;
   },
 
   async professionalApplicationBank() {

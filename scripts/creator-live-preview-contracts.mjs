@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const read = (file) => fs.readFileSync(file, 'utf8');
+const app = read('src/App.tsx');
+const css = read('src/index.css');
+const creator = read('src/components/CreatorLivePreviewOverview.tsx');
+const market = read('src/components/ScriptMarketplace.tsx');
+
+assert.match(app, /const CreatorLivePreviewOverview = lazy\(/, 'Creator preview module loads lazily');
+assert.match(app, /studio-page-live-preview/, 'live Creator mode has its own full-width layout');
+assert.match(app, /<CreatorLivePreviewOverview/, 'the Creator live overview is rendered rather than a warning-only page');
+assert.match(app, /publicReleases=\{tracks\}/, 'published releases use the existing live catalogue');
+assert.match(app, /publicProfiles=\{profileDirectory\}/, 'professional network uses the real public directory');
+assert.match(app, /onOpenScriptAudit=\{\(\) => openAdminPanel\('live-preview'\)\}/, 'Owner can inspect actual script visibility');
+assert.match(app, /\{!liveRolePreview && <div id="creator-pipeline">/, 'private release editor is not rendered under impersonation');
+assert.match(app, /\{canAdmin && !demoMode && !liveRolePreview && <div className="admin-note">/, 'old redundant preview warnings are removed from the live perspective');
+assert.match(creator, /nightjarAdministration\.previewScriptMarketplace\(\)/, 'manuscript counts and visibility come from backend');
+assert.match(creator, /auditStatus === 'unavailable'/, 'backend failure does not masquerade as zero records');
+assert.match(creator, /const \[audit, setAudit\]/, 'script diagnostic state is explicit');
+assert.match(creator, /No public professional profiles returned/, 'empty people list has an honest useful state');
+assert.match(creator, /No published releases returned by the live catalogue/, 'empty audio is labelled honestly');
+assert.doesNotMatch(creator, /demoCreators|demoTracks|demoMarketplaceScripts|Math\.random\(/, 'never invent user or release data');
+assert.match(creator, /CREATOR STUDIO|RELEASE WORKSPACE|LIVE CREATOR EXPERIENCE/, 'creator workflow has an identifiable premium structure');
+assert.match(market, /loadError \?/, 'marketplace network errors are distinguished from no matches');
+assert.match(market, /No Writer scripts are publicly listed yet/, 'unlisted scripts are explained');
+assert.match(market, /onAdminAudit/, 'empty marketplace offers a genuine visibility audit');
+assert.match(css, /\.nj-creator-live-overview-heading/, 'Creator preview hero is styled');
+assert.match(css, /\.nj-creator-live-grid/, 'Creator workspace has a real responsive card layout');
+assert.match(css, /@media \(max-width: 680px\)/, 'Creator preview adapts to phone widths');
+assert.match(css, /\.studio-page-live-preview/, 'workspace avoids the old sparse centred narrow page');
+console.log('Nightjar live Creator density, honest data and visibility diagnostics contracts passed (source checks only).');
