@@ -10024,3 +10024,130 @@ textarea:focus-visible,
   .nj-didit-member-actions > button,
   .nj-didit-member-actions > a { width: 100%; }
 }
+
+
+/* Owner launch-readiness cards: keyboard-operable drill-down, readable on phones. */
+.admin-release-readiness-head p { font-size: 12px; line-height: 1.65; }
+.admin-release-readiness-head code { font-size: 11px; }
+.release-readiness-score { font-size: 11px; line-height: 1.4; }
+.release-readiness-gate {
+  width: 100%;
+  min-width: 0;
+  min-height: 104px;
+  padding: 15px;
+  gap: 12px;
+  font: inherit;
+  text-align: left;
+  color: #eee4ed;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+}
+.release-readiness-gate > .release-readiness-state-icon {
+  width: 32px;
+  height: 32px;
+  background: rgba(255,255,255,.04);
+  flex: none;
+}
+.release-readiness-gate > .release-readiness-copy {
+  display: block;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.release-readiness-gate .release-readiness-copy strong {
+  display: block;
+  color: #f4eaf0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.release-readiness-gate .release-readiness-copy small {
+  display: block;
+  margin-top: 6px;
+  color: #c7bbc6;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.release-readiness-gate em { font-size: 9px; line-height: 1.4; text-align: right; }
+.release-readiness-gate .release-readiness-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: #dfc6df;
+  font-size: 11px;
+  font-weight: 700;
+}
+.release-readiness-gate .release-readiness-open svg { transition: transform .15s ease; }
+.release-readiness-gate[aria-expanded="true"] .release-readiness-open svg { transform: rotate(180deg); }
+.release-readiness-gate:is(:hover, .selected) {
+  border-color: rgba(218, 168, 212, .42);
+  background: rgba(155, 115, 151, .12);
+}
+.release-readiness-gate:focus-visible {
+  outline: 2px solid #e3badd;
+  outline-offset: 2px;
+}
+.release-readiness-next {
+  display: grid;
+  gap: 16px;
+  padding: clamp(18px, 2.4vw, 26px);
+  border: 1px solid rgba(221, 177, 216, .36);
+  border-radius: 16px;
+  background: linear-gradient(115deg, rgba(130, 86, 129, .18), rgba(13, 11, 18, .63));
+}
+.release-readiness-next-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: start;
+}
+.release-readiness-next-heading h3 {
+  margin: 5px 0 8px;
+  color: #f6edf3;
+  font: normal clamp(20px, 2.5vw, 27px)/1.25 Georgia,serif;
+}
+.release-readiness-next-heading p {
+  max-width: 72ch;
+  margin: 0;
+  color: #d4c5d2;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.release-readiness-next ol { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+.release-readiness-next li { padding-left: 4px; color: #e3d5e0; font-size: 12px; line-height: 1.6; }
+.release-readiness-next > .primary-button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+}
+.release-readiness-rules-links { display: flex; flex-wrap: wrap; gap: 15px; }
+.release-readiness-rules-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #e9cce2;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.release-readiness-footer { font-size: 11px; }
+@media (max-width: 760px) {
+  .admin-release-readiness { padding: 16px; }
+  .release-readiness-gate { min-height: 84px; grid-template-columns: 32px minmax(0, 1fr) auto; }
+  .release-readiness-next-heading { flex-direction: column; }
+  .release-readiness-next > .primary-button { width: 100%; justify-self: stretch; justify-content: center; }
+}
+@media (max-width: 460px) {
+  .release-readiness-gate { grid-template-columns: 32px minmax(0,1fr); }
+  .release-readiness-gate em { grid-column: 2; justify-self: start; }
+  .release-readiness-score { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .release-readiness-gate, .release-readiness-gate .release-readiness-open svg { transition: none; }
+}
