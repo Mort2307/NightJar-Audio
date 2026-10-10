@@ -8903,3 +8903,37 @@ textarea:focus-visible,
     flex-wrap: wrap;
   }
 }
+
+.professional-role-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 6px;
+}
+.professional-role-status-summary .panel-note {
+  margin: 0;
+}
+.professional-role-status-summary .secondary-button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.professional-role-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.professional-role-confirm small {
+  flex-basis: 100%;
+}
+.professional-role-confirm button {
+  min-height: 40px;
+}
+@media (max-width: 720px) {
+  .professional-role-status-summary .secondary-button { width: 100%; }
+  .professional-role-confirm { width: 100%; }
+}
