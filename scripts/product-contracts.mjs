@@ -45,22 +45,22 @@ const recovery = read('public/recover.html');
 const indexHtml = read('index.html');
 const appCss = read('src/index.css');
 const scrollPolicy = read('src/platform/scroll-navigation.ts');
-if (!/base:\\s*['"]\\/['"]/.test(vite)) fail('Vite assets are not rooted at / and will fail when nested admin pages are refreshed.');
+if (!/base:\s*['"]\/['"]/.test(vite)) fail('Vite assets are not rooted at / and will fail when nested admin pages are refreshed.');
 else pass('Nested route assets resolve from / on refresh.');
 if (!hosting.hosting.rewrites.some((rule) => rule.source === '**' && rule.destination === '/index.html'))
   fail('Firebase Hosting must rewrite nested SPA routes to index.html.');
 if (!indexHtml.includes('href="/recover.html"') || !recovery.includes('getRegistrations()') || !recovery.includes('caches.keys()'))
   fail('Standalone cache repair must work even if the JavaScript bundle fails to start.');
 else pass('Nightjar can display a recovery link when app JavaScript fails to boot.');
-if (!/html\\s*\\{\\s*scroll-behavior:\\s*auto;/.test(appCss) ||
-    !/\\.app-shell\\s*\\{[^}]*overflow-x:\\s*clip;[^}]*overflow-y:\\s*visible;/s.test(appCss) ||
-    /document\\.addEventListener\\(['"]click['"]/.test(scrollPolicy) ||
+if (!/html\s*\{\s*scroll-behavior:\s*auto;/.test(appCss) ||
+    !/\.app-shell\s*\{[^}]*overflow-x:\s*clip;[^}]*overflow-y:\s*visible;/s.test(appCss) ||
+    /document\.addEventListener\(['"]click['"]/.test(scrollPolicy) ||
     main.includes('installNightjarScrollPolicy'))
   fail('Navigation must use direct pages without global scroll-click handlers.');
 else pass('Nightjar page changes do not trigger global smooth-scroll hijacking.');
 if (fs.existsSync(path.join(root, 'dist/index.html'))) {
   const compiled = read('dist/index.html');
-  const asset = compiled.match(/<script[^>]*src="(\\/assets\\/[^"]+\\.js)"/);
+  const asset = compiled.match(/<script[^>]*src="(\/assets\/[^"]+\.js)"/);
   if (!asset) fail('Production script assets are not root relative.');
   else {
     for (const route of ['/admin/approvals', '/admin/people/creator', '/profile', '/discover']) {
