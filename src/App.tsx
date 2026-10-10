@@ -3063,6 +3063,42 @@ function App() {
         : 'Professional roles are unchanged.');
   };
 
+  const queueAccountProfessions = async (
+    account: any,
+    roles: ('creator' | 'writer' | 'editor' | 'artist')[],
+  ) => {
+    if (!canAdmin || !account?.userId || account.role === 'admin') {
+      throw new Error('Administrator access required to queue professional roles.');
+    }
+    if (demoMode) {
+      setAdminOverview((current: any) => {
+        const accounts = (current?.people?.accounts ?? []).map((item: any) => {
+          if (item.userId !== account.userId) return item;
+          const existing = item.pendingProfessionalRoles ?? [];
+          const approved = item.roles ?? [];
+          return {
+            ...item,
+            pendingProfessionalRoles: Array.from(new Set([
+              ...existing,
+              ...roles.filter((role) => !approved.includes(role)),
+            ])),
+          };
+        });
+        const updated = { ...(current ?? {}), people: { ...(current?.people ?? {}), accounts } };
+        writeDemo('adminOverview', updated);
+        return updated;
+      });
+      notify('Simulation: role suggestions queued locally. No live account changed.');
+      return;
+    }
+    const result = await nightjarAdministration.queueProfessionalRoles(account.userId, roles);
+    await loadAdminOverview();
+    await loadAdminApplications();
+    notify(result.queuedRoles.length
+      ? 'Queued for administrator approval: ' + result.queuedRoles.map((role) => roleMeta[role].label).join(', ') + '. Member consent and age checks are still required.'
+      : 'These professional roles are already queued or approved.');
+  };
+
   const changeAccountRole = async (account: any, nextRole: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') => {
     if (!canAdmin || !account?.userId) return;
     try {
@@ -4431,6 +4467,7 @@ function App() {
             {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <AdminMemberRoleEditor
   account={account}
   onSave={manageAccountProfessions}
+  onQueue={queueAccountProfessions}
   onActiveRoleChange={changeAccountRole}
   onStatusChange={changeAccountStatus}
   onTestAccessChange={changeTestAccess}
