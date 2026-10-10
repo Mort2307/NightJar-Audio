@@ -4703,8 +4703,8 @@ function App() {
                 <h2>Preview what VAs can actually see</h2>
                 <p>View the genuine marketplace and check why tester manuscripts are, or are not, visible. No demo records or write actions.</p>
                 <strong>Open live preview <ArrowRight size={13}/></strong>
-              </>}
               </button>
+              </>}
               {adminWorkspace === 'content' && <>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('approvals')}><span className="admin-icon"><Sparkles size={19} /></span><span className="mini-label">PROFESSIONAL APPROVALS</span><h2>{applicationGroups.pending.length}</h2><p>Bank and release VA Creator, Writer, Audio Editor and Artist applications in controlled intake waves.</p><strong>Open approval workflow <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('suggestions')}><span className="admin-icon"><Users size={19} /></span><span className="mini-label">CREATOR SUGGESTIONS</span><h2>{adminCreatorSuggestions.filter((item:any)=>item.status === 'new').length || 'Review'}</h2><p>Review Creators recommended by Nightjar members and track whether they were contacted, invited or joined.</p><strong>Open Creator suggestions <ArrowRight size={13} /></strong></button>
