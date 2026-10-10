@@ -72,6 +72,7 @@ import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalC
 import MobileNavigation from './components/MobileNavigation';
 import ProductExperience from './components/ProductExperience';
 import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
+import AdminMemberRoleManager from './components/AdminMemberRoleManager';
 import NightjarSkeleton from './components/NightjarSkeleton';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
@@ -440,6 +441,7 @@ function App() {
   const [accountStatus, setAccountStatus] = useState<'active' | 'pending_review'>('active');
   const [accountLoading, setAccountLoading] = useState(false);
   const [rolePicker, setRolePicker] = useState(false);
+  const [profileRolesPage, setProfileRolesPage] = useState(() => window.location.pathname === '/profile/roles');
   const [previewRole, setPreviewRole] = useState<PreviewRole | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const productLoadEpoch = useRef(0);
@@ -787,6 +789,7 @@ function App() {
       setPublicProfileUserId(null);
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
       const topLevel = value.split('/')[0];
+      setProfileRolesPage(value === 'profile/roles');
       if (topLevel === 'admin') {
         setSimulationMode(false);
         setPreviewRole(null);
@@ -1008,6 +1011,7 @@ function App() {
   };
 
   const navigate = (nextView: View) => {
+    setProfileRolesPage(false);
     setAdminPanel(null);
     setAdminPeopleRole(null);
     if (nextView === 'admin' && canAdmin) {
@@ -1019,6 +1023,13 @@ function App() {
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
     setView(nextView);
     setMenuOpen(false);
+    scrollNightjarToTop();
+  };
+
+  const openMyRolesPage = () => {
+    if (window.location.pathname !== '/profile/roles') window.history.pushState({}, '', '/profile/roles');
+    setProfileRolesPage(true);
+    setView('profile');
     scrollNightjarToTop();
   };
 
@@ -3705,6 +3716,10 @@ function App() {
               ]}
               actions={listenerActions}
             />}
+            {effectiveRole === 'listener' && <div className="nj-member-role-shortcut">
+              <div><strong>Want to write or perform for Nightjar?</strong><span>Apply for Writer or VA Creator access, or switch to roles you've already been approved for.</span></div>
+              <button type="button" className="secondary-button" onClick={openMyRolesPage}>Manage my roles <ArrowRight size={15}/></button>
+            </div>}
             <section className="hero-section">
               <div className="hero-copy">
                 <div className="hero-kicker">
@@ -3971,7 +3986,27 @@ function App() {
           </section>
         )}
 
-        {view === 'profile' && (
+        {view === 'profile' && profileRolesPage && (
+          <section className="page-wrap nightjar-roles-page">
+            <div className="page-heading">
+              <div><p className="eyebrow"><ShieldCheck size={15}/> ONE ACCOUNT · MULTIPLE ROLES</p>
+              <h1>Manage your Nightjar roles.</h1>
+              <p>Keep your Listener profile and add VA Creator, Writer, Audio Editor or Artist. Choose any approved workspace here.</p></div>
+              <button type="button" className="secondary-button" onClick={()=>navigate('profile')}><ArrowLeft size={16}/> Back to my profile</button>
+            </div>
+            <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading your professional roles"/>}>
+              <ProfessionalRoleManager notify={notify} onRoleChanged={(nextRole)=>{
+                const next=nextRole as AccountRole;
+                setRole(next);
+                setPreviewRole(next === 'admin' ? null : next as PreviewRole);
+                navigate('profile');
+                if (next !== 'admin') void loadProfile(next as PreviewRole);
+              }}/>
+            </Suspense>
+          </section>
+        )}
+
+        {view === 'profile' && !profileRolesPage && (
           <section className="page-section profile-page premium-profile-page">
             <div className="page-heading premium-profile-page-heading">
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
@@ -4040,9 +4075,11 @@ function App() {
                   <p>Check the deployed build or clear stale app caches without touching your account or cloud data.</p>
                   <AppUpdateControl compact />
                 </article>
-                {effectiveRole !== 'admin' ? <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
-                  <ProfessionalRoleManager compact notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate('profile'); if(next!=='admin') void loadProfile(next as PreviewRole); }} />
-                </Suspense> : <article className="panel profile-account-tool-card"><div className="profile-account-tool-head"><div><span className="mini-label">ADMINISTRATOR</span><h3>Professional roles are member-facing</h3></div><ShieldCheck size={17}/></div><p>Administrator identity stays separate from Listener and professional role applications.</p></article>}
+                {effectiveRole !== 'admin' ? <article className="panel profile-account-tool-card">
+                  <div className="profile-account-tool-head"><div><span className="mini-label">PROFESSIONAL ROLES</span><h3>Listener, VA, Writer and more</h3></div><ShieldCheck size={17}/></div>
+                  <p>Apply for extra roles, see approval status or switch to an approved workspace without changing accounts.</p>
+                  <button type="button" className="secondary-button" onClick={openMyRolesPage}>Manage my professional roles <ArrowRight size={15}/></button>
+                </article> : <article className="panel profile-account-tool-card"><div className="profile-account-tool-head"><div><span className="mini-label">ADMINISTRATOR</span><h3>Professional roles are member-facing</h3></div><ShieldCheck size={17}/></div><p>Administrator identity stays separate from Listener and professional role applications.</p></article>}
               </div>
               {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={hasProfessionalProfileRole} demoMode={demoMode} /></Suspense>}
             </section>
@@ -4242,7 +4279,12 @@ function App() {
               <strong>{authenticationEvents.length} retained authentication event{authenticationEvents.length === 1 ? '' : 's'} shown · repeated attempts can escalate into Owner Alerts above</strong>
             </section>}
 
-            {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <div className="people-row-controls"><select value={account.role ?? 'listener'} onChange={(e)=>void changeAccountRole(account,e.target.value as 'listener'|'creator'|'writer'|'editor'|'artist')}><option value="listener">Listener</option>{(account.roles ?? []).filter((professionalRole:string)=>['creator','writer','editor','artist'].includes(professionalRole)).map((professionalRole:'creator'|'writer'|'editor'|'artist')=><option key={professionalRole} value={professionalRole}>{professionalRole === 'creator' ? 'VA Creator' : professionalRole === 'editor' ? 'Audio Editor' : professionalRole === 'artist' ? 'Artist' : 'Writer'}</option>)}</select><select value={account.status ?? 'active'} onChange={(e)=>void changeAccountStatus(account,e.target.value as 'active'|'pending_review'|'suspended')}><option value="active">Active</option><option value="pending_review">Pending review</option><option value="suspended">Suspended</option></select><button className={account.testAccess ? 'secondary-button' : 'ghost-button'} onClick={()=>void changeTestAccess(account, !account.testAccess)}>{account.testAccess ? 'Remove tester access' : 'Enable tester access'}</button></div>}</article>)}{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).length === 0 && <div className="people-empty"><Users size={18} /><strong>No accounts in this role yet</strong><span>The live directory will populate as accounts are created or approved.</span></div>}</div></div>}
+            {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <div className="people-row-controls"><select value={account.role ?? 'listener'} onChange={(e)=>void changeAccountRole(account,e.target.value as 'listener'|'creator'|'writer'|'editor'|'artist')}><option value="listener">Listener</option>{(account.roles ?? []).filter((professionalRole:string)=>['creator','writer','editor','artist'].includes(professionalRole)).map((professionalRole:'creator'|'writer'|'editor'|'artist')=><option key={professionalRole} value={professionalRole}>{professionalRole === 'creator' ? 'VA Creator' : professionalRole === 'editor' ? 'Audio Editor' : professionalRole === 'artist' ? 'Artist' : 'Writer'}</option>)}</select><select value={account.status ?? 'active'} onChange={(e)=>void changeAccountStatus(account,e.target.value as 'active'|'pending_review'|'suspended')}><option value="active">Active</option><option value="pending_review">Pending review</option><option value="suspended">Suspended</option></select><button className={account.testAccess ? 'secondary-button' : 'ghost-button'} onClick={()=>void changeTestAccess(account, !account.testAccess)}>{account.testAccess ? 'Remove tester access' : 'Enable tester access'}</button></div>}{adminPeopleRole !== 'admin' && <AdminMemberRoleManager
+                account={account}
+                demoMode={demoMode}
+                notify={notify}
+                onChanged={async()=>{ await loadAdminOverview(); await loadAdminApplications(); }}
+              />}</article>)}{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).length === 0 && <div className="people-empty"><Users size={18} /><strong>No accounts in this role yet</strong><span>The live directory will populate as accounts are created or approved.</span></div>}</div></div>}
             {adminPanel && <div className="admin-panel-modal admin-full-page"><section aria-label="Administration workpage"><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Professional approval queue' : adminPanel === 'suggestions' ? 'Creator suggestions' : adminPanel === 'reports' ? 'Reports & feedback' : adminPanel === 'reviews' ? 'Review moderation' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : adminPanel === 'editorial' ? 'Editorial assignments' : adminPanel === 'images' ? 'Image moderation' : adminPanel === 'tags' ? 'Tag catalogue governance' : 'Finance simulator & creator economics'}</h2><p>{adminPanel === 'approvals' ? 'Review banked VA Creator, Writer, Audio Editor and Artist applications. Approve whole applications or individual roles into a named intake wave.' : adminPanel === 'suggestions' ? 'Review Creators recommended by Nightjar members. Suggestions never auto-approve a professional account.' : adminPanel === 'reports' ? 'Review user-submitted safety reports, technical issues and feedback. Reporter identity is shown by profile name and handle.' : adminPanel === 'reviews' ? 'Listener ratings and written reviews are moderated before public display.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : adminPanel === 'editorial' ? 'Assign live manuscripts to active Audio Editor accounts.' : adminPanel === 'images' ? 'Every uploaded image stays private until an administrator explicitly approves it.' : adminPanel === 'tags' ? 'Review creator-made discovery tags. Explicit adult terminology is allowed; administrators can promote useful terms or hide unsuitable catalogue entries.' : 'Adjust the complete Nightjar finance model safely: audience, subscription price, taxes and fees, contributor role shares, app funding and operator income. The simulator never changes live billing.'}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div>{adminPanel === 'reports' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading reports & feedback…</div> : (adminReports.length === 0 && adminCommunityReports.length === 0) ? <div className="people-empty"><ShieldCheck size={18}/><strong>No reports or feedback yet</strong><span>User submissions will appear here for Administrator review.</span></div> : adminReports.map((report:any) => <article className="admin-data-row" key={report.id}><div><strong>{report.reporterName ?? 'Nightjar account'}{report.reporterHandle ? ' · @' + String(report.reporterHandle).replace(/^@/, '') : ''}</strong><span>{report.caseId ?? 'Nightjar report'} · {report.category ?? 'Something else'} · {report.status ?? 'New'}</span><small>{report.reporterEmail ?? 'Account email unavailable'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</small><p>{report.summary ?? 'No report detail supplied.'}</p></div></article>)}{adminCommunityReports.map((report:any)=><article className="admin-data-row community-report-row" key={report.id}><div><strong>{report.type === 'direct_message' ? 'Reported professional message' : 'Reported release comment / reply'}</strong><span>{report.reason ?? 'Community report'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</span><small>Reporter: {report.reporterName ?? 'Nightjar member'}{report.reporterHandle ? ' · @'+String(report.reporterHandle).replace(/^@/,'') : ''} · Reported account: {report.subjectName ?? 'Nightjar member'}{report.subjectRole ? ' · '+(report.subjectRole === 'editor' ? 'Audio Editor' : String(report.subjectRole).charAt(0).toUpperCase()+String(report.subjectRole).slice(1)) : ''}{report.releaseTitle ? ' · '+report.releaseTitle : ''}</small><p>{report.snapshotText || 'No retained report excerpt.'}</p><small>{report.type === 'direct_message' ? 'Only the specifically reported message snapshot is shown here — not the full private conversation.' : 'The reported public comment can be removed without affecting the release.'}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void resolveCommunityReport(report,'dismiss')}>Dismiss</button><button className="secondary-button" onClick={()=>void resolveCommunityReport(report,'remove')}>{report.type === 'direct_message' ? 'Remove message' : 'Remove comment'}</button>{report.subjectUserId && report.subjectRole && report.subjectRole !== 'admin' && <button className="danger-button" onClick={()=>void suspendReportedCommunityAccount(report)}>Suspend reported account</button>}</div></article>)}</div>}{adminPanel === 'reviews' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading review queue…</div> : adminReviewQueue.length === 0 ? <div className="people-empty"><Star size={18}/><strong>No reviews awaiting moderation</strong><span>Listener submissions will appear here before public display.</span></div> : adminReviewQueue.map((review:any)=><article className="admin-data-row" key={review.id}><div><strong>{review.releaseTitle ?? 'Nightjar release'}</strong><span>{review.reviewerName ?? 'Nightjar listener'}{review.reviewerHandle ? ' · @' + String(review.reviewerHandle).replace(/^@/,'') : ''} · {'★'.repeat(review.rating ?? 0)}{'☆'.repeat(Math.max(0,5-(review.rating ?? 0)))}</span><p>{review.review || 'Rating only — no written review.'}</p></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void moderateReleaseReview(review,'rejected')}>Reject</button><button className="primary-button" onClick={()=>void moderateReleaseReview(review,'approved')}>Approve review</button></div></article>)}</div>}{adminPanel === 'suggestions' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading Creator suggestions…</div> : adminCreatorSuggestions.length === 0 ? <div className="people-empty"><Users size={18}/><strong>No Creator suggestions yet</strong><span>Member recommendations will appear here for review.</span></div> : adminCreatorSuggestions.map((suggestion:any)=><article className="admin-data-row" key={suggestion.id}><div><strong>{suggestion.creatorName}</strong><span>{suggestion.status ?? 'new'} · suggested by {suggestion.submittedByName ?? 'Nightjar member'}{suggestion.submittedByHandle ? ' · @'+String(suggestion.submittedByHandle).replace(/^@/,'') : ''}</span>{suggestion.publicUrl && <small>{suggestion.publicUrl}</small>}{suggestion.note && <p>{suggestion.note}</p>}<small>Referral: {suggestion.referralCode ?? '—'}{suggestion.claimedByUserId ? ' · joined Nightjar' : ''}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'dismissed')}>Dismiss</button><button className="secondary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'contacted')}>Contacted</button><button className="primary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'invited')}>Invited</button></div></article>)}</div>}{adminPanel === 'approvals' && <div className="admin-data-list">
   <div className="admin-application-wavebar">
     <div>
