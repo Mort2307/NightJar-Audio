@@ -8979,3 +8979,13 @@ textarea:focus-visible,
   color: var(--ivory);
   overflow-wrap: anywhere;
 }
+
+/* Profile photo optimisation: readable guidance on phone and desktop. */
+.premium-avatar-editor .profile-photo-optimisation-note {
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: normal;
+  color: var(--muted);
+}
