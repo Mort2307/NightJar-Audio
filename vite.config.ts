@@ -21,7 +21,8 @@ export default defineConfig({
     __NIGHTJAR_BUILT_AT__: JSON.stringify(builtAt),
   },
   plugins: [react(), nightjarVersionManifest()],
-  base: './',
+  // Firebase Hosting rewrites deep links to index.html; assets must resolve from / on refresh.
+  base: '/',
   build: {
     outDir: 'dist',
     sourcemap: false,
