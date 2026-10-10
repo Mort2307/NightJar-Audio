@@ -3390,14 +3390,6 @@ function App() {
     }
   };
 
-  const enableDemoMode = () => {
-    if (!canAdmin) return;
-    resetDemo();
-    productLoadEpoch.current++;
-    setDemoMode(true);
-    notify('Demo data enabled. All demo records are isolated from live Nightjar data.');
-  };
-
   const disableDemoMode = () => {
     if (!canAdmin) return;
     if (demoLogoPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(demoLogoPreviewUrl);
