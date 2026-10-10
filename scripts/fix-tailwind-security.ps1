@@ -72,8 +72,8 @@ export default {
     RunChecked 'npm' @('uninstall', '--save-dev', 'autoprefixer')
 
     Write-Host 'Checking all dependency advisories (dev + production)...' -ForegroundColor Cyan
-    RunChecked 'npm' @('audit', '--audit-level=moderate')
-    RunChecked 'npm' @('audit', '--omit=dev', '--audit-level=moderate')
+    RunChecked 'npm' @('audit')
+    RunChecked 'npm' @('audit', '--omit=dev')
 
     Write-Host 'Verifying reproducible lockfile installation...' -ForegroundColor Cyan
     RunChecked 'npm' @('ci')
