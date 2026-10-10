@@ -42,6 +42,11 @@ export default function ProductExperience({ allowInstall = false }: { allowInsta
       setInstalling(false);
     };
     const onUpdate = () => setUpdateReady(true);
+    const onShowInstall = () => {
+      setDismissedInstall(false);
+      setShowManualSteps(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
     const displayMode = window.matchMedia?.('(display-mode: standalone)');
     const onDisplayMode = () => setStandalone(Boolean(displayMode?.matches) || Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
     window.addEventListener('online', onOnline);
@@ -49,6 +54,7 @@ export default function ProductExperience({ allowInstall = false }: { allowInsta
     window.addEventListener('beforeinstallprompt', onInstall);
     window.addEventListener('appinstalled', onInstalled);
     window.addEventListener('nightjar:update-available', onUpdate);
+    window.addEventListener('nightjar:show-install', onShowInstall);
     displayMode?.addEventListener?.('change', onDisplayMode);
     return () => {
       window.removeEventListener('online', onOnline);
@@ -56,6 +62,7 @@ export default function ProductExperience({ allowInstall = false }: { allowInsta
       window.removeEventListener('beforeinstallprompt', onInstall);
       window.removeEventListener('appinstalled', onInstalled);
       window.removeEventListener('nightjar:update-available', onUpdate);
+      window.removeEventListener('nightjar:show-install', onShowInstall);
       displayMode?.removeEventListener?.('change', onDisplayMode);
     };
   }, []);
