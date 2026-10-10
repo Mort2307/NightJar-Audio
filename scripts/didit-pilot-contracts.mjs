@@ -32,7 +32,8 @@ assert.match(starter, /return startDiditSession\(identity\.uid\)/, 'the backend 
 assert.match(didit, /data\?\.environment === 'live'/, 'sandbox approvals cannot become permanent identity verification');
 assert.match(didit, /data\?\.reverifyRequired !== true/, 'a revoked or expired entitlement is never blindly reused');
 assert.match(didit, /if \(diditPass\(existing\)\) return \{ verified: true/, 'no duplicate live session when verified');
-assert.match(didit, /old\.uid === uid && old\.createdAtMs > Date\.now\(\) - 6 \* 86400_000/, 'an existing pending session is reused across refreshes');
+assert.match(didit, /old\.uid === uid && old\.environment === env\(\) && old\.workflowId === DIDIT_WORKFLOW_ID\.value\(\)/, 'only a pending session for this account, mode and workflow can be reused');
+assert.match(didit, /old\.createdAtMs > Date\.now\(\) - 6 \* 86400_000/, 'pending sessions are reusable across reloads, but not indefinitely');
 assert.match(didit, /if \(data\.status === 'CREATING' &&/, 'concurrent browser windows cannot start parallel billable checks');
 assert.match(didit, /session\.environment !== payload\.environment/, 'webhook cannot mix sandbox and live decisions');
 assert.match(didit, /uid !== payload\.vendorData/, 'signed provider decision is bound to the verified account UID');
