@@ -4555,10 +4555,21 @@ export const registerPushDevice = onCall({ region: REGION }, async (request) => 
 
 export const unregisterPushDevice = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  const token = cleanText((request.data as Record<string, unknown> | undefined)?.token, 4096);
-  if (!token) return { unregistered:false };
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  await accountRef(identity.uid).collection('pushDevices').doc(tokenHash).set({
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const token = cleanText(input.token, 4096);
+  const shortId = cleanText(input.deviceId, 40);
+  const devices = accountRef(identity.uid).collection('pushDevices');
+  // Only the authenticated account's own previously registered device can be revoked.
+  // This does not request or regenerate an FCM token.
+  let ref;
+  if (token) {
+    ref = devices.doc(createHash('sha256').update(token).digest('hex'));
+  } else if (/^[0-9a-f]{16}$/.test(shortId)) {
+    const snapshot = await devices.limit(100).get();
+    ref = snapshot.docs.find(doc => doc.id.slice(0, 16) === shortId)?.ref;
+  }
+  if (!ref) return { unregistered:false };
+  await ref.set({
     active:false,
     disabledAt:FieldValue.serverTimestamp(),
     updatedAt:FieldValue.serverTimestamp(),
