@@ -91,7 +91,7 @@ export default function AdminMemberRoleManager({ account, demoMode, notify, onCh
         <button type="button" className="primary-button" disabled={busy || demoMode || !selected.length || account.status === 'suspended'}
           onClick={() => void save('approve')}>{busy ? 'Saving roles…' : 'Approve selected roles'}</button>
       </div>
-      <small>Approving requires this member's accepted professional terms and age assurance (or authorised beta access). Queuing does not grant access. Existing roles are never overwritten. {demoMode ? 'This tool is disabled during Demo Mode.' : ''}</small>
+      <small>Approving requires this member's accepted professional terms and age assurance (or authorised beta access), and creates an audited approval event that may send Nightjar's professional welcome email. Queuing does not grant access or send an email. Existing roles are never overwritten. {demoMode ? 'This tool is disabled during Demo Mode.' : ''}</small>
     </div>}
   </section>;
 }
