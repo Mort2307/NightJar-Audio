@@ -10,15 +10,18 @@ type Props = {
   demoMode?: boolean;
   simulationMode?: boolean;
   readOnlyPreview?: boolean;
+  onAdminAudit?: () => void;
 };
 
-export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = false, simulationMode = false, readOnlyPreview = false }: Props) {
+export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = false, simulationMode = false, readOnlyPreview = false, onAdminAudit }: Props) {
   const [scripts, setScripts] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       if (demoMode) setScripts(structuredClone(demoMarketplaceScripts));
       else {
@@ -26,6 +29,8 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
         setScripts(data.scripts ?? []);
       }
     } catch {
+      setScripts([]);
+      setLoadError(true);
       notify('Script marketplace could not be loaded.');
     } finally {
       setLoading(false);
@@ -72,7 +77,9 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
       <BookOpen size={22}/>
     </div>
     <label className="marketplace-search"><Search size={15}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search Writer, title, genre or trope"/></label>
-    {loading ? <div className="people-empty">Loading marketplace…</div> : <div className="marketplace-grid">
+    {loading ? <div className="people-empty">Loading approved real scripts…</div> :
+    loadError ? <div className="marketplace-empty-state" role="alert"><BookOpen size={21}/><div><strong>Marketplace unavailable</strong><p>Live scripts could not be loaded. This is not evidence that the marketplace is empty.</p></div><button className="secondary-button" type="button" data-nj-preview-safe={readOnlyPreview ? "true" : undefined} onClick={() => void load()}>Try again</button></div>
+    : <div className="marketplace-grid">
       {filtered.map((script) => <article className="marketplace-card" key={script.id}>
         <div className="marketplace-card-head"><span>{script.rights?.licenceType && script.rights.licenceType !== 'none' ? script.rights.licenceType : 'Licence to discuss'}</span><Filter size={15}/></div>
         <h3>{script.title}</h3>
@@ -86,7 +93,12 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
         </dl>
         {readOnlyPreview ? <span className="status-pill muted">Preview only — enquiry disabled</span> : <button className="primary-button" type="button" onClick={()=>void expressInterest(script)}>I’m interested <ArrowRight size={14}/></button>}
       </article>)}
-      {!filtered.length && <div className="people-empty"><BookOpen size={18}/><strong>No matching scripts.</strong><span>Approved Writer listings will appear here when they are made available.</span></div>}
+      {!filtered.length && <div className="marketplace-empty-state"><BookOpen size={24}/><div>
+        <strong>{scripts.length > 0 ? 'No scripts match this search.' : 'No Writer scripts are publicly listed yet.'}</strong>
+        <p>{scripts.length > 0 ? 'Try a different title, genre, Writer or trope.' : 'Only approved manuscripts explicitly made visible by their Writer enter the live marketplace. Uploaded drafts and pending approvals remain protected.'}</p>
+      </div>
+      {readOnlyPreview && onAdminAudit && scripts.length === 0 && <button data-nj-preview-safe="true" type="button" className="secondary-button" onClick={onAdminAudit}>Check actual upload visibility <ArrowRight size={15}/></button>}
+      </div>}
     </div>}
   </section>;
 }
