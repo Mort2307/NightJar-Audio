@@ -6,7 +6,9 @@ const backend = fs.readFileSync('functions/src/index.ts','utf8');
 const clientBypass = /const TESTING_AGE_ASSURANCE_BYPASS\s*=\s*true/.test(app);
 const backendBypass = /const TESTING_AGE_ASSURANCE_BYPASS\s*=\s*true/.test(backend);
 const closedBeta = /const CLOSED_BETA\s*=\s*true/.test(backend);
-const ageAssuranceConfigured = /const AGE_ASSURANCE_CONFIGURED\s*=\s*true/.test(backend);
+const didit = fs.readFileSync('functions/src/didit.ts', 'utf8');
+const liveEvidenceRequired = backend.includes('diditPass(data)') && didit.includes("data?.environment === 'live'");
+const livePilotReviewed = process.env.NIGHTJAR_DIDIT_LIVE_VERIFIED === 'true';
 const failures = [];
 
 if (clientBypass || backendBypass) {
@@ -17,8 +19,8 @@ if (closedBeta) {
   failures.push('Closed Beta registration is still enabled. Set CLOSED_BETA = false before public launch.');
 }
 
-if (!ageAssuranceConfigured) {
-  failures.push('Production age assurance is not configured. AGE_ASSURANCE_CONFIGURED must be true only after the live provider is genuinely configured.');
+if (!liveEvidenceRequired || !livePilotReviewed) {
+  failures.push('Didit production 18+ assurance is not certified. Require live signed evidence, tested webhook and explicit NIGHTJAR_DIDIT_LIVE_VERIFIED=true release attestation.');
 }
 
 if (failures.length) {
@@ -29,5 +31,5 @@ if (failures.length) {
 
 console.log('✓ Testing age-assurance bypass disabled.');
 console.log('✓ Closed Beta registration disabled.');
-console.log('✓ Production age assurance configured.');
+console.log('✓ Live Didit age evidence and operator release attestation confirmed.');
 console.log('Nightjar launch-readiness access gates passed.');
