@@ -83,6 +83,15 @@ assert.match(app, /decideCreatorApplication\(application, 'approved', \[role\]\)
 assert.match(app, /decideCreatorApplication\(application, 'approved'\)/, 'owners can approve all requested roles');
 assert.match(app, /decideCreatorApplication\(application, 'rejected'\)/, 'owners can reject outstanding roles');
 assert.match(app, /application\.ageVerified !== true && application\.temporaryTestAccess !== true/, 'approval respects age-assurance or explicit QA access');
+
+assert.match(roleManager, /Check for updates/, 'users can refresh role approval statuses without restarting');
+assert.match(roleManager, /visibilitychange/, 'returning to app checks for new approvals');
+assert.match(roleManager, /Confirm removal/, 'approved-role removal requires confirmation');
+assert.match(app, /Approved - No pending roles/, 'archived approval labels are consistent for legacy records');
+assert.match(app, /Approved professional roles: \{approvedRoles\.map\(roleLabel\)\.join\(' \/ '\)\}/, 'approval labels use reliable ASCII separators');
+assert.match(app, /Approval email:/, 'approval delivery remains visible');
+assert.match(app, /Application last updated:/, 'application timestamp is distinct from email delivery timestamp');
+assert.doesNotMatch(app, /Approved · no pending role/, 'legacy malformed separator no longer appears in approval archive');
 console.log('Nightjar self-service multi-role request, review and routed workspace contracts passed.');
 
 console.log('Nightjar professional approval counts, Already Approved archive and routed owner workpages contracts passed.');
