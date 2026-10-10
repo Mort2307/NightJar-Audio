@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read = (file) => fs.readFileSync(file, 'utf8');
+const app = read('src/App.tsx');
+const install = read('src/components/ProductExperience.tsx');
+const css = read('src/styles/product-system.css');
+const manifest = JSON.parse(read('public/manifest.webmanifest'));
+
+assert.match(app, /<ProductExperience allowInstall=\{Boolean\(user && ageVerified\)\}/, 'all authenticated age-cleared roles can access install invitation');
+assert.doesNotMatch(app, /<ProductExperience allowInstall=\{canAdmin/, 'admin-only install restriction removed');
+assert.match(install, /beforeinstallprompt/, 'native Chromium install event supported');
+assert.match(install, /installPrompt\.prompt\(\)/, 'native installation is initiated only by the user');
+assert.match(install, /userChoice/, 'browser install acceptance/dismissal tracked');
+assert.match(install, /appinstalled/, 'successful native install is detected');
+assert.match(install, /display-mode: standalone/, 'installed web app suppresses install invitation');
+assert.match(install, /nightjar\.install-dismiss-until\.v1/, 'dismissal stored across app sessions');
+assert.match(install, /INSTALL_DISMISS_DAYS = 7/, 'dismissal does not permanently hide invitation');
+assert.match(install, /aria-label="Remind me about installing Nightjar later"/, 'dismissal is accessible');
+assert.match(install, /How to install/, 'browser-menu install help available without native prompt');
+assert.match(install, /Add to Home screen/, 'manual installation for unsupported browsers');
+assert.match(install, /nj-install-invitation/, 'installation shown as prominent dedicated card');
+assert.match(css, /\.nj-install-invitation\s*\{[^]*?position: relative;/, 'install invitation does not float over live controls');
+assert.match(css, /\.has-mobile-profile-save \.nj-product-status\s*\{[^]*?bottom: calc/, 'status notices clear the profile Save bar');
+assert.equal(manifest.display, 'standalone');
+assert.equal(manifest.name, 'Nightjar');
+assert.ok(Array.isArray(manifest.icons) && manifest.icons.some((icon) => icon.sizes === '512x512'), 'manifest contains app artwork');
+console.log('Nightjar member-wide PWA installation and layout contracts passed.');
