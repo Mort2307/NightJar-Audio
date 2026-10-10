@@ -28,6 +28,8 @@ import {
   BarChart3,
   Check,
   ChevronRight,
+  ChevronDown,
+  Eye,
   Heart,
   Bookmark,
   ThumbsUp,
@@ -110,6 +112,13 @@ type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type TestingMode = 'off' | 'demo' | 'simulation' | 'live';
+const LIVE_PREVIEW_ROLES: { id: PreviewRole; label: string; detail: string }[] = [
+  { id: 'listener', label: 'Listener', detail: 'Catalogue, discovery and public profiles' },
+  { id: 'creator', label: 'VA Creator', detail: 'Creator view and approved scripts' },
+  { id: 'writer', label: 'Writer', detail: 'Public professional discovery' },
+  { id: 'editor', label: 'Audio Editor', detail: 'Public professional discovery' },
+  { id: 'artist', label: 'Artist', detail: 'Public professional discovery' },
+];
 
 const PROFILE_ROLE_DEFAULTS = {
   roleFocus: [] as string[],
@@ -423,6 +432,8 @@ function App() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [liveRoleMenuOpen, setLiveRoleMenuOpen] = useState(false);
+  const liveRoleMenuRef = useRef<HTMLDivElement | null>(null);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
@@ -615,6 +626,21 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [moderationPreviewAsset]);
 
+  useEffect(() => {
+    if (!liveRoleMenuOpen) return;
+    const onOutside = (event: PointerEvent) => {
+      if (!liveRoleMenuRef.current?.contains(event.target as Node)) setLiveRoleMenuOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLiveRoleMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [liveRoleMenuOpen]);
   useEffect(() => installNativeProtectionBridge(), []);
 
   useEffect(() => {
@@ -1034,6 +1060,7 @@ function App() {
     setProfileRolesPage(false);
     setAdminPanel(null);
     setAdminPeopleRole(null);
+    setLiveRoleMenuOpen(false);
     if (nextView === 'admin' && canAdmin) {
       setPreviewRole(null);
       setSimulationMode(false);
@@ -2944,6 +2971,7 @@ function App() {
   const openAdminPanel = (panel: 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview') => {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
+    setLiveRoleMenuOpen(false);
     setView('admin');
     if (previewRole && !simulationMode) setPreviewRole(null);
     if (panel === 'live-preview' && demoMode) {
@@ -3841,10 +3869,34 @@ function App() {
           {canProtection && !canAdmin && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && !liveRolePreview && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
-          {canAdmin && !simulationMode && <div className="admin-preview-strip" role="group" aria-label="Real Nightjar role views"><span><ShieldCheck size={14} /> LIVE ROLE VIEW · REAL DATA · READ ONLY</span><button onClick={() => openAdminPanel('live-preview')}>Script visibility audit</button><button onClick={() => selectPreviewRole('listener')} className={liveRolePreview && previewRole === 'listener' ? 'active' : ''}>Listener</button><button onClick={() => selectPreviewRole('creator')} className={liveRolePreview && previewRole === 'creator' ? 'active' : ''}>VA Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button onClick={() => selectPreviewRole('artist')}>Artist</button><button className={!liveRolePreview ? 'active' : ''} onClick={clearAdminPreview}>Admin</button></div>}
         </nav>
 
         <div className="top-actions">
+          {canAdmin && !simulationMode && <div className="nj-live-switcher" ref={liveRoleMenuRef}>
+            <button type="button" className={liveRolePreview ? 'nj-live-switcher-trigger active' : 'nj-live-switcher-trigger'}
+              aria-expanded={liveRoleMenuOpen} aria-haspopup="true" aria-controls="nj-live-switcher-menu"
+              onClick={() => { setMenuOpen(false); setLiveRoleMenuOpen((open) => !open); }}>
+              <Eye size={17} aria-hidden="true" />
+              <span className="nj-live-switcher-label"><strong>View as</strong><small>{liveRolePreview && previewRole ? roleMeta[previewRole].label : 'Live app'}</small></span>
+              <ChevronDown size={15} className={liveRoleMenuOpen ? 'nj-switcher-chevron rotated' : 'nj-switcher-chevron'} aria-hidden="true" />
+            </button>
+            {liveRoleMenuOpen && <section className="nj-live-switcher-popover" id="nj-live-switcher-menu" aria-label="Live role viewing controls">
+              <header className="nj-live-switcher-heading"><span className="mini-label"><ShieldCheck size={14} /> ADMINISTRATOR ONLY</span><strong>View Nightjar as…</strong><small>Real public data · Read-only · No simulation</small></header>
+              <div className="nj-live-switcher-options" role="group" aria-label="Select a live member perspective">
+                {LIVE_PREVIEW_ROLES.map((option) => <button key={option.id} type="button"
+                  aria-pressed={liveRolePreview && previewRole === option.id}
+                  className={liveRolePreview && previewRole === option.id ? 'nj-live-switcher-option selected' : 'nj-live-switcher-option'}
+                  onClick={() => selectPreviewRole(option.id)}>
+                  <span><strong>{option.label}</strong><small>{option.detail}</small></span>
+                  {liveRolePreview && previewRole === option.id ? <Check size={16} aria-hidden="true"/> : <ChevronRight size={16} aria-hidden="true" />}
+                </button>)}
+              </div>
+              <div className="nj-live-switcher-footer">
+                <button type="button" onClick={() => openAdminPanel('live-preview')}><FileText size={15} aria-hidden="true"/> Script visibility audit</button>
+                <button type="button" onClick={clearAdminPreview}><ShieldCheck size={15} aria-hidden="true"/> Return to Admin</button>
+              </div>
+            </section>}
+          </div>}
           {user && !liveRolePreview && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
           {user && !liveRolePreview && <div className="notification-wrap">
             <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) void loadNotifications(productLoadEpoch.current); setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
@@ -3870,7 +3922,7 @@ function App() {
               <button className="ghost-button desktop-only" onClick={() => void signOut()}><LogOut size={15} /></button>
             </>
           )}
-          <button className="menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Open navigation menu">{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+          <button className="menu-button" onClick={() => { setLiveRoleMenuOpen(false); setMenuOpen((open) => !open); }} aria-label="Open navigation menu" aria-expanded={menuOpen}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </header>
 
@@ -3883,7 +3935,7 @@ function App() {
         </div>
       </div>}
 
-      {liveRolePreview && <div className="nightjar-live-role-banner" role="status"><ShieldCheck size={18}/><div><strong>LIVE NIGHTJAR · {previewRole ? roleMeta[previewRole].label : 'Member'}</strong><span>Real catalogue and public listings, not simulation. This remains your Administrator account: personalised data belongs to you, never an impersonated Creator or Listener.</span></div><button className="secondary-button" onClick={clearAdminPreview}>Return to Admin</button></div>}
+      {liveRolePreview && <div className="nightjar-live-role-banner" role="status"><ShieldCheck size={16} aria-hidden="true"/><span><strong>{previewRole ? roleMeta[previewRole].label : 'Member'} preview</strong> · Live public data · Read only</span><button className="secondary-button" type="button" onClick={clearAdminPreview}>Exit preview <ArrowRight size={14} aria-hidden="true"/></button></div>}
       <main id="nightjar-main-content" className={liveRolePreview ? 'nightjar-main nightjar-read-only-preview' : 'nightjar-main'}
         onClickCapture={(event) => { if (liveRolePreview && (event.target as HTMLElement).closest('button,a,input,select,textarea,summary,[role="button"],[contenteditable]')) { event.preventDefault(); event.stopPropagation(); } }}
         onKeyDownCapture={(event) => { if (liveRolePreview && event.key !== 'Tab' && (event.target as HTMLElement).closest('button,a,input,select,textarea,summary,[role="button"],[contenteditable]')) { event.preventDefault(); event.stopPropagation(); } }}
