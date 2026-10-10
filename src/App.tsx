@@ -1297,8 +1297,21 @@ function App() {
     } catch { /* notifications remain non-blocking */ }
   };
 
+  useEffect(() => {
+    if (!user || !ageVerified || !canAdmin) return;
+    // Low-frequency polling and focus refresh keep Owner actions current without
+    // repeated alerts, push dependencies or background billing surprises.
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadNotifications(productLoadEpoch.current);
+    };
+    const interval = window.setInterval(refresh, 180000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
+  }, [user?.userId, ageVerified, canAdmin]);
+
   const markNotificationRead = async (notification: any) => {
-    if (notification?.read === true) return;
+    // Live owner alerts clear when the work is completed, not when clicked.
+    if (notification?.read === true || notification?.actionRequired === true) return;
     try {
       if (!demoMode) await nightjarNotifications.markRead(String(notification.id));
       setNotifications((items) => {
@@ -1311,23 +1324,37 @@ function App() {
   };
 
   const markAllNotificationsRead = async () => {
-    const unread = notifications.filter((item:any) => item.read !== true);
+    const unread = notifications.filter((item:any) => item.read !== true && item.actionRequired !== true);
     if (!unread.length) return;
     try {
       if (!demoMode) await Promise.all(unread.map((item:any) => nightjarNotifications.markRead(String(item.id))));
       setNotifications((items) => {
-        const next = items.map((item:any) => ({ ...item, read:true }));
+        const next = items.map((item:any) => item.actionRequired === true ? item : { ...item, read:true });
         if (demoMode) writeDemo('notifications', next);
         return next;
       });
-      setNotificationUnreadCount(0);
-      notify('Notifications marked as read.');
+      setNotificationUnreadCount((count) => Math.max(0, count - unread.length));
+      notify('Personal notifications marked as read. Outstanding Administrator reviews remain visible.');
     } catch {
       notify('Some notifications could not be updated.');
     }
   };
 
   const openNotification = async (item:any) => {
+    if (item.type === 'admin_action' && canAdmin && !simulationMode) {
+      setNotificationsOpen(false);
+      if (item.subtype === 'release_verification') {
+        navigate('admin');
+        setModerationOpen(true);
+      } else if (item.subtype === 'professional_approval') {
+        openAdminPanel('approvals');
+      } else if (item.subtype === 'image_verification') {
+        openAdminPanel('images');
+      } else if (item.subtype === 'review_verification') {
+        openAdminPanel('reviews');
+      }
+      return;
+    }
     await markNotificationRead(item);
     setNotificationsOpen(false);
 
@@ -3599,7 +3626,7 @@ function App() {
   ];
 
   const notificationGroups = Object.entries(notifications.slice(0,20).reduce((groups:Record<string,any[]>, item:any) => {
-    const key = item.type === 'spotlight' ? 'Spotlights' : item.type === 'message' ? 'Messages' : item.type === 'comment' ? 'Comments' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
+    const key = item.type === 'admin_action' ? 'Administrator reviews' : item.type === 'spotlight' ? 'Spotlights' : item.type === 'message' ? 'Messages' : item.type === 'comment' ? 'Comments' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
     (groups[key] ??= []).push(item);
     return groups;
   }, {}));
@@ -3665,14 +3692,14 @@ function App() {
         <div className="top-actions">
           {user && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
           {user && <div className="notification-wrap">
-            <button className="ghost-button notification-button" onClick={() => setNotificationsOpen((open) => !open)} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
+            <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) void loadNotifications(productLoadEpoch.current); setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
               <Bell size={17} />
               {notificationUnreadCount > 0 && <span className="notification-badge">{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</span>}
             </button>
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
               <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void openNotification(item)}>
-                <span className="notification-row-icon">{item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
+                <span className="notification-row-icon">{item.type === 'admin_action' ? <ShieldCheck size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small></span>
               </button>)}</div>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new activity. You’re caught up.</span></div>}
             </section>}
