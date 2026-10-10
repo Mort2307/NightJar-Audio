@@ -1,5 +1,6 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { firebaseApp } from './firebase-auth';
+import { repairMojibakeDisplayData } from './text-integrity';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
@@ -105,7 +106,7 @@ const retryEmailCampaignCall = httpsCallable<{ campaignId: string }, {
 
 export const nightjarAdministration = {
   async overview() {
-    return (await overviewCall()).data;
+    return repairMojibakeDisplayData((await overviewCall()).data);
   },
 
   async setAccountRole(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist', status: 'active' | 'pending_review' | 'suspended' = 'active') {
@@ -121,7 +122,7 @@ export const nightjarAdministration = {
   },
 
   async professionalApplicationBank() {
-    return (await professionalBankCall()).data;
+    return repairMojibakeDisplayData((await professionalBankCall()).data);
   },
 
   async retryProfessionalApprovalEmail(userId: string, eventId: string) {
@@ -145,11 +146,11 @@ export const nightjarAdministration = {
   },
 
   async emailAudiencePreview(audience: AdminEmailAudience) {
-    return (await emailAudiencePreviewCall({ audience })).data;
+    return repairMojibakeDisplayData((await emailAudiencePreviewCall({ audience })).data);
   },
 
   async emailCampaigns() {
-    return (await emailCampaignsCall()).data;
+    return repairMojibakeDisplayData((await emailCampaignsCall()).data);
   },
 
   async sendEmailTest(subject: string, body: string, category: AdminEmailCategory, recipientEmails: string[] = []) {
