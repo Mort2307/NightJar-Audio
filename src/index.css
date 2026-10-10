@@ -8937,3 +8937,44 @@ textarea:focus-visible,
   .professional-role-status-summary .secondary-button { width: 100%; }
   .professional-role-confirm { width: 100%; }
 }
+
+
+/* Approval cards: structured fields prevent concatenated status/role/email copy. */
+.nj-application-summary {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  margin: 8px 0 12px;
+  min-width: 0;
+}
+.nj-application-summary .nj-application-status {
+  display: inline-flex;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.nj-application-wave {
+  font-size: .78rem;
+  color: var(--muted);
+}
+.nj-application-field {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.nj-application-field-label {
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nj-application-field strong {
+  font-size: .91rem;
+  font-weight: 600;
+  color: var(--ivory);
+  overflow-wrap: anywhere;
+}
