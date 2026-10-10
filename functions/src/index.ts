@@ -3774,6 +3774,110 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   return { userId, role, status };
 });
 
+/**
+ * Administrator-controlled role repair for existing Listener accounts.
+ * Queuing a role never grants professional permissions. Approval requires the
+ * member's own current professional-terms acceptance and age assurance.
+ * Listener access, existing approved roles, role-specific profiles and
+ * account status are preserved.
+ */
+export const adminManageProfessionalRoles = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const requestedRoles = cleanProfessionalRoles(input.roles);
+  const action = cleanText(input.action, 20);
+  if (!userId || userId.includes('/') || !requestedRoles.length || !['queue','approve'].includes(action)) {
+    throw new HttpsError('invalid-argument', 'Select an existing member, professional role(s), and Queue or Approve.');
+  }
+
+  const account = await accountRef(userId).get();
+  if (!account.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
+  const accountData = account.data() ?? {};
+  if (ADMIN_EMAILS.has(cleanEmail(accountData.email)) || accountData.role === 'admin') {
+    throw new HttpsError('permission-denied', 'Owner administrator permissions cannot be modified here.');
+  }
+  if (accountData.status === 'suspended') {
+    throw new HttpsError('failed-precondition', 'Reactivate this account through the existing account-status review first.');
+  }
+  if (action === 'approve') {
+    // Never grant professional workspace access without this member's own
+    // recorded consent and real age assurance or explicit private-beta testing.
+    await requireProfessionalLegalTerms(userId);
+    await requireAgeVerified(userId);
+  }
+
+  const targetRef = accountRef(userId);
+  const applicationRef = professionalApplicationRef(userId);
+  const decisionRef = applicationRef.collection('events').doc();
+  const result = await db.runTransaction(async (tx) => {
+    const [freshAccount, freshApplication] = await Promise.all([tx.get(targetRef), tx.get(applicationRef)]);
+    if (!freshAccount.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
+    const current = freshAccount.data() ?? {};
+    if (current.role === 'admin' || ADMIN_EMAILS.has(cleanEmail(current.email)) || current.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'This account cannot receive a professional role change.');
+    }
+    const previousApplication = freshApplication.data() ?? {};
+    const currentApproved = professionalRolesForAccount(current) as ProfessionalRole[];
+    const previousStatus = cleanText(previousApplication.status, 30) || 'none';
+    const applicationPending = ['banked','waitlist'].includes(previousStatus)
+      ? cleanProfessionalRoles(previousApplication.requestedRoles)
+      : [];
+    const currentPending = Array.from(new Set([
+      ...cleanProfessionalRoles(current.pendingProfessionalRoles),
+      ...applicationPending,
+    ])).filter((role) => !currentApproved.includes(role));
+
+    const changedRoles = action === 'approve'
+      ? requestedRoles.filter((role) => !currentApproved.includes(role))
+      : requestedRoles.filter((role) => !currentApproved.includes(role) && !currentPending.includes(role));
+    if (!changedRoles.length) return {
+      userId, action, changedRoles: [] as ProfessionalRole[], approvedProfessionalRoles: currentApproved, pendingProfessionalRoles: currentPending,
+    };
+
+    const approved = action === 'approve'
+      ? Array.from(new Set([...currentApproved, ...changedRoles]))
+      : currentApproved;
+    const pending = action === 'approve'
+      ? currentPending.filter((role) => !changedRoles.includes(role))
+      : Array.from(new Set([...currentPending, ...changedRoles]));
+    const nextStatus = pending.length ? 'banked' : approved.length ? 'approved' : 'banked';
+
+    tx.set(targetRef, {
+      approvedProfessionalRoles: approved,
+      pendingProfessionalRoles: pending,
+      professionalAccessUpdatedBy: admin.uid,
+      professionalAccessUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.set(applicationRef, {
+      userId,
+      email: cleanEmail(current.email) || null,
+      requestedRoles: pending,
+      approvedRoles: approved,
+      status: nextStatus,
+      source: 'administrator-account-management',
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(freshApplication.exists ? {} : { createdAt: FieldValue.serverTimestamp(), bankedAt: FieldValue.serverTimestamp() }),
+    }, { merge: true });
+    tx.set(decisionRef, {
+      userId,
+      decision: action === 'approve' ? 'approved' : 'banked',
+      source: 'administrator-account-management',
+      roles: changedRoles,
+      previousStatus,
+      resultingStatus: nextStatus,
+      approvedRolesAfter: approved,
+      pendingRolesAfter: pending,
+      reviewedBy: admin.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { userId, action, changedRoles, approvedProfessionalRoles: approved, pendingProfessionalRoles: pending };
+  });
+  if (result.changedRoles.length && action === 'approve') await syncCreatorCustomTagUsage(userId);
+  return result;
+});
+
 export const listBillingSubscriptions = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('subscriptions').limit(1000).get();
