@@ -3874,13 +3874,13 @@ function App() {
         <div className="top-actions">
           {canAdmin && !simulationMode && <div className="nj-live-switcher" ref={liveRoleMenuRef}>
             <button type="button" className={liveRolePreview ? 'nj-live-switcher-trigger active' : 'nj-live-switcher-trigger'}
-              aria-expanded={liveRoleMenuOpen} aria-haspopup="true" aria-controls="nj-live-switcher-menu"
+              aria-expanded={liveRoleMenuOpen} aria-haspopup="dialog" aria-controls="nj-live-switcher-menu"
               onClick={() => { setMenuOpen(false); setLiveRoleMenuOpen((open) => !open); }}>
               <Eye size={17} aria-hidden="true" />
               <span className="nj-live-switcher-label"><strong>View as</strong><small>{liveRolePreview && previewRole ? roleMeta[previewRole].label : 'Live app'}</small></span>
               <ChevronDown size={15} className={liveRoleMenuOpen ? 'nj-switcher-chevron rotated' : 'nj-switcher-chevron'} aria-hidden="true" />
             </button>
-            {liveRoleMenuOpen && <section className="nj-live-switcher-popover" id="nj-live-switcher-menu" aria-label="Live role viewing controls">
+            {liveRoleMenuOpen && <section className="nj-live-switcher-popover" id="nj-live-switcher-menu" role="dialog" aria-modal="false" aria-label="Live role viewing controls">
               <header className="nj-live-switcher-heading"><span className="mini-label"><ShieldCheck size={14} /> ADMINISTRATOR ONLY</span><strong>View Nightjar as…</strong><small>Real public data · Read-only · No simulation</small></header>
               <div className="nj-live-switcher-options" role="group" aria-label="Select a live member perspective">
                 {LIVE_PREVIEW_ROLES.map((option) => <button key={option.id} type="button"
@@ -3983,7 +3983,7 @@ function App() {
                 <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
                 <div className="hero-actions">
                   <button data-nj-preview-safe="true" className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
-                  <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
+                  <button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
                 </div>
                 <div className="hero-signals">
                   <span><Headphones size={15} /> Headphone-first</span>
@@ -4088,8 +4088,8 @@ function App() {
             </section>
 
             <section className="studio-feature section-wrap">
-              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>Clear work. Clear rates. Real analytics.</h2><p>Nightjar separates the equal capped standard creator rate from listening analytics. Commercial records stay grounded in confirmed billing rather than fabricated earnings.</p><button className="primary-button" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
-              <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>PAID SUBSCRIPTIONS</span><ChevronRight size={12}/><span>PUBLISHED RATE BAND</span><ChevronRight size={12}/><span>CAPPED EQUAL RATE</span></div></div>
+              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>Clear work. Clear rates. Real analytics.</h2><p>Nightjar separates the equal capped standard creator rate from listening analytics. Commercial records stay grounded in confirmed billing rather than fabricated earnings.</p><button data-nj-preview-safe="true" className="primary-button" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
+              {!liveRolePreview && <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>PAID SUBSCRIPTIONS</span><ChevronRight size={12}/><span>PUBLISHED RATE BAND</span><ChevronRight size={12}/><span>CAPPED EQUAL RATE</span></div></div>}
             </section>
           </section>
         )}
@@ -4124,11 +4124,11 @@ function App() {
             </div>
             <div className="nj-directory-viewbar">
               <div className="nj-directory-view-actions">
-                <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>
+                {!liveRolePreview && <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>}
                 <button data-nj-preview-safe="true" className="ghost-button" onClick={clearDirectoryFilters}>Clear filters</button>
-                <span>Saved views stay on this signed-in account’s browser only.</span>
+                {!liveRolePreview && <span>Saved views stay on this signed-in account’s browser only.</span>}
               </div>
-              {!!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
+              {!liveRolePreview && !!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
             </div>
 
             {!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>}
@@ -4156,7 +4156,7 @@ function App() {
                   <div className="profile-main">
                     <div className="profile-heading">
                       <div><div className="profile-role-chips directory-role-chips">{(person.roles?.length ? person.roles : [person.role]).filter((value,index,array)=>array.indexOf(value)===index).map((personRole)=><span className="directory-role-label" key={personRole}>{roleMeta[personRole].label}</span>)}</div><h2>{person.name}</h2><span>{person.handle ? '@' + person.handle.replace(/^@/,'') : 'Handle not set'}</span></div>
-                      <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>
+                      {!liveRolePreview && <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>}
                     </div>
                     <p>{primaryRoleSlice.roleHeadline || person.headline || primaryRoleSlice.roleBio || person.bio || roleMeta[person.role].description}</p>
                     {person.roleAvailability && <span className="creator-availability-pill">{person.roleAvailability}</span>}
