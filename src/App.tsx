@@ -3661,7 +3661,7 @@ function App() {
   return (
     <div className={view === 'profile' && !profileRolesPage && profileDirty ? 'app-shell has-mobile-profile-save' : 'app-shell'}>
       <a className="skip-link" href="#nightjar-main-content">Skip to main content</a>
-      <ProductExperience allowInstall={canAdmin && !simulationMode} />
+      <ProductExperience allowInstall={Boolean(user && ageVerified)} />
       {ageVerified && ageProvider === 'temporary-test-access' && <div className="testing-age-bypass-banner" role="status"><ShieldCheck size={14}/><span><strong>APPROVED TEST ACCESS</strong> This account is using temporary QA age access. Production age assurance is still required before public launch.</span></div>}
       <header className="topbar">
         <button className="brand-button" onClick={() => navigate('discover')} aria-label="Nightjar home">
