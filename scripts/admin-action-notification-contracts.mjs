@@ -15,7 +15,7 @@ for (const source of [
   "db.collection('releaseReviews')",
 ]) assert.ok(summary.includes(source), 'review/verification queue is missing: ' + source);
 assert.match(summary, /where\('status', 'in', \['banked','waitlist'\]\)/, 'only open application states may notify');
-assert.match(summary, /\.filter\(\(role\) => !approved\.has\(role\)\)/, 'already-approved professional roles must not notify');
+assert.match(summary, /\.some\(\(role\) => !approved\.has\(role\)\)/, 'already-approved professional roles must not notify');
 assert.match(summary, /actionRequired:true/, 'action notices cannot be dismissed before review');
 assert.match(summary, /count:item\.count/, 'notice must disclose grounded queue size, not invent counts');
 assert.match(backend, /identity\.admin \? await adminActionNotifications\(\)/, 'non-admin accounts never see owner review notices');
