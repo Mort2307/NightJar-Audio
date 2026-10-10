@@ -7,6 +7,11 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 const overviewCall = httpsCallable<void, { people: any }>(functions, 'adminAccountOverview');
 const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist'; status: 'active' | 'pending_review' | 'suspended' }, { userId: string; role: string; status: string }>(functions, 'adminSetAccountRole');
 export type NightjarManagedProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
+const setWorkspaceCall = httpsCallable<{
+  userId: string;
+  role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
+}, { userId: string; role: string; status: string; unchanged: boolean }>(functions, 'adminSetAccountWorkspace');
+
 
 export type NightjarManagedRolesResult = {
   userId: string;
@@ -23,6 +28,19 @@ const manageProfessionalRolesCall = httpsCallable<{
   approvedRoles: NightjarManagedProfessionalRole[];
   expectedApprovedRoles: NightjarManagedProfessionalRole[];
 }, NightjarManagedRolesResult>(functions, 'adminManageProfessionalRoles');
+
+export type NightjarQueuedProfessionalRolesResult = {
+  userId: string;
+  queuedRoles: NightjarManagedProfessionalRole[];
+  approvedProfessionalRoles: NightjarManagedProfessionalRole[];
+  pendingProfessionalRoles: NightjarManagedProfessionalRole[];
+  unchanged: boolean;
+};
+
+const queueProfessionalRolesCall = httpsCallable<{
+  userId: string;
+  roles: NightjarManagedProfessionalRole[];
+}, NightjarQueuedProfessionalRolesResult>(functions, 'adminQueueProfessionalRoles');
 
 export type NightjarMarketplaceVisibility = {
   id: string;
@@ -146,12 +164,20 @@ export const nightjarAdministration = {
     return (await setRoleCall({ userId, role, status })).data;
   },
 
+  async setAccountWorkspace(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') {
+    return (await setWorkspaceCall({ userId, role })).data;
+  },
+
   async manageProfessionalRoles(
     userId: string,
     approvedRoles: NightjarManagedProfessionalRole[],
     expectedApprovedRoles: NightjarManagedProfessionalRole[],
   ) {
     return (await manageProfessionalRolesCall({ userId, approvedRoles, expectedApprovedRoles })).data;
+  },
+
+  async queueProfessionalRoles(userId: string, roles: NightjarManagedProfessionalRole[]) {
+    return (await queueProfessionalRolesCall({ userId, roles })).data;
   },
 
   async previewScriptMarketplace() {

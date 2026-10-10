@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brush, FileText, Mic2, Scissors, ShieldCheck, X } from 'lucide-react';
 import { nightjarAccount, type NightjarProfessionalRole, type ProfessionalRoleState } from '../platform/firebase-account';
+import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
 
 type Props = {
   notify: (message: string) => void;
@@ -30,17 +31,35 @@ export default function ProfessionalRoleManager({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [confirmRemove, setConfirmRemove] = useState<NightjarProfessionalRole | null>(null);
+  // Legal consent is specific to the member and current document versions.
+  // An unavailable status service must not hide already-approved workspaces.
+  const [legalDocuments, setLegalDocuments] = useState<LegalAgreementStatus[] | null>(null);
+  const [legalError, setLegalError] = useState('');
+  const [termsConfirmed, setTermsConfirmed] = useState(false);
+  const missingProfessionalTerms = (legalDocuments ?? []).filter(
+    (document) => document.requiredForProfessional && !document.accepted,
+  );
 
   const load = async () => {
     setLoading(true);
     setLoadError('');
-    try {
-      setState(await nightjarAccount.professionalRoles());
-    } catch {
+    const [roles, legal] = await Promise.allSettled([
+      nightjarAccount.professionalRoles(),
+      nightjarLegal.status(),
+    ]);
+    if (roles.status === 'fulfilled') {
+      setState(roles.value);
+    } else {
       setLoadError('Your roles could not be loaded. Please retry.');
-    } finally {
-      setLoading(false);
     }
+    if (legal.status === 'fulfilled') {
+      setLegalDocuments(legal.value.documents);
+      setLegalError('');
+    } else {
+      setLegalDocuments(null);
+      setLegalError('Professional terms could not be checked. Refresh before submitting an application.');
+    }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -59,6 +78,30 @@ export default function ProfessionalRoleManager({
         : [...items, role],
     );
 
+  const acceptProfessionalTerms = async () => {
+    if (!legalDocuments) {
+      notify('Professional agreements could not be checked. Use Check for updates and try again.');
+      return false;
+    }
+    if (!missingProfessionalTerms.length) return true;
+    if (!termsConfirmed) {
+      notify('Read the current professional terms and tick the agreement box before requesting or opening professional workspaces.');
+      return false;
+    }
+    await nightjarLegal.accept(
+      missingProfessionalTerms.map(({ id, version }) => ({ id, version, accepted: true as const })),
+      'professional-role-upgrade',
+    );
+    const updated = await nightjarLegal.status();
+    setLegalDocuments(updated.documents);
+    setTermsConfirmed(false);
+    if (updated.documents.some((document) => document.requiredForProfessional && !document.accepted)) {
+      notify('Some current professional agreements still require acceptance.');
+      return false;
+    }
+    return true;
+  };
+
   const apply = async () => {
     if (!selected.length) {
       notify('Choose at least one professional role.');
@@ -67,6 +110,7 @@ export default function ProfessionalRoleManager({
 
     setBusy(true);
     try {
+      if (!(await acceptProfessionalTerms())) return;
       const result = await nightjarAccount.applyForProfessionalRoles(selected, {
         statement,
         experience,
@@ -81,8 +125,8 @@ export default function ProfessionalRoleManager({
       setPortfolioUrl('');
       setSocialUrl('');
       await load();
-    } catch {
-      notify('Professional application could not be stored.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Professional application could not be stored.');
     } finally {
       setBusy(false);
     }
@@ -105,6 +149,7 @@ export default function ProfessionalRoleManager({
   const activate = async (role: 'listener' | NightjarProfessionalRole) => {
     setBusy(true);
     try {
+      if (role !== 'listener' && !(await acceptProfessionalTerms())) return;
       const result = await nightjarAccount.setActiveRole(role);
       onRoleChanged?.(result.activeRole);
       await load();
@@ -230,6 +275,38 @@ export default function ProfessionalRoleManager({
         </button>
       </div>
       {loadError && <p role="alert">{loadError}</p>}
+      {legalError && <div className="professional-terms-upgrade" role="alert">
+        <strong>Professional agreement status unavailable</strong>
+        <p>{legalError} Your existing approved workspaces and Listener access are unchanged.</p>
+        <a href="/legal">View Nightjar Legal Centre</a>
+        <button type="button" className="secondary-button" disabled={loading || busy} onClick={() => void load()}>Retry legal status</button>
+      </div>}
+      {missingProfessionalTerms.length > 0 && <div className="professional-terms-upgrade">
+        <strong>Accept professional terms to request or use new roles</strong>
+        <p>Open and read the current documents. Your agreement is recorded against the specific versions below; approval is still controlled by Nightjar administrators.</p>
+        {missingProfessionalTerms.map((document) => (
+          <a key={document.id} href={document.path} target="_blank" rel="noreferrer">
+            {document.title} · version {document.version}
+          </a>
+        ))}
+        <label className="professional-terms-consent">
+          <input type="checkbox" checked={termsConfirmed} disabled={busy} onChange={(event) => setTermsConfirmed(event.target.checked)}/>
+          <span>I have read and agree to these professional terms and applicable account documents.</span>
+        </label>
+        <button type="button" className="secondary-button" disabled={!termsConfirmed || busy}
+          onClick={() => void (async () => {
+            setBusy(true);
+            try {
+              if (await acceptProfessionalTerms()) notify('Your current professional agreements have been recorded. Administrator approval is still required for new roles.');
+            } catch (error) {
+              notify(error instanceof Error ? error.message : 'Professional agreements could not be recorded.');
+            } finally {
+              setBusy(false);
+            }
+          })()}>
+          {busy ? 'Saving agreement…' : 'Accept professional terms'}
+        </button>
+      </div>}
       {state.applicationStatus === 'rejected' && <p className="panel-note">Your previous professional application was not approved. You can apply again for any available role.</p>}
 
       <div className="professional-role-list">

@@ -18,6 +18,41 @@
     "trailingSlash": false,
     "rewrites": [
       {
+        "source": "/api/webhooks/didit",
+        "function": {
+          "functionId": "diditWebhook",
+          "region": "europe-west2"
+        }
+      },
+      {
+        "source": "/app-manifest.webmanifest",
+        "function": {
+          "functionId": "brandInstallManifest",
+          "region": "europe-west2"
+        }
+      },
+      {
+        "source": "/app-icons/nightjar-192.png",
+        "function": {
+          "functionId": "brandIcon192",
+          "region": "europe-west2"
+        }
+      },
+      {
+        "source": "/app-icons/nightjar-512.png",
+        "function": {
+          "functionId": "brandIcon512",
+          "region": "europe-west2"
+        }
+      },
+      {
+        "source": "/app-icons/nightjar-maskable-512.png",
+        "function": {
+          "functionId": "brandIconMaskable512",
+          "region": "europe-west2"
+        }
+      },
+      {
         "source": "/brand-logo",
         "function": {
           "functionId": "brandLogoImage",
@@ -30,6 +65,28 @@
       }
     ],
     "headers": [
+      {
+        "source": "/app-manifest.webmanifest",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store,max-age=0,must-revalidate"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/manifest+json; charset=utf-8"
+          }
+        ]
+      },
+      {
+        "source": "/app-icons/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store,max-age=0,must-revalidate"
+          }
+        ]
+      },
       {
         "source": "/service-worker.js",
         "headers": [

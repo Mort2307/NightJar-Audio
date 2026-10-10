@@ -9279,3 +9279,93 @@ textarea:focus-visible,
   .admin-live-preview-heading {padding:14px;}
   .admin-live-preview-diagnostic {flex-wrap:wrap;}
 }
+
+/* PUBLIC NIGHTJAR LEGAL CENTRE */
+.nj-legal-centre-shell { min-height: 100dvh; }
+.nj-legal-centre { max-width: 850px; }
+.nj-legal-centre-cards { display: grid; grid-template-columns: 1fr; gap: 11px; margin: 24px 0; }
+.nj-legal-centre-card {
+  display: grid; grid-template-columns: 44px minmax(0,1fr) auto;
+  align-items: center; gap: 14px; padding: 16px;
+  color: inherit; text-decoration: none; border: 1px solid rgba(221,198,215,.19);
+  border-radius: 16px; background: rgba(155,117,149,.055);
+  transition: border-color .16s, background .16s;
+}
+.nj-legal-centre-card:hover,.nj-legal-centre-card:focus-visible {
+  border-color: rgba(221,198,215,.54); background: rgba(155,117,149,.12);
+}
+.nj-legal-centre-icon {
+  display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 13px; background: rgba(167,125,163,.11); color: #d9bbd6;
+}
+.nj-legal-centre-card > span:nth-child(2) { min-width: 0; }
+.nj-legal-centre-card strong,.nj-legal-centre-card em,.nj-legal-centre-card small {
+  display: block; overflow-wrap: anywhere;
+}
+.nj-legal-centre-card strong { font-size: 15px; font-weight: 650; }
+.nj-legal-centre-card small { margin-top: 4px; font-size: 10px; color: #c7b8c5; }
+.nj-legal-centre-card em { margin-top: 7px; font-size: 11px; line-height: 1.6; color: #a99baa; font-style: normal; }
+.nj-legal-centre-card > svg:last-child { color: #cbb5cc; }
+@media(max-width:600px) {
+  .nj-legal-centre-card { grid-template-columns: 36px minmax(0,1fr) auto; gap: 10px; padding: 13px; }
+  .nj-legal-centre-icon { width: 36px; height: 36px; }
+}
+
+
+/* PROFESSIONAL ROLE UPGRADE: versioned self-service consent on mobile and desktop. */
+.professional-terms-upgrade {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid rgba(221, 198, 215, .32);
+  border-radius: 16px;
+  background: rgba(155, 117, 149, .085);
+}
+.professional-terms-upgrade p { margin: 0; line-height: 1.5; }
+.professional-terms-upgrade a { overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 3px; }
+.professional-terms-consent { display: flex; align-items: flex-start; gap: 12px; line-height: 1.45; }
+.professional-terms-consent input { flex: 0 0 auto; width: 19px; height: 19px; margin: 2px 0 0; }
+.professional-terms-upgrade .secondary-button { justify-self: start; min-height: 44px; max-width: 100%; white-space: normal; }
+@media (max-width: 600px) {
+  .professional-terms-upgrade { padding: 13px; }
+  .professional-terms-upgrade .secondary-button { width: 100%; justify-self: stretch; }
+}
+
+
+/* Owner People: queue additional professions separately from live access grants. */
+.admin-member-queue-roles {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(221, 198, 215, .25);
+  background: rgba(155, 117, 149, .055);
+}
+.admin-member-queue-roles p { margin: 0; line-height: 1.55; }
+.admin-member-queue-roles .admin-member-multi-role-options { max-width: 100%; }
+.admin-member-queue-roles .secondary-button { justify-self: start; min-height: 44px; }
+@media (max-width: 600px) {
+  .admin-member-queue-roles { padding: 12px; }
+  .admin-member-queue-roles .secondary-button { width: 100%; justify-self: stretch; white-space: normal; }
+}
+
+
+/* Installed Nightjar icon repair: distinct administrator-only workpage. */
+.nj-install-branding { display: grid; gap: 16px; min-width: 0; }
+.nj-install-branding-status {
+  display: grid; gap: 9px; padding: 15px;
+  border: 1px solid rgba(221,198,215,.25); border-radius: 14px;
+  background: rgba(155,117,149,.06);
+}
+.nj-install-branding-status > div { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.nj-install-branding-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.nj-install-branding-actions button { min-height: 44px; }
+.nj-install-branding a { overflow-wrap: anywhere; text-decoration: underline; }
+@media(max-width: 600px) {
+  .nj-install-branding-actions { display: grid; grid-template-columns: minmax(0,1fr); }
+  .nj-install-branding-actions button { width: 100%; white-space: normal; }
+}

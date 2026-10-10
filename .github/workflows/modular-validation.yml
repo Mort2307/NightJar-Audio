@@ -2,7 +2,7 @@ name: Nightjar modular validation
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/self-service-professional-roles-20261010]
   workflow_dispatch:
 
 permissions:

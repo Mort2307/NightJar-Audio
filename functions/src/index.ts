@@ -8,12 +8,15 @@ import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
+import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession } from './didit';
+import { hasPaidEntitlement } from './entitlements';
+export { diditWebhook, processDiditWebhook } from './didit';
 
 initializeApp();
 
 const db = getFirestore();
 const REGION = 'europe-west2';
-const AGE_ASSURANCE_CONFIGURED = false;
+const DIDIT_LIVE_PILOT_ADMINS_ONLY = true; // Closed beta: billable age sessions are admin-only.
 const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
@@ -310,7 +313,7 @@ export const closedBetaRegistrationStatus = onCall({ region: REGION }, async (re
   return {
     closedBeta: CLOSED_BETA,
     allowed: access.allowed,
-    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED,
+    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS,
   };
 });
 
@@ -2199,6 +2202,38 @@ export const brandIcon192=onRequest({region:REGION},async(_r,res)=>{await stream
 export const brandIcon512=onRequest({region:REGION},async(_r,res)=>{await streamBrandingIcon('icon512Path',res);});
 export const brandIconMaskable512=onRequest({region:REGION},async(_r,res)=>{await streamBrandingIcon('maskable512Path',res);});
 
+export const brandInstallManifest = onRequest({region:REGION},async(_r,res)=>{
+  try {
+    const snap=await db.collection('settings').doc('branding').get();
+    const branding=snap.data()??{};
+    const ready=branding.logoStatus==='approved'
+      && Boolean(branding.icon192Path && branding.icon512Path && branding.maskable512Path);
+    const version=ready ? encodeURIComponent(String(branding.iconVersion??'1')) : 'legacy';
+    const icons=ready
+      ? [
+          {src:'/app-icons/nightjar-192.png?v='+version,sizes:'192x192',type:'image/png',purpose:'any'},
+          {src:'/app-icons/nightjar-512.png?v='+version,sizes:'512x512',type:'image/png',purpose:'any'},
+          {src:'/app-icons/nightjar-maskable-512.png?v='+version,sizes:'512x512',type:'image/png',purpose:'maskable'},
+        ]
+      : [
+          {src:'/nightjar-home-192.png',sizes:'192x192',type:'image/png',purpose:'any'},
+          {src:'/nightjar-home-512.png',sizes:'512x512',type:'image/png',purpose:'any'},
+        ];
+    res.setHeader('Content-Type','application/manifest+json; charset=utf-8');
+    res.setHeader('Cache-Control','no-store,max-age=0,must-revalidate');
+    res.setHeader('X-Content-Type-Options','nosniff');
+    res.status(200).json({
+      id:'/',name:'Nightjar',short_name:'Nightjar',
+      description:'Premium immersive audio for adults.',
+      start_url:'/',scope:'/',display:'standalone',
+      background_color:'#0c0b0d',theme_color:'#0c0b0d',
+      lang:'en-GB',prefer_related_applications:false,icons,
+    });
+  } catch {
+    res.status(503).send('Install manifest temporarily unavailable.');
+  }
+});
+
 export const syncBrandIconVariants = onCall({region:REGION},async(request)=>{
   const admin=requireAdminIdentity(request);
   const input=(request.data??{}) as Record<string,unknown>;
@@ -3657,7 +3692,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
     },
     testing: {
       closedBeta: CLOSED_BETA,
-      ageAssuranceConfigured: AGE_ASSURANCE_CONFIGURED,
+      ageAssuranceConfigured: false /* Query protected ageStatus callable for actual provider configuration */,
       temporaryAgeBypassEnabled: TESTING_AGE_ASSURANCE_BYPASS,
       approvedTesters,
       approvedTesterCount: approvedTesters.length,
@@ -3774,6 +3809,46 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   return { userId, role, status };
 });
 
+// Workspace selection is not account reinstatement. Never let an Owner's
+// role dropdown silently unsuspend or activate a restricted member.
+export const adminSetAccountWorkspace = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const role = cleanText(input.role, 30);
+  if (!userId || userId.includes('/') ||
+      !['listener', 'creator', 'writer', 'editor', 'artist'].includes(role)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid Nightjar member and approved workspace.');
+  }
+  const ref = accountRef(userId);
+  const result = await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar member not found.');
+    const account = snapshot.data() ?? {};
+    if (ADMIN_EMAILS.has(cleanEmail(account.email)) || account.role === 'admin') {
+      throw new HttpsError('permission-denied', 'Administrator accounts cannot be reassigned.');
+    }
+    if (account.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'Resolve the member suspension separately before changing their workspace.');
+    }
+    const approved = professionalRolesForAccount(account);
+    if (role !== 'listener' && !approved.includes(role as AccountRole)) {
+      throw new HttpsError('failed-precondition', 'Approve this professional role before making it the active workspace.');
+    }
+    const status = cleanText(account.status, 30) || 'active';
+    if (cleanText(account.role, 30) === role) return { userId, role, status, unchanged: true };
+    tx.set(ref, {
+      role,
+      roleUpdatedBy: admin.uid,
+      roleUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { userId, role, status, unchanged: false };
+  });
+  if (!result.unchanged) await syncCreatorCustomTagUsage(userId);
+  return result;
+});
+
 export const listBillingSubscriptions = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('subscriptions').limit(1000).get();
@@ -3803,8 +3878,11 @@ const releaseWorkAccess = (data: Record<string, any>, userId: string) => {
 
 const activeListeningSubscriptionFor = async (userId: string) => {
   const snapshot = await db.collection('subscriptions').where('userId', '==', userId).limit(20).get();
-  const eligible = snapshot.docs.find((doc) => ['active','trialing'].includes(String(doc.data()?.status ?? '')));
-  return eligible ? { id: eligible.id, status: String(eligible.data()?.status ?? '') } : null;
+  // Never unlock paid audio from a planning row, unverified trial or a
+  // browser redirect. Only the processor-confirmed account-owned active
+  // subscription with an unexpired paid period constitutes an entitlement.
+  const eligible = snapshot.docs.find((doc) => hasPaidEntitlement(doc.data(), userId));
+  return eligible ? { id: eligible.id, status: 'active' as const } : null;
 };
 
 const playbackAccessFor = (
@@ -3884,7 +3962,7 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
     planningMonthlyPricePence: settings.planningMonthlyPricePence,
     subscriptionUrl: settings.listenerSubscriptionUrl,
     creditedWorkIncluded: true,
-    rule: 'Work credited to your Nightjar account is included for you. Listening to unrelated paid catalogue work requires an active or trialing Listener subscription.',
+    rule: 'Work credited to your Nightjar account is included for you. Listening to unrelated paid catalogue work requires a currently active subscription verified by the payment provider.',
   };
 });
 
@@ -4289,7 +4367,7 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
-  if (!TESTING_AGE_ASSURANCE_BYPASS || AGE_ASSURANCE_CONFIGURED) {
+  if (!TESTING_AGE_ASSURANCE_BYPASS) {
     return { allowed: false, reason: null as string | null };
   }
   const snapshot = await accountRef(uid).get();
@@ -4305,7 +4383,7 @@ const temporaryAgeBypassFor = async (uid: string) => {
 const requireAgeVerified = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
-  const persistentVerified = data?.verified === true && data?.testMode !== true && data?.provider !== 'admin-test';
+  const persistentVerified = diditPass(data);
   if (persistentVerified) return data;
 
   const bypass = await temporaryAgeBypassFor(uid);
@@ -4513,10 +4591,21 @@ export const registerPushDevice = onCall({ region: REGION }, async (request) => 
 
 export const unregisterPushDevice = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  const token = cleanText((request.data as Record<string, unknown> | undefined)?.token, 4096);
-  if (!token) return { unregistered:false };
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  await accountRef(identity.uid).collection('pushDevices').doc(tokenHash).set({
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const token = cleanText(input.token, 4096);
+  const shortId = cleanText(input.deviceId, 40);
+  const devices = accountRef(identity.uid).collection('pushDevices');
+  // Only the authenticated account's own previously registered device can be revoked.
+  // This does not request or regenerate an FCM token.
+  let ref;
+  if (token) {
+    ref = devices.doc(createHash('sha256').update(token).digest('hex'));
+  } else if (/^[0-9a-f]{16}$/.test(shortId)) {
+    const snapshot = await devices.limit(100).get();
+    ref = snapshot.docs.find(doc => doc.id.slice(0, 16) === shortId)?.ref;
+  }
+  if (!ref) return { unregistered:false };
+  await ref.set({
     active:false,
     disabledAt:FieldValue.serverTimestamp(),
     updatedAt:FieldValue.serverTimestamp(),
@@ -4839,6 +4928,38 @@ export const trendingReleases = onCall({ region: REGION }, async (request) => {
   return { trending };
 });
 
+const adminActionNotifications = async () => {
+  const [intake, imageCount, releaseCount, reviewCount] = await Promise.all([
+    db.collection('professionalApplications').where('status', 'in', ['banked','waitlist']).limit(250).get(),
+    db.collection('imageAssets').where('status', '==', 'pending').count().get(),
+    db.collection('releases').where('status', '==', 'pending_review').count().get(),
+    db.collection('releaseReviews').where('status', '==', 'pending').count().get(),
+  ]);
+  const professionalCount = intake.docs.filter((doc) => {
+    const item = doc.data() ?? {};
+    const approved = new Set(cleanProfessionalRoles(item.approvedRoles));
+    return cleanProfessionalRoles(item.requestedRoles).some((role) => !approved.has(role));
+  }).length;
+  const counts = [
+    { id:'admin_action_professionals', subtype:'professional_approval', count:professionalCount, label:'professional role application', route:'/admin/approvals' },
+    { id:'admin_action_images', subtype:'image_verification', count:imageCount.data().count, label:'image awaiting verification', route:'/admin/images' },
+    { id:'admin_action_releases', subtype:'release_verification', count:releaseCount.data().count, label:'release awaiting moderation', route:'/admin?work=release-moderation' },
+    { id:'admin_action_reviews', subtype:'review_verification', count:reviewCount.data().count, label:'review awaiting moderation', route:'/admin/reviews' },
+  ];
+  return counts.filter((item) => item.count > 0).map((item) => ({
+    id:item.id,
+    type:'admin_action',
+    subtype:item.subtype,
+    title:item.count + ' ' + item.label + (item.count === 1 ? '' : 's'),
+    message:'Administrator action required. Open the relevant Nightjar review queue.',
+    count:item.count,
+    route:item.route,
+    actionRequired:true,
+    read:false,
+    createdAt:new Date().toISOString(),
+  }));
+};
+
 export const listNotifications = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, account] = await Promise.all([
@@ -4882,13 +5003,22 @@ export const listNotifications = onCall({ region: REGION }, async (request) => {
     };
   };
 
-  const notifications = snapshot.docs
+  const regularNotifications = snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
     .filter((item: any) => enabled(item))
     .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
     .slice(0, 30)
     .map((item: any) => present(item));
-  return { notifications, unreadCount: notifications.filter((item: any) => item.read !== true).length };
+  const ownerActions = identity.admin ? await adminActionNotifications().catch((error) => {
+    console.warn('Nightjar owner action summary temporarily unavailable', error);
+    return [] as Array<Record<string, unknown>>;
+  }) : [];
+  const notifications = [...ownerActions, ...regularNotifications].slice(0, 34);
+  return {
+    notifications,
+    unreadCount: notifications.filter((item: any) => item.read !== true).length,
+    ownerActionCount: ownerActions.length,
+  };
 });
 
 export const markNotificationRead = onCall({ region: REGION }, async (request) => {
@@ -4901,43 +5031,59 @@ export const markNotificationRead = onCall({ region: REGION }, async (request) =
   return { read: true };
 });
 
-export const ageStatus = onCall({ region: REGION }, async (request) => {
+export const ageStatus = onCall({
+  region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+}, async request => {
   const identity = await requireActiveIdentity(request);
-  const snapshot = await db.collection('ageAssurance').doc(identity.uid).get();
-  const data = snapshot.data() ?? {};
-  const persistentVerified = data.verified === true && data.testMode !== true && data.provider !== 'admin-test';
-  const bypass = persistentVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
-  const verified = persistentVerified || bypass.allowed;
+  const data = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
+  const persistentlyVerified = diditPass(data);
+  const bypass = persistentlyVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
   return {
-    verified,
-    status: verified ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
+    verified: persistentlyVerified || bypass.allowed,
+    status: persistentlyVerified || bypass.allowed ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
+    // The actual provider decision is separate from temporary test access.
+    providerVerified: persistentlyVerified,
+    providerStatus: String(data.status ?? 'NOT_STARTED'),
+    livePilotAvailable: identity.admin && diditConfigured() && diditMode() === 'live',
     ageThreshold: 18,
-    configured: AGE_ASSURANCE_CONFIGURED,
-    provider: persistentVerified ? (data.provider ?? 'verified-provider') : (bypass.allowed ? 'temporary-test-access' : 'not-configured'),
-    environment: persistentVerified ? (data.environment ?? 'production') : (bypass.allowed ? 'development' : 'production'),
-    verifiedAt: persistentVerified ? (data.verifiedAt ?? null) : null,
-    reverifyRequired: persistentVerified && data.reverifyRequired === true,
-    testAvailable: identity.admin || bypass.allowed,
+    configured: diditConfigured(),
+    provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
+    environment: diditMode(), // Report ACTUAL configured provider mode even when tester bypass is active. Prevents chargeable live sessions being mislabelled as sandbox.
+    verifiedAt: persistentlyVerified ? toIso(data.verifiedAt) : null,
+    reverifyRequired: data.reverifyRequired === true,
+    sessionActive: ['PENDING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.status ?? '')),
     temporaryBypass: bypass.allowed,
     temporaryBypassReason: bypass.reason,
+    testAvailable: identity.admin || bypass.allowed,
   };
 });
 
-export const startAgeAssurance = onCall({ region: REGION }, async (request) => {
+export const startAgeAssurance = onCall({
+  region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+}, async request => {
   const identity = await requireActiveIdentity(request);
-  const bypass = await temporaryAgeBypassFor(identity.uid);
-  if (bypass.allowed) {
-    return {
-      verified: true,
-      status: 'COMPLETE',
-      configured: AGE_ASSURANCE_CONFIGURED,
-      provider: 'temporary-test-access',
-      environment: 'development',
-      temporaryBypass: true,
-      temporaryBypassReason: bypass.reason,
-    };
+  const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
+  if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
+  if (diditConfigured()) {
+    if (DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity.admin) {
+      // Never charge or prompt closed-beta testers until Nightjar explicitly ends the pilot.
+      const bypass = await temporaryAgeBypassFor(identity.uid);
+      if (bypass.allowed) return {
+        verified: true, status: 'COMPLETE', configured: true,
+        provider: 'temporary-test-access', environment: 'development',
+        temporaryBypass: true, temporaryBypassReason: bypass.reason,
+      };
+      throw new HttpsError('permission-denied', 'Live age verification is currently limited to Nightjar administrators.');
+    }
+    return startDiditSession(identity.uid);
   }
-  throw new HttpsError('failed-precondition', 'Production age-assurance provider credentials are not configured yet.');
+  const bypass = await temporaryAgeBypassFor(identity.uid);
+  if (bypass.allowed) return {
+    verified: true, status: 'COMPLETE', configured: false,
+    provider: 'temporary-test-access', environment: 'development',
+    temporaryBypass: true, temporaryBypassReason: bypass.reason,
+  };
+  throw new HttpsError('failed-precondition', 'Didit verification is not configured.');
 });
 
 export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
@@ -8277,12 +8423,12 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
         (b.data().createdAt?.toMillis?.() ?? 0) - (a.data().createdAt?.toMillis?.() ?? 0))[0];
       historicalApprovedEmailEventId = latest?.id ?? null;
     }
-    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && accountData.testAccess === true;
+    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && accountData.testAccess === true;
     return {
       id: doc.id,
       userId: doc.id,
       email: data.email ?? accountData.email ?? null,
-      ageVerified: ageAssurance.data()?.verified === true,
+      ageVerified: diditPass(ageAssurance.data()),
       temporaryTestAccess,
       displayName: profile.data()?.displayName ?? null,
       requestedRoles: cleanProfessionalRoles(data.requestedRoles),
@@ -8329,14 +8475,20 @@ export const adminManageProfessionalRoles = onCall({ region: REGION }, async (re
   const expected = cleanProfessionalRoles(input.expectedApprovedRoles);
   const accountDocument = accountRef(userId);
   const applicationDocument = professionalApplicationRef(userId);
-  const ageDocument = db.collection('ageAssurance').doc(userId);
   const eventDocument = applicationDocument.collection('events').doc();
 
+  // A role grant is not a shortcut around the member's own accepted
+  // professional agreements or server-authorised 18+ private-beta access.
+  // Revocations remain possible even when those conditions no longer hold.
+  if (selected.some((role) => !expected.includes(role))) {
+    await requireProfessionalLegalTerms(userId);
+    await requireAgeVerified(userId);
+  }
+
   const result = await db.runTransaction(async (tx) => {
-    const [accountSnapshot, applicationSnapshot, ageSnapshot] = await Promise.all([
+    const [accountSnapshot, applicationSnapshot] = await Promise.all([
       tx.get(accountDocument),
       tx.get(applicationDocument),
-      tx.get(ageDocument),
     ]);
     if (!accountSnapshot.exists) throw new HttpsError('not-found', 'Nightjar member account not found.');
     const account = accountSnapshot.data() ?? {};
@@ -8360,9 +8512,8 @@ export const adminManageProfessionalRoles = onCall({ region: REGION }, async (re
     if (!addedRoles.length && !removedRoles.length) {
       return { userId, approvedProfessionalRoles: previouslyApproved, pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles), activeRole, addedRoles, removedRoles, unchanged: true };
     }
-    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && account.testAccess === true;
-    if (addedRoles.length && ageSnapshot.data()?.verified !== true && !temporaryTestAccess) {
-      throw new HttpsError('failed-precondition', 'This member needs completed age assurance or explicitly enabled temporary tester access before professional roles can be granted.');
+    if (addedRoles.length && account.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'Suspended accounts cannot receive new professional access. Review suspension separately.');
     }
 
     const application = applicationSnapshot.data() ?? {};
@@ -8420,6 +8571,84 @@ export const adminManageProfessionalRoles = onCall({ region: REGION }, async (re
   return result;
 });
 
+// An owner can add a prospective profession to the approval bank without
+// granting a role or recording consent on the member's behalf. The member must
+// separately accept current terms and pass authorised age access before approval.
+export const adminQueueProfessionalRoles = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const roles = cleanProfessionalRoles(input.roles);
+  if (!userId || userId.includes('/') || !Array.isArray(input.roles)
+    || input.roles.some((value) => typeof value !== 'string' || !PROFESSIONAL_ROLE_KEYS.includes(value as ProfessionalRole))
+    || !roles.length) {
+    throw new HttpsError('invalid-argument', 'Select a member and one or more professional roles to queue.');
+  }
+  const accountDocument = accountRef(userId);
+  const applicationDocument = professionalApplicationRef(userId);
+  const eventDocument = applicationDocument.collection('events').doc();
+
+  return db.runTransaction(async (tx) => {
+    const [accountSnapshot, applicationSnapshot] = await Promise.all([
+      tx.get(accountDocument),
+      tx.get(applicationDocument),
+    ]);
+    if (!accountSnapshot.exists) throw new HttpsError('not-found', 'Nightjar member not found.');
+    const account = accountSnapshot.data() ?? {};
+    if (ADMIN_EMAILS.has(cleanEmail(account.email)) || cleanText(account.role, 30) === 'admin') {
+      throw new HttpsError('permission-denied', 'Administrator accounts cannot enter the professional application bank.');
+    }
+    if (account.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'Suspended members cannot be queued for professional approval.');
+    }
+    const application = applicationSnapshot.data() ?? {};
+    const approved = professionalRolesForAccount(account) as ProfessionalRole[];
+    const priorStatus = cleanText(application.status, 30);
+    const previousPending = Array.from(new Set([
+      ...cleanProfessionalRoles(account.pendingProfessionalRoles),
+      ...(['banked', 'waitlist'].includes(priorStatus) ? cleanProfessionalRoles(application.requestedRoles) : []),
+    ])).filter((role) => !approved.includes(role));
+    const addedRoles = roles.filter((role) => !approved.includes(role) && !previousPending.includes(role));
+    if (!addedRoles.length) return {
+      userId, queuedRoles: [] as ProfessionalRole[], approvedProfessionalRoles: approved,
+      pendingProfessionalRoles: previousPending, unchanged: true,
+    };
+    const pending = [...previousPending, ...addedRoles];
+    const now = FieldValue.serverTimestamp();
+    tx.set(accountDocument, {
+      pendingProfessionalRoles: pending,
+      professionalAccessUpdatedBy: admin.uid,
+      professionalAccessUpdatedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    tx.set(applicationDocument, {
+      userId,
+      email: cleanEmail(account.email) || null,
+      requestedRoles: pending,
+      approvedRoles: approved,
+      status: 'banked',
+      source: 'administrator_role_queue',
+      wave: application.wave || 'Administrator role suggestions',
+      updatedAt: now,
+      ...(applicationSnapshot.exists ? {} : { createdAt: now }),
+    }, { merge: true });
+    tx.create(eventDocument, {
+      userId,
+      decision: 'banked',
+      source: 'administrator_role_queue',
+      roles: addedRoles,
+      approvedRolesAfter: approved,
+      pendingRolesAfter: pending,
+      reviewedBy: admin.uid,
+      createdAt: now,
+    });
+    return {
+      userId, queuedRoles: addedRoles, approvedProfessionalRoles: approved,
+      pendingProfessionalRoles: pending, unchanged: false,
+    };
+  });
+});
+
 export const reviewProfessionalApplication = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -8427,93 +8656,103 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
   const decision = cleanText(input.decision, 30);
   const selectedRoles = cleanProfessionalRoles(input.roles);
   const wave = cleanText(input.wave, 80);
-  if (!userId || !['banked','approved','rejected','waitlist'].includes(decision)) {
+  if (!userId || userId.includes('/') || !['banked','approved','rejected','waitlist'].includes(decision)) {
     throw new HttpsError('invalid-argument', 'Choose a valid application decision.');
   }
 
-  const [applicationSnapshot, accountSnapshot, ageAssuranceSnapshot] = await Promise.all([
-    professionalApplicationRef(userId).get(),
-    accountRef(userId).get(),
-    db.collection('ageAssurance').doc(userId).get(),
-  ]);
-  if (!applicationSnapshot.exists || !accountSnapshot.exists) throw new HttpsError('not-found', 'Professional application not found.');
-
-  const applicantAccount = accountSnapshot.data() ?? {};
-  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && applicantAccount.testAccess === true;
-  if (decision === 'approved' && ageAssuranceSnapshot.data()?.verified !== true && !temporaryTestAccess) {
-    throw new HttpsError('failed-precondition', 'This professional applicant must complete age assurance or be explicitly enabled as a controlled tester before approval.');
+  // Role approval requires the account holder's accepted agreement and
+  // authoritative age access. This intentionally does NOT enable suspended
+  // accounts or silently grant permissions to accounts without consent.
+  if (decision === 'approved') {
+    await requireProfessionalLegalTerms(userId);
+    await requireAgeVerified(userId);
   }
 
-  const application = applicationSnapshot.data() ?? {};
-  const requested = cleanProfessionalRoles(application.requestedRoles);
-  const rolesReviewed = (selectedRoles.length ? selectedRoles : requested).filter((role) => requested.includes(role));
-  const rolesToApprove = decision === 'approved' ? rolesReviewed : [];
-  if (decision === 'approved' && !rolesToApprove.length) {
-    throw new HttpsError('failed-precondition', 'There are no pending professional roles selected for approval.');
-  }
-  const currentApproved = professionalRolesForAccount(accountSnapshot.data() ?? {}) as ProfessionalRole[];
-  const nextApproved = decision === 'approved'
-    ? Array.from(new Set([...currentApproved, ...rolesToApprove]))
-    : currentApproved;
-  const remainingRequested = decision === 'approved'
-    ? requested.filter((role) => !rolesToApprove.includes(role))
-    : decision === 'rejected'
-      ? []
-      : requested;
-  const accountPendingRoles = remainingRequested;
-  const nextStatus = decision === 'approved'
-    ? (remainingRequested.length ? 'banked' : 'approved')
-    : decision;
+  const applicationRef = professionalApplicationRef(userId);
+  const accountDocument = accountRef(userId);
+  const eventDocument = applicationRef.collection('events').doc();
+  const result = await db.runTransaction(async (tx) => {
+    const [applicationSnapshot, accountSnapshot] = await Promise.all([
+      tx.get(applicationRef),
+      tx.get(accountDocument),
+    ]);
+    if (!applicationSnapshot.exists || !accountSnapshot.exists) {
+      throw new HttpsError('not-found', 'Professional application not found.');
+    }
+    const application = applicationSnapshot.data() ?? {};
+    const account = accountSnapshot.data() ?? {};
+    if (ADMIN_EMAILS.has(cleanEmail(account.email)) || account.role === 'admin') {
+      throw new HttpsError('permission-denied', 'Owner accounts are not professional applicants.');
+    }
+    if (decision === 'approved' && account.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'A suspended account cannot be approved. Review its suspension separately.');
+    }
 
-  await professionalApplicationRef(userId).set({
-    requestedRoles: remainingRequested,
-    approvedRoles: nextApproved,
-    status: nextStatus,
-    wave: wave || application.wave || null,
-    reviewedBy: admin.uid,
-    reviewedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge:true });
-
-  const currentRole = cleanText(accountSnapshot.data()?.role, 30);
-  const activeRole = currentRole === 'listener'
-    ? 'listener'
-    : currentRole && nextApproved.includes(currentRole as ProfessionalRole)
+    const requested = cleanProfessionalRoles(application.requestedRoles);
+    const rolesReviewed = (selectedRoles.length ? selectedRoles : requested)
+      .filter((role) => requested.includes(role));
+    const rolesToApprove = decision === 'approved' ? rolesReviewed : [];
+    if (decision === 'approved' && !rolesToApprove.length) {
+      throw new HttpsError('failed-precondition', 'There are no pending professional roles selected for approval.');
+    }
+    const currentApproved = professionalRolesForAccount(account) as ProfessionalRole[];
+    const nextApproved = decision === 'approved'
+      ? Array.from(new Set([...currentApproved, ...rolesToApprove]))
+      : currentApproved;
+    const remainingRequested = decision === 'approved'
+      ? requested.filter((role) => !rolesToApprove.includes(role))
+      : decision === 'rejected' ? [] : requested;
+    const nextStatus = decision === 'approved'
+      ? (remainingRequested.length ? 'banked' : 'approved')
+      : decision;
+    const currentRole = cleanText(account.role, 30);
+    const activeRole = currentRole === 'listener' ||
+      (currentRole && nextApproved.includes(currentRole as ProfessionalRole))
       ? currentRole
       : (nextApproved[0] ?? 'listener');
-  await accountRef(userId).set({
-    approvedProfessionalRoles: nextApproved,
-    pendingProfessionalRoles: accountPendingRoles,
-    role: activeRole,
-    status: 'active',
-    professionalAccessUpdatedBy: admin.uid,
-    professionalAccessUpdatedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge:true });
+    const now = FieldValue.serverTimestamp();
 
-  await professionalApplicationRef(userId).collection('events').doc().set({
-    userId,
-    decision,
-    roles: rolesReviewed,
-    wave: wave || null,
-    previousStatus: cleanText(application.status, 30) || 'banked',
-    resultingStatus: nextStatus,
-    approvedRolesAfter: nextApproved,
-    pendingRolesAfter: accountPendingRoles,
-    reviewedBy: admin.uid,
-    createdAt: FieldValue.serverTimestamp(),
+    // All three writes commit together. Firestore retries the read phase if
+    // another admin changes the application or roles concurrently.
+    tx.set(applicationRef, {
+      requestedRoles: remainingRequested,
+      approvedRoles: nextApproved,
+      status: nextStatus,
+      wave: wave || application.wave || null,
+      reviewedBy: admin.uid,
+      reviewedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    tx.set(accountDocument, {
+      approvedProfessionalRoles: nextApproved,
+      pendingProfessionalRoles: remainingRequested,
+      role: activeRole,
+      // Preserve account.status: approving a profession never restores a
+      // suspended or otherwise restricted account.
+      professionalAccessUpdatedBy: admin.uid,
+      professionalAccessUpdatedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    tx.create(eventDocument, {
+      userId,
+      decision,
+      roles: rolesReviewed,
+      wave: wave || null,
+      previousStatus: cleanText(application.status, 30) || 'banked',
+      resultingStatus: nextStatus,
+      approvedRolesAfter: nextApproved,
+      pendingRolesAfter: remainingRequested,
+      reviewedBy: admin.uid,
+      createdAt: now,
+    });
+    return {
+      userId, decision, approvedProfessionalRoles: nextApproved,
+      pendingProfessionalRoles: remainingRequested, activeRole,
+      applicationStatus: nextStatus, wave: wave || application.wave || null,
+    };
   });
-
   await syncCreatorCustomTagUsage(userId);
-  return {
-    userId,
-    decision,
-    approvedProfessionalRoles: nextApproved,
-    pendingProfessionalRoles: accountPendingRoles,
-    activeRole,
-    applicationStatus: nextStatus,
-    wave: wave || application.wave || null,
-  };
+  return result;
 });
 
 // NIGHTJAR_ADMIN_EMAIL_COMMUNICATIONS_V1

@@ -1,33 +1,74 @@
 # Nightjar — installation and release integration inventory
 
-**Audited:** 10 October 2026. **Working candidate:** `feature/self-service-professional-roles-20261010` (PR #39). **Production branch:** `main`.
+**Audited:** 10 October 2026. **Working reconciliation candidate:** `fix/nightjar-release-reconciliation-20261010` (draft PR #40, based on PR #39). **Production branch:** `main`. **No live deployment.**
 
 ## Evidence and non-negotiable status
 
-- GitHub currently shows **12 open PRs**. A GitHub branch being `mergeable` does **not** mean its features are merged, verified or deployed.
-- At audit time the candidate was **78 commits ahead of `main`, zero behind**. It remains unmerged. Pull request changes are not available to live installed apps by virtue of an app installation alone.
-- GitHub build, validation and modular-validation runs for the candidate were **red**, with jobs reporting no steps and job-log retrieval returning an unavailable blob. The precise runner failure has **not been established**; do not describe these checks as passed.
+- The original audit listed **12 open PRs**; reconciliation PR #40 was opened afterward. A GitHub branch being `mergeable` does **not** mean its features are merged, verified or deployed.
+- PR #39 was originally audited at **78 commits ahead of `main`, zero behind**. The separate PR #40 reconciliation branch now includes #39 by Git ancestry, remains unmerged, and has passed the owner's Windows local validation (frontend and Functions) at commit `d7ebff2d1abd`. These changes are **not** available in live installed apps until a release is deployed.
+- GitHub build and validation checks for PR #40 still report **failure before executing steps**, and job-log retrieval returns an unavailable blob. The exact runner failure remains unknown (see GitHub Actions UI annotations). The three workflow triggers were extended to this stacked PR's base branch; this enabled CI reporting but did not cure the runner failure.
 - **No live Firebase deploy or device acceptance test was performed in this audit.** The local working tree cannot be inspected remotely.
-- A key item from PR #37 **has been ported into the candidate**: absolute Vite assets, rooted HTML bootstrap, independent `/recover.html`, service worker v12 and automatic scrolling. These must pass integration, build and phone QA before release.
+- Source integrations include PR #37 recovery improvements, PR #38 owner notification/role protection, and a guarded PR #36 Didit/Legal Centre implementation; these have source-contract coverage but still require live integration, security and phone QA before release.
 
 ## Open PR reconciliation — every row requires an owner disposition
 
 | PR | Workstream | Audit disposition | Action before an all-up installation |
 | --- | --- | --- | --- |
-| [#39](https://github.com/Mort2307/NightJar-Audio/pull/39) | Current full pass: profiles, multi-role, photo compression, touch UX, text integrity, PWA invitation, live admin preview | **Candidate, NOT released** | Run full checks, integration QA, review and merge into `main` |
-| [#38](https://github.com/Mort2307/NightJar-Audio/pull/38) | Refresh recovery, owner People roles, account alerts | **Reconcile** | Review 22 commits not in #39 history; incorporate missing owner/admin security flows with privilege tests, or explicitly supersede after code review |
-| [#37](https://github.com/Mort2307/NightJar-Audio/pull/37) | Deep-link refresh and white-screen repair | **Partially integrated** | Verify equivalent recovery functionality in #39, confirm mobile and installed-PWA QA, then close/supersede appropriately |
-| [#36](https://github.com/Mort2307/NightJar-Audio/pull/36) | Legal Centre and guarded Didit beta pilot | **Separate release / conflict** | Reconcile Legal Centre; Do **not** promote age-provider sandbox configuration or chargeable live testing without explicit owner and compliance approval |
-| [#35](https://github.com/Mort2307/NightJar-Audio/pull/35) | Owner Console, accurate intake, navigation and Editor Studio | **Reconcile** | Compare unique work and contract tests, particularly administrative navigation and approval archive |
-| [#32](https://github.com/Mort2307/NightJar-Audio/pull/32) | Automatic approval emails | **Reconcile** | Confirm Gmail OAuth sender, idempotent notice record, delivery status/retry and approved-role security checks |
-| [#29](https://github.com/Mort2307/NightJar-Audio/pull/29) | Didit integration draft and push fixes | **Draft — not release-ready** | Required patcher, secrets, signed webhook and live workflow safety validations are outstanding |
-| [#28](https://github.com/Mort2307/NightJar-Audio/pull/28) | Earlier Didit integration draft | **Draft — overlap** | Compare to #29/#36 and do not combine competing webhook implementations blindly |
-| [#14](https://github.com/Mort2307/NightJar-Audio/pull/14) | Production entitlements and mobile player | **Draft — not release-ready** | Review production subscription entitlements, adult gating and device player tests separately |
-| [#9](https://github.com/Mort2307/NightJar-Audio/pull/9) | Older consolidated hardening | **Legacy review** | Confirm supersession of unique security changes, do not overwrite newer backend |
-| [#8](https://github.com/Mort2307/NightJar-Audio/pull/8) | Earlier app intelligence | **Legacy review** | Compare for unique unshipped work or formally supersede |
-| [#7](https://github.com/Mort2307/NightJar-Audio/pull/7) | Earlier feedback/telemetry improvements | **Legacy review** | Compare for unique unshipped work or formally supersede |
+| [#40](https://github.com/Mort2307/NightJar-Audio/pull/40) | Reconciliation candidate based on #39; backend security, guarded Didit, owner notifications, legal centre, regression tests | **Current draft candidate, NOT released** | Resolve outstanding PR review and GitHub Actions runner failures, complete staging/device QA before any production merge or deploy |
+| [#39](https://github.com/Mort2307/NightJar-Audio/pull/39) | Full pass: profiles, multi-role, compression, touch UX, text integrity, PWA invitation, admin preview | **Included by verified Git ancestry in #40 (source only)** | Still not deployed; preserve in eventual reviewed integration |
+| [#38](https://github.com/Mort2307/NightJar-Audio/pull/38) | Refresh recovery, Owner People roles, account alerts | **Technically superseded by PR #40** | Source-integrated; imported refresh contracts, multi-role queuing, active-workspace status protection; staging/device acceptance remains mandatory |
+| [#37](https://github.com/Mort2307/NightJar-Audio/pull/37) | Deep-link refresh and white-screen repair | **Technically superseded by PR #40** | Equivalent recovery source present; installed-PWA QA remains |
+| [#36](https://github.com/Mort2307/NightJar-Audio/pull/36) | Legal Centre and guarded Didit beta pilot | **Technically superseded** | Provider/live 18+ workflow and UK legal/privacy review remain mandatory |
+| [#35](https://github.com/Mort2307/NightJar-Audio/pull/35) | Owner Console, accurate intake, navigation and Editor Studio | **Technically superseded by PR #40** | Equivalent source present; device interaction QA remains |
+| [#32](https://github.com/Mort2307/NightJar-Audio/pull/32) | Automatic approval emails | **Technically superseded by PR #40** | Audited event delivery and retry in candidate; live Gmail delivery test remains |
+| [#29](https://github.com/Mort2307/NightJar-Audio/pull/29) | Didit source, FCM repair and branded PWA icon | **Technically superseded** | Source incorporated; old branch deploy scripts omitted. Device/provider QA required |
+| [#28](https://github.com/Mort2307/NightJar-Audio/pull/28) | Earlier, conflicting Didit session/webhook draft | **Technically superseded; do not merge** | Preserve the single current Didit adapter; test real signed 18+ workflow |
+| [#14](https://github.com/Mort2307/NightJar-Audio/pull/14) | Verified entitlements and proposed mobile player | **Deferred; verified entitlement helper ported** | Run entitlement unit tests; billing/processor and alternate player need separate commercial QA |
+| [#9](https://github.com/Mort2307/NightJar-Audio/pull/9) | Legacy hardening and recommendation intelligence | **Deferred** | Unique old feedback/security ideas require Firebase-native parity review |
+| [#8](https://github.com/Mort2307/NightJar-Audio/pull/8) | Legacy recommendation/telemetry | **Deferred** | Old appdeploy API is not integrated; migrate deliberately |
+| [#7](https://github.com/Mort2307/NightJar-Audio/pull/7) | Earlier feedback and creator discovery | **Deferred** | Unique old UX components remain separately reviewable, not deleted or installed |
 
-None of the unresolved rows has been silently marked approved for merging, discarding or deferral.
+PR #39 is included by Git ancestry. All seven formerly unresolved PRs (#36, #29, #28, #14, #9, #8, #7) now have documented technical dispositions. **Deferred features remain unshipped and available in their separate branches. No PR was automatically merged or closed.**
+
+## Consolidated seven-PR source review — COMPLETE
+
+**Review-only result: zero PRs left with a `pending_review` decision.** PRs #36, #29 and #28 are technically superseded by safer, later source implementations. PRs #14, #9, #8 and #7 are explicitly **deferred**, not merged, released or discarded. The commercial entitlement safety helper from PR #14 has been ported to the active backend, with unit tests awaiting a local run.
+
+See [the evidence, retained differences and release gates for all seven PRs](RELEASE_SEVEN_PR_BATCH_REVIEW_2026-10-10.md) and `docs/release-pr-review.json`.
+
+**This is not a green deployment gate.** GitHub Actions still fails early, the final commit has not been CI-validated, real PWA installs and FCM delivery need device tests, and public 18+ provider/legal and payment-processor acceptance are unresolved. Draft PR #40 is not merged into `main` or deployed.
+
+### Prior reconciliation observations (historical)
+The following paragraphs describe earlier stages; where they refer to an item as pending, the consolidated review above supplies the current disposition.
+
+## Reconciliation progress — source review, 10 October 2026
+
+- **PR #37 — technically superseded by the candidate:** independent recovery page and root HTML are byte-identical; service-worker code differs only in a comment. Candidate Vite routing preserves root URLs and adds exact Git source versioning. Browser and installed-PWA refresh acceptance is **still required**.
+- **PR #35 — technically superseded by the candidate:** Editor Studio, Role Dashboard, navigation reset utility and scroll contract are byte-identical, with the candidate carrying newer role-application archives and navigation contracts. Real-device tap and scroll QA is **still required**.
+- **PR #32 — technically superseded by the candidate:** the newer backend has an audited, idempotent approval email event trigger with failed-delivery retry, with source regression coverage. Gmail email delivery and legal prerequisites still require staging verification.
+- **PR #38 — technically superseded in source:** Owner action alerts and pending-only multi-role queuing were incorporated into PR #40. The Owner role editor uses protected transactional updates, explicit professional terms consent and a separate account-status-preserving workspace selector. PR #38's deep-link startup recovery regression script was imported for ongoing checks. The owner has locally validated the source at commit `c1a721c`; newly imported checks and staging/device behaviours are still unverified.
+- **PR #36 — under legal and provider review:** guarded Didit webhook/client, Legal Centre and backend controls are present, but UK legal review and a configured, signed, live adult-document verification remain unproved. No chargeable live session or beta bypass removal has been authorised.
+- **PRs #29 and #28 — overlapping Didit drafts:** do not merge their competing provider implementations onto #40 without a security review; PR #29 also contains independent push-related changes needing comparison.
+- **PR #14 — separate production entitlement/player candidate:** remains a draft and requires commercial authorization, 18+ gating, device playback and payment checks.
+- **PRs #9, #8 and #7 — early hardening/telemetry branches:** distinct legacy histories; the reviewer has not signed off their unique functionality as obsolete.
+
+Only PR #39 is included by ancestry. The three technically superseded PRs above are **not** merged, closed or deployed. Their source dispositions are recorded in `docs/release-pr-review.json`. Remaining records are intentionally pending.
+
+## Additional source reconciliation — 10 October 2026
+
+- **PR #38 source equivalent incorporated and documented:** a transactional `adminQueueProfessionalRoles` callable stages pending professions without granting rights, and Owner People keeps its separate full-set approved roles editor. Local protected queue and status-preservation contracts passed on `c1a721c`. Imported startup recovery regression and live staging/device acceptance remain release gates; PR #38 remains open until owner review and housekeeping.
+- **PR #36 beta legal checks strengthened:** restored contract coverage for the public Legal Centre, individually readable versioned terms, closed beta, retained allowlisted tester access and administrator-only live Didit pilot. This protects the **existing** beta policy; it does not authorise live age-verification charges or certify UK legal compliance.
+- **PR #29 remains pending:** source review identified distinct FCM/push recovery and approved-logo PWA icon functionality. PR #40 now selectively incorporates device-specific FCM registration status, explicit opt-in (no login-time token re-registration), explanatory 401 errors, and authenticated per-device revocation, with a new source regression contract. **The dynamic installed-app icon/manifest, admin branding workflow and push setup scripts have not been ported or validated.** Its alternate Didit patcher must not replace PR #40's guarded provider.
+- **PRs #7–#9 are not confirmed superseded:** older `RecommendationFeedback.tsx`, `LiveReleaseCard.tsx`, `CreatorDirectory.tsx`, `FollowingList.tsx` and the original `appdeploy-local-shim.ts` are not present at those paths in the candidate. This may reflect legitimate consolidation/retirement, but exact feature parity remains unproved; do not silently mark these reviews complete.
+- **PR #14 production entitlements** and **PRs #28/#29 alternate age providers** are still isolated. Release the guarded beta candidate only after explicit safety review; do not infer billing readiness or live Didit approval from successful source contracts.
+
+## Approved-logo install and push reconciliation (10 October 2026)
+
+- **Validated baseline:** the operator's Windows local `npm run validate`, Functions TypeScript check/build, Functions advisory guard and working-tree checks passed at `4b9818d3fce4`. The branch's subsequent icon changes have **not** been locally validated.
+- **PR #29 FCM subset:** current source uses explicit opt-in push registration, prevents automatic FCM token resubscription on login, explains 401 credential problems without crashing Nightjar, reports actual per-device status, and permits a signed-in member to revoke their own recorded device without requesting a new FCM token. This passed source regression checks at `4b9818d`; actual FCM provider credentials and device delivery still require QA.
+- **PR #29 install-icon subset newly integrated, awaiting validation:** approved Nightjar logo can be rendered as 192px, 512px and 512px maskable app icons through an Owner-only confirmation workpage at `/admin/branding`. Firebase Hosting rewrites `/app-manifest.webmanifest` and the three icon routes to restricted-safe read endpoints. The dynamic manifest selects only previously generated, approved icons, falling back to packaged icons before generation. The original rooted HTML bootstrap, service-worker update and offline recovery flow are retained.
+- Existing installed Android/iOS PWAs may retain the old launcher icon in OS caches. **Do not claim icon correction is complete until a real approved logo has been used to generate icons, a preview deployment has been tested, and fresh/old installed apps have been checked.** Staging and normal mobile QA are needed.
+- **PR #29 remains pending:** its earlier Didit installer and push-only deploy helper should not be blindly merged into the reconciliation branch; no production provider migration or backend deployment has been made. The launch-blocking finance, age, terms and entitlement reviews remain independent.
 
 ## Release gates
 

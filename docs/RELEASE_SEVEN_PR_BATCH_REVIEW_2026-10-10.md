@@ -1,0 +1,48 @@
+# Nightjar — consolidated seven-PR reconciliation
+**Source-reviewed:** 10 October 2026  
+**Candidate:** `fix/nightjar-release-reconciliation-20261010` (draft PR #40, based on #39)  
+**Production:** `main` — **not merged or deployed**.
+
+## Scope and decision rules
+This one-pass technical review covers the seven branches previously marked `REVIEW REQUIRED`: #36, #29, #28, #14, #9, #8, #7. It compares their distinctive modules and interfaces against the candidate; it does **not** certify the repository for public launch, assert that every old UI feature survived, test any live account, or substitute for the operator's legal and commercial approval. A review is complete once its disposition and unshipped work are explicit, not when everything has been merged.
+
+| PR | Source-level disposition | What is in the candidate | Distinct work not to silently merge or lose |
+| --- | --- | --- | --- |
+| **#36 — Legal Centre / guarded Didit beta** | **Superseded (technical source only)** | The Didit adapter, `functions/src/nightjars.ts`, live/sandbox setup scripts and Legal Centre are present; the principal provider adapter and scripts are byte-identical. The beta legal and Didit contracts pass locally on the previously validated commit. | Old working-draft legal documents are not commercially approved terms. An administrator-only pilot, provider age-evidence audit, ICO/privacy review and UK regulatory/legal approval are **separate gates**. The test bypass must not be interpreted as verified age. |
+| **#29 — Didit integration / push / install logo** | **Superseded (technical source)** | Didit adapter, push client, notification preferences, approved-logo canvas generator and live setup script are byte-identical to their reviewed PR #29 versions. The candidate also has `AdminInstallBranding`, dynamic approved-image manifest rewrites and separate FCM 401/opt-in regression checks. | Old branch-specific installer/deploy scripts, CI workflow and admin portal variant intentionally not copied. **Actual Android/iOS install icons, service-worker upgrades, FCM permissions/delivery and logo approval still need device/hosting QA.** Live Didit configuration is not evidenced. |
+| **#28 — alternate Didit draft** | **Superseded / do not merge** | Later single Didit implementation with signed event validation, explicit `live` evidence, server-side session linkage and adult documentary proof. | PR #28's different `production`/sandbox status representation and webhook processor must **never run in parallel** with the newer adapter. Staging must test declines, minors, replay, re-verification and account continuity. |
+| **#14 — production entitlement and mobile player** | **Deferred except security fix** | Imported the isolated `hasPaidEntitlement` helper and its unit tests. Replaced status-only backend lookup, which could previously grant audio/transcript access based on an `active` or `trialing` Firestore row without verified provider or expiry evidence. New lookup requires matching account, provider-confirmed active payment, positive amount, processor identifiers and future paid period. Credited collaborators and administrators retain their existing rights. | Draft production checkout/billing provider and alternate player are **not shipped**. CCBill/processor webhooks, refunds, payment IDs, audio/transcript delivery, mobile playback and consumer-rights review require separate commercial integration. This new hardening requires Functions tests and emulator/staging QA. |
+| **#9 — older hardening & intelligence** | **Deferred** | The modern candidate has Firebase-first security, role handling, content moderation and production code; some feature names overlap. | Earlier `RecommendationFeedback`, `FollowingList`, `SecurityReviewPanel`, legacy `backend/index.ts` and `appdeploy-local-shim.ts` are **not proved equivalent**. Their unique security/UX ideas require Firebase-native parity review before being incorporated. The old patch or shim must not overwrite current Firestore rules, functions or accounts. |
+| **#8 — older intelligence/telemetry** | **Deferred** | Modern recommendation and catalogue flows exist. | Older feedback signals, telemetry and `appdeploy-local-shim` implementation are not verified as equivalent. Migrate requirements separately, using the current Firebase data/consent model. Do not install the legacy mock backend on production. |
+| **#7 — feedback/creator discovery** | **Deferred** | Modern Firebase catalogue, creator profiles and live-release cards serve related use cases. | `CreatorDirectory.tsx`, `LiveReleaseCard.tsx`, `RecommendationFeedback.tsx` prototypes and local-shim contracts were distinct; no byte-for-byte functional equivalence or migration was established. Preserve as a separate product backlog, not silently discarded or auto-merged. |
+
+## Decision interpretation
+- `superseded` means the **reviewed technical approach** has a later source implementation; it does **not** mean the old PR was merged, deployed, that all old scripts are byte-identical, or that launch compliance was established.
+- `deferred` means the branch was **reviewed but distinct functionality remains deliberately unshipped** in this beta candidate. The source remains in its own branch. Owner approval is required before changing product scope or treating any deferred feature as discarded.
+- **None of the seven PRs has been merged or closed through this review.** Existing source decisions for PRs #32, #35, #37, #38 also remain subject to real-device QA.
+
+## Critical release blockers that do not disappear with zero PR-review flags
+1. **GitHub Actions:** build and validation jobs are still failing before execution; the exact error banner/annotation must be identified and the checks must be green for the *exact* final commit. The local inventory must refuse certification when `gh` or an authenticated token cannot check CI.
+2. **Firebase staging:** preview Hosting alone does not deploy new Functions. Stage/verify backend and Firestore rules using a controlled test environment and explicit scope; no blind production Functions deployment.
+3. **Didit and UK legal requirements:** actual signed adult 18+ workflow, live validation, disabled public bypass, privacy and legal review. A beta-test bypass and unit tests do not meet public launch conditions.
+4. **Commerce:** verify processor payment events and refund/revocation semantics before opening paid catalogue access. The PR #14 entitlement helper prevents status-only accidental access but is not evidence a payment system is configured.
+5. **Devices and permissions:** run multi-role grants and queue with test accounts, signed-in and denied testers, scripts visible to VAs, mobile PWA icon/update/recovery, age-gated playback and Firebase push.
+6. **Owner acceptance:** approve which deferred #7–#9 intelligence features and #14 commercial features should be brought forward in later scoped work. They have **not** been silently removed.
+
+## Post-batch validation correction
+
+At commit `b2ea9dd`, Windows validation reached the community contract but stopped on
+`Active/trialing subscription playback rule is missing`. The release correctly
+replaced the old, unsafe status-only gate with `hasPaidEntitlement(doc.data(), userId)`,
+which requires provider-verified, paid, unexpired, account-owned **active** access.
+The community test had not been updated to this stricter policy. PR #40 now checks
+the secure helper and individual requirements instead of searching for the
+obsolete active/trialing text; the listener-facing rule is also aligned.
+
+This correction is committed, but **the full validation has not yet been rerun
+on the corrected commit**. The remaining GitHub-hosted CI execution failure is
+independent and remains a release blocker. None of these changes authorises
+a production or public-beta deployment.
+
+## One combined validation after this batch
+From the existing local PR #40 branch, pull latest and run `npm run validate`, `npm --prefix functions run check`, `npm --prefix functions run test:entitlements`, `npm --prefix functions run audit:guard`, `npm run release:inventory`, `git diff --check`, and `git status -sb`. The entitlement runtime tests are new; do not label these changes validated until those commands complete. **Do not deploy yet.**

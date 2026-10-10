@@ -6,6 +6,7 @@ import App from './App';
 import AccountPortal from './components/AccountPortal';
 import AppRecoveryBoundary from './components/AppRecoveryBoundary';
 import LegalDocumentPage from './components/LegalDocumentPage';
+import LegalCentrePage from './components/LegalCentrePage';
 import { registerNightjarServiceWorker } from './platform/pwa';
 
 const root = document.getElementById('root');
@@ -13,6 +14,7 @@ if (!root) throw new Error('Nightjar root missing');
 
 const isAccountPortal = window.location.pathname === '/account' || window.location.pathname.startsWith('/account/');
 const isLegalDocument = window.location.pathname.startsWith('/legal/');
+const isLegalCentre = window.location.pathname === '/legal' || window.location.pathname === '/legal/';
 
 try {
   const cleanUrl = new URL(window.location.href);
@@ -29,7 +31,7 @@ registerNightjarServiceWorker();
 createRoot(root).render(
   <StrictMode>
     <AppRecoveryBoundary>
-      {isLegalDocument ? <LegalDocumentPage /> : isAccountPortal ? <AccountPortal /> : <App />}
+      {isLegalCentre ? <LegalCentrePage /> : isLegalDocument ? <LegalDocumentPage /> : isAccountPortal ? <AccountPortal /> : <App />}
     </AppRecoveryBoundary>
   </StrictMode>,
 );

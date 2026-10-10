@@ -12,6 +12,7 @@ import { nightjarCatalogue } from './platform/firebase-catalogue';
 import { nightjarListening } from './platform/firebase-listening';
 import { nightjarNotifications } from './platform/firebase-notifications';
 import { nightjarPush } from './platform/firebase-push';
+import AdminInstallBranding from './components/AdminInstallBranding';
 import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { nightjarAge } from './platform/firebase-age';
 import { nightjarScripts } from './platform/firebase-scripts';
@@ -426,11 +427,15 @@ function App() {
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
-  const [ageProvider, setAgeProvider] = useState('yoti-sandbox');
-  const [ageEnvironment, setAgeEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [ageProvider, setAgeProvider] = useState('didit');
+  const [ageEnvironment, setAgeEnvironment] = useState<'sandbox' | 'live'>('sandbox');
   const [ageVerifiedAt, setAgeVerifiedAt] = useState<string | null>(null);
   const [ageReverifyRequired, setAgeReverifyRequired] = useState(false);
   const [ageSessionActive, setAgeSessionActive] = useState(false);
+  const [ageProviderVerified, setAgeProviderVerified] = useState(false);
+  const [ageProviderStatus, setAgeProviderStatus] = useState('NOT_STARTED');
+  const [ageLivePilotAvailable, setAgeLivePilotAvailable] = useState(false);
+  const [ageLaunchUrl, setAgeLaunchUrl] = useState<string | null>(null);
   const [ageLoading, setAgeLoading] = useState(false);
   const [ageTemporaryBypass, setAgeTemporaryBypass] = useState(false);
   const [ageTemporaryBypassReason, setAgeTemporaryBypassReason] = useState<string | null>(null);
@@ -484,9 +489,9 @@ function App() {
   const [authenticationEventsLoading, setAuthenticationEventsLoading] = useState(false);
   const [securityEvidenceReview, setSecurityEvidenceReview] = useState<{ alert: any; evidence: any[] } | null>(null);
   const [securityEvidenceLoading, setSecurityEvidenceLoading] = useState(false);
-  const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'live-preview' | null>(() => {
-    const panelFromPath = window.location.pathname.match(/^\/admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|live-preview)\/?$/)?.[1];
-    return (panelFromPath ?? null) as 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'live-preview' | null;
+  const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview' | null>(() => {
+    const panelFromPath = window.location.pathname.match(/^\/admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|branding|live-preview)\/?$/)?.[1];
+    return (panelFromPath ?? null) as 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview' | null;
   });
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
   const [adminApplicationWave, setAdminApplicationWave] = useState('Wave 1');
@@ -795,7 +800,7 @@ function App() {
       if (topLevel === 'admin') {
         setSimulationMode(false);
         setPreviewRole(null);
-        const panelFromPath = value.match(/^admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|live-preview)$/)?.[1];
+        const panelFromPath = value.match(/^admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|branding|live-preview)$/)?.[1];
         const peopleFromPath = value.match(/^admin\/people\/(listener|creator|writer|editor|artist|admin)$/)?.[1];
         setAdminPanel((panelFromPath ?? null) as typeof adminPanel);
         setAdminPeopleRole((peopleFromPath ?? null) as typeof adminPeopleRole);
@@ -1033,11 +1038,9 @@ function App() {
     let cancelled = false;
     let unsubscribeForeground: (() => void) | undefined;
 
-    // Refresh an already-granted device token after app/service-worker updates without prompting again.
-    if (nightjarPush.configured() && nightjarPush.permission() === 'granted') {
-      void nightjarPush.enable().catch(() => { /* explicit device controls remain available in Profile */ });
-    }
-
+    // Do not silently register or refresh FCM on login. An existing browser
+    // permission is not consent to another network registration attempt;
+    // device changes are handled explicitly in Notification Preferences.
     void nightjarPush.listenForeground((payload) => {
       const title = payload.data?.title || payload.notification?.title || 'Nightjar update';
       const body = payload.data?.body || payload.notification?.body || '';
@@ -1292,8 +1295,20 @@ function App() {
     } catch { /* notifications remain non-blocking */ }
   };
 
+  // Live Owner actions are derived from pending queues, not stale stored
+  // messages. Refresh only while the Owner Console is actually in use.
+  useEffect(() => {
+    if (!user || !ageVerified || role !== 'admin' || simulationMode) return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadNotifications(productLoadEpoch.current);
+    };
+    const interval = window.setInterval(refresh, 180000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
+  }, [user?.userId, ageVerified, role, simulationMode]);
+
   const markNotificationRead = async (notification: any) => {
-    if (notification?.read === true) return;
+    if (notification?.read === true || notification?.actionRequired === true) return;
     try {
       if (!demoMode) await nightjarNotifications.markRead(String(notification.id));
       setNotifications((items) => {
@@ -1306,23 +1321,37 @@ function App() {
   };
 
   const markAllNotificationsRead = async () => {
-    const unread = notifications.filter((item:any) => item.read !== true);
+    const unread = notifications.filter((item:any) => item.read !== true && item.actionRequired !== true);
     if (!unread.length) return;
     try {
       if (!demoMode) await Promise.all(unread.map((item:any) => nightjarNotifications.markRead(String(item.id))));
       setNotifications((items) => {
-        const next = items.map((item:any) => ({ ...item, read:true }));
+        const next = items.map((item:any) => item.actionRequired === true ? item : { ...item, read:true });
         if (demoMode) writeDemo('notifications', next);
         return next;
       });
-      setNotificationUnreadCount(0);
-      notify('Notifications marked as read.');
+      setNotificationUnreadCount((count) => Math.max(0, count - unread.length));
+      notify('Personal notifications marked as read. Outstanding Administrator reviews remain visible.');
     } catch {
       notify('Some notifications could not be updated.');
     }
   };
 
   const openNotification = async (item:any) => {
+    if (item.type === 'admin_action' && canAdmin && !simulationMode) {
+      setNotificationsOpen(false);
+      navigate('admin');
+      if (item.subtype === 'release_verification') {
+        setModerationOpen(true);
+      } else if (item.subtype === 'professional_approval') {
+        openAdminPanel('approvals');
+      } else if (item.subtype === 'image_verification') {
+        openAdminPanel('images');
+      } else if (item.subtype === 'review_verification') {
+        openAdminPanel('reviews');
+      }
+      return;
+    }
     await markNotificationRead(item);
     setNotificationsOpen(false);
 
@@ -1491,59 +1520,66 @@ function App() {
       const verified = data.verified === true;
       setAgeVerified(verified);
       setAgeConfigured(data.configured === true);
-      setAgeProvider(String(data.provider ?? 'not-configured'));
-      setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+      setAgeProvider(String(data.provider ?? 'didit'));
+      setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
+      setAgeProviderVerified(data.providerVerified === true);
+      if (data.providerVerified === true) setAgeLaunchUrl(null);
+      setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
+      setAgeLivePilotAvailable(data.livePilotAvailable === true);
       setAgeVerifiedAt(data.verifiedAt ?? null);
       setAgeReverifyRequired(data.reverifyRequired === true);
       setAgeTemporaryBypass(data.temporaryBypass === true);
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
-      setAgeSessionActive(false);
-      setAgeStatus(data.status === 'COMPLETE' ? 'COMPLETE' : data.status === 'PENDING' || data.status === 'PROCESSING' || data.status === 'IN_PROGRESS' ? 'PENDING' : data.status === 'FAIL' || data.status === 'ERROR' || data.status === 'CANCELLED' ? 'FAIL' : 'NOT_STARTED');
+      setAgeSessionActive(data.sessionActive === true);
+      setAgeStatus(verified ? 'COMPLETE'
+        : ['PENDING','PROCESSING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(data.status) ? 'PENDING'
+        : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(data.status) ? 'FAIL' : 'NOT_STARTED');
       if (verified) setAgeStage('app');
       return verified;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   };
 
-  const openAgeCheck = async () => {
+  const openAgeCheck = async (adminPilot = false) => {
     setAgeLoading(true);
     try {
-      if (!nightjarAuth.current()) {
-        window.location.assign('/account');
-        return;
-      }
-      const alreadyVerified = await refreshAgeStatus();
-      if (alreadyVerified) {
-        notify('Your Nightjar account is already age verified. No new check is needed.');
-        return;
+      if (!nightjarAuth.current()) { window.location.assign('/account'); return; }
+      if (adminPilot) {
+        if (role !== 'admin' || simulationMode || !ageConfigured) {
+          notify('Only approved administrators can start the Didit pilot.'); return;
+        }
+        if (ageProviderVerified) { notify('Didit already verified this administrator.'); return; }
+        if (!window.confirm(
+          ageEnvironment === 'live'
+            ? 'Start a REAL Didit verification for your administrator account? Provider charges may apply. Existing testers keep their bypass.'
+            : 'Start a Didit sandbox pilot check? This should be unbilled ONLY if the configured Didit key and workflow are genuinely sandbox. Existing testers keep their bypass.'
+        )) return;
+      } else {
+        const alreadyVerified = await refreshAgeStatus();
+        if (alreadyVerified) { notify('Test access or permanent verification is already active. No paid Didit check was created.'); return; }
       }
       const data = await nightjarAge.start();
       setAgeConfigured(Boolean(data.configured));
-      setAgeProvider(String(data.provider ?? 'not-configured'));
-      setAgeEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+      setAgeProvider(String(data.provider ?? 'didit'));
+      setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
       setAgeTemporaryBypass(data.temporaryBypass === true);
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(Boolean(data.sessionId && !data.verified));
-      if (data.verified === true) {
-        setAgeVerified(true);
-        setAgeStatus('COMPLETE');
-        setAgeVerifiedAt(typeof data.verifiedAt === 'string' ? data.verifiedAt : new Date().toISOString());
-        setAgeReverifyRequired(false);
-        setAgeSessionActive(false);
-        setAgeStage('app');
-        notify('Your Nightjar account is already age verified. No new check was required.');
+      if (data.verified === true && data.provider === 'didit') {
+        await refreshAgeStatus();
+        notify('Didit confirmed your existing adult verification.');
+      } else if (data.temporaryBypass === true) {
+        await refreshAgeStatus();
+        notify('Private test access remains active. No verification session was created.');
       } else if (data.launchUrl) {
+        setAgeLaunchUrl(String(data.launchUrl));
         setAgeStatus('PENDING');
-        window.open(String(data.launchUrl), '_blank', 'noopener,noreferrer');
-        notify('Secure age verification opened. Complete it, then return to Nightjar.');
+        const popup = window.open(String(data.launchUrl), '_blank', 'noopener,noreferrer');
+        notify(popup ? 'Didit opened. Complete the check, then return to Nightjar.' :
+          'Open your Didit session using the button on this page; popups are blocked.');
       }
     } catch (error) {
-      const code = error instanceof Error ? error.message : '';
-      if (!code.includes('popup_closed')) notify('Nightjar could not start age verification. Please try again.');
-    } finally {
-      setAgeLoading(false);
-    }
+      notify(error instanceof Error ? 'Didit could not start: ' + error.message : 'Didit could not start verification.');
+    } finally { setAgeLoading(false); }
   };
 
   useEffect(() => {
@@ -1572,11 +1608,15 @@ function App() {
     setAgeVerified(false);
     setAgeStatus('NOT_STARTED');
     setAgeConfigured(false);
-    setAgeProvider('yoti-sandbox');
+    setAgeProvider('didit');
     setAgeEnvironment('sandbox');
     setAgeVerifiedAt(null);
     setAgeReverifyRequired(false);
     setAgeSessionActive(false);
+    setAgeProviderVerified(false);
+    setAgeProviderStatus('NOT_STARTED');
+    setAgeLivePilotAvailable(false);
+    setAgeLaunchUrl(null);
     setView('discover');
     setRolePicker(false);
     notify('Signed out of Nightjar.');
@@ -2888,7 +2928,7 @@ function App() {
     }
   };
 
-  const openAdminPanel = (panel: 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'live-preview') => {
+  const openAdminPanel = (panel: 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview') => {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
     setView('admin');
@@ -3022,12 +3062,48 @@ function App() {
         : 'Professional roles are unchanged.');
   };
 
+  const queueAccountProfessions = async (
+    account: any,
+    roles: ('creator' | 'writer' | 'editor' | 'artist')[],
+  ) => {
+    if (!canAdmin || !account?.userId || account.role === 'admin') {
+      throw new Error('Administrator access required to queue professional roles.');
+    }
+    if (demoMode) {
+      setAdminOverview((current: any) => {
+        const accounts = (current?.people?.accounts ?? []).map((item: any) => {
+          if (item.userId !== account.userId) return item;
+          const existing = item.pendingProfessionalRoles ?? [];
+          const approved = item.roles ?? [];
+          return {
+            ...item,
+            pendingProfessionalRoles: Array.from(new Set([
+              ...existing,
+              ...roles.filter((role) => !approved.includes(role)),
+            ])),
+          };
+        });
+        const updated = { ...(current ?? {}), people: { ...(current?.people ?? {}), accounts } };
+        writeDemo('adminOverview', updated);
+        return updated;
+      });
+      notify('Simulation: role suggestions queued locally. No live account changed.');
+      return;
+    }
+    const result = await nightjarAdministration.queueProfessionalRoles(account.userId, roles);
+    await loadAdminOverview();
+    await loadAdminApplications();
+    notify(result.queuedRoles.length
+      ? 'Queued for administrator approval: ' + result.queuedRoles.map((role) => roleMeta[role].label).join(', ') + '. Member consent and age checks are still required.'
+      : 'These professional roles are already queued or approved.');
+  };
+
   const changeAccountRole = async (account: any, nextRole: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') => {
     if (!canAdmin || !account?.userId) return;
     try {
       if (demoMode) {
         setAdminOverview((current:any) => {
-          const accounts = (current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, role:nextRole, status:'active' } : item);
+          const accounts = (current?.people?.accounts ?? []).map((item:any) => item.userId === account.userId ? { ...item, role:nextRole } : item);
           const counts = { ...(current?.people?.counts ?? {}) };
           const previousRole = account.role;
           if (previousRole && previousRole !== nextRole && typeof counts[previousRole] === 'number') counts[previousRole] = Math.max(0, counts[previousRole] - 1);
@@ -3039,7 +3115,7 @@ function App() {
         notify(`Demo account role changed to ${roleMeta[nextRole].label} locally.`);
         return;
       }
-      await nightjarAdministration.setAccountRole(account.userId, nextRole, 'active');
+      await nightjarAdministration.setAccountWorkspace(account.userId, nextRole);
       await loadAdminOverview();
       if (nextRole === 'editor') {
         notify('Account saved as Audio Editor and is now eligible for the public Audio Editor Spotlight when its profile is public.');
@@ -3437,10 +3513,10 @@ function App() {
           <div className="verification-panel">
             <div className="verification-icon"><ShieldCheck size={23} /></div>
             <div>
-              <strong>{ageTemporaryBypass ? 'Nightjar Private Test Access' : ageProvider === 'yoti' ? 'Yoti Age Verification' : 'Yoti Age Verification · Sandbox'}</strong>
+              <strong>{ageTemporaryBypass ? 'Nightjar Private Test Access' : 'Didit Age Verification'}</strong>
               <span>
                 {ageTemporaryBypass
-                  ? `Approved QA account · temporary age-assurance bypass active${ageTemporaryBypassReason === 'administrator' ? ' for an administrator' : ''}. This is not a completed Yoti verification and automatically stops working when test bypass mode is disabled.`
+                  ? `Approved QA account · temporary age-assurance bypass active${ageTemporaryBypassReason === 'administrator' ? ' for an administrator' : ''}. This is not a completed Didit verification and automatically stops working when test bypass mode is disabled.`
                   : ageVerified
                     ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins use this stored verification state.`
                     : ageSessionActive
@@ -3463,7 +3539,7 @@ function App() {
           <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
             {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
           </button>
-          <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Yoti verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
+          <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
         </div>
       </main>
     );
@@ -3673,7 +3749,7 @@ function App() {
   ];
 
   const notificationGroups = Object.entries(notifications.slice(0,20).reduce((groups:Record<string,any[]>, item:any) => {
-    const key = item.type === 'spotlight' ? 'Spotlights' : item.type === 'message' ? 'Messages' : item.type === 'comment' ? 'Comments' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
+    const key = item.type === 'admin_action' ? 'Owner action required' : item.type === 'spotlight' ? 'Spotlights' : item.type === 'message' ? 'Messages' : item.type === 'comment' ? 'Comments' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
     (groups[key] ??= []).push(item);
     return groups;
   }, {}));
@@ -3740,14 +3816,14 @@ function App() {
         <div className="top-actions">
           {user && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
           {user && <div className="notification-wrap">
-            <button className="ghost-button notification-button" onClick={() => setNotificationsOpen((open) => !open)} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
+            <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) void loadNotifications(productLoadEpoch.current); setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
               <Bell size={17} />
               {notificationUnreadCount > 0 && <span className="notification-badge">{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</span>}
             </button>
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
               <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void openNotification(item)}>
-                <span className="notification-row-icon">{item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
+                <span className="notification-row-icon">{item.type === 'admin_action' ? <ShieldCheck size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small></span>
               </button>)}</div>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new activity. You’re caught up.</span></div>}
             </section>}
@@ -4303,6 +4379,23 @@ function App() {
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
               <AdminLegalReadiness />
             </Suspense>
+            <section className="panel nj-didit-pilot" aria-label="Administrator Didit verification pilot">
+              <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
+              <h2>Didit Age Verification</h2>
+              <p>See the real provider state without switching to fictional demo data. Only an authorised administrator may initiate a check, and a live session may incur provider charges.</p>
+              <div className="demo-state-line">
+                <span className={ageConfigured ? 'status-pill' : 'status-pill muted'}>{ageLivePilotAvailable ? 'LIVE PILOT ENABLED' : ageConfigured ? 'DIDIT CONNECTED' : 'DIDIT SETUP REQUIRED'}</span>
+                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'VERIFIED 18+' : ageProviderStatus.replaceAll('_', ' ')}</span>
+                <span className={ageEnvironment === 'live' ? 'status-pill warning' : 'status-pill'}>{ageEnvironment === 'live' ? 'LIVE · MAY INCUR FEES' : 'SANDBOX / UNCONFIGURED'}</span>
+              </div>
+              <div className="admin-member-multi-role-actions">
+                <button type="button" className="primary-button" disabled={ageLoading || !ageConfigured || ageProviderVerified}
+                  onClick={() => void openAgeCheck(true)}>{ageLoading ? 'Opening Didit…' : ageProviderVerified ? 'Verified · no repeat needed' : ageEnvironment === 'live' ? 'Start my live Didit test' : 'Start sandbox Didit test'}</button>
+                <button type="button" className="secondary-button" onClick={() => void refreshAgeStatus()}>Refresh Didit status</button>
+                {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open existing Didit session</a>}
+              </div>
+              <small>Sandbox checks never count as production adult verification. All approved private-beta testers retain their separate temporary test-access status.</small>
+            </section>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Mail" />}>
               <AdminCommunications />
             </Suspense>
@@ -4318,6 +4411,13 @@ function App() {
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('writer')}><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">PEOPLE · WRITERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.writer ?? 0}</h2><p>Writers with protected manuscript and script-marketplace access.</p><strong>Open writer profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('editor')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">PEOPLE · AUDIO EDITORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.editor ?? 0}</h2><p>Audio Editors assigned to controlled production and editorial workflows.</p><strong>Open Audio Editor profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('artist')}><span className="admin-icon"><ImagePlus size={19} /></span><span className="mini-label">PEOPLE · ARTISTS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.artist ?? 0}</h2><p>Approved human artists available for visual commissions and collaboration.</p><strong>Open Artist profiles <ArrowRight size={13} /></strong></button>
+              <button className="admin-panel admin-tile" onClick={() => openAdminPanel('branding')}>
+                <span className="admin-icon"><ImagePlus size={19}/></span>
+                <span className="mini-label">APP INSTALL · NIGHTJAR LOGO</span>
+                <h2>Fix installation icon</h2>
+                <p>Create launcher icons from the approved Nightjar logo for mobile and desktop installations.</p>
+                <strong>Open install branding <ArrowRight size={13}/></strong>
+              </button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('live-preview')}>
                 <span className="admin-icon"><FileText size={19}/></span>
                 <span className="mini-label">LIVE ROLE PREVIEW · REAL TESTER CONTENT</span>
@@ -4373,11 +4473,12 @@ function App() {
             {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <AdminMemberRoleEditor
   account={account}
   onSave={manageAccountProfessions}
+  onQueue={queueAccountProfessions}
   onActiveRoleChange={changeAccountRole}
   onStatusChange={changeAccountStatus}
   onTestAccessChange={changeTestAccess}
 />}</article>)}{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).length === 0 && <div className="people-empty"><Users size={18} /><strong>No accounts in this role yet</strong><span>The live directory will populate as accounts are created or approved.</span></div>}</div></div>}
-            {adminPanel && <div className="admin-panel-modal admin-full-page"><section aria-label="Administration workpage"><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Professional approval queue' : adminPanel === 'live-preview' ? 'Live professional visibility preview' : adminPanel === 'suggestions' ? 'Creator suggestions' : adminPanel === 'reports' ? 'Reports & feedback' : adminPanel === 'reviews' ? 'Review moderation' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : adminPanel === 'editorial' ? 'Editorial assignments' : adminPanel === 'images' ? 'Image moderation' : adminPanel === 'tags' ? 'Tag catalogue governance' : 'Finance simulator & creator economics'}</h2><p>{adminPanel === 'live-preview' ? 'Review real tester script visibility with the same marketplace endpoint used by Nightjar professionals. No demo data or impersonation.' : adminPanel === 'approvals' ? 'Review banked VA Creator, Writer, Audio Editor and Artist applications. Approve whole applications or individual roles into a named intake wave.' : adminPanel === 'suggestions' ? 'Review Creators recommended by Nightjar members. Suggestions never auto-approve a professional account.' : adminPanel === 'reports' ? 'Review user-submitted safety reports, technical issues and feedback. Reporter identity is shown by profile name and handle.' : adminPanel === 'reviews' ? 'Listener ratings and written reviews are moderated before public display.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : adminPanel === 'editorial' ? 'Assign live manuscripts to active Audio Editor accounts.' : adminPanel === 'images' ? 'Every uploaded image stays private until an administrator explicitly approves it.' : adminPanel === 'tags' ? 'Review creator-made discovery tags. Explicit adult terminology is allowed; administrators can promote useful terms or hide unsuitable catalogue entries.' : 'Adjust the complete Nightjar finance model safely: audience, subscription price, taxes and fees, contributor role shares, app funding and operator income. The simulator never changes live billing.'}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div>{adminPanel === 'reports' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading reports & feedback…</div> : (adminReports.length === 0 && adminCommunityReports.length === 0) ? <div className="people-empty"><ShieldCheck size={18}/><strong>No reports or feedback yet</strong><span>User submissions will appear here for Administrator review.</span></div> : adminReports.map((report:any) => <article className="admin-data-row" key={report.id}><div><strong>{report.reporterName ?? 'Nightjar account'}{report.reporterHandle ? ' · @' + String(report.reporterHandle).replace(/^@/, '') : ''}</strong><span>{report.caseId ?? 'Nightjar report'} · {report.category ?? 'Something else'} · {report.status ?? 'New'}</span><small>{report.reporterEmail ?? 'Account email unavailable'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</small><p>{report.summary ?? 'No report detail supplied.'}</p></div></article>)}{adminCommunityReports.map((report:any)=><article className="admin-data-row community-report-row" key={report.id}><div><strong>{report.type === 'direct_message' ? 'Reported professional message' : 'Reported release comment / reply'}</strong><span>{report.reason ?? 'Community report'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</span><small>Reporter: {report.reporterName ?? 'Nightjar member'}{report.reporterHandle ? ' · @'+String(report.reporterHandle).replace(/^@/,'') : ''} · Reported account: {report.subjectName ?? 'Nightjar member'}{report.subjectRole ? ' · '+(report.subjectRole === 'editor' ? 'Audio Editor' : String(report.subjectRole).charAt(0).toUpperCase()+String(report.subjectRole).slice(1)) : ''}{report.releaseTitle ? ' · '+report.releaseTitle : ''}</small><p>{report.snapshotText || 'No retained report excerpt.'}</p><small>{report.type === 'direct_message' ? 'Only the specifically reported message snapshot is shown here — not the full private conversation.' : 'The reported public comment can be removed without affecting the release.'}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void resolveCommunityReport(report,'dismiss')}>Dismiss</button><button className="secondary-button" onClick={()=>void resolveCommunityReport(report,'remove')}>{report.type === 'direct_message' ? 'Remove message' : 'Remove comment'}</button>{report.subjectUserId && report.subjectRole && report.subjectRole !== 'admin' && <button className="danger-button" onClick={()=>void suspendReportedCommunityAccount(report)}>Suspend reported account</button>}</div></article>)}</div>}{adminPanel === 'reviews' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading review queue…</div> : adminReviewQueue.length === 0 ? <div className="people-empty"><Star size={18}/><strong>No reviews awaiting moderation</strong><span>Listener submissions will appear here before public display.</span></div> : adminReviewQueue.map((review:any)=><article className="admin-data-row" key={review.id}><div><strong>{review.releaseTitle ?? 'Nightjar release'}</strong><span>{review.reviewerName ?? 'Nightjar listener'}{review.reviewerHandle ? ' · @' + String(review.reviewerHandle).replace(/^@/,'') : ''} · {'★'.repeat(review.rating ?? 0)}{'☆'.repeat(Math.max(0,5-(review.rating ?? 0)))}</span><p>{review.review || 'Rating only — no written review.'}</p></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void moderateReleaseReview(review,'rejected')}>Reject</button><button className="primary-button" onClick={()=>void moderateReleaseReview(review,'approved')}>Approve review</button></div></article>)}</div>}{adminPanel === 'suggestions' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading Creator suggestions…</div> : adminCreatorSuggestions.length === 0 ? <div className="people-empty"><Users size={18}/><strong>No Creator suggestions yet</strong><span>Member recommendations will appear here for review.</span></div> : adminCreatorSuggestions.map((suggestion:any)=><article className="admin-data-row" key={suggestion.id}><div><strong>{suggestion.creatorName}</strong><span>{suggestion.status ?? 'new'} · suggested by {suggestion.submittedByName ?? 'Nightjar member'}{suggestion.submittedByHandle ? ' · @'+String(suggestion.submittedByHandle).replace(/^@/,'') : ''}</span>{suggestion.publicUrl && <small>{suggestion.publicUrl}</small>}{suggestion.note && <p>{suggestion.note}</p>}<small>Referral: {suggestion.referralCode ?? '—'}{suggestion.claimedByUserId ? ' · joined Nightjar' : ''}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'dismissed')}>Dismiss</button><button className="secondary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'contacted')}>Contacted</button><button className="primary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'invited')}>Invited</button></div></article>)}</div>}{adminPanel === 'live-preview' && <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading live professional preview"/>}>
+            {adminPanel && <div className="admin-panel-modal admin-full-page"><section aria-label="Administration workpage"><div className="admin-modal-head"><div><span className="mini-label">ADMINISTRATION / {adminPanel.toUpperCase()}</span><h2>{adminPanel === 'approvals' ? 'Professional approval queue' : adminPanel === 'branding' ? 'Nightjar app installation icon' : adminPanel === 'live-preview' ? 'Live professional visibility preview' : adminPanel === 'suggestions' ? 'Creator suggestions' : adminPanel === 'reports' ? 'Reports & feedback' : adminPanel === 'reviews' ? 'Review moderation' : adminPanel === 'subscriptions' ? 'Subscription ledger' : adminPanel === 'revenue' ? 'Commercial controls' : adminPanel === 'editorial' ? 'Editorial assignments' : adminPanel === 'images' ? 'Image moderation' : adminPanel === 'tags' ? 'Tag catalogue governance' : 'Finance simulator & creator economics'}</h2><p>{adminPanel === 'branding' ? 'Generate approved Nightjar logo icons for installation. Existing app icons may require reinstalling.' : adminPanel === 'live-preview' ? 'Review real tester script visibility with the same marketplace endpoint used by Nightjar professionals. No demo data or impersonation.' : adminPanel === 'approvals' ? 'Review banked VA Creator, Writer, Audio Editor and Artist applications. Approve whole applications or individual roles into a named intake wave.' : adminPanel === 'suggestions' ? 'Review Creators recommended by Nightjar members. Suggestions never auto-approve a professional account.' : adminPanel === 'reports' ? 'Review user-submitted safety reports, technical issues and feedback. Reporter identity is shown by profile name and handle.' : adminPanel === 'reviews' ? 'Listener ratings and written reviews are moderated before public display.' : adminPanel === 'subscriptions' ? 'Live subscription records only. Empty means billing data is not connected yet.' : adminPanel === 'revenue' ? 'Operational assumptions are separated from confirmed billing data.' : adminPanel === 'editorial' ? 'Assign live manuscripts to active Audio Editor accounts.' : adminPanel === 'images' ? 'Every uploaded image stays private until an administrator explicitly approves it.' : adminPanel === 'tags' ? 'Review creator-made discovery tags. Explicit adult terminology is allowed; administrators can promote useful terms or hide unsuitable catalogue entries.' : 'Adjust the complete Nightjar finance model safely: audience, subscription price, taxes and fees, contributor role shares, app funding and operator income. The simulator never changes live billing.'}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div>{adminPanel === 'reports' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading reports & feedback…</div> : (adminReports.length === 0 && adminCommunityReports.length === 0) ? <div className="people-empty"><ShieldCheck size={18}/><strong>No reports or feedback yet</strong><span>User submissions will appear here for Administrator review.</span></div> : adminReports.map((report:any) => <article className="admin-data-row" key={report.id}><div><strong>{report.reporterName ?? 'Nightjar account'}{report.reporterHandle ? ' · @' + String(report.reporterHandle).replace(/^@/, '') : ''}</strong><span>{report.caseId ?? 'Nightjar report'} · {report.category ?? 'Something else'} · {report.status ?? 'New'}</span><small>{report.reporterEmail ?? 'Account email unavailable'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</small><p>{report.summary ?? 'No report detail supplied.'}</p></div></article>)}{adminCommunityReports.map((report:any)=><article className="admin-data-row community-report-row" key={report.id}><div><strong>{report.type === 'direct_message' ? 'Reported professional message' : 'Reported release comment / reply'}</strong><span>{report.reason ?? 'Community report'} · {report.createdAt ? new Date(report.createdAt).toLocaleString('en-GB') : 'Date unavailable'}</span><small>Reporter: {report.reporterName ?? 'Nightjar member'}{report.reporterHandle ? ' · @'+String(report.reporterHandle).replace(/^@/,'') : ''} · Reported account: {report.subjectName ?? 'Nightjar member'}{report.subjectRole ? ' · '+(report.subjectRole === 'editor' ? 'Audio Editor' : String(report.subjectRole).charAt(0).toUpperCase()+String(report.subjectRole).slice(1)) : ''}{report.releaseTitle ? ' · '+report.releaseTitle : ''}</small><p>{report.snapshotText || 'No retained report excerpt.'}</p><small>{report.type === 'direct_message' ? 'Only the specifically reported message snapshot is shown here — not the full private conversation.' : 'The reported public comment can be removed without affecting the release.'}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void resolveCommunityReport(report,'dismiss')}>Dismiss</button><button className="secondary-button" onClick={()=>void resolveCommunityReport(report,'remove')}>{report.type === 'direct_message' ? 'Remove message' : 'Remove comment'}</button>{report.subjectUserId && report.subjectRole && report.subjectRole !== 'admin' && <button className="danger-button" onClick={()=>void suspendReportedCommunityAccount(report)}>Suspend reported account</button>}</div></article>)}</div>}{adminPanel === 'reviews' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading review queue…</div> : adminReviewQueue.length === 0 ? <div className="people-empty"><Star size={18}/><strong>No reviews awaiting moderation</strong><span>Listener submissions will appear here before public display.</span></div> : adminReviewQueue.map((review:any)=><article className="admin-data-row" key={review.id}><div><strong>{review.releaseTitle ?? 'Nightjar release'}</strong><span>{review.reviewerName ?? 'Nightjar listener'}{review.reviewerHandle ? ' · @' + String(review.reviewerHandle).replace(/^@/,'') : ''} · {'★'.repeat(review.rating ?? 0)}{'☆'.repeat(Math.max(0,5-(review.rating ?? 0)))}</span><p>{review.review || 'Rating only — no written review.'}</p></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void moderateReleaseReview(review,'rejected')}>Reject</button><button className="primary-button" onClick={()=>void moderateReleaseReview(review,'approved')}>Approve review</button></div></article>)}</div>}{adminPanel === 'suggestions' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading Creator suggestions…</div> : adminCreatorSuggestions.length === 0 ? <div className="people-empty"><Users size={18}/><strong>No Creator suggestions yet</strong><span>Member recommendations will appear here for review.</span></div> : adminCreatorSuggestions.map((suggestion:any)=><article className="admin-data-row" key={suggestion.id}><div><strong>{suggestion.creatorName}</strong><span>{suggestion.status ?? 'new'} · suggested by {suggestion.submittedByName ?? 'Nightjar member'}{suggestion.submittedByHandle ? ' · @'+String(suggestion.submittedByHandle).replace(/^@/,'') : ''}</span>{suggestion.publicUrl && <small>{suggestion.publicUrl}</small>}{suggestion.note && <p>{suggestion.note}</p>}<small>Referral: {suggestion.referralCode ?? '—'}{suggestion.claimedByUserId ? ' · joined Nightjar' : ''}</small></div><div className="admin-data-actions"><button className="ghost-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'dismissed')}>Dismiss</button><button className="secondary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'contacted')}>Contacted</button><button className="primary-button" onClick={()=>void reviewCreatorSuggestion(suggestion,'invited')}>Invited</button></div></article>)}</div>}{adminPanel === 'branding' && <AdminInstallBranding notify={notify} simulationMode={demoMode}/>}{adminPanel === 'live-preview' && <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading live professional preview"/>}>
   <AdminLiveMarketplacePreview notify={notify}/>
 </Suspense>}{adminPanel === 'approvals' && <div className="admin-data-list">
   <div className="admin-application-wavebar">
@@ -4665,7 +4766,7 @@ function App() {
       )}
       {user && ageVerified && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} messageUnreadCount={messageUnreadCount} messageNeedsReplyCount={messageNeedsReplyCount} />}
 
-      <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
+      <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal">T&Cs Centre</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
       {securityEvidenceReview && <div className="security-evidence-backdrop" role="dialog" aria-modal="true" aria-label="Security alert evidence review" onClick={()=>setSecurityEvidenceReview(null)}>
         <section className="security-evidence-modal" onClick={(event)=>event.stopPropagation()}>

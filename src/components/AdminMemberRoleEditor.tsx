@@ -17,23 +17,27 @@ const validRoles = (account: any) =>
 export default function AdminMemberRoleEditor({
   account,
   onSave,
+  onQueue,
   onActiveRoleChange,
   onStatusChange,
   onTestAccessChange,
 }: {
   account: any;
   onSave: (account: any, approvedRoles: NightjarManagedProfessionalRole[], previouslyApproved: NightjarManagedProfessionalRole[]) => Promise<void>;
+  onQueue: (account: any, pendingRoles: NightjarManagedProfessionalRole[]) => Promise<void>;
   onActiveRoleChange: (account: any, role: 'listener' | NightjarManagedProfessionalRole) => Promise<void>;
   onStatusChange: (account: any, status: 'active' | 'pending_review' | 'suspended') => Promise<void>;
   onTestAccessChange: (account: any, enabled: boolean) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<NightjarManagedProfessionalRole[]>(() => validRoles(account));
+  const [queueSelected, setQueueSelected] = useState<NightjarManagedProfessionalRole[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     setSelected(validRoles(account));
+    setQueueSelected([]);
     setError('');
   }, [account.userId, JSON.stringify(account.roles)]);
 
@@ -42,6 +46,20 @@ export default function AdminMemberRoleEditor({
   const pending = Array.isArray(account.pendingProfessionalRoles)
     ? account.pendingProfessionalRoles.filter((role: string) => PROFESSION_OPTIONS.some((item) => item.id === role))
     : [];
+
+  const queueRoles = async () => {
+    if (busy || queueSelected.length === 0 || account.status === 'suspended') return;
+    setBusy(true);
+    setError('');
+    try {
+      await onQueue(account, queueSelected);
+      setQueueSelected([]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Professional roles could not be queued.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const save = async () => {
     if (busy || !changed) return;
@@ -110,6 +128,26 @@ export default function AdminMemberRoleEditor({
         </label>)}
       </div>
       <p>New role grants require verified age assurance or explicitly enabled temporary tester access. Every change is attributed to the administrator and recorded in the professional access history.</p>
+      <div className="admin-member-queue-roles" role="group" aria-label="Queue professional roles for approval">
+        <strong>Queue additional roles without granting access</strong>
+        <p>Selected roles enter the approval inbox. The member must accept their own professional terms and pass age assurance before an administrator can approve them. No existing role is removed.</p>
+        <div className="admin-member-multi-role-options">
+          {PROFESSION_OPTIONS.filter(({ id }) => !approved.includes(id) && !pending.includes(id)).map(({ id, name }) => (
+            <label key={id} className={queueSelected.includes(id) ? 'selected' : ''}>
+              <input type="checkbox" checked={queueSelected.includes(id)} disabled={busy || account.status === 'suspended'}
+                onChange={(event) => setQueueSelected((roles) =>
+                  event.target.checked ? [...roles, id] : roles.filter((role) => role !== id)
+                )}/>
+              <span>{name}</span><small>Awaiting approval only</small>
+            </label>
+          ))}
+        </div>
+        {PROFESSION_OPTIONS.every(({ id }) => approved.includes(id) || pending.includes(id)) &&
+          <small>All professional roles are already approved or queued.</small>}
+        <button type="button" className="secondary-button" disabled={busy || !queueSelected.length || account.status === 'suspended'}
+          onClick={() => void queueRoles()}>{busy ? 'Updating roles…' : 'Queue selected roles for review'}</button>
+      </div>
+
       {error && <div className="nj-role-save-error" role="alert">{error}</div>}
       <div className="admin-member-multi-role-actions">
         <button type="button" className="ghost-button" disabled={busy} onClick={() => setSelected(approved)}><X size={15}/> Reset selection</button>
