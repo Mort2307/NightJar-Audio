@@ -24,6 +24,19 @@ const manageProfessionalRolesCall = httpsCallable<{
   expectedApprovedRoles: NightjarManagedProfessionalRole[];
 }, NightjarManagedRolesResult>(functions, 'adminManageProfessionalRoles');
 
+export type NightjarQueuedProfessionalRolesResult = {
+  userId: string;
+  queuedRoles: NightjarManagedProfessionalRole[];
+  approvedProfessionalRoles: NightjarManagedProfessionalRole[];
+  pendingProfessionalRoles: NightjarManagedProfessionalRole[];
+  unchanged: boolean;
+};
+
+const queueProfessionalRolesCall = httpsCallable<{
+  userId: string;
+  roles: NightjarManagedProfessionalRole[];
+}, NightjarQueuedProfessionalRolesResult>(functions, 'adminQueueProfessionalRoles');
+
 export type NightjarMarketplaceVisibility = {
   id: string;
   title: string;
@@ -152,6 +165,10 @@ export const nightjarAdministration = {
     expectedApprovedRoles: NightjarManagedProfessionalRole[],
   ) {
     return (await manageProfessionalRolesCall({ userId, approvedRoles, expectedApprovedRoles })).data;
+  },
+
+  async queueProfessionalRoles(userId: string, roles: NightjarManagedProfessionalRole[]) {
+    return (await queueProfessionalRolesCall({ userId, roles })).data;
   },
 
   async previewScriptMarketplace() {
