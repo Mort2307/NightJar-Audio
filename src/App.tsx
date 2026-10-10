@@ -1037,11 +1037,9 @@ function App() {
     let cancelled = false;
     let unsubscribeForeground: (() => void) | undefined;
 
-    // Refresh an already-granted device token after app/service-worker updates without prompting again.
-    if (nightjarPush.configured() && nightjarPush.permission() === 'granted') {
-      void nightjarPush.enable().catch(() => { /* explicit device controls remain available in Profile */ });
-    }
-
+    // Do not silently register or refresh FCM on login. An existing browser
+    // permission is not consent to another network registration attempt;
+    // device changes are handled explicitly in Notification Preferences.
     void nightjarPush.listenForeground((payload) => {
       const title = payload.data?.title || payload.notification?.title || 'Nightjar update';
       const body = payload.data?.body || payload.notification?.body || '';
