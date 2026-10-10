@@ -8329,14 +8329,20 @@ export const adminManageProfessionalRoles = onCall({ region: REGION }, async (re
   const expected = cleanProfessionalRoles(input.expectedApprovedRoles);
   const accountDocument = accountRef(userId);
   const applicationDocument = professionalApplicationRef(userId);
-  const ageDocument = db.collection('ageAssurance').doc(userId);
   const eventDocument = applicationDocument.collection('events').doc();
 
+  // A role grant is not a shortcut around the member's own accepted
+  // professional agreements or server-authorised 18+ private-beta access.
+  // Revocations remain possible even when those conditions no longer hold.
+  if (selected.some((role) => !expected.includes(role))) {
+    await requireProfessionalLegalTerms(userId);
+    await requireAgeVerified(userId);
+  }
+
   const result = await db.runTransaction(async (tx) => {
-    const [accountSnapshot, applicationSnapshot, ageSnapshot] = await Promise.all([
+    const [accountSnapshot, applicationSnapshot] = await Promise.all([
       tx.get(accountDocument),
       tx.get(applicationDocument),
-      tx.get(ageDocument),
     ]);
     if (!accountSnapshot.exists) throw new HttpsError('not-found', 'Nightjar member account not found.');
     const account = accountSnapshot.data() ?? {};
@@ -8360,9 +8366,8 @@ export const adminManageProfessionalRoles = onCall({ region: REGION }, async (re
     if (!addedRoles.length && !removedRoles.length) {
       return { userId, approvedProfessionalRoles: previouslyApproved, pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles), activeRole, addedRoles, removedRoles, unchanged: true };
     }
-    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && account.testAccess === true;
-    if (addedRoles.length && ageSnapshot.data()?.verified !== true && !temporaryTestAccess) {
-      throw new HttpsError('failed-precondition', 'This member needs completed age assurance or explicitly enabled temporary tester access before professional roles can be granted.');
+    if (addedRoles.length && account.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'Suspended accounts cannot receive new professional access. Review suspension separately.');
     }
 
     const application = applicationSnapshot.data() ?? {};
@@ -8427,93 +8432,103 @@ export const reviewProfessionalApplication = onCall({ region: REGION }, async (r
   const decision = cleanText(input.decision, 30);
   const selectedRoles = cleanProfessionalRoles(input.roles);
   const wave = cleanText(input.wave, 80);
-  if (!userId || !['banked','approved','rejected','waitlist'].includes(decision)) {
+  if (!userId || userId.includes('/') || !['banked','approved','rejected','waitlist'].includes(decision)) {
     throw new HttpsError('invalid-argument', 'Choose a valid application decision.');
   }
 
-  const [applicationSnapshot, accountSnapshot, ageAssuranceSnapshot] = await Promise.all([
-    professionalApplicationRef(userId).get(),
-    accountRef(userId).get(),
-    db.collection('ageAssurance').doc(userId).get(),
-  ]);
-  if (!applicationSnapshot.exists || !accountSnapshot.exists) throw new HttpsError('not-found', 'Professional application not found.');
-
-  const applicantAccount = accountSnapshot.data() ?? {};
-  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && !AGE_ASSURANCE_CONFIGURED && applicantAccount.testAccess === true;
-  if (decision === 'approved' && ageAssuranceSnapshot.data()?.verified !== true && !temporaryTestAccess) {
-    throw new HttpsError('failed-precondition', 'This professional applicant must complete age assurance or be explicitly enabled as a controlled tester before approval.');
+  // Role approval requires the account holder's accepted agreement and
+  // authoritative age access. This intentionally does NOT enable suspended
+  // accounts or silently grant permissions to accounts without consent.
+  if (decision === 'approved') {
+    await requireProfessionalLegalTerms(userId);
+    await requireAgeVerified(userId);
   }
 
-  const application = applicationSnapshot.data() ?? {};
-  const requested = cleanProfessionalRoles(application.requestedRoles);
-  const rolesReviewed = (selectedRoles.length ? selectedRoles : requested).filter((role) => requested.includes(role));
-  const rolesToApprove = decision === 'approved' ? rolesReviewed : [];
-  if (decision === 'approved' && !rolesToApprove.length) {
-    throw new HttpsError('failed-precondition', 'There are no pending professional roles selected for approval.');
-  }
-  const currentApproved = professionalRolesForAccount(accountSnapshot.data() ?? {}) as ProfessionalRole[];
-  const nextApproved = decision === 'approved'
-    ? Array.from(new Set([...currentApproved, ...rolesToApprove]))
-    : currentApproved;
-  const remainingRequested = decision === 'approved'
-    ? requested.filter((role) => !rolesToApprove.includes(role))
-    : decision === 'rejected'
-      ? []
-      : requested;
-  const accountPendingRoles = remainingRequested;
-  const nextStatus = decision === 'approved'
-    ? (remainingRequested.length ? 'banked' : 'approved')
-    : decision;
+  const applicationRef = professionalApplicationRef(userId);
+  const accountDocument = accountRef(userId);
+  const eventDocument = applicationRef.collection('events').doc();
+  const result = await db.runTransaction(async (tx) => {
+    const [applicationSnapshot, accountSnapshot] = await Promise.all([
+      tx.get(applicationRef),
+      tx.get(accountDocument),
+    ]);
+    if (!applicationSnapshot.exists || !accountSnapshot.exists) {
+      throw new HttpsError('not-found', 'Professional application not found.');
+    }
+    const application = applicationSnapshot.data() ?? {};
+    const account = accountSnapshot.data() ?? {};
+    if (ADMIN_EMAILS.has(cleanEmail(account.email)) || account.role === 'admin') {
+      throw new HttpsError('permission-denied', 'Owner accounts are not professional applicants.');
+    }
+    if (decision === 'approved' && account.status === 'suspended') {
+      throw new HttpsError('failed-precondition', 'A suspended account cannot be approved. Review its suspension separately.');
+    }
 
-  await professionalApplicationRef(userId).set({
-    requestedRoles: remainingRequested,
-    approvedRoles: nextApproved,
-    status: nextStatus,
-    wave: wave || application.wave || null,
-    reviewedBy: admin.uid,
-    reviewedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge:true });
-
-  const currentRole = cleanText(accountSnapshot.data()?.role, 30);
-  const activeRole = currentRole === 'listener'
-    ? 'listener'
-    : currentRole && nextApproved.includes(currentRole as ProfessionalRole)
+    const requested = cleanProfessionalRoles(application.requestedRoles);
+    const rolesReviewed = (selectedRoles.length ? selectedRoles : requested)
+      .filter((role) => requested.includes(role));
+    const rolesToApprove = decision === 'approved' ? rolesReviewed : [];
+    if (decision === 'approved' && !rolesToApprove.length) {
+      throw new HttpsError('failed-precondition', 'There are no pending professional roles selected for approval.');
+    }
+    const currentApproved = professionalRolesForAccount(account) as ProfessionalRole[];
+    const nextApproved = decision === 'approved'
+      ? Array.from(new Set([...currentApproved, ...rolesToApprove]))
+      : currentApproved;
+    const remainingRequested = decision === 'approved'
+      ? requested.filter((role) => !rolesToApprove.includes(role))
+      : decision === 'rejected' ? [] : requested;
+    const nextStatus = decision === 'approved'
+      ? (remainingRequested.length ? 'banked' : 'approved')
+      : decision;
+    const currentRole = cleanText(account.role, 30);
+    const activeRole = currentRole === 'listener' ||
+      (currentRole && nextApproved.includes(currentRole as ProfessionalRole))
       ? currentRole
       : (nextApproved[0] ?? 'listener');
-  await accountRef(userId).set({
-    approvedProfessionalRoles: nextApproved,
-    pendingProfessionalRoles: accountPendingRoles,
-    role: activeRole,
-    status: 'active',
-    professionalAccessUpdatedBy: admin.uid,
-    professionalAccessUpdatedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge:true });
+    const now = FieldValue.serverTimestamp();
 
-  await professionalApplicationRef(userId).collection('events').doc().set({
-    userId,
-    decision,
-    roles: rolesReviewed,
-    wave: wave || null,
-    previousStatus: cleanText(application.status, 30) || 'banked',
-    resultingStatus: nextStatus,
-    approvedRolesAfter: nextApproved,
-    pendingRolesAfter: accountPendingRoles,
-    reviewedBy: admin.uid,
-    createdAt: FieldValue.serverTimestamp(),
+    // All three writes commit together. Firestore retries the read phase if
+    // another admin changes the application or roles concurrently.
+    tx.set(applicationRef, {
+      requestedRoles: remainingRequested,
+      approvedRoles: nextApproved,
+      status: nextStatus,
+      wave: wave || application.wave || null,
+      reviewedBy: admin.uid,
+      reviewedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    tx.set(accountDocument, {
+      approvedProfessionalRoles: nextApproved,
+      pendingProfessionalRoles: remainingRequested,
+      role: activeRole,
+      // Preserve account.status: approving a profession never restores a
+      // suspended or otherwise restricted account.
+      professionalAccessUpdatedBy: admin.uid,
+      professionalAccessUpdatedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    tx.create(eventDocument, {
+      userId,
+      decision,
+      roles: rolesReviewed,
+      wave: wave || null,
+      previousStatus: cleanText(application.status, 30) || 'banked',
+      resultingStatus: nextStatus,
+      approvedRolesAfter: nextApproved,
+      pendingRolesAfter: remainingRequested,
+      reviewedBy: admin.uid,
+      createdAt: now,
+    });
+    return {
+      userId, decision, approvedProfessionalRoles: nextApproved,
+      pendingProfessionalRoles: remainingRequested, activeRole,
+      applicationStatus: nextStatus, wave: wave || application.wave || null,
+    };
   });
-
   await syncCreatorCustomTagUsage(userId);
-  return {
-    userId,
-    decision,
-    approvedProfessionalRoles: nextApproved,
-    pendingProfessionalRoles: accountPendingRoles,
-    activeRole,
-    applicationStatus: nextStatus,
-    wave: wave || application.wave || null,
-  };
+  return result;
 });
 
 // NIGHTJAR_ADMIN_EMAIL_COMMUNICATIONS_V1
