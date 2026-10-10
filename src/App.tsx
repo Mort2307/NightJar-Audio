@@ -1463,7 +1463,13 @@ function App() {
         setRole(data.role);
         setAccountStatus(nextStatus);
         setRolePicker(false);
-        navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'profile' : 'discover');
+        // Preserve the dedicated My Roles deep link on a fresh PWA/browser load.
+        if (/^\/profile\/roles\/?$/.test(window.location.pathname)) {
+          setView('profile');
+          setProfileRolesPage(true);
+        } else {
+          navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'profile' : 'discover');
+        }
       } else {
         setRole(null);
         setRolePicker(true);
