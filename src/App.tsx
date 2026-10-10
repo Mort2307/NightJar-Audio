@@ -3681,7 +3681,7 @@ function App() {
             <button className="primary-button" disabled={accountLoading} onClick={() => void signIn()}>Sign in <ArrowRight size={15} /></button>
           ) : (
             <>
-              <button className="account-chip" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)}>
+              <button className="account-chip" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : canAdmin ? setRolePicker(true) : openMyRolesPage()}>
                 <span className="account-chip-avatar">{simulationMode ? simulationIdentity.initials : profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : (user.name ?? user.email ?? 'N').slice(0, 1).toUpperCase()}</span>
                 <span><strong>{simulationMode ? simulationIdentity.name : user.name ?? 'Nightjar account'}</strong><em>{simulationMode ? simulationIdentity.label + ' · Simulation' : canAdmin && previewRole ? `Administrator · previewing ${roleMeta[previewRole].label}` : accountLabel}</em></span>
               </button>
@@ -4606,7 +4606,7 @@ function App() {
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
       {user && !rolePicker && (
-        <button className="floating-account" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)} aria-label="Open account information">
+        <button className="floating-account" onClick={() => simulationMode ? (navigate('profile'), void loadProfile()) : canAdmin ? setRolePicker(true) : openMyRolesPage()} aria-label="Open account information">
           <UserCircle2 size={16} /><span>{simulationMode ? simulationIdentity.label + ' simulation' : roleMeta[role ?? 'listener'].label}</span>
         </button>
       )}
