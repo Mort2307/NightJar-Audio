@@ -447,6 +447,11 @@ function App() {
   const [ageProviderVerified, setAgeProviderVerified] = useState(false);
   const [ageProviderStatus, setAgeProviderStatus] = useState('NOT_STARTED');
   const [ageLivePilotAvailable, setAgeLivePilotAvailable] = useState(false);
+  const [agePilotEligible, setAgePilotEligible] = useState(false);
+  const [agePilotConsent, setAgePilotConsent] = useState(false);
+  const [diditPilotEmail, setDiditPilotEmail] = useState('');
+  const [diditPilotBusy, setDiditPilotBusy] = useState(false);
+  const [diditPilotFeedback, setDiditPilotFeedback] = useState('');
   const [ageLaunchUrl, setAgeLaunchUrl] = useState<string | null>(null);
   const [ageLoading, setAgeLoading] = useState(false);
   const [ageTemporaryBypass, setAgeTemporaryBypass] = useState(false);
@@ -1567,23 +1572,39 @@ function App() {
       if (data.providerVerified === true) setAgeLaunchUrl(null);
       setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
       setAgeLivePilotAvailable(data.livePilotAvailable === true);
+      setAgePilotEligible(data.diditPilotEligible === true);
       setAgeVerifiedAt(data.verifiedAt ?? null);
       setAgeReverifyRequired(data.reverifyRequired === true);
       setAgeTemporaryBypass(data.temporaryBypass === true);
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(data.sessionActive === true);
-      setAgeStatus(verified ? 'COMPLETE'
-        : ['PENDING','PROCESSING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(data.status) ? 'PENDING'
-        : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(data.status) ? 'FAIL' : 'NOT_STARTED');
+      const diditPending = ['PENDING','PROCESSING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.providerStatus ?? data.status));
+      setAgeStatus(data.providerVerified === true ? 'COMPLETE'
+        : diditPending && data.diditPilotEligible === true ? 'PENDING'
+        : verified ? 'COMPLETE'
+        : diditPending ? 'PENDING'
+        : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
       if (verified) setAgeStage('app');
       return verified;
     } catch { return false; }
   };
 
-  const openAgeCheck = async (adminPilot = false) => {
+  const openAgeCheck = async (adminPilot = false, memberPilot = false) => {
     setAgeLoading(true);
     try {
       if (!nightjarAuth.current()) { window.location.assign('/account'); return; }
+      if (memberPilot) {
+        if (!agePilotEligible || role === 'admin' || !ageConfigured || simulationMode || demoMode) {
+          notify('Didit is only available to testers explicitly enrolled by a Nightjar administrator.'); return;
+        }
+        if (ageProviderVerified) { notify('Your Nightjar account is already verified by Didit. No further identity check is required.'); return; }
+        if (!agePilotConsent) { notify('Please acknowledge the live ID verification notice first.'); return; }
+        if (!window.confirm(
+          ageEnvironment === 'live'
+            ? 'Start the REAL Didit 18+ ID check for this test account? You may need to show a government ID. A charge may apply to Nightjar. Your existing beta access will remain available.'
+            : 'Start the Didit SANDBOX check? This does not count as verified age and your existing beta access remains available.'
+        )) return;
+      }
       if (adminPilot) {
         if (role !== 'admin' || simulationMode || !ageConfigured) {
           notify('Only approved administrators can start the Didit pilot.'); return;
@@ -1594,7 +1615,7 @@ function App() {
             ? 'Start a REAL Didit verification for your administrator account? Provider charges may apply. Existing testers keep their bypass.'
             : 'Start a Didit sandbox pilot check? This should be unbilled ONLY if the configured Didit key and workflow are genuinely sandbox. Existing testers keep their bypass.'
         )) return;
-      } else {
+      } else if (!memberPilot) {
         const alreadyVerified = await refreshAgeStatus();
         if (alreadyVerified) { notify('Test access or permanent verification is already active. No paid Didit check was created.'); return; }
       }
@@ -1628,6 +1649,30 @@ function App() {
     const timer = window.setInterval(() => { void refreshAgeStatus(); }, 5000);
     return () => window.clearInterval(timer);
   }, [ageStatus, user]);
+
+  const updateDiditPilotAccess = async (enabled: boolean) => {
+    if (!canAdmin || simulationMode || demoMode) return;
+    const email = diditPilotEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setDiditPilotFeedback('Enter the email address of one registered, verified beta tester.');
+      return;
+    }
+    if (enabled && !window.confirm(
+      'Permit ' + email + ' to start a Didit ID-verification pilot voluntarily? This does not remove their beta bypass or start a paid session. The tester must explicitly consent and press Start themselves.'
+    )) return;
+    setDiditPilotBusy(true);
+    setDiditPilotFeedback('');
+    try {
+      const result = await nightjarAdministration.setDiditPilotAccess(email, enabled);
+      setDiditPilotFeedback(result.enabled
+        ? 'This registered test account can now start Didit voluntarily. Ask them to refresh Nightjar and open Profile → Account & Support.'
+        : 'Didit pilot access disabled for this account. Their existing beta-test access is unchanged.');
+    } catch (error) {
+      setDiditPilotFeedback(error instanceof Error ? error.message : 'Could not change Didit pilot enrolment.');
+    } finally {
+      setDiditPilotBusy(false);
+    }
+  };
 
   const signIn = async () => {
     window.location.assign('/account?entry=signin');
