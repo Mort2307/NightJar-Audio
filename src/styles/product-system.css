@@ -2527,3 +2527,127 @@ textarea {
     line-height: 1.45;
   }
 }
+
+/* Install invitation: high-visibility onboarding content in ordinary document
+   flow, so it cannot cover the mobile dock, Save button or notification controls. */
+.nj-install-invitation {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px minmax(0,1fr) auto;
+  align-items: start;
+  gap: 16px;
+  margin: 12px auto;
+  width: min(1140px, calc(100% - 36px));
+  padding: 18px;
+  border: 1px solid rgba(203,181,204,.38);
+  border-radius: 19px;
+  background:
+    radial-gradient(circle at 0 0, rgba(144,99,135,.27), transparent 55%),
+    linear-gradient(125deg, rgba(40,28,40,.96), rgba(22,19,25,.98));
+  box-shadow: 0 15px 42px rgba(0,0,0,.27);
+  color: var(--nj-text-primary);
+}
+.nj-install-invitation-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(203,181,204,.24);
+  border-radius: 15px;
+  color: #eddceb;
+  background: rgba(203,181,204,.14);
+}
+.nj-install-invitation-copy { min-width: 0; }
+.nj-install-invitation-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  color: #d5bed2;
+}
+.nj-install-invitation h2 {
+  margin: 6px 0 7px;
+  font-family: Georgia, serif;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 400;
+}
+.nj-install-invitation p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #c9bdc7;
+}
+.nj-install-invitation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 13px;
+}
+.nj-install-invitation-actions button {
+  min-height: 46px;
+  font-size: 13px;
+  padding: 11px 16px;
+}
+.nj-install-dismiss {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(203,181,204,.16);
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
+  color: #ebdfe9;
+  transition: background-color 140ms ease, transform 100ms ease;
+}
+.nj-install-dismiss:active {
+  transform: scale(.95);
+  background: rgba(203,181,204,.18);
+}
+.nj-install-instructions {
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid rgba(203,181,204,.2);
+  border-radius: 13px;
+  background: rgba(0,0,0,.17);
+}
+.nj-install-instructions strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+.nj-install-instructions p { font-size: 12px; }
+@media (max-width: 700px) {
+  .nj-install-invitation {
+    grid-template-columns: 40px minmax(0,1fr) auto;
+    width: calc(100% - 24px);
+    gap: 10px;
+    margin: 10px auto;
+    padding: 14px;
+    border-radius: 17px;
+  }
+  .nj-install-invitation-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+  .nj-install-dismiss {
+    width: 40px;
+    height: 40px;
+  }
+  .nj-install-invitation h2 { font-size: 24px; line-height: 1.2; }
+  .nj-install-invitation p { font-size: 12px; }
+  .nj-install-invitation-actions { grid-column: 1 / -1; }
+  .nj-install-invitation-actions button { flex: 1 1 180px; }
+  /* Fixed updater/offline notices must clear the larger redesigned dock. */
+  .nj-product-status {
+    bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px));
+    z-index: 90;
+  }
+  .has-mobile-profile-save .nj-product-status {
+    bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px) + 148px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nj-install-dismiss { transition: none; }
+  .nj-install-dismiss:active { transform: none; }
+}
