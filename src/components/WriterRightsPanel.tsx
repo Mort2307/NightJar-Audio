@@ -26,7 +26,7 @@ const defaultRights = {
 };
 
 export const parseListingTags = (draft: string, limit: number) =>
-  Array.from(new Set(draft.split(',').map((part) => part.trim().replace(/\\s+/g, ' ')).filter(Boolean))).slice(0, limit);
+  Array.from(new Set(draft.split(',').map((part) => part.trim().replace(/\s+/g, ' ')).filter(Boolean))).slice(0, limit);
 
 const defaultMarketplace = {
   visibility: 'private',
