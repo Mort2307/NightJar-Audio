@@ -24,6 +24,21 @@ const manageProfessionalRolesCall = httpsCallable<{
   expectedApprovedRoles: NightjarManagedProfessionalRole[];
 }, NightjarManagedRolesResult>(functions, 'adminManageProfessionalRoles');
 
+export type NightjarMarketplaceVisibility = {
+  id: string;
+  title: string;
+  status: string;
+  visibility: string;
+  visibleToProfessionals: boolean;
+  reasons: string[];
+};
+const previewScriptMarketplaceCall = httpsCallable<void, {
+  diagnostics: NightjarMarketplaceVisibility[];
+  eligible: number;
+  total: number;
+  rule: string;
+}>(functions, 'adminPreviewScriptMarketplace');
+
 const setClosedBetaTesterCall = httpsCallable<{ email: string; enabled: boolean; note?: string }, { email: string; enabled: boolean; matchedAccounts: number }>(functions, 'adminSetClosedBetaTester');
 const setTestAccessCall = httpsCallable<{ userId: string; enabled: boolean }, { userId: string; testAccess: boolean }>(functions, 'adminSetTestAccess');
 const professionalBankCall = httpsCallable<void, { applications: any[]; buckets: Record<string, number>; total: number }>(functions, 'listProfessionalApplicationBank');
@@ -137,6 +152,10 @@ export const nightjarAdministration = {
     expectedApprovedRoles: NightjarManagedProfessionalRole[],
   ) {
     return (await manageProfessionalRolesCall({ userId, approvedRoles, expectedApprovedRoles })).data;
+  },
+
+  async previewScriptMarketplace() {
+    return repairMojibakeDisplayData((await previewScriptMarketplaceCall()).data);
   },
 
   async setClosedBetaTester(email: string, enabled: boolean, note = '') {
