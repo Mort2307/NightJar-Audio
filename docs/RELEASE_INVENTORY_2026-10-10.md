@@ -30,6 +30,19 @@
 
 PR #39 is included by verified Git ancestry in draft PR #40. The other eleven unresolved PRs remain pending; none has been silently marked approved for merging, discarding or deferral.
 
+## Reconciliation progress — source review, 10 October 2026
+
+- **PR #37 — technically superseded by the candidate:** independent recovery page and root HTML are byte-identical; service-worker code differs only in a comment. Candidate Vite routing preserves root URLs and adds exact Git source versioning. Browser and installed-PWA refresh acceptance is **still required**.
+- **PR #35 — technically superseded by the candidate:** Editor Studio, Role Dashboard, navigation reset utility and scroll contract are byte-identical, with the candidate carrying newer role-application archives and navigation contracts. Real-device tap and scroll QA is **still required**.
+- **PR #32 — technically superseded by the candidate:** the newer backend has an audited, idempotent approval email event trigger with failed-delivery retry, with source regression coverage. Gmail email delivery and legal prerequisites still require staging verification.
+- **PR #38 — still under review:** owner approval alerts are integrated and now have a dedicated regression contract. Multi-role access uses the candidate's transactional full-set role editor. A **separate pre-approval queue action** from PR #38 has not been ported or declared unnecessary. This review also restored a missing feature: existing Listeners can now read and explicitly accept the current professional terms within My Roles before requesting additional professions; denial/outage fails closed without hiding existing roles.
+- **PR #36 — under legal and provider review:** guarded Didit webhook/client, Legal Centre and backend controls are present, but UK legal review and a configured, signed, live adult-document verification remain unproved. No chargeable live session or beta bypass removal has been authorised.
+- **PRs #29 and #28 — overlapping Didit drafts:** do not merge their competing provider implementations onto #40 without a security review; PR #29 also contains independent push-related changes needing comparison.
+- **PR #14 — separate production entitlement/player candidate:** remains a draft and requires commercial authorization, 18+ gating, device playback and payment checks.
+- **PRs #9, #8 and #7 — early hardening/telemetry branches:** distinct legacy histories; the reviewer has not signed off their unique functionality as obsolete.
+
+Only PR #39 is included by ancestry. The three technically superseded PRs above are **not** merged, closed or deployed. Their source dispositions are recorded in `docs/release-pr-review.json`. Remaining records are intentionally pending.
+
 ## Release gates
 
 1. **Branch scope:** `main` is the production source. Confirm the candidate contains all owner-approved work; review outstanding PRs one by one. Preserve data and avoid automatic conflict resolution of overlapping Firebase Functions.
