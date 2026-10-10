@@ -27,7 +27,19 @@ const checks = [
   ['professional applications accept multiple roles', functions.includes('submitProfessionalApplication') && functions.includes('requestedRoles')],
   ['controlled intake waves are recorded', functions.includes('reviewProfessionalApplication') && functions.includes('wave: wave || application.wave || null')],
   ['professional roles can be removed', functions.includes('removeProfessionalRole')],
-  ['rejected professional roles are cleared from the active application bank', functions.includes("decision === 'rejected'") && functions.includes("? []") && functions.includes('const accountPendingRoles = remainingRequested')],
+  // Decisions now write the application and account atomically. Check the
+  // actual rejection path and both persisted pending-role fields rather than
+  // requiring an obsolete intermediate variable from the pre-transaction code.
+  ['rejected professional roles are cleared from the active application bank', (() => {
+    const start = functions.indexOf('export const reviewProfessionalApplication = onCall');
+    const end = functions.indexOf('// NIGHTJAR_ADMIN_EMAIL_COMMUNICATIONS_V1', start);
+    const review = start >= 0 && end > start ? functions.slice(start, end) : '';
+    return review.includes("decision === 'rejected' ? [] : requested")
+      && review.includes('requestedRoles: remainingRequested')
+      && review.includes('pendingProfessionalRoles: remainingRequested')
+      && review.includes("status: nextStatus")
+      && review.includes('db.runTransaction');
+  })()],
   ['professional workspaces can be switched', functions.includes('setActiveNightjarRole')],
   ['artist is a professional role', functions.includes("['creator','writer','editor','artist']")],
   ['Artist portfolios require human-created work attestation', functions.includes('humanCreatedAttestation') && functions.includes('not AI-generated imagery')],
