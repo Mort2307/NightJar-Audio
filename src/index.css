@@ -8989,3 +8989,73 @@ textarea:focus-visible,
   letter-spacing: normal;
   color: var(--muted);
 }
+
+
+/* PROFILE SAVE ACTION: float above the mobile navigation dock, never beneath it.
+   The account role chip is hidden on mobile; the header avatar keeps account access. */
+.nj-save-label-mobile { display: none; }
+.premium-profile-floating-save .primary-button {
+  min-height: 48px;
+  flex: 0 0 auto;
+  white-space: normal;
+  text-align: center;
+}
+.premium-profile-floating-save .nj-save-loading-icon {
+  animation: nj-save-spin 1s linear infinite;
+}
+@keyframes nj-save-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 700px) {
+  .premium-profile-floating-save {
+    /* The dock remains at the bottom; this sticky action remains fully tappable. */
+    position: sticky;
+    bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px));
+    z-index: 64;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    justify-items: stretch;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    margin: 8px 0 12px;
+    border-color: rgba(203,181,204,.38);
+    border-radius: 16px;
+    background: rgba(20,16,22,.98);
+    box-shadow: 0 12px 42px rgba(0,0,0,.5);
+  }
+  .premium-profile-floating-save > span { min-width: 0; }
+  .premium-profile-floating-save > span strong {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  .premium-profile-floating-save > span small {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .premium-profile-floating-save .primary-button {
+    width: 100%;
+    min-height: 50px;
+    padding: 12px 16px;
+    font-size: 14px;
+    box-shadow: 0 3px 14px rgba(197,154,190,.18);
+  }
+  .premium-profile-floating-save .nj-save-label-full { display: none; }
+  .premium-profile-floating-save .nj-save-label-mobile { display: inline; }
+  /* Put focus/scroll targets above the fixed dock when an input is selected. */
+  .premium-profile-page input,
+  .premium-profile-page textarea,
+  .premium-profile-page select,
+  .professional-roles-page button {
+    scroll-margin-bottom: calc(var(--nj-mobile-dock-clearance, 96px) + env(safe-area-inset-bottom, 0px) + 20px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .premium-profile-floating-save .nj-save-loading-icon {
+    animation: none;
+  }
+}
