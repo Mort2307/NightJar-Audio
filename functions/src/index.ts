@@ -3616,6 +3616,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       email: account.email ?? null,
       role: account.role ?? null,
       roles: account.role === 'admin' ? ['admin'] : ['listener', ...professionalRolesForAccount(account)],
+      approvedProfessionalRoles: account.role === 'admin' ? [] : professionalRolesForAccount(account),
       pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles),
       status: account.status ?? 'active',
       name: profileData.displayName ?? account.email?.split('@')?.[0] ?? 'Nightjar account',
