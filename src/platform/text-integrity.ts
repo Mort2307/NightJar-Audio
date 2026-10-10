@@ -7,7 +7,7 @@ const readableFields = new Set([
   'headline', 'bio', 'roleHeadline', 'roleBio', 'roleDetailOne', 'roleDetailTwo',
   'description', 'synopsis', 'welcomeMessage', 'statement', 'experience',
   'note', 'reviewNote', 'decisionNote', 'moderationNote', 'approvalEmailError',
-  'message', 'creatorName', 'writerName', 'editorName', 'artistName',
+  'creatorName', 'writerName', 'editorName', 'artistName',
   'featuredNote', 'portfolioNote', 'productionNote', 'roleSpecialties',
   'roleSecondary', 'roleFocus', 'favouriteTags', 'favouriteTropes',
   'favouriteCategories', 'genres', 'tropes', 'tags', 'category', 'genre',
