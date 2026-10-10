@@ -1,20 +1,21 @@
 # Nightjar — installation and release integration inventory
 
-**Audited:** 10 October 2026. **Working candidate:** `feature/self-service-professional-roles-20261010` (PR #39). **Production branch:** `main`.
+**Audited:** 10 October 2026. **Working reconciliation candidate:** `fix/nightjar-release-reconciliation-20261010` (draft PR #40, based on PR #39). **Production branch:** `main`. **No live deployment.**
 
 ## Evidence and non-negotiable status
 
-- GitHub currently shows **12 open PRs**. A GitHub branch being `mergeable` does **not** mean its features are merged, verified or deployed.
-- At audit time the candidate was **78 commits ahead of `main`, zero behind**. It remains unmerged. Pull request changes are not available to live installed apps by virtue of an app installation alone.
-- GitHub build, validation and modular-validation runs for the candidate were **red**, with jobs reporting no steps and job-log retrieval returning an unavailable blob. The precise runner failure has **not been established**; do not describe these checks as passed.
+- The original audit listed **12 open PRs**; reconciliation PR #40 was opened afterward. A GitHub branch being `mergeable` does **not** mean its features are merged, verified or deployed.
+- PR #39 was originally audited at **78 commits ahead of `main`, zero behind**. The separate PR #40 reconciliation branch now includes #39 by Git ancestry, remains unmerged, and has passed the owner's Windows local validation (frontend and Functions) at commit `d7ebff2d1abd`. These changes are **not** available in live installed apps until a release is deployed.
+- GitHub build and validation checks for PR #40 still report **failure before executing steps**, and job-log retrieval returns an unavailable blob. The exact runner failure remains unknown (see GitHub Actions UI annotations). The three workflow triggers were extended to this stacked PR's base branch; this enabled CI reporting but did not cure the runner failure.
 - **No live Firebase deploy or device acceptance test was performed in this audit.** The local working tree cannot be inspected remotely.
-- A key item from PR #37 **has been ported into the candidate**: absolute Vite assets, rooted HTML bootstrap, independent `/recover.html`, service worker v12 and automatic scrolling. These must pass integration, build and phone QA before release.
+- Source integrations include PR #37 recovery improvements, PR #38 owner notification/role protection, and a guarded PR #36 Didit/Legal Centre implementation; these have source-contract coverage but still require live integration, security and phone QA before release.
 
 ## Open PR reconciliation — every row requires an owner disposition
 
 | PR | Workstream | Audit disposition | Action before an all-up installation |
 | --- | --- | --- | --- |
-| [#39](https://github.com/Mort2307/NightJar-Audio/pull/39) | Current full pass: profiles, multi-role, photo compression, touch UX, text integrity, PWA invitation, live admin preview | **Candidate, NOT released** | Run full checks, integration QA, review and merge into `main` |
+| [#40](https://github.com/Mort2307/NightJar-Audio/pull/40) | Reconciliation candidate based on #39; backend security, guarded Didit, owner notifications, legal centre, regression tests | **Current draft candidate, NOT released** | Resolve outstanding PR review and GitHub Actions runner failures, complete staging/device QA before any production merge or deploy |
+| [#39](https://github.com/Mort2307/NightJar-Audio/pull/39) | Full pass: profiles, multi-role, compression, touch UX, text integrity, PWA invitation, admin preview | **Included by verified Git ancestry in #40 (source only)** | Still not deployed; preserve in eventual reviewed integration |
 | [#38](https://github.com/Mort2307/NightJar-Audio/pull/38) | Refresh recovery, owner People roles, account alerts | **Reconcile** | Review 22 commits not in #39 history; incorporate missing owner/admin security flows with privilege tests, or explicitly supersede after code review |
 | [#37](https://github.com/Mort2307/NightJar-Audio/pull/37) | Deep-link refresh and white-screen repair | **Partially integrated** | Verify equivalent recovery functionality in #39, confirm mobile and installed-PWA QA, then close/supersede appropriately |
 | [#36](https://github.com/Mort2307/NightJar-Audio/pull/36) | Legal Centre and guarded Didit beta pilot | **Separate release / conflict** | Reconcile Legal Centre; Do **not** promote age-provider sandbox configuration or chargeable live testing without explicit owner and compliance approval |
@@ -27,7 +28,7 @@
 | [#8](https://github.com/Mort2307/NightJar-Audio/pull/8) | Earlier app intelligence | **Legacy review** | Compare for unique unshipped work or formally supersede |
 | [#7](https://github.com/Mort2307/NightJar-Audio/pull/7) | Earlier feedback/telemetry improvements | **Legacy review** | Compare for unique unshipped work or formally supersede |
 
-None of the unresolved rows has been silently marked approved for merging, discarding or deferral.
+PR #39 is included by verified Git ancestry in draft PR #40. The other eleven unresolved PRs remain pending; none has been silently marked approved for merging, discarding or deferral.
 
 ## Release gates
 
