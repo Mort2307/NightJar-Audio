@@ -471,6 +471,7 @@ function App() {
   const productLoadEpoch = useRef(0);
   const [simulationMode, setSimulationMode] = useState(false);
   const liveRolePreview = role === 'admin' && Boolean(previewRole) && !simulationMode && !demoMode;
+  const interactiveRoleTest = role === 'admin' && simulationMode && Boolean(previewRole);
   const [testingSessionHydrated, setTestingSessionHydrated] = useState(false);
   const [demoSessionKey, setDemoSessionKey] = useState(0);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -896,8 +897,8 @@ function App() {
     }
 
     const savedTesting = readTestingSession();
-    // Retire persisted fictional sessions from the ordinary Owner experience.
-    const testing = savedTesting.mode === 'live' ? savedTesting : { mode: 'off' as TestingMode, role: null };
+    // Restore only explicitly selected Owner QA or public preview, never a role permission grant.
+    const testing = savedTesting.mode === 'live' || savedTesting.mode === 'simulation' ? savedTesting : { mode: 'off' as TestingMode, role: null };
     const ownerConsoleRequested = /^\/admin(?:\/|$)/.test(window.location.pathname);
 
     if (ownerConsoleRequested) {
@@ -3502,16 +3503,12 @@ function App() {
     else if (next === 'writer') navigate('writer');
     else if (next === 'editor') navigate('editor');
     else navigate('profile');
-    void loadProfile(next);
-    notify(`Simulation Mode: ${roleMeta[next].label}. No simulated action writes to live Nightjar data.`);
+    notify(`Testing ${roleMeta[next].label} workflows with local fictional records. No real account was impersonated.`);
   };
 
   const stopSimulation = () => {
     if (!canAdmin) return;
-    setSimulationMode(false);
-    setPreviewRole(null);
-    navigate('admin');
-    notify('Simulation ended. Demo data remains enabled until you switch it off.');
+    disableDemoMode();
   };
 
   const resetSimulation = () => {
@@ -3806,7 +3803,7 @@ function App() {
   };
 
   const openMyRoles = () => {
-    if (!user?.userId || canAdmin) return;
+    if (!user?.userId || (canAdmin && !simulationMode)) return;
     setAdminPanel(null);
     setAdminPeopleRole(null);
     if (window.location.pathname !== '/profile/roles') {
@@ -3820,7 +3817,7 @@ function App() {
   const commandItems: NightjarCommand[] = [
     ...(effectiveRole === 'listener' || effectiveRole === 'admin' ? [{ id:'nav-discover', group:'Navigate', label:'Discover', detail:'Recommendations, catalogue and spotlights', keywords:['home','listen'], icon:<Headphones size={15}/>, action:()=>navigate('discover') }] : []),
     { id:'nav-directory', group:'Navigate', label:'Directory', detail:'Find VA Creators, Writers, Audio Editors, Artists and Listeners', keywords:['people','profiles','community'], icon:<Users size={15}/>, action:()=>navigate('creators') },
-    ...(!canAdmin && user?.userId ? [{ id:'nav-my-roles', group:'Account', label:'My Roles', detail:'Apply for or switch approved professional roles', keywords:['role','voice actor','VA','writer','editor','artist','application'], icon:<ShieldCheck size={15}/>, action:openMyRoles }] : []),
+    ...((!canAdmin || interactiveRoleTest) && user?.userId ? [{ id:'nav-my-roles', group:'Account', label:'My Roles', detail:'Apply for or switch approved professional roles', keywords:['role','voice actor','VA','writer','editor','artist','application'], icon:<ShieldCheck size={15}/>, action:openMyRoles }] : []),
     ...(['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'nav-messages', group:'Work', label:'Messages', detail:[
   messageUnreadCount ? messageUnreadCount + ' unread' : '',
   messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : '',
@@ -3912,34 +3909,35 @@ function App() {
           {effectiveRole === 'editor' && !liveRolePreview && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
           {!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && !liveRolePreview && <button className={view === 'profile' && !profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
-          {canProtection && !canAdmin && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
+          {canProtection && (!canAdmin || interactiveRoleTest) && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && !liveRolePreview && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
         </nav>
 
         <div className="top-actions">
-          {canAdmin && !simulationMode && <div className="nj-live-switcher" ref={liveRoleMenuRef}>
-            <button type="button" className={liveRolePreview ? 'nj-live-switcher-trigger active' : 'nj-live-switcher-trigger'}
+          {canAdmin && <div className="nj-live-switcher" ref={liveRoleMenuRef}>
+            <button type="button" className={liveRolePreview || interactiveRoleTest ? 'nj-live-switcher-trigger active' : 'nj-live-switcher-trigger'}
               aria-expanded={liveRoleMenuOpen} aria-haspopup="dialog" aria-controls="nj-live-switcher-menu"
               onClick={() => { setMenuOpen(false); setLiveRoleMenuOpen((open) => !open); }}>
               <Eye size={17} aria-hidden="true" />
-              <span className="nj-live-switcher-label"><strong>View as</strong><small>{liveRolePreview && previewRole ? roleMeta[previewRole].label : 'Live app'}</small></span>
+              <span className="nj-live-switcher-label"><strong>View as</strong><small>{interactiveRoleTest && previewRole ? roleMeta[previewRole].label + ' · QA' : liveRolePreview && previewRole ? roleMeta[previewRole].label + ' · Public' : 'Test roles'}</small></span>
               <ChevronDown size={15} className={liveRoleMenuOpen ? 'nj-switcher-chevron rotated' : 'nj-switcher-chevron'} aria-hidden="true" />
             </button>
             {liveRoleMenuOpen && <section className="nj-live-switcher-popover" id="nj-live-switcher-menu" role="dialog" aria-modal="false" aria-label="Live role viewing controls">
-              <header className="nj-live-switcher-heading"><span className="mini-label"><ShieldCheck size={14} /> ADMINISTRATOR ONLY</span><strong>View Nightjar as…</strong><small>Real public data · Read-only · No simulation</small></header>
+              <header className="nj-live-switcher-heading"><span className="mini-label"><ShieldCheck size={14} /> ADMINISTRATOR ONLY</span><strong>Test Nightjar as…</strong><small>Interactive role workspaces · local fictional records · no live writes</small></header>
               <div className="nj-live-switcher-options" role="group" aria-label="Select a live member perspective">
                 {LIVE_PREVIEW_ROLES.map((option) => <button key={option.id} type="button"
-                  aria-pressed={liveRolePreview && previewRole === option.id}
-                  className={liveRolePreview && previewRole === option.id ? 'nj-live-switcher-option selected' : 'nj-live-switcher-option'}
-                  onClick={() => selectPreviewRole(option.id)}>
+                  aria-pressed={interactiveRoleTest && previewRole === option.id}
+                  className={interactiveRoleTest && previewRole === option.id ? 'nj-live-switcher-option selected' : 'nj-live-switcher-option'}
+                  onClick={() => startSimulation(option.id)}>
                   <span><strong>{option.label}</strong><small>{option.detail}</small></span>
-                  {liveRolePreview && previewRole === option.id ? <Check size={16} aria-hidden="true"/> : <ChevronRight size={16} aria-hidden="true" />}
+                  {interactiveRoleTest && previewRole === option.id ? <Check size={16} aria-hidden="true"/> : <ChevronRight size={16} aria-hidden="true" />}
                 </button>)}
               </div>
               <div className="nj-live-switcher-footer">
-                <button type="button" onClick={() => openAdminPanel('live-preview')}><FileText size={15} aria-hidden="true"/> Script visibility audit</button>
-                <button type="button" onClick={clearAdminPreview}><ShieldCheck size={15} aria-hidden="true"/> Return to Admin</button>
+                <button type="button" onClick={() => selectPreviewRole(previewRole ?? 'creator')}><Eye size={15} aria-hidden="true"/> Live public data (read-only)</button>
+                <button type="button" onClick={() => { disableDemoMode(); openAdminPanel('live-preview'); }}><FileText size={15} aria-hidden="true"/> Real script visibility audit</button>
+                <button type="button" onClick={() => interactiveRoleTest ? disableDemoMode() : clearAdminPreview()}><ShieldCheck size={15} aria-hidden="true"/> Return to Admin</button>
               </div>
             </section>}
           </div>}
@@ -3981,6 +3979,7 @@ function App() {
         </div>
       </div>}
 
+      {interactiveRoleTest && <div className="nightjar-role-qa-banner" role="status"><ShieldCheck size={17} aria-hidden="true"/><div><strong>INTERACTIVE {previewRole ? roleMeta[previewRole].label.toUpperCase() : 'MEMBER'} TEST ACCOUNT</strong><span>Actual role screens with local fictional records. Applications, messages and profile changes do not write to Firebase. Use an approved separate tester login for real authentication, permissions and email testing.</span></div><button className="secondary-button" type="button" onClick={disableDemoMode}>Exit role test</button></div>}
       {liveRolePreview && <div className="nightjar-live-role-banner" role="status"><ShieldCheck size={16} aria-hidden="true"/><span><strong>{previewRole ? roleMeta[previewRole].label : 'Member'} preview</strong> · Live public data · Read only</span><button className="secondary-button" type="button" onClick={clearAdminPreview}>Exit preview <ArrowRight size={14} aria-hidden="true"/></button></div>}
       <main id="nightjar-main-content" className={liveRolePreview ? 'nightjar-main nightjar-read-only-preview' : 'nightjar-main'}
         onClickCapture={(event) => {
@@ -4303,7 +4302,7 @@ function App() {
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
               <div className="profile-heading-actions">
                 {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId)}>View my public profile</button>}
-                {!canAdmin && <button type="button" className="primary-button" onClick={openMyRoles}><ShieldCheck size={16} /> My Roles · Apply or switch</button>}
+                {(!canAdmin || interactiveRoleTest) && <button type="button" className="primary-button" onClick={openMyRoles}><ShieldCheck size={16} /> My Roles · Apply or switch</button>}
               </div>
             </div>
 
@@ -4424,7 +4423,7 @@ function App() {
           </section>
         )}
 
-        {view === 'profile' && profileRolesPage && !canAdmin && (
+        {view === 'profile' && profileRolesPage && (!canAdmin || interactiveRoleTest) && (
           <section className="page-section profile-page professional-roles-page">
             <div className="page-heading">
               <div>
@@ -4436,9 +4435,17 @@ function App() {
             </div>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading My Roles" />}>
               <ProfessionalRoleManager
+                key={'roles-' + demoSessionKey + '-' + (simulationMode ? 'qa' : 'member')}
                 notify={notify}
+                simulationMode={interactiveRoleTest}
+                initialRole={previewRole ?? undefined}
                 onRoleChanged={(nextRole) => {
                   const next = nextRole as PreviewRole;
+                  if (interactiveRoleTest) {
+                    setPreviewRole(next);
+                    navigate(next === 'creator' ? 'creator' : next === 'writer' ? 'writer' : next === 'editor' ? 'editor' : next === 'artist' ? 'profile' : 'discover');
+                    return;
+                  }
                   setRole(next);
                   setPreviewRole(null);
                   navigate('profile');
