@@ -21,6 +21,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
   const [saving, setSaving] = useState(false);
   const [pushStatus, setPushStatus] = useState<any | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
 
   useEffect(() => {
     if (simulationMode) {
@@ -32,13 +33,16 @@ export default function NotificationPreferences({ notify, simulationMode = false
 
   const refreshPush = async () => {
     if (simulationMode) {
-      setPushStatus({ configured:true, supported:true, browserPermission:'granted', activeDeviceCount:1, devices:[], standalone:true });
+      setPushStatus({ configured:true, supported:true, browserPermission:'granted', activeDeviceCount:1, thisDeviceRegistered:true, devices:[], standalone:true });
+      setPushError(null);
       return;
     }
     try {
       setPushStatus(await nightjarPush.status());
-    } catch {
-      setPushStatus({ configured:nightjarPush.configured(), supported:false, browserPermission:nightjarPush.permission(), activeDeviceCount:0, devices:[] });
+      setPushError(null);
+    } catch (error) {
+      setPushError(error instanceof Error ? error.message.slice(0, 200) : 'A Nightjar push service call failed.');
+      setPushStatus({ configured:nightjarPush.configured(), supported:await nightjarPush.supported().catch(()=>false), browserPermission:nightjarPush.permission(), activeDeviceCount:0, thisDeviceRegistered:false, devices:[] });
     }
   };
 
@@ -125,31 +129,37 @@ export default function NotificationPreferences({ notify, simulationMode = false
           <strong>Phone / device push</strong>
           <span>
             {!pushStatus ? 'Checking this device…'
+              : pushError ? 'Nightjar push service error: ' + pushError
               : !pushStatus.configured ? 'Firebase Web Push still needs its VAPID public key configured.'
               : !pushStatus.supported ? 'This browser does not support Nightjar web push.'
               : pushStatus.browserPermission === 'denied' ? 'Notifications are blocked in this browser or device settings.'
-              : pushStatus.activeDeviceCount > 0 ? pushStatus.activeDeviceCount + ' active device' + (pushStatus.activeDeviceCount === 1 ? '' : 's') + ' registered.'
+              : pushStatus.thisDeviceError ? 'This phone could not check its Firebase push token: ' + pushStatus.thisDeviceError
+              : pushStatus.thisDeviceRegistered ? 'Push is enabled on THIS device. ' + pushStatus.activeDeviceCount + ' total registered device(s).'
+              : pushStatus.activeDeviceCount > 0 ? 'Other devices are registered, but THIS phone is not. Enable it here.'
               : 'This device is not registered for Nightjar push yet.'}
           </span>
         </div>
-        <span className={pushStatus?.activeDeviceCount > 0 ? 'status-pill' : 'status-pill muted'}>
-          {pushStatus?.activeDeviceCount > 0 ? 'PUSH ON' : 'PUSH OFF'}
+        <span className={pushStatus?.thisDeviceRegistered ? 'status-pill' : 'status-pill muted'}>
+          {pushStatus?.thisDeviceRegistered ? 'THIS PHONE ON' : 'THIS PHONE OFF'}
         </span>
       </div>
       <div className="push-device-actions">
         <button className="secondary-button" disabled={pushBusy || !pushStatus?.configured || !pushStatus?.supported} onClick={() => void enablePush()}>
           <Bell size={14}/> Enable on this device
         </button>
-        <button className="secondary-button" disabled={pushBusy || !(pushStatus?.activeDeviceCount > 0)} onClick={() => void testPush()}>
+        <button className="secondary-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered} onClick={() => void testPush()}>
           <Send size={14}/> Send test push
         </button>
-        <button className="ghost-button" disabled={pushBusy || !(pushStatus?.activeDeviceCount > 0)} onClick={() => void disablePush()}>
+        <button className="ghost-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered} onClick={() => void disablePush()}>
           Disable this device
         </button>
         <button className="ghost-button" disabled={pushBusy} onClick={() => void refreshPush()}>
           <RefreshCw size={14}/> Refresh status
         </button>
       </div>
+      {!pushStatus?.supported && /iphone|ipad|ipod/i.test(navigator.userAgent) &&
+        <p className="access-fine">On iPhone, install Nightjar on your Home Screen from Safari, then open the installed app to enable notifications. iOS web push is available on supported iOS versions.</p>}
+      {pushStatus?.thisDeviceRegistered && <p className="access-fine">Keep Nightjar installed and allow notifications in your phone's system settings. A sent test is not proof of on-screen delivery until you see it on your device.</p>}
       {pushStatus?.devices?.length > 0 && <div className="push-device-list">
         {pushStatus.devices.map((device:any)=><div key={device.id}>
           <span><strong>{device.platform}</strong><small>{device.standalone ? 'Installed app' : 'Browser'} · {device.active ? 'Active' : 'Inactive'}</small></span>
