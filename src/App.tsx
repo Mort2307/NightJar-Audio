@@ -1299,14 +1299,14 @@ function App() {
   // Live Owner actions are derived from pending queues, not stale stored
   // messages. Refresh only while the Owner Console is actually in use.
   useEffect(() => {
-    if (!user || !ageVerified || !canAdmin || simulationMode) return;
+    if (!user || !ageVerified || role !== 'admin' || simulationMode) return;
     const refresh = () => {
       if (document.visibilityState === 'visible') void loadNotifications(productLoadEpoch.current);
     };
     const interval = window.setInterval(refresh, 180000);
     document.addEventListener('visibilitychange', refresh);
     return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
-  }, [user?.userId, ageVerified, canAdmin, simulationMode]);
+  }, [user?.userId, ageVerified, role, simulationMode]);
 
   const markNotificationRead = async (notification: any) => {
     if (notification?.read === true || notification?.actionRequired === true) return;
