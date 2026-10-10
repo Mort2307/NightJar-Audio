@@ -29,6 +29,7 @@ export default function ProfessionalRoleManager({
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState<NightjarProfessionalRole | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -44,6 +45,11 @@ export default function ProfessionalRoleManager({
 
   useEffect(() => {
     void load();
+    const refreshWhenActive = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', refreshWhenActive);
+    return () => document.removeEventListener('visibilitychange', refreshWhenActive);
   }, []);
 
   const toggle = (role: NightjarProfessionalRole) =>
@@ -68,6 +74,7 @@ export default function ProfessionalRoleManager({
         socialUrl,
       });
       notify(result.message);
+      setConfirmRemove(null);
       setSelected([]);
       setStatement('');
       setExperience('');
@@ -86,6 +93,7 @@ export default function ProfessionalRoleManager({
     try {
       await nightjarAccount.removeProfessionalRole(role);
       notify(labels[role] + ' removed from this account.');
+      setConfirmRemove(null);
       await load();
     } catch {
       notify('That professional role could not be removed.');
@@ -210,7 +218,20 @@ export default function ProfessionalRoleManager({
         <ShieldCheck size={20} />
       </div>
 
-      <p className="panel-note" aria-live="polite">{state.approvedProfessionalRoles.length} approved professional role{state.approvedProfessionalRoles.length === 1 ? '' : 's'} · {state.pendingProfessionalRoles.length} awaiting review. Your Listener role is always available.</p>
+      <div className="professional-role-status-summary">
+        <p className="panel-note" aria-live="polite">
+          {state.approvedProfessionalRoles.length} approved professional role{state.approvedProfessionalRoles.length === 1 ? '' : 's'}
+          {' / '}
+          {state.pendingProfessionalRoles.length} awaiting review.
+          Your Listener role is always available.
+        </p>
+        <button type="button" className="secondary-button" onClick={() => void load()} disabled={busy || loading}>
+          {loading ? 'Checking…' : 'Check for updates'}
+        </button>
+      </div>
+      {loadError && <p role="alert">{loadError}</p>}
+      {state.applicationStatus === 'rejected' && <p className="panel-note">Your previous professional application was not approved. You can apply again for any available role.</p>}
+
       <div className="professional-role-list">
         <div className="professional-role-row">
           <div>
@@ -241,13 +262,22 @@ export default function ProfessionalRoleManager({
               >
                 {state.activeRole === role ? 'Active' : 'Use role'}
               </button>
-              <button
-                className="ghost-button"
-                disabled={busy}
-                onClick={() => void remove(role)}
-              >
-                <X size={14} /> Remove
-              </button>
+              {confirmRemove === role ? (
+                <div className="professional-role-confirm">
+                  <small>Removing an approved role removes access to its workspace. Continue?</small>
+                  <button type="button" className="ghost-button" disabled={busy} onClick={() => void remove(role)}>Confirm removal</button>
+                  <button type="button" className="secondary-button" disabled={busy} onClick={() => setConfirmRemove(null)}>Cancel</button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={busy}
+                  onClick={() => setConfirmRemove(role)}
+                >
+                  <X size={14} /> Remove
+                </button>
+              )}
             </div>
           </div>
         ))}
