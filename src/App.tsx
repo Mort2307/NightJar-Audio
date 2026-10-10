@@ -415,6 +415,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(topLevel) ? topLevel : 'discover') as View; });
+  const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
   const [playing, setPlaying] = useState<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -787,6 +788,7 @@ function App() {
       setPublicProfileUserId(null);
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
       const topLevel = value.split('/')[0];
+      setProfileRolesPage(value === 'profile/roles');
       if (topLevel === 'admin') {
         setSimulationMode(false);
         setPreviewRole(null);
@@ -1008,6 +1010,7 @@ function App() {
   };
 
   const navigate = (nextView: View) => {
+    setProfileRolesPage(false);
     setAdminPanel(null);
     setAdminPeopleRole(null);
     if (nextView === 'admin' && canAdmin) {
@@ -3552,9 +3555,23 @@ function App() {
     navigate('profile');
     void loadProfile();
   };
+
+  const openMyRoles = () => {
+    if (!user?.userId || canAdmin) return;
+    setAdminPanel(null);
+    setAdminPeopleRole(null);
+    if (window.location.pathname !== '/profile/roles') {
+      window.history.pushState({}, '', '/profile/roles');
+    }
+    setProfileRolesPage(true);
+    setView('profile');
+    setMenuOpen(false);
+    scrollNightjarToTop();
+  };
   const commandItems: NightjarCommand[] = [
     ...(effectiveRole === 'listener' || effectiveRole === 'admin' ? [{ id:'nav-discover', group:'Navigate', label:'Discover', detail:'Recommendations, catalogue and spotlights', keywords:['home','listen'], icon:<Headphones size={15}/>, action:()=>navigate('discover') }] : []),
     { id:'nav-directory', group:'Navigate', label:'Directory', detail:'Find VA Creators, Writers, Audio Editors, Artists and Listeners', keywords:['people','profiles','community'], icon:<Users size={15}/>, action:()=>navigate('creators') },
+    ...(!canAdmin && user?.userId ? [{ id:'nav-my-roles', group:'Account', label:'My Roles', detail:'Apply for or switch approved professional roles', keywords:['role','voice actor','VA','writer','editor','artist','application'], icon:<ShieldCheck size={15}/>, action:openMyRoles }] : []),
     ...(['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'nav-messages', group:'Work', label:'Messages', detail:[
   messageUnreadCount ? messageUnreadCount + ' unread' : '',
   messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : '',
@@ -3645,7 +3662,8 @@ function App() {
           {effectiveRole === 'writer' && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
           {['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
-          {canProtection && <button className={view === 'profile' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
+          {canProtection && <button className={view === 'profile' && !profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
+          {canProtection && !canAdmin && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
           {canAdmin && !simulationMode && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ROLE SIMULATION · REAL ROLE: ADMINISTRATOR</span><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button onClick={() => selectPreviewRole('artist')}>Artist</button><button className="active" onClick={clearAdminPreview}>Admin</button></div>}
@@ -3971,11 +3989,14 @@ function App() {
           </section>
         )}
 
-        {view === 'profile' && (
+        {view === 'profile' && !profileRolesPage && (
           <section className="page-section profile-page premium-profile-page">
             <div className="page-heading premium-profile-page-heading">
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
-              {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId)}>View my public profile</button>}
+              <div className="profile-heading-actions">
+                {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId)}>View my public profile</button>}
+                {!canAdmin && <button type="button" className="primary-button" onClick={openMyRoles}><ShieldCheck size={16} /> My Roles · Apply or switch</button>}
+              </div>
             </div>
 
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
@@ -4040,9 +4061,11 @@ function App() {
                   <p>Check the deployed build or clear stale app caches without touching your account or cloud data.</p>
                   <AppUpdateControl compact />
                 </article>
-                {effectiveRole !== 'admin' ? <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading professional roles" />}>
-                  <ProfessionalRoleManager compact notify={notify} onRoleChanged={(nextRole)=>{ const next=nextRole as AccountRole; setRole(next); setPreviewRole(next==='admin'?null:next as PreviewRole); navigate('profile'); if(next!=='admin') void loadProfile(next as PreviewRole); }} />
-                </Suspense> : <article className="panel profile-account-tool-card"><div className="profile-account-tool-head"><div><span className="mini-label">ADMINISTRATOR</span><h3>Professional roles are member-facing</h3></div><ShieldCheck size={17}/></div><p>Administrator identity stays separate from Listener and professional role applications.</p></article>}
+                {effectiveRole !== 'admin' ? <article className="panel profile-account-tool-card">
+                  <div className="profile-account-tool-head"><div><span className="mini-label">PROFESSIONAL ACCESS</span><h3>My Roles</h3></div><ShieldCheck size={17}/></div>
+                  <p>Apply for additional professions, review outstanding requests or switch between approved workspaces — all on one account.</p>
+                  <button type="button" className="secondary-button" onClick={openMyRoles}>Open My Roles <ArrowRight size={15}/></button>
+                </article> : <article className="panel profile-account-tool-card"><div className="profile-account-tool-head"><div><span className="mini-label">ADMINISTRATOR</span><h3>Professional roles are member-facing</h3></div><ShieldCheck size={17}/></div><p>Administrator identity stays separate from Listener and professional role applications.</p></article>}
               </div>
               {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={hasProfessionalProfileRole} demoMode={demoMode} /></Suspense>}
             </section>
@@ -4058,6 +4081,31 @@ function App() {
               </article>
               <NotificationPreferences key={'notification-prefs-' + demoSessionKey} notify={notify} simulationMode={demoMode} />
             </div>
+          </section>
+        )}
+
+        {view === 'profile' && profileRolesPage && !canAdmin && (
+          <section className="page-section profile-page professional-roles-page">
+            <div className="page-heading">
+              <div>
+                <span className="eyebrow"><ShieldCheck size={14}/> PROFESSIONAL ACCESS</span>
+                <h1>My Roles</h1>
+                <p>Request one or several creative roles, track your applications and open each approved workspace. Your personal account and Listener access stay intact.</p>
+              </div>
+              <button type="button" className="secondary-button" onClick={openProfileEditor}><ArrowLeft size={16}/> Back to profile</button>
+            </div>
+            <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading My Roles" />}>
+              <ProfessionalRoleManager
+                notify={notify}
+                onRoleChanged={(nextRole) => {
+                  const next = nextRole as PreviewRole;
+                  setRole(next);
+                  setPreviewRole(null);
+                  navigate('profile');
+                  void loadProfile(next);
+                }}
+              />
+            </Suspense>
           </section>
         )}
 
