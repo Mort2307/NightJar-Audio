@@ -1,5 +1,6 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { firebaseApp } from './firebase-auth';
+import { repairMojibakeDisplayData } from './text-integrity';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
@@ -29,7 +30,7 @@ const marketplaceCall = httpsCallable<void, { scripts: any[] }>(functions, 'list
 
 export const nightjarScripts = {
   async writerScripts() {
-    return (await listWriterCall()).data;
+    return repairMojibakeDisplayData((await listWriterCall()).data);
   },
 
   async create(title: string, content = '') {
@@ -57,7 +58,7 @@ export const nightjarScripts = {
   },
 
   async editorQueue() {
-    return (await editorQueueCall()).data;
+    return repairMojibakeDisplayData((await editorQueueCall()).data);
   },
 
   async review(scriptId: string, status: string, comment = '') {
@@ -65,11 +66,11 @@ export const nightjarScripts = {
   },
 
   async editorAccounts() {
-    return (await editorAccountsCall()).data;
+    return repairMojibakeDisplayData((await editorAccountsCall()).data);
   },
 
   async adminScripts() {
-    return (await adminScriptsCall()).data;
+    return repairMojibakeDisplayData((await adminScriptsCall()).data);
   },
 
   async assignEditor(scriptId: string, editorUserId: string) {
@@ -77,7 +78,7 @@ export const nightjarScripts = {
   },
 
   async protectedCatalogue() {
-    return (await protectedCatalogueCall()).data;
+    return repairMojibakeDisplayData((await protectedCatalogueCall()).data);
   },
 
   async openProtected(scriptId: string) {
@@ -97,6 +98,6 @@ export const nightjarScripts = {
   },
 
   async marketplace() {
-    return (await marketplaceCall()).data;
+    return repairMojibakeDisplayData((await marketplaceCall()).data);
   },
 };
