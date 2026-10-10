@@ -23,7 +23,9 @@
     "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs",
     "release:inventory": "node scripts/release-work-inventory.mjs",
     "release:preflight": "npm run validate && npm audit && npm --prefix functions run check && npm --prefix functions run build && npm --prefix functions run audit:guard && node scripts/release-work-inventory.mjs --strict",
-    "validate:reconciliation": "node scripts/didit-contracts.mjs && node scripts/release-reconciliation-contracts.mjs"
+    "validate:reconciliation": "node scripts/didit-contracts.mjs && node scripts/release-reconciliation-contracts.mjs",
+    "setup:didit:sandbox": "node scripts/setup-didit-sandbox.mjs",
+    "setup:didit:live": "node scripts/setup-didit-live.mjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",
