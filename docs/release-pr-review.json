@@ -1,16 +1,24 @@
 {
   "repository": "Mort2307/NightJar-Audio",
   "auditedOn": "2026-10-10",
-  "candidateBranch": "feature/self-service-professional-roles-20261010",
-  "notice": "Set a decision only after manually reviewing the PR diff and verifying equivalent shipped code. Deferrals or supersession require a meaningful reason and reviewer.",
+  "candidateBranch": "fix/nightjar-release-reconciliation-20261010",
+  "notice": "Decisions require an evidence-backed review. 'Included' means verified in candidate Git ancestry, not production deployment or owner approval. Pending PRs remain release blockers; do not merge unrelated changes automatically.",
   "items": [
+    {
+      "number": 40,
+      "branch": "fix/nightjar-release-reconciliation-20261010",
+      "decision": "current_candidate",
+      "reason": "Draft reconciliation PR based on #39; locally validated, not merged or deployed; outstanding PR review and CI release gates remain.",
+      "reviewedBy": null,
+      "reviewedAt": null
+    },
     {
       "number": 39,
       "branch": "feature/self-service-professional-roles-20261010",
-      "decision": "current_candidate",
-      "reason": "Current release candidate; not yet merged or deployed",
-      "reviewedBy": null,
-      "reviewedAt": null
+      "decision": "included",
+      "reason": "PR #39 is a verified Git ancestor of this reconciliation candidate. Included in source only; not merged into main or deployed.",
+      "reviewedBy": "Technical Git ancestry audit",
+      "reviewedAt": "2026-10-10"
     },
     {
       "number": 38,
