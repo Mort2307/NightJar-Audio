@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { Brush, FileText, Mic2, Scissors, ShieldCheck, X } from 'lucide-react';
 import { nightjarAccount, type NightjarProfessionalRole, type ProfessionalRoleState } from '../platform/firebase-account';
 import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
+import { readDemo, writeDemo } from '../demo/demoSession';
 
 type Props = {
   notify: (message: string) => void;
   onRoleChanged?: (activeRole: string) => void;
   compact?: boolean;
+  simulationMode?: boolean;
+  initialRole?: 'listener' | NightjarProfessionalRole;
 };
 
 const labels: Record<NightjarProfessionalRole, string> = {
@@ -20,6 +23,8 @@ export default function ProfessionalRoleManager({
   notify,
   onRoleChanged,
   compact = false,
+  simulationMode = false,
+  initialRole = 'listener',
 }: Props) {
   const [state, setState] = useState<ProfessionalRoleState | null>(null);
   const [selected, setSelected] = useState<NightjarProfessionalRole[]>([]);
@@ -36,6 +41,23 @@ export default function ProfessionalRoleManager({
   const [legalDocuments, setLegalDocuments] = useState<LegalAgreementStatus[] | null>(null);
   const [legalError, setLegalError] = useState('');
   const [termsConfirmed, setTermsConfirmed] = useState(false);
+  const demoInitialState: ProfessionalRoleState = {
+    listener: true,
+    approvedProfessionalRoles: initialRole === 'listener' ? [] : [initialRole],
+    pendingProfessionalRoles: [],
+    activeRole: initialRole,
+    applicationStatus: null,
+  };
+  const demoInitialTerms: LegalAgreementStatus[] = [{
+    id: 'professional_terms', version: '2026-10-09.1',
+    title: 'Nightjar Professional & Content Terms', path: '/legal/professional',
+    requiredForAccount: false, requiredForProfessional: true,
+    accepted: false, acceptedVersion: null, acceptedAt: null,
+  }];
+  const persistDemoRoles = (next: ProfessionalRoleState) => {
+    writeDemo('professionalRoleQa', next);
+    setState(next);
+  };
   const missingProfessionalTerms = (legalDocuments ?? []).filter(
     (document) => document.requiredForProfessional && !document.accepted,
   );
@@ -43,6 +65,18 @@ export default function ProfessionalRoleManager({
   const load = async () => {
     setLoading(true);
     setLoadError('');
+    if (simulationMode) {
+      const prior = readDemo('professionalRoleQa', demoInitialState);
+      const approved = initialRole === 'listener' || prior.approvedProfessionalRoles.includes(initialRole)
+        ? prior.approvedProfessionalRoles
+        : [...prior.approvedProfessionalRoles, initialRole];
+      const next = { ...prior, approvedProfessionalRoles: approved, activeRole: initialRole };
+      persistDemoRoles(next);
+      setLegalDocuments(readDemo('professionalRoleQaTerms', demoInitialTerms));
+      setLegalError('');
+      setLoading(false);
+      return;
+    }
     const [roles, legal] = await Promise.allSettled([
       nightjarAccount.professionalRoles(),
       nightjarLegal.status(),
@@ -88,6 +122,15 @@ export default function ProfessionalRoleManager({
       notify('Read the current professional terms and tick the agreement box before requesting or opening professional workspaces.');
       return false;
     }
+    if (simulationMode) {
+      const updated = legalDocuments.map(document => document.requiredForProfessional
+        ? { ...document, accepted: true, acceptedVersion: document.version, acceptedAt: new Date().toISOString() }
+        : document);
+      writeDemo('professionalRoleQaTerms', updated);
+      setLegalDocuments(updated);
+      setTermsConfirmed(false);
+      return true;
+    }
     await nightjarLegal.accept(
       missingProfessionalTerms.map(({ id, version }) => ({ id, version, accepted: true as const })),
       'professional-role-upgrade',
@@ -111,20 +154,30 @@ export default function ProfessionalRoleManager({
     setBusy(true);
     try {
       if (!(await acceptProfessionalTerms())) return;
-      const result = await nightjarAccount.applyForProfessionalRoles(selected, {
-        statement,
-        experience,
-        portfolioUrl,
-        socialUrl,
-      });
-      notify(result.message);
+      if (simulationMode) {
+        const pending = Array.from(new Set([...(state?.pendingProfessionalRoles ?? []), ...selected]));
+        persistDemoRoles({
+          ...(state ?? demoInitialState),
+          pendingProfessionalRoles: pending,
+          applicationStatus: 'pending_review',
+        });
+        notify('Simulation: professional application added to the local review queue.');
+      } else {
+        const result = await nightjarAccount.applyForProfessionalRoles(selected, {
+          statement,
+          experience,
+          portfolioUrl,
+          socialUrl,
+        });
+        notify(result.message);
+      }
       setConfirmRemove(null);
       setSelected([]);
       setStatement('');
       setExperience('');
       setPortfolioUrl('');
       setSocialUrl('');
-      await load();
+      if (!simulationMode) await load();
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Professional application could not be stored.');
     } finally {
@@ -135,10 +188,22 @@ export default function ProfessionalRoleManager({
   const remove = async (role: NightjarProfessionalRole) => {
     setBusy(true);
     try {
-      await nightjarAccount.removeProfessionalRole(role);
-      notify(labels[role] + ' removed from this account.');
+      if (simulationMode) {
+        const next: ProfessionalRoleState = {
+          ...(state ?? demoInitialState),
+          approvedProfessionalRoles: (state?.approvedProfessionalRoles ?? []).filter(item => item !== role),
+          pendingProfessionalRoles: (state?.pendingProfessionalRoles ?? []).filter(item => item !== role),
+          activeRole: state?.activeRole === role ? 'listener' : state?.activeRole ?? 'listener',
+        };
+        persistDemoRoles(next);
+        if (state?.activeRole === role) onRoleChanged?.('listener');
+        notify('Simulation: ' + labels[role] + ' removed from the local account.');
+      } else {
+        await nightjarAccount.removeProfessionalRole(role);
+        notify(labels[role] + ' removed from this account.');
+        await load();
+      }
       setConfirmRemove(null);
-      await load();
     } catch {
       notify('That professional role could not be removed.');
     } finally {
@@ -150,14 +215,34 @@ export default function ProfessionalRoleManager({
     setBusy(true);
     try {
       if (role !== 'listener' && !(await acceptProfessionalTerms())) return;
-      const result = await nightjarAccount.setActiveRole(role);
-      onRoleChanged?.(result.activeRole);
-      await load();
+      if (simulationMode) {
+        if (role !== 'listener' && !state?.approvedProfessionalRoles.includes(role)) {
+          notify('Simulation: approve this professional role before opening its workspace.');
+          return;
+        }
+        persistDemoRoles({ ...(state ?? demoInitialState), activeRole: role });
+        onRoleChanged?.(role);
+      } else {
+        const result = await nightjarAccount.setActiveRole(role);
+        onRoleChanged?.(result.activeRole);
+        await load();
+      }
     } catch {
       notify('That workspace could not be opened.');
     } finally {
       setBusy(false);
     }
+  };
+
+  const approveSimulatedApplication = (role: NightjarProfessionalRole) => {
+    if (!simulationMode || !state?.pendingProfessionalRoles.includes(role)) return;
+    persistDemoRoles({
+      ...state,
+      approvedProfessionalRoles: Array.from(new Set([...state.approvedProfessionalRoles, role])),
+      pendingProfessionalRoles: state.pendingProfessionalRoles.filter(item => item !== role),
+      applicationStatus: state.pendingProfessionalRoles.length === 1 ? 'approved' : 'pending_review',
+    });
+    notify('Simulation: ' + labels[role] + ' approved locally. Select Use role to open the workspace.');
   };
 
   const roles: NightjarProfessionalRole[] = ['creator', 'writer', 'editor', 'artist'];
@@ -263,6 +348,10 @@ export default function ProfessionalRoleManager({
         <ShieldCheck size={20} />
       </div>
 
+      {simulationMode && <div className="nj-role-qa-inline" role="status">
+        <strong>INTERACTIVE ACCOUNT TEST · LOCAL ONLY</strong>
+        <span>Try consent, multiple applications, approval, role removal and workspace switching without changing a real Nightjar account. This does not test server authorization.</span>
+      </div>}
       <div className="professional-role-status-summary">
         <p className="panel-note" aria-live="polite">
           {state.approvedProfessionalRoles.length} approved professional role{state.approvedProfessionalRoles.length === 1 ? '' : 's'}
@@ -366,13 +455,10 @@ export default function ProfessionalRoleManager({
               <strong>{labels[role]}</strong>
               <small>Pending Nightjar review. This workspace will be available only after approval.</small>
             </div>
-            <button
-              className="ghost-button"
-              disabled={busy}
-              onClick={() => void remove(role)}
-            >
-              <X size={14} /> Withdraw
-            </button>
+            <div className="professional-role-actions">
+              {simulationMode && <button type="button" className="primary-button" disabled={busy} onClick={() => approveSimulatedApplication(role)}>Simulate approval</button>}
+              <button className="ghost-button" disabled={busy} onClick={() => void remove(role)}><X size={14} /> Withdraw</button>
+            </div>
           </div>
         ))}
       </div>
