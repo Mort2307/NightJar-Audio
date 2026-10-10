@@ -115,9 +115,6 @@ export async function optimiseProfileImage(file: File): Promise<OptimisedProfile
     const context = canvas.getContext('2d');
     if (!context) throw new Error('This browser cannot resize photos. Please try another browser.');
 
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = 'high';
-
     let format: 'image/webp' | 'image/jpeg' = 'image/webp';
 
     for (const maxEdge of [PROFILE_IMAGE_MAX_EDGE, 640, 512, 384, PROFILE_IMAGE_MIN_EDGE]) {
@@ -126,6 +123,8 @@ export async function optimiseProfileImage(file: File): Promise<OptimisedProfile
       canvas.height = dimensions.height;
 
       const draw = () => {
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
         context.clearRect(0, 0, canvas.width, canvas.height);
         if (format === 'image/jpeg') {
           context.fillStyle = '#ffffff';
