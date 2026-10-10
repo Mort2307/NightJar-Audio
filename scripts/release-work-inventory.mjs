@@ -101,7 +101,9 @@ try {
   }
 } catch (error) {
   warnings.push('Live GitHub PR/check discovery unavailable: ' + (error instanceof Error ? error.message : String(error)));
-  if (strict) blockers.push('Release cannot be certified without live open-PR and check-run verification.');
+  // Inventory can reconcile branches offline, but it must not label a build
+  // release-clear when the exact GitHub check run cannot be inspected.
+  blockers.push('GitHub Actions and open-PR status are UNVERIFIED for this exact commit; do not deploy or merge until CI is green.');
 }
 
 console.log('\n' + (blockers.length ? 'RELEASE BLOCKERS (' + blockers.length + ')' : 'No tracked release blockers'));
