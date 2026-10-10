@@ -20,7 +20,7 @@
     "validate:nightjar-economy": "node scripts/nightjar-economy-contracts.mjs",
     "validate:release-hardening": "node scripts/release-hardening-contracts.mjs && node scripts/finance-simulator-tests.mjs",
     "validate:scroll": "node scripts/scroll-navigation-contracts.mjs",
-    "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs",
+    "validate:professional-intake": "node scripts/professional-application-bank-contracts.mjs && node scripts/professional-legal-upgrade-contracts.mjs",
     "release:inventory": "node scripts/release-work-inventory.mjs",
     "release:preflight": "npm run validate && npm audit && npm --prefix functions run check && npm --prefix functions run build && npm --prefix functions run audit:guard && node scripts/release-work-inventory.mjs --strict",
     "validate:reconciliation": "node scripts/didit-contracts.mjs && node scripts/release-reconciliation-contracts.mjs",
