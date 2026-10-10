@@ -2891,6 +2891,7 @@ function App() {
   const openAdminPanel = (panel: 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'live-preview') => {
     if (!canAdmin) return;
     setAdminPeopleRole(null);
+    setView('admin');
     if (panel === 'live-preview' && demoMode) {
       setSimulationMode(false);
       setPreviewRole(null);
@@ -3733,7 +3734,7 @@ function App() {
           {canProtection && !canAdmin && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
-          {canAdmin && !simulationMode && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> ROLE SIMULATION · REAL ROLE: ADMINISTRATOR</span><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button onClick={() => selectPreviewRole('artist')}>Artist</button><button className="active" onClick={clearAdminPreview}>Admin</button></div>}
+          {canAdmin && !simulationMode && <div className="admin-preview-strip"><span><ShieldCheck size={14} /> DEMO SIMULATION · FICTIONAL DATA</span><button className="primary-button" type="button" onClick={() => openAdminPanel('live-preview')}>Live Script Preview</button><button onClick={() => selectPreviewRole('listener')}>Listener</button><button onClick={() => selectPreviewRole('creator')}>Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer</button><button onClick={() => selectPreviewRole('editor')}>Audio Editor</button><button onClick={() => selectPreviewRole('artist')}>Artist</button><button className="active" onClick={clearAdminPreview}>Admin</button></div>}
         </nav>
 
         <div className="top-actions">
