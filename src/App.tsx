@@ -75,6 +75,7 @@ import { nightjarReferrals } from './platform/firebase-referrals';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
 import MobileNavigation from './components/MobileNavigation';
 import NightjarSettings from './components/NightjarSettings';
+import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
 import ProductExperience from './components/ProductExperience';
 import AdminMemberRoleEditor from './components/AdminMemberRoleEditor';
 import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
@@ -513,6 +514,10 @@ function App() {
     const panelFromPath = window.location.pathname.match(/^\/admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|branding|live-preview)\/?$/)?.[1];
     return (panelFromPath ?? null) as 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview' | null;
   });
+  const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>(() => {
+    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|finance|security|tools)\/?$/);
+    return (match?.[1] ?? 'overview') as AdminWorkspace;
+  });
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
   const [adminApplicationWave, setAdminApplicationWave] = useState('Wave 1');
   const [adminApplicationRoleFilter, setAdminApplicationRoleFilter] = useState<'all'|'creator'|'writer'|'editor'|'artist'>('all');
@@ -839,6 +844,8 @@ function App() {
         const peopleFromPath = value.match(/^admin\/people\/(listener|creator|writer|editor|artist|admin)$/)?.[1];
         setAdminPanel((panelFromPath ?? null) as typeof adminPanel);
         setAdminPeopleRole((peopleFromPath ?? null) as typeof adminPeopleRole);
+        const workspaceFromPath = value.match(/^admin\/workspace\/(overview|people|content|launch|finance|security|tools)$/)?.[1];
+        setAdminWorkspace((workspaceFromPath ?? 'overview') as AdminWorkspace);
       } else {
         setAdminPanel(null);
         setAdminPeopleRole(null);
@@ -1072,6 +1079,7 @@ function App() {
   };
 
   const navigate = (nextView: View) => {
+    if (nextView === 'admin') setAdminWorkspace('overview');
     setProfileRolesPage(false);
     setAdminPanel(null);
     setAdminPeopleRole(null);
@@ -1085,6 +1093,17 @@ function App() {
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
     setView(nextView);
     setMenuOpen(false);
+    scrollNightjarToTop();
+  };
+
+  const openAdminWorkspace = (workspace: AdminWorkspace) => {
+    if (!canAdmin) return;
+    setAdminPanel(null);
+    setAdminPeopleRole(null);
+    setAdminWorkspace(workspace);
+    setMenuOpen(false);
+    const path = workspace === 'overview' ? '/admin' : '/admin/workspace/' + workspace;
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
     scrollNightjarToTop();
   };
 
