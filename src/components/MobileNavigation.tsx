@@ -12,7 +12,7 @@ type Props = {
   messageNeedsReplyCount?: number;
 };
 
-type Item = { view?: View; label: string; icon: LucideIcon; search?: boolean };
+type Item = { view?: View; label: string; accessibleLabel?: string; icon: LucideIcon; search?: boolean };
 
 export default function MobileNavigation({ view, role, onNavigate, onSearch, messageUnreadCount = 0, messageNeedsReplyCount = 0 }: Props) {
   if (!role) return null;
@@ -22,7 +22,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
     : role === 'writer'
       ? { view: 'writer', label: 'Write', icon: FileText }
       : role === 'editor'
-        ? { view: 'editor', label: 'Editor', icon: FileText }
+        ? { view: 'editor', label: 'Editor', accessibleLabel: 'Editor Studio', icon: FileText }
         : { view: 'profile', label: 'Artist', icon: Brush };
 
   const settings: Item = { view: 'settings', label: 'Settings', icon: Settings2 };
@@ -66,7 +66,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
             className={active ? 'active' : ''}
             onClick={() => item.search ? onSearch() : item.view && onNavigate(item.view)}
             aria-current={active ? 'page' : undefined}
-            aria-label={item.label}
+            aria-label={item.accessibleLabel ?? item.label}
           >
             <span className="nj-mobile-nav-icon">
               <Icon size={19} aria-hidden="true" />
