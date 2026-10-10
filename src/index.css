@@ -9396,3 +9396,197 @@ textarea:focus-visible,
   .nightjar-live-role-banner { gap: 10px; }
   .nightjar-live-role-banner > button { width: 100%; }
 }
+
+
+/* NIGHTJAR OWNER LIVE ROLE SWITCHER
+   Keep ordinary app navigation uncluttered. Role QA lives behind one
+   accessible Owner-only button, never in the primary navigation row. */
+.topbar { gap: clamp(10px, 1.6vw, 26px); padding-inline: clamp(14px, 3.5vw, 58px); }
+.topbar .brand-button { min-width: 0; flex: 0 0 auto; white-space: nowrap; }
+.topbar .nav {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  margin-left: 0;
+  gap: 4px;
+}
+.topbar .nav .nav-link { flex: 0 0 auto; white-space: nowrap; padding: 10px clamp(9px, .9vw, 15px); }
+.topbar .top-actions { display: flex; align-items: center; flex: 0 0 auto; min-width: 0; gap: 8px; }
+.nj-live-switcher { position: relative; flex: 0 0 auto; }
+.nj-live-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 7px 12px;
+  border: 1px solid rgba(220, 197, 218, .25);
+  border-radius: 12px;
+  background: rgba(176, 141, 173, .08);
+  color: #f2eaf2;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+.nj-live-switcher-trigger:hover,
+.nj-live-switcher-trigger:focus-visible,
+.nj-live-switcher-trigger.active {
+  border-color: rgba(229, 190, 214, .57);
+  background: rgba(176, 141, 173, .16);
+}
+.nj-live-switcher-label { display: grid; gap: 1px; min-width: 0; }
+.nj-live-switcher-label strong { color: #f9eff7; font-size: 11px; font-weight: 750; line-height: 1.15; white-space: nowrap; }
+.nj-live-switcher-label small { max-width: 128px; overflow: hidden; text-overflow: ellipsis; color: #c5b3c4; font-size: 10px; line-height: 1.3; white-space: nowrap; }
+.nj-switcher-chevron { flex: 0 0 auto; transition: transform .16s ease; opacity: .8; }
+.nj-switcher-chevron.rotated { transform: rotate(180deg); }
+.nj-live-switcher-popover {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 100;
+  width: min(352px, calc(100vw - 24px));
+  max-height: min(590px, calc(100dvh - 112px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid rgba(228, 202, 226, .28);
+  border-radius: 18px;
+  background: #1c171f;
+  color: #f5ecf2;
+  box-shadow: 0 22px 58px rgba(0, 0, 0, .65);
+  overscroll-behavior: contain;
+}
+.nj-live-switcher-heading { display: grid; gap: 6px; padding: 8px 9px 13px; }
+.nj-live-switcher-heading .mini-label { display: flex; align-items: center; gap: 6px; color: #cfb8d0; font-size: 10px; letter-spacing: .08em; }
+.nj-live-switcher-heading > strong { color: #fff4fa; font-size: 17px; font-weight: 760; }
+.nj-live-switcher-heading > small { color: #c9bac9; font-size: 11px; line-height: 1.5; }
+.nj-live-switcher-options { display: grid; gap: 3px; }
+.nj-live-switcher-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #f4edf1;
+  text-align: left;
+  cursor: pointer;
+}
+.nj-live-switcher-option > span { display: grid; gap: 4px; min-width: 0; }
+.nj-live-switcher-option strong { font-size: 12px; font-weight: 700; }
+.nj-live-switcher-option small { color: #c4b4c3; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.nj-live-switcher-option > svg { flex: 0 0 auto; color: #cdb4cf; }
+.nj-live-switcher-option:hover,
+.nj-live-switcher-option:focus-visible,
+.nj-live-switcher-option.selected {
+  border-color: rgba(222, 188, 220, .3);
+  background: rgba(224, 174, 218, .1);
+}
+.nj-live-switcher-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 11px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(228, 202, 226, .17);
+}
+.nj-live-switcher-footer button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 45px;
+  padding: 8px;
+  border: 1px solid rgba(228, 202, 226, .24);
+  border-radius: 10px;
+  color: #f4eaf2;
+  background: rgba(229, 205, 221, .05);
+  font-size: 11px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.nj-live-switcher-footer button:hover,
+.nj-live-switcher-footer button:focus-visible { background: rgba(229, 205, 221, .14); }
+.nightjar-live-role-banner {
+  width: 100%;
+  margin: 0;
+  padding: 10px clamp(14px, 3.5vw, 58px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  background: rgba(139, 93, 131, .1);
+}
+.nightjar-live-role-banner > svg { flex: 0 0 auto; color: #e6c9e4; }
+.nightjar-live-role-banner > span { display: block; flex: 1 1 180px; min-width: 0; color: #d8cbd7; font-size: 11px; line-height: 1.45; }
+.nightjar-live-role-banner strong { color: #f9eff7; font-weight: 750; letter-spacing: 0; }
+.nightjar-live-role-banner > button {
+  width: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+@media (min-width: 761px) and (max-width: 1120px) {
+  .topbar .nav {
+    display: none;
+    position: absolute;
+    top: 74px;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 12px;
+    border-bottom: 1px solid rgba(228, 202, 226, .22);
+    background: #151218;
+    box-shadow: 0 20px 35px rgba(0, 0, 0, .3);
+    max-height: calc(100dvh - 74px);
+    overflow-y: auto;
+  }
+  .topbar .nav.open { display: grid; }
+  .topbar .nav .nav-link { text-align: left; padding: 12px; }
+  .topbar .menu-button {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--line-soft);
+    border-radius: 10px;
+  }
+}
+@media (max-width: 760px) {
+  .topbar .nav { display: none; }
+  .topbar .nav.open { display: grid; }
+  .topbar .nav .nav-link { text-align: left; }
+  .topbar .nj-live-switcher { position: static; }
+  .nj-live-switcher-popover {
+    top: calc(100% + 5px);
+    right: 10px;
+    left: 10px;
+    width: auto;
+    max-height: calc(100dvh - 96px);
+  }
+  .nj-live-switcher-trigger { min-height: 42px; }
+}
+@media (max-width: 520px) {
+  .topbar .nj-live-switcher-label { display: none; }
+  .topbar .nj-live-switcher-trigger { gap: 5px; padding: 8px; }
+  .topbar .top-actions { gap: 5px; }
+  .nightjar-live-role-banner { gap: 8px; }
+  .nightjar-live-role-banner > span { flex-basis: 150px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nj-live-switcher-trigger,
+  .nj-switcher-chevron { transition: none; }
+}
