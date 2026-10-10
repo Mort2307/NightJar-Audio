@@ -6433,6 +6433,38 @@ export const updateScriptRightsAndListing = onCall({ region: REGION }, async (re
   return { script: scriptPayload(saved.data() ?? {}, scriptId, true) };
 });
 
+// Admin-only, read-only visibility diagnostic using the SAME public listing
+// eligibility rule as listScriptMarketplace. No manuscript contents, protected
+// reader tokens, permissions or private source-file paths are returned.
+export const adminPreviewScriptMarketplace = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('scripts').limit(1000).get();
+  const diagnostics = snapshot.docs.map((doc) => {
+    const data = doc.data() ?? {};
+    const listing = normaliseScriptMarketplace(data.marketplace);
+    const status = cleanText(data.status, 50) || 'Draft';
+    const visible = listing.visibility === 'marketplace' && ['Approved','Published'].includes(status);
+    const reasons = [
+      ...(!['Approved','Published'].includes(status) ? ['Not approved or published'] : []),
+      ...(listing.visibility !== 'marketplace' ? ['Not listed in the marketplace'] : []),
+    ];
+    return {
+      id: doc.id,
+      title: cleanText(data.title, 200) || 'Untitled manuscript',
+      status,
+      visibility: listing.visibility,
+      visibleToProfessionals: visible,
+      reasons,
+    };
+  }).sort((a,b) => a.title.localeCompare(b.title));
+  return {
+    diagnostics,
+    eligible: diagnostics.filter((entry) => entry.visibleToProfessionals).length,
+    total: diagnostics.length,
+    rule: 'Approved or Published AND marketplace visibility. No protected script text is included.',
+  };
+});
+
 export const listScriptMarketplace = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
