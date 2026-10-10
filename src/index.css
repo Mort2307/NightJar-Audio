@@ -9230,3 +9230,52 @@ textarea:focus-visible,
   .people-row-role-management .people-row-controls > label { flex-basis: 100%; }
   .admin-member-multi-role-actions button { flex: 1 1 140px; }
 }
+
+
+/* Owner live-preview workpage. This is never the fictional demo dataset. */
+.admin-live-preview { display:grid; gap:18px; min-width:0; }
+.admin-live-preview-heading {
+  display:flex; flex-wrap:wrap; align-items:start; gap:14px;
+  padding:19px; border-radius:17px; border:1px solid rgba(203,181,204,.34);
+  background:linear-gradient(110deg,rgba(67,43,65,.53),rgba(23,21,26,.9));
+}
+.admin-live-preview-heading-icon {
+  display:grid;place-items:center;width:48px;height:48px;flex:0 0 auto;
+  color:#e8d0e3; border-radius:14px;background:rgba(203,181,204,.15);
+}
+.admin-live-preview-heading > div:nth-child(2) { flex:1 1 280px; min-width:0; }
+.admin-live-preview-heading h2 {font-size:clamp(23px,3vw,31px);margin:4px 0 8px;}
+.admin-live-preview-heading p {font-size:13px;line-height:1.6;max-width:740px;color:var(--muted);}
+.admin-live-preview-heading > button {min-height:46px;}
+.admin-live-preview-roles {display:flex; flex-wrap:wrap;gap:8px;}
+.admin-live-preview-roles button {min-height:44px;flex:1 1 130px;}
+.admin-live-preview-context,.admin-live-preview-safety {
+  display:flex;gap:12px;align-items:flex-start;padding:15px;border-radius:14px;
+  border:1px solid rgba(203,181,204,.25);background:rgba(255,255,255,.025);
+}
+.admin-live-preview-context > div {min-width:0;}
+.admin-live-preview-context p,.admin-live-preview-safety span {font-size:12px;line-height:1.55;color:var(--muted);margin-top:5px;}
+.admin-live-preview-stats {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.admin-live-preview-stats > div {
+  display:grid;gap:7px;padding:16px;
+  border:1px solid rgba(203,181,204,.22);border-radius:13px;
+  background:rgba(255,255,255,.03);
+}
+.admin-live-preview-stats strong {font-size:28px;}
+.admin-live-preview-stats span {font-size:12px;line-height:1.4;color:var(--muted);}
+.admin-live-preview-marketplace {min-width:0;}
+.admin-live-preview-diagnostics {display:grid;gap:12px;padding:16px;border:1px solid rgba(203,181,204,.25);border-radius:16px;}
+.admin-live-preview-diagnostic-list {display:grid;gap:9px;}
+.admin-live-preview-diagnostic {
+  display:flex;align-items:flex-start;gap:12px;padding:12px;
+  border:1px solid rgba(203,181,204,.19);border-radius:12px;
+}
+.admin-live-preview-diagnostic > div {min-width:0;flex:1;display:grid;gap:4px;}
+.admin-live-preview-diagnostic small {font-size:11px;color:var(--muted);overflow-wrap:anywhere;}
+.admin-live-preview-diagnostic .status-pill {white-space:nowrap;}
+@media(max-width:700px) {
+  .admin-live-preview-stats {grid-template-columns:1fr;}
+  .admin-live-preview-roles button {flex:1 1 44%;}
+  .admin-live-preview-heading {padding:14px;}
+  .admin-live-preview-diagnostic {flex-wrap:wrap;}
+}
