@@ -16,6 +16,9 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
     }
   });
   const [applying, setApplying] = useState(false);
+  const installed = window.matchMedia?.('(display-mode: standalone)').matches === true
+    || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+  const showInstall = () => window.dispatchEvent(new Event('nightjar:show-install'));
 
   const check = async () => {
     setChecking(true);
@@ -45,6 +48,7 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
       {status?.updateAvailable
         ? <button className="primary-button" disabled={applying} onClick={()=>void apply()}><Download size={14}/>{applying ? 'Updating…' : 'Update now'}</button>
         : <button className="ghost-button" disabled={applying} onClick={()=>void apply()}><RefreshCw size={14}/>{applying ? 'Refreshing…' : 'Force app refresh'}</button>}
+      {!installed && <button type="button" className="secondary-button" onClick={showInstall}><Download size={14}/> Install Nightjar</button>}
       {message && <small>{message}</small>}
     </div>;
   }
@@ -66,6 +70,7 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
         ? <button className="primary-button" disabled={applying} onClick={()=>void apply()}><Download size={14}/>{applying ? 'Updating Nightjar…' : 'Update Nightjar now'}</button>
         : <button className="ghost-button" disabled={applying} onClick={()=>void apply()}><RefreshCw size={14}/>{applying ? 'Refreshing app…' : 'Force refresh app'}</button>}
     </div>
+    {!installed && <button type="button" className="secondary-button" onClick={showInstall}><Download size={14}/> Install Nightjar on this device</button>}
     <div className="app-update-safety"><ShieldCheck size={14}/><span>Force refresh unregisters old Nightjar service workers, clears browser Cache Storage and reloads the deployed app. It does not remove your account, profile, subscriptions or cloud data.</span></div>
   </article>;
 }
