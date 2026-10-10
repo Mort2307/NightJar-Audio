@@ -18,7 +18,14 @@
     <link rel="manifest" href="/manifest.webmanifest?v=12" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="./src/main.tsx"></script>
+    <div id="root">
+      <!-- Visible even when a failed module import prevents React from starting. -->
+      <main role="status" style="min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;background:#0c0b0d;color:#efe7df;font-family:system-ui,sans-serif;text-align:center">
+        <h1 style="margin:0;font-family:Georgia,serif;font-weight:400;font-size:32px">NIGHTJAR</h1>
+        <p style="margin:0;max-width:460px;line-height:1.6">Opening your Nightjar workspace. If this screen does not change, the app may need to refresh its files.</p>
+        <a href="/recover.html" style="display:inline-block;border:1px solid #b59eaf;border-radius:12px;padding:12px 20px;background:#332532;color:#fff;text-decoration:none;font-weight:600">Repair Nightjar app</a>
+      </main>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
