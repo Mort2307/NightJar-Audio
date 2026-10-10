@@ -7,6 +7,11 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 const overviewCall = httpsCallable<void, { people: any }>(functions, 'adminAccountOverview');
 const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist'; status: 'active' | 'pending_review' | 'suspended' }, { userId: string; role: string; status: string }>(functions, 'adminSetAccountRole');
 export type NightjarManagedProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
+const setWorkspaceCall = httpsCallable<{
+  userId: string;
+  role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
+}, { userId: string; role: string; status: string; unchanged: boolean }>(functions, 'adminSetAccountWorkspace');
+
 
 export type NightjarManagedRolesResult = {
   userId: string;
@@ -157,6 +162,10 @@ export const nightjarAdministration = {
 
   async setAccountRole(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist', status: 'active' | 'pending_review' | 'suspended' = 'active') {
     return (await setRoleCall({ userId, role, status })).data;
+  },
+
+  async setAccountWorkspace(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') {
+    return (await setWorkspaceCall({ userId, role })).data;
   },
 
   async manageProfessionalRoles(
