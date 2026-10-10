@@ -3937,8 +3937,24 @@ function App() {
 
       {liveRolePreview && <div className="nightjar-live-role-banner" role="status"><ShieldCheck size={16} aria-hidden="true"/><span><strong>{previewRole ? roleMeta[previewRole].label : 'Member'} preview</strong> · Live public data · Read only</span><button className="secondary-button" type="button" onClick={clearAdminPreview}>Exit preview <ArrowRight size={14} aria-hidden="true"/></button></div>}
       <main id="nightjar-main-content" className={liveRolePreview ? 'nightjar-main nightjar-read-only-preview' : 'nightjar-main'}
-        onClickCapture={(event) => { if (liveRolePreview && (event.target as HTMLElement).closest('button,a,input,select,textarea,summary,[role="button"],[contenteditable]')) { event.preventDefault(); event.stopPropagation(); } }}
-        onKeyDownCapture={(event) => { if (liveRolePreview && event.key !== 'Tab' && (event.target as HTMLElement).closest('button,a,input,select,textarea,summary,[role="button"],[contenteditable]')) { event.preventDefault(); event.stopPropagation(); } }}
+        onClickCapture={(event) => {
+          if (!liveRolePreview) return;
+          const target = event.target as HTMLElement;
+          if (target.closest('[data-nj-preview-safe="true"],input,select')) return;
+          if (target.closest('button,a,textarea,summary,[role="button"],[contenteditable]')) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onKeyDownCapture={(event) => {
+          if (!liveRolePreview || event.key === 'Tab') return;
+          const target = event.target as HTMLElement;
+          if (target.closest('[data-nj-preview-safe="true"],input,select')) return;
+          if (target.closest('button,a,textarea,summary,[role="button"],[contenteditable]')) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
         onSubmitCapture={(event) => { if (liveRolePreview) { event.preventDefault(); event.stopPropagation(); } }}
         onDropCapture={(event) => { if (liveRolePreview) { event.preventDefault(); event.stopPropagation(); } }}
       >
@@ -3966,7 +3982,7 @@ function App() {
                 <h1>Premium immersive<span> audio for adults.</span></h1>
                 <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
                 <div className="hero-actions">
-                  <button className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
+                  <button data-nj-preview-safe="true" className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
                   <button className="text-button with-icon" onClick={() => creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
                 </div>
                 <div className="hero-signals">
@@ -4027,7 +4043,7 @@ function App() {
             <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} />
 
             <section id="catalogue" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
+              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
               <div className="catalogue-filter-bar">
                 <label className="catalogue-search"><Search size={15}/><input value={catalogueQuery} onChange={(event)=>setCatalogueQuery(event.target.value)} placeholder="Search title, VA, Writer, Audio Editor, Artist, trope or genre"/></label>
                 <select value={catalogueRating} onChange={(event)=>setCatalogueRating(event.target.value)} aria-label="Content level"><option value="all">All content levels</option><option value="sfw">SFW</option><option value="suggestive">Suggestive</option><option value="adult">Adult</option><option value="explicit">Explicit</option></select>
@@ -4066,8 +4082,8 @@ function App() {
             <TransparencyPanel demoMode={demoMode} />
 
             <section className="creator-band section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
-              <div className="creator-grid">{profileDirectory.filter((person) => person.role === 'creator').slice(0, 5).map((creator) => <button className="creator-card" key={creator.userId} onClick={() => openPublicProfile(creator.userId)}><span className="avatar-large">{creator.avatarUrl ? <img className="avatar-approved-image" src={creator.avatarUrl} alt="" loading="lazy" decoding="async" /> : creator.avatarInitials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.headline || creator.bio || 'Nightjar creator profile.'}</em><small>{creator.releaseCount ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
+              <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
+              <div className="creator-grid">{profileDirectory.filter((person) => person.role === 'creator').slice(0, 5).map((creator) => <button data-nj-preview-safe="true" className="creator-card" key={creator.userId} onClick={() => openPublicProfile(creator.userId)}><span className="avatar-large">{creator.avatarUrl ? <img className="avatar-approved-image" src={creator.avatarUrl} alt="" loading="lazy" decoding="async" /> : creator.avatarInitials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.headline || creator.bio || 'Nightjar creator profile.'}</em><small>{creator.releaseCount ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
               {!profileDirectory.some((person) => person.role === 'creator') && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
             </section>
 
@@ -4109,13 +4125,13 @@ function App() {
             <div className="nj-directory-viewbar">
               <div className="nj-directory-view-actions">
                 <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>
-                <button className="ghost-button" onClick={clearDirectoryFilters}>Clear filters</button>
+                <button data-nj-preview-safe="true" className="ghost-button" onClick={clearDirectoryFilters}>Clear filters</button>
                 <span>Saved views stay on this signed-in account’s browser only.</span>
               </div>
               {!!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
             </div>
 
-            <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
+            {!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>}
 
             <div className="profile-directory-summary">
               <span><strong>{filteredDirectoryProfiles.length}</strong> matching profile{filteredDirectoryProfiles.length === 1 ? '' : 's'}</span>
@@ -4153,9 +4169,9 @@ function App() {
                     </div>
                   </div>
                   <div className="profile-directory-actions">
-                    {person.role === 'creator' && <button className="ghost-button" onClick={() => void recommendCreator(person)}><Share2 size={13}/> Recommend</button>}
-                    {['creator','writer','editor','artist'].includes(String(effectiveRole)) && ['creator','writer','editor','artist'].includes(String(person.role)) && person.userId !== user?.userId && <button className="ghost-button" onClick={() => { setMessageRecipientUserId(person.userId); setMessageCollaborationId(null); navigate('messages'); }}><MessageCircle size={13}/> Message</button>}
-                    <button className="round-arrow" onClick={() => openPublicProfile(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
+                    {person.role === 'creator' && !liveRolePreview && <button className="ghost-button" onClick={() => void recommendCreator(person)}><Share2 size={13}/> Recommend</button>}
+                    {!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && ['creator','writer','editor','artist'].includes(String(person.role)) && person.userId !== user?.userId && <button className="ghost-button" onClick={() => { setMessageRecipientUserId(person.userId); setMessageCollaborationId(null); navigate('messages'); }}><MessageCircle size={13}/> Message</button>}
+                    <button data-nj-preview-safe="true" className="round-arrow" onClick={() => openPublicProfile(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
                   </div>
                 </article>;
               })}
@@ -4909,8 +4925,8 @@ function App() {
         simulationMode={demoMode}
         initialTranscriptOpen={transcriptRequested === playing}
       />}
-      {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onPlayRelease={playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener'} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
-      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener'} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
+      {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? () => notify('Read-only preview: follow actions are disabled.') : toggleProfileFollow} onPlayRelease={liveRolePreview ? () => notify('Playback requires an authorised Listener account.') : playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
+      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? () => notify('Read-only preview: follow actions are disabled.') : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
