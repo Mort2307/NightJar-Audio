@@ -438,6 +438,8 @@ function App() {
   const [followingProfileIds, setFollowingProfileIds] = useState<string[]>([]);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [role, setRole] = useState<AccountRole | null>(null);
+  // Derive admin eligibility before hooks and effects can reference it.
+  const canAdmin = role === 'admin';
   const [accountStatus, setAccountStatus] = useState<'active' | 'pending_review'>('active');
   const [accountLoading, setAccountLoading] = useState(false);
   const [rolePicker, setRolePicker] = useState(false);
@@ -2408,7 +2410,7 @@ function App() {
   const accountLabel = role ? roleMeta[role].label : 'Signed out';
   const effectiveRole: AccountRole | null = role === 'admin' ? (previewRole ?? 'admin') : role;
   const combinedProfileTagOptions = Array.from(new Set([...PROFILE_TAG_OPTIONS, ...profileTagCatalogue]));
-  const canAdmin = role === 'admin';
+
   const canProtection = Boolean(user);
   const simulationIdentity = previewRole === 'listener'
     ? { name: 'Jamie', initials: 'JL', label: 'Listener' }
