@@ -1343,8 +1343,8 @@ function App() {
   const openNotification = async (item:any) => {
     if (item.type === 'admin_action' && canAdmin && !simulationMode) {
       setNotificationsOpen(false);
+      navigate('admin');
       if (item.subtype === 'release_verification') {
-        navigate('admin');
         setModerationOpen(true);
       } else if (item.subtype === 'professional_approval') {
         openAdminPanel('approvals');
