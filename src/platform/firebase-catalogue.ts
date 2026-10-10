@@ -1,6 +1,7 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { deleteObject, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { firebaseApp, firebaseAuth } from './firebase-auth';
+import { repairMojibakeDisplayData } from './text-integrity';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 const storage = getStorage(firebaseApp);
@@ -31,7 +32,7 @@ const trendingCall = httpsCallable<void, { trending: any[] }>(functions, 'trendi
 
 export const nightjarCatalogue = {
   async list(q = '', category = '') {
-    return (await listCatalogueCall({ q, category })).data;
+    return repairMojibakeDisplayData((await listCatalogueCall({ q, category })).data);
   },
 
   async create(input: Record<string, unknown>) {
@@ -69,7 +70,7 @@ export const nightjarCatalogue = {
   },
 
   async dashboard(creatorUserId?: string) {
-    return (await dashboardCall(creatorUserId ? { creatorUserId } : {})).data;
+    return repairMojibakeDisplayData((await dashboardCall(creatorUserId ? { creatorUserId } : {})).data);
   },
 
   async playback(releaseId: string) {
@@ -81,7 +82,7 @@ export const nightjarCatalogue = {
   },
 
   async moderationQueue() {
-    return (await moderationQueueCall()).data;
+    return repairMojibakeDisplayData((await moderationQueueCall()).data);
   },
 
   async adminPreview(releaseId: string) {
@@ -93,10 +94,10 @@ export const nightjarCatalogue = {
   },
 
   async recommendations(intent = '') {
-    return (await recommendationsCall(intent ? { intent } : {})).data;
+    return repairMojibakeDisplayData((await recommendationsCall(intent ? { intent } : {})).data);
   },
 
   async trending() {
-    return (await trendingCall()).data;
+    return repairMojibakeDisplayData((await trendingCall()).data);
   },
 };
