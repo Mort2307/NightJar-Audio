@@ -30,4 +30,26 @@ assert.match(app, /openMyRolesPage/, 'Listener can access professional role upgr
 assert.match(manager, /nightjarLegal\.accept/, 'existing Listeners can give their own professional consent');
 assert.match(manager, /nightjarAccount\.setActiveRole/, 'member role manager still switches between approved roles');
 
+// A member may request an additional role, but approval is exclusively Owner-controlled.
+const applyStart = backend.indexOf('export const submitProfessionalApplication = onCall');
+const applyEnd = backend.indexOf('export const removeProfessionalRole = onCall', applyStart);
+const requestRole = backend.slice(applyStart, applyEnd);
+assert.ok(applyStart > 0 && applyEnd > applyStart, 'member-request callable exists');
+assert.match(requestRole, /requireActiveIdentity\(request\)/, 'member application requires an authenticated identity');
+assert.match(requestRole, /requireProfessionalLegalTerms\(identity\.uid\)/, 'member request requires current terms');
+assert.match(requestRole, /requireAgeVerified\(identity\.uid\)/, 'member requests require adult access');
+assert.match(requestRole, /status: 'banked'/, 'member request enters the approval bank');
+assert.match(requestRole, /pendingProfessionalRoles: requested/, 'member can only create pending access requests');
+assert.doesNotMatch(requestRole, /status: 'approved'/, 'member cannot self-approve');
+
+const switchStart = backend.indexOf('export const setActiveNightjarRole = onCall');
+const switchEnd = backend.indexOf('export const listProfessionalApplicationBank = onCall', switchStart);
+const switchRole = backend.slice(switchStart, switchEnd);
+assert.match(switchRole, /!approved\.includes\(role as AccountRole\)/, 'switch must reject an unapproved role');
+assert.match(switchRole, /HttpsError\('permission-denied'/, 'server rejects privilege escalation');
+assert.match(manager, /Send roles for approval/, 'member interface explicitly describes administrator approval');
+assert.match(manager, /Awaiting Administrator approval · workspace locked/, 'requested workspaces are visibly locked');
+assert.match(manager, /nightjarAccount\.applyForProfessionalRoles\(selected/, 'member can request multiple roles');
+assert.match(manager, /nightjarAccount\.setActiveRole\(role\)/, 'approved roles can be selected');
+
 console.log('Nightjar protected admin multi-role and Listener upgrade contracts passed.');
