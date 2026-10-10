@@ -38,7 +38,7 @@ assert.doesNotMatch(roleMutation, /tx\.set\(profileRef/, 'role grants must never
 // Admin real-data preview must NOT impersonate a member, disclose manuscript
 // contents, or bypass protected reader access.
 assert.match(app, /openAdminPanel\('live-preview'\)/, 'Owner Console offers a separate live preview page');
-assert.match(app, /adminPanel === 'live-preview' && demoMode/, 'live preview exits fictional demo mode');
+assert.match(app, /panel === 'live-preview' && demoMode/, 'live preview exits fictional demo mode');
 assert.match(app, /<AdminLiveMarketplacePreview notify=\{notify\}/, 'live preview mounts in dedicated routed page');
 assert.match(live, /previewScriptMarketplace\(\)/, 'admin visibility diagnostic uses actual server data');
 assert.match(live, /<ScriptMarketplace/, 'actual VA marketplace component is reused');
