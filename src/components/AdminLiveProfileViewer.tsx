@@ -58,7 +58,7 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
         const profile=data.profile;
         setResults((prev)=>({...prev,[id]:profile ? {status:'ready',profile} : {status:'private'}}));
       } catch (error) {
-        if (!cancelled) setResults((prev)=>({...prev,[id]:{status:'error',message:error instanceof Error ? error.message : 'Public profile unavailable.'}]}));
+        if (!cancelled) setResults((prev)=>({...prev,[id]:{status:'error',message:error instanceof Error ? error.message : 'Public profile unavailable.'}}));
       }
     }));
     return ()=>{cancelled=true;};
