@@ -4399,6 +4399,37 @@ export const deleteRelease = onCall({ region: REGION }, async (request) => {
   return { deleted: true };
 });
 
+/**
+ * Nightjar owner QA: verify a temporary Storage upload using the same bucket
+ * and canonical audio metadata, then delete it. No release, catalogue entry,
+ * playback link or professional-role impersonation is created.
+ */
+export const adminVerifyAudioUpload = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const path = cleanText((request.data as Record<string, unknown> | undefined)?.storagePath, 500);
+  const expected = `audio-upload-diagnostics/${admin.uid}/`;
+  const id = path.startsWith(expected) ? path.slice(expected.length) : '';
+  if (!/^[a-f0-9-]{36}$/i.test(id)) {
+    throw new HttpsError('invalid-argument', 'The administrator audio test path is invalid.');
+  }
+  const file = getStorage().bucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError('not-found', 'The test recording did not reach Firebase Storage.');
+  try {
+    const [metadata] = await file.getMetadata();
+    const bytes = Number(metadata.size ?? 0);
+    const mime = String(metadata.contentType ?? '');
+    const allowed = ['audio/mpeg','audio/wav','audio/mp4','audio/ogg','audio/webm'];
+    if (!allowed.includes(mime) || bytes <= 0 || bytes > 10 * 1024 * 1024) {
+      throw new HttpsError('invalid-argument', 'The uploaded test file does not meet Nightjar audio validation.');
+    }
+    return { verified: true, bytes, contentType: mime, private: true, retained: false };
+  } finally {
+    // Never retain temporary creator sample files on the server.
+    await file.delete({ ignoreNotFound: true });
+  }
+});
+
 export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
   const input = (request.data ?? {}) as Record<string, unknown>;
