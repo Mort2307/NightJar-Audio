@@ -45,6 +45,31 @@ service firebase.storage {
         );
     }
 
+    // Administrator-only temporary audio probes. No read access, never
+    // part of a release or showcase, and always deleted after verification.
+    match /audio-upload-diagnostics/{userId}/{fileId} {
+      allow read: if false;
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'mike.owen230792@gmail.com',
+          'megan.wright666@hotmail.com',
+          'nightjar.audio.app@gmail.com'
+        ]
+        && request.resource.size <= 10 * 1024 * 1024
+        && supportedAudio();
+      allow update: if false;
+      allow delete: if signedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'mike.owen230792@gmail.com',
+          'megan.wright666@hotmail.com',
+          'nightjar.audio.app@gmail.com'
+        ];
+    }
+
     match /release-audio/{userId}/{releaseId}/{fileId} {
       allow read: if false;
       allow create: if activeCreator()

@@ -89,6 +89,7 @@ import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashbo
 import NightjarSkeleton from './components/NightjarSkeleton';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
+const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
 const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipeline'));
 const CreatorLivePreviewOverview = lazy(() => import('./components/CreatorLivePreviewOverview'));
 const CreatorProfile = lazy(() => import('./components/CreatorProfile'));
@@ -4797,6 +4798,9 @@ function App() {
               </div>
             </section>
             </>}
+            {adminWorkspace === 'tools' && <Suspense fallback={<NightjarSkeleton variant="cards" count={1} label="Loading Audio Upload Test" />}>
+              <AdminAudioUploadTest />
+            </Suspense>}
             {adminWorkspace === 'tools' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Mail" />}>
               <AdminCommunications />
             </Suspense>}

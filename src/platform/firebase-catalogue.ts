@@ -1,6 +1,7 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { deleteObject, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { firebaseApp, firebaseAuth } from './firebase-auth';
+import { nightjarAudioContentType, nightjarAudioFileProblem, nightjarAudioUploadFailure } from './audio-upload';
 import { repairMojibakeDisplayData } from './text-integrity';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
@@ -51,13 +52,21 @@ export const nightjarCatalogue = {
     const user = firebaseAuth.currentUser;
     if (!user) throw new Error('auth/no-current-user');
     const storagePath = `release-audio/${user.uid}/${releaseId}/${crypto.randomUUID()}`;
+    const maxMiB = 25;
+    const problem = nightjarAudioFileProblem(file, maxMiB);
+    if (problem) throw new Error(problem);
+    const contentType = nightjarAudioContentType(file)!;
     const fileRef = ref(storage, storagePath);
-    await uploadBytes(fileRef, file, { contentType: file.type, cacheControl: 'private,no-store,max-age=0' });
+    try {
+      await uploadBytes(fileRef, file, { contentType, cacheControl: 'private,no-store,max-age=0' });
+    } catch (error) {
+      throw nightjarAudioUploadFailure('STORAGE', error);
+    }
     try {
       return (await finalizeAudioCall({ releaseId, storagePath, durationMinutes })).data;
     } catch (error) {
       try { await deleteObject(fileRef); } catch { /* backend validation is authoritative */ }
-      throw error;
+      throw nightjarAudioUploadFailure('FINALIZE', error);
     }
   },
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { FileAudio, LoaderCircle, Send, ShieldCheck, Trash2, UploadCloud } from 'lucide-react';
 import { nightjarEditorPortfolio, type EditorPortfolioItem } from '../platform/firebase-editor-portfolio';
+import { nightjarAudioFileProblem } from '../platform/audio-upload';
 
 type Props = { notify: (message: string) => void; demoMode?: boolean };
 
-const allowedAudio = new Set(['audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/x-m4a','audio/ogg','audio/webm']);
-const validAudio = (file: File | null) => !file || (allowedAudio.has(file.type) && file.size > 0 && file.size <= 20 * 1024 * 1024);
+
 
 export default function EditorShowcaseManager({ notify, demoMode = false }: Props) {
   const [items, setItems] = useState<EditorPortfolioItem[]>([]);
@@ -38,7 +38,8 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
   const create = async () => {
     if (!title.trim()) return notify('Give the showcase item a title.');
     if (!afterFile) return notify('Choose the finished / after audio sample.');
-    if (!validAudio(afterFile) || !validAudio(beforeFile)) return notify('Use MP3, WAV, M4A, OGG or WebM audio up to 20 MB per sample.');
+    const audioProblem = nightjarAudioFileProblem(afterFile, 20) || (beforeFile ? nightjarAudioFileProblem(beforeFile, 20) : null);
+    if (audioProblem) return notify(audioProblem);
     if (!rightsConfirmed || !permissionsConfirmed) return notify('Confirm your rights and contributor/client permission first.');
     setBusy(true);
     try {
@@ -61,8 +62,9 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       setTitle('');setDescription('');setServices('');setTechniques('');setBeforeFile(null);setAfterFile(null);setRightsConfirmed(false);setPermissionsConfirmed(false);setPermissionNote('');
       await load();
       notify('Editor showcase submitted for moderation.');
-    } catch {
-      notify('Editor showcase could not be submitted.');
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '';
+      notify(detail || 'Editor showcase could not be submitted.');
     } finally { setBusy(false); }
   };
 
@@ -86,8 +88,8 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       <label className="editor-showcase-wide">Description<textarea maxLength={1200} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Explain the problem, your approach and what changed."/></label>
       <label>Techniques<input value={techniques} onChange={(e)=>setTechniques(e.target.value)} placeholder="RX cleanup, EQ, de-click, dynamics"/></label>
       <label>Permission note<input maxLength={500} value={permissionNote} onChange={(e)=>setPermissionNote(e.target.value)} placeholder="Optional internal note: client approved portfolio use on…"/></label>
-      <label>Before audio <span className="optional-label">optional</span><input type="file" accept="audio/*" onChange={(e)=>setBeforeFile(e.target.files?.[0] ?? null)}/></label>
-      <label>Finished / after audio<input type="file" accept="audio/*" onChange={(e)=>setAfterFile(e.target.files?.[0] ?? null)}/></label>
+      <label>Before audio <span className="optional-label">optional</span><input type="file" onChange={(e)=>setBeforeFile(e.target.files?.[0] ?? null)}/></label>
+      <label>Finished / after audio<input type="file" onChange={(e)=>setAfterFile(e.target.files?.[0] ?? null)}/></label>
       <label className="rights-check editor-showcase-wide"><input type="checkbox" checked={rightsConfirmed} onChange={(e)=>setRightsConfirmed(e.target.checked)}/><span>I own or control the rights needed to upload and publicly showcase these samples.</span></label>
       <label className="rights-check editor-showcase-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have permission from any client, performer or other contributor whose work/voice appears in the sample.</span></label>
       <div className="rights-ai-lock editor-showcase-wide"><ShieldCheck size={15}/><div><strong>Private until approved</strong><span>Direct storage reads are blocked. Nightjar only exposes approved samples through short-lived signed playback links.</span></div></div>

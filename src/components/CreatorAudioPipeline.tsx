@@ -4,6 +4,7 @@ import { nightjarMedia } from '../platform/firebase-media';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { BookOpenText, Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
+import { nightjarAudioFileProblem } from '../platform/audio-upload';
 import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
@@ -245,9 +246,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const uploadAsset = async (file: File, kind: 'audio' | 'artwork') => {
     const max = kind === 'audio' ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > max) return notify(kind === 'audio' ? 'Audio must be 25 MB or smaller.' : 'Artwork must be 5 MB or smaller.');
-    const allowedAudio = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 'audio/webm'];
     const allowedImage = ['image/png', 'image/jpeg', 'image/webp'];
-    if (kind === 'audio' && !allowedAudio.includes(file.type)) return notify('Use MP3, WAV, M4A, OGG or WebM audio.');
+    if (kind === 'audio') {
+      const problem = nightjarAudioFileProblem(file, 25);
+      if (problem) return notify(problem);
+    }
     if (kind === 'artwork' && !allowedImage.includes(file.type)) return notify('Use PNG, JPG or WebP artwork.');
     if (!current?.id) return notify('Create the release draft before uploading its assets.');
 
@@ -290,7 +293,12 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       setSelectedRelease(data.release ?? { ...current, audioAvailable: true, ...(durationMinutes ? { durationMinutes } : {}) });
       await onRefresh();
       notify('Audio attached privately to the release.');
-    } catch { notify(kind === 'audio' ? 'Audio upload failed.' : 'Artwork upload failed.'); }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '';
+      notify(kind === 'audio'
+        ? (detail || 'Audio upload failed. Please try again or contact Nightjar support.')
+        : 'Artwork upload failed.');
+    }
     finally { if (kind === 'audio') setAudioBusy(false); else setArtBusy(false); }
   };
 
@@ -557,7 +565,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </section>
 
           <div className="pipeline-assets">
-            <div className="asset-drop asset-drop-moderated"><Music2 size={18} /><strong>{audioBusy ? 'Working…' : current.audioAvailable ? 'Replace private audio' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · direct public reads blocked</span><label className="secondary-button upload-label">{current.audioAvailable ? 'Replace audio' : 'Choose audio'}<input type="file" accept="audio/*" hidden disabled={audioBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>{current.audioAvailable && <button className="ghost-button" disabled={audioBusy} onClick={()=>void removeAudio()}>Remove audio</button>}</div>
+            <div className="asset-drop asset-drop-moderated"><Music2 size={18} /><strong>{audioBusy ? 'Working…' : current.audioAvailable ? 'Replace private audio' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · direct public reads blocked</span><label className="secondary-button upload-label">{current.audioAvailable ? 'Replace audio' : 'Choose audio'}<input type="file" hidden disabled={audioBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>{current.audioAvailable && <button className="ghost-button" disabled={audioBusy} onClick={()=>void removeAudio()}>Remove audio</button>}</div>
             <div className="asset-drop asset-drop-moderated"><ImagePlus size={18} /><strong>{artBusy ? 'Working…' : current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Replacement awaiting approval' : 'Artwork awaiting approval' : current.artworkUrl ? 'Replace approved artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB · administrator approval required</span><label className="secondary-button upload-label">{current.artworkUrl || current.pendingArtworkAssetId ? 'Replace' : 'Choose image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'artwork'); event.currentTarget.value = ''; }} /></label>{(current.artworkUrl || current.artworkAssetId || current.pendingArtworkAssetId) && <button className="ghost-button" disabled={artBusy} onClick={()=>void removeArtwork()}>Remove artwork</button>}</div>
           </div>
 
