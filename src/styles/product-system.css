@@ -3369,3 +3369,6 @@ textarea {
 @media(prefers-reduced-motion:reduce) {
   .nj-spotlight-card,.nj-spotlight-card button {transition:none;}
 }
+
+/* Weekly listener appreciation is deliberately editorial, not a leaderboard. */
+.nj-spotlight-weekly-note {margin:10px 0 0;text-align:center;font-size:12px;line-height:1.6;color:#bcaebd;}
