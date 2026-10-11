@@ -1,4 +1,4 @@
-import { Brush, CalendarDays, Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, ShieldCheck, FileText, type LucideIcon } from 'lucide-react';
+import { Brush, CalendarDays, Home, Library, MessageCircle, Mic2, Search, Settings2, ShieldCheck, FileText, type LucideIcon } from 'lucide-react';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'calendar' | 'settings';
 type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | null;
