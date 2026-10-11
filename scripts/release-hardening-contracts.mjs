@@ -78,6 +78,35 @@ requireText(firestore,'allow read, write: if false','Firestore client access mus
 requireText(storage,'match /release-audio/{userId}/{releaseId}/{fileId}','Release-audio storage boundary missing.');
 requireText(storage,'allow read: if false','Release audio must not be public through direct Storage reads.');
 
+// Real device audio test: the mobile picker must never grey out a supported
+// file before the Nightjar MIME/extension validation can inspect it.
+const creatorAudio=read('src/components/CreatorAudioPipeline.tsx');
+const editorAudio=read('src/components/EditorShowcaseManager.tsx');
+const audioPlatform=read('src/platform/audio-upload.ts');
+const releaseUpload=read('src/platform/firebase-catalogue.ts');
+const editorUpload=read('src/platform/firebase-editor-portfolio.ts');
+const adminAudio=read('src/components/AdminAudioUploadTest.tsx');
+const audioTestPlatform=read('src/platform/firebase-audio-diagnostics.ts');
+for (const [label, source] of [['Creator',creatorAudio],['Editor',editorAudio],['Admin test',adminAudio]]) {
+  if (source.includes('accept="audio/*"')) failures.push(label+' audio file picker must not grey out valid device files before inspection.');
+}
+requireText(audioPlatform,'nightjarAudioContentType','Mobile audio files must be identified from their known extension and MIME.');
+requireText(audioPlatform,'application/octet-stream','Android file providers can omit audio MIME types.');
+requireText(creatorAudio,'nightjarAudioFileProblem(file, 25)','Creator upload must validate after file selection.');
+requireText(editorAudio,'nightjarAudioFileProblem(afterFile, 20)','Editor upload must validate after file selection.');
+requireText(releaseUpload,"nightjarAudioUploadFailure('STORAGE', error)",'Creator upload must surface Firebase Storage failure stage.');
+requireText(editorUpload,"nightjarAudioUploadFailure('STORAGE', error)",'Editor upload must surface Firebase Storage failure stage.');
+requireText(adminAudio,'Run private upload test','Admin Tools must provide an actual upload test action.');
+requireText(app,'<AdminAudioUploadTest />','The test must be reachable in administrator Tools.');
+requireText(audioTestPlatform,'uploadBytesResumable','The administrator audio test must transfer real bytes to Firebase.');
+requireText(audioTestPlatform,"onStage('CLEANUP')",'The administrator audio test must attempt cleanup on failure.');
+requireText(storage,'match /audio-upload-diagnostics/{userId}/{fileId}','Temporary QA audio must have a scoped Storage path.');
+requireText(storage,'request.auth.token.email_verified == true','Only verified admin identities can upload QA files.');
+requireText(functions,'export const adminVerifyAudioUpload = onCall','Backend must authenticate and verify actual QA uploads.');
+requireText(functions,'const admin = requireAdminIdentity(request);','Audio QA must require backend administrator verification.');
+requireText(functions,'await file.delete({ ignoreNotFound: true });','Verified QA uploads must be deleted server-side.');
+
+
 for(const marker of ['max-width:min(1100px,calc(100vw - 18px))','max-height:calc(100dvh - 18px)','@media (max-width:430px)']){
   requireText(css,marker,'Mobile/modal hardening marker missing: '+marker);
 }
