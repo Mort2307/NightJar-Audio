@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const backend=fs.readFileSync('functions/src/index.ts','utf8');
+const mail=fs.readFileSync('src/components/AdminCommunications.tsx','utf8');
+const client=fs.readFileSync('src/platform/firebase-administration.ts','utf8');
+const p=fs.readFileSync('package.json','utf8');
+assert.match(backend,/export const adminSendEmailCampaign = onCall/,'real campaign sender must remain');
+assert.match(backend,/const resolveSelectedMemberEmails = async/,'selected account IDs have server-side resolution');
+assert.match(backend,/new Set\(ids\).size!==ids.length/,'duplicate user IDs are rejected');
+assert.match(backend,/data.status!=='active'/,'inactive accounts cannot be emailed through selected audience');
+assert.match(backend,/ADMIN_EMAILS.has\(email\)/,'administrators excluded from targeted member audience');
+assert.match(backend,/accounts\[i\].exists/,'server verifies real accounts');
+assert.match(backend,/await resolveSelectedMemberEmails\(selectedUserIds\)/,'server verifies selected members on preview and send');
+assert.match(backend,/audience === 'selected_members'/,'selected members have a separate backend audience');
+assert.match(backend,/deliveryModel: 'one_recipient_per_message'/,'individual Gmail deliveries must remain private');
+assert.match(backend,/confirmPrivateIndividualDelivery/,'existing explicit private-send confirmation is preserved');
+assert.match(mail,/Select members/,'member selection is present in Nightjar Mail');
+assert.match(mail,/type="checkbox" checked=\{selectedMemberIds.includes\(person.userId\)\}/,'selected members use independent checkboxes');
+assert.match(mail,/setPreview\(null\)/,'changing selected members invalidates recipient preview');
+assert.match(mail,/Review exact recipients/,'manual review is required before a real send');
+assert.match(mail,/preview.recipientCount!==selectedMemberIds.length/,'recipient count mismatch prevents send');
+assert.match(client,/selectedUserIds\?: string\[\]/,'selected IDs propagate from client to audited sender');
+assert.match(p,/admin-targeted-email-contracts\.mjs/,'targeted email tests are included in the full validation command');
+console.log('Nightjar selected-member private email delivery contracts passed.');
