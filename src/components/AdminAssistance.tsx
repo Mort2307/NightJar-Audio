@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowRight, CheckCircle2, CircleHelp, Clock3, KeyRound, LifeBuoy, LockKeyhole, Mail, RefreshCw, Search, ShieldAlert, ShieldCheck, UserRoundCheck } from 'lucide-react';
 import { nightjarAssistance, type AccountAssistanceResult } from '../platform/firebase-account-assistance';
 
@@ -6,6 +6,7 @@ type Props = {
   onPeople: () => void;
   onSafety: () => void;
   onMail: () => void;
+  initialEmail?: string;
 };
 
 const labelError = (code:string) => {
@@ -22,7 +23,7 @@ const readableTime = (value:string|null|undefined) => {
   return Number.isNaN(date.getTime())?'Not available':date.toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'});
 };
 
-export default function AdminAssistance({onPeople,onSafety,onMail}:Props) {
+export default function AdminAssistance({onPeople,onSafety,onMail,initialEmail}:Props) {
   const [email,setEmail]=useState('');
   const [account,setAccount]=useState<AccountAssistanceResult|null>(null);
   const [busy,setBusy]=useState(false);
@@ -40,6 +41,7 @@ export default function AdminAssistance({onPeople,onSafety,onMail}:Props) {
     catch(e) { setError(e instanceof Error?e.message:'Account lookup was unsuccessful.'); }
     finally {setBusy(false);}
   };
+  useEffect(() => { if (initialEmail) {setEmail(initialEmail);void lookup(initialEmail);} },[initialEmail]);
   const onSubmit = (event:FormEvent) => {event.preventDefault();void lookup();};
   const send = async (kind:'password_reset'|'email_verification') => {
     if (!account?.found || !account.email || reason.trim().length<12 || !requested) return;
