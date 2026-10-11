@@ -29,6 +29,7 @@ type Props = {
   onSave: () => Promise<void>;
   onRevert: () => void;
   notify: (message:string) => void;
+  simulationMode?:boolean;
   onOpenEditorStudio?: () => void;
 };
 
@@ -65,6 +66,7 @@ export default function UserProfileStudio({
   onSave,
   onRevert,
   notify,
+  simulationMode=false,
   onOpenEditorStudio,
 }: Props) {
   const handleProblem = nightjarHandleError(profile.handle);
@@ -178,7 +180,7 @@ export default function UserProfileStudio({
         </div>
       </article>
 
-      <SocialLinksEditor notify={notify} />
+      <SocialLinksEditor notify={notify} simulationMode={simulationMode} />
       <AccessibilityPreferences />
       <LegalAgreementPanel />
       <AccountSecurityActivity />
