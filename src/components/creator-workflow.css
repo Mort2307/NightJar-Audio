@@ -188,3 +188,13 @@
 .nj-admin-creator-contact > p {font-size:13px;line-height:1.6;margin:0;color:var(--muted);}
 .nj-admin-creator-contact > button {justify-self:start;}
 @media(max-width:760px){.nj-admin-creator-contact>button{width:100%;justify-self:stretch;justify-content:center;}.nj-release-schedule-panel {padding:12px;}}
+
+.nj-admin-decision{display:grid;gap:13px;margin-top:16px;}
+.nj-admin-decision-editor{border:1px solid rgba(210,162,193,.3);border-radius:16px;background:linear-gradient(120deg,rgba(82,52,73,.28),rgba(24,20,29,.96));padding:18px;display:grid;gap:12px;}
+.nj-admin-decision-editor h4{font:normal 22px Georgia,serif;color:#f3e6ef;margin:0;}
+.nj-admin-decision-editor p{font-size:13px;color:#d0bfcf;line-height:1.6;margin:0;}
+.nj-admin-decision-editor label{display:grid;gap:7px;color:#e5d1e0;font-size:12px;}
+.nj-admin-decision-editor textarea{background:#1a151d;color:#f2e6f0;border:1px solid rgba(236,208,224,.22);border-radius:12px;padding:12px;box-sizing:border-box;width:100%;min-height:110px;font:inherit;resize:vertical;}
+.nj-admin-decision-editor > div:last-child{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+.nj-admin-decision-editor > div:last-child button{min-height:44px;}
+@media(max-width:700px){.nj-admin-decision-editor > div:last-child button{width:100%;justify-content:center;}}
