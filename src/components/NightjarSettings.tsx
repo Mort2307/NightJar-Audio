@@ -4,6 +4,7 @@ import AppUpdateControl from './AppUpdateControl';
 import NotificationPreferences from './NotificationPreferences';
 import ThemePreferences from './ThemePreferences';
 import PasskeySettings from './PasskeySettings';
+import AdminAudioUploadTest from './AdminAudioUploadTest';
 
 type Props = {
   email?: string | null;
@@ -56,6 +57,7 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         </section>
       </div>
 
+      {administrator && !simulationMode && <div className="nj-settings-tools"><AdminAudioUploadTest/></div>}
       <div className="nj-settings-tools">
         <div className="nj-settings-tool-heading"><Bell size={19}/><div><span className="mini-label">COMMUNICATIONS</span><h2>Notifications</h2></div></div>
         <NotificationPreferences notify={notify} simulationMode={simulationMode} />
