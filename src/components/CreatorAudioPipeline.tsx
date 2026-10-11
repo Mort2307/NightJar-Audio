@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarMedia } from '../platform/firebase-media';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
@@ -92,6 +92,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [submitting, setSubmitting] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [submissionConfirmed, setSubmissionConfirmed] = useState(false);
+  const handledFocus = useRef<string | null>(null);
+  const lastOpenedKey = 'nightjar:last-opened-creator-release';
   const [artBusy, setArtBusy] = useState(false);
   const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
   const [promotedTagOptions, setPromotedTagOptions] = useState<string[]>([]);
@@ -100,19 +102,23 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   // Show existing drafts immediately instead of leaving creators in an empty editor.
   useEffect(() => {
     if (selectedRelease || releases.length === 0) return;
-    const next = releases.find((item) => item.id === focusReleaseId) ?? releases.find((item) => item.status === 'draft') ?? releases[0];
+    let lastOpened = '';
+    try { lastOpened = window.sessionStorage.getItem(lastOpenedKey) ?? ''; } catch { /* private storage may be unavailable */ }
+    const next = releases.find((item) => item.id === focusReleaseId) ?? releases.find((item) => item.id === lastOpened) ?? releases.find((item) => item.status === 'draft') ?? releases[0];
     setSelectedRelease(next);
     setWorkflowStep(next.status === 'draft' ? 'prepare' : 'review');
   }, [releases, selectedRelease, focusReleaseId]);
 
   useEffect(() => {
-    if (!focusReleaseId) return;
+    if (!focusReleaseId || handledFocus.current === focusReleaseId) return;
     const match = releases.find((release) => release.id === focusReleaseId);
-    if (match && match.id !== selectedRelease?.id) {
+    if (match) {
+      handledFocus.current = focusReleaseId;
       setSelectedRelease(match);
-      setWorkflowStep(match.status === 'draft' ? 'review' : 'review');
+      setWorkflowStep('review');
+      try { window.sessionStorage.setItem(lastOpenedKey, match.id); } catch {}
     }
-  }, [focusReleaseId, releases, selectedRelease?.id]);
+  }, [focusReleaseId, releases]);
 
   // Reconcile read-only submission status after a refresh without overwriting
   // unfinished metadata that a creator is still editing locally.
@@ -124,6 +130,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const chooseRelease = (release: Release) => {
     setSelectedRelease(release);
+    try { window.sessionStorage.setItem(lastOpenedKey, release.id); } catch {}
     setWorkflowStep(release.status === 'draft' ? 'prepare' : 'review');
     setAudioStage('idle');
     setAudioFileLabel('');
@@ -445,6 +452,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         await onRefresh().catch(() => {});
       }
       setSelectedRelease(null);
+      try { window.sessionStorage.removeItem(lastOpenedKey); } catch {}
       setSubmissionConfirmed(false);
       setAudioFileLabel('');
       setAudioFeedback('');
@@ -497,6 +505,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       const submitted = await nightjarCatalogue.submit(current.id);
       if (submitted.release?.status !== 'pending_review') throw new Error('Nightjar did not confirm this submission reached moderation.');
       setSelectedRelease(submitted.release);
+      try { window.sessionStorage.setItem(lastOpenedKey, current.id); } catch {}
       setWorkflowStep('review');
       setSubmissionConfirmed(true);
       await onRefresh().catch(() => { /* retain the verified submission status */ });
