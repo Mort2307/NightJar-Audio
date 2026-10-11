@@ -73,9 +73,8 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
   const edit=(id:string,patch:Partial<EditorRow>)=>setRows((prev)=>prev.map((row)=>row.id===id?{...row,...patch}:row));
   const add=()=>{
     if(rows.length>=12){notify('Nightjar allows up to 12 social profile links.');return;}
-    setAdded((n)=>n+1);
     setRows((prev)=>[...prev,{
-      id:'new-'+added, url:'', platform:'Website',photoUrl:null,photoStatus:null,
+      id:'new-'+crypto.randomUUID(), url:'', platform:'Website',photoUrl:null,photoStatus:null,
       editing:true,draft:true,
     }]);
   };
