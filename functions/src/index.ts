@@ -9172,7 +9172,7 @@ const resolveSelectedMemberEmails = async (rawIds: unknown): Promise<AdminEmailR
   for (let i=0;i<ids.length;i++) {
     const data = accounts[i].data() ?? {};
     const email = cleanEmail(data.email);
-    if (!accounts[i].exists || data.status!=='active' || !validEmailAddress(email)
+    if (!accounts[i].exists || String(data.status ?? 'active')!=='active' || !validEmailAddress(email)
         || ADMIN_EMAILS.has(email) || data.role==='admin') {
       throw new HttpsError('failed-precondition','A selected account is inactive, an administrator, or has no valid email. Refresh the member selection.');
     }
