@@ -1680,6 +1680,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const role = activePublicRole === 'listener' || professionalRoles.includes(activePublicRole as AccountRole)
     ? activePublicRole
     : (professionalRoles[0] ?? 'listener');
+  const linksSnapshot = await socialLinkCollection(userId).limit(12).get();
+  const publicSocialLinks = linksSnapshot.docs.map((doc)=>socialLinkPayload(doc.id,doc.data()));
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
@@ -1790,6 +1792,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       headline: data.headline ?? null,
       bio: data.bio ?? null,
       welcomeMessage: data.welcomeMessage ?? null,
+      socialLinks: publicSocialLinks,
       pronouns: data.pronouns ?? null,
       avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
       initials: data.avatarInitials ?? null,
