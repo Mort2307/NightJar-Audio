@@ -90,3 +90,45 @@
   .nj-review-submit > button { width: 100%; justify-content: center; }
   .nj-review-check { align-items: flex-start; }
 }
+
+/* Approved-role switcher: changing tools is not an account-management action. */
+.nj-workspace-switcher-wrap { padding-top: .9rem; padding-bottom: 0; }
+.nj-workspace-switcher {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .65rem 1.25rem;
+  position: relative;
+  padding: .9rem 1rem;
+  border: 1px solid var(--line, rgba(255,255,255,.16));
+  border-radius: 14px;
+  background: var(--surface, rgba(255,255,255,.04));
+}
+.nj-workspace-switcher-leading { display: flex; align-items: center; gap: .7rem; flex: 1; min-width: 12rem; }
+.nj-workspace-switcher-leading > div { display: flex; flex-direction: column; gap: .2rem; }
+.nj-workspace-switcher-leading small { letter-spacing: .08em; font-size: .7rem; opacity: .7; }
+.nj-workspace-switcher-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.nj-workspace-helper { width: 100%; font-size: .77rem; opacity: .7; }
+.nj-workspace-error { width: 100%; margin: 0; color: #f1aaab; }
+.nj-workspace-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  width: 100%;
+  border-top: 1px solid var(--line, rgba(255,255,255,.16));
+  padding-top: .8rem;
+}
+.nj-workspace-choices button {
+  cursor: pointer;
+  font: inherit;
+  padding: .65rem .9rem;
+  border: 1px solid var(--line, rgba(255,255,255,.16));
+  background: var(--surface, rgba(255,255,255,.045));
+  border-radius: 9px;
+  color: inherit;
+}
+.nj-workspace-choices button.is-active { border-color: var(--accent, #caa579); background: rgba(196,157,107,.14); }
+@media (max-width: 720px) {
+  .nj-workspace-switcher-actions { width: 100%; }
+  .nj-workspace-switcher-actions > button:first-child { flex: 1; }
+}
