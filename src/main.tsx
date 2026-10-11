@@ -9,6 +9,7 @@ import AppRecoveryBoundary from './components/AppRecoveryBoundary';
 import LegalDocumentPage from './components/LegalDocumentPage';
 import LegalCentrePage from './components/LegalCentrePage';
 import { registerNightjarServiceWorker } from './platform/pwa';
+import NightjarLaunchUnlock from './components/NightjarLaunchUnlock';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Nightjar root missing');
@@ -33,7 +34,8 @@ registerNightjarServiceWorker();
 createRoot(root).render(
   <StrictMode>
     <AppRecoveryBoundary>
-      {isLegalCentre ? <LegalCentrePage /> : isLegalDocument ? <LegalDocumentPage /> : isAccountPortal ? <AccountPortal /> : <App />}
+      {isLegalCentre ? <LegalCentrePage /> : isLegalDocument ? <LegalDocumentPage /> :
+        <NightjarLaunchUnlock>{isAccountPortal ? <AccountPortal /> : <App />}</NightjarLaunchUnlock>}
     </AppRecoveryBoundary>
   </StrictMode>,
 );
