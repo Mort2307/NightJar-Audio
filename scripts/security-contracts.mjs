@@ -19,7 +19,7 @@ if (!app.includes('possible_screenshot_key')) failures.push('protected reader po
 if (!app.includes('possible_capture_shortcut')) failures.push('protected reader capture-shortcut signal is missing');
 if (!app.includes('native_screenshot_detected')) failures.push('native screenshot bridge event is missing');
 if (!protection.includes('detectionConfidence')) failures.push('server protection evidence confidence classification is missing');
-if (!protection.includes('no automatic') && !app.includes('no automatic freeze')) failures.push('human-review security principle is not visible in app code');
+if (!protection.includes('no automatic') && !app.includes('no automatic freeze') && !read('src/components/SecurityEvidenceReview.tsx').includes('Human review only')) failures.push('human-review security principle must remain visible in security evidence UI');
 if (!protection.includes('recordAuthenticationAttempt')) failures.push('authentication-attempt backend logging is missing');
 if (!protection.includes('passwordCaptured: false')) failures.push('authentication security records must explicitly state that passwords are not captured');
 if (!protection.includes("category: 'authentication'")) failures.push('authentication alerts must remain a distinct security-alert category');
