@@ -27,7 +27,7 @@ assert.match(client, /navigator.credentials.create\(/, 'enrollment uses the nati
 assert.match(client, /navigator.credentials.get\(/, 'sign in uses the native WebAuthn API');
 assert.match(client, /signInWithCustomToken\(/, 'real Firebase session is minted from verified custom token');
 assert.match(client, /beginRegistration\(\{\}\)/, 'registration begins with explicit valid callable data');
-assert.match(client, /beginSignIn\(\{\}\)/, 'login begins with explicit valid callable data');
+assert.match(client, /beginSignIn\(expectedUserId \? \{ expectedUserId \} : \{\}\)/, 'quick login scopes passkey discovery to registered account');
 assert.match(client, /passkeyFailure\('LOGIN_START', error\)/, 'login challenge errors retain the diagnostic step');
 assert.match(client, /passkeyFailure\('LOGIN_DEVICE', error\)/, 'native authenticator failures retain the diagnostic step');
 assert.match(client, /passkeyFailure\('LOGIN_VERIFY', error\)/, 'server assertion errors retain the diagnostic step');
@@ -54,5 +54,15 @@ assert.match(settings, /nightjarQuickUnlock.disable\(uid\)/, 'users can disable 
 assert.match(preference, /localStorage\.setItem\(preferenceKey/, 'launch opt-in is stored locally per device');
 assert.match(preference, /sessionStorage\.setItem\(sessionKey/, 'full-page login redirects avoid looping back into unlock');
 assert.match(css, /\.nj-launch-unlock\s*\{/, 'branded splash follow-up screen has dedicated styling');
+
+assert.match(functions, /allowCredentials = records\.docs/, 'backend limits launch passkey list to enrolled user credentials');
+assert.match(functions, /challenge\.expectedUserId !== uid/, 'backend checks asserted account against challenge binding');
+assert.match(functions, /NIGHTJAR_PASSKEY_TOKEN_SIGNING_FAILED/, 'token signer errors are logged with safe diagnostics');
+assert.match(functions, /PASSKEY_TOKEN_SIGNING_IAM/, 'missing Firebase signing permissions create actionable errors');
+assert.match(functions, /PASSKEY_COUNTER_WRITE_FAILED/, 'server counter errors are distinguished from invalid credentials');
+assert.match(launch, /manualUnlockVisible && supported/, 'normal launch does not require manual unlock screen');
+assert.match(launch, /void unlock\(true\)/, 'saved Android passkeys open immediately without another tap');
+assert.match(launch, /setManualUnlockVisible\(true\)/, 'failed prompts expose manual retry and password recovery');
+assert.match(launch, /Use email and password/, 'password fallback always remains available');
 
 console.log('Nightjar WebAuthn passkey security contracts passed (source checks only).');

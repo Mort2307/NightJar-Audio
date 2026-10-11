@@ -44,6 +44,10 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [diagnostic, setDiagnostic] = useState('');
+  // No redundant Nightjar sign-in step: show the actual device passkey
+  // chooser automatically and reveal the manual unlock screen only if the
+  // browser needs user activation or the verification attempt fails.
+  const [manualUnlockVisible, setManualUnlockVisible] = useState(!nightjarPasskeys.supported());
   const aborted = useRef<AbortController | null>(null);
   const alive = useRef(true);
   const attemptedAutomatically = useRef(false);
@@ -91,13 +95,14 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
     };
   }, [preference?.userId, allowedFlow, redirectGrace]);
 
-  const unlock = async () => {
+  const unlock = async (automatic = false) => {
     if (!preference || busy || !locked) return;
     const controller = new AbortController();
     aborted.current = controller;
     setBusy(true);
     setMessage('');
     setDiagnostic('');
+    if (automatic) setManualUnlockVisible(false);
     try {
       const identity = await nightjarPasskeys.signIn(preference.userId, controller.signal);
       if (!alive.current || controller.signal.aborted) return;
@@ -109,6 +114,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       if (alive.current && !controller.signal.aborted) {
         setMessage(unlockError(error));
         setDiagnostic(passkeyDiagnostic(error));
+        setManualUnlockVisible(true);
       }
     } finally {
       if (alive.current) setBusy(false);
@@ -121,7 +127,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   useEffect(() => {
     if (!locked || !authReady || !supported || attemptedAutomatically.current) return;
     attemptedAutomatically.current = true;
-    const timer = window.setTimeout(() => { void unlock(); }, 350);
+    const timer = window.setTimeout(() => { void unlock(true); }, 80);
     return () => window.clearTimeout(timer);
   }, [locked, authReady, supported]);
 
@@ -145,6 +151,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
         setLocked(true);
         setMessage('');
         setDiagnostic('');
+        setManualUnlockVisible(!supported);
         // Relock is also a real session boundary when returning to Nightjar.
         void nightjarAuth.signOut().catch(() => { /* user can still use password */ })
           .finally(() => { if (alive.current) setAuthReady(true); });
@@ -166,6 +173,23 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   };
 
   if (!preference || !locked) return <>{children}</>;
+
+  // This is the seamless path after the Android Nightjar splash: the browser's
+  // genuine saved-passkey prompt appears over a simple branded background.
+  // We must not fake or replace the Android-controlled credential selector.
+  if (!manualUnlockVisible && supported) {
+    return <main className="nj-launch-unlock nj-launch-unlock-auto" role="main" aria-label="Nightjar secure passkey sign-in">
+      <div className="nj-launch-unlock-card nj-launch-unlock-waiting" role="status" aria-live="polite">
+        <img src="/brand-logo" className="nj-launch-unlock-logo" alt="Nightjar logo"/>
+        <span className="mini-label">NIGHTJAR · SECURE SIGN-IN</span>
+        <p>{busy ? 'Confirm your saved passkey on your device…' : 'Opening your saved passkey…'}</p>
+        <button type="button" className="ghost-button nj-launch-unlock-fallback"
+          onClick={() => void usePassword()}>
+          <KeyRound size={16} aria-hidden="true"/> Use email and password
+        </button>
+      </div>
+    </main>;
+  }
 
   return <main className="nj-launch-unlock" role="main" aria-labelledby="nj-launch-unlock-title">
     <div className="nj-launch-unlock-card">
