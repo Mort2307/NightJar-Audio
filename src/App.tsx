@@ -3082,11 +3082,18 @@ function App() {
     }
     setAdminPanel(panel);
     if (panel === 'approvals') setAdminApplicationBox('pending');
-    if (panel === 'profile-viewer') void loadAdminOverview();
+
     const path = '/admin/' + panel;
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
     window.scrollTo({top:0,left:0,behavior:'instant'});
   };
+
+  // Exiting QA simulation is asynchronous. Always load real accounts only
+  // after React has completed the transition out of fictional data.
+  useEffect(() => {
+    if (adminPanel !== 'profile-viewer' || demoMode || !canAdmin) return;
+    void loadAdminOverview();
+  }, [adminPanel, demoMode, canAdmin]);
 
   // Load a selected workpage once, including deep links and browser Back/Forward.
   useEffect(() => {
