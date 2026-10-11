@@ -1146,7 +1146,7 @@ const socialLinkPayload = (id:string, data:Record<string,any>) => ({
   url:cleanText(data.url,500),
   platform:cleanText(data.platform,60)||'Website',
   photoUrl:data.photoStatus==='approved' ? cleanText(data.photoUrl,500)||null : null,
-  photoStatus:data.photoStatus==='approved' ? 'approved' : data.pendingPhotoStatus==='pending' ? 'pending' : data.pendingPhotoStatus==='rejected' ? 'rejected' : null,
+  photoStatus:data.pendingPhotoStatus==='pending' ? 'pending' : data.pendingPhotoStatus==='rejected' ? 'rejected' : data.photoStatus==='approved' ? 'approved' : null,
   pendingPhotoAssetId:cleanText(data.pendingPhotoAssetId,160)||null,
 });
 
