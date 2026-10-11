@@ -70,7 +70,7 @@ import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
 import AppUpdateControl from './components/AppUpdateControl';
-import { checkNightjarUpdate, applyNightjarUpdate, type NightjarUpdateStatus } from './platform/pwa';
+import { checkNightjarUpdate, applyNightjarSafeUpdate, type NightjarUpdateStatus } from './platform/pwa';
 import TransparencyPanel from './components/TransparencyPanel';
 import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
@@ -1412,7 +1412,7 @@ function App() {
   const installNightjarUpdate = async () => {
     if (nightjarUpdating) return;
     setNightjarUpdating(true);
-    try { await applyNightjarUpdate(); }
+    try { if (!await applyNightjarSafeUpdate()) { setNightjarUpdating(false); notify('Nightjar is already running the latest available build.'); } }
     catch { setNightjarUpdating(false); notify('Unable to update Nightjar. Check your connection and try again.'); }
   };
 
