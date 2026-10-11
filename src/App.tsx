@@ -3,6 +3,7 @@ import { readDemo, writeDemo, resetDemo } from './demo/demoSession';
 import { nightjarAuth } from './platform/firebase-auth';
 import { nightjarAccount } from './platform/firebase-account';
 import { nightjarCommunity } from './platform/firebase-community';
+import { nightjarHandleError, normaliseNightjarHandle } from './platform/profile-handle';
 import { nightjarMedia } from './platform/firebase-media';
 import { optimiseProfileImage, formatProfileImageBytes } from './platform/profile-image-optimizer';
 import { nightjarCommercial, type CommercialOverview, type CommercialSettings } from './platform/firebase-commercial';
@@ -2219,10 +2220,19 @@ function App() {
 
   const saveProfile = async () => {
     if (!user || profileLoading) return;
+    const invalidHandle = nightjarHandleError(profile.handle);
+    if (invalidHandle) {
+      setProfileSaveError(invalidHandle);
+      notify(invalidHandle);
+      return;
+    }
     setProfileSaveError('');
     setProfileLoading(true);
     try {
-      const capturedProfile = captureProfileRoleDraft(profile, profileEditRole);
+      const capturedProfile = captureProfileRoleDraft({
+        ...profile,
+        handle: normaliseNightjarHandle(profile.handle),
+      }, profileEditRole);
       // Keep unsaved drafts on-screen while the request is in flight.
       setProfile(capturedProfile);
       if (demoMode) {
@@ -2258,7 +2268,7 @@ function App() {
         ? String((error as { code?: unknown }).code ?? '')
         : '';
       const raw = error instanceof Error ? error.message : '';
-      const detail = raw.replace(/^Firebase(?:Error)?:\\s*/i, '').replace(/\\s*\\(functions\\/[^)]+\\)\\.?$/, '').trim();
+      const detail = raw.replace(/^Firebase(?:Error)?:\s*/i, '').replace(/\s*\(functions\/[^)]+\)\.?$/, '').trim();
       const message = code.includes('already-exists') ? 'That @handle is already in use. Please try a different one.'
         : code.includes('invalid-argument') ? (detail || 'Check your @handle: use 3–30 letters, numbers, underscores or hyphens.')
         : code.includes('permission-denied') ? (detail || 'This account cannot edit one of the selected roles. Check your approved roles.')
