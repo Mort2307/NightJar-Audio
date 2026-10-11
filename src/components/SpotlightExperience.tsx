@@ -37,10 +37,6 @@ const roles: Record<SpotlightPerson['kind'], { label: string; icon: LucideIcon; 
   listener: { label: 'LISTENER', singular: 'community', icon: Headphones },
 };
 
-const todayInLondon = () => new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
-}).format(new Date());
-
 const labelFor = (person: SpotlightPerson) => person.kind === 'listener'
   ? 'A listener who makes Nightjar matter'
   : person.kind === 'creator' ? 'The voice behind the feeling'
@@ -48,14 +44,14 @@ const labelFor = (person: SpotlightPerson) => person.kind === 'listener'
       : person.kind === 'editor' ? 'The craft behind the sound'
         : 'The artistry behind the world';
 
-function PersonCard({ person, featured, viewerUserId, followingIds, simulationMode, simulationRole, onProfile, onFollow, onShare, onListen }: Props & {person: SpotlightPerson; featured: boolean}) {
+function PersonCard({ person, viewerUserId, followingIds, simulationMode, simulationRole, onProfile, onFollow, onShare, onListen }: Props & {person: SpotlightPerson}) {
   const role = roles[person.kind];
   const Icon = role.icon;
   const canVisit = person.publicProfile !== false && Boolean(person.targetId);
   const isSelf = Boolean(!simulationMode && viewerUserId && person.targetId === viewerUserId);
   const isDemoSelf = Boolean(simulationMode && simulationRole === person.kind);
   const followed = person.targetId ? followingIds.includes(person.targetId) : false;
-  return <article className={featured ? 'nj-spotlight-card nj-spotlight-lead' : 'nj-spotlight-card'} data-role={person.kind} id={'spotlight-' + person.kind}>
+  return <article className="nj-spotlight-card" data-role={person.kind} id={'spotlight-' + person.kind}>
     <div className="nj-spotlight-portrait">
       {person.imageUrl && person.publicProfile !== false
         ? <img className="nj-spotlight-portrait-img" src={person.imageUrl} alt={person.name + ' approved Nightjar profile portrait'} loading="lazy" decoding="async"/>
@@ -63,7 +59,7 @@ function PersonCard({ person, featured, viewerUserId, followingIds, simulationMo
       <div className="nj-spotlight-portrait-stamp"><Icon size={17}/>{role.label}</div>
     </div>
     <div className="nj-spotlight-story">
-      <div className="nj-spotlight-eyebrow"><span><Star size={13} fill="currentColor"/> IN THE SPOTLIGHT</span><span>TODAY ONLY</span></div>
+      <div className="nj-spotlight-eyebrow"><span><Star size={13} fill="currentColor"/> IN THE SPOTLIGHT</span><span>SPOTLIGHT DAY</span></div>
       <p className="nj-spotlight-editorial">{labelFor(person)}</p>
       <h3>{person.name}</h3>
       {person.handle && person.publicProfile !== false && <p className="nj-spotlight-handle">@{person.handle.replace(/^@/, '')}</p>}
@@ -89,26 +85,22 @@ function PersonCard({ person, featured, viewerUserId, followingIds, simulationMo
 
 export default function SpotlightExperience(props: Props) {
   const available = props.spotlights.filter(p=>p?.kind && p?.name);
-  const dateKey = todayInLondon();
-  // Rotate the lead editorial position across the roles rather than giving
-  // one profession permanent top billing. Backend role selection stays intact.
-  const calendarDay = Number.isFinite(Date.parse(dateKey + 'T00:00:00Z'))
-    ? Math.floor(Date.parse(dateKey + 'T00:00:00Z') / 86400000) : 0;
-  const leadIndex = available.length ? ((calendarDay % available.length) + available.length) % available.length : 0;
-  const ordered = available.length ? [available[leadIndex],...available.filter((_,i)=>i!==leadIndex)] : [];
+  // Editorial equality: the existing server-selected rotation chooses who
+  // appears, while every profession now receives the same full-width card.
+  const ordered = available;
 
   return <section className="spotlight-section section-wrap nj-spotlight-experience" aria-labelledby="daily-spotlights-title">
     <header className="nj-spotlight-section-head">
       <div className="nj-spotlight-section-kicker"><span className="nj-spotlight-kicker-icon"><Crown size={17}/></span> THE NIGHTJAR SPOTLIGHT <span className="nj-spotlight-live"><span/> LIVE TODAY</span></div>
       <h2 id="daily-spotlights-title">Their moment. <em>Our stage.</em></h2>
-      <p>Today, we celebrate the voices, imaginations, craft and listeners who make Nightjar what it is. One day of recognition worth sharing.</p>
-      <div className="nj-spotlight-promises"><span><CheckCircle2 size={14}/> Every approved professional gets their turn</span><span><Sparkles size={14}/> A new spotlight each day</span></div>
+      <p>Each featured member gets their own spotlight day. We celebrate the voices, imaginations, craft and listeners who make Nightjar what it is.</p>
+      <div className="nj-spotlight-promises"><span><CheckCircle2 size={14}/> A place for every creative discipline</span><span><Sparkles size={14}/> Featured members rotate</span></div>
     </header>
     {ordered.length ? <>
       <div className="nj-spotlight-editorial-grid">
-        {ordered.map((person, index)=><PersonCard key={person.kind+':'+person.targetId} {...props} person={person} featured={index===0}/>)}
+        {ordered.map(person=><PersonCard key={person.kind+':'+person.targetId} {...props} person={person}/>)}
       </div>
-      <p className="nj-spotlight-outro"><Sparkles size={14}/> Your next favourite creator, collaborator or community voice could be right here tomorrow.</p>
+      <p className="nj-spotlight-outro"><Sparkles size={14}/> Spotlight days rotate, giving each featured person their own moment on the Nightjar stage.</p>
       {Boolean(props.spotlightMeta?.listenerTopSevenCount) && <p className="nj-spotlight-weekly-note">Weekly listener recognition celebrates {props.spotlightMeta!.listenerTopSevenCount} listener{props.spotlightMeta!.listenerTopSevenCount === 1 ? '' : 's'} across the week, with one featured day at a time.</p>}
     </> : <div className="nj-spotlight-empty"><Star size={24}/><strong>The stage is being prepared.</strong><p>Featured members will appear as public profiles become eligible. Each approved professional is included in Nightjar's fair daily rotation.</p></div>}
   </section>;
