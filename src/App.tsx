@@ -70,6 +70,7 @@ import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
 import AppUpdateControl from './components/AppUpdateControl';
+import { checkNightjarUpdate, applyNightjarUpdate, type NightjarUpdateStatus } from './platform/pwa';
 import TransparencyPanel from './components/TransparencyPanel';
 import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
@@ -616,6 +617,8 @@ function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [nightjarUpdate, setNightjarUpdate] = useState<NightjarUpdateStatus | null>(null);
+  const [nightjarUpdating, setNightjarUpdating] = useState(false);
   const [releaseReactions, setReleaseReactions] = useState<Record<string, Exclude<ReleaseReaction, null>>>({});
   const [messageRecipientUserId, setMessageRecipientUserId] = useState<string | null>(null);
   const [messageCollaborationId, setMessageCollaborationId] = useState<string | null>(null);
@@ -1382,6 +1385,35 @@ function App() {
       setLiveTrending([]);
       setListeningAccess(null);
     }
+  };
+
+  // Show real deployed-build updates in the bell, not as synthetic Firestore messages.
+  // Checking never alters FCM subscriptions or marks a user's activity as read.
+  useEffect(() => {
+    let mounted = true;
+    const check = () => {
+      if (document.visibilityState === 'hidden') return;
+      void checkNightjarUpdate().then(status => {
+        if (mounted) setNightjarUpdate(status.latestBuildId ? status : null);
+      }).catch(() => { /* offline is not evidence of a new build */ });
+    };
+    check();
+    const interval = window.setInterval(check, 300000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('nightjar:update-available', check);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('nightjar:update-available', check);
+    };
+  }, []);
+
+  const installNightjarUpdate = async () => {
+    if (nightjarUpdating) return;
+    setNightjarUpdating(true);
+    try { await applyNightjarUpdate(); }
+    catch { setNightjarUpdating(false); notify('Unable to update Nightjar. Check your connection and try again.'); }
   };
 
   const loadNotifications = async (epoch: number) => {
@@ -4064,16 +4096,20 @@ function App() {
           </div>}
           {user && !liveRolePreview && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
           {user && !liveRolePreview && <div className="notification-wrap">
-            <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) void loadNotifications(productLoadEpoch.current); setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount ? String(notificationUnreadCount) + ' unread notifications' : 'Notifications'}>
+            <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) void loadNotifications(productLoadEpoch.current); setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0) ? String(notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0)) + ' updates and unread notifications' : 'Notifications'}>
               <Bell size={17} />
-              {notificationUnreadCount > 0 && <span className="notification-badge">{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</span>}
+              {(notificationUnreadCount > 0 || nightjarUpdate?.updateAvailable) && <span className="notification-badge">{notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0) > 9 ? '9+' : notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0)}</span>}
             </button>
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
               <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
+              {nightjarUpdate?.updateAvailable && <div className="nightjar-update-notification" role="status">
+                <div className="nightjar-update-notification-copy"><Download size={18} aria-hidden="true"/><span><strong>New Nightjar version available</strong><small>Latest build {nightjarUpdate.latestBuildId}. Update this device to enjoy the newest features.</small></span></div>
+                <button type="button" className="primary-button" onClick={() => void installNightjarUpdate()} disabled={nightjarUpdating}><Download size={14}/>{nightjarUpdating ? 'Updating…' : 'Update now'}</button>
+              </div>}
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void openNotification(item)}>
                 <span className="notification-row-icon">{item.type === 'admin_action' ? <ShieldCheck size={15}/> : item.type === 'spotlight' ? <Star size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
-                <span><strong>{item.title}</strong><small>{item.message}</small></span>
-              </button>)}</div>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new activity. You’re caught up.</span></div>}
+                <span><strong>{item.title}</strong><small>{item.message}</small>{nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title))) && <span className="notification-inline-update" onClick={event => event.stopPropagation()}><span className="primary-button" role="button" tabIndex={0} onClick={() => void installNightjarUpdate()} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void installNightjarUpdate(); } }}>{nightjarUpdating ? 'Updating…' : 'Update now'}</span></span>}</span>
+              </button>)}</div>)}</div> : !nightjarUpdate?.updateAvailable && <div className="notification-empty"><Bell size={17} /><span>No new activity. You’re caught up.</span></div>}
             </section>}
           </div>}
           {!user ? (
