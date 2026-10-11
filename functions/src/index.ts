@@ -4281,6 +4281,18 @@ const scheduleReleaseInput = (atInput: unknown, zoneInput: unknown, localInput: 
   const field = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
   const actual = field('year')+'-'+field('month')+'-'+field('day')+'T'+field('hour')+':'+field('minute');
   if (actual !== local) throw new HttpsError('invalid-argument', 'The selected time is invalid in this time zone (possibly a daylight-saving change).');
+  // Autumn clock changes can repeat the same local hour; do not guess which
+  // of the two possible instants the creator intended.
+  const formatsToLocal = (candidate:number) => {
+    const p = new Intl.DateTimeFormat('en-GB',{
+      timeZone:zone,hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',
+    }).formatToParts(new Date(candidate));
+    const part=(kind:string)=>p.find((item)=>item.type===kind)?.value??'';
+    return part('year')+'-'+part('month')+'-'+part('day')+'T'+part('hour')+':'+part('minute');
+  };
+  if ([-90,-60,-30,30,60,90].some((minutes)=>formatsToLocal(Date.parse(at)+minutes*60000)===local)) {
+    throw new HttpsError('invalid-argument','That local time occurs twice during a clock change. Choose another time.');
+  }
   const offset = Date.parse(at) - Date.now();
   if (offset <= 60000) throw new HttpsError('failed-precondition', 'Choose a release time at least one minute in the future.');
   if (offset > 2 * 365 * 86400000) throw new HttpsError('invalid-argument', 'Schedule up to two years ahead.');
