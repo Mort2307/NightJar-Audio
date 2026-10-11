@@ -193,7 +193,7 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
                 <button type="button" className="primary-button" disabled={reviewBusy || (reviewDecision!=='approved'&&!reviewNote.trim())} onClick={()=>void decide(reviewDecision)}>{reviewBusy?'Saving decision…':'Confirm & notify creator'}</button>
               </div>
             </section>}
-          </div>} : selected.status !== 'pending_review' ? <p className="nj-audio-review-help">Listening is for administrator quality checks only. Moderation decisions unlock after the creator submits the completed release.</p> : null}
+          </div>}{selected.status !== 'pending_review' && <p className="nj-audio-review-help">Listening is for administrator quality checks only. Moderation decisions unlock after the creator submits the completed release.</p>}
         <div className="nj-admin-creator-contact">
           <strong>Discuss this submission with the creator</strong>
           <p>Approval and rejection notes are also sent to the creator's Nightjar Inbox. You can open a direct conversation at any time.</p>
