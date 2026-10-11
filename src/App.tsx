@@ -4361,6 +4361,7 @@ function App() {
         {view === 'library' && (effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && (
           <section className="page-wrap">
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading Listener Library" />}><ListenerLibrary
+              onDiscoverCreators={()=>{setDirectoryRoleFilter('all');navigate('creators');}}
               key={'listener-library-' + demoSessionKey}
               onPlayRelease={(release)=>{const track=releaseToTrack(release); setTracks((items)=>items.some((item)=>item.id===track.id)?items:[...items,track]); togglePlayback(track);}}
               notify={notify}
