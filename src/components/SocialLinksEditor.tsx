@@ -57,7 +57,6 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
   const [rows,setRows]=useState<EditorRow[]>([]);
   const [loading,setLoading]=useState(true);
   const [busyId,setBusyId]=useState<string|null>(null);
-  const [added,setAdded]=useState(0);
   const disabled=simulationMode||readOnly;
   const refresh=async()=>{
     setLoading(true);
