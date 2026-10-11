@@ -3687,3 +3687,38 @@ textarea {
 .nj-admin-audio-test-result { padding: 13px 15px; border: 1px solid rgba(133,197,145,.35); border-radius: 12px; background: rgba(84,149,87,.1); color: var(--ivory); font-size: 12px; overflow-wrap: anywhere; }
 .nj-admin-audio-test-result.failed { border-color: rgba(214,126,122,.42); background: rgba(140,55,55,.13); }
 .nj-admin-audio-test-result p { margin: 7px 0 0; line-height: 1.6; }
+
+
+/* AUDIO RELEASE WORKFLOW · clear persistence, progress and admin visibility */
+.nj-release-journey {display:grid;gap:12px;padding:19px;margin:0 0 19px;border:1px solid rgba(218,183,208,.33);border-radius:15px;background:linear-gradient(135deg,rgba(116,65,103,.14),rgba(17,13,20,.7));}
+.nj-release-journey h3 {margin:0;font:normal 24px Georgia,serif;color:var(--text);}
+.nj-release-journey-steps {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+.nj-release-journey-steps>div {display:flex;align-items:center;gap:9px;min-width:0;min-height:47px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:12px;line-height:1.45;color:var(--muted);background:rgba(255,255,255,.018);}
+.nj-release-journey-steps .done {border-color:rgba(181,206,176,.28);color:#d9edd7;background:rgba(81,139,82,.09);}
+.nj-release-journey-steps .next {border-color:rgba(220,188,213,.55);color:#f6e1f3;background:rgba(167,110,151,.12);}
+.nj-release-journey>p {margin:0;font-size:13px;line-height:1.6;color:#ead9e7;}
+.nj-audio-attachment {min-width:0;}
+.nj-audio-file-label {overflow-wrap:anywhere;font-size:12px!important;}
+.nj-audio-upload-progress {height:9px;width:100%;border:1px solid rgba(220,199,218,.35);border-radius:999px;overflow:hidden;background:rgba(10,8,13,.55);}
+.nj-audio-upload-progress>span {display:block;height:100%;border-radius:999px;background:#deb7d5;transition:width .15s linear;}
+.nj-audio-percent {font-size:12px;color:#e6cce0;}
+.nj-audio-feedback {padding:12px 13px;width:100%;border:1px solid rgba(217,189,209,.28);border-radius:10px;font-size:12px;line-height:1.55;text-align:left;color:#e5d1e3;background:rgba(148,95,138,.07);}
+.nj-audio-feedback.success {border-color:rgba(163,198,156,.34);background:rgba(92,140,92,.1);color:#e0eedd;}
+.nj-audio-feedback.error {border-color:rgba(234,144,144,.48);background:rgba(155,60,72,.1);color:#ffd6dc;}
+.nj-audio-review-tabs {display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding:13px 0;}
+.nj-audio-review-tabs>button {min-height:43px;font-size:12px;}
+.nj-audio-review-help {margin:7px 0 15px;padding:13px 15px;border-left:3px solid rgba(211,163,201,.6);border-radius:8px;background:rgba(118,77,111,.1);font-size:13px;line-height:1.55;color:#e8d9e2;}
+.nj-audio-review-error {margin:8px 0;padding:13px 15px;border:1px solid #b76c7c;border-radius:9px;font-size:13px;color:#ffdbdf;background:rgba(134,43,62,.14);}
+.nj-audio-review-queue-status {display:block;font-size:10px!important;font-weight:800;letter-spacing:.06em;color:#d3c1d0!important;}
+.nj-audio-review-queue-status.pending {color:#f6d3f0!important;}
+.nj-audio-review-state {display:grid;gap:7px;padding:14px 15px;margin-bottom:14px;border:1px solid rgba(212,183,205,.29);border-radius:10px;background:rgba(118,77,111,.08);}
+.nj-audio-review-state.pending {border-color:rgba(221,177,214,.55);background:rgba(155,83,144,.16);}
+.nj-audio-review-state>strong {font-size:13px;line-height:1.4;}
+.nj-audio-review-state>span {font-size:12px;line-height:1.5;color:var(--muted);}
+@media(max-width:640px) {
+  .nj-release-journey {padding:15px;}
+  .nj-release-journey-steps {grid-template-columns:minmax(0,1fr);}
+  .nj-audio-review-tabs {display:grid;grid-template-columns:minmax(0,1fr);}
+  .nj-audio-review-tabs>button {width:100%;justify-content:center;}
+}
+@media(prefers-reduced-motion:reduce){.nj-audio-upload-progress>span {transition:none;}}
