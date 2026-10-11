@@ -1696,7 +1696,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     ? activePublicRole
     : (professionalRoles[0] ?? 'listener');
   const linksSnapshot = await socialLinkCollection(userId).limit(12).get();
-  const publicSocialLinks = linksSnapshot.docs.map((doc)=>socialLinkPayload(doc.id,doc.data()));
+  const publicSocialLinks = linksSnapshot.docs.map((doc)=>{
+    const link=socialLinkPayload(doc.id,doc.data());
+    return {id:link.id,url:link.url,platform:link.platform,photoUrl:link.photoUrl};
+  });
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
