@@ -1484,7 +1484,7 @@ function App() {
     if (item.type === 'admin_action' && canAdmin && !simulationMode) {
       setNotificationsOpen(false);
       navigate('admin');
-      if (item.subtype === 'release_verification') {
+      if (item.subtype === 'release_verification' || item.subtype === 'release_submitted') {
         setModerationOpen(true);
       } else if (item.subtype === 'professional_approval') {
         openAdminPanel('approvals');
