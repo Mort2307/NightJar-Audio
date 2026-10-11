@@ -26,6 +26,16 @@ assert.match(functions, /await recentVerifiedUser\(request\)/, 'enrollment and r
 assert.match(client, /navigator.credentials.create\(/, 'enrollment uses the native WebAuthn API');
 assert.match(client, /navigator.credentials.get\(/, 'sign in uses the native WebAuthn API');
 assert.match(client, /signInWithCustomToken\(/, 'real Firebase session is minted from verified custom token');
+assert.match(client, /beginRegistration\(\{\}\)/, 'registration begins with explicit valid callable data');
+assert.match(client, /beginSignIn\(\{\}\)/, 'login begins with explicit valid callable data');
+assert.match(client, /passkeyFailure\('LOGIN_START', error\)/, 'login challenge errors retain the diagnostic step');
+assert.match(client, /passkeyFailure\('LOGIN_DEVICE', error\)/, 'native authenticator failures retain the diagnostic step');
+assert.match(client, /passkeyFailure\('LOGIN_VERIFY', error\)/, 'server assertion errors retain the diagnostic step');
+assert.match(client, /passkeyFailure\('LOGIN_SESSION', error\)/, 'Firebase custom token errors retain the diagnostic step');
+assert.match(client, /functions\/invalid-argument/, 'malformed callable replies have a distinct recovery instruction');
+assert.match(launch, /Diagnostic: \{diagnostic\}/, 'launch screen displays non-sensitive diagnostic step');
+assert.match(launch, /NightjarPasskeyError/, 'launch error handler presents the real passkey failure message');
+
 assert.match(settings, /nightjarAuth.reauthenticate\(password\)/, 'passkey changes need password reauthentication');
 assert.match(signin, /nightjarPasskeys.signIn\(/, 'sign-in screen exposes real passkey flow');
 assert.ok(packageJson.dependencies['@simplewebauthn/server'], 'a maintained WebAuthn verification library is installed');
