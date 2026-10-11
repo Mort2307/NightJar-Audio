@@ -8175,7 +8175,7 @@ export const reportReleaseComment = onCall({ region: REGION }, async (request) =
 const requireCreativeMessagingIdentity = async (
   request: { auth?: { uid: string; token: Record<string, unknown> } | null },
 ) => {
-  const identity = await requireAccountRole(request, ['creator','writer','editor','artist']);
+  const identity = await requireAccountRole(request, ['creator','writer','editor','artist','admin']);
   await requireAgeVerified(identity.uid);
   return identity;
 };
@@ -8275,7 +8275,8 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
 
   const target = await accountRef(targetUserId).get();
   const targetRoles = target.exists ? professionalRolesForAccount(target.data() ?? {}) : [];
-  if (!target.exists || target.data()?.status !== 'active' || !targetRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role))) {
+  const targetCreative = targetRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role)) || target.data()?.role === 'admin';
+  if (!target.exists || target.data()?.status !== 'active' || !targetCreative) {
     throw new HttpsError('not-found', 'Eligible creative account not found.');
   }
   if (await directMessagingBlockedBetween(identity.uid, targetUserId)) {
@@ -8390,7 +8391,7 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
   const recipientUserId = data.participantUserIds.find((id: string) => id !== identity.uid);
   const recipient = recipientUserId ? await accountRef(recipientUserId).get() : null;
   const recipientRoles = recipient?.exists ? professionalRolesForAccount(recipient.data() ?? {}) : [];
-  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !recipientRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role))) {
+  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !(recipientRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role)) || recipient.data()?.role === 'admin')) {
     throw new HttpsError('failed-precondition', 'The recipient account is no longer available for creative messaging.');
   }
   if (await directMessagingBlockedBetween(identity.uid, recipientUserId)) {
