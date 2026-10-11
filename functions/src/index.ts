@@ -9176,10 +9176,36 @@ const escapeEmailHtml = (value: string) => value
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#039;');
 
-const applyEmailPersonalisation = (template: string, recipient: AdminEmailRecipient) => template
-  .replace(/\{\{\s*firstName\s*\}\}/gi, recipient.firstName)
-  .replace(/\{\{\s*displayName\s*\}\}/gi, recipient.displayName)
-  .replace(/\{\{\s*role\s*\}\}/gi, recipient.roleLabel);
+type AdminEmailPersonalisationOverrides = Partial<Record<'firstName' | 'displayName' | 'role', string>>;
+
+const parseEmailPersonalisationOverrides = (value: unknown): AdminEmailPersonalisationOverrides => {
+  if (value === undefined || value === null) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new HttpsError('invalid-argument', 'Personalisation replacements must be named fields.');
+  }
+  const input = value as Record<string, unknown>;
+  const keys = ['firstName','displayName','role'] as const;
+  if (Object.keys(input).some(key=>!keys.includes(key as typeof keys[number]))) {
+    throw new HttpsError('invalid-argument', 'Unknown personalisation field.');
+  }
+  const out: AdminEmailPersonalisationOverrides = {};
+  for (const key of keys) {
+    if (input[key] == null || input[key] === '') continue;
+    if (typeof input[key] !== 'string' || input[key].length > 80 || /[\r\n{}]/.test(input[key])) {
+      throw new HttpsError('invalid-argument', 'Personalisation replacements must be single-line text of up to 80 characters.');
+    }
+    const replacement = input[key].trim();
+    if (replacement) out[key] = replacement;
+  }
+  return out;
+};
+
+const applyEmailPersonalisation = (
+  template: string, recipient: AdminEmailRecipient, overrides: AdminEmailPersonalisationOverrides = {},
+) => template
+  .replace(/\{\{\s*firstName\s*\}\}/gi, overrides.firstName || recipient.firstName)
+  .replace(/\{\{\s*displayName\s*\}\}/gi, overrides.displayName || recipient.displayName)
+  .replace(/\{\{\s*role\s*\}\}/gi, overrides.role || recipient.roleLabel);
 
 const emailFooterText = (category: AdminEmailCategory) => {
   if (category === 'testing_update') {
@@ -9230,9 +9256,10 @@ const renderAdminEmail = (
   bodyTemplate: string,
   category: AdminEmailCategory,
   recipient: AdminEmailRecipient,
+  overrides: AdminEmailPersonalisationOverrides = {},
 ) => {
-  const subject = applyEmailPersonalisation(subjectTemplate, recipient).replace(/[\r\n]+/g, ' ').trim();
-  const body = applyEmailPersonalisation(bodyTemplate, recipient).trim();
+  const subject = applyEmailPersonalisation(subjectTemplate, recipient, overrides).replace(/[\r\n]+/g, ' ').trim();
+  const body = applyEmailPersonalisation(bodyTemplate, recipient, overrides).trim();
   const footer = emailFooterText(category);
   const text = body + '\n\n—\n' + footer + '\nNightjar — Audio, after dark. 🌙';
   const htmlBody = escapeEmailHtml(body).replace(/\r?\n/g, '<br>');
@@ -9956,6 +9983,7 @@ export const adminSendEmailTest = onCall({
   const input = (request.data ?? {}) as Record<string, unknown>;
   const subjectTemplate = cleanText(input.subject, 180);
   const bodyTemplate = cleanText(input.body, 12000);
+  const personalisationOverrides = parseEmailPersonalisationOverrides(input.personalisationOverrides);
   const category = cleanText(input.category, 40) as AdminEmailCategory;
   const submittedEmails = Array.isArray(input.recipientEmails)
     ? input.recipientEmails.map((value) => cleanEmail(value)).filter(Boolean)
@@ -10000,7 +10028,7 @@ export const adminSendEmailTest = onCall({
   }
 
   for (const recipient of recipients) {
-    const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
+    const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient, personalisationOverrides);
     try {
       const sent = await sendGmailApiMessage({
         accessToken,
@@ -10057,6 +10085,7 @@ export const adminSendEmailCampaign = onCall({
   const input = (request.data ?? {}) as Record<string, unknown>;
   const subjectTemplate = cleanText(input.subject, 180);
   const bodyTemplate = cleanText(input.body, 12000);
+  const personalisationOverrides = parseEmailPersonalisationOverrides(input.personalisationOverrides);
   const audience = cleanText(input.audience, 40) as AdminEmailAudience;
   const selectedUserIds = input.selectedUserIds;
   const category = cleanText(input.category, 40) as AdminEmailCategory;
@@ -10100,6 +10129,7 @@ export const adminSendEmailCampaign = onCall({
   await campaignRef.create({
     subject: subjectTemplate,
     body: bodyTemplate,
+    personalisationOverrides,
     category,
     audience,
     audienceLabel: adminEmailAudienceLabel(audience),
@@ -10144,7 +10174,7 @@ export const adminSendEmailCampaign = onCall({
   for (const recipient of recipients) {
     const deliveryId = createHash('sha256').update(recipient.email).digest('hex');
     const deliveryRef = campaignRef.collection('deliveries').doc(deliveryId);
-    const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient);
+    const rendered = renderAdminEmail(subjectTemplate, bodyTemplate, category, recipient, personalisationOverrides);
     try {
       const sent = await sendGmailApiMessage({
         accessToken,
@@ -10243,7 +10273,7 @@ export const adminRetryEmailCampaign = onCall({
       userId: cleanText(delivery.userId, 160) || null,
       source: delivery.source === 'tester_allowlist' ? 'tester_allowlist' : 'account',
     };
-    const rendered = renderAdminEmail(cleanText(campaign.subject, 180), cleanText(campaign.body, 12000), category, recipient);
+    const rendered = renderAdminEmail(cleanText(campaign.subject, 180), cleanText(campaign.body, 12000), category, recipient, parseEmailPersonalisationOverrides(campaign.personalisationOverrides));
     try {
       const sent = await sendGmailApiMessage({
         accessToken,

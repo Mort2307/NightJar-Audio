@@ -54,6 +54,8 @@ export default function AdminCommunications() {
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const [personalisationTarget, setPersonalisationTarget] = useState<'subject' | 'message'>('message');
   const [previewNames, setPreviewNames] = useState({ firstName: 'Alex', displayName: 'Alex Nightjar', role: 'VA Creator' });
+  // Optional per-campaign replacements; blank means recipient-specific values.
+  const [personalisationOverrides, setPersonalisationOverrides] = useState({ firstName: '', displayName: '', role: '' });
   const insertPersonalisation = (token: 'firstName' | 'displayName' | 'role') => {
     const input = personalisationTarget === 'subject' ? subjectRef.current : messageRef.current;
     const current = personalisationTarget === 'subject' ? subject : body;
@@ -68,9 +70,9 @@ export default function AdminCommunications() {
     });
   };
   const previewText = (template: string) => template
-    .replace(/\{\{\s*firstName\s*\}\}/gi, previewNames.firstName)
-    .replace(/\{\{\s*displayName\s*\}\}/gi, previewNames.displayName)
-    .replace(/\{\{\s*role\s*\}\}/gi, previewNames.role);
+    .replace(/\{\{\s*firstName\s*\}\}/gi, personalisationOverrides.firstName.trim() || previewNames.firstName)
+    .replace(/\{\{\s*displayName\s*\}\}/gi, personalisationOverrides.displayName.trim() || previewNames.displayName)
+    .replace(/\{\{\s*role\s*\}\}/gi, personalisationOverrides.role.trim() || previewNames.role);
   const [preview, setPreview] = useState<AdminEmailAudiencePreview | null>(null);
   const [campaigns, setCampaigns] = useState<AdminEmailCampaign[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -277,6 +279,7 @@ export default function AdminCommunications() {
         body.trim(),
         category,
         recipientEmails,
+        personalisationOverrides,
       );
 
       const message = result.failedCount
@@ -316,6 +319,7 @@ export default function AdminCommunications() {
         body: body.trim(),
         audience,
         category,
+        personalisationOverrides,
         ...(audience==='selected_members' ? {selectedUserIds:selectedMemberIds} : {}),
         clientRequestId: crypto.randomUUID(),
         confirmPrivateIndividualDelivery: true,
@@ -582,7 +586,17 @@ export default function AdminCommunications() {
                 </button>
               )}
             </div>
-            <small>Choose where to insert a field, then edit the wording in your subject or message as normal. Each field is replaced with that recipient's own Nightjar details when sent.</small>
+            <small>Choose where to insert a field, then edit the wording in your subject or message as normal. By default, Nightjar inserts each recipient's actual details.</small>
+            <details className="admin-mail-personalisation-preview">
+              <summary>Optional: customise the values sent for these fields</summary>
+              <div className="admin-mail-example-fields">
+                {([['firstName','First name'],['displayName','Display name'],['role','Role']] as const).map(([key,label])=>
+                  <label key={key}>{label} override for every recipient
+                    <input maxLength={80} disabled={sendingCampaign} placeholder={'Automatic ' + label.toLowerCase()} value={personalisationOverrides[key]} onChange={event=>{setPersonalisationOverrides(current=>({...current,[key]:event.target.value}));setConfirmed(false);}}/>
+                  </label>)}
+              </div>
+              <small>Leave a field blank to use each person's own name or role. Any text entered here replaces that field for EVERY recipient in this email campaign, including tests and retries. This does not edit member profiles.</small>
+            </details>
             <details className="admin-mail-personalisation-preview">
               <summary>Preview personalised email · edit example details</summary>
               <div className="admin-mail-example-fields">
@@ -593,7 +607,7 @@ export default function AdminCommunications() {
                 <strong>{previewText(subject) || 'Your personalised subject appears here'}</strong>
                 <p>{previewText(body) || 'Your personalised message appears here'}</p>
               </div>
-              <small>Preview-only example values. Editing these examples does not change any recipient's stored account details or the backend substitution rules.</small>
+              <small>Example values are preview-only. Custom replacements above, if entered, are the actual values used when this campaign is sent.</small>
             </details>
           </div>
 
