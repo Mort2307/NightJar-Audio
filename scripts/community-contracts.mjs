@@ -205,6 +205,29 @@ requireText(functions,"await deliverPushNotification(targetId, mobilePayload, di
 requireText(functions,"const mobilePayload = displayMode === 'full'", 'Push notification must respect display privacy levels');
 requireText(functions,"Promise.allSettled(spotlights.map", 'Push availability must not break daily Spotlight state');
 
+
+// Professional Library: role-specific public discovery for every approved
+// VA, Writer, Audio Editor and Artist without exposing hidden/private people.
+const proLibrary=read('src/components/ProfessionalLibrary.tsx');
+requireText(app,"import ProfessionalLibrary from './components/ProfessionalLibrary'",'Professional library must be imported');
+requireText(app,'<ProfessionalLibrary','Directory must render dedicated Professional Library');
+requireText(app,'filteredProfiles={filteredDirectoryProfiles}','Professional Library must use the existing public directory filtering');
+requireText(app,'category={directoryRoleFilter}','Category selection must match directory search and saved filters');
+requireText(app,'onOpen={openPublicProfile}','Library must use actual public-profile renderer');
+requireText(app,'readOnly={liveRolePreview}','Owner preview cannot follow or message members');
+for(const role of ["'creator'","'writer'","'editor'","'artist'"]) {
+  requireText(proLibrary,'id:'+role, 'Professional category missing '+role);
+}
+requireText(proLibrary,'belongsToLibraryCategory','Multi-role members must appear under each approved profession');
+requireText(proLibrary,'profile.roles.includes(category)','Multi-role membership must not rely only on primary account role');
+requireText(proLibrary,'person.roleProfiles?.[category]','A role-scoped headline must be used for each category');
+requireText(proLibrary,'new Set(filteredProfiles.filter','All-professionals matching total must deduplicate multi-role accounts');
+requireText(proLibrary,'category===\'all\' ? categories.map','All-professionals mode should show distinct sections for all four roles');
+requireText(proLibrary,'role===\'listener\'','Listener community should remain optional, not dominate professional library');
+requireText(proLibrary,'data-nj-preview-safe="true"','Public profiles must be viewable in read-only owner preview');
+requireText(proLibrary,'!readOnly&&canMessage','Role-based private messaging should not appear in owner preview');
+requireText(functions,'if (!data || data.publicProfile === false) return null;', 'Private profiles must be filtered at the backend');
+
 if (failures.length) {
   console.error('COMMUNITY CONTRACT FAILURES');
   failures.forEach((failure)=>console.error('-',failure));
