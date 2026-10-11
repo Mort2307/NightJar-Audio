@@ -9,6 +9,7 @@ import { nightjarReferrals } from '../platform/firebase-referrals';
 import NightjarGiftPanel from './NightjarGiftPanel';
 import PublicEditorShowcase from './PublicEditorShowcase';
 import PublicWriterPortfolio from './PublicWriterPortfolio';
+import { SocialLinksDisplay } from './SocialLinksEditor';
 
 type Props = {
   userId: string;
@@ -239,6 +240,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
         {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}
         {profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
+        <SocialLinksDisplay links={profile.socialLinks} />
 
         <div className="public-profile-metrics">
           {profileMetrics.map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}

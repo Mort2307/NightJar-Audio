@@ -3,7 +3,7 @@ import { firebaseApp } from './firebase-auth';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
-type ImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio';
+type ImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio' | 'social_avatar';
 
 const submitImageCall = httpsCallable<{
   kind: ImageKind;

@@ -1106,6 +1106,111 @@ export const getMyProfilePortfolioOptions = onCall({ region: REGION }, async (re
   return { role, options, completedCollaborations };
 });
 
+// Social profile links are a shared, public-facing part of the member identity.
+// Use separate account-owned documents: saving a link must not overwrite profile
+// drafts or other professional-role settings.
+const socialLinkCollection = (uid: string) => profileRef(uid).collection('socialLinks');
+const socialLinkPlatform = (hostname: string) => {
+  const host = hostname.toLowerCase().replace(/^(www|m)\./, '');
+  const rules: Array<[string, string]> = [
+    ['instagram.com','Instagram'], ['tiktok.com','TikTok'], ['youtube.com','YouTube'], ['youtu.be','YouTube'],
+    ['x.com','X'], ['twitter.com','X'], ['bsky.app','Bluesky'], ['threads.net','Threads'],
+    ['facebook.com','Facebook'],['fb.com','Facebook'], ['twitch.tv','Twitch'],
+    ['reddit.com','Reddit'], ['tumblr.com','Tumblr'], ['soundcloud.com','SoundCloud'],
+    ['open.spotify.com','Spotify'],['spotify.com','Spotify'], ['patreon.com','Patreon'],
+    ['ko-fi.com','Ko-fi'], ['linktr.ee','Linktree'],['beacons.ai','Beacons'],
+    ['carrd.co','Carrd'], ['onlyfans.com','OnlyFans'],['fansly.com','Fansly'],
+  ];
+  return rules.find(([domain]) => host === domain || host.endsWith('.' + domain))?.[1] ?? 'Website';
+};
+
+const validatedSocialUrl = (input: unknown) => {
+  const raw = cleanText(input, 500);
+  if (!raw || raw.length > 500) throw new HttpsError('invalid-argument', 'Paste a social profile link (maximum 500 characters).');
+  let url: URL;
+  try { url = new URL(raw); } catch { throw new HttpsError('invalid-argument', 'Paste the full social link starting with https://'); }
+  if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.port) {
+    throw new HttpsError('invalid-argument', 'Social links must use secure https:// addresses without credentials or custom ports.');
+  }
+  const host = url.hostname.toLowerCase();
+  if (!host.includes('.') || host === 'localhost' || host.endsWith('.local') ||
+      /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
+    throw new HttpsError('invalid-argument', 'Use a public social profile address.');
+  }
+  url.hash = '';
+  return {url:url.toString(),platform:socialLinkPlatform(host)};
+};
+
+const socialLinkPayload = (id:string, data:Record<string,any>) => ({
+  id,
+  url:cleanText(data.url,500),
+  platform:cleanText(data.platform,60)||'Website',
+  photoUrl:data.photoStatus==='approved' ? cleanText(data.photoUrl,500)||null : null,
+  photoStatus:data.pendingPhotoStatus==='pending' ? 'pending' : data.pendingPhotoStatus==='rejected' ? 'rejected' : data.photoStatus==='approved' ? 'approved' : null,
+  pendingPhotoAssetId:cleanText(data.pendingPhotoAssetId,160)||null,
+});
+
+export const listMySocialLinks = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const docs=await socialLinkCollection(identity.uid).limit(16).get();
+  return { links:docs.docs.map(doc=>socialLinkPayload(doc.id,doc.data())).sort((a,b)=>a.platform.localeCompare(b.platform)||a.url.localeCompare(b.url)) };
+});
+
+export const saveMySocialLink = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const result=validatedSocialUrl(input.url);
+  const id=cleanText(input.id,120);
+  if (id && !/^[a-zA-Z0-9_-]{5,120}$/.test(id)) throw new HttpsError('invalid-argument','Social link identifier is invalid.');
+  const collection=socialLinkCollection(identity.uid);
+  const ref=id ? collection.doc(id) : collection.doc();
+  const snapshot=await ref.get();
+  if (!snapshot.exists) {
+    const count=await collection.count().get();
+    if (count.data().count>=12) throw new HttpsError('resource-exhausted','You can save up to 12 social links.');
+  }
+  const accountChanged = snapshot.exists && snapshot.data()?.url !== result.url;
+  if(accountChanged){
+    // Never carry a person's picture across to a different social account URL.
+    // Revoke image access before allowing the new link to appear publicly.
+    for(const value of [snapshot.data()?.photoAssetId,snapshot.data()?.pendingPhotoAssetId]){
+      const assetId=cleanText(value,160);
+      if(!assetId)continue;
+      const asset=await db.collection('imageAssets').doc(assetId).get();
+      if(asset.exists && asset.data()?.ownerUserId===identity.uid && asset.data()?.kind==='social_avatar'){
+        await asset.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        await clearAssetFile(asset.data()??{});
+      }
+    }
+  }
+  await ref.set({url:result.url,platform:result.platform,updatedAt:FieldValue.serverTimestamp(),
+    ...(accountChanged?{photoAssetId:null,photoUrl:null,photoStatus:null,pendingPhotoAssetId:null,pendingPhotoStatus:null}:{}),
+    ...(snapshot.exists?{}:{createdAt:FieldValue.serverTimestamp()})},{merge:true});
+  const saved=await ref.get();
+  return {link:socialLinkPayload(ref.id,saved.data()??{})};
+});
+
+export const deleteMySocialLink = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const id=cleanText((request.data as Record<string,unknown>|undefined)?.id,120);
+  if(!/^[a-zA-Z0-9_-]{5,120}$/.test(id))throw new HttpsError('invalid-argument','Social link identifier is invalid.');
+  const ref=socialLinkCollection(identity.uid).doc(id);
+  const snapshot=await ref.get();
+  const link=snapshot.data();
+  if(!link)return {deleted:true};
+  await ref.delete();
+  for (const value of [link.photoAssetId,link.pendingPhotoAssetId]) {
+    const assetId=cleanText(value,160);
+    if(!assetId)continue;
+    const asset=await db.collection('imageAssets').doc(assetId).get();
+    if(asset.exists && asset.data()?.ownerUserId===identity.uid && asset.data()?.kind==='social_avatar') {
+      await asset.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await clearAssetFile(asset.data()??{});
+    }
+  }
+  return {deleted:true};
+});
+
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -1590,6 +1695,11 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const role = activePublicRole === 'listener' || professionalRoles.includes(activePublicRole as AccountRole)
     ? activePublicRole
     : (professionalRoles[0] ?? 'listener');
+  const linksSnapshot = await socialLinkCollection(userId).limit(12).get();
+  const publicSocialLinks = linksSnapshot.docs.map((doc)=>{
+    const link=socialLinkPayload(doc.id,doc.data());
+    return {id:link.id,url:link.url,platform:link.platform,photoUrl:link.photoUrl};
+  });
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
@@ -1700,6 +1810,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       headline: data.headline ?? null,
       bio: data.bio ?? null,
       welcomeMessage: data.welcomeMessage ?? null,
+      socialLinks: publicSocialLinks,
       pronouns: data.pronouns ?? null,
       avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
       initials: data.avatarInitials ?? null,
@@ -1952,7 +2063,7 @@ export const setFavouriteRelease = onCall({ region: REGION }, async (request) =>
   return { releaseId, favourite: input.favourite !== false };
 });
 
-type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio';
+type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio' | 'social_avatar';
 
 const IMAGE_CONTENT_TYPES = new Map([
   ['image/png', 'png'],
@@ -2019,7 +2130,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const kind = cleanText(input.kind, 40) as ModeratedImageKind;
-  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'artist_portfolio'].includes(kind)) {
+  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'artist_portfolio', 'social_avatar'].includes(kind)) {
     throw new HttpsError('invalid-argument', 'Unsupported image type.');
   }
   if (kind === 'brand_logo' && !identity.admin) {
@@ -2032,6 +2143,12 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
 
   if ((kind === 'release_artwork' || kind === 'artist_portfolio') && !targetId) {
     throw new HttpsError('invalid-argument', kind === 'artist_portfolio' ? 'Artist portfolio artwork requires a portfolio item ID.' : 'Release artwork requires a release ID.');
+  }
+
+  if (kind === 'social_avatar') {
+    if(!targetId)throw new HttpsError('invalid-argument','Save the social link before adding its profile photo.');
+    const item=await socialLinkCollection(identity.uid).doc(targetId).get();
+    if(!item.exists)throw new HttpsError('not-found','Social profile link not found.');
   }
 
   if (kind === 'artist_portfolio') {
@@ -2113,6 +2230,19 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       pendingAvatarStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+  } else if (kind === 'social_avatar') {
+    const ref=socialLinkCollection(identity.uid).doc(targetId);
+    const existing=await ref.get();
+    if(!existing.exists)throw new HttpsError('not-found','Social profile link was removed.');
+    const prior=cleanText(existing.data()?.pendingPhotoAssetId,160);
+    if(prior && prior!==assetId){
+      const old=await db.collection('imageAssets').doc(prior).get();
+      if(old.exists && old.data()?.ownerUserId===identity.uid && old.data()?.kind==='social_avatar'){
+        await old.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        await clearAssetFile(old.data()??{});
+      }
+    }
+    await ref.set({pendingPhotoAssetId:assetId,pendingPhotoStatus:'pending',updatedAt:FieldValue.serverTimestamp()},{merge:true});
   } else if (kind === 'brand_logo') {
     const brandingRef = db.collection('settings').doc('branding');
     const existingBranding = await brandingRef.get();
@@ -2388,6 +2518,12 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         pendingAvatarStatus: 'rejected',
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+    } else if (asset.kind === 'social_avatar' && asset.targetId) {
+      const ref=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
+      const linked=await ref.get();
+      if(linked.exists && linked.data()?.pendingPhotoAssetId===assetId){
+        await ref.set({pendingPhotoAssetId:null,pendingPhotoStatus:'rejected',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      }
     } else if (asset.kind === 'brand_logo') {
       await db.collection('settings').doc('branding').set({
         pendingLogoAssetId: null,
@@ -2427,6 +2563,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
             ? 'Release artwork not approved'
             : asset.kind === 'artist_portfolio'
               ? 'Portfolio artwork not approved'
+              : asset.kind === 'social_avatar' ? 'Social profile picture not approved'
               : 'Nightjar image not approved',
         message: note || 'The submitted image was not approved for use on Nightjar. You can remove it or submit a different image.',
         assetId,
@@ -2466,6 +2603,26 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       if (previous.exists) {
         await clearAssetFile(previous.data() ?? {});
         await previous.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+    }
+  } else if (asset.kind === 'social_avatar' && asset.targetId) {
+    const linkRef=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
+    const link=await linkRef.get();
+    if(!link.exists || link.data()?.pendingPhotoAssetId!==assetId){
+      await ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await clearAssetFile(asset);
+      throw new HttpsError('failed-precondition','This link no longer needs the submitted photo.');
+    }
+    const old=cleanText(link.data()?.photoAssetId,160);
+    await linkRef.set({
+      photoAssetId:assetId,photoUrl:url,photoStatus:'approved',
+      pendingPhotoAssetId:null,pendingPhotoStatus:null,updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    if(old && old!==assetId){
+      const prior=await db.collection('imageAssets').doc(old).get();
+      if(prior.exists && prior.data()?.ownerUserId===asset.ownerUserId && prior.data()?.kind==='social_avatar'){
+        await prior.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        await clearAssetFile(prior.data()??{});
       }
     }
   } else if (asset.kind === 'brand_logo') {
@@ -2560,6 +2717,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
           ? 'Release artwork approved'
           : asset.kind === 'artist_portfolio'
             ? 'Portfolio artwork approved'
+            : asset.kind === 'social_avatar' ? 'Social profile picture approved'
             : 'Nightjar image approved',
       message: asset.kind === 'release_artwork'
         ? 'Your artwork passed Nightjar image moderation and is now available to the release.'
@@ -2609,6 +2767,17 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
     publicUrl: null,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+
+  if(asset.kind==='social_avatar' && asset.targetId){
+    const ref=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
+    const link=await ref.get();
+    if(link.exists){
+      const next:Record<string,unknown>={updatedAt:FieldValue.serverTimestamp()};
+      if(link.data()?.photoAssetId===assetId){next.photoAssetId=null;next.photoUrl=null;next.photoStatus=null;}
+      if(link.data()?.pendingPhotoAssetId===assetId){next.pendingPhotoAssetId=null;next.pendingPhotoStatus=null;}
+      if(Object.keys(next).length>1)await ref.set(next,{merge:true});
+    }
+  }
 
   if (asset.kind === 'artist_portfolio' && asset.targetId) {
     const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
