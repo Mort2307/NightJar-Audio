@@ -5,7 +5,9 @@
 export type NightjarQuickUnlockPreference = { userId: string; enabled: true };
 const preferenceKey = 'nightjar.passkeys.quick-unlock.v1';
 const sessionKey = 'nightjar.passkeys.unlocked-session.v1';
-const graceMillis = 10 * 60 * 1000;
+// Only bridges a deliberate full-page redirect after authentication. Reloading
+// outside this short window requires a new passkey verification.
+const graceMillis = 45 * 1000;
 
 export const nightjarQuickUnlock = {
   preference(): NightjarQuickUnlockPreference | null {
