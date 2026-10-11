@@ -10273,3 +10273,100 @@ textarea:focus-visible,
   .admin-mail-recipient > span { width: 26px; height: 26px; flex-basis: 26px; }
   .admin-mail-send-toggle { min-width: 59px; }
 }
+
+
+/* Nightjar's opt-in WebAuthn screen appears directly after the OS launch splash. */
+.nj-launch-unlock {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  min-width: 0;
+  overflow: auto;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  background: radial-gradient(ellipse at 50% 42%, rgba(121,83,47,.12), transparent 52%), #080809;
+  color: #f1ece7;
+  text-align: center;
+}
+.nj-launch-unlock-card {
+  width: min(100%, 440px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 18px;
+  gap: 15px;
+}
+.nj-launch-unlock-logo {
+  display: block;
+  width: clamp(96px, 28vw, 134px);
+  height: clamp(96px, 28vw, 134px);
+  object-fit: contain;
+  border-radius: 24px;
+  background: #070707;
+  margin-bottom: 12px;
+}
+.nj-launch-unlock-card > .mini-label {
+  color: #d5b47b;
+  letter-spacing: .19em;
+  font-size: 10px;
+}
+.nj-launch-unlock h1 {
+  color: #f2e9df;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(31px, 8vw, 42px);
+  font-weight: 400;
+  margin: 0;
+  line-height: 1.18;
+}
+.nj-launch-unlock-card > p {
+  max-width: 310px;
+  line-height: 1.65;
+  color: #baaeb4;
+  margin: 0 0 12px;
+}
+.nj-launch-unlock-card button {
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.nj-launch-unlock-action {
+  border: 1px solid rgba(235,191,121,.45);
+  background: linear-gradient(130deg, #b98b57, #71502f);
+  color: #0e0b0c;
+  border-radius: 14px;
+}
+.nj-launch-unlock-action:disabled { opacity: .65; }
+.nj-launch-unlock-fallback {
+  border: 1px solid rgba(219,198,179,.2);
+  color: #f1e5da;
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+}
+.nj-launch-unlock-message {
+  padding: 12px 14px;
+  border: 1px solid rgba(231,167,154,.4);
+  border-radius: 10px;
+  color: #f1b9ae !important;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.nj-launch-unlock-privacy { display: flex; align-items: flex-start; gap: 10px; max-width: 335px; margin-top: 14px; color: #a99c94; text-align: left; line-height: 1.6; }
+.nj-launch-unlock-privacy svg { flex: 0 0 15px; margin-top: 2px; color: #cbab78; }
+.nj-launch-unlock-privacy small { font-size: 11px; }
+.nightjar-passkey-quick-toggle { display: flex; align-items: flex-start; gap: 13px; margin: 18px 0 6px; padding: 14px; border: 1px solid rgba(181,154,174,.32); border-radius: 13px; background: rgba(255,255,255,.023); cursor: pointer; }
+.nightjar-passkey-quick-toggle input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; accent-color: #ad816a; cursor: pointer; }
+.nightjar-passkey-quick-toggle input:disabled { cursor: not-allowed; }
+.nightjar-passkey-quick-toggle > span { min-width: 0; display: grid; gap: 6px; }
+.nightjar-passkey-quick-toggle strong { font-size: 13px; }
+.nightjar-passkey-quick-toggle small { font-size: 12px; color: var(--muted); line-height: 1.6; }
+@media (prefers-reduced-motion: reduce) {
+  .nj-launch-unlock *, .nj-launch-unlock *::before, .nj-launch-unlock *::after { animation: none !important; transition: none !important; }
+}
