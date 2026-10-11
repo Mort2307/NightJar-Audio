@@ -1,5 +1,5 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { deleteObject, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, getStorage, ref, uploadBytesResumable } from 'firebase/storage';
 import { firebaseApp, firebaseAuth } from './firebase-auth';
 import { nightjarAudioContentType, nightjarAudioFileProblem, nightjarAudioUploadFailure } from './audio-upload';
 import { repairMojibakeDisplayData } from './text-integrity';
@@ -26,6 +26,7 @@ const transcriptCall = httpsCallable<{ releaseId: string }, {
   accessReason: 'admin' | 'credited_work' | 'subscription';
 }>(functions, 'getReleaseTranscript');
 const moderationQueueCall = httpsCallable<void, { releases: any[] }>(functions, 'releaseModerationQueue');
+const audioLibraryCall = httpsCallable<void, { releases: any[]; totalInspected: number; truncated: boolean }>(functions, 'adminReleaseAudioLibrary');
 const adminPreviewCall = httpsCallable<{ releaseId: string }, { releaseId: string; url: string; expiresInSeconds: number }>(functions, 'getAdminReleasePreviewUrl');
 const moderateReleaseCall = httpsCallable<{ releaseId: string; decision: 'approved' | 'changes' | 'rejected'; note?: string; nightjarOriginal?: boolean }, { release: any }>(functions, 'moderateRelease');
 const recommendationsCall = httpsCallable<{ intent?: string }, { recommendations: any[]; model: any }>(functions, 'recommendations');
@@ -48,7 +49,7 @@ export const nightjarCatalogue = {
     return (await deleteReleaseCall({ releaseId })).data;
   },
 
-  async uploadAudio(releaseId: string, file: File, durationMinutes?: number | null) {
+  async uploadAudio(releaseId: string, file: File, durationMinutes?: number | null, onProgress?: (stage: 'uploading' | 'verifying', percent: number) => void) {
     const user = firebaseAuth.currentUser;
     if (!user) throw new Error('auth/no-current-user');
     const storagePath = `release-audio/${user.uid}/${releaseId}/${crypto.randomUUID()}`;
@@ -58,7 +59,15 @@ export const nightjarCatalogue = {
     const contentType = nightjarAudioContentType(file)!;
     const fileRef = ref(storage, storagePath);
     try {
-      await uploadBytes(fileRef, file, { contentType, cacheControl: 'private,no-store,max-age=0' });
+      onProgress?.('uploading', 0);
+      await new Promise<void>((resolve, reject) => {
+        const task = uploadBytesResumable(fileRef, file, { contentType, cacheControl: 'private,no-store,max-age=0' });
+        task.on('state_changed', (snapshot) => {
+          const percent = snapshot.totalBytes > 0 ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
+          onProgress?.('uploading', percent);
+        }, reject, () => resolve());
+      });
+      onProgress?.('verifying', 100);
     } catch (error) {
       throw nightjarAudioUploadFailure('STORAGE', error);
     }
@@ -92,6 +101,10 @@ export const nightjarCatalogue = {
 
   async moderationQueue() {
     return repairMojibakeDisplayData((await moderationQueueCall()).data);
+  },
+
+  async adminAudioLibrary() {
+    return repairMojibakeDisplayData((await audioLibraryCall()).data);
   },
 
   async adminPreview(releaseId: string) {

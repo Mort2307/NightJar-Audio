@@ -4683,6 +4683,33 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
   };
 });
 
+// Owner-only attached-audio audit. Unlike releaseModerationQueue, this
+// deliberately includes audio connected to drafts and returned-for-changes
+// releases, so a creator upload is visible before final submission.
+// Only metadata is listed; listening uses the existing admin-signed URL.
+export const adminReleaseAudioLibrary = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('releases').limit(1000).get();
+  const releases = snapshot.docs
+    .filter((doc) => Boolean(doc.data().audioStoragePath))
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        ...releaseOwnerPayload(data, doc.id),
+        audioByteSize: Math.max(0, Number(data.audioByteSize ?? 0)),
+        audioContentType: cleanText(data.audioContentType, 100) || null,
+        submittedAt: toIso(data.submittedAt),
+        moderatedAt: toIso(data.moderatedAt),
+      };
+    })
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  return {
+    releases,
+    totalInspected: snapshot.size,
+    truncated: snapshot.size >= 1000,
+  };
+});
+
 export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('releases').where('status', '==', 'pending_review').limit(100).get();
