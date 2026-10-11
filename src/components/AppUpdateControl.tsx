@@ -10,7 +10,7 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
       const appliedAt = window.sessionStorage.getItem('nightjar.update-applied.v1');
       if (!appliedAt) return '';
       window.sessionStorage.removeItem('nightjar.update-applied.v1');
-      return 'Nightjar was refreshed from the deployed app and local app caches were cleared.';
+      return 'Nightjar was refreshed to the deployed version. Your push notification registration was preserved.';
     } catch {
       return '';
     }
@@ -71,6 +71,6 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
         : <button className="ghost-button" disabled={applying} onClick={()=>void apply()}><RefreshCw size={14}/>{applying ? 'Refreshing app…' : 'Force refresh app'}</button>}
     </div>
     {!installed && <button type="button" className="secondary-button" onClick={showInstall}><Download size={14}/> Install Nightjar on this device</button>}
-    <div className="app-update-safety"><ShieldCheck size={14}/><span>Force refresh unregisters old Nightjar service workers, clears browser Cache Storage and reloads the deployed app. It does not remove your account, profile, subscriptions or cloud data.</span></div>
+    <div className="app-update-safety"><ShieldCheck size={14}/><span>Updates refresh Nightjar-owned app caches without deleting your account, profile, subscriptions, cloud data or push notification registration.</span></div>
   </article>;
 }
