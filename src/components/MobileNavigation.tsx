@@ -1,6 +1,6 @@
-import { Brush, Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, ShieldCheck, FileText, type LucideIcon } from 'lucide-react';
+import { Brush, CalendarDays, Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, ShieldCheck, FileText, type LucideIcon } from 'lucide-react';
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'calendar' | 'settings';
 type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | null;
 
 type Props = {
@@ -27,6 +27,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
 
   const settings: Item = { view: 'settings', label: 'Settings', icon: Settings2 };
   const search: Item = { label: 'Search', icon: Search, search: true };
+  const calendar: Item = { view:'calendar',label:'Calendar',icon:CalendarDays };
 
   // Exactly five unique destinations. Previously Admin appeared twice, and
   // the duplicate could make the mobile dock appear crowded or wrapped.
@@ -34,22 +35,22 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
     ? [
         { view: 'discover', label: 'Home', icon: Home },
         { view: 'library', label: 'Library', icon: Library },
-        { view: 'creators', label: 'Creators', accessibleLabel:'Discover creators and their work', icon: Headphones },
+        calendar,
         search,
         settings,
       ]
     : role === 'admin'
       ? [
           { view: 'discover', label: 'Home', icon: Home },
-          { view: 'creators', label: 'Directory', icon: Headphones },
           { view: 'admin', label: 'Admin', icon: ShieldCheck },
+          calendar,
           search,
           settings,
         ]
       : [
           workspace,
-          { view: 'creators', label: 'Directory', icon: Headphones },
           { view: 'messages', label: 'Inbox', icon: MessageCircle },
+          calendar,
           search,
           settings,
         ];
