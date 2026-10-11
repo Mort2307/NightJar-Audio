@@ -1106,6 +1106,96 @@ export const getMyProfilePortfolioOptions = onCall({ region: REGION }, async (re
   return { role, options, completedCollaborations };
 });
 
+// Social profile links are a shared, public-facing part of the member identity.
+// Use separate account-owned documents: saving a link must not overwrite profile
+// drafts or other professional-role settings.
+const socialLinkCollection = (uid: string) => profileRef(uid).collection('socialLinks');
+const socialLinkPlatform = (hostname: string) => {
+  const host = hostname.toLowerCase().replace(/^(www|m)\./, '');
+  const rules: Array<[string, string]> = [
+    ['instagram.com','Instagram'], ['tiktok.com','TikTok'], ['youtube.com','YouTube'], ['youtu.be','YouTube'],
+    ['x.com','X'], ['twitter.com','X'], ['bsky.app','Bluesky'], ['threads.net','Threads'],
+    ['facebook.com','Facebook'],['fb.com','Facebook'], ['twitch.tv','Twitch'],
+    ['reddit.com','Reddit'], ['tumblr.com','Tumblr'], ['soundcloud.com','SoundCloud'],
+    ['open.spotify.com','Spotify'],['spotify.com','Spotify'], ['patreon.com','Patreon'],
+    ['ko-fi.com','Ko-fi'], ['linktr.ee','Linktree'],['beacons.ai','Beacons'],
+    ['carrd.co','Carrd'], ['onlyfans.com','OnlyFans'],['fansly.com','Fansly'],
+  ];
+  return rules.find(([domain]) => host === domain || host.endsWith('.' + domain))?.[1] ?? 'Website';
+};
+
+const validatedSocialUrl = (input: unknown) => {
+  const raw = cleanText(input, 500);
+  if (!raw || raw.length > 500) throw new HttpsError('invalid-argument', 'Paste a social profile link (maximum 500 characters).');
+  let url: URL;
+  try { url = new URL(raw); } catch { throw new HttpsError('invalid-argument', 'Paste the full social link starting with https://'); }
+  if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.port) {
+    throw new HttpsError('invalid-argument', 'Social links must use secure https:// addresses without credentials or custom ports.');
+  }
+  const host = url.hostname.toLowerCase();
+  if (!host.includes('.') || host === 'localhost' || host.endsWith('.local') ||
+      /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
+    throw new HttpsError('invalid-argument', 'Use a public social profile address.');
+  }
+  url.hash = '';
+  return {url:url.toString(),platform:socialLinkPlatform(host)};
+};
+
+const socialLinkPayload = (id:string, data:Record<string,any>) => ({
+  id,
+  url:cleanText(data.url,500),
+  platform:cleanText(data.platform,60)||'Website',
+  photoUrl:data.photoStatus==='approved' ? cleanText(data.photoUrl,500)||null : null,
+  photoStatus:data.photoStatus==='approved' ? 'approved' : data.pendingPhotoStatus==='pending' ? 'pending' : data.pendingPhotoStatus==='rejected' ? 'rejected' : null,
+  pendingPhotoAssetId:cleanText(data.pendingPhotoAssetId,160)||null,
+});
+
+export const listMySocialLinks = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const docs=await socialLinkCollection(identity.uid).limit(16).get();
+  return { links:docs.docs.map(doc=>socialLinkPayload(doc.id,doc.data())).sort((a,b)=>a.platform.localeCompare(b.platform)||a.url.localeCompare(b.url)) };
+});
+
+export const saveMySocialLink = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const result=validatedSocialUrl(input.url);
+  const id=cleanText(input.id,120);
+  if (id && !/^[a-zA-Z0-9_-]{5,120}$/.test(id)) throw new HttpsError('invalid-argument','Social link identifier is invalid.');
+  const collection=socialLinkCollection(identity.uid);
+  const ref=id ? collection.doc(id) : collection.doc();
+  const snapshot=await ref.get();
+  if (!snapshot.exists) {
+    const count=await collection.count().get();
+    if (count.data().count>=12) throw new HttpsError('resource-exhausted','You can save up to 12 social links.');
+  }
+  await ref.set({url:result.url,platform:result.platform,updatedAt:FieldValue.serverTimestamp(),
+    ...(snapshot.exists?{}:{createdAt:FieldValue.serverTimestamp()})},{merge:true});
+  const saved=await ref.get();
+  return {link:socialLinkPayload(ref.id,saved.data()??{})};
+});
+
+export const deleteMySocialLink = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const id=cleanText((request.data as Record<string,unknown>|undefined)?.id,120);
+  if(!/^[a-zA-Z0-9_-]{5,120}$/.test(id))throw new HttpsError('invalid-argument','Social link identifier is invalid.');
+  const ref=socialLinkCollection(identity.uid).doc(id);
+  const snapshot=await ref.get();
+  const link=snapshot.data();
+  if(!link)return {deleted:true};
+  await ref.delete();
+  for (const value of [link.photoAssetId,link.pendingPhotoAssetId]) {
+    const assetId=cleanText(value,160);
+    if(!assetId)continue;
+    const asset=await db.collection('imageAssets').doc(assetId).get();
+    if(asset.exists && asset.data()?.ownerUserId===identity.uid && asset.data()?.kind==='social_avatar') {
+      await asset.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await clearAssetFile(asset.data()??{});
+    }
+  }
+  return {deleted:true};
+});
+
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
