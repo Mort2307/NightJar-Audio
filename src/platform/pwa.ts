@@ -76,22 +76,45 @@ export const applyNightjarUpdate = async () => {
       // Update still proceeds if session storage is unavailable.
     }
 
-    // Preserve registration and push subscriptions while replacing the app shell.
     if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration('/');
-      if (registration) {
-        try { await registration.update(); } catch { /* reload still proceeds */ }
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(async (registration) => {
+        try { await registration.update(); } catch { /* continue with forced reset */ }
         try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch { /* optional */ }
-      }
+        try { await registration.unregister(); } catch { /* reload still continues */ }
+      }));
     }
 
     if ('caches' in window) {
       const keys = await caches.keys();
-      await Promise.all(keys.filter(key => key.startsWith('nightjar-')).map(key => caches.delete(key)));
+      await Promise.all(keys.map((key) => caches.delete(key)));
     }
   } finally {
     const url = new URL(window.location.href);
     url.searchParams.set('nightjar-refresh', Date.now().toString());
     window.location.replace(url.toString());
   }
+};
+
+
+/** Refresh the app in place while preserving the existing push/FCM service worker. */
+export const applyNightjarSafeUpdate = async () => {
+  const status = await checkNightjarUpdate();
+  if (!status.updateAvailable) return false;
+  if ('serviceWorker' in navigator) {
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    if (registration) {
+      try { await registration.update(); } catch { /* keep the existing registration */ }
+      try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch { /* optional */ }
+    }
+  }
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith('nightjar-')).map(key => caches.delete(key)));
+  }
+  try { window.sessionStorage.setItem('nightjar.update-applied.v1', new Date().toISOString()); } catch { /* optional */ }
+  const url = new URL(window.location.href);
+  url.searchParams.set('nightjar-refresh', String(Date.now()));
+  window.location.replace(url.toString());
+  return true;
 };
