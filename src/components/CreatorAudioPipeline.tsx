@@ -603,7 +603,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <div><strong>When should listeners hear this?</strong><small>Nightjar reviews your submission as soon as you send it, regardless of the chosen release date.</small></div>
             <label><input type="radio" name="nightjar-publish-mode" checked={!current.scheduledAt} onChange={() => setSchedule('')} /> Publish as soon as Nightjar approves</label>
             <label><input type="radio" name="nightjar-publish-mode" checked={Boolean(current.scheduledAt)} onChange={() => {
-              const next = new Date(Date.now() + 4 * 86400000); next.setSeconds(0,0);
+              const next = new Date(); next.setDate(next.getDate() + 4); next.setSeconds(0,0);
               setSchedule(formatLocal(next));
             }} /> Release on my chosen date</label>
             {current.scheduledAt && <div className="nj-scheduled-input">
