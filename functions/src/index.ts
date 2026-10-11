@@ -6408,7 +6408,50 @@ export const securityAlertEvidence = onCall({ region: REGION }, async (request) 
     })
     .slice(0, 100);
 
+  // Contact details refer ONLY to the registered account that was targeted.
+  // An attempted email address, client token or browser string never identifies
+  // the person who submitted the failed sign-in.
+  let authorisedTarget: {
+    eligible: boolean;
+    status: 'approved' | 'unapproved' | 'unverified' | 'unregistered';
+    displayName: string | null;
+    email: string | null;
+    accessReason: string | null;
+  } | null = null;
+  if (authenticationAlert) {
+    const targetUid = cleanText(alertData.targetUserId, 160);
+    authorisedTarget = { eligible: false, status: 'unregistered', displayName: null, email: null, accessReason: null };
+    if (targetUid) {
+      try {
+        const [authUser, accountSnapshot] = await Promise.all([
+          getAuth().getUser(targetUid),
+          accountRef(targetUid).get(),
+        ]);
+        const account = accountSnapshot.data() ?? {};
+        const email = cleanEmail(authUser.email);
+        const matchesTarget = email && createHash('sha256').update(email).digest('hex') === cleanText(alertData.emailHash, 100);
+        if (matchesTarget && accountSnapshot.exists) {
+          const access = await closedBetaAccessFor(email, account);
+          const eligible = authUser.emailVerified === true
+            && account.status !== 'suspended'
+            && access.allowed === true;
+          const presenter = eligible ? await accountPresentation(targetUid) : null;
+          authorisedTarget = {
+            eligible,
+            status: eligible ? 'approved' : authUser.emailVerified !== true ? 'unverified' : 'unapproved',
+            displayName: eligible ? presenter?.displayName ?? 'Nightjar member' : null,
+            email: eligible ? email : null,
+            accessReason: eligible ? access.reason : null,
+          };
+        }
+      } catch {
+        // If account resolution fails, never expose an unverified identity.
+      }
+    }
+  }
+
   return {
+    authorisedTarget,
     alert: {
       id: alert.id,
       userId,
