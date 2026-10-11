@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowRight, CheckCircle2, CircleHelp, Clock3, KeyRound, LifeBuoy, LockKeyhole, Mail, RefreshCw, Search, ShieldAlert, ShieldCheck, UserRoundCheck, XCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle2, CircleHelp, Clock3, KeyRound, LifeBuoy, LockKeyhole, Mail, RefreshCw, Search, ShieldAlert, ShieldCheck, UserRoundCheck } from 'lucide-react';
 import { nightjarAssistance, type AccountAssistanceResult } from '../platform/firebase-account-assistance';
 
 type Props = {
