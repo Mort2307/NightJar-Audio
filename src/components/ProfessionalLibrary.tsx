@@ -49,6 +49,8 @@ type Props = {
   onMessage: (userId: string) => void;
   canMessage: boolean;
   readOnly: boolean;
+  audience?: 'listener' | 'professional';
+  onSupport?: (person: LibraryProfile, role: LibraryRole) => void;
 };
 
 const categories: {id:LibraryRole;name:string;description:string;icon:LucideIcon}[] = [
@@ -63,11 +65,12 @@ export const belongsToLibraryCategory = (profile:LibraryProfile, category:Profil
   profile.role === category || Array.isArray(profile.roles) && profile.roles.includes(category);
 
 function PersonCard({
-  person, category, readOnly, followingIds, canMessage, onOpen, onFollow, onRecommend, onMessage,
+  person, category, readOnly, followingIds, canMessage, audience, onOpen, onFollow, onRecommend, onMessage, onSupport,
 }: {
-  person:LibraryProfile;category:ProfileRole;readOnly:boolean;followingIds:string[];canMessage:boolean;
+  person:LibraryProfile;category:ProfileRole;readOnly:boolean;followingIds:string[];canMessage:boolean;audience:'listener'|'professional';
   onOpen:(id:string,role:ProfileRole)=>void;onFollow:(id:string)=>void|Promise<void>;
   onRecommend:(profile:LibraryProfile)=>void|Promise<void>;onMessage:(id:string)=>void;
+  onSupport?:(person:LibraryProfile,role:LibraryRole)=>void;
 }) {
   const slice=person.roleProfiles?.[category] ?? {};
   const roleHeadline=slice.roleHeadline || (person.role===category ? person.headline : null)
@@ -105,10 +108,11 @@ function PersonCard({
     <div className="nj-pro-library-meta"><span>{metric}</span><span>{available || 'View professional profile'}</span></div>
     <div className="nj-pro-library-actions">
       <button data-nj-preview-safe="true" className="primary-button" type="button" onClick={()=>onOpen(person.userId,category)}>
-        View {roleName[category]} profile <ArrowRight size={14}/>
+        {audience==='listener' ? 'Explore their work' : 'View '+roleName[category]+' profile'} <ArrowRight size={14}/>
       </button>
       {!readOnly&&<button className="secondary-button" type="button" aria-label={followingIds.includes(person.userId)?'Unfollow '+person.name:'Follow '+person.name}
-        onClick={()=>void onFollow(person.userId)}><Heart size={15} fill={followingIds.includes(person.userId)?'currentColor':'none'}/></button>}
+        onClick={()=>void onFollow(person.userId)}><Heart size={15} fill={followingIds.includes(person.userId)?'currentColor':'none'}/>{audience==='listener'?followingIds.includes(person.userId)?' Following':' Follow':null}</button>}
+      {!readOnly&&audience==='listener'&&category!=='listener'&&onSupport&&<button className="secondary-button" type="button" onClick={()=>onSupport(person,category as LibraryRole)}>Support with Nightjars</button>}
       {!readOnly&&category==='creator'&&<button className="secondary-button" type="button" aria-label={'Recommend '+person.name} onClick={()=>void onRecommend(person)}><Share2 size={15}/></button>}
       {!readOnly&&canMessage&&category!=='listener'&&<button className="secondary-button" type="button" aria-label={'Message '+person.name} onClick={()=>onMessage(person.userId)}><MessageCircle size={15}/></button>}
     </div>
@@ -116,7 +120,7 @@ function PersonCard({
 }
 
 export default function ProfessionalLibrary({
-  profiles,filteredProfiles,category,onCategoryChange,onOpen,onFollow,followingIds,onRecommend,onMessage,canMessage,readOnly,
+  profiles,filteredProfiles,category,onCategoryChange,onOpen,onFollow,followingIds,onRecommend,onMessage,canMessage,readOnly,audience='professional',onSupport,
 }:Props) {
   const uniqueProfessionals=new Set(profiles.filter(profile=>categories.some(({id})=>belongsToLibraryCategory(profile,id))).map(item=>item.userId)).size;
   const displayedCategories=category==='all' ? categories.map(c=>c.id)
@@ -126,8 +130,8 @@ export default function ProfessionalLibrary({
     : filteredProfiles.filter(profile=>belongsToLibraryCategory(profile,category)).length;
   return <div className="nj-pro-library">
     <div className="nj-pro-library-banner"><div><span className="mini-label">THE PEOPLE BEHIND NIGHTJAR</span>
-      <h2>The Professional Library</h2>
-      <p>One creative community, four distinct professions. Browse verified public profiles, portfolios and services—without losing the individuality of each creator.</p>
+      <h2>{audience==='listener'?'The Creator Collection':'The Professional Library'}</h2>
+      <p>{audience==='listener' ? 'One community. Discover the voices, storytelling, sound and visual work you love. Follow for free, explore published work or choose to send Nightjars to show appreciation.' : 'One creative community, four distinct professions. Browse approved public profiles, portfolios and services—without losing the individuality of each creator.'}</p>
     </div><span className="nj-pro-library-total"><strong>{uniqueProfessionals}</strong><small>public professionals</small></span></div>
 
     <div className="nj-pro-library-navigation" role="group" aria-label="Professional library categories">
@@ -157,11 +161,11 @@ export default function ProfessionalLibrary({
         </div>
         {!!list.length?<div className="nj-pro-library-grid">
           {list.map(person=><PersonCard key={role+':'+person.userId} person={person} category={role} readOnly={readOnly}
-            followingIds={followingIds} canMessage={canMessage} onOpen={onOpen} onFollow={onFollow} onRecommend={onRecommend} onMessage={onMessage}/>)}
+            followingIds={followingIds} canMessage={canMessage} audience={audience} onSupport={onSupport} onOpen={onOpen} onFollow={onFollow} onRecommend={onRecommend} onMessage={onMessage}/>)}
         </div>:<div className="nj-pro-library-empty"><Icon size={20}/><strong>{category==='all'?'No public '+title.toLowerCase()+' yet':'No matching '+title.toLowerCase()}</strong>
           <p>{category==='all'?'This category will populate as approved Nightjar members publish their professional profiles.':'Try clearing the search, specialty or availability filters. Private profiles remain private.'}</p></div>}
       </section>;
     })}
-    {category==='all'&&<p className="nj-pro-library-footnote">Members with multiple approved professions appear in each relevant category. Counts within each category are accurate; the all-professionals total counts each person only once. All content shown is published public profile data.</p>}
+    {category==='all'&&<p className="nj-pro-library-footnote">Members with multiple approved professions appear in each relevant category. Counts within each category are accurate; the all-professionals total counts each person only once. All content shown is published public profile data. {audience==='listener'?'No professional enquiry is needed to follow or support someone.':''}</p>}
   </div>;
 }
