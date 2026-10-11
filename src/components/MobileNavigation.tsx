@@ -34,7 +34,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
     ? [
         { view: 'discover', label: 'Home', icon: Home },
         { view: 'library', label: 'Library', icon: Library },
-        { view: 'creators', label: 'Directory', icon: Headphones },
+        { view: 'creators', label: 'Creators', accessibleLabel:'Discover creators and their work', icon: Headphones },
         search,
         settings,
       ]

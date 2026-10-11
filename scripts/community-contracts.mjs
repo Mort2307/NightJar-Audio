@@ -189,9 +189,12 @@ requireText(app,"'/people/' + encodeURIComponent(spotlight.targetId)",'Shared Sp
 requireText(spotlightUi,'THE NIGHTJAR SPOTLIGHT', 'Premium spotlight should have its own editorial identity');
 requireText(spotlightUi,'IT’S YOUR SPOTLIGHT DAY!', 'Featured member must see the celebratory in-app state');
 requireText(spotlightUi,'!simulationMode && viewerUserId', 'Personal spotlight must not treat owner simulations as real users');
-requireText(spotlightUi,'calendarDay % available.length', 'Editorial lead billing must rotate among live role spotlights');
+requireText(spotlightUi,"className=\"nj-spotlight-card\"", 'All featured roles must receive an equal Spotlight card, not a privileged hero');
+requireText(spotlightUi,'SPOTLIGHT DAY', 'Featured members must have an accurate rotating day badge');
+if (spotlightUi.includes('TODAY ONLY') || spotlightUi.includes('nj-spotlight-lead') || spotlightUi.includes('featured={index===0}')) failures.push('Spotlight must not diminish other roles through ranked hero layout or a misleading today-only label');
+requireText(productStyles,'.nj-spotlight-experience .nj-spotlight-editorial-grid>.nj-spotlight-card', 'All desktop Spotlight cards must match the Maze-sized feature');
 requireText(spotlightUi,'person.publicProfile !== false', 'Sharing and profile links must respect privacy');
-requireText(spotlightUi,'available.length', 'Empty profession lanes should not dominate the premium spotlight');
+requireText(spotlightUi,'const available = props.spotlights.filter', 'Empty profession lanes should not dominate the premium spotlight');
 requireText(productStyles,'.nj-spotlight-editorial-grid', 'Premium Spotlight responsive cards are missing');
 requireText(functions,"export const notifyDailySpotlights = onSchedule({", 'UK-morning Spotlight notification scheduling is missing');
 requireText(functions,"timeZone: 'Europe/London'",'Daily spotlight dispatch must respect UK daylight saving');
@@ -215,7 +218,7 @@ requireText(app,'<ProfessionalLibrary','Directory must render dedicated Professi
 requireText(app,'filteredProfiles={filteredDirectoryProfiles}','Professional Library must use the existing public directory filtering');
 requireText(app,'category={directoryRoleFilter}','Category selection must match directory search and saved filters');
 requireText(app,'onOpen={openPublicProfile}','Library must use actual public-profile renderer');
-requireText(app,'readOnly={liveRolePreview}','Owner preview cannot follow or message members');
+requireText(app,'readOnly={liveRolePreview||(demoMode&&!simulationMode)}','Owner preview and passive demo cannot follow or message members');
 for(const role of ["'creator'","'writer'","'editor'","'artist'"]) {
   requireText(proLibrary,'id:'+role, 'Professional category missing '+role);
 }
@@ -228,6 +231,28 @@ requireText(proLibrary,'role===\'listener\'','Listener community should remain o
 requireText(proLibrary,'data-nj-preview-safe="true"','Public profiles must be viewable in read-only owner preview');
 requireText(proLibrary,'!readOnly&&canMessage','Role-based private messaging should not appear in owner preview');
 requireText(functions,'if (!data || data.publicProfile === false) return null;', 'Private profiles must be filtered at the backend');
+
+
+// Listener-facing Creator Collection uses the SAME protected public profiles,
+// not an unmoderated duplicate directory. Its actions deliberately differ
+// from professional work enquiries.
+const listenerDiscovery = read('src/components/ListenerCreatorDiscovery.tsx');
+const listenerLibrary = read('src/components/ListenerLibrary.tsx');
+const mobileNav = read('src/components/MobileNavigation.tsx');
+requireText(app,"effectiveRole==='listener'&&<Suspense", 'All real Listener accounts need the Creator Collection route');
+requireText(app,'<ListenerCreatorDiscovery', 'Listener discovery must be mounted in shared Directory');
+requireText(app,"audience={effectiveRole==='listener'?'listener':'professional'}", 'Professional cards must adapt to the member perspective');
+requireText(app,'onSupport={(person,role)=>', 'Listener directory needs optional Nightjars support');
+requireText(app,'<NightjarGiftPanel recipientUserId={supportTarget.userId}', 'Support controls need the existing verified Nightjars gift workflow');
+requireText(proLibrary,"audience==='listener'?'The Creator Collection'", 'Listener library must not read like a commissioning directory');
+requireText(proLibrary,"!readOnly&&canMessage&&category!=='listener'", 'Professional messaging must remain role-gated');
+requireText(proLibrary,"!readOnly&&audience==='listener'&&category!=='listener'&&onSupport", 'Listener support is optional and role-scoped');
+requireText(listenerDiscovery,'THE NIGHTJAR CREATOR COLLECTION', 'Listener discovery needs its own editorial identity');
+requireText(listenerDiscovery,'publicCreativeCredits', 'Discovery must link actual published release credits to visible makers');
+requireText(listenerDiscovery,'belongsToLibraryCategory(person,role)', 'Only eligible public professionals may be linked from release credits');
+requireText(listenerDiscovery,'onClick={()=>void onFollow(person.userId)}', 'Listener following must be an explicit user action');
+requireText(listenerLibrary,'onDiscoverCreators', 'Listener personal library must link to the Creator Collection');
+requireText(mobileNav,"label: 'Creators', accessibleLabel:'Discover creators and their work'", 'Listener mobile nav must surface Creators, not a hiring directory');
 
 if (failures.length) {
   console.error('COMMUNITY CONTRACT FAILURES');

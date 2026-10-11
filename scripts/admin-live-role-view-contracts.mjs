@@ -17,7 +17,7 @@ assert.match(app, /const onEscape = \(event: KeyboardEvent\)/, 'the role menu cl
 assert.doesNotMatch(app, /className="admin-preview-strip"/, 'the overflowing unstyled role strip must not return');
 const nav = app.split('<nav className={menuOpen ?')[1]?.split('</nav>')[0] ?? '';
 assert.match(nav, />Discover<\/button>/, 'primary app navigation retains Discover');
-assert.match(nav, />Directory<\/button>/, 'primary app navigation retains Directory');
+assert.match(nav, /Creators & Work.*Directory/, 'primary navigation preserves both listener discovery and professional Directory');
 assert.match(nav, />Library<\/button>/, 'primary app navigation retains Library');
 assert.match(nav, />Admin<\/button>/, 'primary app navigation retains Admin for Owners');
 assert.doesNotMatch(nav, /nj-live-switcher/, 'role controls must stay separate from normal app navigation');

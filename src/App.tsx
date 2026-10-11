@@ -96,6 +96,8 @@ const PublicProfile = lazy(() => import('./components/PublicProfile'));
 const CollaborationHub = lazy(() => import('./components/CollaborationHub'));
 const WriterRightsPanel = lazy(() => import('./components/WriterRightsPanel'));
 const ListenerLibrary = lazy(() => import('./components/ListenerLibrary'));
+const ListenerCreatorDiscovery = lazy(() => import('./components/ListenerCreatorDiscovery'));
+const NightjarGiftPanel = lazy(() => import('./components/NightjarGiftPanel'));
 const CreatorCapacityBank = lazy(() => import('./components/CreatorCapacityBank'));
 const ScriptMarketplace = lazy(() => import('./components/ScriptMarketplace'));
 const ReleaseReviews = lazy(() => import('./components/ReleaseReviews'));
@@ -592,6 +594,7 @@ function App() {
   const [catalogueDuration, setCatalogueDuration] = useState('all');
   const [profileDirectory, setProfileDirectory] = useState<PublicDirectoryProfile[]>([]);
   const [directoryQuery, setDirectoryQuery] = useState('');
+  const [supportTarget, setSupportTarget] = useState<{userId:string;name:string;role:'creator'|'writer'|'editor'|'artist';roles:string[]}|null>(null);
   const [directoryRoleFilter, setDirectoryRoleFilter] = useState<'all' | 'creator' | 'writer' | 'editor' | 'artist' | 'listener'>('all');
   const [directoryTagFilter, setDirectoryTagFilter] = useState('all');
   const [directoryAvailabilityFilter, setDirectoryAvailabilityFilter] = useState('all');
@@ -3980,7 +3983,7 @@ function App() {
 
         <nav className={menuOpen ? 'nav open' : 'nav'} aria-label="Primary navigation">
           {(effectiveRole === 'listener' || effectiveRole === 'admin' || !role) && <button className={view === 'discover' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('discover')}>Discover</button>}
-          <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>Directory</button>
+          <button className={view === 'creators' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('creators')}>{effectiveRole==='listener'?'Creators & Work':'Directory'}</button>
           {(effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && <button className={view === 'library' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('library')}>Library</button>}
           {(creatorOnly || adminOnly || (liveRolePreview && previewRole === 'creator')) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && !liveRolePreview && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
@@ -4210,12 +4213,12 @@ function App() {
           <section className="page-wrap profile-directory-page">
             <div className="page-heading profile-directory-heading">
               <div>
-                <p className="eyebrow">NIGHTJAR COMMUNITY DIRECTORY</p>
-                <h1>Discover the people behind Nightjar.</h1>
-                <p>Explore the Professional Library by category—VA Creators, Writers, Audio Editors and Artists. Each person appears in every profession they are approved for. Search by name, handle, specialties, tags or availability. Only published public profiles appear.</p>
+                <p className="eyebrow">{effectiveRole==='listener'?'DISCOVER NIGHTJAR CREATORS':'NIGHTJAR COMMUNITY DIRECTORY'}</p>
+                <h1>{effectiveRole==='listener'?'Find the makers behind your favourites.':'Discover the people behind Nightjar.'}</h1>
+                <p>{effectiveRole==='listener'?'Explore VAs, Writers, Audio Editors and Artists. Find their published work, follow favourites for free, or choose to show your support—no commissioning or professional enquiry required.':'Explore the Professional Library by category—VA Creators, Writers, Audio Editors and Artists. Each person appears in every profession they are approved for. Search by name, handle, specialties, tags or availability. Only published public profiles appear.'}</p>
               </div>
               <div className="creator-directory-tools profile-directory-tools">
-                <label className="creator-directory-search"><Search size={16}/><input value={directoryQuery} onChange={(event)=>setDirectoryQuery(event.target.value)} placeholder="Search name, tag, specialty, badge…"/></label>
+                <label className="creator-directory-search"><Search size={16}/><input value={directoryQuery} onChange={(event)=>setDirectoryQuery(event.target.value)} placeholder={effectiveRole==='listener'?'Find a creator, style, subject or genre…':'Search name, tag, specialty, badge…'}/></label>
                 <select value={directoryRoleFilter} onChange={(event)=>setDirectoryRoleFilter(event.target.value as 'all' | 'creator' | 'writer' | 'editor' | 'artist' | 'listener')}>
                   <option value="all">All professionals · grouped by category</option>
                   <option value="creator">VA Creators</option>
@@ -4228,10 +4231,10 @@ function App() {
                   <option value="all">All tags & specialties</option>
                   {directoryTagOptions.map((option)=><option key={option} value={option}>{option}</option>)}
                 </select>
-                <select value={directoryAvailabilityFilter} onChange={(event)=>setDirectoryAvailabilityFilter(event.target.value)}>
+                {effectiveRole!=='listener'&&<select value={directoryAvailabilityFilter} onChange={(event)=>setDirectoryAvailabilityFilter(event.target.value)}>
                   <option value="all">Any availability</option>
                   {directoryAvailabilityOptions.map((option)=><option key={option} value={option}>{option}</option>)}
-                </select>
+                </select>}
               </div>
             </div>
             <div className="nj-directory-viewbar">
@@ -4243,9 +4246,29 @@ function App() {
               {!liveRolePreview && !!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
             </div>
 
-            {!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>}
+            {effectiveRole==='listener'&&<Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Finding Nightjar creators and released work" />}>
+              <ListenerCreatorDiscovery
+                profiles={profileDirectory}
+                releases={tracks}
+                followingIds={followingProfileIds}
+                category={directoryRoleFilter}
+                onCategoryChange={(next)=>{setDirectoryRoleFilter(next);setDirectoryTagFilter('all');setDirectoryAvailabilityFilter('all');}}
+                onOpen={openPublicProfile}
+                onFollow={toggleProfileFollow}
+                onPlayRelease={(releaseId)=>{const track=tracks.find(item=>item.id===releaseId);if(track)togglePlayback(track);}}
+                readOnly={liveRolePreview||(demoMode&&!simulationMode)}
+              />
+            </Suspense>}
+
+            {effectiveRole!=='listener'&&!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>}
 
             <ProfessionalLibrary
+              audience={effectiveRole==='listener'?'listener':'professional'}
+              onSupport={(person,role)=>{
+                if(demoMode||liveRolePreview){notify('Nightjars can only be gifted from an active member account.');return;}
+                if(person.userId===user?.userId){notify('You cannot gift Nightjars to your own account.');return;}
+                setSupportTarget({userId:person.userId,name:person.name,role,roles:person.roles??[person.role]});
+              }}
               profiles={profileDirectory}
               filteredProfiles={filteredDirectoryProfiles}
               category={directoryRoleFilter}
@@ -4256,7 +4279,7 @@ function App() {
               onRecommend={(person) => void recommendCreator(person as PublicDirectoryProfile)}
               onMessage={(recipient) => { setMessageRecipientUserId(recipient); setMessageCollaborationId(null); navigate('messages'); }}
               canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && !liveRolePreview}
-              readOnly={liveRolePreview}
+              readOnly={liveRolePreview||(demoMode&&!simulationMode)}
             />
           </section>
         )}
@@ -4338,6 +4361,7 @@ function App() {
         {view === 'library' && (effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && (
           <section className="page-wrap">
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading Listener Library" />}><ListenerLibrary
+              onDiscoverCreators={()=>{setDirectoryRoleFilter('all');navigate('creators');}}
               key={'listener-library-' + demoSessionKey}
               onPlayRelease={(release)=>{const track=releaseToTrack(release); setTracks((items)=>items.some((item)=>item.id===track.id)?items:[...items,track]); togglePlayback(track);}}
               notify={notify}
@@ -5114,6 +5138,9 @@ function App() {
         initialTranscriptOpen={transcriptRequested === playing}
       />}
       {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onPlayRelease={liveRolePreview ? () => notify('Playback requires an authorised Listener account.') : playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
+      {supportTarget && !liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Opening Nightjars support" />}>
+        <NightjarGiftPanel recipientUserId={supportTarget.userId} recipientName={supportTarget.name} recipientRole={supportTarget.role} recipientRoles={supportTarget.roles} onClose={()=>setSupportTarget(null)} notify={notify}/>
+      </Suspense>}
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
