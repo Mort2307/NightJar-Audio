@@ -3660,7 +3660,9 @@ const materializeSpotlightNotification = async (item: any, date: string) => {
   // dispatch will still send its push once the daytime window begins.
   if (localHour < 9 || localHour >= 21) return;
 
-  const dispatchRef = accountRef(targetId).collection('notificationDispatches').doc('spotlight_' + date + '_' + kind);
+  // Even if one member has two professional roles featured today, send
+  // just one celebratory phone push per member/day (inbox retains both roles).
+  const dispatchRef = accountRef(targetId).collection('notificationDispatches').doc('spotlight_' + date);
   try {
     await dispatchRef.create({
       kind, date, notificationId: ref.id, createdAt: FieldValue.serverTimestamp(),
