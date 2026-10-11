@@ -63,7 +63,7 @@ const serialize = (credential: PublicKeyCredential, registration: boolean): Reco
 export const nightjarPasskeys = {
   supported() {
     return typeof window !== 'undefined' && window.isSecureContext &&
-      'PublicKeyCredential' in window && Boolean(navigator.credentials?.get && navigator.credentials?.create);
+      'PublicKeyCredential' in window && typeof navigator.credentials?.get === 'function' && typeof navigator.credentials?.create === 'function';
   },
 
   async register() {
