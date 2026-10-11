@@ -198,3 +198,6 @@
 .nj-admin-decision-editor > div:last-child{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
 .nj-admin-decision-editor > div:last-child button{min-height:44px;}
 @media(max-width:700px){.nj-admin-decision-editor > div:last-child button{width:100%;justify-content:center;}}
+
+.nj-submission-confirmation .nj-creator-scheduled-confirmation,.nj-submission-confirmation .nj-creator-moderation-feedback{flex-basis:100%;font-size:13px;line-height:1.55;color:#ead6e4;}
+.nj-creator-moderation-feedback{border-top:1px solid var(--line,rgba(255,255,255,.12));padding-top:10px;white-space:pre-wrap;}
