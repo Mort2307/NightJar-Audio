@@ -1,4 +1,4 @@
-import { Accessibility, ArrowRight, Bell, BookOpenText, CreditCard, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Accessibility, ArrowRight, Bell, CalendarDays, BookOpenText, CreditCard, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import AppUpdateControl from './AppUpdateControl';
 import NotificationPreferences from './NotificationPreferences';
@@ -11,6 +11,7 @@ type Props = {
   administrator: boolean;
   simulationMode: boolean;
   onProfile: () => void;
+  onCalendar: () => void;
   onRoles: () => void;
   onProtection: () => void;
   onAdmin: () => void;
@@ -18,7 +19,7 @@ type Props = {
   notify: (message: string) => void;
 };
 
-export default function NightjarSettings({ email, administrator, simulationMode, onProfile, onRoles, onProtection, onAdmin, onSignOut, notify }: Props) {
+export default function NightjarSettings({ email, administrator, simulationMode, onProfile, onCalendar, onRoles, onProtection, onAdmin, onSignOut, notify }: Props) {
   return (
     <section className="page-section nj-settings-page" aria-labelledby="nightjar-settings-title">
       <div className="nj-settings-heading">
@@ -31,6 +32,7 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-account">
           <div className="nj-settings-section-head"><UserCircle2 size={19} /><div><span className="mini-label">PERSONAL</span><h2 id="nj-settings-account">Account and profile</h2></div></div>
           {email && <p className="nj-settings-identity">Signed in as <strong>{email}</strong></p>}
+          <button type="button" className="nj-settings-link" onClick={onCalendar}><span><strong><CalendarDays size={15}/> My calendar</strong><small>Local date and time, personal dates and scheduled release plans</small></span><ArrowRight size={17} aria-hidden="true" /></button>
           <button type="button" className="nj-settings-link" onClick={onProfile}><span><strong>Edit my profile</strong><small>Avatar, personal details, visibility and professional identity</small></span><ArrowRight size={17} aria-hidden="true" /></button>
           {!administrator && <button type="button" className="nj-settings-link" onClick={onRoles}><span><strong>Professional roles</strong><small>Add or switch approved Writer, VA, Editor and Artist identities</small></span><ArrowRight size={17} aria-hidden="true" /></button>}
           {administrator && <button type="button" className="nj-settings-link" onClick={onAdmin}><span><strong>Administrator workspace</strong><small>People, moderation, permissions and platform controls</small></span><ArrowRight size={17} aria-hidden="true" /></button>}
