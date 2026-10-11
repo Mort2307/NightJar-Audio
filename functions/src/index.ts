@@ -4644,6 +4644,17 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
     releaseId, releaseTitle: cleanText(data.title, 160),
     dedupeKey: 'release-submitted-' + releaseId,
   }).catch((error) => console.warn('Release submission notification failed', error));
+  // Alert actual Nightjar administrators immediately, not only when their
+  // Owner Console happens to refresh. Deduplication is per release and admin.
+  await Promise.allSettled([...ADMIN_EMAILS].map(async (email) => {
+    const user = await getAuth().getUserByEmail(email);
+    await createNotification(user.uid, {
+      type:'admin_action',subtype:'release_submitted',
+      title:'Recording ready for Nightjar review',
+      message:'A creator has submitted a recording. Open the moderation queue to review it.',
+      releaseId,dedupeKey:'admin-release-submitted-'+releaseId,
+    });
+  }));
   return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
 
