@@ -11,6 +11,17 @@ const main = read('src/main.tsx');
 const system = read('src/styles/product-system.css');
 const pkg = JSON.parse(read('package.json'));
 
+
+// A profession library must show every eligible multi-role public profile
+// under each approved identity, and use role-specific public metadata.
+const library=read('src/App.tsx');
+if (!library.includes('PROFESSIONAL_LIBRARY_CATEGORIES') || !library.includes('NIGHTJAR · PROFESSIONAL LIBRARY')) fail('Dedicated professional library is missing.');
+if (!library.includes("(person.roles??[person.role]).includes(category.id)")) fail('Multi-role members must appear in each eligible profession.');
+if (!library.includes('roleSlice.roleHeadline||roleSlice.roleBio')) fail('Professional cards must use the selected role identity rather than the primary account role.');
+if (!library.includes('openPublicProfile(person.userId,displayRole)')) fail('Role-specific library card must open the corresponding public profile tab.');
+if (!library.includes("initialRole={publicProfileInitialRole??undefined}")) fail('Public profile deep links must retain their selected professional tab.');
+if (!system.includes('.nj-professional-library-nav') || !system.includes('.nj-professional-library-group')) fail('Premium responsive professional library styles are missing.');
+
 for (const file of ['src/App.tsx','src/main.tsx','src/styles/product-system.css']) {
   if (/<<<<<<<|=======|>>>>>>>/.test(read(file))) fail(file + ' contains merge-conflict markers.');
 }
