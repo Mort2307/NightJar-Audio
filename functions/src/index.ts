@@ -3483,7 +3483,30 @@ const spotlightForRole = async (role: 'creator' | 'writer' | 'editor' | 'artist'
       }),
   )).filter((item): item is NonNullable<typeof item> => Boolean(item));
 
-  return deterministicDailyPick(eligible, dateKey);
+  // Hold the same professional in the spotlight for the full UK day.
+  // Without a daily snapshot, approving a new professional midway through
+  // the day changes the eligible array length and can silently switch
+  // the featured person after their announcement has already gone out.
+  const selectionRef = db.collection('spotlightDailySelections').doc(dateKey + '_' + role);
+  const stored = await selectionRef.get();
+  if (stored.exists) {
+    const selectedId = cleanText(stored.data()?.targetId, 160);
+    return eligible.find(item => item.targetId === selectedId) ?? null;
+  }
+  const selected = deterministicDailyPick(eligible, dateKey);
+  if (!selected) return null;
+  try {
+    await selectionRef.create({
+      date: dateKey, kind: role, targetId: selected.targetId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return selected;
+  } catch (error) {
+    const code = (error as {code?: number | string})?.code;
+    if (code !== 6 && code !== 'already-exists' && code !== 'ALREADY_EXISTS') throw error;
+    const winner = await selectionRef.get();
+    return eligible.find(item => item.targetId === cleanText(winner.data()?.targetId, 160)) ?? null;
+  }
 };
 
 const londonSpotlightContext = () => {
