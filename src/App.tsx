@@ -512,6 +512,7 @@ function App() {
   const [authenticationEvents, setAuthenticationEvents] = useState<AuthenticationSecurityEvent[]>([]);
   const [authenticationEventsLoading, setAuthenticationEventsLoading] = useState(false);
   const [securityEvidenceReview, setSecurityEvidenceReview] = useState<SecurityEvidenceReviewData | null>(null);
+  const [assistancePrefillEmail, setAssistancePrefillEmail] = useState('');
   const [securityEvidenceLoading, setSecurityEvidenceLoading] = useState(false);
   const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview' | null>(() => {
     const panelFromPath = window.location.pathname.match(/^\/admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|branding|live-preview)\/?$/)?.[1];
@@ -4610,7 +4611,7 @@ function App() {
               pendingImages={imageModeration.length}
               openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
             />
-            {adminWorkspace === 'assistance' && <AdminAssistance onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
+            {adminWorkspace === 'assistance' && <AdminAssistance initialEmail={assistancePrefillEmail} onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
             {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
               title="Exceptions first."
@@ -5073,7 +5074,7 @@ function App() {
 
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal">T&Cs Centre</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
-      {securityEvidenceReview && <SecurityEvidenceReview review={securityEvidenceReview} onClose={() => setSecurityEvidenceReview(null)} />}
+      {securityEvidenceReview && <SecurityEvidenceReview review={securityEvidenceReview} onClose={() => setSecurityEvidenceReview(null)} onAssistance={(email) => { setAssistancePrefillEmail(email); setSecurityEvidenceReview(null); openAdminWorkspace('assistance'); }} />}
 
       {moderationPreviewAsset?.previewUrl && <div className="image-moderation-fullscreen" role="dialog" aria-modal="true" aria-label="Full-screen image moderation preview" onClick={()=>setModerationPreviewAsset(null)}>
         <div className="image-moderation-fullscreen-shell" onClick={(event)=>event.stopPropagation()}>
