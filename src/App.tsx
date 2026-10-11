@@ -4510,6 +4510,7 @@ function App() {
             simulationMode={demoMode}
             notify={notify}
             onProfile={() => { navigate('profile'); void loadProfile(); }}
+            onCalendar={() => navigate('calendar')}
             onRoles={openMyRoles}
             onProtection={() => { navigate('protection'); void loadProtection(); }}
             onAdmin={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}
