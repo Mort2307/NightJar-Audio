@@ -494,7 +494,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           {!submittedOrPublished && <div className="nj-creator-workflow-switch" role="group" aria-label="Release workflow">
             <button type="button" className={workflowStep === 'prepare' ? 'is-active' : ''} onClick={() => openDetails()} aria-current={workflowStep === 'prepare' ? 'step' : undefined}>1 · Upload & details</button>
             <button type="button" className={workflowStep === 'review' ? 'is-active' : ''} onClick={() => setWorkflowStep('review')} aria-current={workflowStep === 'review' ? 'step' : undefined}>2 · Review & submit</button>
-          </div>
+          </div>}
           <section className="nj-release-journey" aria-label="Audio publishing steps">
             <h3>From your recording to Nightjar</h3>
             <div className="nj-release-journey-steps">
