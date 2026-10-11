@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
 import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession } from './didit';
 import { hasPaidEntitlement } from './entitlements';
@@ -3571,51 +3572,76 @@ const listenerSpotlightForToday = async (dateKey: string) => {
   };
 };
 
+const spotlightNotice = (kind: string) => {
+  const roleLabel = kind === 'creator' ? 'VA Creator' : kind === 'writer' ? 'Writer'
+    : kind === 'editor' ? 'Audio Editor' : kind === 'artist' ? 'Artist' : 'Listener';
+  return {
+    title: 'You’re in the Nightjar Spotlight! ✨',
+    message: kind === 'listener'
+      ? 'Your Nightjar moment is here! We’re celebrating you today. Open Nightjar, enjoy the recognition and let’s make some noise.'
+      : 'It’s your ' + roleLabel + ' spotlight day! The stage is yours for 24 hours. Open Nightjar, share your feature and let’s make some noise.',
+  };
+};
+
 const materializeSpotlightNotification = async (item: any, date: string) => {
   const targetId = cleanText(item?.targetId, 160);
   const kind = cleanText(item?.kind, 40);
-  if (!targetId || !kind) return;
+  if (!targetId || !['creator','writer','editor','artist','listener'].includes(kind)) return;
+  // Privacy: public discovery and promotional push are for public profiles;
+  // anonymous/private Listener recognition must not result in promotion.
+  if (item.publicProfile === false) return;
+
+  const account = await accountRef(targetId).get();
+  const accountData = account.data() ?? {};
+  if (!account.exists || accountData.status !== 'active') return;
+  const preferences = accountData.notificationPreferences ?? {};
+  // Reuse the existing followedProfiles/spotlight preference; do not override
+  // a member's previous notification opt-out.
+  if (preferences.followedProfiles === false) return;
+
   const ref = accountRef(targetId).collection('notifications').doc('spotlight_' + date + '_' + kind);
-  const existing = await ref.get();
-  if (existing.exists) return;
-
-  const title = kind === 'creator'
-    ? 'You are today’s VA Creator Spotlight'
-    : kind === 'writer'
-      ? 'You are today’s Writer Spotlight'
-      : kind === 'editor'
-        ? 'You are today’s Audio Editor Spotlight'
-        : kind === 'artist'
-          ? 'You are today’s Artist Spotlight'
-          : 'Thank you — you’re today’s Listener Spotlight';
-
-  const message = kind === 'creator'
-    ? 'Your public Nightjar VA Creator profile is featured for the full day.'
-    : kind === 'writer'
-      ? 'Your public Nightjar writer profile is featured for the full day.'
-      : kind === 'editor'
-        ? 'Your public Audio Editor profile is featured for the full day.'
-        : kind === 'artist'
-          ? 'Your public Artist profile is featured for the full day.'
-          : 'Thank you for being part of Nightjar. You are being recognised from the previous week’s Top 7 listeners.';
-
-  await ref.set({
+  const { title, message } = spotlightNotice(kind);
+  const displayMode = ['full','discreet','minimal'].includes(String(preferences.displayMode ?? ''))
+    ? String(preferences.displayMode) : 'discreet';
+  const payload = {
     type: 'spotlight',
     subtype: kind,
     spotlightDate: date,
     targetUserId: targetId,
     title,
     message,
+    route: '/discover#spotlight-' + kind,
     listenerRank: kind === 'listener' ? item.listenerRank ?? null : null,
-    read: false,
-    createdAt: FieldValue.serverTimestamp(),
-  });
+  };
+
+  try {
+    // create() is atomic. Concurrent visitors and the daily scheduler
+    // cannot send two different notifications to the same person/day/role.
+    await ref.create({
+      ...payload, read: false, createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    const code = (error as {code?: number | string})?.code;
+    if (code === 6 || code === 'already-exists' || code === 'ALREADY_EXISTS') return;
+    throw error;
+  }
+
+  const mobilePayload = displayMode === 'full'
+    ? payload
+    : displayMode === 'minimal'
+      ? { ...payload, title: 'Nightjar', message: 'Open Nightjar to see your new notification.' }
+      : { ...payload, title: 'A Nightjar moment for you', message: 'Something special is waiting inside Nightjar.' };
+  try {
+    await deliverPushNotification(targetId, mobilePayload, displayMode, ref.id);
+  } catch (error) {
+    // A failed phone push never removes the one-time inbox notification.
+    console.warn('Nightjar Spotlight phone delivery unavailable', {
+      kind, date, error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
 
-export const spotlightState = onCall({ region: REGION }, async (request) => {
-  const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
-  const date = londonDateKey();
+const todaySpotlightState = async (date: string) => {
   const [creator, writer, editor, artist, listenerState] = await Promise.all([
     spotlightForRole('creator', date),
     spotlightForRole('writer', date),
@@ -3624,8 +3650,14 @@ export const spotlightState = onCall({ region: REGION }, async (request) => {
     listenerSpotlightForToday(date),
   ]);
   const spotlights = [creator, writer, editor, artist, listenerState.listener].filter(Boolean);
-  await Promise.all(spotlights.map((item) => materializeSpotlightNotification(item, date)));
-
+  const notifications = await Promise.allSettled(spotlights.map((item) => materializeSpotlightNotification(item, date)));
+  notifications.forEach((result, index) => {
+    if (result.status === 'rejected') console.warn('Nightjar Spotlight inbox notice could not be created', {
+      kind: (spotlights[index] as { kind?:string }).kind,
+      date,
+      error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+    });
+  });
   return {
     date,
     spotlights,
@@ -3633,6 +3665,23 @@ export const spotlightState = onCall({ region: REGION }, async (request) => {
     listenerSpotlightDay: listenerState.listenerSpotlightDay,
     listenerWeek: listenerState.listenerWeek,
   };
+};
+
+export const spotlightState = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  return todaySpotlightState(londonDateKey());
+});
+
+// A daily UK-morning dispatch does not depend on somebody opening the app.
+// The callable above is the same idempotent fallback if scheduling is delayed.
+export const notifyDailySpotlights = onSchedule({
+  region: REGION, schedule: '0 9 * * *', timeZone: 'Europe/London',
+  retryCount: 1,
+}, async () => {
+  const date = londonDateKey();
+  const result = await todaySpotlightState(date);
+  console.info('Nightjar daily spotlight dispatch', { date, spotlightCount: result.spotlights.length });
 });
 
 export const adminAccountOverview = onCall({ region: REGION }, async (request) => {
