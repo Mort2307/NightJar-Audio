@@ -172,8 +172,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       .then((data) => setCreditDirectory(data.people ?? []))
       .catch(() => setCreditDirectory([]));
   }, [simulationMode]);
-  const statusLabel = current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
-  const statusHint = current?.status === 'pending_review'
+  const statusLabel = current?.status === 'removing' ? 'REMOVAL PENDING' : current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
+  const statusHint = current?.status === 'removing' ? 'This recording is hidden while Nightjar finishes deleting its files. Retry removal if necessary.' : current?.status === 'pending_review'
     ? 'Your submission is with Nightjar moderation.'
     : current?.status === 'released'
       ? 'Published and available to age-verified listeners.'
@@ -193,7 +193,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   ];
   const incompleteChecks = reviewChecks.filter((check) => !check.passed);
   const complete = incompleteChecks.length === 0;
-  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'released';
+  const removalPending = current?.status === 'removing';
+  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'released' || removalPending;
 
   const openDetails = (target?: string) => {
     setWorkflowStep('prepare');
@@ -459,6 +460,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       onDeleted?.(item.id);
       notify('Recording removed from Nightjar. Its playable audio is no longer available.');
     } catch (error) {
+      await onRefresh().catch(() => {});
       notify(error instanceof Error ? error.message : 'Removal could not be completed. Please retry.');
     } finally { setRemoving(false); }
   };
@@ -529,7 +531,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     <div className="creator-pipeline-grid">
       <aside className="pipeline-library">
-        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
+        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
@@ -542,10 +544,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           <div className="pipeline-status"><div><span>{statusLabel}</span><strong>{statusHint}</strong></div><Check size={18} /></div>
           {submittedOrPublished && <section className="nj-submission-confirmation" role="status" aria-live="polite">
             <Check size={28} aria-hidden="true"/>
-            <div><span className="mini-label">{current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>
-              <h3>{current.status === 'released' ? 'Your recording is live.' : 'Your recording has been submitted!'}</h3>
-              <p><strong>{current.title}</strong> {current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
-              <small>{submissionConfirmed ? 'Submission confirmed just now · ' : ''}Status: {current.status === 'released' ? 'Published' : 'Awaiting review'}</small>
+            <div><span className="mini-label">{removalPending ? 'NIGHTJAR · REMOVAL PENDING' : current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>
+              <h3>{removalPending ? 'Your recording is hidden.' : current.status === 'released' ? 'Your recording is live.' : 'Your recording has been submitted!'}</h3>
+              <p><strong>{current.title}</strong> {removalPending ? 'is no longer publicly accessible. Storage cleanup is still pending; select Remove recording to retry.' : current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
+              <small>{submissionConfirmed ? 'Submission confirmed just now · ' : ''}Status: {removalPending ? 'Removal pending' : current.status === 'released' ? 'Published' : 'Awaiting review'}</small>
             </div>
             <button className="secondary-button" type="button" onClick={() => void onRefresh()}>Refresh status</button>
           </section>}
