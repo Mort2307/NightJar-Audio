@@ -3774,7 +3774,7 @@ export const notifyDailySpotlights = onSchedule({
 export const publishScheduledReleases = onSchedule({
   region:REGION,schedule:'every 1 minutes',timeZone:'UTC',retryCount:1,
 },async () => {
-  const due = await db.collection('releases').where('status','==','scheduled').limit(250).get();
+  const due = await db.collection('releases').where('status','==','scheduled').where('scheduledAt','<=',new Date().toISOString()).orderBy('scheduledAt').limit(250).get();
   const now = Date.now();
   let published = 0;
   for (const doc of due.docs) {
