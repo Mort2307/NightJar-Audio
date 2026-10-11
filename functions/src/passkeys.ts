@@ -11,6 +11,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { error as logError } from 'firebase-functions/logger';
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -197,8 +198,40 @@ export const finishPasskeyRegistration = onCall({ region: REGION }, async reques
 export const beginPasskeySignIn = onCall({ region: REGION }, async request => {
   const { origin, rpID } = verifiedOrigin(request);
   await rateLimit(compact(request.rawRequest.ip || request.rawRequest.headers['x-forwarded-for'], 120) || 'unknown');
-  const options = await generateAuthenticationOptions({ rpID, userVerification: 'required' });
-  const challengeId = await writeChallenge({ kind: 'login', challenge: options.challenge, origin, rpID });
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  // A quick-unlock preference belongs to an already known local account.
+  // Return only that member's registered passkey IDs, not an all-account
+  // discoverable credential chooser. Credential signatures are still verified
+  // and all eligibility checks run again after the actual assertion.
+  const expectedUserId = typeof input.expectedUserId === 'string'
+    && /^[A-Za-z0-9_-]{6,128}$/.test(input.expectedUserId)
+      ? input.expectedUserId
+      : null;
+  let allowCredentials: Array<{ id: string; transports?: WebAuthnCredential['transports'] }> | undefined;
+  if (expectedUserId) {
+    const records = await getFirestore().collection('passkeyCredentials')
+      .where('uid', '==', expectedUserId).limit(10).get();
+    allowCredentials = records.docs
+      .filter(doc => typeof doc.data().credentialId === 'string')
+      .map(doc => ({
+        id: String(doc.data().credentialId),
+        transports: (doc.data().transports ?? []) as WebAuthnCredential['transports'],
+      }));
+    if (!allowCredentials.length) {
+      // Same public response for nonexistent or no-longer-enrolled accounts.
+      throw new HttpsError('failed-precondition',
+        'This Nightjar account no longer has a registered passkey. Use your email and password, then add a passkey in Settings.');
+    }
+  }
+  const options = await generateAuthenticationOptions({
+    rpID,
+    userVerification: 'required',
+    ...(allowCredentials ? { allowCredentials } : {}),
+  });
+  const challengeId = await writeChallenge({
+    kind: 'login', challenge: options.challenge, origin, rpID,
+    ...(expectedUserId ? { expectedUserId } : {}),
+  });
   return { challengeId, options };
 });
 
@@ -240,18 +273,52 @@ export const finishPasskeySignIn = onCall({ region: REGION }, async request => {
   }
   if (!verification.verified) throw new HttpsError('permission-denied', 'Passkey verification unsuccessful.');
   const uid = String(record.uid);
+  if (challenge.expectedUserId && challenge.expectedUserId !== uid) {
+    throw new HttpsError('permission-denied', 'That passkey belongs to a different Nightjar account.');
+  }
   await assertAccountEligible(uid);
-  await getFirestore().runTransaction(async transaction => {
-    const current = await transaction.get(ref);
-    if (!current.exists || current.data()?.uid !== uid) {
-      throw new HttpsError('permission-denied', 'This passkey was removed.');
-    }
-    const prior = Number(current.data()?.counter ?? 0);
-    const next = Number(verification.authenticationInfo.newCounter);
-    if (prior > 0 && next <= prior) throw new HttpsError('permission-denied', 'Passkey counter validation failed.');
-    transaction.update(ref, { counter: next, lastUsedAt: FieldValue.serverTimestamp() });
-  });
-  const token = await getAuth().createCustomToken(uid);
+  try {
+    await getFirestore().runTransaction(async transaction => {
+      const current = await transaction.get(ref);
+      if (!current.exists || current.data()?.uid !== uid) {
+        throw new HttpsError('permission-denied', 'This passkey was removed.');
+      }
+      const prior = Number(current.data()?.counter ?? 0);
+      const next = Number(verification.authenticationInfo.newCounter);
+      if (prior > 0 && next <= prior) throw new HttpsError('permission-denied', 'Passkey counter validation failed.');
+      transaction.update(ref, { counter: next, lastUsedAt: FieldValue.serverTimestamp() });
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    logError('NIGHTJAR_PASSKEY_COUNTER_WRITE_FAILED', {
+      stage: 'counter_transaction',
+      code: (error as { code?: unknown })?.code ?? 'unknown',
+    });
+    throw new HttpsError('unavailable',
+      'Your passkey verified, but Nightjar could not update its sign-in record. Try again later.',
+      { code: 'PASSKEY_COUNTER_WRITE_FAILED' });
+  }
+
+  let token: string;
+  try {
+    token = await getAuth().createCustomToken(uid);
+  } catch (error) {
+    // The Firebase Admin SDK may need iam.serviceAccounts.signBlob to sign
+    // custom tokens on 2nd-gen Cloud Functions. A missing IAM permission gives
+    // the caller only 'internal' without an explicit controlled error.
+    const detail = String((error as { message?: unknown })?.message ?? '').slice(0, 800);
+    const iamMissing = /signBlob|iamcredentials|IAM API|permission denied|insufficient permission|service account/i.test(detail);
+    logError('NIGHTJAR_PASSKEY_TOKEN_SIGNING_FAILED', {
+      stage: 'firebase_custom_token',
+      code: (error as { code?: unknown })?.code ?? 'unknown',
+      iamPermissionSuspected: iamMissing,
+    });
+    throw new HttpsError('unavailable',
+      iamMissing
+        ? 'Your passkey verified, but Nightjar needs its Firebase service-account token-signing permission repaired. Please use your password while Nightjar resolves this.'
+        : 'Your passkey verified, but Nightjar could not complete Firebase sign-in. Please use your password while Nightjar checks its token-signing service.',
+      { code: iamMissing ? 'PASSKEY_TOKEN_SIGNING_IAM' : 'PASSKEY_TOKEN_SIGNING_UNAVAILABLE' });
+  }
   return { token };
 });
 
