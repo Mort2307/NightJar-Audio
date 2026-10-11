@@ -4489,7 +4489,17 @@ function App() {
         {view === 'calendar' && user && ageVerified && !liveRolePreview && (
           <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Opening your Nightjar calendar" />}>
             <PersonalCalendar role={effectiveRole ?? 'listener'} showCreatorReleases={uniqueProfileEditableRoles.includes('creator') || effectiveRole === 'creator'} simulationMode={simulationMode || demoMode} notify={notify}
-              onOpenStudio={() => {navigate('creator');void loadCreatorDashboard();window.setTimeout(()=>document.getElementById('creator-pipeline')?.scrollIntoView({behavior:'smooth',block:'start'}),100);}}
+              onOpenStudio={() => {void (async()=>{
+                try {
+                  if (!canAdmin && effectiveRole !== 'creator') {
+                    const result = await nightjarAccount.setActiveRole('creator');
+                    if (result.activeRole !== 'creator') throw new Error('Nightjar could not switch to your approved VA Creator workspace.');
+                    setRole('creator');void loadProfile('creator');
+                  }
+                  navigate('creator');void loadCreatorDashboard();
+                  window.setTimeout(()=>document.getElementById('creator-pipeline')?.scrollIntoView({behavior:'smooth',block:'start'}),150);
+                } catch(error) {notify(error instanceof Error?error.message:'Could not open VA Creator Studio.');}
+              })();}}
               onOpenModeration={() => setModerationOpen(true)}/>
           </Suspense>
         )}
