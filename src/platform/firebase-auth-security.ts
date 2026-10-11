@@ -9,6 +9,8 @@ export type AuthenticationSecurityEvent = {
   id: string;
   eventType: 'signin_failed' | 'closed_beta_signin_denied' | string;
   targetEmailMasked: string;
+  targetKey?: string;
+  accountOwner?: { name: string; email: string } | null;
   targetUserId?: string | null;
   adminTarget: boolean;
   firebaseCode?: string | null;
