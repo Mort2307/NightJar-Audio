@@ -59,7 +59,6 @@ import {
   Bell,
   Download,
   FileCheck2,
-  Share2,
   Coins,
   WalletCards,
   ImagePlus,
