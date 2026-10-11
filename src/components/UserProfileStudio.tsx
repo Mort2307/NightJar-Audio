@@ -4,6 +4,7 @@ import SearchableMultiSelect from './SearchableMultiSelect';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
 import AccountSecurityActivity from './AccountSecurityActivity';
 import AccessibilityPreferences from './AccessibilityPreferences';
+import SocialLinksEditor from './SocialLinksEditor';
 import LegalAgreementPanel from './LegalAgreementPanel';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
@@ -27,6 +28,7 @@ type Props = {
   onRemoveAvatar: () => Promise<void>;
   onSave: () => Promise<void>;
   onRevert: () => void;
+  notify: (message:string) => void;
   onOpenEditorStudio?: () => void;
 };
 
@@ -62,6 +64,7 @@ export default function UserProfileStudio({
   onRemoveAvatar,
   onSave,
   onRevert,
+  notify,
   onOpenEditorStudio,
 }: Props) {
   const handleProblem = nightjarHandleError(profile.handle);
@@ -175,6 +178,7 @@ export default function UserProfileStudio({
         </div>
       </article>
 
+      <SocialLinksEditor notify={notify} />
       <AccessibilityPreferences />
       <LegalAgreementPanel />
       <AccountSecurityActivity />
