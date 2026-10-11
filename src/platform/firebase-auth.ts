@@ -90,6 +90,13 @@ export const nightjarAuth = {
     await sendPasswordResetEmail(firebaseAuth, email.trim());
   },
 
+  async reauthenticate(password: string) {
+    const user = firebaseAuth.currentUser;
+    if (!user?.email) throw new Error('Sign in with email and password before managing passkeys.');
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+    await user.getIdToken(true);
+  },
+
   async changePassword(currentPassword: string, nextPassword: string) {
     const user = firebaseAuth.currentUser;
     if (!user?.email) throw new Error('auth/no-current-user');
