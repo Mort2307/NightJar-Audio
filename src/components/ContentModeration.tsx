@@ -9,9 +9,10 @@ type Props = {
   onClose: () => void;
   notify: (message: string) => void;
   demoMode?: boolean;
+  onDeleted?: (releaseId: string) => void;
 };
 
-export default function ContentModeration({ open, onClose, notify, demoMode = false }: Props) {
+export default function ContentModeration({ open, onClose, notify, demoMode = false, onDeleted }: Props) {
   const [queue, setQueue] = useState<any[]>([]);
   const [audioLibrary, setAudioLibrary] = useState<any[]>([]);
   const [auditMode, setAuditMode] = useState<'all' | 'pending'>('all');
@@ -23,6 +24,7 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [nightjarOriginal, setNightjarOriginal] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -111,6 +113,29 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
     } catch { notify('Moderation decision could not be saved.'); }
   };
 
+  const removeSelected = async () => {
+    if (!selected?.id || removing) return;
+    const release = selected;
+    if (!window.confirm('Permanently remove “' + String(release.title ?? 'this recording') + '” from Nightjar? Audio and artwork will be deleted and public access stopped. This cannot be undone.')) return;
+    setRemoving(true);
+    try {
+      if (demoMode) {
+        setQueue((items) => items.filter((item) => item.id !== release.id));
+        setAudioLibrary((items) => items.filter((item) => item.id !== release.id));
+      } else {
+        const result = await nightjarCatalogue.adminRemove(release.id);
+        if (result.deleted !== true) throw new Error('The server could not verify the removal.');
+        await load();
+      }
+      setSelected(null);
+      setPreviewUrl(null);
+      onDeleted?.(release.id);
+      notify('Recording removed. Audio and artwork are no longer available.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Unable to remove this recording.');
+    } finally { setRemoving(false); }
+  };
+
   const visibleAudio = auditMode === 'pending' ? queue : audioLibrary;
   const formatted = (date:unknown) => date ? new Date(String(date)).toLocaleString('en-GB') : 'Date unavailable';
   if (!open) return null;
@@ -140,7 +165,8 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
               : <div className="people-empty"><BookOpenText size={16}/><strong>No transcript supplied.</strong><span>Request changes before publishing this release.</span></div>}
             <small>{selected.transcriptLanguage || 'en'} · {Math.max(0, Number(selected.transcriptWordCount ?? 0)).toLocaleString('en-GB')} words</small>
           </section>
-          <div className="moderation-tags">{[...(selected.tags || []), ...(selected.tropes || [])].map((tag:string) => <span key={tag}>{tag}</span>)}</div>{!!selected.contributors?.length && <div className="moderation-credit-list">{selected.contributors.map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}{selected.status === 'pending_review' && <label className="rights-check moderation-original-check"><input type="checkbox" checked={nightjarOriginal} onChange={(e)=>setNightjarOriginal(e.target.checked)}/> Designate as a Nightjar Original on approval</label>}</div>{selected.status === 'pending_review' ? <div className="moderation-actions"><button className="secondary-button" onClick={() => void decide('changes')}><MessageSquare size={14} /> Request changes</button><button className="ghost-button" onClick={() => void decide('rejected')}><X size={14} /> Reject</button><button className="primary-button" disabled={!demoMode && (!String(selected.transcriptText ?? '').trim() || selected.transcriptAccessibilityReviewed !== true)} onClick={() => void decide('approved')}><Check size={14} /> Approve & publish</button></div> : <p className="nj-audio-review-help">Listening is for administrator quality checks only. Moderation decisions unlock after the creator submits the completed release.</p>}</> : <div className="people-empty"><Eye size={19} /><strong>Select a release.</strong><span>Moderation shows the actual audio and metadata together.</span></div>}</article>
+          <div className="moderation-tags">{[...(selected.tags || []), ...(selected.tropes || [])].map((tag:string) => <span key={tag}>{tag}</span>)}</div>{!!selected.contributors?.length && <div className="moderation-credit-list">{selected.contributors.map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}{selected.status === 'pending_review' && <label className="rights-check moderation-original-check"><input type="checkbox" checked={nightjarOriginal} onChange={(e)=>setNightjarOriginal(e.target.checked)}/> Designate as a Nightjar Original on approval</label>}</div>{selected.status === 'pending_review' ? <div className="moderation-actions"><button className="secondary-button" onClick={() => void decide('changes')}><MessageSquare size={14} /> Request changes</button><button className="ghost-button" onClick={() => void decide('rejected')}><X size={14} /> Reject</button><button className="primary-button" disabled={!demoMode && (!String(selected.transcriptText ?? '').trim() || selected.transcriptAccessibilityReviewed !== true)} onClick={() => void decide('approved')}><Check size={14} /> Approve & publish</button></div> : <p className="nj-audio-review-help">Listening is for administrator quality checks only. Moderation decisions unlock after the creator submits the completed release.</p>}
+        <div className="nj-admin-recording-removal"><p>Administrator control · remove a test upload, submitted work or published recording.</p><button type="button" className="ghost-button nj-work-remove-button" disabled={removing} onClick={() => void removeSelected()}>{removing ? 'Removing recording…' : 'Remove recording permanently'}</button></div></> : <div className="people-empty"><Eye size={19} /><strong>Select a release.</strong><span>Moderation shows the actual audio and metadata together.</span></div>}</article>
       </div>
     </section>
   </div>;
