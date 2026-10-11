@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const read = (path) => fs.readFileSync(path, 'utf8');
+const app = read('src/App.tsx');
+const profile = read('src/components/UserProfileStudio.tsx');
+const onboarding = read('src/components/NightjarOnboarding.tsx');
+const handle = read('src/platform/profile-handle.ts');
+const server = read('functions/src/index.ts');
+
+assert.match(handle, /!handle \|\| \/\^\[a-z0-9_-\]\{3,30\}\$\//, 'empty handles allowed, otherwise strict 3–30 rule');
+assert.match(handle, /suggestNightjarHandle/, 'invalid handles can be corrected with one click');
+assert.match(profile, /aria-invalid=\{!!handleProblem\}/, 'profile editor shows invalid handles inline');
+assert.match(profile, /Save without a handle/, 'profile editing can continue without claiming a handle');
+assert.match(onboarding, /if \(handleProblem\)/, 'onboarding validates before the network request');
+assert.match(app, /const invalidHandle = nightjarHandleError\(profile.handle\)/, 'save validates handles before API call');
+assert.match(app, /handle: normaliseNightjarHandle\(profile.handle\)/, 'submitted handles are normalised');
+assert.match(app, /setProfileSaveError\(message\)/, 'save failures are visible');
+assert.match(app, /setProfileBaseline\(structuredClone\(empty\)\)/, 'brand-new accounts can save their first profile edit');
+assert.match(app, /nightjarListening\.taste\(\)\.catch/, 'recommendation loading cannot block profile editor');
+const save = app.split('  const saveProfile = async () => {')[1]?.split('  const switchProfileEditRole')[0] ?? '';
+assert.ok(save, 'profile save flow is present');
+assert.doesNotMatch(save, /for \(const targetRole of rolesToSave\)/, 'save is not one network call per role');
+assert.match(save, /await nightjarCommunity\.saveMyProfile\(payload, profileEditRole\)/, 'one atomic multi-role save');
+assert.match(save, /getMyProfile\(\)\.catch\(\(\) => null\)/, 'optional refresh cannot produce a false failed save');
+assert.match(server, /const validatedRoleProfiles:/, 'backend receives and validates role draft bundle');
+assert.match(server, /approvedRoles/, 'backend checks approved roles');
+assert.match(server, /Object\.assign\(roleProfiles, validatedRoleProfiles\)/, 'one transaction writes all approved role drafts');
+assert.match(server, /Profile saved; creator tag indexing failed/, 'secondary tag indexing errors are isolated');
+assert.match(server, /Profile saved; release display-name sync failed/, 'secondary release syncing errors are isolated');
+console.log('Nightjar profile persistence and optional @handle regression contracts passed.');
