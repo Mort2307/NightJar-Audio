@@ -1,0 +1,33 @@
+name: Nightjar passkey lock sync (temporary)
+
+on:
+  push:
+    branches: [feature/secure-passkeys-20261011]
+
+permissions:
+  contents: write
+
+jobs:
+  synchronise-functions-lock:
+    if: "!contains(github.event.head_commit.message, '[passkey-lock-synced]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          ref: feature/secure-passkeys-20261011
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Update Functions lockfile only
+        working-directory: functions
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Record validated lock
+        run: |
+          git config user.name "nightjar-lock-sync[bot]"
+          git config user.email "nightjar-lock-sync@users.noreply.github.com"
+          git add functions/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "[passkey-lock-synced] Add WebAuthn dependency lockfile"
+            git push origin HEAD:feature/secure-passkeys-20261011
+          fi
