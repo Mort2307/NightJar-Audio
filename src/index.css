@@ -10398,3 +10398,83 @@ textarea:focus-visible,
   font-size: 12px;
 }
 .nj-launch-unlock-diagnostic { display: block; font-size: 11px; margin-top: 9px; color: #e4afac; }
+
+
+/* BRONZE NOIR — Nightjar's black and burnished bronze logo palette.
+   Only applies when the member explicitly selects the theme in Settings. */
+:root[data-nightjar-theme="bronze"] {
+  color-scheme: dark;
+  --bg: #080809;
+  --panel: #111010;
+  --panel-soft: #1a1511;
+  --line: rgba(213,172,117,.24);
+  --line-soft: rgba(213,172,117,.12);
+  --muted: #c2b2a2;
+  --muted-2: #9c8a7a;
+  --ivory: #f3e7d8;
+  --plum: #b88a52;
+  --plum-soft: #e2ba83;
+  --wine: #754727;
+  --nj-surface-0: #080809;
+  --nj-surface-1: #111010;
+  --nj-surface-2: #1a1511;
+  --nj-surface-raised: rgba(24,20,17,.97);
+  --nj-line-subtle: rgba(213,172,117,.12);
+  --nj-line-default: rgba(213,172,117,.24);
+  --nj-line-strong: rgba(226,186,131,.4);
+  --nj-text-primary: #f3e7d8;
+  --nj-text-secondary: #c2b2a2;
+  --nj-text-tertiary: #978575;
+  --nj-accent: #e2ba83;
+  --nj-accent-soft: rgba(184,138,82,.19);
+  --nj-warning: #e5ba80;
+}
+:root[data-nightjar-theme="bronze"] body { background: var(--bg); color: var(--ivory); }
+:root[data-nightjar-theme="bronze"] .app-shell {
+  background: radial-gradient(ellipse at 76% -4%, rgba(163,104,50,.15), transparent 32%),
+    radial-gradient(ellipse at 8% 65%, rgba(109,65,36,.095), transparent 35%), var(--bg);
+}
+:root[data-nightjar-theme="bronze"] .access-shell,
+:root[data-nightjar-theme="bronze"] .account-portal-shell {
+  background: radial-gradient(ellipse at 55% 0%, rgba(165,107,53,.18), transparent 34%), var(--bg);
+}
+:root[data-nightjar-theme="bronze"] .access-card {
+  background: linear-gradient(155deg, rgba(31,24,18,.97), rgba(12,11,11,.99));
+  border-color: rgba(213,172,117,.26);
+}
+:root[data-nightjar-theme="bronze"] .primary-button {
+  background: linear-gradient(125deg,#e1b782 0%,#b98a52 50%,#936536 100%);
+  color: #120d08;
+  box-shadow: 0 10px 32px rgba(157,105,45,.2);
+}
+:root[data-nightjar-theme="bronze"] .primary-button:hover {
+  background: linear-gradient(125deg,#f0c995,#ca9c60 55%,#a7763c);
+}
+:root[data-nightjar-theme="bronze"] .secondary-button {
+  background: rgba(179,126,70,.065);
+  color: var(--ivory);
+  border-color: rgba(213,172,117,.3);
+}
+:root[data-nightjar-theme="bronze"] .ghost-button { color: var(--ivory); border-color: var(--line); }
+:root[data-nightjar-theme="bronze"] .secondary-button:hover,
+:root[data-nightjar-theme="bronze"] .ghost-button:hover {
+  background: rgba(184,138,82,.14);
+  border-color: rgba(226,186,131,.55);
+}
+:root[data-nightjar-theme="bronze"] .text-button { color: var(--plum-soft); }
+:root[data-nightjar-theme="bronze"] :where(button,a,input,select,textarea,[tabindex]):focus-visible {
+  outline-color: #e2ba83;
+}
+:root[data-nightjar-theme="bronze"] :where(input[type="checkbox"],input[type="radio"]) {
+  accent-color: #b88a52;
+}
+:root[data-nightjar-theme="bronze"] ::selection { background: rgba(184,138,82,.35); color: #fff0e0; }
+/* The biometric splash is already bronze. Match the chosen theme's exact accents. */
+:root[data-nightjar-theme="bronze"] .nj-launch-unlock {
+  background: radial-gradient(ellipse at 50% 42%,rgba(177,115,54,.14),transparent 55%),#080809;
+}
+:root[data-nightjar-theme="bronze"] .nj-launch-unlock-action {
+  border-color: #d4a773;
+  background: linear-gradient(125deg,#e0b37b,#b88a52,#8c5d32);
+  color: #120d08;
+}
