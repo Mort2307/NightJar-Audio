@@ -36,4 +36,7 @@ for (const remoteCall of [
 }
 check(css, ".nightjar-role-qa-banner", 'QA requires a distinct safety banner');
 assert.ok(!app.includes("onClick={() => setRole(option.id)}"), 'Never grant or impersonate a member role from Owner View as');
+check(app, "else if (next === 'artist') navigate('artist');", 'Artist simulation starts Artist Studio rather than falling back to Profile');
+check(app, "testing.role === 'artist' ? 'artist'", 'Artist QA session restoration uses the role workspace');
+check(app, "view === 'artist' && effectiveRole === 'artist' && !liveRolePreview", 'Artist Studio is limited to selected artist role');
 console.log('Nightjar interactive owner role-QA navigation, isolated multi-role lifecycle, and non-impersonation contracts PASS (source-level only).');

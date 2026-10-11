@@ -72,4 +72,16 @@ assert.match(ownerNav, /nj-owner-workspaces-compact/, 'non-overview admin workpa
 assert.match(product, /\.nj-owner-workspaces\.nj-owner-workspaces-compact\s*\{[^]*?overflow-x: auto;/, 'mobile admin sections are scrollable rather than four repeated rows');
 assert.match(product, /\.admin-live-preview-diagnostic \.nj-script-visibility-info/, 'script titles and status descriptions have dedicated readable card space');
 assert.match(authCases, /nj-auth-case-list/, 'sign-in activity renders grouped readable cases');
+const artist = fs.readFileSync('src/components/ArtistStudio.tsx','utf8');
+const portfolio = fs.readFileSync('src/components/ArtistPortfolioManager.tsx','utf8');
+assert.match(app, /view === 'artist' && effectiveRole === 'artist' && !liveRolePreview/, 'Artist Studio must enforce current role and not allow read-only owner preview to edit');
+assert.match(app, /onEditProfile=\{\(\) => \{ navigate\('profile'\); void switchProfileEditRole\('artist'\); \}\}/, 'Artist Studio profile link opens the correct professional identity');
+assert.match(mobileNav, /\{ view: 'artist', label: 'Artist', accessibleLabel: 'Artist Studio'/, 'Artist bottom navigation opens its own studio, not generic Profile');
+assert.match(app, /Your portfolio lives in Artist Studio/, 'Profile retains an Artist portfolio hand-off without mounting uploader');
+assert.doesNotMatch(app, /<ArtistPortfolioManager/, 'Artwork submission does not live inside shared Profile route');
+assert.match(artist, /section==='portfolio' &&/, 'Artist has a dedicated portfolio workpage');
+assert.match(artist, /<ArtistPortfolioManager notify=\{notify\} demoMode=\{demoMode\}/, 'Artist Studio reuses existing moderated and fictional artwork safety flows');
+assert.match(portfolio, /formOpen && <div className="artist-portfolio-form">/, 'Artwork upload is collapsed until user requests it');
+assert.match(product, /\.nj-artist-studio-actions\s*\{/, 'Artist actions have responsive layout');
+
 console.log('Nightjar mobile dock, save-bar visibility and responsive touch-feedback contracts passed.');

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ImagePlus, LoaderCircle, Trash2 } from 'lucide-react';
+import { ImagePlus, LoaderCircle, Trash2, ChevronDown } from 'lucide-react';
 import { nightjarArtists, type ArtistPortfolioItem } from '../platform/firebase-artists';
 import { nightjarMedia } from '../platform/firebase-media';
 
@@ -17,6 +17,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 
 export default function ArtistPortfolioManager({ notify, demoMode = false }: Props) {
   const [items, setItems] = useState<ArtistPortfolioItem[]>([]);
+  const [formOpen, setFormOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -56,6 +57,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         id:'demo-artist-piece-'+Date.now(),ownerUserId:'demo-artist-lena',title:title.trim(),description:description.trim(),tags:tags.split(',').map((tag)=>tag.trim()).filter(Boolean).slice(0,12),commissionType:commissionType.trim()||null,status:'draft',imageUrl:null,imageStatus:null,pendingImageAssetId:'demo-pending-'+Date.now(),pendingImageStatus:'pending',createdAt:new Date().toISOString(),publishedAt:null,updatedAt:new Date().toISOString(),
       },...current]);
       setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+      setFormOpen(false);
       notify('Simulation: artwork entered the fictional image-moderation queue.');
       return;
     }
@@ -81,6 +83,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       });
       setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       await load();
+      setFormOpen(false);
       notify('Artwork submitted. It stays private until an administrator approves the image.');
     } catch {
       notify('Artist portfolio artwork could not be submitted.');
@@ -113,7 +116,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <ImagePlus size={20}/>
     </div>
 
-    <div className="artist-portfolio-form">
+    <button type="button" className="secondary-button nj-artist-artwork-toggle" aria-expanded={formOpen} onClick={()=>setFormOpen(current=>!current)}><ImagePlus size={16}/>{formOpen?'Close upload form':'Add new artwork'}<ChevronDown size={15}/></button>
+    {formOpen && <div className="artist-portfolio-form">
       <label>Artwork title<input maxLength={120} value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="e.g. Neon After Midnight"/></label>
       <label>Commission type<input maxLength={80} value={commissionType} onChange={(e)=>setCommissionType(e.target.value)} placeholder="Cover artwork, character portrait…"/></label>
       <label className="artist-form-wide">Description<textarea maxLength={600} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="A short public note about the piece, style or brief."/></label>
@@ -123,8 +127,9 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={rightsConfirmed} onChange={(e)=>setRightsConfirmed(e.target.checked)}/><span>I own or control the rights needed to display this artwork publicly on Nightjar.</span></label>
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have any required client, subject, model or collaborator permission for this public portfolio use.</span></label>
       <button className="primary-button artist-form-wide" disabled={busy || !humanCreated || !rightsConfirmed || !permissionsConfirmed} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Submitting…</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
-    </div>
+    </div>}
 
+    <div className="nj-artist-portfolio-summary"><strong>{items.length} artwork piece{items.length===1?'':'s'}</strong><span>{items.filter(item=>item.status==='published').length} public · {items.filter(item=>item.status!=='published').length} private or awaiting review</span></div>
     <div className="artist-portfolio-grid">
       {items.map((item)=><article key={item.id} className="artist-portfolio-card">
         <div className="artist-portfolio-image">{item.imageUrl?<img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/>:<div><ImagePlus size={22}/><span>{item.pendingImageStatus==='pending'?'Awaiting image approval':item.pendingImageStatus==='rejected'?'Image rejected':'No public image yet'}</span></div>}</div>

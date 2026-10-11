@@ -3118,6 +3118,56 @@ textarea {
 @media(max-width:620px) { .nj-evidence-help-actions { width: 100%; flex-direction: column; } .nj-evidence-help-actions .nj-evidence-contact-action { width: 100%; } }
 
 
+/* Artist role parity: give artwork a dedicated professional workspace without
+   burying general profile, notification or legal account tools in it. */
+.nj-artist-studio {max-width:1180px;min-width:0;}
+.nj-artist-studio-heading {display:flex;align-items:flex-start;justify-content:space-between;gap:17px;}
+.nj-artist-studio-heading > div {min-width:0;}
+.nj-artist-studio-heading h1 {max-width:720px;font-size:clamp(35px,5vw,53px);line-height:1.07;}
+.nj-artist-studio-heading p {max-width:720px;font-size:14px;line-height:1.6;}
+.nj-artist-studio-heading > button {display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;min-height:45px;}
+.nj-artist-studio-tabs {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 20px;border-bottom:1px solid var(--nj-line-default);padding-bottom:13px;}
+.nj-artist-studio-tabs button {display:inline-flex;align-items:center;gap:8px;justify-content:center;border:1px solid var(--nj-line-default);border-radius:12px;min-height:45px;padding:9px 15px;color:var(--nj-text-primary);background:rgba(255,255,255,.02);font-size:14px;cursor:pointer;}
+.nj-artist-studio-tabs button.active {background:rgba(203,181,204,.13);border-color:rgba(203,181,204,.48);font-weight:750;}
+.nj-artist-studio-tabs button:focus-visible {outline:2px solid var(--nj-accent);outline-offset:2px;}
+.nj-artist-studio-intro {display:grid;gap:7px;margin:10px 0 20px;}
+.nj-artist-studio-intro h2 {font-family:Georgia,serif;font-size:clamp(25px,3.5vw,36px);font-weight:400;margin:0;line-height:1.2;}
+.nj-artist-studio-intro p {font-size:14px;line-height:1.6;color:var(--nj-text-secondary);max-width:720px;margin:0;}
+.nj-artist-studio-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin:10px 0 18px;}
+.nj-artist-studio-action {min-width:0;display:flex;align-items:flex-start;gap:13px;padding:17px;border:1px solid var(--nj-line-default);border-radius:14px;background:rgba(255,255,255,.02);color:var(--nj-text-primary);text-align:left;cursor:pointer;}
+.nj-artist-studio-action:hover,.nj-artist-studio-action:focus-visible {border-color:rgba(203,181,204,.46);}
+.nj-artist-studio-action-icon {display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border:1px solid var(--nj-line-subtle);border-radius:11px;}
+.nj-artist-studio-action > span:nth-child(2) {display:grid;gap:7px;flex:1;min-width:0;}
+.nj-artist-studio-action > span:nth-child(2) strong {font-size:17px;line-height:1.25;}
+.nj-artist-studio-action > span:nth-child(2) small {font-size:13px;line-height:1.5;color:var(--nj-text-secondary);}
+.nj-artist-studio-action > svg {flex:0 0 auto;margin-top:11px;}
+.nj-artist-studio-trust {padding:14px 16px;margin:10px 0;border:1px solid var(--nj-line-subtle);border-radius:12px;}
+.nj-artist-studio-trust > div {display:flex;align-items:center;gap:9px;}
+.nj-artist-studio-trust strong {font-size:14px;}
+.nj-artist-studio-trust p {font-size:13px;line-height:1.55;color:var(--nj-text-secondary);margin:7px 0 0;}
+.nj-artist-studio-portfolio {display:grid;gap:12px;}
+.nj-artist-artwork-toggle {display:inline-flex;align-items:center;gap:9px;justify-content:center;justify-self:start;min-height:46px;}
+.nj-artist-artwork-toggle[aria-expanded="true"] svg:last-child {transform:rotate(180deg);}
+.nj-artist-portfolio-summary {display:flex;flex-wrap:wrap;gap:5px 14px;align-items:center;font-size:13px;}
+.nj-artist-portfolio-summary strong {font-size:15px;}
+.nj-artist-portfolio-summary span {color:var(--nj-text-secondary);}
+.nj-profile-artist-handoff {display:flex;align-items:center;justify-content:space-between;gap:20px;margin:20px 0;padding:18px;}
+.nj-profile-artist-handoff > div {min-width:0;}
+.nj-profile-artist-handoff h2 {font-size:23px;font-weight:500;line-height:1.2;margin:7px 0;}
+.nj-profile-artist-handoff p {font-size:14px;line-height:1.55;color:var(--nj-text-secondary);margin:0;max-width:670px;}
+.nj-profile-artist-handoff > button {flex:0 0 auto;min-height:46px;display:inline-flex;align-items:center;gap:8px;}
+@media(max-width:700px) {
+  .nj-artist-studio-heading,.nj-profile-artist-handoff {flex-direction:column;align-items:stretch;}
+  .nj-artist-studio-heading > button,.nj-profile-artist-handoff > button {width:100%;}
+  .nj-artist-studio-tabs {flex-wrap:nowrap;}
+  .nj-artist-studio-tabs button {flex:1 1 0;padding:9px;}
+  .nj-artist-studio-actions {grid-template-columns:minmax(0,1fr);}
+  .nj-artist-studio-action {padding:14px;}
+  .nj-artist-studio-action-icon {width:36px;height:36px;flex-basis:36px;}
+  .nj-artist-artwork-toggle {width:100%;}
+}
+
+
 /* Visual audit 04: keep context switching available without eight repeated
    two-column tiles at the start of every owner subpage. */
 .nj-owner-workspaces.nj-owner-workspaces-compact {

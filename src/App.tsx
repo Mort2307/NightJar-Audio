@@ -101,7 +101,7 @@ const ReleaseReviews = lazy(() => import('./components/ReleaseReviews'));
 const CreatorSuggestionBox = lazy(() => import('./components/CreatorSuggestionBox'));
 const MessagingHub = lazy(() => import('./components/MessagingHub'));
 const ProfessionalRoleManager = lazy(() => import('./components/ProfessionalRoleManager'));
-const ArtistPortfolioManager = lazy(() => import('./components/ArtistPortfolioManager'));
+const ArtistStudio = lazy(() => import('./components/ArtistStudio'));
 const NightjarWalletPanel = lazy(() => import('./components/NightjarWalletPanel'));
 const UserProfileStudio = lazy(() => import('./components/UserProfileStudio'));
 const RoleProfileExtension = lazy(() => import('./components/RoleProfileExtension'));
@@ -114,7 +114,7 @@ const AdminLiveMarketplacePreview = lazy(() => import('./components/AdminLiveMar
 const EditorShowcaseModeration = lazy(() => import('./components/EditorShowcaseModeration'));
 
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
 type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -434,7 +434,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 });
 
 function App() {
-  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
+  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
   const [playing, setPlaying] = useState<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
@@ -855,7 +855,7 @@ function App() {
         setAdminPanel(null);
         setAdminPeopleRole(null);
       }
-      setView((['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View);
+      setView((['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View);
     };
     window.addEventListener('popstate', onPop);
     void (async () => {
@@ -934,7 +934,7 @@ function App() {
       setDemoMode(true);
       setSimulationMode(true);
       setPreviewRole(testing.role);
-      const restoredView: View = testing.role === 'creator' ? 'creator' : testing.role === 'writer' ? 'writer' : testing.role === 'editor' ? 'editor' : testing.role === 'artist' ? 'profile' : 'discover';
+      const restoredView: View = testing.role === 'creator' ? 'creator' : testing.role === 'writer' ? 'writer' : testing.role === 'editor' ? 'editor' : testing.role === 'artist' ? 'artist' : 'discover';
       const restoredPath = restoredView === 'discover' ? '/discover' : '/' + restoredView;
       if (window.location.pathname !== restoredPath) window.history.replaceState({}, '', restoredPath);
       setView(restoredView);
@@ -1133,7 +1133,7 @@ function App() {
     const onWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'NIGHTJAR_PUSH_OPEN') return;
       const route = String(event.data.route ?? '/discover').replace(/^\//, '');
-      const target = (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(route)
+      const target = (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(route)
         ? route
         : 'discover') as View;
       navigate(target);
@@ -1165,7 +1165,7 @@ function App() {
     window.history.replaceState({}, '', returnPath);
     setPublicProfileUserId(null);
     const value = returnPath.replace(/^\/+|\/+$/g, '');
-    if (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(value)) setView(value as View);
+    if (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(value)) setView(value as View);
   };
 
   const recommendCreator = async (creator: PublicDirectoryProfile) => {
@@ -1190,11 +1190,12 @@ function App() {
   useEffect(() => {
     if (accountLoading || !role) return;
     const perspective = role === 'admin' ? (previewRole ?? 'admin') : role;
-    const home: View = perspective === 'creator' ? 'creator' : perspective === 'writer' ? 'writer' : perspective === 'editor' ? 'editor' : perspective === 'artist' ? 'profile' : 'discover';
+    const home: View = perspective === 'creator' ? 'creator' : perspective === 'writer' ? 'writer' : perspective === 'editor' ? 'editor' : perspective === 'artist' ? 'artist' : 'discover';
     if ((view === 'admin' && (role !== 'admin' || simulationMode)) ||
         (view === 'creator' && perspective !== 'creator' && perspective !== 'admin') ||
         (view === 'writer' && perspective !== 'writer') ||
         (view === 'editor' && perspective !== 'editor') ||
+        (view === 'artist' && perspective !== 'artist') ||
         (view === 'messages' && !['creator','writer','editor','artist'].includes(String(perspective))) ||
         (view === 'library' && perspective !== 'listener')) {
       navigate(home);
@@ -1579,7 +1580,7 @@ function App() {
           setView('profile');
           setProfileRolesPage(true);
         } else {
-          navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'profile' : 'discover');
+          navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'artist' : 'discover');
         }
       } else {
         setRole(null);
@@ -3534,6 +3535,7 @@ function App() {
     else if (next === 'listener') navigate('discover');
     else if (next === 'writer') navigate('writer');
     else if (next === 'editor') navigate('editor');
+    else if (next === 'artist') navigate('artist');
     else navigate('profile');
     notify(`Testing ${roleMeta[next].label} workflows with local fictional records. No real account was impersonated.`);
   };
@@ -3859,6 +3861,7 @@ function App() {
     ...(effectiveRole === 'creator' || adminOnly ? [{ id:'nav-creator', group:'Studio', label:'Creator Studio', detail:'Releases, catalogue and creator operations', keywords:['publish','audio'], icon:<Mic2 size={15}/>, action:()=>{ navigate('creator'); void loadCreatorDashboard(); } }] : []),
     ...(effectiveRole === 'writer' ? [{ id:'nav-writer', group:'Studio', label:'Writer Studio', detail:'Manuscripts, rights and collaborations', keywords:['script','write'], icon:<FileText size={15}/>, action:()=>{ navigate('writer'); void loadWriterScripts(); } }] : []),
     ...(effectiveRole === 'editor' ? [{ id:'nav-editor', group:'Studio', label:'Editor Studio', detail:'Professional profile, portfolio, projects and collaborations', keywords:['edit','review','portfolio','services'], icon:<FileCheck2 size={15}/>, action:()=>{ navigate('editor'); void loadEditorQueue(); void loadProfile(); } }] : []),
+    ...(effectiveRole === 'artist' ? [{ id:'nav-artist', group:'Studio', label:'Artist Studio', detail:'Artwork, portfolio and collaboration opportunities', keywords:['artist','artwork','commission','illustration','portfolio'], icon:<ImagePlus size={15}/>, action:()=>navigate('artist') }] : []),
     { id:'nav-profile', group:'Account', label:'Profile', detail:'Identity, public showcase and preferences', keywords:['settings','bio'], icon:<UserCircle2 size={15}/>, action:openProfileEditor },
     { id:'nav-protection', group:'Account', label:'Protection Centre', detail:'Reports, evidence and account safety', keywords:['security','safety'], icon:<ShieldCheck size={15}/>, action:()=>{ navigate('protection'); void loadProtection(); } },
     ...(canAdmin && !simulationMode ? [{ id:'nav-admin', group:'Administration', label:'Owner Console', detail:'People, content, security and commercial operations', keywords:['admin','moderation'], icon:<Settings2 size={15}/>, action:()=>{ navigate('admin'); void loadAdminOverview(); } }] : []),
@@ -3939,6 +3942,7 @@ function App() {
           {(creatorOnly || adminOnly || (liveRolePreview && previewRole === 'creator')) && <button className={view === 'creator' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('creator'); void loadCreatorDashboard(); }}>Creator Studio</button>}
           {effectiveRole === 'writer' && !liveRolePreview && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && !liveRolePreview && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
+          {effectiveRole === 'artist' && !liveRolePreview && <button className={view === 'artist' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('artist')}>Artist Studio</button>}
           {!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && !liveRolePreview && <button className={view === 'profile' && !profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && (!canAdmin || interactiveRoleTest) && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
@@ -4317,6 +4321,21 @@ function App() {
           </section>
         )}
 
+        {view === 'artist' && effectiveRole === 'artist' && !liveRolePreview && (
+          <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Opening Artist Studio" />}>
+            <ArtistStudio
+              key={'artist-studio-' + demoSessionKey}
+              notify={notify}
+              demoMode={demoMode}
+              onEditProfile={() => { navigate('profile'); void switchProfileEditRole('artist'); }}
+              onMessages={() => navigate('messages')}
+              onDirectory={() => navigate('creators')}
+              completedCollaborations={profileCompletedCollaborations}
+              messageUnreadCount={messageUnreadCount}
+            />
+          </Suspense>
+        )}
+
         {view === 'library' && (effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && (
           <section className="page-wrap">
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading Listener Library" />}><ListenerLibrary
@@ -4425,7 +4444,10 @@ function App() {
               />
             </Suspense>}
 
-            {profileEditRole === 'artist' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Artist portfolio" />}><ArtistPortfolioManager notify={notify} demoMode={demoMode} /></Suspense>}
+            {profileEditRole === 'artist' && <section className="panel nj-profile-artist-handoff">
+              <div><span className="mini-label">ARTIST / ARTWORK</span><h2>Your portfolio lives in Artist Studio.</h2><p>Your Artist identity is edited here, alongside your other approved roles. Uploads, artwork approvals and portfolio management have their own focused workspace.</p></div>
+              <button type="button" className="primary-button" onClick={() => effectiveRole === 'artist' ? navigate('artist') : openMyRoles()}>{effectiveRole === 'artist' ? 'Open Artist Studio' : 'Switch to Artist role'} <ArrowRight size={15}/></button>
+            </section>}
 
             {profileDirty && <div className="premium-profile-floating-save" role="region" aria-label="Unsaved profile changes" aria-busy={profileLoading}>
               <span><strong>{profileLoading ? 'Saving your profile…' : 'Profile changes waiting.'}</strong><small>Save your personal and professional changes together.</small></span>
@@ -4490,7 +4512,7 @@ function App() {
                   const next = nextRole as PreviewRole;
                   if (interactiveRoleTest) {
                     setPreviewRole(next);
-                    navigate(next === 'creator' ? 'creator' : next === 'writer' ? 'writer' : next === 'editor' ? 'editor' : next === 'artist' ? 'profile' : 'discover');
+                    navigate(next === 'creator' ? 'creator' : next === 'writer' ? 'writer' : next === 'editor' ? 'editor' : next === 'artist' ? 'artist' : 'discover');
                     return;
                   }
                   setRole(next);
