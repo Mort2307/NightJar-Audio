@@ -619,6 +619,7 @@ function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [focusedReleaseId, setFocusedReleaseId] = useState<string | null>(null);
   const [nightjarUpdate, setNightjarUpdate] = useState<NightjarUpdateStatus | null>(null);
   const [nightjarUpdating, setNightjarUpdating] = useState(false);
   const [releaseReactions, setReleaseReactions] = useState<Record<string, Exclude<ReleaseReaction, null>>>({});
@@ -1494,6 +1495,25 @@ function App() {
     }
     await markNotificationRead(item);
     setNotificationsOpen(false);
+
+    if (item.type === 'release_submission' && item.releaseId) {
+      const releaseId = String(item.releaseId);
+      if (!['creator','writer','editor','artist','listener'].includes(String(effectiveRole))) return;
+      try {
+        if (effectiveRole !== 'creator' && !demoMode) {
+          const next = await nightjarAccount.setActiveRole('creator');
+          if (next.activeRole !== 'creator') throw new Error('Could not switch to VA Creator.');
+          setRole('creator');
+        }
+        setFocusedReleaseId(releaseId);
+        navigate('creator');
+        void loadCreatorDashboard();
+        window.setTimeout(() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior:'smooth', block:'start' }), 150);
+      } catch {
+        notify('Switch to your approved VA Creator workspace to view this submission.');
+      }
+      return;
+    }
 
     if (item.type === 'spotlight') {
       navigate('discover');
@@ -4421,7 +4441,7 @@ function App() {
               {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
             </div>}
             {!liveRolePreview && <div id="creator-pipeline">
-              {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
+              {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} focusReleaseId={focusedReleaseId} onSubmitted={() => { void loadNotifications(productLoadEpoch.current); }} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); setReviewTrack((track) => track?.id === releaseId ? null : track); setFocusedReleaseId((id) => id === releaseId ? null : id); }} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
             </div>}
             {(creatorOnly || (canAdmin && !demoMode)) && <div className={liveRolePreview ? 'nj-creator-preview-marketplace' : undefined}>
               <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading live script marketplace" />}>
@@ -5237,7 +5257,7 @@ function App() {
         <NightjarGiftPanel recipientUserId={supportTarget.userId} recipientName={supportTarget.name} recipientRole={supportTarget.role} recipientRoles={supportTarget.roles} onClose={()=>setSupportTarget(null)} notify={notify}/>
       </Suspense>}
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
-      <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
+      <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
