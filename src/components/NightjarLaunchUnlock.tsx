@@ -52,14 +52,26 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       return () => { alive.current = false; };
     }
     // Do not begin a device prompt until Firebase has hydrated local session.
+    // On a fresh launch, revoke the persisted Firebase session before the
+    // passkey prompt: this makes the step a real sign-in, not a cosmetic overlay
+    // on top of an already authenticated 18+ account.
+    let initialIdentityChecked = false;
     const unsubscribe = nightjarAuth.observe(identity => {
-      if (!alive.current) return;
-      setAuthReady(true);
+      if (!alive.current || initialIdentityChecked) return;
+      initialIdentityChecked = true;
       if (identity && identity.userId !== preference.userId) {
-        // This installation is now signed into another member. A stale quick
-        // unlock setting must not force that user into someone else's identity.
+        // Another account is signed in on this device. A stale preference for
+        // the previous account must not hijack or sign out the current member.
         setLocked(false);
+        setAuthReady(true);
+        return;
       }
+      if (identity && !nightjarQuickUnlock.unlockedRecently(preference.userId)) {
+        void nightjarAuth.signOut().catch(() => { /* locked screen still protects entry */ })
+          .finally(() => { if (alive.current) setAuthReady(true); });
+        return;
+      }
+      setAuthReady(true);
     });
     return () => {
       alive.current = false;
@@ -107,12 +119,17 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       }
       const elapsed = hiddenAt.current === null ? 0 : Date.now() - hiddenAt.current;
       hiddenAt.current = null;
-      if (elapsed >= 2 * 60_000 && nightjarQuickUnlock.enabledFor(preference.userId)) {
+      if (elapsed >= 2 * 60_000 && nightjarQuickUnlock.enabledFor(preference.userId)
+        && (!nightjarAuth.current() || nightjarAuth.current()?.userId === preference.userId)) {
         nightjarQuickUnlock.lock();
         aborted.current?.abort();
         attemptedAutomatically.current = false;
+        setAuthReady(false);
         setLocked(true);
         setMessage('');
+        // Relock is also a real session boundary when returning to Nightjar.
+        void nightjarAuth.signOut().catch(() => { /* user can still use password */ })
+          .finally(() => { if (alive.current) setAuthReady(true); });
       }
     };
     document.addEventListener('visibilitychange', visibility);
