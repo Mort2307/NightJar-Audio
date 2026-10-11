@@ -28,6 +28,9 @@ type Release = {
   pendingArtworkAssetId?: string | null;
   pendingArtworkStatus?: 'pending' | 'rejected' | null;
   status?: string;
+  scheduledAt?: string | null;
+  scheduledLocal?: string | null;
+  scheduledTimeZone?: string | null;
   moderationNote?: string | null;
   contributors?: { userId?: string | null; name: string; role: string }[];
   contentRating?: 'sfw' | 'suggestive' | 'adult' | 'explicit';
@@ -172,8 +175,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       .then((data) => setCreditDirectory(data.people ?? []))
       .catch(() => setCreditDirectory([]));
   }, [simulationMode]);
-  const statusLabel = current?.status === 'removing' ? 'REMOVAL PENDING' : current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
-  const statusHint = current?.status === 'removing' ? 'This recording is hidden while Nightjar finishes deleting its files. Retry removal if necessary.' : current?.status === 'pending_review'
+  const statusLabel = current?.status === 'scheduled' ? 'APPROVED · SCHEDULED' : current?.status === 'removing' ? 'REMOVAL PENDING' : current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
+  const statusHint = current?.status === 'scheduled' ? 'Approved. Publication is automatic at your selected date and time; not visible to listeners yet.' : current?.status === 'removing' ? 'This recording is hidden while Nightjar finishes deleting its files. Retry removal if necessary.' : current?.status === 'pending_review'
     ? 'Your submission is with Nightjar moderation.'
     : current?.status === 'released'
       ? 'Published and available to age-verified listeners.'
@@ -190,11 +193,24 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     { label: 'Contributor permissions confirmed', passed: current?.contributorPermissionsConfirmed === true, target: 'release-rights', help: 'Confirm any necessary permissions for included work.' },
     { label: 'Finished-audio transcript', passed: Boolean(current?.transcriptText?.trim()), target: 'release-transcript', help: 'Provide a readable transcript of the finished audio.' },
     { label: 'Transcript accuracy confirmed', passed: current?.transcriptAccessibilityReviewed === true, target: 'release-transcript', help: 'Check the transcript against the recording.' },
+    ...(current?.scheduledAt ? [{label:'Future publication time',passed:Date.parse(current.scheduledAt) > Date.now() + 60000,target:'release-schedule',help:'Choose a future release time. Review and approval must happen before publication.'}] : []),
   ];
   const incompleteChecks = reviewChecks.filter((check) => !check.passed);
   const complete = incompleteChecks.length === 0;
   const removalPending = current?.status === 'removing';
-  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'released' || removalPending;
+  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'scheduled' || current?.status === 'released' || removalPending;
+  const scheduleZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London';
+  const scheduleReadable = (release: Release) => release.scheduledAt ? new Intl.DateTimeFormat('en-GB', { dateStyle:'full',timeStyle:'short',timeZone:release.scheduledTimeZone || scheduleZone }).format(new Date(release.scheduledAt)) + ' (' + (release.scheduledTimeZone || scheduleZone) + ')' : 'Immediately after Nightjar approval';
+  const formatLocal = (date:Date) => [date.getFullYear(), String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-')+'T'+[String(date.getHours()).padStart(2,'0'),String(date.getMinutes()).padStart(2,'0')].join(':');
+  const setSchedule = (input: string) => {
+    if (!input) return setRelease({scheduledAt:null,scheduledLocal:null,scheduledTimeZone:null});
+    const parsed = new Date(input);
+    if (!Number.isFinite(parsed.getTime()) || formatLocal(parsed) !== input) {
+      notify('That local date and time does not exist, possibly because clocks are changing. Choose another time.');
+      return;
+    }
+    setRelease({scheduledAt:parsed.toISOString(),scheduledLocal:input,scheduledTimeZone:scheduleZone});
+  };
 
   const openDetails = (target?: string) => {
     setWorkflowStep('prepare');
@@ -531,7 +547,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     <div className="creator-pipeline-grid">
       <aside className="pipeline-library">
-        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
+        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
@@ -544,10 +560,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           <div className="pipeline-status"><div><span>{statusLabel}</span><strong>{statusHint}</strong></div><Check size={18} /></div>
           {submittedOrPublished && <section className="nj-submission-confirmation" role="status" aria-live="polite">
             <Check size={28} aria-hidden="true"/>
-            <div><span className="mini-label">{removalPending ? 'NIGHTJAR · REMOVAL PENDING' : current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>
-              <h3>{removalPending ? 'Your recording is hidden.' : current.status === 'released' ? 'Your recording is live.' : 'Your recording has been submitted!'}</h3>
-              <p><strong>{current.title}</strong> {removalPending ? 'is no longer publicly accessible. Storage cleanup is still pending; select Remove recording to retry.' : current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
-              <small>{submissionConfirmed ? 'Submission confirmed just now · ' : ''}Status: {removalPending ? 'Removal pending' : current.status === 'released' ? 'Published' : 'Awaiting review'}</small>
+            <div><span className="mini-label">{removalPending ? 'NIGHTJAR · REMOVAL PENDING' : current.status === 'scheduled' ? 'NIGHTJAR · APPROVED & SCHEDULED' : current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>
+              <h3>{removalPending ? 'Your recording is hidden.' : current.status === 'scheduled' ? 'Approved! Your release is scheduled.' : current.status === 'released' ? 'Your recording is live.' : 'Your recording has been submitted!'}</h3>
+              <p><strong>{current.title}</strong> {removalPending ? 'is no longer publicly accessible. Storage cleanup is still pending; select Remove recording to retry.' : current.status === 'scheduled' ? 'has passed Nightjar review and is safely waiting for its scheduled publication.' : current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
+              <small>{submissionConfirmed ? 'Submission confirmed just now · ' : ''}Status: {removalPending ? 'Removal pending' : current.status === 'scheduled' ? 'Scheduled · '+scheduleReadable(current) : current.status === 'released' ? 'Published' : 'Awaiting review'}</small>
             </div>
             <button className="secondary-button" type="button" onClick={() => void onRefresh()}>Refresh status</button>
           </section>}
@@ -583,6 +599,21 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <div><strong>{current.audioAvailable ? 'Recording uploaded successfully' : 'Start by uploading your recording'}</strong><small>{current.audioAvailable ? 'Saved privately — not submitted for review yet.' : 'You can complete the details before or after uploading.'}</small></div>
             <button type="button" className="primary-button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={16}/> Continue to Review →</button>
           </div>
+          <section className="nj-release-schedule-panel" id="release-schedule" aria-label="Schedule publication">
+            <div><strong>When should listeners hear this?</strong><small>Nightjar reviews your submission as soon as you send it, regardless of the chosen release date.</small></div>
+            <label><input type="radio" name="nightjar-publish-mode" checked={!current.scheduledAt} onChange={() => setSchedule('')} /> Publish as soon as Nightjar approves</label>
+            <label><input type="radio" name="nightjar-publish-mode" checked={Boolean(current.scheduledAt)} onChange={() => {
+              const next = new Date(Date.now() + 4 * 86400000); next.setSeconds(0,0);
+              setSchedule(formatLocal(next));
+            }} /> Release on my chosen date</label>
+            {current.scheduledAt && <div className="nj-scheduled-input">
+              <label htmlFor="nj-release-date-time">Publication date and local time</label>
+              <input id="nj-release-date-time" type="datetime-local" step={60} value={current.scheduledLocal ?? ''} onChange={(event) => setSchedule(event.target.value)} />
+              <small>Your device time zone: {scheduleZone}. Nightjar saves the exact moment, accounting for daylight-saving changes.</small>
+              <strong>Scheduled for {scheduleReadable(current)}</strong>
+              <small>Submitting early does not publish early. Administrator approval is required first.</small>
+            </div>}
+          </section>
           <div className="nj-workflow-section-heading" id="release-details"><strong>Release details</strong><small>Title, category and description are required. Other fields help discovery.</small></div>
           <div className="pipeline-form-grid">
             <label>Title<input value={current.title ?? ''} onChange={(event) => setRelease({ title: event.target.value })} /></label>
@@ -732,6 +763,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           {workflowStep === 'review' && !submittedOrPublished && <section className="nj-release-review" aria-label="Review release before moderation">
             <div className="nj-review-heading"><span className="mini-label">REVIEW YOUR SUBMISSION</span><h3>{submittedOrPublished ? current.status === 'released' ? 'This release is published' : 'Your release is awaiting review' : 'Ready to send to Nightjar?'}</h3>
               <p>{submittedOrPublished ? 'Your recording is already in the Nightjar review and publishing workflow. You do not need to submit it again.' : 'Check the essentials below. Only clicking Submit for Review sends your private recording to our moderators.'}</p></div>
+            <div className="nj-review-schedule-summary"><strong>Publication plan</strong><span>{scheduleReadable(current)}</span><small>Nightjar receives this recording for moderation immediately. If approved, it will not go public before the scheduled time.</small></div>
             <div className="nj-review-checklist">{reviewChecks.map((check) => <div className={check.passed ? 'nj-review-check passed' : 'nj-review-check missing'} key={check.label}>
               <span aria-hidden="true">{check.passed ? '✓' : '!'}</span><div><strong>{check.label}</strong>{!check.passed && <small>{check.help}</small>}</div>
               {!check.passed && !submittedOrPublished && <button type="button" className="secondary-button" onClick={() => openDetails(check.target)}>Fix</button>}
