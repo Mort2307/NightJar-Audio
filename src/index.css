@@ -10246,3 +10246,30 @@ textarea:focus-visible,
 .admin-mail-personalisation-example { padding: 15px; border: 1px solid rgba(185,166,198,.25); border-radius: 10px; overflow-wrap: anywhere; }
 .admin-mail-personalisation-example p { white-space: pre-wrap; margin-top: 9px; }
 @media (max-width: 420px) { .nightjar-update-notification > button { width: 100%; justify-content: center; } }
+
+
+/* Nightjar Mail: genuine recipient inclusion controls in the live audience. */
+.admin-mail-recipient-instructions { margin: 9px 0 13px; font-size: 12px; line-height: 1.55; color: var(--muted); }
+.admin-mail-recipient-instructions strong { color: var(--ivory); }
+.admin-mail-recipient-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.admin-mail-recipient-tools button { flex: 1 1 auto; min-height: 42px; justify-content: center; font-size: 12px; }
+.admin-mail-recipient-search { display: grid; gap: 5px; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+.admin-mail-recipient-search input { width: 100%; min-width: 0; min-height: 42px; font-size: 16px; }
+.admin-mail-recipient { flex-wrap: nowrap; gap: 8px; transition: opacity 120ms, border-color 120ms; }
+.admin-mail-recipient.included { border-color: rgba(157,190,158,.27); }
+.admin-mail-recipient.excluded { opacity: .66; }
+.admin-mail-recipient .admin-mail-recipient-details { min-width: 0; flex: 1 1 0; display: grid; gap: 3px; }
+.admin-mail-recipient-details strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-mail-recipient-details small { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-mail-send-toggle { flex: 0 0 auto; display: inline-flex; justify-content: center; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 11px; min-height: 42px; min-width: 66px; padding: 0 8px; background: rgba(255,255,255,.025); color: var(--muted); font-weight: 700; font-size: 11px; cursor: pointer; }
+.admin-mail-send-toggle.selected { border-color: rgba(167,210,171,.55); color: #b4e1b9; background: rgba(77,123,80,.2); }
+.admin-mail-send-toggle:focus-visible { outline: 2px solid var(--plum-soft); outline-offset: 2px; }
+.admin-mail-send-toggle:disabled { cursor: not-allowed; opacity: .5; }
+.admin-mail-show-more { width: 100%; margin-top: 10px; min-height: 40px; }
+.admin-mail-audience-summary { display: block; margin-top: 12px; line-height: 1.5; color: var(--muted); }
+@media (max-width: 420px) {
+  .admin-mail-audience { padding: 13px; }
+  .admin-mail-recipient { padding: 8px; }
+  .admin-mail-recipient > span { width: 26px; height: 26px; flex-basis: 26px; }
+  .admin-mail-send-toggle { min-width: 59px; }
+}
