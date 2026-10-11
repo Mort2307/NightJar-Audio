@@ -4329,7 +4329,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (current.status === 'released') throw new HttpsError('failed-precondition', 'Live releases cannot be edited directly.');
+  if (['released', 'removed', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
 
   const update = {
     title: cleanText(input.title ?? current.title, 160),
@@ -4366,37 +4366,64 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
   return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
 
-export const deleteRelease = onCall({ region: REGION }, async (request) => {
-  const identity = await requireAccountRole(request, ['creator']);
-  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+// Removal is available to both the owner and Nightjar administrators.
+// Hide the release BEFORE deleting media so failed cleanup cannot expose it.
+const removeOwnedRelease = async (releaseId: string, actorUserId: string, administrator: boolean) => {
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
   const ref = releaseRef(releaseId);
   const snapshot = await ref.get();
   const current = snapshot.data();
-  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (current.status === 'released') throw new HttpsError('failed-precondition', 'Live releases must be unpublished by Nightjar administration.');
+  if (!current) throw new HttpsError('not-found', 'Release not found.');
+  if (!administrator && current.creatorUserId !== actorUserId) throw new HttpsError('permission-denied', 'You can only remove your own releases.');
 
-  const audioPath = cleanText(current.audioStoragePath, 500);
-  if (audioPath) {
-    try { await getStorage().bucket().file(audioPath).delete({ ignoreNotFound: true }); } catch { /* release deletion continues */ }
+  if (current.status === 'removed' && !current.audioStoragePath && !current.artworkAssetId && !current.pendingArtworkAssetId) {
+    return { deleted: true };
   }
+  const ownerUserId = String(current.creatorUserId);
+  const previousStatus = String(current.status ?? 'draft');
+  await ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 
-  for (const assetId of [current.artworkAssetId, current.pendingArtworkAssetId]) {
-    const cleanId = cleanText(assetId, 160);
-    if (!cleanId) continue;
-    const asset = await db.collection('imageAssets').doc(cleanId).get();
-    if (asset.exists && asset.data()?.ownerUserId === identity.uid) {
+  // The actual audio file must be deleted, not merely detached from its record.
+  const audioPath = cleanText(current.audioStoragePath, 500);
+  if (audioPath) await getStorage().bucket().file(audioPath).delete({ ignoreNotFound: true });
+  for (const value of [current.artworkAssetId, current.pendingArtworkAssetId]) {
+    const assetId = cleanText(value, 160);
+    if (!assetId) continue;
+    const asset = await db.collection('imageAssets').doc(assetId).get();
+    if (asset.exists && asset.data()?.ownerUserId === ownerUserId) {
       await clearAssetFile(asset.data() ?? {});
-      await asset.ref.set({
-        status: 'removed',
-        publicUrl: null,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+      await asset.ref.set({ status: 'removed', publicUrl: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     }
   }
 
-  await ref.delete();
-  await syncCreatorCustomTagUsage(identity.uid);
+  // Preserve minimal provenance for legitimate safety, dispute and financial
+  // reconciliation without keeping the deleted recording or transcript.
+  await db.collection('releaseRemovalAudits').doc(releaseId).set({
+    releaseId, creatorUserId: ownerUserId, removedByUserId: actorUserId,
+    removedByAdmin: administrator, previousStatus,
+    removedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  await ref.set({
+    creatorUserId: ownerUserId,
+    status: 'removed',
+    createdAt: current.createdAt ?? FieldValue.serverTimestamp(),
+    removedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await syncCreatorCustomTagUsage(ownerUserId);
   return { deleted: true };
+};
+
+export const deleteRelease = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  return removeOwnedRelease(releaseId, identity.uid, false);
+});
+
+export const adminRemoveRelease = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  return removeOwnedRelease(releaseId, admin.uid, true);
 });
 
 /**
@@ -4444,7 +4471,7 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (current.status === 'released') throw new HttpsError('failed-precondition', 'Live release audio cannot be replaced directly.');
+  if (['released', 'removed', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
 
   const file = getStorage().bucket().file(storagePath);
   const [exists] = await file.exists();
@@ -4482,7 +4509,7 @@ export const removeReleaseAudio = onCall({ region: REGION }, async (request) => 
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (current.status === 'released') throw new HttpsError('failed-precondition', 'Live release audio cannot be removed directly.');
+  if (['released', 'removed', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
 
   const path = cleanText(current.audioStoragePath, 500);
   if (path) {
@@ -4506,6 +4533,7 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
   const snapshot = await ref.get();
   const data = snapshot.data();
   if (!data || data.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
+  if (data.status !== 'draft') throw new HttpsError('failed-precondition', 'Only saved drafts can be submitted for review.');
   if (!data.title || !data.description || !data.category || !data.audioStoragePath) {
     throw new HttpsError('failed-precondition', 'Complete title, description, category and audio before submitting.');
   }
@@ -4540,6 +4568,14 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   const saved = await ref.get();
+  // A failed push cannot roll back a confirmed moderation submission.
+  await createNotification(identity.uid, {
+    type: 'release_submission', subtype: 'submitted',
+    title: 'Recording submitted for review',
+    message: 'Your recording has reached Nightjar moderation. Open to see its status.',
+    releaseId, releaseTitle: cleanText(data.title, 160),
+    dedupeKey: 'release-submitted-' + releaseId,
+  }).catch((error) => console.warn('Release submission notification failed', error));
   return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
 
@@ -4550,7 +4586,7 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
     : cleanText((request.data as { creatorUserId?: unknown } | undefined)?.creatorUserId, 160) || identity.uid;
 
   const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', targetCreatorId).limit(500).get();
-  const releases = releasesSnapshot.docs.map((doc) => releaseOwnerPayload(doc.data(), doc.id));
+  const releases = releasesSnapshot.docs.filter((doc) => doc.data().status !== 'removed').map((doc) => releaseOwnerPayload(doc.data(), doc.id));
   const listeningSnapshot = await db.collection('listeningEvents').where('creatorUserId', '==', targetCreatorId).limit(5000).get();
 
   const verified = calculateVerifiedListening(listeningSnapshot.docs.map((doc) => doc.data()));
