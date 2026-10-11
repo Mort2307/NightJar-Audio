@@ -11,6 +11,7 @@ import {
 } from '../platform/firebase-administration';
 
 const AUDIENCES: { value: AdminEmailAudience; label: string; detail: string }[] = [
+  { value: 'selected_members', label:'Selected individual members', detail:'Choose actual Nightjar accounts and send each person their own private email.' },
   { value: 'all_testers', label: 'Founding / private-beta testers', detail: 'Includes approved tester emails even before they create a Nightjar account.' },
   { value: 'all_professionals', label: 'All professional creators', detail: 'Every active VA Creator, Writer, Audio Editor and Artist account.' },
   { value: 'creator', label: 'VA Creators', detail: 'Active accounts approved as VA Creators.' },
@@ -55,6 +56,10 @@ export default function AdminCommunications() {
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [manualTestEmails, setManualTestEmails] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberAccounts, setMemberAccounts] = useState<Array<{userId:string;name:string;email:string;status:string;role?:string;roles?:string[]}>>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [loadingMembers,setLoadingMembers] = useState(false);
   const [manualTestStatus, setManualTestStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [manualTestMessage, setManualTestMessage] = useState('');
   const [manualTestResults, setManualTestResults] = useState<{ email: string; status: 'sent' | 'failed'; error?: string }[]>([]);
@@ -92,10 +97,10 @@ export default function AdminCommunications() {
     [parsedManualTestEmails],
   );
 
-  const refreshPreview = async (nextAudience = audience) => {
+  const refreshPreview = async (nextAudience = audience, ids = selectedMemberIds) => {
     setLoadingPreview(true);
     try {
-      setPreview(await nightjarAdministration.emailAudiencePreview(nextAudience));
+      setPreview(await nightjarAdministration.emailAudiencePreview(nextAudience, ids));
     } catch (error) {
       setPreview(null);
       setNotice({ kind: 'error', text: cleanError(error) });
@@ -185,7 +190,15 @@ export default function AdminCommunications() {
   };
 
   useEffect(() => {
-    void refreshPreview(audience);
+    if (audience !== 'selected_members') void refreshPreview(audience);
+    else {
+      setPreview(null);
+      setLoadingMembers(true);
+      void nightjarAdministration.overview().then(data=>{
+        setMemberAccounts((data.people?.accounts??[]).filter((person:any)=>person.userId && person.email && person.status==='active' && person.role!=='admin'));
+      }).catch(error=>setNotice({kind:'error',text:cleanError(error)}))
+        .finally(()=>setLoadingMembers(false));
+    }
     setConfirmed(false);
   }, [audience]);
 
@@ -272,7 +285,8 @@ export default function AdminCommunications() {
   };
 
   const sendCampaign = async () => {
-    if (!subject.trim() || !body.trim() || !confirmed || !preview?.recipientCount || preview.overSendLimit) return;
+    if (!subject.trim() || !body.trim() || !confirmed || !preview?.recipientCount || preview.overSendLimit
+        || (audience==='selected_members' && preview.recipientCount!==selectedMemberIds.length)) return;
     setSendingCampaign(true);
     setNotice(null);
     try {
@@ -281,6 +295,7 @@ export default function AdminCommunications() {
         body: body.trim(),
         audience,
         category,
+        ...(audience==='selected_members' ? {selectedUserIds:selectedMemberIds} : {}),
         clientRequestId: crypto.randomUUID(),
         confirmPrivateIndividualDelivery: true,
       });
@@ -329,6 +344,7 @@ export default function AdminCommunications() {
     || !confirmed
     || !preview?.recipientCount
     || preview.overSendLimit
+    || (audience==='selected_members' && preview.recipientCount!==selectedMemberIds.length)
     || sendingCampaign;
 
   return (
@@ -472,6 +488,34 @@ export default function AdminCommunications() {
               <small>{selectedCategory.detail}</small>
             </label>
           </div>
+
+          {audience==='selected_members' && <section className="nj-mail-member-picker" aria-label="Select individual Nightjar email recipients">
+            <div className="nj-mail-member-picker-head"><div><strong>Select members</strong><small>Choose up to 25 active member accounts. This is LIVE delivery, not a test.</small></div><span className="status-pill">{selectedMemberIds.length}/25</span></div>
+            <input type="search" value={memberSearch} onChange={e=>setMemberSearch(e.target.value)}
+              placeholder="Search by name, email or professional role" aria-label="Search individual Nightjar members"/>
+            <div className="nj-mail-member-list">
+              {memberAccounts.filter(person=>[person.name,person.email,person.role,...(person.roles??[])].join(' ').toLowerCase().includes(memberSearch.toLowerCase())).slice(0,100).map(person=><label key={person.userId} className={selectedMemberIds.includes(person.userId)?'nj-mail-member-row selected':'nj-mail-member-row'}>
+                <input type="checkbox" checked={selectedMemberIds.includes(person.userId)} disabled={sendingCampaign || (!selectedMemberIds.includes(person.userId) && selectedMemberIds.length>=25)}
+                  onChange={event=>{
+                    setSelectedMemberIds(current=>event.target.checked?[...current,person.userId]:current.filter(id=>id!==person.userId));
+                    setPreview(null);
+                    setConfirmed(false);
+                  }}/>
+                <span><strong>{person.name}</strong><small>{person.email}</small></span>
+                <span>{(person.roles??[person.role]).filter(Boolean).join(' · ')}</span>
+              </label>)}
+              {loadingMembers&&<p>Checking real Nightjar accounts…</p>}
+              {!loadingMembers&&!memberAccounts.length&&<p>No active, addressable member accounts were returned. Refresh Nightjar Mail to retry.</p>}
+            </div>
+            <div className="nj-mail-member-review">
+              <button type="button" className="secondary-button" disabled={!selectedMemberIds.length || loadingPreview || sendingCampaign}
+                onClick={()=>{setConfirmed(false);void refreshPreview('selected_members',selectedMemberIds);}}>
+                <ShieldCheck size={14}/>{loadingPreview?'Reviewing…':'Review exact recipients'}
+              </button>
+              {!!selectedMemberIds.length&&<button type="button" className="ghost-button" onClick={()=>{setSelectedMemberIds([]);setPreview(null);setConfirmed(false);}}>Clear selection</button>}
+            </div>
+            {!preview&&!!selectedMemberIds.length&&<small>Recipient list changed. Review the exact selected members before enabling Send.</small>}
+          </section>}
 
           <div className="admin-mail-policy-note">
             <ShieldCheck size={15} />
