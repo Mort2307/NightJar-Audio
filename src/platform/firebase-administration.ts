@@ -77,7 +77,7 @@ const reviewProfessionalCall = httpsCallable<{
   wave: string | null;
 }>(functions, 'reviewProfessionalApplication');
 
-export type AdminEmailAudience = 'all_professionals' | 'creator' | 'writer' | 'editor' | 'artist' | 'all_testers' | 'all_members';
+export type AdminEmailAudience = 'all_professionals' | 'creator' | 'writer' | 'editor' | 'artist' | 'all_testers' | 'all_members' | 'selected_members';
 export type AdminEmailCategory = 'testing_update' | 'creator_operations' | 'account_service';
 
 export type AdminGmailOAuthStatus = {
@@ -126,7 +126,7 @@ export type AdminEmailCampaign = {
 const gmailOAuthStatusCall = httpsCallable<void, AdminGmailOAuthStatus>(functions, 'adminGmailOAuthStatus');
 const beginGmailOAuthCall = httpsCallable<void, { authorizationUrl: string; senderEmail: string; redirectUri: string }>(functions, 'adminBeginGmailOAuth');
 const disconnectGmailOAuthCall = httpsCallable<void, { disconnected: boolean }>(functions, 'adminDisconnectGmailOAuth');
-const emailAudiencePreviewCall = httpsCallable<{ audience: AdminEmailAudience }, AdminEmailAudiencePreview>(functions, 'adminEmailAudiencePreview');
+const emailAudiencePreviewCall = httpsCallable<{ audience: AdminEmailAudience; selectedUserIds?: string[] }, AdminEmailAudiencePreview>(functions, 'adminEmailAudiencePreview');
 const emailCampaignsCall = httpsCallable<void, { campaigns: AdminEmailCampaign[] }>(functions, 'adminListEmailCampaigns');
 const sendEmailTestCall = httpsCallable<{
   subject: string;
@@ -148,6 +148,7 @@ const sendEmailCampaignCall = httpsCallable<{
   category: AdminEmailCategory;
   clientRequestId: string;
   confirmPrivateIndividualDelivery: boolean;
+  selectedUserIds?: string[];
 }, { campaign: AdminEmailCampaign; duplicateRequest: boolean }>(functions, 'adminSendEmailCampaign');
 const retryEmailCampaignCall = httpsCallable<{ campaignId: string }, {
   campaign: AdminEmailCampaign;
@@ -221,8 +222,8 @@ export const nightjarAdministration = {
     return (await disconnectGmailOAuthCall()).data;
   },
 
-  async emailAudiencePreview(audience: AdminEmailAudience) {
-    return repairMojibakeDisplayData((await emailAudiencePreviewCall({ audience })).data);
+  async emailAudiencePreview(audience: AdminEmailAudience, selectedUserIds: string[] = []) {
+    return repairMojibakeDisplayData((await emailAudiencePreviewCall({ audience, ...(audience === 'selected_members' ? {selectedUserIds}: {}) })).data);
   },
 
   async emailCampaigns() {
@@ -245,6 +246,7 @@ export const nightjarAdministration = {
     category: AdminEmailCategory;
     clientRequestId: string;
     confirmPrivateIndividualDelivery: boolean;
+    selectedUserIds?: string[];
   }) {
     return (await sendEmailCampaignCall(input)).data;
   },
