@@ -76,18 +76,18 @@ export const applyNightjarUpdate = async () => {
       // Update still proceeds if session storage is unavailable.
     }
 
+    // Preserve registration and push subscriptions while replacing the app shell.
     if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map(async (registration) => {
-        try { await registration.update(); } catch { /* continue with forced reset */ }
+      const registration = await navigator.serviceWorker.getRegistration('/');
+      if (registration) {
+        try { await registration.update(); } catch { /* reload still proceeds */ }
         try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch { /* optional */ }
-        try { await registration.unregister(); } catch { /* reload still continues */ }
-      }));
+      }
     }
 
     if ('caches' in window) {
       const keys = await caches.keys();
-      await Promise.all(keys.map((key) => caches.delete(key)));
+      await Promise.all(keys.filter(key => key.startsWith('nightjar-')).map(key => caches.delete(key)));
     }
   } finally {
     const url = new URL(window.location.href);
