@@ -7,7 +7,7 @@ type Challenge = { challengeId: string; options: Record<string, any> };
 type PasskeyRecord = { id: string; label: string; createdAt: string | null; lastUsedAt: string | null };
 const beginRegistration = httpsCallable<Record<string, never>, Challenge>(functions, 'beginPasskeyRegistration');
 const finishRegistration = httpsCallable<{ challengeId: string; response: Record<string, unknown> }, { registered: boolean }>(functions, 'finishPasskeyRegistration');
-const beginSignIn = httpsCallable<Record<string, never>, Challenge>(functions, 'beginPasskeySignIn');
+const beginSignIn = httpsCallable<{ expectedUserId?: string }, Challenge>(functions, 'beginPasskeySignIn');
 const finishSignIn = httpsCallable<{ challengeId: string; response: Record<string, unknown> }, { token: string }>(functions, 'finishPasskeySignIn');
 const listCall = httpsCallable<void, { passkeys: PasskeyRecord[] }>(functions, 'listMyPasskeys');
 const removeCall = httpsCallable<{ id: string }, { removed: boolean }>(functions, 'removeMyPasskey');
@@ -50,7 +50,14 @@ const passkeyFailure = (step: NightjarPasskeyStep, error: unknown): NightjarPass
     return new NightjarPasskeyError(step, code, 'Too many sign-in attempts. Try again later, or sign in using your password.');
   }
   if (code === 'functions/unavailable' || code === 'functions/deadline-exceeded') {
+    if (step === 'LOGIN_VERIFY' && /^Your passkey verified, but Nightjar/.test(message)) {
+      return new NightjarPasskeyError(step, code, message.slice(0, 280));
+    }
     return new NightjarPasskeyError(step, code, 'Cannot reach the Nightjar sign-in service. Check your connection and retry.');
+  }
+  if (step === 'LOGIN_VERIFY' && code === 'functions/internal') {
+    return new NightjarPasskeyError(step, code,
+      'Nightjar could not finish server-side passkey sign-in. Your saved passkey was found, but the server failed. Use your password until the Nightjar server issue is repaired.');
   }
   if (step === 'LOGIN_DEVICE' && code === 'NotReadableError') {
     return new NightjarPasskeyError(step, code, 'Your device could not access its passkey authenticator. Try the device screen lock or use a password.');
@@ -145,7 +152,7 @@ export const nightjarPasskeys = {
   async signIn(expectedUserId?: string, signal?: AbortSignal): Promise<NightjarIdentity> {
     if (!this.supported()) throw new NightjarPasskeyError('LOGIN_DEVICE', 'UNSUPPORTED', 'Passkey sign-in is unavailable on this device. Use your email and password.');
     let data: Challenge;
-    try { data = (await beginSignIn({})).data; }
+    try { data = (await beginSignIn(expectedUserId ? { expectedUserId } : {})).data; }
     catch (error) { throw passkeyFailure('LOGIN_START', error); }
     let credential: Credential | null;
     try {
