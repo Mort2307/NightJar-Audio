@@ -10224,3 +10224,25 @@ textarea:focus-visible,
   radial-gradient(circle at 14% 60%,color-mix(in srgb,var(--wine) 18%,transparent),transparent 31%),var(--bg);
 }
 :root[data-nightjar-theme]:not([data-nightjar-theme="nocturne"]) body {background:var(--bg);color:var(--ivory);}
+
+/* Nightjar update actions: integrated into the bell without altering FCM registration. */
+.nightjar-update-notification { padding: 15px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-bottom: 1px solid var(--border, rgba(255,255,255,.14)); }
+.nightjar-update-notification-copy { display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1 1 180px; }
+.nightjar-update-notification-copy > span { display: grid; gap: 4px; min-width: 0; }
+.nightjar-update-notification-copy small { display: block; overflow-wrap: anywhere; opacity: .82; }
+.nightjar-update-notification > button { flex: 0 0 auto; min-height: 38px; }
+.notification-inline-update { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; font-weight: 700; text-decoration: underline; }
+.admin-mail-personalisation-editor { margin: 16px 0; padding: 16px; border: 1px solid rgba(185,166,198,.35); border-radius: 12px; }
+.admin-mail-personalisation-editor > small { display: block; margin-top: 10px; }
+.admin-mail-personalisation-editor .admin-mail-token-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.admin-mail-personalisation-editor .admin-mail-token-row label { display: inline-flex; align-items: center; gap: 7px; }
+.admin-mail-personalisation-editor .admin-mail-token-row select { max-width: 130px; min-height: 36px; }
+.admin-mail-personalisation-editor .admin-mail-token-row button { min-height: 38px; font-family: inherit; }
+.admin-mail-personalisation-preview { margin-top: 15px; }
+.admin-mail-personalisation-preview summary { cursor: pointer; font-weight: 700; padding: 7px 0; }
+.admin-mail-example-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,150px),1fr)); gap: 10px; margin: 11px 0; }
+.admin-mail-example-fields label { display: grid; gap: 6px; font-size: .85rem; }
+.admin-mail-example-fields input { width: 100%; min-width: 0; font-size: 16px; }
+.admin-mail-personalisation-example { padding: 15px; border: 1px solid rgba(185,166,198,.25); border-radius: 10px; overflow-wrap: anywhere; }
+.admin-mail-personalisation-example p { white-space: pre-wrap; margin-top: 9px; }
+@media (max-width: 420px) { .nightjar-update-notification > button { width: 100%; justify-content: center; } }
