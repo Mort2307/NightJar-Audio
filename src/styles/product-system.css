@@ -3111,3 +3111,8 @@ textarea {
   .nj-support-action-links,.nj-support-recovery-actions { flex-direction: column; }
   .nj-support-action-links button,.nj-support-recovery-actions button { width: 100%; justify-content: center; }
 }
+
+
+.nj-evidence-help-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.nj-evidence-help-actions .nj-evidence-contact-action { display: inline-flex; align-items: center; gap: 8px; justify-content: center; min-height: 43px; white-space: normal; text-align: center; }
+@media(max-width:620px) { .nj-evidence-help-actions { width: 100%; flex-direction: column; } .nj-evidence-help-actions .nj-evidence-contact-action { width: 100%; } }
