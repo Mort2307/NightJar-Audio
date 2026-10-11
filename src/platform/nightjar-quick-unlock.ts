@@ -30,7 +30,9 @@ export const nightjarQuickUnlock = {
     try {
       if (!/^[a-zA-Z0-9_-]{6,160}$/.test(userId)) return false;
       localStorage.setItem(preferenceKey, JSON.stringify({ enabled:true, userId }));
-      this.markUnlocked(userId); // already authenticated when enabling from Settings.
+      // Enabling should NOT defer the next launch prompt via redirect grace:
+      // users often close and immediately reopen the app to test biometrics.
+      this.lock();
       return true;
     } catch { return false; }
   },
