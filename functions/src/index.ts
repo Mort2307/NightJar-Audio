@@ -5226,6 +5226,83 @@ const adminActionNotifications = async () => {
   }));
 };
 
+// Personal calendar: dates are all-day civil dates (YYYY-MM-DD). No implicit
+// conversion of all-day dates to UTC instants, which would shift across zones.
+const personalCalendarDate = (input: unknown) => {
+  const date = cleanText(input, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpsError('invalid-argument', 'Choose a valid calendar date.');
+  const [year, month, day] = date.split('-').map(Number);
+  if (year < 2000 || year > 2100 || !month || month > 12 || day < 1 || day > 31 ||
+      new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== date) {
+    throw new HttpsError('invalid-argument', 'Choose a real calendar date.');
+  }
+  return date;
+};
+
+const personalCalendarZone = (input: unknown) => {
+  const zone = cleanText(input, 100) || 'auto';
+  if (zone === 'auto') return zone;
+  try { new Intl.DateTimeFormat('en-GB', { timeZone: zone }).format(new Date()); }
+  catch { throw new HttpsError('invalid-argument', 'Choose a recognised time zone.'); }
+  return zone;
+};
+
+export const getMyCalendar = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const [account, snapshot] = await Promise.all([
+    accountRef(identity.uid).get(),
+    accountRef(identity.uid).collection('personalCalendar').limit(251).get(),
+  ]);
+  return {
+    timeZone: personalCalendarZone(account.data()?.personalCalendarTimeZone ?? 'auto'),
+    events: snapshot.docs.map((item) => ({
+      id: item.id, title: cleanText(item.data().title, 120),
+      note: cleanText(item.data().note, 1500),
+      date: personalCalendarDate(item.data().date),
+    })).sort((a,b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)),
+    limited: snapshot.size > 250,
+  };
+});
+
+export const saveMyCalendarTimeZone = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const timeZone = personalCalendarZone((request.data as Record<string, unknown> | undefined)?.timeZone);
+  await accountRef(identity.uid).set({
+    personalCalendarTimeZone: timeZone,
+    personalCalendarUpdatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { timeZone };
+});
+
+export const saveMyCalendarEvent = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const title = cleanText(input.title, 120);
+  const date = personalCalendarDate(input.date);
+  const note = cleanText(input.note, 1500);
+  if (!title) throw new HttpsError('invalid-argument', 'Enter an event title.');
+  const rawId = cleanText(input.id, 80);
+  if (rawId && !/^[a-zA-Z0-9_-]{5,80}$/.test(rawId)) throw new HttpsError('invalid-argument', 'Calendar event ID is invalid.');
+  const collection = accountRef(identity.uid).collection('personalCalendar');
+  const target = rawId ? collection.doc(rawId) : collection.doc();
+  const prior = await target.get();
+  if (!prior.exists) {
+    const count = await collection.count().get();
+    if (count.data().count >= 250) throw new HttpsError('resource-exhausted', 'You have reached 250 personal calendar dates. Remove one to create another.');
+  }
+  await target.set({ title, date, note, updatedAt: FieldValue.serverTimestamp(),
+    ...(prior.exists ? {} : { createdAt: FieldValue.serverTimestamp() }) }, { merge: true });
+  return { event: { id: target.id, title, date, note } };
+});
+
+export const deleteMyCalendarEvent = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const id = cleanText((request.data as Record<string, unknown> | undefined)?.id, 80);
+  if (!/^[a-zA-Z0-9_-]{5,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Calendar event ID is invalid.');
+  await accountRef(identity.uid).collection('personalCalendar').doc(id).delete();
+  return { deleted: true };
+});
+
 export const listNotifications = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, account] = await Promise.all([
