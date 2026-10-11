@@ -55,6 +55,16 @@ if (!assistance.includes('window.confirm(') || !assistance.includes('I confirm t
 if (!assistance.includes('no supported administrator') || !assistance.includes('Nightjar currently flags repeated failures')) failures.push('Assistance must not promise Firebase unlock or claim an invented 24-hour Nightjar lockout.');
 if (!assistanceClient.includes('adminAccountAssistanceLookup') || !workspaceNav.includes("id: 'assistance'") || !app.includes("<AdminAssistance initialEmail=")) failures.push('Admin Assistance must be accessible through a dedicated Owner workspace.');
 
+const loginLog = read('src/components/AdminAuthenticationLog.tsx');
+const preview = read('src/components/AdminLiveMarketplacePreview.tsx');
+if (!app.includes('<AdminAuthenticationLog') || !loginLog.includes('What happened?') || !loginLog.includes('What should you do?')) failures.push('Login failures must be explained through account-centred, plain-English cases');
+if (!loginLog.includes('event.targetKey || event.id') || loginLog.includes('event.targetEmailMasked || event.id')) failures.push('Login grouping must never merge different emails sharing the same mask');
+if (!protection.includes('targetKey: cleanText(data.emailHash') || !protection.includes('accountOwnerByTarget.get(event.targetKey)')) failures.push('Admin account log must group safely and expose verified registered members only');
+if (!protection.includes('authUser.emailVerified') || !protection.includes('getAuth().getUser(uid)') || !protection.includes('closedBetaAccessFor(email, accountSnapshot.data()')) failures.push('Admin login contact fields must be gated by current verification and approved access');
+if (!loginLog.includes('onAssistance(g.owner!.email)')) failures.push('Known members should link to secure assistance rather than receive an automatic reset');
+if (!loginLog.includes('<details className="nj-auth-records">') || !loginLog.includes('<summary>Technical details</summary>')) failures.push('Raw authentication diagnostics must be collapsed by default');
+if (!preview.includes('nj-script-visibility-info')) failures.push('Script visibility cards must have a full-width diagnostic body');
+
 if (failures.length) {
   console.error('SECURITY CONTRACT FAILURES');
   failures.forEach((failure)=>console.error('-',failure));

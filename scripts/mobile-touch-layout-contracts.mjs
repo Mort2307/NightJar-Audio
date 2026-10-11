@@ -56,7 +56,8 @@ assert.match(app, /adminWorkspace === 'launch' && <>/, 'launch readiness is kept
 assert.match(app, /adminWorkspace === 'people' && <>/, 'People workpage keeps account-role management');
 assert.match(app, /adminWorkspace === 'content' && <>/, 'Content workpage keeps moderation and approvals');
 assert.match(app, /adminWorkspace === 'finance' && <>/, 'Finance has a separate workpage');
-assert.match(app, /adminWorkspace === 'security' && <section/, 'Security alerts require the Safety workpage');
+assert.match(app, /adminWorkspace === 'security' && <AdminSecurityAlerts/, 'Security alerts require the Safety workpage');
+assert.match(app, /adminWorkspace === 'security' && <AdminAuthenticationLog/, 'Sign-in problems use the same focused Safety workpage');
 assert.match(app, /adminWorkspace === 'tools' && <Suspense/, 'Mail tools are not mounted until requested');
 assert.match(app, /\/admin\/workspace\//, 'admin workspace navigation uses dedicated deep links');
 assert.match(app, /setAdminWorkspace\(\(workspaceFromPath/, 'browser Back restores admin workpage');
@@ -65,6 +66,12 @@ assert.match(workspaceTabs, /aria-current=\{active === section\.id \? 'page' : u
 assert.match(product, /\.nj-owner-workspaces\s*\{/, 'compact workspace navigation has CSS');
 assert.match(product, /\.nj-admin-focused-grid \.admin-panel p\s*\{ font-size: 13px;/, 'Admin cards have readable body text');
 
+const ownerNav = fs.readFileSync('src/components/AdminWorkspaceTabs.tsx', 'utf8');
+const authCases = fs.readFileSync('src/components/AdminAuthenticationLog.tsx', 'utf8');
+assert.match(ownerNav, /nj-owner-workspaces-compact/, 'non-overview admin workpages use compact single-row section navigation');
+assert.match(product, /\.nj-owner-workspaces\.nj-owner-workspaces-compact\s*\{[^]*?overflow-x: auto;/, 'mobile admin sections are scrollable rather than four repeated rows');
+assert.match(product, /\.admin-live-preview-diagnostic \.nj-script-visibility-info/, 'script titles and status descriptions have dedicated readable card space');
+assert.match(authCases, /nj-auth-case-list/, 'sign-in activity renders grouped readable cases');
 const artist = fs.readFileSync('src/components/ArtistStudio.tsx','utf8');
 const portfolio = fs.readFileSync('src/components/ArtistPortfolioManager.tsx','utf8');
 assert.match(app, /view === 'artist' && effectiveRole === 'artist' && !liveRolePreview/, 'Artist Studio must enforce current role and not allow read-only owner preview to edit');

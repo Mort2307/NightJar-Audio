@@ -78,6 +78,7 @@ import NightjarSettings from './components/NightjarSettings';
 import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
 import AdminSecurityAlerts from './components/AdminSecurityAlerts';
+import AdminAuthenticationLog from './components/AdminAuthenticationLog';
 import AdminAssistance from './components/AdminAssistance';
 import ProductExperience from './components/ProductExperience';
 import AdminMemberRoleEditor from './components/AdminMemberRoleEditor';
@@ -4771,32 +4772,12 @@ function App() {
               onRevoke={(alert) => { void revokeSessionsFromSecurityAlert(alert); }}
               onSuspend={(alert) => { void suspendFromSecurityAlert(alert); }}
             />}
-            {canAdmin && adminWorkspace === 'security' && <section className="security-alert-panel authentication-attempt-panel">
-              <div>
-                <span className="mini-label">SECURITY / AUTHENTICATION LOG</span>
-                <h2>Unauthorised sign-in attempts</h2>
-                <p>Nightjar records failed or private-beta-blocked attempts observed through the Nightjar account portal. Passwords are never stored. This supplements — but does not replace — Firebase / Google authentication audit logs.</p>
-              </div>
-              <button className="secondary-button" onClick={() => void loadAuthenticationEvents()}>{authenticationEventsLoading ? 'Refreshing…' : 'Refresh login log'}</button>
-              <div className="security-alert-list">
-                {authenticationEvents.length === 0
-                  ? <div className="people-empty"><ShieldCheck size={18}/><strong>No unauthorised sign-in attempts recorded.</strong><span>Observed failed account-portal attempts will appear here.</span></div>
-                  : authenticationEvents.slice(0,60).map((event)=><article className="security-alert-row authentication-attempt-row" key={event.id}>
-                    <div>
-                      <strong>{event.eventType === 'closed_beta_signin_denied' ? 'PRIVATE BETA ACCESS DENIED' : 'FAILED SIGN-IN'} · {event.targetEmailMasked}</strong>
-                      <span>{event.firebaseCode ? String(event.firebaseCode).replace('auth/','').replaceAll('-',' ') : 'authentication failure'} · {event.createdAt ? new Date(event.createdAt).toLocaleString('en-GB') : 'time unavailable'}</span>
-                      <div className="security-signal-meta">
-                        {event.adminTarget && <span><strong>Owner administrator identity targeted</strong></span>}
-                        {event.clientPlatform && <span>Client: {event.clientPlatform}</span>}
-                        {event.clientAttemptId && <span>Client token: {event.clientAttemptId}</span>}
-                        <span>Evidence: Nightjar-observed account portal attempt</span>
-                      </div>
-                      <em>No password, credential value or clipboard content is retained.</em>
-                    </div>
-                  </article>)}
-              </div>
-              <strong>{authenticationEvents.length} retained authentication event{authenticationEvents.length === 1 ? '' : 's'} shown · repeated attempts can escalate into Owner Alerts above</strong>
-            </section>}
+            {canAdmin && adminWorkspace === 'security' && <AdminAuthenticationLog
+              events={authenticationEvents}
+              loading={authenticationEventsLoading}
+              onRefresh={() => { void loadAuthenticationEvents(); }}
+              onAssistance={(email) => { setAssistancePrefillEmail(email); openAdminWorkspace('assistance'); }}
+            />}
 
             {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <AdminMemberRoleEditor
   account={account}
