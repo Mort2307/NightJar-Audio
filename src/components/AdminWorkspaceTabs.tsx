@@ -25,7 +25,7 @@ export default function AdminWorkspaceTabs({ active, onChange, pendingApplicatio
   const count = (id: AdminWorkspace) => id === 'content' ? pendingApplications + pendingImages : id === 'security' ? openAlerts : 0;
 
   return (
-    <nav className="nj-owner-workspaces" aria-label="Administrator workspaces">
+    <nav className={active === 'overview' ? 'nj-owner-workspaces' : 'nj-owner-workspaces nj-owner-workspaces-compact'} aria-label="Administrator workspaces">
       {sections.map((section) => {
         const Icon = section.icon;
         const pending = count(section.id);

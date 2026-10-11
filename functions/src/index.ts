@@ -6309,6 +6309,9 @@ export const listAuthenticationEvents = onCall({ region: REGION }, async (reques
         id: doc.id,
         eventType: cleanText(data.eventType, 80),
         targetEmailMasked: cleanText(data.targetEmailMasked, 180) || 'unknown account',
+        // Hash prefix groups the SAME entered address without exposing the raw
+        // email or mistakenly merging different emails with the same mask.
+        targetKey: cleanText(data.emailHash, 100).slice(0, 28) || doc.id,
         targetUserId: cleanText(data.targetUserId, 160) || null,
         adminTarget: data.adminTarget === true,
         firebaseCode: cleanText(data.firebaseCode, 80) || null,
@@ -6319,8 +6322,39 @@ export const listAuthenticationEvents = onCall({ region: REGION }, async (reques
         createdAt: toIso(data.createdAt),
       };
     })
-    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
-  return { events };
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+    .slice(0, 80);
+
+  // Only reveal contact details where the registered and verified account
+  // actually matches the TARGET email, is currently permitted, and isn't
+  // disabled or suspended. This never identifies the attempted sign-in actor.
+  const accountOwnerByTarget = new Map<string, { name:string; email:string }>();
+  const targets = new Map<string, string>();
+  for (const event of events) {
+    if (event.targetUserId && !event.adminTarget) targets.set(event.targetKey, event.targetUserId);
+  }
+  await Promise.all(Array.from(targets.entries()).map(async ([targetKey, uid]) => {
+    try {
+      const [authUser, accountSnapshot] = await Promise.all([
+        getAuth().getUser(uid), accountRef(uid).get(),
+      ]);
+      if (!accountSnapshot.exists || !authUser.emailVerified || authUser.disabled || accountSnapshot.data()?.status === 'suspended') return;
+      const email = cleanEmail(authUser.email);
+      if (!validEmailAddress(email) || createHash('sha256').update(email).digest('hex').slice(0, 28) !== targetKey) return;
+      const access = await closedBetaAccessFor(email, accountSnapshot.data() ?? {});
+      if (!access.allowed || ADMIN_EMAILS.has(email)) return;
+      const presenter = await accountPresentation(uid);
+      accountOwnerByTarget.set(targetKey, { name: presenter.displayName, email });
+    } catch {
+      // Missing, stale or ineligible accounts stay masked.
+    }
+  }));
+  return {
+    events: events.map(event => ({
+      ...event,
+      accountOwner: accountOwnerByTarget.get(event.targetKey) ?? null,
+    })),
+  };
 });
 
 export const listSecurityAlerts = onCall({ region: REGION }, async (request) => {

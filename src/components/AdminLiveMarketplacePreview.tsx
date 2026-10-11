@@ -86,9 +86,16 @@ export default function AdminLiveMarketplacePreview({ notify }: { notify: (messa
       {!loading && !error && diagnostics.length === 0 && <p>No manuscripts exist in the current Firebase project. Tester uploads won't appear here until saved to this backend.</p>}
       {!loading && !error && <div className="admin-live-preview-diagnostic-list">
         {diagnostics.map((item) => <article className="admin-live-preview-diagnostic" key={item.id}>
-          {item.visibleToProfessionals ? <CheckCircle2 size={17} aria-label="Visible" /> : <XCircle size={17} aria-label="Not visible" />}
-          <div><strong>{item.title}</strong><small>Status: {item.status} · Listing: {item.visibility}</small>
-          {!item.visibleToProfessionals && <small>{item.reasons.join(' · ')}</small>}</div>
+          <div className="nj-script-visibility-main">
+            <span className="nj-script-visibility-icon">{item.visibleToProfessionals
+              ? <CheckCircle2 size={18} aria-label="Visible in marketplace"/>
+              : <XCircle size={18} aria-label="Not visible in marketplace"/>}</span>
+            <div className="nj-script-visibility-info">
+              <strong>{item.title}</strong>
+              <span>Status: {item.status} · Listing: {item.visibility}</span>
+              {!item.visibleToProfessionals && <p>{item.reasons.join(' · ')}</p>}
+            </div>
+          </div>
           <span className={item.visibleToProfessionals ? 'status-pill' : 'status-pill muted'}>{item.visibleToProfessionals ? 'Visible to VAs' : 'Not listed'}</span>
         </article>)}
       </div>}
