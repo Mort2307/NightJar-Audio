@@ -4113,6 +4113,7 @@ function App() {
             <section className="editorial-strip"><span>VOICE</span><span>STORY</span><span>ATMOSPHERE</span><span>CHARACTER</span><span>SOUND DESIGN</span><span>AFTER DARK</span></section>
 
             <SpotlightExperience
+              spotlightMeta={spotlightMeta}
               spotlights={[creatorSpotlight, writerSpotlight, editorSpotlight, artistSpotlight, listenerSpotlight].filter((person): person is Spotlight => person !== null)}
               viewerUserId={simulationMode ? null : user?.userId}
               followingIds={followingProfileIds}
