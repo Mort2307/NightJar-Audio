@@ -3614,11 +3614,33 @@ const materializeSpotlightNotification = async (item: any, date: string) => {
     listenerRank: kind === 'listener' ? item.listenerRank ?? null : null,
   };
 
+  let alreadySeen = false;
   try {
-    // create() is atomic. Concurrent visitors and the daily scheduler
-    // cannot send two different notifications to the same person/day/role.
+    // Atomic inbox creation survives simultaneous users opening Discover.
     await ref.create({
       ...payload, read: false, createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    const code = (error as {code?: number | string})?.code;
+    if (code !== 6 && code !== 'already-exists' && code !== 'ALREADY_EXISTS') throw error;
+    // A member who has already acknowledged the feature should not
+    // receive a later surprise push simply because the 9am job ran.
+    alreadySeen = (await ref.get()).data()?.read === true;
+  }
+  if (alreadySeen) return;
+
+  const localHour = Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23',
+  }).format(new Date()));
+  // The feature starts at midnight, but phone pushes are daytime only.
+  // An early visitor can create the in-app notice; the 09:00 scheduled
+  // dispatch will still send its push once the daytime window begins.
+  if (localHour < 9 || localHour >= 21) return;
+
+  const dispatchRef = accountRef(targetId).collection('notificationDispatches').doc('spotlight_' + date + '_' + kind);
+  try {
+    await dispatchRef.create({
+      kind, date, notificationId: ref.id, createdAt: FieldValue.serverTimestamp(),
     });
   } catch (error) {
     const code = (error as {code?: number | string})?.code;
