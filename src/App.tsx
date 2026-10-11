@@ -78,6 +78,7 @@ import NightjarSettings from './components/NightjarSettings';
 import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
 import AdminSecurityAlerts from './components/AdminSecurityAlerts';
+import AdminAssistance from './components/AdminAssistance';
 import ProductExperience from './components/ProductExperience';
 import AdminMemberRoleEditor from './components/AdminMemberRoleEditor';
 import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
@@ -517,7 +518,7 @@ function App() {
     return (panelFromPath ?? null) as 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview' | null;
   });
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>(() => {
-    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|finance|security|tools)\/?$/);
+    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)\/?$/);
     return (match?.[1] ?? 'overview') as AdminWorkspace;
   });
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
@@ -846,7 +847,7 @@ function App() {
         const peopleFromPath = value.match(/^admin\/people\/(listener|creator|writer|editor|artist|admin)$/)?.[1];
         setAdminPanel((panelFromPath ?? null) as typeof adminPanel);
         setAdminPeopleRole((peopleFromPath ?? null) as typeof adminPeopleRole);
-        const workspaceFromPath = value.match(/^admin\/workspace\/(overview|people|content|launch|finance|security|tools)$/)?.[1];
+        const workspaceFromPath = value.match(/^admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)$/)?.[1];
         setAdminWorkspace((workspaceFromPath ?? 'overview') as AdminWorkspace);
       } else {
         setAdminPanel(null);
@@ -4598,7 +4599,7 @@ function App() {
           <section className={adminPanel || adminPeopleRole ? 'page-wrap admin-page admin-detail-active' : 'page-wrap admin-page'}>
             <div className="page-heading admin-owner-heading">
               <div><p className="eyebrow"><Settings2 size={14} /> ADMINISTRATOR WORKSPACE</p>
-              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', finance:'Finance & subscriptions', security:'Safety & security', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
+              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', finance:'Finance & subscriptions', security:'Safety & security', assistance:'Admin assistance', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
               <p>{adminWorkspace === 'overview' ? 'Daily priorities, pending decisions and the right tools — without endless scrolling.' : 'A focused Nightjar workpage. Choose another section above to move between administrative tasks.'}</p></div>
               <button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh</button>
             </div>
@@ -4609,6 +4610,7 @@ function App() {
               pendingImages={imageModeration.length}
               openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
             />
+            {adminWorkspace === 'assistance' && <AdminAssistance onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
             {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
               title="Exceptions first."
