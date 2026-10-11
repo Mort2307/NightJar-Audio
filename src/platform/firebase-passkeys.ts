@@ -1,5 +1,5 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { signInWithCustomToken } from 'firebase/auth';
+import { signInWithCustomToken, signOut } from 'firebase/auth';
 import { firebaseApp, firebaseAuth, type NightjarIdentity } from './firebase-auth';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
@@ -81,7 +81,7 @@ export const nightjarPasskeys = {
     return (await finishRegistration({ challengeId: data.challengeId, response: serialize(credential as PublicKeyCredential, true) })).data;
   },
 
-  async signIn(): Promise<NightjarIdentity> {
+  async signIn(expectedUserId?: string, signal?: AbortSignal): Promise<NightjarIdentity> {
     if (!this.supported()) throw new Error('Passkey sign-in is unavailable on this device. Use your email and password.');
     const { data } = await beginSignIn();
     const o = data.options;
@@ -90,10 +90,20 @@ export const nightjarPasskeys = {
       challenge: b64Bytes(o.challenge),
       allowCredentials: (o.allowCredentials ?? []).map((entry: any) => ({ ...entry, id: b64Bytes(entry.id) })),
     } as PublicKeyCredentialRequestOptions;
-    const credential = await navigator.credentials.get({ publicKey });
+    const credential = await navigator.credentials.get({ publicKey, signal });
     if (!credential || credential.type !== 'public-key') throw new Error('Passkey sign-in was cancelled.');
+    if (signal?.aborted) throw new Error('Passkey sign-in was cancelled.');
     const reply = (await finishSignIn({ challengeId: data.challengeId, response: serialize(credential as PublicKeyCredential, false) })).data;
+    if (signal?.aborted) throw new Error('Passkey sign-in was cancelled.');
     const result = await signInWithCustomToken(firebaseAuth, reply.token);
+    // Quick unlock is explicitly bound to the member who enabled it on this
+    // device. A passkey for another account must never open their workspace.
+    if (signal?.aborted || (expectedUserId && result.user.uid !== expectedUserId)) {
+      await signOut(firebaseAuth);
+      throw new Error(signal?.aborted
+        ? 'Passkey sign-in was cancelled.'
+        : 'That passkey belongs to a different Nightjar account. Use the registered passkey or sign in with your password.');
+    }
     return {
       userId: result.user.uid,
       email: result.user.email,

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Fingerprint, KeyRound, ShieldCheck, Trash2 } from 'lucide-react';
 import { nightjarAuth } from '../platform/firebase-auth';
 import { nightjarPasskeys } from '../platform/firebase-passkeys';
+import { nightjarQuickUnlock } from '../platform/nightjar-quick-unlock';
 
 /** Passkeys are never enabled through a client-side boolean alone. */
 export default function PasskeySettings({ simulationMode }: { simulationMode: boolean }) {
@@ -9,12 +10,19 @@ export default function PasskeySettings({ simulationMode }: { simulationMode: bo
   const [devices, setDevices] = useState<Array<{ id: string; label: string; createdAt: string | null; lastUsedAt: string | null }>>([]);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [quickUnlockEnabled, setQuickUnlockEnabled] = useState(() => {
+    const uid = nightjarAuth.current()?.userId;
+    return Boolean(uid && nightjarQuickUnlock.enabledFor(uid));
+  });
   const [message, setMessage] = useState('');
 
   const refresh = async () => {
     try {
       const list = await nightjarPasskeys.list();
       setDevices(list);
+      const uid = nightjarAuth.current()?.userId;
+      if (uid && list.length === 0 && nightjarQuickUnlock.enabledFor(uid)) nightjarQuickUnlock.disable(uid);
+      setQuickUnlockEnabled(Boolean(uid && list.length > 0 && nightjarQuickUnlock.enabledFor(uid)));
     } catch {
       setMessage('Passkeys could not be loaded. Check your connection.');
     }
@@ -63,9 +71,28 @@ export default function PasskeySettings({ simulationMode }: { simulationMode: bo
       </label>
       <button type="button" className="primary-button" disabled={!supported || busy || !password} onClick={() => void action(async () => {
         await nightjarPasskeys.register();
-        setMessage('Your new passkey is ready. You can use it to sign in next time.');
-      })}><Fingerprint size={16}/>{busy ? 'Confirming…' : 'Add passkey on this device'}</button>
-      <p className="nj-settings-explanation"><ShieldCheck size={13}/> Keep your email and password available for account recovery. Changing or removing passkeys requires recent password verification.</p>
+        const uid = nightjarAuth.current()?.userId;
+        const enabled = uid ? nightjarQuickUnlock.enable(uid) : false;
+        setQuickUnlockEnabled(enabled);
+        setMessage(enabled
+          ? 'Passkey registered. Nightjar will ask for biometrics immediately after its black logo splash screen on this device.'
+          : 'Passkey registered. Enable launch unlock from this device to use it at startup.');
+      })}><Fingerprint size={16}/>{busy ? 'Confirming…' : 'Add passkey and enable launch unlock'}</button>
+      <label className="nightjar-passkey-quick-toggle">
+        <input type="checkbox" checked={quickUnlockEnabled} disabled={!supported || busy || devices.length===0}
+          onChange={event=>{
+            const uid = nightjarAuth.current()?.userId;
+            if (!uid) return;
+            const next = event.target.checked ? nightjarQuickUnlock.enable(uid) : (nightjarQuickUnlock.disable(uid), false);
+            setQuickUnlockEnabled(next);
+            setMessage(next
+              ? 'Biometric unlock enabled. It appears after the Nightjar logo splash on your next fresh app launch.'
+              : 'Automatic launch unlock disabled on this device. Your passkey remains usable on the sign-in page.');
+          }}/>
+        <span><strong>Ask for biometrics when Nightjar opens</strong>
+          <small>After the black Nightjar logo screen, prompt for your fingerprint, Face ID or passkey before opening the app. This preference is for this device only.</small></span>
+      </label>
+      <p className="nj-settings-explanation"><ShieldCheck size={13}/> Keep your email and password for recovery. Launch unlock uses a verified passkey, and cannot replace Nightjar age verification. Changing or removing passkeys requires recent password verification.</p>
       {message && <p className="account-access-message" role="status">{message}</p>}
     </>}
   </div>;
