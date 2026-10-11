@@ -26,6 +26,9 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [nightjarOriginal, setNightjarOriginal] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [reviewDecision,setReviewDecision] = useState<'approved'|'changes'|'rejected'|null>(null);
+  const [reviewNote,setReviewNote] = useState('');
+  const [reviewBusy,setReviewBusy] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -84,13 +87,9 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
       notify('This release needs a reviewed final transcript before it can be published.');
       return;
     }
-    const rawNote = window.prompt(decision === 'approved'
-      ? 'Optional note to the creator (also sent in their Nightjar Inbox):'
-      : 'Explain exactly why this release needs changes or was rejected (required):');
-    if (rawNote === null) return;
-    const note = rawNote.trim();
+    const note = reviewNote.trim();
     if (decision !== 'approved' && !note) { notify('Enter a reason before requesting changes or rejecting a release.'); return; }
-
+    setReviewBusy(true);
     try {
       if (demoMode) {
         const dashboard = readDemo('creatorDashboard', demoCreatorDashboard);
@@ -110,14 +109,17 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
         }
         setQueue((items) => items.filter((item) => item.id !== selected.id));
         setSelected(null);
+        setReviewDecision(null);setReviewNote('');
         notify(decision === 'approved' ? 'Demo release approved locally.' : decision === 'changes' ? 'Demo changes request recorded locally.' : 'Demo release rejected locally.');
         return;
       }
       await nightjarCatalogue.moderate(selected.id, decision, note, decision === 'approved' && nightjarOriginal);
       await load();
       setSelected(null);
+      setReviewDecision(null);setReviewNote('');
       notify(decision === 'approved' ? selected.scheduledAt ? 'Release approved and scheduled. It will remain private until publication.' : 'Release approved and published.' : decision === 'changes' ? 'Changes requested from the creator.' : 'Release rejected.');
-    } catch { notify('Moderation decision could not be saved.'); }
+    } catch (error) { notify(error instanceof Error ? error.message : 'Moderation decision could not be saved.'); }
+    finally { setReviewBusy(false); }
   };
 
   const removeSelected = async () => {
@@ -173,7 +175,25 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
               : <div className="people-empty"><BookOpenText size={16}/><strong>No transcript supplied.</strong><span>Request changes before publishing this release.</span></div>}
             <small>{selected.transcriptLanguage || 'en'} · {Math.max(0, Number(selected.transcriptWordCount ?? 0)).toLocaleString('en-GB')} words</small>
           </section>
-          <div className="moderation-tags">{[...(selected.tags || []), ...(selected.tropes || [])].map((tag:string) => <span key={tag}>{tag}</span>)}</div>{!!selected.contributors?.length && <div className="moderation-credit-list">{selected.contributors.map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}{selected.status === 'pending_review' && <label className="rights-check moderation-original-check"><input type="checkbox" checked={nightjarOriginal} onChange={(e)=>setNightjarOriginal(e.target.checked)}/> Designate as a Nightjar Original on approval</label>}</div>{selected.status === 'pending_review' ? <div className="moderation-actions"><button className="secondary-button" onClick={() => void decide('changes')}><MessageSquare size={14} /> Request changes</button><button className="ghost-button" onClick={() => void decide('rejected')}><X size={14} /> Reject</button><button className="primary-button" disabled={!demoMode && (!String(selected.transcriptText ?? '').trim() || selected.transcriptAccessibilityReviewed !== true)} onClick={() => void decide('approved')}><Check size={14} /> Approve & publish</button></div> : <p className="nj-audio-review-help">Listening is for administrator quality checks only. Moderation decisions unlock after the creator submits the completed release.</p>}
+          <div className="moderation-tags">{[...(selected.tags || []), ...(selected.tropes || [])].map((tag:string) => <span key={tag}>{tag}</span>)}</div>{!!selected.contributors?.length && <div className="moderation-credit-list">{selected.contributors.map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}{selected.status === 'pending_review' && <label className="rights-check moderation-original-check"><input type="checkbox" checked={nightjarOriginal} onChange={(e)=>setNightjarOriginal(e.target.checked)}/> Designate as a Nightjar Original on approval</label>}</div>{selected.status === 'pending_review' && <div className="nj-admin-decision">
+            <div className="moderation-actions">
+              <button type="button" className="secondary-button" onClick={()=>{setReviewDecision('changes');setReviewNote('');}}><MessageSquare size={14}/> Request changes</button>
+              <button type="button" className="ghost-button" onClick={()=>{setReviewDecision('rejected');setReviewNote('');}}><X size={14}/> Reject</button>
+              <button type="button" className="primary-button" disabled={!demoMode && (!String(selected.transcriptText ?? '').trim() || selected.transcriptAccessibilityReviewed !== true)} onClick={()=>{setReviewDecision('approved');setReviewNote('');}}><Check size={14}/> {selected.scheduledAt?'Approve & schedule':'Approve & publish'}</button>
+            </div>
+            {reviewDecision && <section className="nj-admin-decision-editor" aria-label="Moderation decision and message">
+              <h4>{reviewDecision==='approved' ? selected.scheduledAt ? 'Approve for the scheduled release' : 'Approve and publish now' : reviewDecision==='changes'?'Request changes from the creator':'Reject this recording'}</h4>
+              <p>{reviewDecision==='approved'
+                ? selected.scheduledAt ? 'Nightjar will keep this approved audio private until '+formattedScheduled(selected)+'.' : 'Approval will make this recording available to eligible Nightjar listeners.'
+                : 'The creator must receive a clear reason and will be able to reply in Nightjar Messages.'}</p>
+              <label>{reviewDecision==='approved'?'Note to creator (optional)':'Explain your decision (required)'}
+                <textarea rows={4} value={reviewNote} maxLength={1200} onChange={(event)=>setReviewNote(event.target.value)} placeholder={reviewDecision==='approved'?'A courtesy note from Nightjar…':'Explain what needs correcting and why…'} />
+              </label>
+              <div><button type="button" className="secondary-button" disabled={reviewBusy} onClick={()=>setReviewDecision(null)}>Cancel</button>
+                <button type="button" className="primary-button" disabled={reviewBusy || (reviewDecision!=='approved'&&!reviewNote.trim())} onClick={()=>void decide(reviewDecision)}>{reviewBusy?'Saving decision…':'Confirm & notify creator'}</button>
+              </div>
+            </section>}
+          </div>} : selected.status !== 'pending_review' ? <p className="nj-audio-review-help">Listening is for administrator quality checks only. Moderation decisions unlock after the creator submits the completed release.</p> : null}
         <div className="nj-admin-creator-contact">
           <strong>Discuss this submission with the creator</strong>
           <p>Approval and rejection notes are also sent to the creator's Nightjar Inbox. You can open a direct conversation at any time.</p>
