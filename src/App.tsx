@@ -13,6 +13,7 @@ import { nightjarListening } from './platform/firebase-listening';
 import { nightjarNotifications } from './platform/firebase-notifications';
 import { nightjarPush } from './platform/firebase-push';
 import AdminInstallBranding from './components/AdminInstallBranding';
+import ProfessionalLibrary from './components/ProfessionalLibrary';
 import SpotlightExperience from './components/SpotlightExperience';
 import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { nightjarAge } from './platform/firebase-age';
@@ -58,7 +59,6 @@ import {
   Bell,
   Download,
   FileCheck2,
-  Share2,
   Coins,
   WalletCards,
   ImagePlus,
@@ -4201,14 +4201,14 @@ function App() {
             <div className="page-heading profile-directory-heading">
               <div>
                 <p className="eyebrow">NIGHTJAR COMMUNITY DIRECTORY</p>
-                <h1>Find the people behind Nightjar.</h1>
-                <p>Search public VA Creator, Writer, Audio Editor, Artist and Listener profiles by name, handle, role, tags, specialties, categories or availability. Private profiles never appear here.</p>
+                <h1>Discover the people behind Nightjar.</h1>
+                <p>Explore the Professional Library by category—VA Creators, Writers, Audio Editors and Artists. Each person appears in every profession they are approved for. Search by name, handle, specialties, tags or availability. Only published public profiles appear.</p>
               </div>
               <div className="creator-directory-tools profile-directory-tools">
                 <label className="creator-directory-search"><Search size={16}/><input value={directoryQuery} onChange={(event)=>setDirectoryQuery(event.target.value)} placeholder="Search name, tag, specialty, badge…"/></label>
                 <select value={directoryRoleFilter} onChange={(event)=>setDirectoryRoleFilter(event.target.value as 'all' | 'creator' | 'writer' | 'editor' | 'artist' | 'listener')}>
-                  <option value="all">All public roles</option>
-                  <option value="creator">Creators</option>
+                  <option value="all">All professionals · grouped by category</option>
+                  <option value="creator">VA Creators</option>
                   <option value="writer">Writers</option>
                   <option value="editor">Audio Editors</option>
                   <option value="artist">Artists</option>
@@ -4235,50 +4235,19 @@ function App() {
 
             {!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading Creator suggestion tools" />}><CreatorSuggestionBox notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>}
 
-            <div className="profile-directory-summary">
-              <span><strong>{filteredDirectoryProfiles.length}</strong> matching profile{filteredDirectoryProfiles.length === 1 ? '' : 's'}</span>
-              <span>Public profiles only · protected work and private listening remain excluded</span>
-            </div>
-
-            <div className="creator-directory profile-directory-grid">
-              {filteredDirectoryProfiles.map((person, index) => {
-                const workMetric = person.role === 'creator'
-                  ? (person.releaseCount ?? 0) + ' releases'
-                  : person.role === 'writer'
-                    ? (person.publishedWorkCount ?? 0) + ' published scripts'
-                    : person.role === 'editor'
-                      ? (person.creditedReleaseCount ?? 0) + ' release credits'
-                      : person.role === 'artist'
-                        ? 'Visual artist profile'
-                        : 'Curated Listener profile';
-                const primaryRoleSlice = person.roleProfiles?.[person.role] ?? {};
-                return <article className="creator-profile profile-directory-card premium-directory-card" key={person.userId}>
-                  <div className="profile-number">{String(index + 1).padStart(2,'0')}</div>
-                  <span className="avatar-xl">{person.avatarUrl ? <img className="avatar-approved-image" src={person.avatarUrl} alt="" loading="lazy" decoding="async" /> : person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>
-                  <div className="profile-main">
-                    <div className="profile-heading">
-                      <div><div className="profile-role-chips directory-role-chips">{(person.roles?.length ? person.roles : [person.role]).filter((value,index,array)=>array.indexOf(value)===index).map((personRole)=><span className="directory-role-label" key={personRole}>{roleMeta[personRole].label}</span>)}</div><h2>{person.name}</h2><span>{person.handle ? '@' + person.handle.replace(/^@/,'') : 'Handle not set'}</span></div>
-                      {!liveRolePreview && <button className="icon-button" onClick={() => void toggleProfileFollow(person.userId)} aria-label={followingProfileIds.includes(person.userId) ? 'Unfollow profile' : 'Follow profile'}><Heart size={17} fill={followingProfileIds.includes(person.userId) ? 'currentColor' : 'none'} /></button>}
-                    </div>
-                    <p>{primaryRoleSlice.roleHeadline || person.headline || primaryRoleSlice.roleBio || person.bio || roleMeta[person.role].description}</p>
-                    {person.roleAvailability && <span className="creator-availability-pill">{person.roleAvailability}</span>}
-                    {!!person.activityBadges?.length && <div className="profile-activity-badges">{person.activityBadges.slice(0,3).map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={11}/>{badge.label}</span>)}</div>}
-                    <div className="creator-directory-tags">{[...(person.roleSpecialties??[]),...(person.favouriteTags??[])].slice(0,5).map((item)=><span key={item}>{item}</span>)}</div>
-                    <div className="profile-stats">
-                      <span><strong>{person.followerCount ?? 0}</strong> followers</span>
-                      <span><strong>{workMetric}</strong></span>
-                      {person.role !== 'listener' && <span><strong>{person.completedCollaborations ?? 0}</strong> completed collaborations</span>}
-                    </div>
-                  </div>
-                  <div className="profile-directory-actions">
-                    {person.role === 'creator' && !liveRolePreview && <button className="ghost-button" onClick={() => void recommendCreator(person)}><Share2 size={13}/> Recommend</button>}
-                    {!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && ['creator','writer','editor','artist'].includes(String(person.role)) && person.userId !== user?.userId && <button className="ghost-button" onClick={() => { setMessageRecipientUserId(person.userId); setMessageCollaborationId(null); navigate('messages'); }}><MessageCircle size={13}/> Message</button>}
-                    <button data-nj-preview-safe="true" className="round-arrow" onClick={() => openPublicProfile(person.userId)} aria-label={'Open ' + person.name + ' profile'}><ArrowRight size={18} /></button>
-                  </div>
-                </article>;
-              })}
-            </div>
-            {!filteredDirectoryProfiles.length && <div className="people-empty"><Users size={18}/><strong>No public profiles match those filters.</strong><span>Try a different role, tag, availability setting or search term.</span></div>}
+            <ProfessionalLibrary
+              profiles={profileDirectory}
+              filteredProfiles={filteredDirectoryProfiles}
+              category={directoryRoleFilter}
+              onCategoryChange={(next) => { setDirectoryRoleFilter(next); setDirectoryTagFilter('all'); setDirectoryAvailabilityFilter('all'); }}
+              onOpen={openPublicProfile}
+              onFollow={toggleProfileFollow}
+              followingIds={followingProfileIds}
+              onRecommend={(person) => void recommendCreator(person as PublicDirectoryProfile)}
+              onMessage={(recipient) => { setMessageRecipientUserId(recipient); setMessageCollaborationId(null); navigate('messages'); }}
+              canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && !liveRolePreview}
+              readOnly={liveRolePreview}
+            />
           </section>
         )}
 
