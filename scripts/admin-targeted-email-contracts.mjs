@@ -8,7 +8,7 @@ const p=fs.readFileSync('package.json','utf8');
 assert.match(backend,/export const adminSendEmailCampaign = onCall/,'real campaign sender must remain');
 assert.match(backend,/const resolveSelectedMemberEmails = async/,'selected account IDs have server-side resolution');
 assert.match(backend,/new Set\(ids\).size!==ids.length/,'duplicate user IDs are rejected');
-assert.match(backend,/String(data.status ?? 'active')!=='active'/,'inactive accounts cannot be emailed through selected audience');
+assert.ok(backend.includes("String(data.status ?? 'active')!=='active'"),'inactive accounts cannot be emailed through selected audience');
 assert.match(backend,/ADMIN_EMAILS.has\(email\)/,'administrators excluded from targeted member audience');
 assert.match(backend,/accounts\[i\].exists/,'server verifies real accounts');
 assert.match(backend,/await resolveSelectedMemberEmails\(selectedUserIds\)/,'server verifies selected members on preview and send');
