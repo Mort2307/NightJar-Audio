@@ -42,6 +42,19 @@ if (!evidenceReview.includes('person who entered the credentials')) failures.pus
 if (!evidenceReview.includes('<details className="nj-evidence-technical">')) failures.push('technical evidence must be collapsed by default');
 if (!evidenceReview.includes('Please do not send your password')) failures.push('support email must not solicit credentials');
 
+const assistance = read('src/components/AdminAssistance.tsx');
+const assistanceClient = read('src/platform/firebase-account-assistance.ts');
+const workspaceNav = read('src/components/AdminWorkspaceTabs.tsx');
+if (!protection.includes('export const adminAccountAssistanceLookup = onCall') || !protection.includes('export const adminSendAccountAssistanceEmail = onCall')) failures.push('Owner account assistance endpoints must be implemented.');
+if (!protection.includes('const assistanceContactTarget = async') || !protection.includes('const administrator = ADMIN_EMAILS.has(email)')) failures.push('Owner/admin identities must not be assisted through member recovery.');
+if (!protection.includes('const admin = requireAdminIdentity(request);') || !protection.includes('memberRequested !== true')) failures.push('Account recovery email must require an owner and a confirmed member request.');
+if (!protection.includes('target.canReset') || !protection.includes('target.canVerify') || !protection.includes('!target.registered')) failures.push('Account recovery must enforce current verified eligibility.');
+if (!protection.includes('await gmailAccessToken()') || !protection.includes('generatePasswordResetLink') || !protection.includes('generateEmailVerificationLink')) failures.push('Recovery links must be generated on the server and sent through Nightjar Mail.');
+if (!protection.includes('adminAssistanceEvents') || !protection.includes('lastSentAtMs') || !protection.includes('count >= 3')) failures.push('Recovery email requests require rate limiting and a durable audit trail.');
+if (!assistance.includes('window.confirm(') || !assistance.includes('I confirm the actual account holder')) failures.push('Owner must confirm a member assistance request.');
+if (!assistance.includes('no supported administrator') || !assistance.includes('Nightjar currently flags repeated failures')) failures.push('Assistance must not promise Firebase unlock or claim an invented 24-hour Nightjar lockout.');
+if (!assistanceClient.includes('adminAccountAssistanceLookup') || !workspaceNav.includes("id: 'assistance'") || !app.includes("<AdminAssistance onPeople")) failures.push('Admin Assistance must be accessible through a dedicated Owner workspace.');
+
 if (failures.length) {
   console.error('SECURITY CONTRACT FAILURES');
   failures.forEach((failure)=>console.error('-',failure));
