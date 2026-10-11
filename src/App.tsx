@@ -996,10 +996,10 @@ function App() {
       } else {
         // New accounts do not have a profiles document yet. Give their blank
         // editor a real baseline so editing enables Save rather than locking it.
-        const empty = { ...structuredClone(EMPTY_PROFILE), roles: role === 'admin' ? ['admin'] : ['listener', ...(role !== 'listener' ? [role] : [])] };
+        const empty = { ...structuredClone(EMPTY_PROFILE), roles: ['listener'] };
         setProfile(empty);
         setProfileBaseline(structuredClone(empty));
-        setProfileEditRole(role && ['creator','writer','editor','artist'].includes(role) ? role as PreviewRole : 'listener');
+        setProfileEditRole('listener');
         setShowOnboarding(true);
       }
     }).catch(() => { /* A later explicit profile load can retry without losing local edits. */ });
@@ -2179,10 +2179,10 @@ function App() {
         setProfileEditRole(targetRole);
       } else {
         // No saved profile yet: allow the first edit to be persisted.
-        const empty = { ...structuredClone(EMPTY_PROFILE), roles: role === 'admin' ? ['admin'] : ['listener', ...(requestedEditRole !== 'listener' ? [requestedEditRole] : [])] };
+        const empty = { ...structuredClone(EMPTY_PROFILE), roles: role === 'admin' ? ['admin'] : ['listener'] };
         setProfile(empty);
         setProfileBaseline(structuredClone(empty));
-        setProfileEditRole(requestedEditRole);
+        setProfileEditRole('listener');
       }
       setTasteVector(tasteData.vector ?? []);
       setProfileTagCatalogue(Array.isArray(tagData?.tags) ? tagData.tags : []);
