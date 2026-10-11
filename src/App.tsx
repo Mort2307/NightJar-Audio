@@ -4488,7 +4488,9 @@ function App() {
 
         {view === 'calendar' && user && ageVerified && !liveRolePreview && (
           <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Opening your Nightjar calendar" />}>
-            <PersonalCalendar role={effectiveRole ?? 'listener'} simulationMode={simulationMode || demoMode} notify={notify}/>
+            <PersonalCalendar role={effectiveRole ?? 'listener'} simulationMode={simulationMode || demoMode} notify={notify}
+              onOpenStudio={() => {navigate('creator');void loadCreatorDashboard();window.setTimeout(()=>document.getElementById('creator-pipeline')?.scrollIntoView({behavior:'smooth',block:'start'}),100);}}
+              onOpenModeration={() => setModerationOpen(true)}/>
           </Suspense>
         )}
         {view === 'settings' && (
