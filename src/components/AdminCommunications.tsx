@@ -754,7 +754,7 @@ export default function AdminCommunications() {
             />
             <label htmlFor="admin-mail-private-confirm">
               <strong>I confirm this should send as separate private emails.</strong>
-              <span>No recipient will be placed in another recipient's To, CC or BCC fields.</span>
+              <span>No recipient will be placed in another recipient's To, CC or BCC fields. Only the {selectedCount} recipients marked Send above will receive this campaign.</span>
             </label>
           </div>
 
@@ -772,39 +772,65 @@ export default function AdminCommunications() {
 
         <aside className="admin-mail-audience">
           <div className="admin-mail-audience-title">
-            <div><span className="mini-label">LIVE AUDIENCE</span><h3>{preview?.audienceLabel ?? selectedAudience.label}</h3></div>
-            <button className="icon-button" type="button" onClick={() => void refreshPreview()} disabled={loadingPreview} aria-label="Refresh email audience">
+            <div><span className="mini-label">LIVE AUDIENCE · WHO GETS EMAIL</span><h3>{preview?.audienceLabel ?? selectedAudience.label}</h3></div>
+            <button className="icon-button" type="button" onClick={() => void refreshPreview()} disabled={loadingPreview || sendingCampaign} aria-label="Refresh audience while preserving existing selections">
               <RefreshCw size={16} />
             </button>
           </div>
 
-          <div className="admin-mail-recipient-count">
+          <div className="admin-mail-recipient-count" aria-live="polite">
             <Users size={18} />
-            <strong>{loadingPreview ? '…' : preview?.recipientCount ?? 0}</strong>
-            <span>private deliveries</span>
+            <strong>{loadingPreview && !preview ? '…' : selectedCount}</strong>
+            <span>set to Send · {preview?.recipientCount ?? 0} available</span>
           </div>
+          <p className="admin-mail-recipient-instructions">Use <strong>Send / Skip</strong> to choose who receives this campaign. Skipped people receive nothing, and every change requires reconfirming before sending.</p>
+          <div className="admin-mail-recipient-tools">
+            <button type="button" className="secondary-button" disabled={!preview || loadingPreview || sendingCampaign || selectedCount===audienceRecipients.length} onClick={()=>setAllRecipients(true)}>Select all</button>
+            <button type="button" className="ghost-button" disabled={!preview || loadingPreview || sendingCampaign || selectedCount===0} onClick={()=>setAllRecipients(false)}>Deselect all</button>
+          </div>
+          {preview && audienceRecipients.length>0 && <label className="admin-mail-recipient-search">
+            <span>Find recipient</span>
+            <input type="search" placeholder="Search name, email or role" value={recipientQuery}
+              onChange={event=>{setRecipientQuery(event.target.value);setVisibleRecipientLimit(60);}}
+              disabled={sendingCampaign} aria-label="Filter live email recipients" />
+          </label>}
 
-          {preview?.overSendLimit && (
-            <div className="admin-mail-limit-warning">
-              <AlertTriangle size={16} />
-              <span>This audience exceeds the current {preview.sendLimit}-message Gmail API safety limit. Nothing will send until the audience is reduced or the delivery layer is scaled.</span>
-            </div>
-          )}
+          {selectedOverLimit && <div className="admin-mail-limit-warning" role="alert">
+            <AlertTriangle size={16}/>
+            <span>{selectedCount} selected exceeds Nightjar's {preview?.sendLimit ?? 250}-email campaign limit. Deselect recipients before sending.</span>
+          </div>}
+          {recipientPreviewIncomplete && <div className="admin-mail-limit-warning" role="alert">
+            <AlertTriangle size={16}/>
+            <span>This preview could not show every recipient. Narrow the audience or refresh before sending. Nightjar never sends to unreviewed people.</span>
+          </div>}
+          {preview && selectedCount===0 && <p className="admin-mail-recipient-instructions">Everyone is currently set to Skip. Select at least one person to enable Send.</p>}
 
           <div className="admin-mail-recipient-list">
-            {(preview?.recipients ?? []).slice(0, 12).map((recipient) => (
-              <div key={recipient.email} className="admin-mail-recipient">
-                <span>{recipient.displayName.slice(0, 1).toUpperCase()}</span>
-                <div><strong>{recipient.displayName}</strong><small>{recipient.email} · {recipient.roleLabel}</small></div>
-              </div>
-            ))}
-            {!loadingPreview && !preview?.recipientCount && (
-              <div className="people-empty"><Mail size={17} /><strong>No deliverable recipients yet</strong><span>Nightjar will not send an empty campaign.</span></div>
-            )}
-            {(preview?.recipientCount ?? 0) > 12 && (
-              <small className="admin-mail-more">+{(preview?.recipientCount ?? 0) - 12} more recipients resolved privately by the backend.</small>
-            )}
+            {matchedRecipients.slice(0,visibleRecipientLimit).map(recipient=>{
+              const selected = selectedEmailSet.has(recipient.email);
+              return <div key={recipient.email} className={selected ? 'admin-mail-recipient included' : 'admin-mail-recipient excluded'}>
+                <span className="admin-mail-recipient-avatar">{recipient.displayName.slice(0,1).toUpperCase()}</span>
+                <div className="admin-mail-recipient-details"><strong>{recipient.displayName}</strong><small>{recipient.email} · {recipient.roleLabel}</small></div>
+                <button type="button" role="switch" aria-checked={selected}
+                  aria-label={`Send this campaign to ${recipient.displayName} (${recipient.email})`}
+                  className={selected ? 'admin-mail-send-toggle selected' : 'admin-mail-send-toggle'}
+                  disabled={loadingPreview || sendingCampaign}
+                  onClick={()=>toggleRecipient(recipient.email)}>
+                  {selected ? <><Send size={13} aria-hidden="true"/> Send</> : 'Skip'}
+                </button>
+              </div>;
+            })}
+            {!loadingPreview && !preview?.recipientCount && <div className="people-empty"><Mail size={17}/><strong>No deliverable recipients yet</strong><span>Nightjar will not send an empty campaign.</span></div>}
+            {preview && recipientQuery && matchedRecipients.length===0 && <small className="admin-mail-more">No matching people.</small>}
           </div>
+          {matchedRecipients.length>visibleRecipientLimit && <button type="button" className="secondary-button admin-mail-show-more"
+              disabled={sendingCampaign} onClick={()=>setVisibleRecipientLimit(current=>current+60)}>
+              Show more ({matchedRecipients.length-visibleRecipientLimit} remaining)
+            </button>}
+          {preview && <small className="admin-mail-audience-summary">
+            {selectedCount} receiving · {audienceRecipients.length-selectedCount} skipped.
+            {loadingPreview ? ' Refreshing…' : ' Only the selected people will receive this campaign.'}
+          </small>}
         </aside>
       </div>
 
