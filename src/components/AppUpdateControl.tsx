@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CheckCircle2, Download, RefreshCw, ShieldCheck } from 'lucide-react';
-import { applyNightjarUpdate, checkNightjarUpdate, type NightjarUpdateStatus } from '../platform/pwa';
+import { applyNightjarUpdate, applyNightjarSafeUpdate, checkNightjarUpdate, type NightjarUpdateStatus } from '../platform/pwa';
 
 export default function AppUpdateControl({ compact = false }: { compact?: boolean }) {
   const [status, setStatus] = useState<NightjarUpdateStatus | null>(null);
@@ -10,7 +10,7 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
       const appliedAt = window.sessionStorage.getItem('nightjar.update-applied.v1');
       if (!appliedAt) return '';
       window.sessionStorage.removeItem('nightjar.update-applied.v1');
-      return 'Nightjar was refreshed from the deployed app and local app caches were cleared.';
+      return 'Nightjar finished refreshing from the deployed version.';
     } catch {
       return '';
     }
@@ -37,7 +37,8 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
   const apply = async () => {
     setApplying(true);
     setMessage('Clearing cached app files and reloading Nightjar…');
-    await applyNightjarUpdate();
+    if (status?.updateAvailable) await applyNightjarSafeUpdate();
+    else await applyNightjarUpdate();
   };
 
   if (compact) {
@@ -71,6 +72,6 @@ export default function AppUpdateControl({ compact = false }: { compact?: boolea
         : <button className="ghost-button" disabled={applying} onClick={()=>void apply()}><RefreshCw size={14}/>{applying ? 'Refreshing app…' : 'Force refresh app'}</button>}
     </div>
     {!installed && <button type="button" className="secondary-button" onClick={showInstall}><Download size={14}/> Install Nightjar on this device</button>}
-    <div className="app-update-safety"><ShieldCheck size={14}/><span>Force refresh unregisters old Nightjar service workers, clears browser Cache Storage and reloads the deployed app. It does not remove your account, profile, subscriptions or cloud data.</span></div>
+    <div className="app-update-safety"><ShieldCheck size={14}/><span>Update Nightjar keeps the push worker registered. Force refresh clears service workers and cached files to recover a broken installation, which may require re-enabling notifications. Neither action deletes your cloud account or profile.</span></div>
   </article>;
 }

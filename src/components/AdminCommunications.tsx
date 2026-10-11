@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ExternalLink, Link2, Mail, RefreshCw, Send, ShieldCheck, Unplug, Users } from 'lucide-react';
 import { applyNightjarUpdate, checkNightjarUpdate, type NightjarUpdateStatus } from '../platform/pwa';
 import {
@@ -50,6 +50,27 @@ export default function AdminCommunications() {
   const [category, setCategory] = useState<AdminEmailCategory>('testing_update');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const [personalisationTarget, setPersonalisationTarget] = useState<'subject' | 'message'>('message');
+  const [previewNames, setPreviewNames] = useState({ firstName: 'Alex', displayName: 'Alex Nightjar', role: 'VA Creator' });
+  const insertPersonalisation = (token: 'firstName' | 'displayName' | 'role') => {
+    const input = personalisationTarget === 'subject' ? subjectRef.current : messageRef.current;
+    const current = personalisationTarget === 'subject' ? subject : body;
+    const marker = '{{' + token + '}}';
+    const start = input?.selectionStart ?? current.length;
+    const end = input?.selectionEnd ?? current.length;
+    const next = current.slice(0, start) + marker + current.slice(end);
+    (personalisationTarget === 'subject' ? setSubject : setBody)(next);
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + marker.length, start + marker.length);
+    });
+  };
+  const previewText = (template: string) => template
+    .replace(/\{\{\s*firstName\s*\}\}/gi, previewNames.firstName)
+    .replace(/\{\{\s*displayName\s*\}\}/gi, previewNames.displayName)
+    .replace(/\{\{\s*role\s*\}\}/gi, previewNames.role);
   const [preview, setPreview] = useState<AdminEmailAudiencePreview | null>(null);
   const [campaigns, setCampaigns] = useState<AdminEmailCampaign[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -525,9 +546,11 @@ export default function AdminCommunications() {
           <label className="admin-mail-field">
             Subject
             <input
+              ref={subjectRef}
               value={subject}
               maxLength={180}
               onChange={(event) => setSubject(event.target.value)}
+              onFocus={() => setPersonalisationTarget('subject')}
               placeholder="Welcome to Nightjar 🌙"
               disabled={sendingCampaign}
             />
@@ -536,21 +559,42 @@ export default function AdminCommunications() {
           <label className="admin-mail-field">
             Message
             <textarea
+              ref={messageRef}
               value={body}
               maxLength={12000}
               rows={12}
               onChange={(event) => setBody(event.target.value)}
+              onFocus={() => setPersonalisationTarget('message')}
               placeholder="Write the message exactly as you want each recipient to receive it…"
               disabled={sendingCampaign}
             />
           </label>
 
-          <div className="admin-mail-token-row">
-            <span>Personalisation:</span>
-            <code>{'{{firstName}}'}</code>
-            <code>{'{{displayName}}'}</code>
-            <code>{'{{role}}'}</code>
-            <small>Optional. Nightjar resolves these separately for each delivery.</small>
+          <div className="admin-mail-personalisation-editor">
+            <div className="admin-mail-token-row">
+              <strong>Personalisation</strong>
+              <label>Insert into <select value={personalisationTarget} disabled={sendingCampaign} onChange={event=>setPersonalisationTarget(event.target.value as 'subject' | 'message')}>
+                <option value="message">Message</option><option value="subject">Subject</option>
+              </select></label>
+              {(['firstName','displayName','role'] as const).map(token=>
+                <button type="button" key={token} className="secondary-button" disabled={sendingCampaign} onClick={()=>insertPersonalisation(token)} aria-label={'Insert ' + token + ' into ' + personalisationTarget}>
+                  <span aria-hidden="true">+</span> {'{{' + token + '}}'}
+                </button>
+              )}
+            </div>
+            <small>Choose where to insert a field, then edit the wording in your subject or message as normal. Each field is replaced with that recipient's own Nightjar details when sent.</small>
+            <details className="admin-mail-personalisation-preview">
+              <summary>Preview personalised email · edit example details</summary>
+              <div className="admin-mail-example-fields">
+                {([['firstName','First name'],['displayName','Display name'],['role','Role']] as const).map(([key,label])=>
+                  <label key={key}>{label}<input value={previewNames[key]} onChange={event=>setPreviewNames(current=>({...current,[key]:event.target.value}))} maxLength={80}/></label>)}
+              </div>
+              <div className="admin-mail-personalisation-example">
+                <strong>{previewText(subject) || 'Your personalised subject appears here'}</strong>
+                <p>{previewText(body) || 'Your personalised message appears here'}</p>
+              </div>
+              <small>Preview-only example values. Editing these examples does not change any recipient's stored account details or the backend substitution rules.</small>
+            </details>
           </div>
 
           <div className="admin-mail-manual-test">

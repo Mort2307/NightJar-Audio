@@ -95,3 +95,26 @@ export const applyNightjarUpdate = async () => {
     window.location.replace(url.toString());
   }
 };
+
+
+/** Refresh the app in place while preserving the existing push/FCM service worker. */
+export const applyNightjarSafeUpdate = async () => {
+  const status = await checkNightjarUpdate();
+  if (!status.updateAvailable) return false;
+  if ('serviceWorker' in navigator) {
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    if (registration) {
+      try { await registration.update(); } catch { /* keep the existing registration */ }
+      try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch { /* optional */ }
+    }
+  }
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith('nightjar-')).map(key => caches.delete(key)));
+  }
+  try { window.sessionStorage.setItem('nightjar.update-applied.v1', new Date().toISOString()); } catch { /* optional */ }
+  const url = new URL(window.location.href);
+  url.searchParams.set('nightjar-refresh', String(Date.now()));
+  window.location.replace(url.toString());
+  return true;
+};
