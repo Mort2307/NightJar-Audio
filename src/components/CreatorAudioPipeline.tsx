@@ -209,6 +209,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       notify('That local date and time does not exist, possibly because clocks are changing. Choose another time.');
       return;
     }
+    if ([-90,-60,-30,30,60,90].some((offset) => formatLocal(new Date(parsed.getTime()+offset*60000))===input)) {
+      notify('That time occurs twice when the clocks change. Choose a different time so your release is unambiguous.');
+      return;
+    }
     setRelease({scheduledAt:parsed.toISOString(),scheduledLocal:input,scheduledTimeZone:scheduleZone});
   };
 
