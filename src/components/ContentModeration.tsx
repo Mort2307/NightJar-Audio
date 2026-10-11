@@ -10,9 +10,10 @@ type Props = {
   notify: (message: string) => void;
   demoMode?: boolean;
   onDeleted?: (releaseId: string) => void;
+  onMessageCreator?: (userId: string) => void;
 };
 
-export default function ContentModeration({ open, onClose, notify, demoMode = false, onDeleted }: Props) {
+export default function ContentModeration({ open, onClose, notify, demoMode = false, onDeleted, onMessageCreator }: Props) {
   const [queue, setQueue] = useState<any[]>([]);
   const [audioLibrary, setAudioLibrary] = useState<any[]>([]);
   const [auditMode, setAuditMode] = useState<'all' | 'pending'>('all');
@@ -83,14 +84,20 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
       notify('This release needs a reviewed final transcript before it can be published.');
       return;
     }
-    const note = decision === 'changes' ? (window.prompt('What should the creator change?') ?? '') : (window.prompt('Moderator note (optional)') ?? '');
+    const rawNote = window.prompt(decision === 'approved'
+      ? 'Optional note to the creator (also sent in their Nightjar Inbox):'
+      : 'Explain exactly why this release needs changes or was rejected (required):');
+    if (rawNote === null) return;
+    const note = rawNote.trim();
+    if (decision !== 'approved' && !note) { notify('Enter a reason before requesting changes or rejecting a release.'); return; }
+
     try {
       if (demoMode) {
         const dashboard = readDemo('creatorDashboard', demoCreatorDashboard);
-        const status = decision === 'approved' ? 'released' : decision === 'changes' ? 'draft' : 'rejected';
+        const status = decision === 'approved' ? selected.scheduledAt ? 'scheduled' : 'released' : decision === 'changes' ? 'draft' : 'rejected';
         const releases = dashboard.releases.map((release: any) => release.id === selected.id ? { ...release, status, moderationNote: note } : release);
         writeDemo('creatorDashboard', { ...dashboard, releases });
-        if (decision === 'approved') {
+        if (decision === 'approved' && !selected.scheduledAt) {
           const tracks = readDemo('tracks', demoTracks);
           writeDemo('tracks', [...tracks.filter((track: any) => track.id !== selected.id), {
             id: selected.id, title: selected.title, creator: selected.creatorName || 'Aria Vale',
@@ -109,7 +116,7 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
       await nightjarCatalogue.moderate(selected.id, decision, note, decision === 'approved' && nightjarOriginal);
       await load();
       setSelected(null);
-      notify(decision === 'approved' ? 'Release approved and published.' : decision === 'changes' ? 'Changes requested from the creator.' : 'Release rejected.');
+      notify(decision === 'approved' ? selected.scheduledAt ? 'Release approved and scheduled. It will remain private until publication.' : 'Release approved and published.' : decision === 'changes' ? 'Changes requested from the creator.' : 'Release rejected.');
     } catch { notify('Moderation decision could not be saved.'); }
   };
 
@@ -138,6 +145,7 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
 
   const visibleAudio = auditMode === 'pending' ? queue : audioLibrary;
   const formatted = (date:unknown) => date ? new Date(String(date)).toLocaleString('en-GB') : 'Date unavailable';
+  const formattedScheduled = (release:any) => release.scheduledAt ? new Intl.DateTimeFormat('en-GB',{dateStyle:'full',timeStyle:'short',timeZone:release.scheduledTimeZone || 'Europe/London'}).format(new Date(release.scheduledAt))+' ('+(release.scheduledTimeZone || 'Europe/London')+')' : 'As soon as approved';
   if (!open) return null;
   return <div className="admin-panel-modal" role="dialog" aria-modal="true">
     <section className="moderation-modal">
@@ -151,8 +159,8 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
       {libraryTruncated && <p className="nj-audio-review-help">Showing the most recent matches from the first 1,000 release records. Additional records may require a more specific audit.</p>}
       {loadError && <p role="alert" className="nj-audio-review-error">{loadError}</p>}
       <div className="moderation-layout">
-        <aside className="moderation-queue">{loading ? <div className="people-empty">Loading live audio records…</div> : visibleAudio.length ? visibleAudio.map((release) => <button key={release.id} className={selected?.id === release.id ? 'moderation-item active' : 'moderation-item'} onClick={() => setSelected(release)}><FileAudio size={16} /><span><strong>{release.title || 'Untitled release'}</strong><small>{release.creatorName || 'Creator'} · {release.category || 'Audio'}</small><small className={release.status === 'pending_review' ? 'nj-audio-review-queue-status pending' : 'nj-audio-review-queue-status'}>{release.status === 'pending_review' ? 'AWAITING MODERATION' : release.status === 'draft' ? 'DRAFT · AUDIO ATTACHED' : String(release.status ?? 'Unknown').replaceAll('_',' ').toUpperCase()}</small></span></button>) : <div className="people-empty"><Check size={18}/><strong>{auditMode === 'pending' ? 'No releases awaiting moderation' : 'No attached audio records found'}</strong><span>{auditMode === 'pending' ? 'Audio attached to a private draft will be listed under All attached audio.' : 'Check that a creator completed Firebase audio verification, then refresh.'}</span></div>}</aside>
-        <article className="moderation-preview">{selected ? <><div className="moderation-preview-head"><div><span className="mini-label">{selected.category || 'AUDIO'}</span><h3>{selected.title}</h3><p>By {selected.creatorName || 'Nightjar creator'} · {selected.creatorHandle ? '@' + selected.creatorHandle.replace(/^@/, '') : 'handle not set'}</p></div>{previewLoading && <p role="status">Opening signed, private Nightjar audio preview…</p>}{previewError && <p role="alert" className="nj-audio-review-error">{previewError}</p>}{previewUrl && <audio key={selected.id} className="moderation-audio" controls src={previewUrl} preload="none" />}{!selected.audioAvailable && <p>No verified audio is attached to this release.</p>}</div><div className="moderation-copy"><div className={selected.status === 'pending_review' ? 'nj-audio-review-state pending' : 'nj-audio-review-state'}><strong>{selected.status === 'pending_review' ? 'Submitted · ready for moderation review' : selected.status === 'draft' ? 'Private draft · NOT submitted for moderation' : selected.status === 'released' ? 'Approved · live in Nightjar catalogue' : 'Not currently awaiting moderation'}</strong><span>Updated: {formatted(selected.updatedAt)}{selected.submittedAt ? ' · Submitted: ' + formatted(selected.submittedAt) : ''}{selected.audioByteSize ? ' · Audio ' + (selected.audioByteSize / (1024 * 1024)).toFixed(2) + ' MB' : ''}</span></div><p>{selected.description || 'No description.'}</p>{selected.productionNote && <p><strong>Behind the scenes:</strong> {selected.productionNote}</p>}
+        <aside className="moderation-queue">{loading ? <div className="people-empty">Loading live audio records…</div> : visibleAudio.length ? visibleAudio.map((release) => <button key={release.id} className={selected?.id === release.id ? 'moderation-item active' : 'moderation-item'} onClick={() => setSelected(release)}><FileAudio size={16} /><span><strong>{release.title || 'Untitled release'}</strong><small>{release.creatorName || 'Creator'} · {release.category || 'Audio'}</small><small className={release.status === 'pending_review' ? 'nj-audio-review-queue-status pending' : 'nj-audio-review-queue-status'}>{release.status === 'scheduled' ? 'APPROVED · AWAITING RELEASE TIME' : release.status === 'pending_review' ? 'AWAITING MODERATION' : release.status === 'draft' ? 'DRAFT · AUDIO ATTACHED' : String(release.status ?? 'Unknown').replaceAll('_',' ').toUpperCase()}</small></span></button>) : <div className="people-empty"><Check size={18}/><strong>{auditMode === 'pending' ? 'No releases awaiting moderation' : 'No attached audio records found'}</strong><span>{auditMode === 'pending' ? 'Audio attached to a private draft will be listed under All attached audio.' : 'Check that a creator completed Firebase audio verification, then refresh.'}</span></div>}</aside>
+        <article className="moderation-preview">{selected ? <><div className="moderation-preview-head"><div><span className="mini-label">{selected.category || 'AUDIO'}</span><h3>{selected.title}</h3><p>By {selected.creatorName || 'Nightjar creator'} · {selected.creatorHandle ? '@' + selected.creatorHandle.replace(/^@/, '') : 'handle not set'}</p></div>{previewLoading && <p role="status">Opening signed, private Nightjar audio preview…</p>}{previewError && <p role="alert" className="nj-audio-review-error">{previewError}</p>}{previewUrl && <audio key={selected.id} className="moderation-audio" controls src={previewUrl} preload="none" />}{!selected.audioAvailable && <p>No verified audio is attached to this release.</p>}</div><div className="moderation-copy"><div className={selected.status === 'pending_review' ? 'nj-audio-review-state pending' : 'nj-audio-review-state'}><strong>{selected.status === 'pending_review' ? 'Submitted · ready for moderation review' : selected.status === 'draft' ? 'Private draft · NOT submitted for moderation' : selected.status === 'released' ? 'Approved · live in Nightjar catalogue' : 'Not currently awaiting moderation'}</strong><span>Updated: {formatted(selected.updatedAt)}{selected.submittedAt ? ' · Submitted: ' + formatted(selected.submittedAt) : ''}{selected.audioByteSize ? ' · Audio ' + (selected.audioByteSize / (1024 * 1024)).toFixed(2) + ' MB' : ''}</span></div><p>{selected.description || 'No description.'}</p><div className="nj-admin-release-plan"><strong>Creator publication preference</strong><span>{formattedScheduled(selected)}</span><small>{selected.scheduledAt ? 'Approval now will schedule publication, not make the recording public.' : 'Approval will publish immediately.'}</small></div>{selected.productionNote && <p><strong>Behind the scenes:</strong> {selected.productionNote}</p>}
           <section className="moderation-transcript-review">
             <div className="moderation-transcript-head">
               <div><span className="mini-label">ACCESSIBILITY TRANSCRIPT</span><strong><BookOpenText size={15}/> Final-release text alternative</strong></div>
@@ -166,6 +174,11 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
             <small>{selected.transcriptLanguage || 'en'} · {Math.max(0, Number(selected.transcriptWordCount ?? 0)).toLocaleString('en-GB')} words</small>
           </section>
           <div className="moderation-tags">{[...(selected.tags || []), ...(selected.tropes || [])].map((tag:string) => <span key={tag}>{tag}</span>)}</div>{!!selected.contributors?.length && <div className="moderation-credit-list">{selected.contributors.map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}{selected.status === 'pending_review' && <label className="rights-check moderation-original-check"><input type="checkbox" checked={nightjarOriginal} onChange={(e)=>setNightjarOriginal(e.target.checked)}/> Designate as a Nightjar Original on approval</label>}</div>{selected.status === 'pending_review' ? <div className="moderation-actions"><button className="secondary-button" onClick={() => void decide('changes')}><MessageSquare size={14} /> Request changes</button><button className="ghost-button" onClick={() => void decide('rejected')}><X size={14} /> Reject</button><button className="primary-button" disabled={!demoMode && (!String(selected.transcriptText ?? '').trim() || selected.transcriptAccessibilityReviewed !== true)} onClick={() => void decide('approved')}><Check size={14} /> Approve & publish</button></div> : <p className="nj-audio-review-help">Listening is for administrator quality checks only. Moderation decisions unlock after the creator submits the completed release.</p>}
+        <div className="nj-admin-creator-contact">
+          <strong>Discuss this submission with the creator</strong>
+          <p>Approval and rejection notes are also sent to the creator's Nightjar Inbox. You can open a direct conversation at any time.</p>
+          <button type="button" className="secondary-button" disabled={!selected.creatorUserId} onClick={() => selected.creatorUserId && onMessageCreator?.(String(selected.creatorUserId))}>Message creator in Nightjar</button>
+        </div>
         <div className="nj-admin-recording-removal"><p>Administrator control · remove a test upload, submitted work or published recording.</p><button type="button" className="ghost-button nj-work-remove-button" disabled={removing} onClick={() => void removeSelected()}>{removing ? 'Removing recording…' : 'Remove recording permanently'}</button></div></> : <div className="people-empty"><Eye size={19} /><strong>Select a release.</strong><span>Moderation shows the actual audio and metadata together.</span></div>}</article>
       </div>
     </section>
