@@ -4057,6 +4057,7 @@ const accessibilityPreferencesPayload = (data: Record<string, any>) => ({
   transcriptFollowPlayback: data.transcriptFollowPlayback !== false,
   transcriptTextSize: cleanTranscriptTextSize(data.transcriptTextSize),
   transcriptHighContrast: data.transcriptHighContrast === true,
+  theme: ['nocturne','aubergine','midnight','ember','obsidian'].includes(String(data.theme)) ? String(data.theme) : 'nocturne',
 });
 
 export const getAccessibilityPreferences = onCall({ region: REGION }, async (request) => {
