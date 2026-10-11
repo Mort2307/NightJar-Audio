@@ -1,6 +1,6 @@
 import { Brush, Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, ShieldCheck, FileText, type LucideIcon } from 'lucide-react';
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
 type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | null;
 
 type Props = {
@@ -23,7 +23,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
       ? { view: 'writer', label: 'Write', icon: FileText }
       : role === 'editor'
         ? { view: 'editor', label: 'Editor', accessibleLabel: 'Editor Studio', icon: FileText }
-        : { view: 'profile', label: 'Artist', icon: Brush };
+        : { view: 'artist', label: 'Artist', accessibleLabel: 'Artist Studio', icon: Brush };
 
   const settings: Item = { view: 'settings', label: 'Settings', icon: Settings2 };
   const search: Item = { label: 'Search', icon: Search, search: true };
