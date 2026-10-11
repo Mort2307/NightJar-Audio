@@ -1114,7 +1114,12 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const accountData = accountSnapshot.data() ?? {};
   const approvedRoles = professionalRolesForAccount(accountData);
   const requestedProfileRole = cleanText(input.profileRole, 30);
-  const fallbackProfileRole = cleanText(accountData.role, 30) || 'listener';
+  const assignedRole = cleanText(accountData.role, 30) || 'listener';
+  // Pending or historic accounts can have a professional primary role before
+  // that role is actually approved. They must still be able to edit Listener.
+  const fallbackProfileRole = identity.admin || assignedRole === 'listener' || approvedRoles.includes(assignedRole as AccountRole)
+    ? assignedRole
+    : 'listener';
   const profileRole = identity.admin ? 'admin' : (requestedProfileRole || fallbackProfileRole);
   if (!identity.admin && profileRole !== 'listener' && !approvedRoles.includes(profileRole as AccountRole)) {
     throw new HttpsError('permission-denied', 'That professional profile role has not been approved for this account.');
