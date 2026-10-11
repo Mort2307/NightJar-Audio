@@ -9,9 +9,10 @@ type Props = {
   notify: (message: string) => void;
   demoMode?: boolean;
   simulationMode?: boolean;
+  onDiscoverCreators?: () => void;
 };
 
-export default function ListenerLibrary({ onPlayRelease, notify, demoMode = false, simulationMode = false }: Props) {
+export default function ListenerLibrary({ onPlayRelease, notify, demoMode = false, simulationMode = false, onDiscoverCreators }: Props) {
   const [library, setLibrary] = useState<any>({ history: [], continueListening: [], favourites: [], playlists: [] });
   const [tab, setTab] = useState<'continue' | 'history' | 'favourites' | 'playlists'>('continue');
   const [loading, setLoading] = useState(true);
@@ -161,7 +162,7 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
 
   return <section className="listener-library-shell">
     <div className="page-heading">
-      <div><p className="eyebrow"><Bookmark size={14}/> YOUR LIBRARY</p><h1>Your listening, under your control.</h1><p>Continue where you left off, remove things you no longer care about, keep favourites separate and build your own playlists.</p></div>
+      <div><p className="eyebrow"><Bookmark size={14}/> YOUR LIBRARY</p><h1>Your listening, under your control.</h1><p>Continue where you left off, remove things you no longer care about, keep favourites separate and build your own playlists.</p>{onDiscoverCreators&&<button type="button" className="secondary-button" onClick={onDiscoverCreators}><Heart size={15}/> Discover creators and their work</button>}</div>
     </div>
 
     <div className="library-tabs">
