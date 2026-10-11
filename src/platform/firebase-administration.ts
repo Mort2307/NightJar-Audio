@@ -150,6 +150,7 @@ const sendEmailCampaignCall = httpsCallable<{
   clientRequestId: string;
   confirmPrivateIndividualDelivery: boolean;
   selectedUserIds?: string[];
+  selectedRecipientEmails?: string[];
   personalisationOverrides?: Partial<Record<'firstName' | 'displayName' | 'role', string>>;
 }, { campaign: AdminEmailCampaign; duplicateRequest: boolean }>(functions, 'adminSendEmailCampaign');
 const retryEmailCampaignCall = httpsCallable<{ campaignId: string }, {
@@ -250,6 +251,7 @@ export const nightjarAdministration = {
     clientRequestId: string;
     confirmPrivateIndividualDelivery: boolean;
     selectedUserIds?: string[];
+    selectedRecipientEmails?: string[];
     personalisationOverrides?: Partial<Record<'firstName' | 'displayName' | 'role', string>>;
   }) {
     return (await sendEmailCampaignCall(input)).data;

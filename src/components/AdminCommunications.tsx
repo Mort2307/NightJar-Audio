@@ -74,6 +74,10 @@ export default function AdminCommunications() {
     .replace(/\{\{\s*displayName\s*\}\}/gi, personalisationOverrides.displayName.trim() || previewNames.displayName)
     .replace(/\{\{\s*role\s*\}\}/gi, personalisationOverrides.role.trim() || previewNames.role);
   const [preview, setPreview] = useState<AdminEmailAudiencePreview | null>(null);
+  const previewRequestId = useRef(0);
+  const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
+  const [recipientQuery, setRecipientQuery] = useState('');
+  const [visibleRecipientLimit, setVisibleRecipientLimit] = useState(60);
   const [campaigns, setCampaigns] = useState<AdminEmailCampaign[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
@@ -120,17 +124,52 @@ export default function AdminCommunications() {
     [parsedManualTestEmails],
   );
 
-  const refreshPreview = async (nextAudience = audience, ids = selectedMemberIds) => {
+  const refreshPreview = async (nextAudience = audience, ids = selectedMemberIds, resetSelection = false) => {
+    const requestId = ++previewRequestId.current;
     setLoadingPreview(true);
+    setConfirmed(false);
     try {
-      setPreview(await nightjarAdministration.emailAudiencePreview(nextAudience, ids));
+      const next = await nightjarAdministration.emailAudiencePreview(nextAudience, ids);
+      if (requestId !== previewRequestId.current) return;
+      const availableEmails = next.recipients.map(recipient => recipient.email.toLowerCase());
+      const eligible = new Set(availableEmails);
+      setPreview(next);
+      // First load includes everyone. Refresh preserves intentional skips and
+      // does not silently add new people to an existing selection.
+      setSelectedRecipientEmails(current => resetSelection
+        ? availableEmails
+        : current.filter(email => eligible.has(email)));
     } catch (error) {
+      if (requestId !== previewRequestId.current) return;
       setPreview(null);
+      setSelectedRecipientEmails([]);
       setNotice({ kind: 'error', text: cleanError(error) });
     } finally {
-      setLoadingPreview(false);
+      if (requestId === previewRequestId.current) setLoadingPreview(false);
     }
   };
+
+  const toggleRecipient = (email: string) => {
+    setSelectedRecipientEmails(current => current.includes(email)
+      ? current.filter(value => value !== email)
+      : [...current, email]);
+    setConfirmed(false);
+  };
+
+  const setAllRecipients = (send: boolean) => {
+    setSelectedRecipientEmails(send ? (preview?.recipients ?? []).map(recipient => recipient.email) : []);
+    setConfirmed(false);
+  };
+
+  const audienceRecipients = preview?.recipients ?? [];
+  const selectedEmailSet = new Set(selectedRecipientEmails);
+  const selectedCount = audienceRecipients.filter(recipient => selectedEmailSet.has(recipient.email)).length;
+  const matchedRecipients = audienceRecipients.filter(recipient => {
+    const query = recipientQuery.trim().toLowerCase();
+    return !query || [recipient.displayName, recipient.email, recipient.roleLabel].join(' ').toLowerCase().includes(query);
+  });
+  const recipientPreviewIncomplete = preview?.recipientPreviewTruncated === true;
+  const selectedOverLimit = selectedCount > (preview?.sendLimit ?? 250);
 
   const refreshGmailStatus = async () => {
     setGmailStatusLoading(true);
@@ -213,16 +252,21 @@ export default function AdminCommunications() {
   };
 
   useEffect(() => {
-    if (audience !== 'selected_members') void refreshPreview(audience);
+    previewRequestId.current += 1;
+    setPreview(null);
+    setSelectedRecipientEmails([]);
+    setRecipientQuery('');
+    setVisibleRecipientLimit(60);
+    setConfirmed(false);
+    if (audience !== 'selected_members') void refreshPreview(audience, [], true);
     else {
-      setPreview(null);
+      setLoadingPreview(false);
       setLoadingMembers(true);
       void nightjarAdministration.overview().then(data=>{
         setMemberAccounts((data.people?.accounts??[]).filter((person:any)=>person.userId && person.email && person.status==='active' && person.role!=='admin'));
       }).catch(error=>setNotice({kind:'error',text:cleanError(error)}))
         .finally(()=>setLoadingMembers(false));
     }
-    setConfirmed(false);
   }, [audience]);
 
   useEffect(() => {
@@ -309,7 +353,8 @@ export default function AdminCommunications() {
   };
 
   const sendCampaign = async () => {
-    if (!subject.trim() || !body.trim() || !confirmed || !preview?.recipientCount || preview.overSendLimit
+    if (!subject.trim() || !body.trim() || !confirmed || !preview || !selectedCount || selectedOverLimit
+        || loadingPreview || recipientPreviewIncomplete
         || (audience==='selected_members' && preview.recipientCount!==selectedMemberIds.length)) return;
     setSendingCampaign(true);
     setNotice(null);
@@ -321,6 +366,7 @@ export default function AdminCommunications() {
         category,
         personalisationOverrides,
         ...(audience==='selected_members' ? {selectedUserIds:selectedMemberIds} : {}),
+        selectedRecipientEmails: preview.recipients.filter(recipient=>selectedEmailSet.has(recipient.email)).map(recipient=>recipient.email),
         clientRequestId: crypto.randomUUID(),
         confirmPrivateIndividualDelivery: true,
       });
@@ -367,8 +413,11 @@ export default function AdminCommunications() {
     || !subject.trim()
     || !body.trim()
     || !confirmed
-    || !preview?.recipientCount
-    || preview.overSendLimit
+    || !preview
+    || !selectedCount
+    || selectedOverLimit
+    || recipientPreviewIncomplete
+    || loadingPreview
     || (audience==='selected_members' && preview.recipientCount!==selectedMemberIds.length)
     || sendingCampaign;
 
@@ -534,7 +583,7 @@ export default function AdminCommunications() {
             </div>
             <div className="nj-mail-member-review">
               <button type="button" className="secondary-button" disabled={!selectedMemberIds.length || loadingPreview || sendingCampaign}
-                onClick={()=>{setConfirmed(false);void refreshPreview('selected_members',selectedMemberIds);}}>
+                onClick={()=>{setConfirmed(false);void refreshPreview('selected_members',selectedMemberIds,true);}}>
                 <ShieldCheck size={14}/>{loadingPreview?'Reviewing…':'Review exact recipients'}
               </button>
               {!!selectedMemberIds.length&&<button type="button" className="ghost-button" onClick={()=>{setSelectedMemberIds([]);setPreview(null);setConfirmed(false);}}>Clear selection</button>}
@@ -705,7 +754,7 @@ export default function AdminCommunications() {
             />
             <label htmlFor="admin-mail-private-confirm">
               <strong>I confirm this should send as separate private emails.</strong>
-              <span>No recipient will be placed in another recipient's To, CC or BCC fields.</span>
+              <span>No recipient will be placed in another recipient's To, CC or BCC fields. Only the {selectedCount} recipients marked Send above will receive this campaign.</span>
             </label>
           </div>
 
@@ -716,46 +765,72 @@ export default function AdminCommunications() {
               onClick={() => void sendCampaign()}
               disabled={sendDisabled}
             >
-              <Send size={15} /> {sendingCampaign ? 'Sending private emails…' : `Send ${preview?.recipientCount ?? 0} separate live emails`}
+              <Send size={15} /> {sendingCampaign ? 'Sending private emails…' : `Send ${selectedCount} separate live emails`}
             </button>
           </div>
         </div>
 
         <aside className="admin-mail-audience">
           <div className="admin-mail-audience-title">
-            <div><span className="mini-label">LIVE AUDIENCE</span><h3>{preview?.audienceLabel ?? selectedAudience.label}</h3></div>
-            <button className="icon-button" type="button" onClick={() => void refreshPreview()} disabled={loadingPreview} aria-label="Refresh email audience">
+            <div><span className="mini-label">LIVE AUDIENCE · WHO GETS EMAIL</span><h3>{preview?.audienceLabel ?? selectedAudience.label}</h3></div>
+            <button className="icon-button" type="button" onClick={() => void refreshPreview()} disabled={loadingPreview || sendingCampaign} aria-label="Refresh audience while preserving existing selections">
               <RefreshCw size={16} />
             </button>
           </div>
 
-          <div className="admin-mail-recipient-count">
+          <div className="admin-mail-recipient-count" aria-live="polite">
             <Users size={18} />
-            <strong>{loadingPreview ? '…' : preview?.recipientCount ?? 0}</strong>
-            <span>private deliveries</span>
+            <strong>{loadingPreview && !preview ? '…' : selectedCount}</strong>
+            <span>set to Send · {preview?.recipientCount ?? 0} available</span>
           </div>
+          <p className="admin-mail-recipient-instructions">Use <strong>Send / Skip</strong> to choose who receives this campaign. Skipped people receive nothing, and every change requires reconfirming before sending.</p>
+          <div className="admin-mail-recipient-tools">
+            <button type="button" className="secondary-button" disabled={!preview || loadingPreview || sendingCampaign || selectedCount===audienceRecipients.length} onClick={()=>setAllRecipients(true)}>Select all</button>
+            <button type="button" className="ghost-button" disabled={!preview || loadingPreview || sendingCampaign || selectedCount===0} onClick={()=>setAllRecipients(false)}>Deselect all</button>
+          </div>
+          {preview && audienceRecipients.length>0 && <label className="admin-mail-recipient-search">
+            <span>Find recipient</span>
+            <input type="search" placeholder="Search name, email or role" value={recipientQuery}
+              onChange={event=>{setRecipientQuery(event.target.value);setVisibleRecipientLimit(60);}}
+              disabled={sendingCampaign} aria-label="Filter live email recipients" />
+          </label>}
 
-          {preview?.overSendLimit && (
-            <div className="admin-mail-limit-warning">
-              <AlertTriangle size={16} />
-              <span>This audience exceeds the current {preview.sendLimit}-message Gmail API safety limit. Nothing will send until the audience is reduced or the delivery layer is scaled.</span>
-            </div>
-          )}
+          {selectedOverLimit && <div className="admin-mail-limit-warning" role="alert">
+            <AlertTriangle size={16}/>
+            <span>{selectedCount} selected exceeds Nightjar's {preview?.sendLimit ?? 250}-email campaign limit. Deselect recipients before sending.</span>
+          </div>}
+          {recipientPreviewIncomplete && <div className="admin-mail-limit-warning" role="alert">
+            <AlertTriangle size={16}/>
+            <span>This preview could not show every recipient. Narrow the audience or refresh before sending. Nightjar never sends to unreviewed people.</span>
+          </div>}
+          {preview && selectedCount===0 && <p className="admin-mail-recipient-instructions">Everyone is currently set to Skip. Select at least one person to enable Send.</p>}
 
           <div className="admin-mail-recipient-list">
-            {(preview?.recipients ?? []).slice(0, 12).map((recipient) => (
-              <div key={recipient.email} className="admin-mail-recipient">
-                <span>{recipient.displayName.slice(0, 1).toUpperCase()}</span>
-                <div><strong>{recipient.displayName}</strong><small>{recipient.email} · {recipient.roleLabel}</small></div>
-              </div>
-            ))}
-            {!loadingPreview && !preview?.recipientCount && (
-              <div className="people-empty"><Mail size={17} /><strong>No deliverable recipients yet</strong><span>Nightjar will not send an empty campaign.</span></div>
-            )}
-            {(preview?.recipientCount ?? 0) > 12 && (
-              <small className="admin-mail-more">+{(preview?.recipientCount ?? 0) - 12} more recipients resolved privately by the backend.</small>
-            )}
+            {matchedRecipients.slice(0,visibleRecipientLimit).map(recipient=>{
+              const selected = selectedEmailSet.has(recipient.email);
+              return <div key={recipient.email} className={selected ? 'admin-mail-recipient included' : 'admin-mail-recipient excluded'}>
+                <span className="admin-mail-recipient-avatar">{recipient.displayName.slice(0,1).toUpperCase()}</span>
+                <div className="admin-mail-recipient-details"><strong>{recipient.displayName}</strong><small>{recipient.email} · {recipient.roleLabel}</small></div>
+                <button type="button" role="switch" aria-checked={selected}
+                  aria-label={`Send this campaign to ${recipient.displayName} (${recipient.email})`}
+                  className={selected ? 'admin-mail-send-toggle selected' : 'admin-mail-send-toggle'}
+                  disabled={loadingPreview || sendingCampaign}
+                  onClick={()=>toggleRecipient(recipient.email)}>
+                  {selected ? <><Send size={13} aria-hidden="true"/> Send</> : 'Skip'}
+                </button>
+              </div>;
+            })}
+            {!loadingPreview && !preview?.recipientCount && <div className="people-empty"><Mail size={17}/><strong>No deliverable recipients yet</strong><span>Nightjar will not send an empty campaign.</span></div>}
+            {preview && recipientQuery && matchedRecipients.length===0 && <small className="admin-mail-more">No matching people.</small>}
           </div>
+          {matchedRecipients.length>visibleRecipientLimit && <button type="button" className="secondary-button admin-mail-show-more"
+              disabled={sendingCampaign} onClick={()=>setVisibleRecipientLimit(current=>current+60)}>
+              Show more ({matchedRecipients.length-visibleRecipientLimit} remaining)
+            </button>}
+          {preview && <small className="admin-mail-audience-summary">
+            {selectedCount} receiving · {audienceRecipients.length-selectedCount} skipped.
+            {loadingPreview ? ' Refreshing…' : ' Only the selected people will receive this campaign.'}
+          </small>}
         </aside>
       </div>
 

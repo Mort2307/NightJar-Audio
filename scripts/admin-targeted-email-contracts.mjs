@@ -22,4 +22,19 @@ assert.match(mail,/Review exact recipients/,'manual review is required before a 
 assert.match(mail,/preview.recipientCount!==selectedMemberIds.length/,'recipient count mismatch prevents send');
 assert.match(client,/selectedUserIds\?: string\[\]/,'selected IDs propagate from client to audited sender');
 assert.match(p,/admin-targeted-email-contracts\.mjs/,'targeted email tests are included in the full validation command');
+// The live audience sidebar can only select eligible recipients resolved again on the server.
+assert.match(backend, /const filterAdminEmailRecipients = \(available:/, 'server-side audience filter must exist');
+assert.match(backend, /const eligible = new Map\(available\.map\(/, 'submitted emails cannot introduce arbitrary recipients');
+assert.match(backend, /eligible\.get\(email\)/, 'every selection must resolve to an eligible account or tester');
+assert.match(backend, /new Set\(selected\)\.size !== selected\.length/, 'duplicate recipient selection is rejected');
+assert.match(backend, /const recipients = filterAdminEmailRecipients\(availableRecipients, selectedRecipientEmails\)/, 'live campaign uses exact verified selected subset');
+assert.match(backend, /recipients: recipients\.slice\(0, MAX_EMAIL_AUDIENCE_PREVIEW\)/, 'audience preview exposes all selectable entries up to safe bound');
+assert.match(mail, /role="switch" aria-checked=\{selected\}/, 'each recipient has an accessible Send/Skip switch');
+assert.match(mail, /setAllRecipients\(true\)/, 'select-all control exists');
+assert.match(mail, /setAllRecipients\(false\)/, 'deselect-all control exists');
+assert.match(mail, /setConfirmed\(false\)/, 'changing selections must invalidate prior delivery confirmation');
+assert.match(mail, /selectedRecipientEmails: preview\.recipients\.filter\(/, 'UI sends exactly toggled recipients');
+assert.match(mail, /recipientPreviewIncomplete/, 'truncated previews cannot be sent');
+assert.match(client, /selectedRecipientEmails\?: string\[\]/, 'selected recipient list is passed via callable');
+console.log('Nightjar live audience Send/Skip selection contracts passed.');
 console.log('Nightjar selected-member private email delivery contracts passed.');

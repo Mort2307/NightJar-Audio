@@ -9052,6 +9052,9 @@ const EMAIL_CATEGORIES = new Set<AdminEmailCategory>([
 ]);
 
 const MAX_EMAIL_CAMPAIGN_RECIPIENTS = 250;
+// Include every resolved candidate in the Owner's interactive selection list.
+// Existing account and allowlist reads cap each source at 2,000.
+const MAX_EMAIL_AUDIENCE_PREVIEW = 4000;
 
 const adminEmailAudienceLabel = (audience: AdminEmailAudience) => ({
   all_professionals: 'All professional creators',
@@ -9168,6 +9171,38 @@ const resolveAdminEmailAudience = async (audience: AdminEmailAudience): Promise<
     a.displayName.localeCompare(b.displayName, 'en-GB', { sensitivity: 'base' })
     || a.email.localeCompare(b.email)
   );
+};
+
+/**
+ * The final recipient list is ALWAYS derived from the selected audience on
+ * the server. Client-supplied addresses can only select existing, eligible
+ * audience members; they can never add an arbitrary recipient.
+ * Passing no selection preserves legacy campaign behaviour.
+ */
+const filterAdminEmailRecipients = (available: AdminEmailRecipient[], rawSelection: unknown) => {
+  if (rawSelection === undefined) return available;
+  if (!Array.isArray(rawSelection) || !rawSelection.length || rawSelection.length > MAX_EMAIL_CAMPAIGN_RECIPIENTS) {
+    throw new HttpsError('invalid-argument', 'Choose between 1 and 250 recipients using the live audience switches.');
+  }
+  const selected = rawSelection.map(value => {
+    if (typeof value !== 'string' || value.length > 320) {
+      throw new HttpsError('invalid-argument', 'Recipient selection contains an invalid email address.');
+    }
+    const email = cleanEmail(value);
+    if (!validEmailAddress(email)) {
+      throw new HttpsError('invalid-argument', 'Recipient selection contains an invalid email address.');
+    }
+    return email;
+  });
+  if (new Set(selected).size !== selected.length) {
+    throw new HttpsError('invalid-argument', 'Recipient selection must not contain duplicates.');
+  }
+  const eligible = new Map(available.map(recipient => [recipient.email, recipient]));
+  const resolved = selected.map(email => eligible.get(email));
+  if (resolved.some(recipient => !recipient)) {
+    throw new HttpsError('failed-precondition', 'Your audience changed since preview. Refresh the list and review recipients before sending.');
+  }
+  return resolved as AdminEmailRecipient[];
 };
 
 const escapeEmailHtml = (value: string) => value
@@ -9954,13 +9989,13 @@ export const adminEmailAudiencePreview = onCall({ region: REGION }, async (reque
     recipientCount: recipients.length,
     sendLimit: MAX_EMAIL_CAMPAIGN_RECIPIENTS,
     overSendLimit: recipients.length > MAX_EMAIL_CAMPAIGN_RECIPIENTS,
-    recipients: recipients.slice(0, 100).map((recipient) => ({
+    recipients: recipients.slice(0, MAX_EMAIL_AUDIENCE_PREVIEW).map((recipient) => ({
       email: recipient.email,
       displayName: recipient.displayName,
       roleLabel: recipient.roleLabel,
       source: recipient.source,
     })),
-    recipientPreviewTruncated: recipients.length > 100,
+    recipientPreviewTruncated: recipients.length > MAX_EMAIL_AUDIENCE_PREVIEW,
   };
 });
 
@@ -10089,6 +10124,7 @@ export const adminSendEmailCampaign = onCall({
   const personalisationOverrides = parseEmailPersonalisationOverrides(input.personalisationOverrides);
   const audience = cleanText(input.audience, 40) as AdminEmailAudience;
   const selectedUserIds = input.selectedUserIds;
+  const selectedRecipientEmails = input.selectedRecipientEmails;
   const category = cleanText(input.category, 40) as AdminEmailCategory;
   const clientRequestId = cleanText(input.clientRequestId, 120);
   const confirmed = input.confirmPrivateIndividualDelivery === true;
@@ -10115,10 +10151,11 @@ export const adminSendEmailCampaign = onCall({
     return { campaign: publicCampaignSummary(campaignId, existingCampaign.data() ?? {}), duplicateRequest: true };
   }
 
-  const recipients = audience === 'selected_members'
+  const availableRecipients = audience === 'selected_members'
     ? await resolveSelectedMemberEmails(selectedUserIds)
     : await resolveAdminEmailAudience(audience);
-  if (!recipients.length) throw new HttpsError('failed-precondition', 'That audience currently has no deliverable email addresses.');
+  const recipients = filterAdminEmailRecipients(availableRecipients, selectedRecipientEmails);
+  if (!recipients.length) throw new HttpsError('failed-precondition', 'Select at least one live audience recipient before sending.');
   if (recipients.length > MAX_EMAIL_CAMPAIGN_RECIPIENTS) {
     throw new HttpsError(
       'resource-exhausted',
@@ -10135,6 +10172,7 @@ export const adminSendEmailCampaign = onCall({
     audience,
     audienceLabel: adminEmailAudienceLabel(audience),
     ...(audience === 'selected_members' ? { selectedUserIds: recipients.map(item=>item.userId) } : {}),
+    selectedRecipientEmails: recipients.map(item => item.email),
     status: 'sending',
     recipientCount: recipients.length,
     sentCount: 0,
