@@ -42,7 +42,7 @@ type Props = {
   filteredProfiles: LibraryProfile[];
   category: LibraryCategory;
   onCategoryChange: (category: LibraryCategory) => void;
-  onOpen: (userId: string) => void;
+  onOpen: (userId: string, role: ProfileRole) => void;
   onFollow: (userId: string) => void | Promise<void>;
   followingIds: string[];
   onRecommend: (person: LibraryProfile) => void | Promise<void>;
@@ -66,7 +66,7 @@ function PersonCard({
   person, category, readOnly, followingIds, canMessage, onOpen, onFollow, onRecommend, onMessage,
 }: {
   person:LibraryProfile;category:ProfileRole;readOnly:boolean;followingIds:string[];canMessage:boolean;
-  onOpen:(id:string)=>void;onFollow:(id:string)=>void|Promise<void>;
+  onOpen:(id:string,role:ProfileRole)=>void;onFollow:(id:string)=>void|Promise<void>;
   onRecommend:(profile:LibraryProfile)=>void|Promise<void>;onMessage:(id:string)=>void;
 }) {
   const slice=person.roleProfiles?.[category] ?? {};
@@ -104,7 +104,7 @@ function PersonCard({
     {!!person.activityBadges?.length&&<div className="nj-pro-library-verification"><ShieldCheck size={12}/>{person.activityBadges[0].label}</div>}
     <div className="nj-pro-library-meta"><span>{metric}</span><span>{available || 'View professional profile'}</span></div>
     <div className="nj-pro-library-actions">
-      <button data-nj-preview-safe="true" className="primary-button" type="button" onClick={()=>onOpen(person.userId)}>
+      <button data-nj-preview-safe="true" className="primary-button" type="button" onClick={()=>onOpen(person.userId,category)}>
         View {roleName[category]} profile <ArrowRight size={14}/>
       </button>
       {!readOnly&&<button className="secondary-button" type="button" aria-label={followingIds.includes(person.userId)?'Unfollow '+person.name:'Follow '+person.name}
