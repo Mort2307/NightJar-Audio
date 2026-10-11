@@ -42,3 +42,9 @@
 .nj-calendar-form small {display:flex;align-items:flex-start;gap:6px;font-size:11px;color:var(--muted);line-height:1.5;}
 @media(max-width:840px){.nj-calendar-main {grid-template-columns:1fr;} .nj-personal-calendar {padding-left:12px;padding-right:12px;}}
 @media(max-width:460px){.nj-calendar-month {padding:10px!important;}.nj-calendar-grid {gap:3px;} .nj-calendar-day,.nj-calendar-empty {min-height:65px;border-radius:7px;padding:5px 3px;}.nj-calendar-day small,.nj-calendar-day em {font-size:8px;}.nj-calendar-day > span:first-child {font-size:11px;}.nj-calendar-day.today > span:first-child {width:22px;height:22px;}.nj-calendar-hero h1 {font-size:2rem;}}
+
+.nj-calendar-role-shortcut{display:flex;align-items:center;flex-wrap:wrap;gap:10px 20px;border:1px solid rgba(215,182,200,.22);background:rgba(160,111,153,.07);border-radius:15px;padding:14px 16px;}
+.nj-calendar-role-shortcut strong{font-size:14px;}
+.nj-calendar-role-shortcut span{font-size:12px;flex:1;min-width:220px;color:#cdbdcb;line-height:1.55;}
+.nj-calendar-role-shortcut button{min-height:40px;}
+@media(max-width:580px){.nj-calendar-role-shortcut button{width:100%;justify-content:center;}}
