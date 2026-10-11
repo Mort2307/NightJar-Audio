@@ -11,6 +11,14 @@ const main = read('src/main.tsx');
 const system = read('src/styles/product-system.css');
 const pkg = JSON.parse(read('package.json'));
 
+
+// Role-aware public links: a multi-role member opened from Writers must
+// display the Writer identity, not accidentally fall back to primary VA.
+const professionalLibrary=read('src/components/ProfessionalLibrary.tsx');
+if (!professionalLibrary.includes('onOpen(person.userId,category)')) fail('Profession cards must request their exact public profile role.');
+if (!app.includes("initialRole={publicProfileInitialRole??undefined}")) fail('Public Profile must start on the requested category role.');
+if (!app.includes("new URLSearchParams(window.location.search).get('role')")) fail('The chosen profile role must survive page refresh and browser navigation.');
+
 for (const file of ['src/App.tsx','src/main.tsx','src/styles/product-system.css']) {
   if (/<<<<<<<|=======|>>>>>>>/.test(read(file))) fail(file + ' contains merge-conflict markers.');
 }

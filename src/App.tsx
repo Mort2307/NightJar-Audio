@@ -618,6 +618,10 @@ function App() {
   const [messageNeedsReplyCount, setMessageNeedsReplyCount] = useState(0);
   const [messageAwaitingReplyCount, setMessageAwaitingReplyCount] = useState(0);
   const [creatorProfileUserId, setCreatorProfileUserId] = useState<string | null>(null);
+  const [publicProfileInitialRole, setPublicProfileInitialRole] = useState<string | null>(() => {
+    const initial = new URLSearchParams(window.location.search).get('role');
+    return ['listener','creator','writer','editor','artist'].includes(String(initial)) ? initial : null;
+  });
   const [publicProfileUserId, setPublicProfileUserId] = useState<string | null>(() => {
     const match = window.location.pathname.match(/^\/people\/([^/]+)$/);
     return match ? decodeURIComponent(match[1]) : null;
@@ -838,6 +842,8 @@ function App() {
     const onPop = () => {
       const profileMatch = window.location.pathname.match(/^\/people\/([^/]+)$/);
       if (profileMatch) {
+        const profileRole = new URLSearchParams(window.location.search).get('role');
+        setPublicProfileInitialRole(['listener','creator','writer','editor','artist'].includes(String(profileRole)) ? profileRole : null);
         setPublicProfileUserId(decodeURIComponent(profileMatch[1]));
         return;
       }
@@ -1155,10 +1161,13 @@ function App() {
     scrollNightjarToTop();
   }, [view, publicProfileUserId]);
 
-  const openPublicProfile = (userId: string) => {
+  const openPublicProfile = (userId: string, initialRole?: string) => {
     if (!userId) return;
     const returnPath = window.location.pathname.startsWith('/people/') ? '/creators' : window.location.pathname;
-    window.history.pushState({ nightjarOverlay:'public-profile', returnPath }, '', '/people/' + encodeURIComponent(userId));
+    const requestedRole = initialRole && ['listener','creator','writer','editor','artist'].includes(initialRole) ? initialRole : null;
+    const route = '/people/' + encodeURIComponent(userId) + (requestedRole ? '?role=' + encodeURIComponent(requestedRole) : '');
+    window.history.pushState({ nightjarOverlay:'public-profile', returnPath }, '', route);
+    setPublicProfileInitialRole(requestedRole);
     setPublicProfileUserId(userId);
     scrollNightjarToTop();
   };
@@ -1167,6 +1176,7 @@ function App() {
     const returnPath = typeof window.history.state?.returnPath === 'string' ? window.history.state.returnPath : '/creators';
     window.history.replaceState({}, '', returnPath);
     setPublicProfileUserId(null);
+    setPublicProfileInitialRole(null);
     const value = returnPath.replace(/^\/+|\/+$/g, '');
     if (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(value)) setView(value as View);
   };
@@ -5104,7 +5114,7 @@ function App() {
         initialTranscriptOpen={transcriptRequested === playing}
       />}
       {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onPlayRelease={liveRolePreview ? () => notify('Playback requires an authorised Listener account.') : playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
-      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
+      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
