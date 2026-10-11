@@ -80,6 +80,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
   const [audioBusy, setAudioBusy] = useState(false);
+  const [audioStage, setAudioStage] = useState<'idle' | 'uploading' | 'verifying' | 'saved' | 'error'>('idle');
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioFileLabel, setAudioFileLabel] = useState('');
+  const [audioFeedback, setAudioFeedback] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [artBusy, setArtBusy] = useState(false);
   const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
   const [promotedTagOptions, setPromotedTagOptions] = useState<string[]>([]);
@@ -254,12 +259,21 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (kind === 'artwork' && !allowedImage.includes(file.type)) return notify('Use PNG, JPG or WebP artwork.');
     if (!current?.id) return notify('Create the release draft before uploading its assets.');
 
-    if (kind === 'audio') setAudioBusy(true); else setArtBusy(true);
+    if (kind === 'audio') {
+      setAudioBusy(true);
+      setAudioProgress(0);
+      setAudioFileLabel(file.name + ' · ' + (file.size / (1024 * 1024)).toFixed(2) + ' MB');
+      setAudioStage('uploading');
+      setAudioFeedback('Preparing private audio transfer. Keep Nightjar open until it is verified.');
+    } else setArtBusy(true);
     try {
       if (simulationMode) {
         if (kind === 'audio') {
           const durationMinutes = await readAudioDurationMinutes(file);
           setSelectedRelease({ ...current, audioAvailable: true, ...(durationMinutes ? { durationMinutes } : {}) });
+          setAudioStage('saved');
+          setAudioProgress(100);
+          setAudioFeedback('Simulation only: a fictional audio attachment is shown. No file has reached Firebase.');
           notify('Simulation: audio attached locally; nothing was uploaded.');
         } else {
           setSelectedRelease({ ...current, pendingArtworkAssetId: 'demo-art-' + Date.now(), pendingArtworkStatus: 'pending' });
@@ -289,12 +303,26 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       }
 
       const durationMinutes = await readAudioDurationMinutes(file);
-      const data = await nightjarCatalogue.uploadAudio(current.id, file, durationMinutes);
-      setSelectedRelease(data.release ?? { ...current, audioAvailable: true, ...(durationMinutes ? { durationMinutes } : {}) });
-      await onRefresh();
-      notify('Audio attached privately to the release.');
+      const data = await nightjarCatalogue.uploadAudio(current.id, file, durationMinutes, (stage, percent) => {
+        setAudioStage(stage);
+        setAudioProgress(percent);
+        setAudioFeedback(stage === 'uploading'
+          ? 'Uploading encrypted private audio to Firebase Storage. Please keep Nightjar open.'
+          : 'Transfer finished. Nightjar is verifying and attaching the file to your saved release.');
+      });
+      if (data.release?.audioAvailable !== true) throw new Error('Nightjar did not confirm that the audio was attached to your release.');
+      setSelectedRelease(data.release);
+      setAudioStage('saved');
+      setAudioProgress(100);
+      setAudioFeedback('Audio saved and verified in your private release. This is NOT sent for approval yet. Complete the details and press Submit to moderation.');
+      await onRefresh().catch(() => { /* confirmed upload must remain visible */ });
+      notify('Audio successfully uploaded and verified. Next: submit the completed release for moderation.');
     } catch (error) {
       const detail = error instanceof Error ? error.message : '';
+      if (kind === 'audio') {
+        setAudioStage('error');
+        setAudioFeedback(detail || 'Audio upload could not be verified. Please retry. No approval submission was created.');
+      }
       notify(kind === 'audio'
         ? (detail || 'Audio upload failed. Please try again or contact Nightjar support.')
         : 'Artwork upload failed.');
@@ -339,6 +367,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       await nightjarCatalogue.removeAudio(current.id);
       setSelectedRelease({ ...current, audioAvailable: false, audioUrl: null, durationMinutes: 0 });
       await onRefresh();
+      setAudioStage('idle');
+      setAudioProgress(0);
+      setAudioFileLabel('');
+      setAudioFeedback('Audio removed from this release.');
       notify('Release audio removed.');
     } catch { notify('Release audio could not be removed.'); }
     finally { setAudioBusy(false); }
@@ -383,18 +415,28 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!current?.id) return;
     if (!complete) return notify('Add the release details, audio, final transcript and transcript accuracy confirmation before submitting.');
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator publishing stays locked until your account is approved.');
+    setSubmitting(true);
     try {
       if (simulationMode) {
         setSelectedRelease({ ...current, status: 'pending_review' });
         notify('Simulation: release moved to pending moderation locally.');
         return;
       }
-      await nightjarCatalogue.submit(current.id);
-      await onRefresh();
-      const refreshed = releases.find((item) => item.id === current.id);
-      setSelectedRelease(refreshed ?? { ...current, status: 'pending_review' });
-      notify('Release submitted to Nightjar moderation.');
-    } catch { notify('Release could not be submitted for moderation.'); }
+      // Persist unsaved title, transcript and attestation edits BEFORE the
+      // server reviews the submission. Previously the UI could show complete
+      // data while submit() still saw stale draft fields on Firestore.
+      const saved = await nightjarCatalogue.update(current.id, {
+        ...current, tags: current.tags ?? [], tropes: current.tropes ?? [],
+      });
+      setSelectedRelease(saved.release ?? current);
+      const submitted = await nightjarCatalogue.submit(current.id);
+      if (submitted.release?.status !== 'pending_review') throw new Error('Nightjar did not confirm this submission reached moderation.');
+      setSelectedRelease(submitted.release);
+      await onRefresh().catch(() => { /* retain the verified submission status */ });
+      notify('Submitted to Nightjar moderation. You can follow its status here.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Release could not be submitted for moderation.');
+    } finally { setSubmitting(false); }
   };
 
   return <article className="creator-pipeline-card panel-card">
@@ -420,6 +462,16 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       <div className="pipeline-editor">
         {current ? <>
           <div className="pipeline-status"><div><span>{statusLabel}</span><strong>{statusHint}</strong></div><Check size={18} /></div>
+          <section className="nj-release-journey" aria-label="Audio publishing steps">
+            <h3>From your recording to Nightjar</h3>
+            <div className="nj-release-journey-steps">
+              <div className="done"><Check size={14}/> 1. Draft created</div>
+              <div className={current.audioAvailable ? 'done' : 'next'}>{current.audioAvailable ? <Check size={14}/> : <Music2 size={14}/>} 2. Audio uploaded and verified</div>
+              <div className={complete ? 'done' : current.audioAvailable ? 'next' : ''}>{complete ? <Check size={14}/> : <BookOpenText size={14}/>} 3. Details, rights and transcript</div>
+              <div className={current.status === 'pending_review' || current.status === 'released' ? 'done' : complete ? 'next' : ''}>{current.status === 'pending_review' || current.status === 'released' ? <Check size={14}/> : <Send size={14}/>} 4. Submit for review</div>
+            </div>
+            <p role="status">{current.status === 'pending_review' ? 'Your release has reached the administrator moderation queue. No public listening is possible until it is approved.' : current.status === 'released' ? 'Nightjar approved and published this release.' : current.audioAvailable ? 'Your audio is stored privately, but has NOT been submitted. Complete the release information, then select Submit to moderation.' : 'Choose a supported audio file below. Selecting a file starts an upload; it does not publish or submit your release.'}</p>
+          </section>
           <div className="pipeline-form-grid">
             <label>Title<input value={current.title ?? ''} onChange={(event) => setRelease({ title: event.target.value })} /></label>
             <label>Category<input value={current.category ?? ''} onChange={(event) => setRelease({ category: event.target.value })} placeholder="Story, performance, soundscape…" /></label>
@@ -565,11 +617,18 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </section>
 
           <div className="pipeline-assets">
-            <div className="asset-drop asset-drop-moderated"><Music2 size={18} /><strong>{audioBusy ? 'Working…' : current.audioAvailable ? 'Replace private audio' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · direct public reads blocked</span><label className="secondary-button upload-label">{current.audioAvailable ? 'Replace audio' : 'Choose audio'}<input type="file" hidden disabled={audioBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>{current.audioAvailable && <button className="ghost-button" disabled={audioBusy} onClick={()=>void removeAudio()}>Remove audio</button>}</div>
+            <div className="asset-drop asset-drop-moderated nj-audio-attachment"><Music2 size={19} /><strong>{audioBusy ? audioStage === 'verifying' ? 'Verifying saved audio…' : 'Uploading your audio…' : current.audioAvailable ? 'Audio connected to this draft' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · private until approved</span>
+              <label className="secondary-button upload-label">{audioBusy ? 'Upload in progress' : current.audioAvailable ? 'Replace this audio' : 'Choose audio to upload'}<input type="file" hidden disabled={audioBusy || current.status === 'pending_review' || current.status === 'released' || submitting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
+              {audioFileLabel && <strong className="nj-audio-file-label">{audioFileLabel}</strong>}
+              {audioBusy && <div className="nj-audio-upload-progress" role="progressbar" aria-label="Audio upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={audioProgress}><span style={{width:audioProgress + '%'}}/></div>}
+              {audioBusy && <small className="nj-audio-percent">{audioStage === 'verifying' ? 'Transfer 100% · awaiting server verification' : audioProgress + '% transferred'}</small>}
+              {(audioFeedback || current.audioAvailable) && <div className={audioStage === 'error' ? 'nj-audio-feedback error' : audioStage === 'saved' || current.audioAvailable ? 'nj-audio-feedback success' : 'nj-audio-feedback'} role="status">{audioFeedback || 'Private audio confirmed. This release is not publicly available until moderation approval.'}</div>}
+              {current.audioAvailable && <button className="ghost-button" disabled={audioBusy || submitting || current.status === 'pending_review' || current.status === 'released'} onClick={()=>void removeAudio()}>Remove audio</button>}
+            </div>
             <div className="asset-drop asset-drop-moderated"><ImagePlus size={18} /><strong>{artBusy ? 'Working…' : current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Replacement awaiting approval' : 'Artwork awaiting approval' : current.artworkUrl ? 'Replace approved artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB · administrator approval required</span><label className="secondary-button upload-label">{current.artworkUrl || current.pendingArtworkAssetId ? 'Replace' : 'Choose image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'artwork'); event.currentTarget.value = ''; }} /></label>{(current.artworkUrl || current.artworkAssetId || current.pendingArtworkAssetId) && <button className="ghost-button" disabled={artBusy} onClick={()=>void removeArtwork()}>Remove artwork</button>}</div>
           </div>
 
-          <div className="pipeline-footer"><span>{current.audioAvailable ? 'Private audio connected' : 'Audio missing'} · {current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Approved artwork live · replacement pending' : 'Artwork pending admin approval' : current.pendingArtworkStatus === 'rejected' ? current.artworkUrl ? 'Approved artwork live · replacement rejected' : 'Artwork rejected' : current.artworkUrl ? 'Approved artwork connected' : 'Artwork optional'}</span><div>{current.status !== 'released' && <button className="ghost-button" onClick={() => void deleteDraft()}>Delete draft</button>}<button className="secondary-button" onClick={() => void saveMetadata()}>Save draft</button><button className="primary-button" onClick={() => void submit()} disabled={!complete || current.status === 'pending_review' || current.status === 'released'}><Send size={14} /> Submit to moderation</button></div></div>
+          <div className="pipeline-footer"><span>{current.audioAvailable ? 'Private audio connected' : 'Audio missing'} · {current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Approved artwork live · replacement pending' : 'Artwork pending admin approval' : current.pendingArtworkStatus === 'rejected' ? current.artworkUrl ? 'Approved artwork live · replacement rejected' : 'Artwork rejected' : current.artworkUrl ? 'Approved artwork connected' : 'Artwork optional'}</span><div>{current.status !== 'released' && <button className="ghost-button" onClick={() => void deleteDraft()}>Delete draft</button>}<button className="secondary-button" onClick={() => void saveMetadata()}>Save draft</button><button className="primary-button" onClick={() => void submit()} disabled={!complete || audioBusy || submitting || current.status === 'pending_review' || current.status === 'released'}><Send size={14} /> {submitting ? 'Submitting to moderators…' : 'Submit to moderation'}</button></div></div>
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Select a release draft.</strong><span>The pipeline keeps upload, metadata and moderation state together.</span></div>}
       </div>
     </div>
