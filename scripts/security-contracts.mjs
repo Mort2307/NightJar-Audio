@@ -53,7 +53,7 @@ if (!protection.includes('await gmailAccessToken()') || !protection.includes('ge
 if (!protection.includes('adminAssistanceEvents') || !protection.includes('lastSentAtMs') || !protection.includes('count >= 3')) failures.push('Recovery email requests require rate limiting and a durable audit trail.');
 if (!assistance.includes('window.confirm(') || !assistance.includes('I confirm the actual account holder')) failures.push('Owner must confirm a member assistance request.');
 if (!assistance.includes('no supported administrator') || !assistance.includes('Nightjar currently flags repeated failures')) failures.push('Assistance must not promise Firebase unlock or claim an invented 24-hour Nightjar lockout.');
-if (!assistanceClient.includes('adminAccountAssistanceLookup') || !workspaceNav.includes("id: 'assistance'") || !app.includes("<AdminAssistance onPeople")) failures.push('Admin Assistance must be accessible through a dedicated Owner workspace.');
+if (!assistanceClient.includes('adminAccountAssistanceLookup') || !workspaceNav.includes("id: 'assistance'") || !app.includes("<AdminAssistance initialEmail=")) failures.push('Admin Assistance must be accessible through a dedicated Owner workspace.');
 
 if (failures.length) {
   console.error('SECURITY CONTRACT FAILURES');
