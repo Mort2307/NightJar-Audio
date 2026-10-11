@@ -3469,3 +3469,24 @@ textarea {
 .nj-push-diagnostics p,.nj-push-diagnostics li {font-size:12px;line-height:1.6;color:var(--muted);}
 .nj-push-diagnostics ol {margin:0;padding-left:22px;}
 .nj-push-diagnostics a {display:inline-flex;align-items:center;max-width:max-content;font-size:12px;min-height:36px;color:var(--plum-soft);text-decoration:underline;}
+
+
+/* Private recipient selection in Nightjar Mail */
+.nj-mail-member-picker {display:grid;gap:12px;margin:12px 0 20px;padding:17px;border:1px solid var(--line);border-radius:14px;background:var(--panel);}
+.nj-mail-member-picker-head {display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.nj-mail-member-picker-head>div {display:grid;gap:4px;}
+.nj-mail-member-picker-head strong {font-size:15px;}
+.nj-mail-member-picker-head small,.nj-mail-member-picker>small {font-size:12px;color:var(--muted);line-height:1.5;}
+.nj-mail-member-picker>input {width:100%;min-height:44px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-soft);color:var(--ivory);font-size:14px;}
+.nj-mail-member-list {display:grid;gap:7px;max-height:290px;overflow:auto;overscroll-behavior:contain;}
+.nj-mail-member-list>p {color:var(--muted);font-size:13px;}
+.nj-mail-member-row {display:flex;align-items:center;gap:10px;min-height:58px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;}
+.nj-mail-member-row.selected {border-color:var(--plum-soft);background:color-mix(in srgb,var(--plum) 13%,transparent);}
+.nj-mail-member-row input {flex:0 0 auto;accent-color:var(--plum-soft);width:17px;height:17px;}
+.nj-mail-member-row>span:nth-child(2) {display:grid;gap:4px;flex:1;min-width:0;}
+.nj-mail-member-row strong {font-size:13px;overflow-wrap:anywhere;}
+.nj-mail-member-row small {font-size:12px;color:var(--muted);overflow-wrap:anywhere;}
+.nj-mail-member-row>span:last-child {font-size:11px;color:var(--plum-soft);text-align:right;max-width:35%;}
+.nj-mail-member-review {display:flex;flex-wrap:wrap;gap:10px;}
+.nj-mail-member-review button {min-height:43px;}
+@media(max-width:620px) {.nj-mail-member-row {flex-wrap:wrap;}.nj-mail-member-row>span:last-child {max-width:none;flex-basis:100%;text-align:left;padding-left:27px;}}
