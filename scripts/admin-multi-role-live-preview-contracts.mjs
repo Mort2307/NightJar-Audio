@@ -41,7 +41,7 @@ assert.doesNotMatch(roleMutation, /tx\.set\(profileRef/, 'role grants must never
 // Admin real-data preview must NOT impersonate a member, disclose manuscript
 // contents, or bypass protected reader access.
 assert.match(app, /openAdminPanel\('live-preview'\)/, 'Owner Console offers a separate live preview page');
-assert.match(app, /panel === 'live-preview' && demoMode/, 'live preview exits fictional demo mode');
+assert.match(app, /panel === 'live-preview' \|\| panel === 'profile-viewer'\) && demoMode/, 'both real-data preview pages exit fictional demo mode');
 assert.match(app, /<AdminLiveMarketplacePreview notify=\{notify\}/, 'live preview mounts in dedicated routed page');
 assert.match(live, /previewScriptMarketplace\(\)/, 'admin visibility diagnostic uses actual server data');
 assert.match(live, /<ScriptMarketplace/, 'actual VA marketplace component is reused');
@@ -54,5 +54,30 @@ assert.match(backend, /listing\.visibility === 'marketplace' && \['Approved','Pu
 assert.match(backend, /No protected script text is included/, 'privacy requirement documented in diagnostic');
 assert.match(css, /\.admin-member-multi-role-options/, 'checkboxes are styled for touch');
 assert.match(css, /\.admin-live-preview/, 'preview remains responsive');
+
+
+// A dedicated live member preview is distinct from the original VA script
+// visibility audit and the fictional 'View as' QA simulator.
+const realProfile = read('src/components/AdminLiveProfileViewer.tsx');
+const publishedProfile = read('src/components/PublicProfile.tsx');
+const product = read('src/styles/product-system.css');
+assert.match(app, /openAdminPanel\('profile-viewer'\)/, 'owner can open dedicated real member preview');
+assert.match(app, /<AdminLiveProfileViewer accounts=\{adminOverview\?\.people\?\.accounts \?\? \[\]\}/, 'owner viewer receives live admin accounts');
+assert.match(app, /openLiveMemberProfile\(account\.userId\)/, 'a listed member can be opened straight from the People workpage');
+assert.match(app, /tags\|branding\|live-preview\|profile-viewer/, 'profile viewer deep-link is reloadable');
+assert.match(app, /adminPanel !== 'profile-viewer' \|\| demoMode \|\| !canAdmin/, 'live accounts are loaded only after leaving simulation');
+assert.match(realProfile, /nightjarCommunity\.getPublicProfile\(id\)/, 'all roles use the same real published profile endpoint');
+assert.match(realProfile, /const \[selected,setSelected\] = useState<string\[\]>/, 'viewer supports selecting more than one account');
+assert.match(realProfile, /prev\.length>=3/, 'comparison has a bounded account count');
+assert.match(realProfile, /type="checkbox" checked=\{chosen\.includes\(role\)\}/, 'multiple approved role checkboxes are supported');
+assert.match(realProfile, /approvedRoles\(account\)/, 'role picker uses account roles actually approved');
+assert.match(realProfile, /readOnlyPreview/, 'exact public profile opens in non-mutating state');
+assert.match(realProfile, /result\.status==='private'/, 'private or unavailable profiles cannot be bypassed');
+assert.doesNotMatch(realProfile, /getMyProfile\(|getProtectedScript\(|listDirectMessages\(|saveMyProfile\(/, 'viewer cannot call member-private endpoints');
+assert.match(publishedProfile, /initialRole\?: string/, 'member profile supports opening a selected role');
+assert.match(publishedProfile, /!readOnlyPreview && <button className="secondary-button" onClick=\{\(\) => void onToggleFollow/, 'owner preview does not mutate follows');
+assert.match(publishedProfile, /!readOnlyPreview && .*setGiftOpen\(true\)/, 'owner preview cannot open money-sending flow');
+assert.match(product, /\.nj-profile-viewer-account-list/, 'viewer search results have responsive layout');
+assert.match(product, /\.nj-profile-viewer-role-select/, 'approved roles are readable on mobile');
 
 console.log('Nightjar admin multi-role grants and live tester marketplace preview contracts passed.');

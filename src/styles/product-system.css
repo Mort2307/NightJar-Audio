@@ -3372,3 +3372,72 @@ textarea {
 
 /* Weekly listener appreciation is deliberately editorial, not a leaderboard. */
 .nj-spotlight-weekly-note {margin:10px 0 0;text-align:center;font-size:12px;line-height:1.6;color:#bcaebd;}
+
+
+/* OWNER LIVE PROFILE VIEWER · real published records, multiple accounts & roles */
+.nj-admin-profile-viewer {display:grid;gap:18px;min-width:0;max-width:100%;}
+.nj-profile-viewer-head {display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;padding:23px;border:1px solid rgba(229,202,224,.19);border-radius:18px;background:linear-gradient(135deg,rgba(84,45,77,.19),rgba(14,12,18,.8));}
+.nj-profile-viewer-head-icon {width:43px;height:43px;flex:0 0 auto;display:grid;place-items:center;border:1px solid var(--line);border-radius:13px;color:var(--plum-soft);}
+.nj-profile-viewer-head>div:nth-child(2) {flex:1 1 240px;min-width:0;}
+.nj-profile-viewer-head h2 {margin:7px 0;font-size:clamp(22px,3vw,32px);font-family:Georgia,serif;font-weight:400;}
+.nj-profile-viewer-head p,.nj-profile-viewer-safety p {font-size:13px;line-height:1.55;color:var(--muted);margin:0;}
+.nj-profile-viewer-head>.secondary-button {min-height:44px;}
+.nj-profile-viewer-safety {display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid rgba(216,190,212,.22);border-radius:13px;background:rgba(255,255,255,.025);}
+.nj-profile-viewer-safety>svg {flex:0 0 auto;color:var(--plum-soft);}
+.nj-profile-viewer-safety strong {font-size:14px;display:block;margin-bottom:6px;}
+.nj-profile-viewer-filters {display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+.nj-profile-viewer-filters label {flex:1 1 250px;min-width:0;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:11px;padding:0 13px;color:var(--plum-soft);}
+.nj-profile-viewer-filters input {font-size:14px;min-width:0;min-height:47px;flex:1;color:inherit;border:0;background:transparent;outline:none;}
+.nj-profile-viewer-filters span {font-size:12px;color:var(--muted);}
+.nj-profile-viewer-account-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:9px;max-height:285px;overflow:auto;align-content:start;}
+.nj-profile-viewer-account {display:flex;align-items:center;gap:11px;min-width:0;min-height:78px;padding:11px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.018);color:inherit;text-align:left;cursor:pointer;}
+.nj-profile-viewer-account.selected {border-color:rgba(216,173,205,.78);background:rgba(141,91,134,.12);}
+.nj-profile-viewer-avatar {display:grid;place-items:center;flex:0 0 41px;width:41px;height:41px;border-radius:50%;background:linear-gradient(150deg,#654363,#221a2b);font:24px Georgia,serif;overflow:hidden;}
+.nj-profile-viewer-avatar img {width:100%;height:100%;object-fit:cover;}
+.nj-profile-viewer-account-detail {display:grid;gap:4px;min-width:0;flex:1;}
+.nj-profile-viewer-account-detail strong,.nj-profile-viewer-account-detail small,.nj-profile-viewer-account-detail>span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nj-profile-viewer-account-detail strong {font-size:14px;}
+.nj-profile-viewer-account-detail small {font-size:12px;color:var(--muted);}
+.nj-profile-viewer-account-detail>span {font-size:11px;color:var(--plum-soft);}
+.nj-profile-viewer-check {color:var(--muted);flex:0 0 auto;}
+.nj-profile-viewer-check.checked {color:var(--plum-soft);}
+.nj-profile-viewer-welcome,.nj-profile-viewer-status {display:grid;gap:11px;justify-items:center;text-align:center;padding:28px 18px;border:1px dashed var(--line);border-radius:13px;color:var(--muted);}
+.nj-profile-viewer-welcome h3,.nj-profile-viewer-status strong {font:normal 23px Georgia,serif;color:var(--text);margin:0;}
+.nj-profile-viewer-welcome p,.nj-profile-viewer-status p {max-width:460px;font-size:13px;line-height:1.6;margin:0;}
+.nj-profile-viewer-compare {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px;align-items:start;}
+.nj-profile-viewer-member {display:grid;gap:16px;padding:19px;min-width:0;border:1px solid rgba(216,188,207,.31);border-radius:17px;background:linear-gradient(150deg,rgba(39,29,42,.86),rgba(19,15,22,.93));}
+.nj-profile-viewer-member>header {display:flex;align-items:flex-start;gap:10px;justify-content:space-between;}
+.nj-profile-viewer-member>header h3 {font:normal 27px Georgia,serif;margin:8px 0 5px;}
+.nj-profile-viewer-member>header p {font-size:12px;line-height:1.45;color:var(--muted);margin:0;}
+.nj-profile-viewer-member>header>.ghost-button {font-size:12px;min-height:37px;}
+.nj-profile-viewer-role-select {min-width:0;border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;}
+.nj-profile-viewer-role-select legend {font-size:12px;color:var(--muted);padding:0 0 10px;}
+.nj-profile-viewer-role-select label {display:inline-flex;align-items:center;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:12px;line-height:1.4;cursor:pointer;}
+.nj-profile-viewer-role-select label.active {border-color:rgba(222,187,214,.68);color:#f5e5f2;background:rgba(182,119,165,.13);}
+.nj-profile-viewer-role-select input {accent-color:#c38aaf;width:15px;height:15px;}
+.nj-profile-viewer-roles {display:grid;grid-template-columns:minmax(0,1fr);gap:13px;}
+.nj-profile-viewer-role-card {display:grid;gap:12px;min-width:0;padding:20px;border:1px solid rgba(220,199,215,.21);border-radius:15px;background:radial-gradient(ellipse at 100% 0,rgba(157,88,138,.11),transparent 65%),rgba(9,9,13,.43);}
+.nj-profile-viewer-card-kicker {display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;color:#dfbfd5;font-size:10px;font-weight:800;letter-spacing:.1em;}
+.nj-profile-viewer-identity {display:flex;align-items:center;gap:13px;}
+.nj-profile-viewer-big-avatar {flex:0 0 64px;width:64px;height:64px;border-radius:16px;display:grid;place-items:center;overflow:hidden;background:#352337;font:28px Georgia,serif;}
+.nj-profile-viewer-big-avatar img {height:100%;width:100%;object-fit:cover;}
+.nj-profile-viewer-identity>div {min-width:0;display:grid;gap:4px;}
+.nj-profile-viewer-identity strong {font:normal 25px Georgia,serif;overflow-wrap:anywhere;}
+.nj-profile-viewer-identity>div span {font-size:12px;color:var(--muted);}
+.nj-profile-viewer-role-card h4 {margin:0;font-size:18px;line-height:1.4;overflow-wrap:anywhere;}
+.nj-profile-viewer-role-card>p {font-size:13px;line-height:1.65;margin:0;color:var(--muted);}
+.nj-profile-viewer-tags {display:flex;flex-wrap:wrap;gap:7px;}
+.nj-profile-viewer-tags span {padding:5px 8px;border:1px solid var(--line);border-radius:7px;font-size:11px;color:var(--plum-soft);}
+.nj-profile-viewer-availability {display:flex;align-items:center;gap:7px;font-size:12px;color:var(--plum-soft);}
+.nj-profile-viewer-role-card>.primary-button {display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;font-size:12px;}
+.nj-profile-viewer-modal-note {display:flex;align-items:center;gap:8px;padding:13px 17px;font-size:12px;color:#edcbe1;background:rgba(152,85,132,.15);border-bottom:1px solid var(--line);}
+@media(max-width:640px) {
+  .nj-profile-viewer-head {padding:17px;}
+  .nj-profile-viewer-head>.secondary-button {width:100%;justify-content:center;}
+  .nj-profile-viewer-account-list {grid-template-columns:minmax(0,1fr);max-height:255px;}
+  .nj-profile-viewer-compare {grid-template-columns:minmax(0,1fr);}
+  .nj-profile-viewer-member {padding:13px;}
+  .nj-profile-viewer-member>header {flex-wrap:wrap;}
+  .nj-profile-viewer-role-card {padding:15px;}
+  .nj-profile-viewer-head h2 {font-size:27px;}
+}
