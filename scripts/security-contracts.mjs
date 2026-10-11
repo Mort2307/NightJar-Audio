@@ -29,6 +29,18 @@ if (!pwa.includes("fetch('/version.json")) failures.push('manual update check mu
 if (!vite.includes("fileName: 'version.json'")) failures.push('Nightjar build must emit the update version manifest');
 if (!hosting.includes('"source": "/version.json"') || !hosting.includes('no-store,max-age=0,must-revalidate')) failures.push('version manifest must be served without cache');
 
+const evidenceReview=read('src/components/SecurityEvidenceReview.tsx');
+if (!protection.includes('authorisedTarget') || !protection.includes('getAuth().getUser(targetUid)')) failures.push('authenticated target resolution must be server-side');
+if (!protection.includes("requireAdminIdentity(request);") || !protection.includes("const eligible = authUser.emailVerified === true")) failures.push('authorised outreach requires authenticated administrators and verified account');
+if (!protection.includes('closedBetaAccessFor(email, account)')) failures.push('contact information must be gated by current closed-beta permission');
+if (!protection.includes("account.status !== 'suspended'")) failures.push('suspended members must not be eligible for routine outreach');
+if (!protection.includes('matchesTarget') || !protection.includes("alertData.emailHash")) failures.push('contact details must match the targeted email hash');
+if (!protection.includes('email: eligible ? email : null')) failures.push('unapproved accounts must not disclose contact emails');
+if (!evidenceReview.includes("authorisedTarget?.eligible")) failures.push('support contact link must be shown only for authorised registered targets');
+if (!evidenceReview.includes('person who entered the credentials')) failures.push('UI must distinguish account owner from actor');
+if (!evidenceReview.includes('<details className="nj-evidence-technical">')) failures.push('technical evidence must be collapsed by default');
+if (!evidenceReview.includes('Please do not send your password')) failures.push('support email must not solicit credentials');
+
 if (failures.length) {
   console.error('SECURITY CONTRACT FAILURES');
   failures.forEach((failure)=>console.error('-',failure));
