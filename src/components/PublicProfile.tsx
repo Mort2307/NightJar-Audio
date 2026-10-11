@@ -24,6 +24,8 @@ type Props = {
   onReaction?: (releaseId:string, reaction:'like'|'love') => void;
   communityByRelease?: Record<string,{likes:number;loves:number;comments:number}>;
   demoMode?: boolean;
+  initialRole?: string;
+  readOnlyPreview?: boolean;
 };
 
 const roleLabel = (role: string | null | undefined) => {
@@ -34,14 +36,14 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false }: Props) {
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = null, readOnlyPreview = false }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
   const [giftOpen, setGiftOpen] = useState(false);
-  const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(null);
+  const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(initialRole);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
@@ -217,6 +219,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
       {!loading && loadError && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile temporarily unavailable</strong><p>{loadError}</p></div><button className="secondary-button" onClick={()=>setRetryKey((value)=>value+1)}>Try again</button></div>}
       {!loading && !loadError && !profile && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile not available</strong><p>This profile is private, unavailable or no longer active.</p></div></div>}
+      {readOnlyPreview && <div className="nj-profile-viewer-modal-note"><ShieldCheck size={15}/> Admin live public profile view · original member data · all actions disabled</div>}
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero">
           <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
@@ -227,10 +230,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             {availableProfileRoles.length > 0 && <div className="profile-role-chips" role="tablist" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" role="tab" aria-selected={profileRole===role} data-nightjar-scroll-top className={profileRole===role?'active':''} key={role} onClick={()=>{ setSelectedProfileRole(role); scrollNightjarToTop(); }}>{roleLabel(role)}</button>)}</div>}
           </div>
           <div className="writer-discovery-actions">
-            <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>
+            {!readOnlyPreview && <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>
             {canMessage && onMessage && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
-            {(profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Send Nightjars</button>}
-            <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>
+            {!readOnlyPreview && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Send Nightjars</button>}
+            {!readOnlyPreview && <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>}
           </div>
         </div>
 
