@@ -4393,7 +4393,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
+  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
 
   const update = {
     title: cleanText(input.title ?? current.title, 160),
@@ -4538,7 +4538,7 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
+  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
 
   const file = getStorage().bucket().file(storagePath);
   const [exists] = await file.exists();
@@ -4576,7 +4576,7 @@ export const removeReleaseAudio = onCall({ region: REGION }, async (request) => 
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
+  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
 
   const path = cleanText(current.audioStoragePath, 500);
   if (path) {
