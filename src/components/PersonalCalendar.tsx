@@ -9,7 +9,7 @@ type ReleaseDate = {
   scheduledAt?:string|null; scheduledTimeZone?:string|null;
   releaseDate?:string|null;
 };
-type Props = { role: string; simulationMode?:boolean; notify:(message:string)=>void; onOpenStudio?:()=>void; onOpenModeration?:()=>void };
+type Props = { role: string; showCreatorReleases?:boolean; simulationMode?:boolean; notify:(message:string)=>void; onOpenStudio?:()=>void; onOpenModeration?:()=>void };
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const two = (value:number) => String(value).padStart(2,'0');
 const dateKey = (year:number,month:number,day:number) => year+'-'+two(month+1)+'-'+two(day);
@@ -20,7 +20,7 @@ const dateInZone = (date:Date,zone:string) => {
 };
 const validDateKey = (date:string) => /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(new Date(date+'T12:00:00Z').getTime());
 
-export default function PersonalCalendar({role,simulationMode=false,notify,onOpenStudio,onOpenModeration}:Props) {
+export default function PersonalCalendar({role,showCreatorReleases=false,simulationMode=false,notify,onOpenStudio,onOpenModeration}:Props) {
   const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London';
   const [timeZone,setTimeZone] = useState('auto');
   const zone = timeZone === 'auto' ? deviceZone : timeZone;
@@ -56,7 +56,7 @@ export default function PersonalCalendar({role,simulationMode=false,notify,onOpe
       const data = await nightjarCalendar.get();
       setEvents(data.events);
       setTimeZone(data.timeZone);
-      if (role === 'creator' || role === 'admin') {
+      if (showCreatorReleases || role === 'admin') {
         const data = role === 'admin' ? await nightjarCatalogue.adminAudioLibrary() : await nightjarCatalogue.dashboard();
         setReleases((data.releases??[]).filter((item:ReleaseDate)=>item.scheduledAt || item.releaseDate));
       } else setReleases([]);
@@ -64,7 +64,7 @@ export default function PersonalCalendar({role,simulationMode=false,notify,onOpe
       notify(error instanceof Error ? error.message : 'Calendar could not load.');
     } finally { setLoading(false); }
   };
-  useEffect(() => { void refresh(); },[role,simulationMode]);
+  useEffect(() => { void refresh(); },[role,showCreatorReleases,simulationMode]);
 
   const today = dateInZone(clock,zone);
   const zoneDate = new Intl.DateTimeFormat('en-GB',{timeZone:zone,dateStyle:'full'}).format(clock);
@@ -144,7 +144,7 @@ export default function PersonalCalendar({role,simulationMode=false,notify,onOpe
       </div>
       <div className="nj-calendar-clock" aria-live="off"><small>YOUR LOCAL DATE AND TIME</small><strong>{zoneTime}</strong><span>{zoneDate}</span><small>{zone}</small></div>
     </div>
-    {role === 'creator' && <div className="nj-calendar-role-shortcut"><strong>Planning an audio premiere?</strong><span>Choose the publication date and time when you prepare your recording; Nightjar will review it immediately but publish only when scheduled.</span><button className="primary-button" type="button" onClick={onOpenStudio}>Open VA Studio</button></div>}
+    {showCreatorReleases && <div className="nj-calendar-role-shortcut"><strong>Planning an audio premiere?</strong><span>Choose the publication date and time when you prepare your recording; Nightjar will review it immediately but publish only when scheduled.</span><button className="primary-button" type="button" onClick={onOpenStudio}>Open VA Studio</button></div>}
     {role === 'admin' && <div className="nj-calendar-role-shortcut"><strong>Nightjar's approved release schedule</strong><span>Upcoming release dates shown here remain private until publication. Review new submissions in the moderation queue.</span><button className="secondary-button" type="button" onClick={onOpenModeration}>Open audio moderation</button></div>}
     <div className="nj-calendar-toolbar">
       <label>Time zone
