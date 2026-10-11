@@ -48,6 +48,16 @@ assert.match(themeUi,/simulationMode/,'theme preview preserves role-simulation s
 assert.match(themePlatform,/nightjar\.appearance\.theme\.v1/,'theme is cached locally for instant bootstrap');
 assert.match(main,/nightjarTheme\.initialise\(\)/,'theme applies before rendering the app');
 assert.match(settings,/<ThemePreferences/,'Settings exposes theme choices');
-assert.match(backend,/theme: \['nocturne','aubergine','midnight','ember','obsidian'\]/,'theme preference is whitelist validated by Firebase');
+assert.match(themePlatform, /\| 'bronze'/, 'the Bronze Noir theme is included in Nightjar's typed appearance options');
+assert.match(themePlatform, /id:'bronze',label:'Bronze Noir'/, 'Bronze Noir appears in selectable swatches');
+assert.match(themePlatform, /updateBrowserChrome\(theme\)/, 'system browser chrome matches the selected dark Nightjar theme');
+assert.match(themeUi, /Bronze Noir/, 'member-facing appearance choice explains new black and bronze style');
+const themeStyles = fs.readFileSync('src/index.css','utf8');
+assert.match(themeStyles, /:root\[data-nightjar-theme="bronze"\]/, 'Bronze Noir provides its own scoped brand tokens');
+assert.match(themeStyles, /--nj-accent:\s*#e2ba83/, 'professional workspaces inherit bronze premium accents');
+assert.match(themeStyles, /--bg:\s*#080809/, 'Bronze Noir retains jet-black discreet backgrounds');
+assert.match(themeStyles, /:root\[data-nightjar-theme="bronze"\] \.primary-button/, 'primary actions have matching bronze gradients');
+
+assert.match(backend,/theme: \['nocturne','aubergine','midnight','ember','obsidian','bronze'\]/,'theme preference is whitelist validated by Firebase');
 
 console.log('Nightjar accessibility contracts passed.');
