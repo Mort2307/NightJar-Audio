@@ -5,9 +5,9 @@ import { firebaseApp, firebaseAuth, type NightjarIdentity } from './firebase-aut
 const functions = getFunctions(firebaseApp, 'europe-west2');
 type Challenge = { challengeId: string; options: Record<string, any> };
 type PasskeyRecord = { id: string; label: string; createdAt: string | null; lastUsedAt: string | null };
-const beginRegistration = httpsCallable<void, Challenge>(functions, 'beginPasskeyRegistration');
+const beginRegistration = httpsCallable<Record<string, never>, Challenge>(functions, 'beginPasskeyRegistration');
 const finishRegistration = httpsCallable<{ challengeId: string; response: Record<string, unknown> }, { registered: boolean }>(functions, 'finishPasskeyRegistration');
-const beginSignIn = httpsCallable<void, Challenge>(functions, 'beginPasskeySignIn');
+const beginSignIn = httpsCallable<Record<string, never>, Challenge>(functions, 'beginPasskeySignIn');
 const finishSignIn = httpsCallable<{ challengeId: string; response: Record<string, unknown> }, { token: string }>(functions, 'finishPasskeySignIn');
 const listCall = httpsCallable<void, { passkeys: PasskeyRecord[] }>(functions, 'listMyPasskeys');
 const removeCall = httpsCallable<{ id: string }, { removed: boolean }>(functions, 'removeMyPasskey');
