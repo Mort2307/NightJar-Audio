@@ -12,6 +12,7 @@ import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo,
 import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession } from './didit';
 import { hasPaidEntitlement } from './entitlements';
 export { diditWebhook, processDiditWebhook } from './didit';
+export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
 
 initializeApp();
 
