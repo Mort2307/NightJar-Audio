@@ -4554,6 +4554,7 @@ function App() {
                 onRemoveAvatar={removeProfileImage}
                 onSave={saveProfile}
                 onRevert={()=>profileBaseline && setProfile(structuredClone(profileBaseline))}
+                notify={notify}
                 onOpenEditorStudio={effectiveRole==='editor'?()=>{navigate('editor'); void loadEditorQueue(); void loadProfile();}:undefined}
               />
             </Suspense>
