@@ -33,8 +33,11 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   const [preference] = useState(() => nightjarQuickUnlock.preference());
   const allowedFlow = isPasswordFlow() ||
     (window.location.pathname.startsWith('/account') && new URLSearchParams(window.location.search).get('entry') === 'register');
+  const [redirectGrace] = useState(() => Boolean(
+    preference && nightjarQuickUnlock.unlockedRecently(preference.userId),
+  ));
   const [locked, setLocked] = useState(() => Boolean(
-    preference && !allowedFlow && !nightjarQuickUnlock.unlockedRecently(preference.userId),
+    preference && !allowedFlow && !redirectGrace,
   ));
   const [authReady, setAuthReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,6 +47,12 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   const attemptedAutomatically = useRef(false);
   const hiddenAt = useRef<number | null>(null);
   const supported = nightjarPasskeys.supported();
+
+  // Consume the one-page redirect allowance immediately. A subsequent app
+  // launch will require biometrics even if it occurs seconds after login.
+  useEffect(() => {
+    if (redirectGrace) nightjarQuickUnlock.lock();
+  }, [redirectGrace]);
 
   useEffect(() => {
     alive.current = true;
@@ -66,7 +75,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
         setAuthReady(true);
         return;
       }
-      if (identity && !nightjarQuickUnlock.unlockedRecently(preference.userId)) {
+      if (identity && !redirectGrace && !allowedFlow) {
         void nightjarAuth.signOut().catch(() => { /* locked screen still protects entry */ })
           .finally(() => { if (alive.current) setAuthReady(true); });
         return;
@@ -78,7 +87,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       aborted.current?.abort();
       unsubscribe();
     };
-  }, [preference?.userId, allowedFlow]);
+  }, [preference?.userId, allowedFlow, redirectGrace]);
 
   const unlock = async () => {
     if (!preference || busy || !locked) return;
@@ -89,7 +98,9 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
     try {
       const identity = await nightjarPasskeys.signIn(preference.userId, controller.signal);
       if (!alive.current || controller.signal.aborted) return;
-      nightjarQuickUnlock.markUnlocked(identity.userId);
+      // Only a full-page account-to-workspace redirect needs a one-time pass.
+      // Main app unlocks never create a bypass for the next cold launch.
+      if (window.location.pathname.startsWith('/account')) nightjarQuickUnlock.markUnlocked(identity.userId);
       setLocked(false);
     } catch (error) {
       if (alive.current && !controller.signal.aborted) setMessage(unlockError(error));
