@@ -65,4 +65,10 @@ assert.match(workspaceTabs, /aria-current=\{active === section\.id \? 'page' : u
 assert.match(product, /\.nj-owner-workspaces\s*\{/, 'compact workspace navigation has CSS');
 assert.match(product, /\.nj-admin-focused-grid \.admin-panel p\s*\{ font-size: 13px;/, 'Admin cards have readable body text');
 
+const ownerNav = fs.readFileSync('src/components/AdminWorkspaceTabs.tsx', 'utf8');
+const authCases = fs.readFileSync('src/components/AdminAuthenticationLog.tsx', 'utf8');
+assert.match(ownerNav, /nj-owner-workspaces-compact/, 'non-overview admin workpages use compact single-row section navigation');
+assert.match(product, /\.nj-owner-workspaces\.nj-owner-workspaces-compact\s*\{[^]*?overflow-x: auto;/, 'mobile admin sections are scrollable rather than four repeated rows');
+assert.match(product, /\.admin-live-preview-diagnostic \.nj-script-visibility-info/, 'script titles and status descriptions have dedicated readable card space');
+assert.match(authCases, /nj-auth-case-list/, 'sign-in activity renders grouped readable cases');
 console.log('Nightjar mobile dock, save-bar visibility and responsive touch-feedback contracts passed.');
