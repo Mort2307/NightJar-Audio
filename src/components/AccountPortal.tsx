@@ -5,6 +5,7 @@ import AppUpdateControl from './AppUpdateControl';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount, type NightjarAccountIdentity } from '../platform/firebase-account';
 import { nightjarMedia } from '../platform/firebase-media';
+import { markPasswordAuthenticated } from './NightjarLaunchUnlock';
 
 const accountDestination = (account: NightjarAccountIdentity) => {
   if (account.admin || account.role === 'admin') return '/admin';
@@ -54,6 +55,7 @@ export default function AccountPortal() {
       if (enterApp) {
         const destination = accountDestination(nextAccount);
         if (destination) {
+          markPasswordAuthenticated(nextIdentity.userId);
           window.location.replace(destination);
           return;
         }
