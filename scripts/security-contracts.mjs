@@ -34,6 +34,7 @@ if (!protection.includes('authorisedTarget') || !protection.includes('getAuth().
 if (!protection.includes("requireAdminIdentity(request);") || !protection.includes("const eligible = authUser.emailVerified === true")) failures.push('authorised outreach requires authenticated administrators and verified account');
 if (!protection.includes('closedBetaAccessFor(email, account)')) failures.push('contact information must be gated by current closed-beta permission');
 if (!protection.includes("account.status !== 'suspended'")) failures.push('suspended members must not be eligible for routine outreach');
+if (!protection.includes('authUser.disabled !== true')) failures.push('disabled Firebase accounts must not receive authorised outreach status');
 if (!protection.includes('matchesTarget') || !protection.includes("alertData.emailHash")) failures.push('contact details must match the targeted email hash');
 if (!protection.includes('email: eligible ? email : null')) failures.push('unapproved accounts must not disclose contact emails');
 if (!evidenceReview.includes("authorisedTarget?.eligible")) failures.push('support contact link must be shown only for authorised registered targets');
