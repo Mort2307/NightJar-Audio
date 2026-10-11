@@ -2042,7 +2042,7 @@ export const setFavouriteRelease = onCall({ region: REGION }, async (request) =>
   return { releaseId, favourite: input.favourite !== false };
 });
 
-type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio';
+type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio' | 'social_avatar';
 
 const IMAGE_CONTENT_TYPES = new Map([
   ['image/png', 'png'],
@@ -2109,7 +2109,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const kind = cleanText(input.kind, 40) as ModeratedImageKind;
-  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'artist_portfolio'].includes(kind)) {
+  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'artist_portfolio', 'social_avatar'].includes(kind)) {
     throw new HttpsError('invalid-argument', 'Unsupported image type.');
   }
   if (kind === 'brand_logo' && !identity.admin) {
@@ -2122,6 +2122,12 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
 
   if ((kind === 'release_artwork' || kind === 'artist_portfolio') && !targetId) {
     throw new HttpsError('invalid-argument', kind === 'artist_portfolio' ? 'Artist portfolio artwork requires a portfolio item ID.' : 'Release artwork requires a release ID.');
+  }
+
+  if (kind === 'social_avatar') {
+    if(!targetId)throw new HttpsError('invalid-argument','Save the social link before adding its profile photo.');
+    const item=await socialLinkCollection(identity.uid).doc(targetId).get();
+    if(!item.exists)throw new HttpsError('not-found','Social profile link not found.');
   }
 
   if (kind === 'artist_portfolio') {
@@ -2203,6 +2209,19 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       pendingAvatarStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+  } else if (kind === 'social_avatar') {
+    const ref=socialLinkCollection(identity.uid).doc(targetId);
+    const existing=await ref.get();
+    if(!existing.exists)throw new HttpsError('not-found','Social profile link was removed.');
+    const prior=cleanText(existing.data()?.pendingPhotoAssetId,160);
+    if(prior && prior!==assetId){
+      const old=await db.collection('imageAssets').doc(prior).get();
+      if(old.exists && old.data()?.ownerUserId===identity.uid && old.data()?.kind==='social_avatar'){
+        await old.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        await clearAssetFile(old.data()??{});
+      }
+    }
+    await ref.set({pendingPhotoAssetId:assetId,pendingPhotoStatus:'pending',updatedAt:FieldValue.serverTimestamp()},{merge:true});
   } else if (kind === 'brand_logo') {
     const brandingRef = db.collection('settings').doc('branding');
     const existingBranding = await brandingRef.get();
@@ -2478,6 +2497,12 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         pendingAvatarStatus: 'rejected',
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+    } else if (asset.kind === 'social_avatar' && asset.targetId) {
+      const ref=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
+      const linked=await ref.get();
+      if(linked.exists && linked.data()?.pendingPhotoAssetId===assetId){
+        await ref.set({pendingPhotoAssetId:null,pendingPhotoStatus:'rejected',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      }
     } else if (asset.kind === 'brand_logo') {
       await db.collection('settings').doc('branding').set({
         pendingLogoAssetId: null,
@@ -2517,6 +2542,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
             ? 'Release artwork not approved'
             : asset.kind === 'artist_portfolio'
               ? 'Portfolio artwork not approved'
+              : asset.kind === 'social_avatar' ? 'Social profile picture not approved'
               : 'Nightjar image not approved',
         message: note || 'The submitted image was not approved for use on Nightjar. You can remove it or submit a different image.',
         assetId,
@@ -2556,6 +2582,26 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       if (previous.exists) {
         await clearAssetFile(previous.data() ?? {});
         await previous.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+    }
+  } else if (asset.kind === 'social_avatar' && asset.targetId) {
+    const linkRef=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
+    const link=await linkRef.get();
+    if(!link.exists || link.data()?.pendingPhotoAssetId!==assetId){
+      await ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await clearAssetFile(asset);
+      throw new HttpsError('failed-precondition','This link no longer needs the submitted photo.');
+    }
+    const old=cleanText(link.data()?.photoAssetId,160);
+    await linkRef.set({
+      photoAssetId:assetId,photoUrl:url,photoStatus:'approved',
+      pendingPhotoAssetId:null,pendingPhotoStatus:null,updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    if(old && old!==assetId){
+      const prior=await db.collection('imageAssets').doc(old).get();
+      if(prior.exists && prior.data()?.ownerUserId===asset.ownerUserId && prior.data()?.kind==='social_avatar'){
+        await prior.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        await clearAssetFile(prior.data()??{});
       }
     }
   } else if (asset.kind === 'brand_logo') {
@@ -2650,6 +2696,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
           ? 'Release artwork approved'
           : asset.kind === 'artist_portfolio'
             ? 'Portfolio artwork approved'
+            : asset.kind === 'social_avatar' ? 'Social profile picture approved'
             : 'Nightjar image approved',
       message: asset.kind === 'release_artwork'
         ? 'Your artwork passed Nightjar image moderation and is now available to the release.'
@@ -2699,6 +2746,17 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
     publicUrl: null,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+
+  if(asset.kind==='social_avatar' && asset.targetId){
+    const ref=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
+    const link=await ref.get();
+    if(link.exists){
+      const next:Record<string,unknown>={updatedAt:FieldValue.serverTimestamp()};
+      if(link.data()?.photoAssetId===assetId){next.photoAssetId=null;next.photoUrl=null;next.photoStatus=null;}
+      if(link.data()?.pendingPhotoAssetId===assetId){next.pendingPhotoAssetId=null;next.pendingPhotoStatus=null;}
+      if(Object.keys(next).length>1)await ref.set(next,{merge:true});
+    }
+  }
 
   if (asset.kind === 'artist_portfolio' && asset.targetId) {
     const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
