@@ -18,6 +18,7 @@ export type SpotlightPerson = {
 
 type Props = {
   spotlights: SpotlightPerson[];
+  spotlightMeta?: { listenerTopSevenCount: number; listenerSpotlightDay: number | null; listenerWeek: string | null };
   viewerUserId?: string | null;
   followingIds: string[];
   simulationMode?: boolean;
@@ -108,6 +109,7 @@ export default function SpotlightExperience(props: Props) {
         {ordered.map((person, index)=><PersonCard key={person.kind+':'+person.targetId} {...props} person={person} featured={index===0}/>)}
       </div>
       <p className="nj-spotlight-outro"><Sparkles size={14}/> Your next favourite creator, collaborator or community voice could be right here tomorrow.</p>
+      {Boolean(props.spotlightMeta?.listenerTopSevenCount) && <p className="nj-spotlight-weekly-note">Weekly listener recognition celebrates {props.spotlightMeta!.listenerTopSevenCount} listener{props.spotlightMeta!.listenerTopSevenCount === 1 ? '' : 's'} across the week, with one featured day at a time.</p>}
     </> : <div className="nj-spotlight-empty"><Star size={24}/><strong>The stage is being prepared.</strong><p>Featured members will appear as public profiles become eligible. Each approved professional is included in Nightjar's fair daily rotation.</p></div>}
   </section>;
 }
