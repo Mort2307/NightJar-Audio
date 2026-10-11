@@ -48,7 +48,7 @@ assert.match(themeUi,/simulationMode/,'theme preview preserves role-simulation s
 assert.match(themePlatform,/nightjar\.appearance\.theme\.v1/,'theme is cached locally for instant bootstrap');
 assert.match(main,/nightjarTheme\.initialise\(\)/,'theme applies before rendering the app');
 assert.match(settings,/<ThemePreferences/,'Settings exposes theme choices');
-assert.match(themePlatform, /\| 'bronze'/, 'the Bronze Noir theme is included in Nightjar's typed appearance options');
+assert.match(themePlatform, /\| 'bronze'/, 'Bronze Noir is included in the typed Nightjar appearance options');
 assert.match(themePlatform, /id:'bronze',label:'Bronze Noir'/, 'Bronze Noir appears in selectable swatches');
 assert.match(themePlatform, /updateBrowserChrome\(theme\)/, 'system browser chrome matches the selected dark Nightjar theme');
 assert.match(themeUi, /Bronze Noir/, 'member-facing appearance choice explains new black and bronze style');
