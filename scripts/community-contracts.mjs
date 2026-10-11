@@ -195,6 +195,9 @@ requireText(productStyles,'.nj-spotlight-editorial-grid', 'Premium Spotlight res
 requireText(functions,"export const notifyDailySpotlights = onSchedule({", 'UK-morning Spotlight notification scheduling is missing');
 requireText(functions,"timeZone: 'Europe/London'",'Daily spotlight dispatch must respect UK daylight saving');
 requireText(functions,"await ref.create({", 'Concurrent Spotlight updates must create the one-time notification atomically');
+requireText(functions,"collection('notificationDispatches').doc('spotlight_' + date + '_' + kind)", 'FCM push must be claimed separately once by UK date and role');
+requireText(functions,"if (localHour < 9 || localHour >= 21) return;",'Nightjar must never deliver promotional phone pushes during UK night hours');
+requireText(functions,"collection('spotlightDailySelections').doc(dateKey + '_' + role)",'A spotlight person must retain their entire featured UK day despite new approvals');
 requireText(functions,"doc('spotlight_' + date + '_' + kind)", 'Spotlight notification must be unique by London date and professional role');
 requireText(functions,"preferences.followedProfiles === false", 'Spotlight push must respect existing member opt-out');
 requireText(functions,"if (item.publicProfile === false) return;", 'Private spotlight accounts must not receive promotional pushes');
