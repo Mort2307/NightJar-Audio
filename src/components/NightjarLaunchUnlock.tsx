@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Fingerprint, KeyRound, ShieldCheck } from 'lucide-react';
 import { nightjarAuth } from '../platform/firebase-auth';
-import { nightjarPasskeys } from '../platform/firebase-passkeys';
+import { nightjarPasskeys, NightjarPasskeyError, passkeyDiagnostic } from '../platform/firebase-passkeys';
 import { nightjarQuickUnlock } from '../platform/nightjar-quick-unlock';
 
 const passwordFlowKey = 'nightjar.passkeys.password-fallback.v1';
@@ -13,6 +13,7 @@ const isPasswordFlow = () => {
 };
 
 const unlockError = (error: unknown) => {
+  if (error instanceof NightjarPasskeyError) return error.message;
   const name = error instanceof Error ? error.name : '';
   const detail = error instanceof Error ? error.message : String(error ?? '');
   if (name === 'AbortError') return 'Biometric verification was cancelled.';
@@ -42,6 +43,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   const [authReady, setAuthReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [diagnostic, setDiagnostic] = useState('');
   const aborted = useRef<AbortController | null>(null);
   const alive = useRef(true);
   const attemptedAutomatically = useRef(false);
@@ -95,6 +97,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
     aborted.current = controller;
     setBusy(true);
     setMessage('');
+    setDiagnostic('');
     try {
       const identity = await nightjarPasskeys.signIn(preference.userId, controller.signal);
       if (!alive.current || controller.signal.aborted) return;
@@ -103,7 +106,10 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       if (window.location.pathname.startsWith('/account')) nightjarQuickUnlock.markUnlocked(identity.userId);
       setLocked(false);
     } catch (error) {
-      if (alive.current && !controller.signal.aborted) setMessage(unlockError(error));
+      if (alive.current && !controller.signal.aborted) {
+        setMessage(unlockError(error));
+        setDiagnostic(passkeyDiagnostic(error));
+      }
     } finally {
       if (alive.current) setBusy(false);
       if (aborted.current === controller) aborted.current = null;
@@ -138,6 +144,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
         setAuthReady(false);
         setLocked(true);
         setMessage('');
+        setDiagnostic('');
         // Relock is also a real session boundary when returning to Nightjar.
         void nightjarAuth.signOut().catch(() => { /* user can still use password */ })
           .finally(() => { if (alive.current) setAuthReady(true); });
@@ -174,7 +181,10 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       <button type="button" className="ghost-button nj-launch-unlock-fallback" onClick={() => void usePassword()}>
         <KeyRound size={16} aria-hidden="true"/> Use email and password
       </button>
-      {message && <p className="nj-launch-unlock-message" role="status" aria-live="polite">{message}</p>}
+      {message && <div className="nj-launch-unlock-message" role="status" aria-live="polite">
+        <p>{message}</p>
+        {diagnostic && diagnostic !== 'UNKNOWN' && <small className="nj-launch-unlock-diagnostic">Diagnostic: {diagnostic}</small>}
+      </div>}
       <div className="nj-launch-unlock-privacy"><ShieldCheck size={15} aria-hidden="true"/>
         <small>Your biometrics stay on your device. Nightjar verifies the passkey, then checks your existing account and age-assurance access.</small>
       </div>
