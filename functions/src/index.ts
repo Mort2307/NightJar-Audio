@@ -6408,7 +6408,51 @@ export const securityAlertEvidence = onCall({ region: REGION }, async (request) 
     })
     .slice(0, 100);
 
+  // Contact details refer ONLY to the registered account that was targeted.
+  // An attempted email address, client token or browser string never identifies
+  // the person who submitted the failed sign-in.
+  let authorisedTarget: {
+    eligible: boolean;
+    status: 'approved' | 'unapproved' | 'unverified' | 'unregistered';
+    displayName: string | null;
+    email: string | null;
+    accessReason: string | null;
+  } | null = null;
+  if (authenticationAlert) {
+    const targetUid = cleanText(alertData.targetUserId, 160);
+    authorisedTarget = { eligible: false, status: 'unregistered', displayName: null, email: null, accessReason: null };
+    if (targetUid) {
+      try {
+        const [authUser, accountSnapshot] = await Promise.all([
+          getAuth().getUser(targetUid),
+          accountRef(targetUid).get(),
+        ]);
+        const account = accountSnapshot.data() ?? {};
+        const email = cleanEmail(authUser.email);
+        const matchesTarget = email && createHash('sha256').update(email).digest('hex') === cleanText(alertData.emailHash, 100);
+        if (matchesTarget && accountSnapshot.exists) {
+          const access = await closedBetaAccessFor(email, account);
+          const eligible = authUser.emailVerified === true
+            && authUser.disabled !== true
+            && account.status !== 'suspended'
+            && access.allowed === true;
+          const presenter = eligible ? await accountPresentation(targetUid) : null;
+          authorisedTarget = {
+            eligible,
+            status: eligible ? 'approved' : authUser.emailVerified !== true ? 'unverified' : 'unapproved',
+            displayName: eligible ? presenter?.displayName ?? 'Nightjar member' : null,
+            email: eligible ? email : null,
+            accessReason: eligible ? access.reason : null,
+          };
+        }
+      } catch {
+        // If account resolution fails, never expose an unverified identity.
+      }
+    }
+  }
+
   return {
+    authorisedTarget,
     alert: {
       id: alert.id,
       userId,
@@ -9287,6 +9331,198 @@ const publicCampaignSummary = (id: string, data: Record<string, any>) => ({
   createdBy: cleanEmail(data.createdBy),
 });
 
+
+
+/* ADMIN ASSISTANCE — account-owner support, never an authentication bypass.
+   The only privileged data exposed is an exact-match registered account lookup
+   to an authenticated owner, and each email action is rate-limited and audited.
+   Firebase credential throttles, disabled identities, age verification and
+   moderation suspensions cannot be overridden from this surface. */
+const assistanceContactTarget = async (email: string) => {
+  let user: Awaited<ReturnType<ReturnType<typeof getAuth>['getUserByEmail']>> | null = null;
+  try {
+    user = await getAuth().getUserByEmail(email);
+  } catch (error) {
+    if ((error as { code?: string })?.code !== 'auth/user-not-found') throw error;
+  }
+  if (!user) return null;
+  const accountSnapshot = await accountRef(user.uid).get();
+  const account = accountSnapshot.data() ?? {};
+  const presenter = accountSnapshot.exists ? await accountPresentation(user.uid) : null;
+  const access = await closedBetaAccessFor(email, accountSnapshot.exists ? account : null);
+  const administrator = ADMIN_EMAILS.has(email) || account.role === 'admin';
+  const active = accountSnapshot.exists && account.status !== 'suspended' && !user.disabled && access.allowed && !administrator;
+  return {
+    user,
+    account,
+    presenter,
+    access,
+    administrator,
+    registered: accountSnapshot.exists,
+    canReset: active && user.emailVerified === true,
+    canVerify: active && user.emailVerified !== true,
+  };
+};
+
+export const adminAccountAssistanceLookup = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const email = cleanEmail((request.data as { email?: unknown } | undefined)?.email);
+  if (!validEmailAddress(email)) throw new HttpsError('invalid-argument', 'Enter a valid account email address.');
+  const target = await assistanceContactTarget(email);
+  if (!target) return {
+    found: false,
+    email: maskSecurityEmail(email),
+    message: 'No Firebase account exists for this address. Do not treat this as a verified member.',
+    attempts: [],
+    history: [],
+  };
+
+  const hash = createHash('sha256').update(email).digest('hex');
+  const [eventsSnapshot, actionsSnapshot] = await Promise.all([
+    db.collection('authenticationEvents').where('emailHash', '==', hash).limit(100).get(),
+    db.collection('adminAssistanceEvents').where('targetUid', '==', target.user.uid).limit(100).get(),
+  ]);
+  const attempts = eventsSnapshot.docs.map(doc => {
+    const entry = doc.data() ?? {};
+    return {
+      id: doc.id,
+      type: cleanText(entry.eventType, 80),
+      reasonCode: cleanText(entry.firebaseCode, 100) || 'auth/unknown',
+      createdAt: toIso(entry.createdAt),
+    };
+  }).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,20);
+  const recentWindow = Date.now() - 15 * 60 * 1000;
+  const recentFailures = attempts.filter(entry => Boolean(entry.createdAt) && new Date(entry.createdAt!).getTime() >= recentWindow).length;
+  const history = actionsSnapshot.docs.map(doc => {
+    const entry = doc.data() ?? {};
+    return {
+      id: doc.id,
+      kind: cleanText(entry.kind, 40),
+      status: cleanText(entry.status, 30),
+      note: cleanText(entry.note, 360),
+      by: cleanEmail(entry.adminEmail),
+      createdAt: toIso(entry.createdAt),
+    };
+  }).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,12);
+
+  return {
+    found: true,
+    userId: target.user.uid,
+    email: target.user.email ?? email,
+    displayName: target.presenter?.displayName ?? 'Nightjar account',
+    emailVerified: target.user.emailVerified === true,
+    firebaseDisabled: target.user.disabled === true,
+    registered: target.registered,
+    administrator: target.administrator,
+    nightjarStatus: cleanText(target.account.status, 40) || (target.registered ? 'active' : 'not registered in Nightjar'),
+    betaAllowed: target.access.allowed,
+    betaAccessReason: target.access.reason,
+    canReset: target.canReset,
+    canVerify: target.canVerify,
+    lastSignIn: target.user.metadata.lastSignInTime ?? null,
+    recentFailures,
+    firebaseRateLimitObserved: attempts.some(entry =>
+      entry.reasonCode === 'auth/too-many-requests' &&
+      Boolean(entry.createdAt) &&
+      new Date(entry.createdAt!).getTime() > Date.now() - 60 * 60 * 1000,
+    ),
+    cooldown: { source: 'firebase_if_applicable', nightjarCooldownActive: false, providerUnlockAvailable: false, endsAt: null },
+    attempts,
+    history,
+  };
+});
+
+export const adminSendAccountAssistanceEmail = onCall({
+  region: REGION,
+  secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+  timeoutSeconds: 120,
+}, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const email = cleanEmail(input.email);
+  const kind = cleanText(input.kind, 40);
+  const note = cleanText(input.note, 360);
+  if (!validEmailAddress(email) || !['password_reset', 'email_verification'].includes(kind)) {
+    throw new HttpsError('invalid-argument', 'Choose an existing account and a supported recovery action.');
+  }
+  if (input.memberRequested !== true || note.length < 12) {
+    throw new HttpsError('failed-precondition', 'Confirm the user requested assistance and record a brief support reason.');
+  }
+  const target = await assistanceContactTarget(email);
+  if (!target || !target.registered || target.administrator) {
+    throw new HttpsError('failed-precondition', 'This account cannot be assisted through the member support workflow.');
+  }
+  if ((kind === 'password_reset' && !target.canReset) || (kind === 'email_verification' && !target.canVerify)) {
+    throw new HttpsError('failed-precondition', 'Account status, verification or access permissions do not allow this action.');
+  }
+  // Secure one-use links are generated by Firebase and delivered exclusively
+  // to the registered account email. They are never returned to the browser.
+  const accessToken = await gmailAccessToken();
+  const link = kind === 'password_reset'
+    ? await getAuth().generatePasswordResetLink(email)
+    : await getAuth().generateEmailVerificationLink(email);
+  const lockRef = accountRef(target.user.uid).collection('assistance').doc('emailDelivery');
+  const now = Date.now();
+  const dateKey = new Date(now).toISOString().slice(0, 10);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(lockRef);
+    const state = snap.data() ?? {};
+    const count = state.dateKey === dateKey ? Number(state.sentCount ?? 0) : 0;
+    if (count >= 3 || (Number(state.lastSentAtMs ?? 0) > now - 15 * 60_000) ||
+      (state.status === 'sending' && Number(state.requestedAtMs ?? 0) > now - 2 * 60_000)) {
+      throw new HttpsError('resource-exhausted', 'Recovery email limit reached. Do not repeatedly send reset links.');
+    }
+    tx.set(lockRef, { status: 'sending', requestedAtMs: now, dateKey, sentCount: count,
+      updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  let status: 'sent' | 'failed' = 'failed';
+  try {
+    const subject = kind === 'password_reset' ? 'Nightjar account assistance — reset your password' : 'Nightjar account assistance — verify your email';
+    const intro = kind === 'password_reset'
+      ? 'You requested help signing in to Nightjar. Use this Firebase-secured link to choose a new password:'
+      : 'You requested help verifying your Nightjar account. Open this secure email verification link:';
+    const message = {
+      subject,
+      text: intro + '\n\n' + link + '\n\nIf you did not request help, you can ignore this email. Never share a password or verification code with any Nightjar administrator.\n\nNightjar Support',
+      html: '<div style="font:15px/1.6 Arial,sans-serif;background:#171119;color:#f4eaf5;padding:26px;border-radius:14px"><h2>Nightjar account assistance</h2><p>' +
+        escapeEmailHtml(intro) + '</p><p><a href="' + escapeEmailHtml(link) + '" style="color:#f0c9ee">Open secure account link</a></p>' +
+        '<p>If you did not request help, ignore this message. Nightjar will never ask for your password or verification code.</p></div>',
+    };
+    await sendGmailApiMessage({
+      accessToken,
+      fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      fromName: 'Nightjar Support',
+      replyTo: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      message: { toEmail: email, toName: target.presenter?.displayName ?? 'Nightjar member', ...message },
+    });
+    status = 'sent';
+    await lockRef.set({
+      status: 'sent', lastSentAtMs: Date.now(), dateKey,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    // Use a transaction for the counter to tolerate concurrent owners.
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(lockRef);
+      const data = snap.data() ?? {};
+      tx.set(lockRef, { sentCount: Number(data.sentCount ?? 0) + 1 }, { merge: true });
+    });
+    return { sent: true, recipient: maskSecurityEmail(email), kind };
+  } catch (error) {
+    await lockRef.set({ status: 'failed', updatedAt: FieldValue.serverTimestamp() }, { merge:true });
+    throw new HttpsError('unavailable', 'Nightjar could not deliver this recovery email. Check Nightjar Mail connection and retry after reviewing the error.');
+  } finally {
+    await db.collection('adminAssistanceEvents').add({
+      targetUid: target.user.uid,
+      kind,
+      status,
+      note,
+      adminUid: admin.uid,
+      adminEmail: admin.email,
+      recipientMasked: maskSecurityEmail(email),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+});
 
 export const adminGmailOAuthStatus = onCall({
   region: REGION,

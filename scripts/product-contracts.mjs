@@ -65,7 +65,7 @@ for (const destination of [
 ]) {
   if (!app.includes(destination)) fail('Dashboard metric lacks route to ' + destination);
 }
-if (!app.includes('id="admin-security-alerts"')) fail('Admin security metric has no corresponding anchor.');
+if (!app.includes("openAdminWorkspace('security')") || !read('src/components/AdminSecurityAlerts.tsx').includes('id="admin-security-alerts"')) fail('Admin security metric must navigate to the focused security workpage with a real anchor.');
 if (!["selectTab('portfolio')", "selectTab('collaborations')", "selectTab('profile')", "selectTab('projects')"]
   .every((call) => editorStudio.includes(call))) fail('Editor top tiles must open their relevant tabs.');
 if (!editorStyles.includes('.editor-studio-metrics > button')) fail('Editor summary buttons lack visible interaction affordance.');

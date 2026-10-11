@@ -74,6 +74,11 @@ import { installNativeProtectionBridge } from './platform/native-protection';
 import { nightjarReferrals } from './platform/firebase-referrals';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
 import MobileNavigation from './components/MobileNavigation';
+import NightjarSettings from './components/NightjarSettings';
+import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
+import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
+import AdminSecurityAlerts from './components/AdminSecurityAlerts';
+import AdminAssistance from './components/AdminAssistance';
 import ProductExperience from './components/ProductExperience';
 import AdminMemberRoleEditor from './components/AdminMemberRoleEditor';
 import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
@@ -108,7 +113,7 @@ const AdminLiveMarketplacePreview = lazy(() => import('./components/AdminLiveMar
 const EditorShowcaseModeration = lazy(() => import('./components/EditorShowcaseModeration'));
 
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
 type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -428,7 +433,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 });
 
 function App() {
-  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(topLevel) ? topLevel : 'discover') as View; });
+  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
   const [playing, setPlaying] = useState<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
@@ -506,11 +511,16 @@ function App() {
   const [securityAlertsLoading, setSecurityAlertsLoading] = useState(false);
   const [authenticationEvents, setAuthenticationEvents] = useState<AuthenticationSecurityEvent[]>([]);
   const [authenticationEventsLoading, setAuthenticationEventsLoading] = useState(false);
-  const [securityEvidenceReview, setSecurityEvidenceReview] = useState<{ alert: any; evidence: any[] } | null>(null);
+  const [securityEvidenceReview, setSecurityEvidenceReview] = useState<SecurityEvidenceReviewData | null>(null);
+  const [assistancePrefillEmail, setAssistancePrefillEmail] = useState('');
   const [securityEvidenceLoading, setSecurityEvidenceLoading] = useState(false);
   const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview' | null>(() => {
     const panelFromPath = window.location.pathname.match(/^\/admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|branding|live-preview)\/?$/)?.[1];
     return (panelFromPath ?? null) as 'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview' | null;
+  });
+  const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>(() => {
+    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)\/?$/);
+    return (match?.[1] ?? 'overview') as AdminWorkspace;
   });
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
   const [adminApplicationWave, setAdminApplicationWave] = useState('Wave 1');
@@ -838,11 +848,13 @@ function App() {
         const peopleFromPath = value.match(/^admin\/people\/(listener|creator|writer|editor|artist|admin)$/)?.[1];
         setAdminPanel((panelFromPath ?? null) as typeof adminPanel);
         setAdminPeopleRole((peopleFromPath ?? null) as typeof adminPeopleRole);
+        const workspaceFromPath = value.match(/^admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)$/)?.[1];
+        setAdminWorkspace((workspaceFromPath ?? 'overview') as AdminWorkspace);
       } else {
         setAdminPanel(null);
         setAdminPeopleRole(null);
       }
-      setView((['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(topLevel) ? topLevel : 'discover') as View);
+      setView((['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View);
     };
     window.addEventListener('popstate', onPop);
     void (async () => {
@@ -1071,6 +1083,7 @@ function App() {
   };
 
   const navigate = (nextView: View) => {
+    if (nextView === 'admin') setAdminWorkspace('overview');
     setProfileRolesPage(false);
     setAdminPanel(null);
     setAdminPeopleRole(null);
@@ -1084,6 +1097,17 @@ function App() {
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
     setView(nextView);
     setMenuOpen(false);
+    scrollNightjarToTop();
+  };
+
+  const openAdminWorkspace = (workspace: AdminWorkspace) => {
+    if (!canAdmin) return;
+    setAdminPanel(null);
+    setAdminPeopleRole(null);
+    setAdminWorkspace(workspace);
+    setMenuOpen(false);
+    const path = workspace === 'overview' ? '/admin' : '/admin/workspace/' + workspace;
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
     scrollNightjarToTop();
   };
 
@@ -1108,7 +1132,7 @@ function App() {
     const onWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'NIGHTJAR_PUSH_OPEN') return;
       const route = String(event.data.route ?? '/discover').replace(/^\//, '');
-      const target = (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(route)
+      const target = (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(route)
         ? route
         : 'discover') as View;
       navigate(target);
@@ -1140,7 +1164,7 @@ function App() {
     window.history.replaceState({}, '', returnPath);
     setPublicProfileUserId(null);
     const value = returnPath.replace(/^\/+|\/+$/g, '');
-    if (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile'].includes(value)) setView(value as View);
+    if (['discover','library','creators','creator','writer','editor','messages','admin','protection','profile','settings'].includes(value)) setView(value as View);
   };
 
   const recommendCreator = async (creator: PublicDirectoryProfile) => {
@@ -3890,7 +3914,7 @@ function App() {
     ...(editorQueue.length > 0 ? [{ id:'editor-queue', title:`${editorQueue.length} manuscript${editorQueue.length === 1 ? '' : 's'} in your queue`, reason:'Assigned production work is ready for an editorial decision or handoff.', label:'Open queue', priority:'high' as const, onClick:()=>document.querySelector('.editorial-queue')?.scrollIntoView({behavior:'smooth'}) }] : []),
   ];
   const adminActions: RoleDashboardAction[] = [
-    ...(securityAlerts.filter((item:any)=>item.status === 'open').length ? [{ id:'security', title:'Review open security alerts', reason:'Protection signals require human review before any account action is taken.', label:'Review alerts', priority:'high' as const, onClick:()=>document.getElementById('admin-security-alerts')?.scrollIntoView({behavior:'instant',block:'start'}) }] : []),
+    ...(securityAlerts.filter((item:any)=>item.status === 'open').length ? [{ id:'security', title:'Review open security alerts', reason:'Protection signals require human review before any account action is taken.', label:'Review alerts', priority:'high' as const, onClick:()=>openAdminWorkspace('security') }] : []),
     ...(imageModeration.length ? [{ id:'images', title:`${imageModeration.length} image${imageModeration.length === 1 ? '' : 's'} awaiting moderation`, reason:'Images remain private until an Administrator explicitly approves them.', label:'Moderate images', priority:'high' as const, onClick:()=>openAdminPanel('images') }] : []),
     ...(applicationGroups.pending.length ? [{ id:'applications', title:`${applicationGroups.pending.length} professional application${applicationGroups.pending.length === 1 ? '' : 's'} awaiting approval`, reason:'Only outstanding professional applications are counted. Completed approvals are archived separately.', label:'Review new applications', onClick:()=>openAdminPanel('approvals') }] : []),
     ...(adminCreatorSuggestions.some((item:any)=>item.status === 'new') ? [{ id:'creator-suggestions', title:'New Creator suggestions to review', reason:'Nightjar members have recommended Creators who are not yet on the platform.', label:'Review suggestions', onClick:()=>openAdminPanel('suggestions') }] : []),
@@ -3919,6 +3943,7 @@ function App() {
           {canProtection && (!canAdmin || interactiveRoleTest) && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && !liveRolePreview && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
+          {user && !liveRolePreview && <button className={view === 'settings' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('settings')}>Settings</button>}
         </nav>
 
         <div className="top-actions">
@@ -4303,6 +4328,20 @@ function App() {
           </section>
         )}
 
+        {view === 'settings' && (
+          <NightjarSettings
+            email={simulationMode ? undefined : user?.email}
+            administrator={effectiveRole === 'admin' && canAdmin}
+            simulationMode={demoMode}
+            notify={notify}
+            onProfile={() => { navigate('profile'); void loadProfile(); }}
+            onRoles={openMyRoles}
+            onProtection={() => { navigate('protection'); void loadProtection(); }}
+            onAdmin={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}
+            onSignOut={() => { void signOut(); }}
+          />
+        )}
+
         {view === 'profile' && !profileRolesPage && (
           <section className="page-section profile-page premium-profile-page">
             <div className="page-heading premium-profile-page-heading">
@@ -4559,20 +4598,34 @@ function App() {
 
         {view === 'admin' && canAdmin && !simulationMode && (
           <section className={adminPanel || adminPeopleRole ? 'page-wrap admin-page admin-detail-active' : 'page-wrap admin-page'}>
-            <div className="page-heading admin-owner-heading"><div><p className="eyebrow"><Settings2 size={14} /> OWNER / APP CREATOR CONSOLE</p><h1>Nightjar, from the inside.</h1><p>Private platform controls for Nightjar Administrators only. Listener, VA Creator, Writer, Audio Editor and Artist accounts cannot render or access this console.</p></div><button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh owner console</button></div>
-            <RoleDashboard
+            <div className="page-heading admin-owner-heading">
+              <div><p className="eyebrow"><Settings2 size={14} /> ADMINISTRATOR WORKSPACE</p>
+              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', finance:'Finance & subscriptions', security:'Safety & security', assistance:'Admin assistance', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
+              <p>{adminWorkspace === 'overview' ? 'Daily priorities, pending decisions and the right tools — without endless scrolling.' : 'A focused Nightjar workpage. Choose another section above to move between administrative tasks.'}</p></div>
+              <button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh</button>
+            </div>
+            <AdminWorkspaceTabs
+              active={adminWorkspace}
+              onChange={openAdminWorkspace}
+              pendingApplications={applicationGroups.pending.length}
+              pendingImages={imageModeration.length}
+              openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
+            />
+            {adminWorkspace === 'assistance' && <AdminAssistance initialEmail={assistancePrefillEmail} onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
+            {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
               title="Exceptions first."
               description="Nightjar surfaces items that require an owner decision before routine totals, so operational risk does not get buried in dashboards."
               metrics={[
-                {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts',destination:'administrator security alerts',onClick:()=>document.getElementById('admin-security-alerts')?.scrollIntoView({behavior:'instant',block:'start'})},
+                {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts',destination:'administrator security alerts',onClick:()=>openAdminWorkspace('security')},
                 {label:'Images',value:imageModeration.length,detail:'Awaiting moderation',destination:'image moderation',onClick:()=>openAdminPanel('images')},
                 {label:'Applications',value:applicationGroups.pending.length,detail:'New applications awaiting approval',destination:'professional application bank',onClick:()=>openAdminPanel('approvals')},
                 {label:'Past due',value:commercialOverview?.subscriptions.pastDue ?? 0,detail:'Billing attention',destination:'subscription ledger',onClick:()=>openAdminPanel('subscriptions')},
               ]}
               actions={adminActions}
               loading={adminOverviewLoading}
-            />
+            />}
+            {adminWorkspace === 'launch' && <>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Checking release readiness" />}>
               <AdminReleaseReadiness
                 testing={adminOverview?.testing}
@@ -4581,11 +4634,11 @@ function App() {
                 pendingImages={imageModeration.length}
                 pendingApplications={applicationGroups.pending.length}
                 onOpenDidit={() => document.getElementById('nightjar-admin-didit')?.scrollIntoView({ behavior:'instant', block:'start' })}
-                onOpenTesters={() => document.getElementById('nightjar-admin-testers')?.scrollIntoView({ behavior:'instant', block:'start' })}
-                onOpenSecurityAlerts={() => document.getElementById('admin-security-alerts')?.scrollIntoView({ behavior:'instant', block:'start' })}
+                onOpenTesters={() => openAdminWorkspace('people')}
+                onOpenSecurityAlerts={() => openAdminWorkspace('security')}
                 onOpenImages={() => openAdminPanel('images')}
                 onOpenApplications={() => openAdminPanel('approvals')}
-                onOpenAppUpdates={() => { navigate('profile'); void loadProfile(); }}
+                onOpenAppUpdates={() => navigate('settings')}
               />
             </Suspense>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
@@ -4623,21 +4676,25 @@ function App() {
                 </div>
               </div>
             </section>
-            <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Mail" />}>
+            </>}
+            {adminWorkspace === 'tools' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Mail" />}>
               <AdminCommunications />
-            </Suspense>
-            <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Editor showcase moderation" />}>
+            </Suspense>}
+            {adminWorkspace === 'content' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Editor showcase moderation" />}>
               <EditorShowcaseModeration />
-            </Suspense>
-            <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">LIVE PREVIEW</span><strong>Live role view</strong><small>Real Nightjar content · read-only · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>
-            <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">LIVE APP VIEW · NO DEMO DATA</span><strong>See Nightjar with the actual public content.</strong><p>See the real Listener catalogue and Creator marketplace. Other roles show public discovery only. Preview cannot change users, scripts, payments or permissions; private workspaces require an approved tester account.</p><div className="demo-state-line"><span className="status-pill">Real Firebase content</span><span className="status-pill muted">Read-only</span></div></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>View live Listener</button><button onClick={() => selectPreviewRole('creator')}>View live VA Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer public discovery</button><button onClick={() => selectPreviewRole('editor')}>Editor public discovery</button><button onClick={() => selectPreviewRole('artist')}>Artist public discovery</button><button onClick={() => openAdminPanel('live-preview')}>Audit script visibility</button></div></div>
-            <div className="admin-grid">
+            </Suspense>}
+            {adminWorkspace === 'tools' && <div className="admin-owner-summary"><div><span className="mini-label">ACCESS</span><strong>Administrator only</strong><small>Backend owner allowlist + authenticated admin identity</small></div><button type="button" className="admin-owner-test" onClick={() => document.getElementById("demo-simulation-controls")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span className="mini-label">LIVE PREVIEW</span><strong>Live role view</strong><small>Real Nightjar content · read-only · open controls ↓</small></button><div><span className="mini-label">OPERATIONS</span><strong>People · Content · Commercial · Safety</strong><small>Central control surface for the Nightjar app</small></div></div>}
+            {adminWorkspace === 'tools' && <div className="admin-preview-control demo-control" id="demo-simulation-controls"><div><span className="mini-label">LIVE APP VIEW · NO DEMO DATA</span><strong>See Nightjar with the actual public content.</strong><p>See the real Listener catalogue and Creator marketplace. Other roles show public discovery only. Preview cannot change users, scripts, payments or permissions; private workspaces require an approved tester account.</p><div className="demo-state-line"><span className="status-pill">Real Firebase content</span><span className="status-pill muted">Read-only</span></div></div><div className="admin-preview-buttons"><button onClick={() => selectPreviewRole('listener')}>View live Listener</button><button onClick={() => selectPreviewRole('creator')}>View live VA Creator</button><button onClick={() => selectPreviewRole('writer')}>Writer public discovery</button><button onClick={() => selectPreviewRole('editor')}>Editor public discovery</button><button onClick={() => selectPreviewRole('artist')}>Artist public discovery</button><button onClick={() => openAdminPanel('live-preview')}>Audit script visibility</button></div></div>}
+            {adminWorkspace !== 'overview' && adminWorkspace !== 'launch' && adminWorkspace !== 'assistance' && <div className="admin-grid nj-admin-focused-grid">
+              {adminWorkspace === 'people' && <>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('listener')}><span className="admin-icon"><Headphones size={19} /></span><span className="mini-label">PEOPLE · LISTENERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.listener ?? 0}</h2><p>Listener accounts with access to the catalogue and listening surfaces.</p><strong>Open listener profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('creator')}><span className="admin-icon"><Mic2 size={19} /></span><span className="mini-label">PEOPLE · CREATORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.creator ?? 0}</h2><p>Creator accounts and their current onboarding status.</p><strong>Open creator profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('admin')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">PEOPLE · ADMINISTRATORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.admin ?? 3}</h2><p>Owner accounts with administrator permissions enforced by the backend allowlist.</p><strong>Open administrator profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('writer')}><span className="admin-icon"><FileText size={19} /></span><span className="mini-label">PEOPLE · WRITERS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.writer ?? 0}</h2><p>Writers with protected manuscript and script-marketplace access.</p><strong>Open writer profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('editor')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">PEOPLE · AUDIO EDITORS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.editor ?? 0}</h2><p>Audio Editors assigned to controlled production and editorial workflows.</p><strong>Open Audio Editor profiles <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPeople('artist')}><span className="admin-icon"><ImagePlus size={19} /></span><span className="mini-label">PEOPLE · ARTISTS</span><h2>{adminOverviewLoading ? '…' : adminOverview?.people?.counts?.artist ?? 0}</h2><p>Approved human artists available for visual commissions and collaboration.</p><strong>Open Artist profiles <ArrowRight size={13} /></strong></button>
+              </>}
+              {adminWorkspace === 'tools' && <>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('branding')}>
                 <span className="admin-icon"><ImagePlus size={19}/></span>
                 <span className="mini-label">APP INSTALL · NIGHTJAR LOGO</span>
@@ -4652,25 +4709,47 @@ function App() {
                 <p>View the genuine marketplace and check why tester manuscripts are, or are not, visible. No demo records or write actions.</p>
                 <strong>Open live preview <ArrowRight size={13}/></strong>
               </button>
+              </>}
+              {adminWorkspace === 'content' && <>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('approvals')}><span className="admin-icon"><Sparkles size={19} /></span><span className="mini-label">PROFESSIONAL APPROVALS</span><h2>{applicationGroups.pending.length}</h2><p>Bank and release VA Creator, Writer, Audio Editor and Artist applications in controlled intake waves.</p><strong>Open approval workflow <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('suggestions')}><span className="admin-icon"><Users size={19} /></span><span className="mini-label">CREATOR SUGGESTIONS</span><h2>{adminCreatorSuggestions.filter((item:any)=>item.status === 'new').length || 'Review'}</h2><p>Review Creators recommended by Nightjar members and track whether they were contacted, invited or joined.</p><strong>Open Creator suggestions <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => setModerationOpen(true)}><span className="admin-icon"><Headphones size={19} /></span><span className="mini-label">CONTENT MODERATION</span><h2>Review</h2><p>Preview submitted release audio and metadata before anything enters the public adult catalogue.</p><strong>Open release moderation <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('images')}><span className="admin-icon"><ImagePlus size={19} /></span><span className="mini-label">IMAGE MODERATION</span><h2>{imageModeration.length || 'Review'}</h2><p>Approve every user-uploaded profile image, logo, release artwork and Artist portfolio image before it can render publicly.</p><strong>Open image queue <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('tags')}><span className="admin-icon"><Search size={19} /></span><span className="mini-label">TAG CATALOGUE</span><h2>{adminProfileTags.filter((tag:any)=>tag.status === 'candidate').length || 'Review'}</h2><p>Review custom Creator tags, promote useful recurring terms and hide unsuitable shared-catalogue entries.</p><strong>Open tag governance <ArrowRight size={13} /></strong></button>
+              </>}
 
+              {adminWorkspace === 'finance' && <>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('revenue')}><span className="admin-icon"><BarChart3 size={19} /></span><span className="mini-label">REVENUE</span><h2>Commercial controls</h2><p>Open confirmed subscription revenue, capped creator-rate bands and payout readiness.</p><strong>Open commercial controls <ArrowRight size={13} /></strong></button>
+              </>}
+              {adminWorkspace === 'content' && <>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('editorial')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">EDITORIAL</span><h2>{adminScripts.length}</h2><p>Assign live manuscripts to controlled editors and review production workflow.</p><strong>Open editorial controls <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('reports')}><span className="admin-icon"><ShieldAlert size={19} /></span><span className="mini-label">REPORTS & FEEDBACK</span><h2>{(adminReports.length + adminCommunityReports.length) || 'Review'}</h2><p>User-submitted safety reports, technical issues and product feedback, identified by profile name rather than opaque account IDs.</p><strong>Open reports inbox <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('reviews')}><span className="admin-icon"><Star size={19} /></span><span className="mini-label">REVIEW MODERATION</span><h2>{adminReviewQueue.length || 'Review'}</h2><p>Approve or reject listener ratings and written reviews before they appear publicly.</p><strong>Open review queue <ArrowRight size={13} /></strong></button>
+              </>}
+              {adminWorkspace === 'security' && <>
               <button className="admin-panel admin-tile" onClick={() => navigate('protection')}><span className="admin-icon"><ShieldCheck size={19} /></span><span className="mini-label">SAFETY</span><h2>Access & moderation</h2><p>Review protection signals and age-assurance boundaries.</p><strong>Open Protection Centre <ArrowRight size={13} /></strong></button>
+              </>}
+              {adminWorkspace === 'finance' && <>
               <button className="admin-panel admin-tile subscription-tile" onClick={() => openAdminPanel('subscriptions')}><span className="admin-icon"><WalletCards size={19} /></span><span className="mini-label">SUBSCRIPTIONS</span><h2>{adminOverviewLoading ? '…' : commercialOverview?.subscriptions.active ?? adminOverview?.subscriptions?.active ?? 0}</h2><p>Active paid subscriptions tracked by the confirmed Nightjar billing ledger.</p><strong>{commercialOverview?.subscriptions.trialing ?? adminOverview?.subscriptions?.trialing ?? 0} trial · {commercialOverview?.subscriptions.pastDue ?? adminOverview?.subscriptions?.pastDue ?? 0} past due <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile admin-economics" onClick={() => openAdminPanel('economics')}><span className="admin-icon"><Coins size={19} /></span><span className="mini-label">FINANCE LAB</span><h2>Model the whole split</h2><p>Simulate users, subscribers, price, VAT, fees, professional-role payouts, app funding, tax reserve and operator income.</p><strong>Open finance simulator <ArrowRight size={13} /></strong></button>
+              </>}
+              {adminWorkspace === 'tools' && <>
               <div className="admin-panel branding-admin-panel"><span className="admin-icon"><Upload size={19} /></span><span className="mini-label">BRANDING</span><h2>Nightjar logo</h2><p>{demoMode ? 'Preview a replacement logo locally while Demo Mode is active. Nothing is uploaded or changed in production.' : 'Upload or replace the logo used across Nightjar. A replacement stays pending until an administrator approves it in Image Moderation.'}</p><div className="logo-preview-grid"><div><span className="mini-label">CURRENT APPROVED</span><div className="logo-preview-box">{logoUrl ? <img src={logoUrl} alt={demoMode ? 'Nightjar demo logo preview' : 'Current approved Nightjar logo'} /> : <img src="/brand-logo" alt="Default Nightjar logo" />}</div></div>{!demoMode && pendingLogoPreviewUrl && <div><span className="mini-label">PENDING REPLACEMENT</span><div className="logo-preview-box pending-logo-preview"><img src={pendingLogoPreviewUrl} alt="Pending Nightjar logo replacement" /></div></div>}</div><div className="admin-data-actions"><label className="secondary-button upload-label"><Upload size={15} /> {demoMode ? 'Preview logo' : logoUploading ? 'Working…' : 'Replace logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.currentTarget.value = ''; }} /></label>{logoUrl && <button className="ghost-button" onClick={()=>void removeLogo()}>{demoMode ? 'Clear preview' : 'Remove logo'}</button>}</div><strong>{demoMode ? 'Local preview only · PNG / JPG / WebP · max 5 MB' : pendingLogoPreviewUrl ? 'Replacement uploaded · open Image Moderation to approve it' : 'Approved logo is used inside Nightjar. The home-screen/PWA icon is the fixed official Nightjar mark shipped with the app release.'}</strong></div>
-            </div>
-            {canAdmin && <section className="security-alert-panel" id="nightjar-admin-testers"><div><span className="mini-label">PRIVATE TESTING / EMAIL ALLOWLIST</span><h2>Approved tester emails</h2><p>Only the owner accounts and emails listed here can enter Nightjar while Closed Beta is enabled. Approved testers still verify their Firebase email normally; the temporary age bypass is clearly marked as test access.</p></div><div className="admin-application-wavebar"><label>Tester email<input type="email" value={adminTesterEmail} onChange={(event)=>setAdminTesterEmail(event.target.value)} placeholder="tester@example.com" /></label><button className="primary-button" disabled={!adminTesterEmail.trim()} onClick={()=>void changeClosedBetaTester(adminTesterEmail,true)}>Approve tester email</button></div><div className="security-alert-list">{(adminOverview?.testing?.approvedTesters ?? []).length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No tester emails approved</strong><span>Owner administrator emails remain allowed automatically.</span></div> : (adminOverview?.testing?.approvedTesters ?? []).map((tester:any)=><article className="security-alert-row" key={tester.email}><div><strong>{tester.email}</strong><span>Private beta account access · temporary age-assurance bypass while test mode is enabled</span><em>Removing access blocks Nightjar backend use even if a Firebase Auth identity already exists.</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={()=>void changeClosedBetaTester(tester.email,false)}>Remove tester access</button></div></article>)}</div><strong>{adminOverview?.testing?.approvedTesterCount ?? 0} approved tester email{(adminOverview?.testing?.approvedTesterCount ?? 0) === 1 ? '' : 's'} · Closed Beta {adminOverview?.testing?.closedBeta === false ? 'OFF' : 'ON'}</strong></section>}
-            <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>
-            {canAdmin && <section id="admin-security-alerts" className="security-alert-panel"><div><span className="mini-label">SECURITY / OWNER ALERTS</span><h2>Suspicious activity</h2><p>Every qualifying alert is addressed to all three Nightjar owners and retained in the audit trail.</p></div><button className="secondary-button" onClick={() => void loadSecurityAlerts()}>{securityAlertsLoading ? 'Refreshing…' : 'Refresh alerts'}</button><div className="security-alert-list">{securityAlerts.length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No open security alerts</strong><span>Signals remain evidence, not accusations. Alerts are retained for review.</span></div> : securityAlerts.map((alert:any) => <article className="security-alert-row" key={alert.id}><div><strong>{alert.severity?.toUpperCase() ?? 'MEDIUM'} · Risk {alert.riskScore ?? '—'} · {alert.reason ?? 'Suspicious protected-content activity'}</strong><span>{alert.category === 'authentication' ? 'Target: ' + (alert.targetEmailMasked ?? alert.userEmail ?? 'Nightjar account') : 'User: ' + (alert.userName ?? 'Nightjar account') + (alert.userHandle ? ' · @' + String(alert.userHandle).replace(/^@/, '') : '') + ' · Script: ' + (alert.relatedId ?? '—')} · {new Date(alert.createdAt).toLocaleString('en-GB')}</span>{alert.signal && <div className="security-signal-meta"><span><strong>{protectionEventLabel(alert.signal.eventType)}</strong>{protectionConfidenceLabel(alert.signal.detectionConfidence) ? ' · ' + protectionConfidenceLabel(alert.signal.detectionConfidence) : ''}</span>{alert.signal.detectionSource && <span>Source: {String(alert.signal.detectionSource).replaceAll('_',' ')}</span>}{Number(alert.signal.possibleCaptureEvents ?? 0) > 0 && <span>Possible capture signals / 10 min: {alert.signal.possibleCaptureEvents}</span>}{Number(alert.signal.nativeCaptureEvents ?? 0) > 0 && <span>Native capture callbacks / 10 min: {alert.signal.nativeCaptureEvents}</span>}</div>}<em>Delivered to all three owners · evidence requires human review · no automatic freeze</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={() => void openSecurityAlertEvidence(alert)}>{securityEvidenceLoading ? 'Loading evidence…' : 'Review evidence'}</button><button className="ghost-button" disabled={alert.status !== 'open'} onClick={() => void closeSecurityAlertBenign(alert)}>Benign</button>{alert.category !== 'authentication' && <><button className="secondary-button" disabled={alert.status !== 'open'} onClick={() => void revokeSessionsFromSecurityAlert(alert)}>Revoke reader sessions</button><button className="secondary-button" disabled={alert.status === 'actioned'} onClick={() => void suspendFromSecurityAlert(alert)}>{alert.status === 'actioned' ? 'Account suspended' : 'Suspend account'}</button></>}</div></article>)}</div></section>}
-            {canAdmin && <section className="security-alert-panel authentication-attempt-panel">
+              </>}
+            </div>}
+            {canAdmin && adminWorkspace === 'people' && <section className="security-alert-panel" id="nightjar-admin-testers"><div><span className="mini-label">PRIVATE TESTING / EMAIL ALLOWLIST</span><h2>Approved tester emails</h2><p>Only the owner accounts and emails listed here can enter Nightjar while Closed Beta is enabled. Approved testers still verify their Firebase email normally; the temporary age bypass is clearly marked as test access.</p></div><div className="admin-application-wavebar"><label>Tester email<input type="email" value={adminTesterEmail} onChange={(event)=>setAdminTesterEmail(event.target.value)} placeholder="tester@example.com" /></label><button className="primary-button" disabled={!adminTesterEmail.trim()} onClick={()=>void changeClosedBetaTester(adminTesterEmail,true)}>Approve tester email</button></div><div className="security-alert-list">{(adminOverview?.testing?.approvedTesters ?? []).length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No tester emails approved</strong><span>Owner administrator emails remain allowed automatically.</span></div> : (adminOverview?.testing?.approvedTesters ?? []).map((tester:any)=><article className="security-alert-row" key={tester.email}><div><strong>{tester.email}</strong><span>Private beta account access · temporary age-assurance bypass while test mode is enabled</span><em>Removing access blocks Nightjar backend use even if a Firebase Auth identity already exists.</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={()=>void changeClosedBetaTester(tester.email,false)}>Remove tester access</button></div></article>)}</div><strong>{adminOverview?.testing?.approvedTesterCount ?? 0} approved tester email{(adminOverview?.testing?.approvedTesterCount ?? 0) === 1 ? '' : 's'} · Closed Beta {adminOverview?.testing?.closedBeta === false ? 'OFF' : 'ON'}</strong></section>}
+            {adminWorkspace === 'security' && <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>}
+            {canAdmin && adminWorkspace === 'security' && <AdminSecurityAlerts
+              alerts={securityAlerts}
+              loading={securityAlertsLoading}
+              evidenceLoading={securityEvidenceLoading}
+              onRefresh={() => { void loadSecurityAlerts(); }}
+              onReview={(alert) => { void openSecurityAlertEvidence(alert); }}
+              onBenign={(alert) => { void closeSecurityAlertBenign(alert); }}
+              onRevoke={(alert) => { void revokeSessionsFromSecurityAlert(alert); }}
+              onSuspend={(alert) => { void suspendFromSecurityAlert(alert); }}
+            />}
+            {canAdmin && adminWorkspace === 'security' && <section className="security-alert-panel authentication-attempt-panel">
               <div>
                 <span className="mini-label">SECURITY / AUTHENTICATION LOG</span>
                 <h2>Unauthorised sign-in attempts</h2>
@@ -4995,31 +5074,7 @@ function App() {
 
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal">T&Cs Centre</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
-      {securityEvidenceReview && <div className="security-evidence-backdrop" role="dialog" aria-modal="true" aria-label="Security alert evidence review" onClick={()=>setSecurityEvidenceReview(null)}>
-        <section className="security-evidence-modal" onClick={(event)=>event.stopPropagation()}>
-          <header className="security-evidence-head">
-            <div><span className="mini-label">SECURITY / EVIDENCE REVIEW</span><h2>{String(securityEvidenceReview.alert?.severity ?? 'medium').toUpperCase()} · Risk {securityEvidenceReview.alert?.riskScore ?? '—'}</h2><p>{securityEvidenceReview.alert?.reason ?? 'Protected-content activity retained for human review.'}</p></div>
-            <button className="icon-button" onClick={()=>setSecurityEvidenceReview(null)} aria-label="Close security evidence review"><X size={18}/></button>
-          </header>
-          <div className="security-evidence-principle"><ShieldCheck size={16}/><div><strong>Evidence is contextual, not a finding of wrongdoing.</strong><span>{securityEvidenceReview.alert?.category === 'authentication' ? 'Authentication evidence here is observed through Nightjar’s own account portal. Passwords are never captured, and direct Firebase requests outside Nightjar require separate Google/Firebase audit logging for complete coverage.' : 'Browser capture shortcuts are labelled possible. Native callbacks are stronger OS-level signals. No screenshot contents, clipboard contents or private device files are collected.'}</span></div></div>
-          <div className="security-evidence-list">
-            {securityEvidenceReview.evidence.length ? securityEvidenceReview.evidence.map((item:any)=><article key={item.id} className="security-evidence-row">
-              <div className="security-evidence-row-head"><strong>{protectionEventLabel(item.eventType)}</strong><span>{protectionConfidenceLabel(item.detectionConfidence) ?? 'Recorded interaction'}</span></div>
-              <p>{item.summary || 'Protected interaction recorded by Nightjar.'}</p>
-              <dl>
-                <div><dt>Time</dt><dd>{item.createdAt ? new Date(item.createdAt).toLocaleString('en-GB') : '—'}</dd></div>
-                <div><dt>Script / item</dt><dd>{item.relatedId ?? '—'}</dd></div>
-                <div><dt>Reader session</dt><dd>{item.readerSessionId ?? '—'}</dd></div>
-                <div><dt>Device token</dt><dd>{item.deviceId ?? '—'}</dd></div>
-                <div><dt>Platform</dt><dd>{item.clientPlatform ?? '—'}</dd></div>
-                <div><dt>Source</dt><dd>{item.detectionSource ? String(item.detectionSource).replaceAll('_',' ') : '—'}</dd></div>
-                <div><dt>Route</dt><dd>{item.route ?? '—'}</dd></div>
-                <div><dt>Visibility</dt><dd>{item.visibilityState ?? '—'}</dd></div>
-              </dl>
-            </article>) : <div className="people-empty"><ShieldCheck size={18}/><strong>No retained events for this alert.</strong><span>The alert record remains available, but no supporting protection events were returned.</span></div>}
-          </div>
-        </section>
-      </div>}
+      {securityEvidenceReview && <SecurityEvidenceReview review={securityEvidenceReview} onClose={() => setSecurityEvidenceReview(null)} onAssistance={(email) => { setAssistancePrefillEmail(email); setSecurityEvidenceReview(null); openAdminWorkspace('assistance'); }} />}
 
       {moderationPreviewAsset?.previewUrl && <div className="image-moderation-fullscreen" role="dialog" aria-modal="true" aria-label="Full-screen image moderation preview" onClick={()=>setModerationPreviewAsset(null)}>
         <div className="image-moderation-fullscreen-shell" onClick={(event)=>event.stopPropagation()}>
