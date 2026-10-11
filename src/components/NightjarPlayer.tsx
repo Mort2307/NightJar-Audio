@@ -7,6 +7,7 @@ import {
   type AccessibilityPreferences,
 } from '../platform/firebase-accessibility';
 import { BookOpenText, ChevronLeft, ChevronRight, Clock3, Moon, Pause, Play, Volume2, X } from 'lucide-react';
+import './nightjar-player-premium.css';
 
 export type NightjarPlayerTrack = {
   id: string;
@@ -343,6 +344,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
 
   return <div className={transcriptOpen ? 'nightjar-player-shell transcript-open' : 'nightjar-player-shell'}>
     <div className="player-dock" role="region" aria-label="Nightjar audio player">
+      <button type="button" className="dock-close" onClick={onClose} aria-label="Close audio player"><X size={21} aria-hidden="true" /></button>
       {!simulationMode && <audio
         ref={audioRef}
         src={playbackUrl ?? undefined}
@@ -392,7 +394,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
       </button>
       <div className="dock-volume"><Volume2 size={15} /><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume" /></div>
       <label className="dock-sleep"><Clock3 size={14}/><select value={sleepTimer} onChange={(event) => setSleepTimer(event.target.value as typeof sleepTimer)} aria-label="Sleep timer"><option value="off">Sleep off</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="end">End of audio</option></select></label>
-      <button className="dock-close" onClick={onClose} aria-label="Close player"><X size={15} /></button>
+
     </div>
 
     {transcriptOpen && <aside

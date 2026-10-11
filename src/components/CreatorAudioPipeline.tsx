@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarMedia } from '../platform/firebase-media';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
@@ -52,6 +52,9 @@ type Props = {
   notify: (message: string) => void;
   simulationMode?: boolean;
   onSimulationChange?: (release: Release | null, deletedId?: string) => void;
+  focusReleaseId?: string | null;
+  onSubmitted?: () => void;
+  onDeleted?: (id: string) => void;
 };
 
 const readDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
@@ -77,7 +80,7 @@ const readAudioDurationMinutes = (file: File) => new Promise<number | null>((res
   audio.src = objectUrl;
 });
 
-export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify, simulationMode = false, onSimulationChange }: Props) {
+export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify, simulationMode = false, onSimulationChange, focusReleaseId, onSubmitted, onDeleted }: Props) {
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [workflowStep, setWorkflowStep] = useState<'prepare' | 'review'>('prepare');
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
@@ -87,6 +90,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [audioFileLabel, setAudioFileLabel] = useState('');
   const [audioFeedback, setAudioFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [submissionConfirmed, setSubmissionConfirmed] = useState(false);
+  const handledFocus = useRef<string | null>(null);
+  const lastOpenedKey = 'nightjar:last-opened-creator-release';
   const [artBusy, setArtBusy] = useState(false);
   const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
   const [promotedTagOptions, setPromotedTagOptions] = useState<string[]>([]);
@@ -95,17 +102,40 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   // Show existing drafts immediately instead of leaving creators in an empty editor.
   useEffect(() => {
     if (selectedRelease || releases.length === 0) return;
-    const next = releases.find((item) => item.status === 'draft') ?? releases[0];
+    let lastOpened = '';
+    try { lastOpened = window.sessionStorage.getItem(lastOpenedKey) ?? ''; } catch { /* private storage may be unavailable */ }
+    const next = releases.find((item) => item.id === focusReleaseId) ?? releases.find((item) => item.id === lastOpened) ?? releases.find((item) => item.status === 'draft') ?? releases[0];
     setSelectedRelease(next);
     setWorkflowStep(next.status === 'draft' ? 'prepare' : 'review');
-  }, [releases, selectedRelease]);
+  }, [releases, selectedRelease, focusReleaseId]);
+
+  useEffect(() => {
+    if (!focusReleaseId || handledFocus.current === focusReleaseId) return;
+    const match = releases.find((release) => release.id === focusReleaseId);
+    if (match) {
+      handledFocus.current = focusReleaseId;
+      setSelectedRelease(match);
+      setWorkflowStep('review');
+      try { window.sessionStorage.setItem(lastOpenedKey, match.id); } catch {}
+    }
+  }, [focusReleaseId, releases]);
+
+  // Reconcile read-only submission status after a refresh without overwriting
+  // unfinished metadata that a creator is still editing locally.
+  useEffect(() => {
+    if (!selectedRelease || selectedRelease.status === 'draft') return;
+    const refreshed = releases.find((release) => release.id === selectedRelease.id);
+    if (refreshed && refreshed.status !== 'draft') setSelectedRelease((prior) => prior?.id === refreshed.id && JSON.stringify(prior) !== JSON.stringify(refreshed) ? refreshed : prior);
+  }, [releases, selectedRelease?.id, selectedRelease?.status]);
 
   const chooseRelease = (release: Release) => {
     setSelectedRelease(release);
+    try { window.sessionStorage.setItem(lastOpenedKey, release.id); } catch {}
     setWorkflowStep(release.status === 'draft' ? 'prepare' : 'review');
     setAudioStage('idle');
     setAudioFileLabel('');
     setAudioFeedback('');
+    setSubmissionConfirmed(false);
   };
 
   const combinedTagOptions = useMemo(
@@ -142,8 +172,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       .then((data) => setCreditDirectory(data.people ?? []))
       .catch(() => setCreditDirectory([]));
   }, [simulationMode]);
-  const statusLabel = current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
-  const statusHint = current?.status === 'pending_review'
+  const statusLabel = current?.status === 'removing' ? 'REMOVAL PENDING' : current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
+  const statusHint = current?.status === 'removing' ? 'This recording is hidden while Nightjar finishes deleting its files. Retry removal if necessary.' : current?.status === 'pending_review'
     ? 'Your submission is with Nightjar moderation.'
     : current?.status === 'released'
       ? 'Published and available to age-verified listeners.'
@@ -163,7 +193,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   ];
   const incompleteChecks = reviewChecks.filter((check) => !check.passed);
   const complete = incompleteChecks.length === 0;
-  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'released';
+  const removalPending = current?.status === 'removing';
+  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'released' || removalPending;
 
   const openDetails = (target?: string) => {
     setWorkflowStep('prepare');
@@ -269,7 +300,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       });
       const next = data.release as Release | undefined;
       setDraft({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
-      if (next) { setSelectedRelease(next); setWorkflowStep('prepare'); }
+      if (next) { setSelectedRelease(next); setWorkflowStep('prepare'); setSubmissionConfirmed(false); }
       await onRefresh();
       notify('Release draft created.');
     } catch { notify('Release draft could not be created.'); }
@@ -403,21 +434,35 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     finally { setAudioBusy(false); }
   };
 
-  const deleteDraft = async () => {
-    if (!current?.id || current.status === 'released') return;
-    if (!window.confirm('Delete this release draft and its private audio?')) return;
+  const removeRelease = async () => {
+    if (!current?.id || removing || audioBusy || submitting) return;
+    const item = current;
+    const warning = item.status === 'released'
+      ? 'Remove this published recording from Nightjar? Listening will stop, and its audio and artwork will be deleted. This cannot be undone.'
+      : item.status === 'pending_review'
+        ? 'Withdraw and permanently remove this submission from Nightjar review? The uploaded recording will be deleted. This cannot be undone.'
+        : 'Remove this draft and delete its uploaded audio and artwork? This cannot be undone.';
+    if (!window.confirm(warning)) return;
+    setRemoving(true);
     try {
       if (simulationMode) {
-        onSimulationChange?.(null, current.id);
-        setSelectedRelease(null);
-        notify('Simulation: release draft removed locally.');
-        return;
+        onSimulationChange?.(null, item.id);
+      } else {
+        const result = await nightjarCatalogue.remove(item.id);
+        if (result.deleted !== true) throw new Error('Nightjar could not verify the removal.');
+        await onRefresh().catch(() => {});
       }
-      await nightjarCatalogue.remove(current.id);
       setSelectedRelease(null);
-      await onRefresh();
-      notify('Release draft removed.');
-    } catch { notify('Release draft could not be removed.'); }
+      try { window.sessionStorage.removeItem(lastOpenedKey); } catch {}
+      setSubmissionConfirmed(false);
+      setAudioFileLabel('');
+      setAudioFeedback('');
+      onDeleted?.(item.id);
+      notify('Recording removed from Nightjar. Its playable audio is no longer available.');
+    } catch (error) {
+      await onRefresh().catch(() => {});
+      notify(error instanceof Error ? error.message : 'Removal could not be completed. Please retry.');
+    } finally { setRemoving(false); }
   };
 
   const saveMetadata = async () => {
@@ -447,6 +492,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       if (simulationMode) {
         setSelectedRelease({ ...current, status: 'pending_review' });
         setWorkflowStep('review');
+        setSubmissionConfirmed(true);
+        onSubmitted?.();
         notify('Simulation: release moved to pending moderation locally.');
         return;
       }
@@ -460,9 +507,13 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       const submitted = await nightjarCatalogue.submit(current.id);
       if (submitted.release?.status !== 'pending_review') throw new Error('Nightjar did not confirm this submission reached moderation.');
       setSelectedRelease(submitted.release);
+      try { window.sessionStorage.setItem(lastOpenedKey, current.id); } catch {}
       setWorkflowStep('review');
+      setSubmissionConfirmed(true);
       await onRefresh().catch(() => { /* retain the verified submission status */ });
-      notify('Submitted to Nightjar moderation. You can follow its status here.');
+      onSubmitted?.();
+      window.requestAnimationFrame(() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      notify('Submission confirmed! Your recording is now awaiting Nightjar review.');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Release could not be submitted for moderation.');
     } finally { setSubmitting(false); }
@@ -480,7 +531,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     <div className="creator-pipeline-grid">
       <aside className="pipeline-library">
-        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'pending_review' ? 'Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
+        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
@@ -491,11 +542,20 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       <div className="pipeline-editor">
         {current ? <>
           <div className="pipeline-status"><div><span>{statusLabel}</span><strong>{statusHint}</strong></div><Check size={18} /></div>
+          {submittedOrPublished && <section className="nj-submission-confirmation" role="status" aria-live="polite">
+            <Check size={28} aria-hidden="true"/>
+            <div><span className="mini-label">{removalPending ? 'NIGHTJAR · REMOVAL PENDING' : current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>
+              <h3>{removalPending ? 'Your recording is hidden.' : current.status === 'released' ? 'Your recording is live.' : 'Your recording has been submitted!'}</h3>
+              <p><strong>{current.title}</strong> {removalPending ? 'is no longer publicly accessible. Storage cleanup is still pending; select Remove recording to retry.' : current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
+              <small>{submissionConfirmed ? 'Submission confirmed just now · ' : ''}Status: {removalPending ? 'Removal pending' : current.status === 'released' ? 'Published' : 'Awaiting review'}</small>
+            </div>
+            <button className="secondary-button" type="button" onClick={() => void onRefresh()}>Refresh status</button>
+          </section>}
           {!submittedOrPublished && <div className="nj-creator-workflow-switch" role="group" aria-label="Release workflow">
             <button type="button" className={workflowStep === 'prepare' ? 'is-active' : ''} onClick={() => openDetails()} aria-current={workflowStep === 'prepare' ? 'step' : undefined}>1 · Upload & details</button>
             <button type="button" className={workflowStep === 'review' ? 'is-active' : ''} onClick={() => setWorkflowStep('review')} aria-current={workflowStep === 'review' ? 'step' : undefined}>2 · Review & submit</button>
           </div>}
-          <section className="nj-release-journey" aria-label="Audio publishing steps">
+          {!submittedOrPublished && <section className="nj-release-journey" aria-label="Audio publishing steps">
             <h3>From your recording to Nightjar</h3>
             <div className="nj-release-journey-steps">
               <div className="done"><Check size={14}/> 1. Draft created</div>
@@ -504,7 +564,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               <div className={current.status === 'pending_review' || current.status === 'released' ? 'done' : complete ? 'next' : ''}>{current.status === 'pending_review' || current.status === 'released' ? <Check size={14}/> : <Send size={14}/>} 4. Submit for review</div>
             </div>
             <p role="status">{current.status === 'pending_review' ? 'Your release has reached the administrator moderation queue. No public listening is possible until it is approved.' : current.status === 'released' ? 'Nightjar approved and published this release.' : current.audioAvailable ? 'Your audio is stored privately, but has NOT been submitted. Complete the release information, then select Submit to moderation.' : 'Choose a supported audio file below. Selecting a file starts an upload; it does not publish or submit your release.'}</p>
-          </section>
+          </section>}
           {workflowStep === 'prepare' && !submittedOrPublished && <>
           <div className="pipeline-assets" id="release-audio">
             <div className="asset-drop asset-drop-moderated nj-audio-attachment"><Music2 size={19} /><strong>{audioBusy ? audioStage === 'verifying' ? 'Verifying saved audio…' : 'Uploading your audio…' : current.audioAvailable ? 'Audio connected to this draft' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · private until approved</span>
@@ -669,7 +729,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </section>
 
           </>}
-          {(workflowStep === 'review' || submittedOrPublished) && <section className="nj-release-review" aria-label="Review release before moderation">
+          {workflowStep === 'review' && !submittedOrPublished && <section className="nj-release-review" aria-label="Review release before moderation">
             <div className="nj-review-heading"><span className="mini-label">REVIEW YOUR SUBMISSION</span><h3>{submittedOrPublished ? current.status === 'released' ? 'This release is published' : 'Your release is awaiting review' : 'Ready to send to Nightjar?'}</h3>
               <p>{submittedOrPublished ? 'Your recording is already in the Nightjar review and publishing workflow. You do not need to submit it again.' : 'Check the essentials below. Only clicking Submit for Review sends your private recording to our moderators.'}</p></div>
             <div className="nj-review-checklist">{reviewChecks.map((check) => <div className={check.passed ? 'nj-review-check passed' : 'nj-review-check missing'} key={check.label}>
@@ -683,7 +743,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               <button type="button" className="primary-button" disabled={!complete || audioBusy || submitting || !canPublish || accountStatus === 'pending_review'} onClick={() => void submit()}><Send size={16}/> {submitting ? 'Sending to moderators…' : 'Submit for Review'}</button>
             </div>}
           </section>}
-          {workflowStep === 'prepare' && !submittedOrPublished && <div className="pipeline-footer"><span>Save changes before leaving this release.</span><div><button className="ghost-button" type="button" onClick={() => void deleteDraft()}>Delete draft</button><button className="secondary-button" type="button" onClick={() => void saveMetadata()}>Save changes</button><button className="primary-button" type="button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={14}/> Continue to Review →</button></div></div>}
+          <div className="nj-work-removal">
+            <div><strong>Remove this recording</strong><small>You control your work. Remove drafts, submissions or published recordings whenever you choose. Removal cannot be undone.</small></div>
+            <button className="ghost-button nj-work-remove-button" type="button" disabled={removing || submitting || audioBusy} onClick={() => void removeRelease()}>{removing ? 'Removing recording…' : 'Remove recording'}</button>
+          </div>
+          {workflowStep === 'prepare' && !submittedOrPublished && <div className="pipeline-footer"><span>Save changes before leaving this release.</span><div><button className="ghost-button" type="button" onClick={() => void removeRelease()} disabled={removing}>{removing ? 'Removing…' : 'Remove draft'}</button><button className="secondary-button" type="button" onClick={() => void saveMetadata()}>Save changes</button><button className="primary-button" type="button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={14}/> Continue to Review →</button></div></div>}
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Choose a recording.</strong><span>Select a saved recording above, or create one with a title.</span></div>}
       </div>
     </div>

@@ -132,3 +132,41 @@
   .nj-workspace-switcher-actions { width: 100%; }
   .nj-workspace-switcher-actions > button:first-child { flex: 1; }
 }
+
+/* Confirmation replaces the form after a verified moderation submission. */
+.nj-submission-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.1rem;
+  padding: clamp(1.1rem, 3vw, 1.7rem);
+  margin: 1rem 0;
+  border: 1px solid rgba(207,181,216,.36);
+  border-radius: 18px;
+  background: linear-gradient(130deg, rgba(94,66,86,.3),rgba(23,21,28,.86));
+  box-shadow: 0 12px 34px rgba(0,0,0,.14);
+}
+.nj-submission-confirmation > svg { width: 48px; height: 48px; padding: 11px; border-radius: 50%; background:rgba(179,228,187,.12); color:#b8e4bf; flex-shrink:0; }
+.nj-submission-confirmation > div { min-width: 0; flex: 1; }
+.nj-submission-confirmation h3 { margin: .4rem 0; font: normal clamp(1.45rem, 3vw, 2rem) Georgia, serif; }
+.nj-submission-confirmation p { font-size: 1rem; line-height: 1.6; margin: .4rem 0; }
+.nj-submission-confirmation small { color: #d1c4d0; font-size: .85rem; }
+.nj-submission-confirmation > button { align-self: center; }
+.nj-work-removal, .nj-admin-recording-removal {
+  margin: 1.25rem 0 .25rem;
+  padding: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  border-top: 1px solid var(--line,rgba(255,255,255,.16));
+}
+.nj-work-removal > div { display: grid; flex: 1; min-width: 175px; gap: .3rem; }
+.nj-work-removal small, .nj-admin-recording-removal p { color: var(--muted, #bdb1c0); font-size: .84rem; line-height: 1.4; }
+.nj-admin-recording-removal { border: 1px solid rgba(214,150,150,.25); border-radius: 12px; }
+.nj-work-remove-button { border: 1px solid rgba(216,136,136,.4) !important; color: #f4b7b7 !important; }
+@media (max-width: 720px) {
+ .nj-submission-confirmation > button, .nj-work-removal > button, .nj-admin-recording-removal > button { width: 100%; justify-content: center; }
+ .nj-submission-confirmation h3 { font-size: 1.65rem; }
+}
