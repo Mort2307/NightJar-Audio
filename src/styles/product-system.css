@@ -3642,3 +3642,17 @@ textarea {
  .nj-listener-discovery-work-grid {grid-template-columns:minmax(0,1fr);}
  .nj-listener-discovery-follow-list {grid-template-columns:minmax(0,1fr);}
 }
+
+
+/* Accessible, compact new-theme badge without altering other styles. */
+.nj-theme-new-tag {
+  color: #e2ba83;
+  font-size: 10px;
+  letter-spacing: .09em;
+  font-weight: 800;
+}
+:root[data-nightjar-theme="bronze"] .nj-theme-choice.selected {
+  background: linear-gradient(150deg,#251b13,#13100e);
+  border-color: #d4a773;
+  box-shadow: 0 0 0 1px rgba(226,186,131,.45) inset, 0 12px 32px rgba(122,79,36,.13);
+}
