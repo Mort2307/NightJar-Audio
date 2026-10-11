@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AudioLines, Brush, Eye, EyeOff, FileText, Headphones, KeyRound, LockKeyhole, Mail, Mic2, ShieldCheck } from 'lucide-react';
+import { AudioLines, Brush, Eye, EyeOff, FileText, Headphones, KeyRound, LockKeyhole, Mail, Mic2, ShieldCheck, Fingerprint } from 'lucide-react';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount } from '../platform/firebase-account';
 import { nightjarAuthSecurity } from '../platform/firebase-auth-security';
+import { nightjarPasskeys } from '../platform/firebase-passkeys';
 import { currentLegalAcceptancePayload, NIGHTJAR_LEGAL_DOCUMENTS } from '../legal/nightjarLegal';
 
 type Mode = 'signin' | 'register' | 'reset' | 'verify' | 'security';
@@ -22,6 +23,7 @@ const friendlyError = (error: unknown) => {
   const value = error instanceof Error ? error.message : String(error ?? '');
   const detail = code || value;
 
+  if (/passkey|device verification|webauthn/i.test(value) && !code) return value;
   if (detail.includes('email-already-in-use')) return 'That email already has a Nightjar account. Try signing in instead.';
   if (detail.includes('invalid-credential')) return 'The email or password is incorrect.';
   if (detail.includes('weak-password') || detail.includes('password-does-not-meet-requirements')) return 'Firebase rejected that password under the project password policy. Try a longer password with upper-case, lower-case, a number and a symbol.';
@@ -330,6 +332,12 @@ export default function AccountAccess({
     </div>}
     {message && <p className="account-access-message" role="status" aria-live="polite">{message}</p>}
     <button type="button" className="primary-button account-access-submit" disabled={busy || (mode === 'register' && (!termsAccepted || !privacyRead || (registrationRoles.length > 0 && !professionalTermsAccepted)))} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
+    {mode === 'signin' && nightjarPasskeys.supported() && <button type="button" className="secondary-button account-access-submit" disabled={busy} onClick={() => void run(async () => {
+      const next = await nightjarPasskeys.signIn();
+      onAuthenticated(next);
+      if (next.emailVerified) void nightjarAuthSecurity.recordSuccess().catch(() => { /* analytics cannot block login */ });
+      setMessage('Passkey verified. Opening Nightjar…');
+    })}><Fingerprint size={17}/> Sign in with Face ID, fingerprint or passkey</button>}
     <div className="account-access-switches">
       {mode !== 'signin' && <button onClick={() => { setMode('signin'); setMessage(''); }}>Already have an account?</button>}
       {mode !== 'register' && <button onClick={() => { setMode('register'); setMessage(''); }}>Create account</button>}
