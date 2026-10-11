@@ -1169,7 +1169,22 @@ export const saveMySocialLink = onCall({region:REGION},async(request)=>{
     const count=await collection.count().get();
     if (count.data().count>=12) throw new HttpsError('resource-exhausted','You can save up to 12 social links.');
   }
+  const accountChanged = snapshot.exists && snapshot.data()?.url !== result.url;
+  if(accountChanged){
+    // Never carry a person's picture across to a different social account URL.
+    // Revoke image access before allowing the new link to appear publicly.
+    for(const value of [snapshot.data()?.photoAssetId,snapshot.data()?.pendingPhotoAssetId]){
+      const assetId=cleanText(value,160);
+      if(!assetId)continue;
+      const asset=await db.collection('imageAssets').doc(assetId).get();
+      if(asset.exists && asset.data()?.ownerUserId===identity.uid && asset.data()?.kind==='social_avatar'){
+        await asset.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        await clearAssetFile(asset.data()??{});
+      }
+    }
+  }
   await ref.set({url:result.url,platform:result.platform,updatedAt:FieldValue.serverTimestamp(),
+    ...(accountChanged?{photoAssetId:null,photoUrl:null,photoStatus:null,pendingPhotoAssetId:null,pendingPhotoStatus:null}:{}),
     ...(snapshot.exists?{}:{createdAt:FieldValue.serverTimestamp()})},{merge:true});
   const saved=await ref.get();
   return {link:socialLinkPayload(ref.id,saved.data()??{})};
