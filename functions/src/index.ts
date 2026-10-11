@@ -4680,7 +4680,7 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
 
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
-  if (!data) throw new HttpsError('not-found', 'Release transcript not found.');
+  if (!data || data.status === 'removed') throw new HttpsError('not-found', 'Release transcript not found.');
 
   const transcriptText = cleanReleaseTranscript(data.transcriptText);
   if (!transcriptText) throw new HttpsError('not-found', 'This release does not have a transcript yet.');
@@ -4758,6 +4758,7 @@ const notificationRouteFor = (payload: Record<string, unknown>) => {
   if (type === 'message' || subtype === 'professional_message' || subtype === 'direct_message') return '/messages';
   if (type === 'collaboration') return '/messages';
   if (type === 'payment' || subtype === 'payment') return '/profile';
+  if (type === 'release_submission') return '/creator';
   if (subtype === 'release' || subtype === 'release_comment' || subtype === 'release_reaction') return '/discover';
   return '/discover';
 };
@@ -5375,7 +5376,7 @@ export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (reque
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
-  if (!data || !data.audioStoragePath) throw new HttpsError('not-found', 'Release audio not found.');
+  if (!data || data.status === 'removed' || !data.audioStoragePath) throw new HttpsError('not-found', 'Release audio not found.');
   const [url] = await getStorage().bucket().file(String(data.audioStoragePath)).getSignedUrl({
     action: 'read',
     expires: Date.now() + 10 * 60 * 1000,
