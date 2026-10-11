@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import assert from 'node:assert/strict';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -36,6 +37,7 @@ if (failures.length) {
 }
 
 // Theme customisation is account-backed but never bypasses existing transcript controls.
+const backend=fs.readFileSync('functions/src/index.ts','utf8');
 const themeUi=fs.readFileSync('src/components/ThemePreferences.tsx','utf8');
 const themePlatform=fs.readFileSync('src/platform/nightjar-theme.ts','utf8');
 const settings=fs.readFileSync('src/components/NightjarSettings.tsx','utf8');
