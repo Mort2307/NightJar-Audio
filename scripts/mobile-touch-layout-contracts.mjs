@@ -56,7 +56,8 @@ assert.match(app, /adminWorkspace === 'launch' && <>/, 'launch readiness is kept
 assert.match(app, /adminWorkspace === 'people' && <>/, 'People workpage keeps account-role management');
 assert.match(app, /adminWorkspace === 'content' && <>/, 'Content workpage keeps moderation and approvals');
 assert.match(app, /adminWorkspace === 'finance' && <>/, 'Finance has a separate workpage');
-assert.match(app, /adminWorkspace === 'security' && <section/, 'Security alerts require the Safety workpage');
+assert.match(app, /adminWorkspace === 'security' && <AdminSecurityAlerts/, 'Security alerts require the Safety workpage');
+assert.match(app, /adminWorkspace === 'security' && <AdminAuthenticationLog/, 'Sign-in problems use the same focused Safety workpage');
 assert.match(app, /adminWorkspace === 'tools' && <Suspense/, 'Mail tools are not mounted until requested');
 assert.match(app, /\/admin\/workspace\//, 'admin workspace navigation uses dedicated deep links');
 assert.match(app, /setAdminWorkspace\(\(workspaceFromPath/, 'browser Back restores admin workpage');
