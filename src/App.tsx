@@ -86,6 +86,7 @@ import AdminAssistance from './components/AdminAssistance';
 import ProductExperience from './components/ProductExperience';
 import AdminMemberRoleEditor from './components/AdminMemberRoleEditor';
 import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
+import WorkspaceSwitcher from './components/WorkspaceSwitcher';
 import NightjarSkeleton from './components/NightjarSkeleton';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
@@ -4161,6 +4162,22 @@ function App() {
         onSubmitCapture={(event) => { if (liveRolePreview) { event.preventDefault(); event.stopPropagation(); } }}
         onDropCapture={(event) => { if (liveRolePreview) { event.preventDefault(); event.stopPropagation(); } }}
       >
+        {!canAdmin && !simulationMode && !liveRolePreview && ['creator', 'writer', 'editor', 'artist'].includes(String(effectiveRole)) && ['creator', 'writer', 'editor', 'artist'].includes(view) &&
+          <div className="page-wrap nj-workspace-switcher-wrap">
+            <WorkspaceSwitcher
+              activeRole={effectiveRole as 'creator' | 'writer' | 'editor' | 'artist'}
+              onManageRoles={openMyRoles}
+              onSwitch={(nextRole) => {
+                setRole(nextRole);
+                setPreviewRole(null);
+                navigate(nextRole === 'listener' ? 'discover' : nextRole);
+                void loadProfile(nextRole);
+                if (nextRole === 'creator') void loadCreatorDashboard();
+                if (nextRole === 'writer') void loadWriterScripts();
+                if (nextRole === 'editor') void loadEditorQueue();
+              }}
+            />
+          </div>}
         {view === 'discover' && (
           <section className="page-wrap nj-animate">
             {effectiveRole === 'listener' && !liveRolePreview && <RoleDashboard

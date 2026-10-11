@@ -7,6 +7,7 @@ import { BookOpenText, Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 
 import { nightjarAudioFileProblem } from '../platform/audio-upload';
 import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
+import './creator-workflow.css';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type Release = {
@@ -78,6 +79,7 @@ const readAudioDurationMinutes = (file: File) => new Promise<number | null>((res
 
 export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify, simulationMode = false, onSimulationChange }: Props) {
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
+  const [workflowStep, setWorkflowStep] = useState<'prepare' | 'review'>('prepare');
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioStage, setAudioStage] = useState<'idle' | 'uploading' | 'verifying' | 'saved' | 'error'>('idle');
@@ -90,6 +92,22 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [promotedTagOptions, setPromotedTagOptions] = useState<string[]>([]);
 
   const current = selectedRelease ?? null;
+  // Show existing drafts immediately instead of leaving creators in an empty editor.
+  useEffect(() => {
+    if (selectedRelease || releases.length === 0) return;
+    const next = releases.find((item) => item.status === 'draft') ?? releases[0];
+    setSelectedRelease(next);
+    setWorkflowStep(next.status === 'draft' ? 'prepare' : 'review');
+  }, [releases, selectedRelease]);
+
+  const chooseRelease = (release: Release) => {
+    setSelectedRelease(release);
+    setWorkflowStep(release.status === 'draft' ? 'prepare' : 'review');
+    setAudioStage('idle');
+    setAudioFileLabel('');
+    setAudioFeedback('');
+  };
+
   const combinedTagOptions = useMemo(
     () => Array.from(new Set([...PROFILE_TAG_OPTIONS, ...promotedTagOptions])).sort((a, b) => a.localeCompare(b)),
     [promotedTagOptions],
@@ -133,16 +151,24 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         ? current.moderationNote
         : 'A complete release can be submitted for moderation.';
 
-  const complete = useMemo(() => Boolean(
-    current?.title
-    && current.description
-    && current.audioAvailable
-    && current.category
-    && current.rightsConfirmed
-    && current.contributorPermissionsConfirmed
-    && current.transcriptText?.trim()
-    && current.transcriptAccessibilityReviewed
-  ), [current]);
+  const reviewChecks = [
+    { label: 'Recording attached and verified', passed: current?.audioAvailable === true, target: 'release-audio', help: 'Upload an MP3, WAV, M4A, OGG or WebM recording.' },
+    { label: 'Release title', passed: Boolean(current?.title?.trim()), target: 'release-details', help: 'Give your recording a title.' },
+    { label: 'Category', passed: Boolean(current?.category?.trim()), target: 'release-details', help: 'Enter the type of release.' },
+    { label: 'Description', passed: Boolean(current?.description?.trim()), target: 'release-details', help: 'Add a short listener-facing description.' },
+    { label: 'Publishing rights confirmed', passed: current?.rightsConfirmed === true, target: 'release-rights', help: 'Confirm you control the publishing rights.' },
+    { label: 'Contributor permissions confirmed', passed: current?.contributorPermissionsConfirmed === true, target: 'release-rights', help: 'Confirm any necessary permissions for included work.' },
+    { label: 'Finished-audio transcript', passed: Boolean(current?.transcriptText?.trim()), target: 'release-transcript', help: 'Provide a readable transcript of the finished audio.' },
+    { label: 'Transcript accuracy confirmed', passed: current?.transcriptAccessibilityReviewed === true, target: 'release-transcript', help: 'Check the transcript against the recording.' },
+  ];
+  const incompleteChecks = reviewChecks.filter((check) => !check.passed);
+  const complete = incompleteChecks.length === 0;
+  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'released';
+
+  const openDetails = (target?: string) => {
+    setWorkflowStep('prepare');
+    if (target) window.requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
 
   const setRelease = (patch: Partial<Release>) => setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
 
@@ -211,6 +237,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     if (!draft.title.trim()) return notify('Give the release a title first.');
     try {
       if (simulationMode) {
+        setWorkflowStep('prepare');
         setSelectedRelease({
           id: 'demo-release-draft-' + Date.now(),
           title: draft.title,
@@ -242,7 +269,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       });
       const next = data.release as Release | undefined;
       setDraft({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
-      if (next) setSelectedRelease(next);
+      if (next) { setSelectedRelease(next); setWorkflowStep('prepare'); }
       await onRefresh();
       notify('Release draft created.');
     } catch { notify('Release draft could not be created.'); }
@@ -419,6 +446,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     try {
       if (simulationMode) {
         setSelectedRelease({ ...current, status: 'pending_review' });
+        setWorkflowStep('review');
         notify('Simulation: release moved to pending moderation locally.');
         return;
       }
@@ -432,6 +460,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       const submitted = await nightjarCatalogue.submit(current.id);
       if (submitted.release?.status !== 'pending_review') throw new Error('Nightjar did not confirm this submission reached moderation.');
       setSelectedRelease(submitted.release);
+      setWorkflowStep('review');
       await onRefresh().catch(() => { /* retain the verified submission status */ });
       notify('Submitted to Nightjar moderation. You can follow its status here.');
     } catch (error) {
@@ -443,25 +472,29 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     <div className="creator-pipeline-header">
       <div>
         <span className="mini-label">CREATOR → CATALOGUE</span>
-        <h2>Build a release properly.</h2>
-        <p>Real audio, real metadata, explicit discovery tags and a controlled publishing handoff.</p>
+        <h2>Upload a recording</h2>
+        <p>Upload privately, complete the essentials, then submit your release for Nightjar review.</p>
       </div>
       <span className="status-pill"><Mic2 size={12} /> {statusLabel}</span>
     </div>
 
     <div className="creator-pipeline-grid">
       <aside className="pipeline-library">
-        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => setSelectedRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status || 'draft'}</span></button>)}</div>
-        {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No release drafts yet.</strong><span>Create the first piece of Nightjar’s launch catalogue.</span></div>}
+        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'pending_review' ? 'Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
+        {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
-          <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="New release title" />
-          <button className="primary-button" disabled={!canPublish || accountStatus === 'pending_review'} onClick={() => void createDraft()}><UploadCloud size={14} /> {accountStatus === 'pending_review' ? 'Approval required' : 'Start release'}</button>
+          <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
+          <button className="primary-button" disabled={!canPublish || accountStatus === 'pending_review'} onClick={() => void createDraft()}><UploadCloud size={14} /> {accountStatus === 'pending_review' ? 'Approval required' : 'Create & upload'}</button>
         </div>
       </aside>
 
       <div className="pipeline-editor">
         {current ? <>
           <div className="pipeline-status"><div><span>{statusLabel}</span><strong>{statusHint}</strong></div><Check size={18} /></div>
+          {!submittedOrPublished && <div className="nj-creator-workflow-switch" role="group" aria-label="Release workflow">
+            <button type="button" className={workflowStep === 'prepare' ? 'is-active' : ''} onClick={() => openDetails()} aria-current={workflowStep === 'prepare' ? 'step' : undefined}>1 · Upload & details</button>
+            <button type="button" className={workflowStep === 'review' ? 'is-active' : ''} onClick={() => setWorkflowStep('review')} aria-current={workflowStep === 'review' ? 'step' : undefined}>2 · Review & submit</button>
+          </div>}
           <section className="nj-release-journey" aria-label="Audio publishing steps">
             <h3>From your recording to Nightjar</h3>
             <div className="nj-release-journey-steps">
@@ -472,6 +505,25 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </div>
             <p role="status">{current.status === 'pending_review' ? 'Your release has reached the administrator moderation queue. No public listening is possible until it is approved.' : current.status === 'released' ? 'Nightjar approved and published this release.' : current.audioAvailable ? 'Your audio is stored privately, but has NOT been submitted. Complete the release information, then select Submit to moderation.' : 'Choose a supported audio file below. Selecting a file starts an upload; it does not publish or submit your release.'}</p>
           </section>
+          {workflowStep === 'prepare' && !submittedOrPublished && <>
+          <div className="pipeline-assets" id="release-audio">
+            <div className="asset-drop asset-drop-moderated nj-audio-attachment"><Music2 size={19} /><strong>{audioBusy ? audioStage === 'verifying' ? 'Verifying saved audio…' : 'Uploading your audio…' : current.audioAvailable ? 'Audio connected to this draft' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · private until approved</span>
+              <label className="secondary-button upload-label">{audioBusy ? 'Upload in progress' : current.audioAvailable ? 'Replace this audio' : 'Choose audio to upload'}<input type="file" hidden disabled={audioBusy || current.status === 'pending_review' || current.status === 'released' || submitting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
+              {audioFileLabel && <strong className="nj-audio-file-label">{audioFileLabel}</strong>}
+              {audioBusy && <div className="nj-audio-upload-progress" role="progressbar" aria-label="Audio upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={audioProgress}><span style={{width:audioProgress + '%'}}/></div>}
+              {audioBusy && <small className="nj-audio-percent">{audioStage === 'verifying' ? 'Transfer 100% · awaiting server verification' : audioProgress + '% transferred'}</small>}
+              {(audioFeedback || current.audioAvailable) && <div className={audioStage === 'error' ? 'nj-audio-feedback error' : audioStage === 'saved' || current.audioAvailable ? 'nj-audio-feedback success' : 'nj-audio-feedback'} role="status">{audioFeedback || 'Private audio confirmed. This release is not publicly available until moderation approval.'}</div>}
+              {current.audioAvailable && <button className="ghost-button" disabled={audioBusy || submitting || current.status === 'pending_review' || current.status === 'released'} onClick={()=>void removeAudio()}>Remove audio</button>}
+            </div>
+            <div className="asset-drop asset-drop-moderated"><ImagePlus size={18} /><strong>{artBusy ? 'Working…' : current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Replacement awaiting approval' : 'Artwork awaiting approval' : current.artworkUrl ? 'Replace approved artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB · administrator approval required</span><label className="secondary-button upload-label">{current.artworkUrl || current.pendingArtworkAssetId ? 'Replace' : 'Choose image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'artwork'); event.currentTarget.value = ''; }} /></label>{(current.artworkUrl || current.artworkAssetId || current.pendingArtworkAssetId) && <button className="ghost-button" disabled={artBusy} onClick={()=>void removeArtwork()}>Remove artwork</button>}</div>
+          </div>
+
+
+          <div className="nj-continue-review" role="status">
+            <div><strong>{current.audioAvailable ? 'Recording uploaded successfully' : 'Start by uploading your recording'}</strong><small>{current.audioAvailable ? 'Saved privately — not submitted for review yet.' : 'You can complete the details before or after uploading.'}</small></div>
+            <button type="button" className="primary-button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={16}/> Continue to Review →</button>
+          </div>
+          <div className="nj-workflow-section-heading" id="release-details"><strong>Release details</strong><small>Title, category and description are required. Other fields help discovery.</small></div>
           <div className="pipeline-form-grid">
             <label>Title<input value={current.title ?? ''} onChange={(event) => setRelease({ title: event.target.value })} /></label>
             <label>Category<input value={current.category ?? ''} onChange={(event) => setRelease({ category: event.target.value })} placeholder="Story, performance, soundscape…" /></label>
@@ -505,7 +557,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <label className="pipeline-span-two">Production / behind-the-scenes note<textarea value={current.productionNote ?? ''} onChange={(event) => setRelease({ productionNote: event.target.value || null })} placeholder="Optional context about the people or process behind this release."/></label>
           </div>
 
-          <section className="release-rights-attestation">
+          <section className="release-rights-attestation" id="release-rights">
             <div className="release-transcript-head">
               <div>
                 <span className="mini-label">RIGHTS & PERMISSIONS · REQUIRED TO PUBLISH</span>
@@ -526,7 +578,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </label>
           </section>
 
-          <section className="release-transcript-editor">
+          <section className="release-transcript-editor" id="release-transcript">
             <div className="release-transcript-head">
               <div>
                 <span className="mini-label">ACCESSIBILITY · FINAL RELEASE TRANSCRIPT</span>
@@ -616,20 +668,23 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </div>
           </section>
 
-          <div className="pipeline-assets">
-            <div className="asset-drop asset-drop-moderated nj-audio-attachment"><Music2 size={19} /><strong>{audioBusy ? audioStage === 'verifying' ? 'Verifying saved audio…' : 'Uploading your audio…' : current.audioAvailable ? 'Audio connected to this draft' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · private until approved</span>
-              <label className="secondary-button upload-label">{audioBusy ? 'Upload in progress' : current.audioAvailable ? 'Replace this audio' : 'Choose audio to upload'}<input type="file" hidden disabled={audioBusy || current.status === 'pending_review' || current.status === 'released' || submitting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
-              {audioFileLabel && <strong className="nj-audio-file-label">{audioFileLabel}</strong>}
-              {audioBusy && <div className="nj-audio-upload-progress" role="progressbar" aria-label="Audio upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={audioProgress}><span style={{width:audioProgress + '%'}}/></div>}
-              {audioBusy && <small className="nj-audio-percent">{audioStage === 'verifying' ? 'Transfer 100% · awaiting server verification' : audioProgress + '% transferred'}</small>}
-              {(audioFeedback || current.audioAvailable) && <div className={audioStage === 'error' ? 'nj-audio-feedback error' : audioStage === 'saved' || current.audioAvailable ? 'nj-audio-feedback success' : 'nj-audio-feedback'} role="status">{audioFeedback || 'Private audio confirmed. This release is not publicly available until moderation approval.'}</div>}
-              {current.audioAvailable && <button className="ghost-button" disabled={audioBusy || submitting || current.status === 'pending_review' || current.status === 'released'} onClick={()=>void removeAudio()}>Remove audio</button>}
-            </div>
-            <div className="asset-drop asset-drop-moderated"><ImagePlus size={18} /><strong>{artBusy ? 'Working…' : current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Replacement awaiting approval' : 'Artwork awaiting approval' : current.artworkUrl ? 'Replace approved artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB · administrator approval required</span><label className="secondary-button upload-label">{current.artworkUrl || current.pendingArtworkAssetId ? 'Replace' : 'Choose image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'artwork'); event.currentTarget.value = ''; }} /></label>{(current.artworkUrl || current.artworkAssetId || current.pendingArtworkAssetId) && <button className="ghost-button" disabled={artBusy} onClick={()=>void removeArtwork()}>Remove artwork</button>}</div>
-          </div>
-
-          <div className="pipeline-footer"><span>{current.audioAvailable ? 'Private audio connected' : 'Audio missing'} · {current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Approved artwork live · replacement pending' : 'Artwork pending admin approval' : current.pendingArtworkStatus === 'rejected' ? current.artworkUrl ? 'Approved artwork live · replacement rejected' : 'Artwork rejected' : current.artworkUrl ? 'Approved artwork connected' : 'Artwork optional'}</span><div>{current.status !== 'released' && <button className="ghost-button" onClick={() => void deleteDraft()}>Delete draft</button>}<button className="secondary-button" onClick={() => void saveMetadata()}>Save draft</button><button className="primary-button" onClick={() => void submit()} disabled={!complete || audioBusy || submitting || current.status === 'pending_review' || current.status === 'released'}><Send size={14} /> {submitting ? 'Submitting to moderators…' : 'Submit to moderation'}</button></div></div>
-        </> : <div className="people-empty"><Mic2 size={19} /><strong>Select a release draft.</strong><span>The pipeline keeps upload, metadata and moderation state together.</span></div>}
+          </>}
+          {(workflowStep === 'review' || submittedOrPublished) && <section className="nj-release-review" aria-label="Review release before moderation">
+            <div className="nj-review-heading"><span className="mini-label">REVIEW YOUR SUBMISSION</span><h3>{submittedOrPublished ? current.status === 'released' ? 'This release is published' : 'Your release is awaiting review' : 'Ready to send to Nightjar?'}</h3>
+              <p>{submittedOrPublished ? 'Your recording is already in the Nightjar review and publishing workflow. You do not need to submit it again.' : 'Check the essentials below. Only clicking Submit for Review sends your private recording to our moderators.'}</p></div>
+            <div className="nj-review-checklist">{reviewChecks.map((check) => <div className={check.passed ? 'nj-review-check passed' : 'nj-review-check missing'} key={check.label}>
+              <span aria-hidden="true">{check.passed ? '✓' : '!'}</span><div><strong>{check.label}</strong>{!check.passed && <small>{check.help}</small>}</div>
+              {!check.passed && !submittedOrPublished && <button type="button" className="secondary-button" onClick={() => openDetails(check.target)}>Fix</button>}
+            </div>)}</div>
+            {!submittedOrPublished && <div className="nj-review-submit">
+              {incompleteChecks.length > 0 && <p role="status"><strong>{incompleteChecks.length} item{incompleteChecks.length === 1 ? '' : 's'} to finish.</strong> Nothing has been submitted. Select Fix beside a missing item.</p>}
+              {incompleteChecks.length === 0 && <p role="status">Everything required is ready. Submission does not publish your recording; an administrator must approve it first.</p>}
+              <button type="button" className="secondary-button" onClick={() => openDetails()}>← Edit release</button>
+              <button type="button" className="primary-button" disabled={!complete || audioBusy || submitting || !canPublish || accountStatus === 'pending_review'} onClick={() => void submit()}><Send size={16}/> {submitting ? 'Sending to moderators…' : 'Submit for Review'}</button>
+            </div>}
+          </section>}
+          {workflowStep === 'prepare' && !submittedOrPublished && <div className="pipeline-footer"><span>Save changes before leaving this release.</span><div><button className="ghost-button" type="button" onClick={() => void deleteDraft()}>Delete draft</button><button className="secondary-button" type="button" onClick={() => void saveMetadata()}>Save changes</button><button className="primary-button" type="button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={14}/> Continue to Review →</button></div></div>}
+        </> : <div className="people-empty"><Mic2 size={19} /><strong>Choose a recording.</strong><span>Select a saved recording above, or create one with a title.</span></div>}
       </div>
     </div>
   </article>;
