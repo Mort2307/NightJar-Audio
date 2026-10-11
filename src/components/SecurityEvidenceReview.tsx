@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3, ExternalLink, LockKeyhole, Mail, Monitor, ShieldCheck, UserCircle2, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Clock3, ExternalLink, LockKeyhole, Mail, LifeBuoy, Monitor, ShieldCheck, UserCircle2, X } from 'lucide-react';
 
 type Evidence = {
   id?: string;
@@ -29,7 +29,7 @@ export type SecurityEvidenceReviewData = {
   authorisedTarget?: Target | null;
 };
 
-type Props = { review: SecurityEvidenceReviewData; onClose: () => void };
+type Props = { review: SecurityEvidenceReviewData; onClose: () => void; onAssistance?: (email:string) => void };
 
 const time = (value: unknown) => {
   if (!value) return 'Not recorded';
@@ -61,7 +61,7 @@ const shortDevice = (value: unknown) => {
   return str ? str.slice(0, 6) + '…' : 'Not recorded';
 };
 
-export default function SecurityEvidenceReview({ review, onClose }: Props) {
+export default function SecurityEvidenceReview({ review, onClose, onAssistance }: Props) {
   const { alert, evidence, authorisedTarget } = review;
   const isAuthentication = alert?.category === 'authentication';
   const signal = alert?.signal ?? {};
@@ -95,7 +95,10 @@ export default function SecurityEvidenceReview({ review, onClose }: Props) {
             {email && name ? <>
               <div className="nj-evidence-contact">
                 <div><strong>{name}</strong><span>{email}</span><small><CheckCircle2 size={14}/> Registered, email-verified and authorised for Nightjar access</small></div>
-                {helpLink && <a className="primary-button nj-evidence-contact-action" href={helpLink}><Mail size={16}/> Contact to offer help <ExternalLink size={14}/></a>}
+                <div className="nj-evidence-help-actions">
+                  {helpLink && <a className="secondary-button nj-evidence-contact-action" href={helpLink}><Mail size={16}/> Contact to offer help <ExternalLink size={14}/></a>}
+                  {email && onAssistance && <button type="button" className="primary-button nj-evidence-contact-action" onClick={() => onAssistance(email)}><LifeBuoy size={16}/> Open Admin Assistance</button>}
+                </div>
               </div>
             </> : <>
               <p className="nj-evidence-target">{alert?.targetEmailMasked || 'Unidentified account'}</p>
