@@ -29,4 +29,14 @@ assert.match(revoke, /\^\[0-9a-f\]\{16\}\$/, 'short device ids require strict va
 assert.match(revoke, /doc\.id\.slice\(0, 16\) === shortId/, 'short device ids must match a stored device');
 assert.match(revoke, /active:false/, 'revoked devices are marked inactive');
 assert.doesNotMatch(revoke, /createUser|verifyIdToken|setCustomUserClaims/, 'push revocation must not change account privileges');
+
+// Web Push setup inspection is optional, passive, transparent and actionable.
+assert.match(push,/async diagnostics\(\)/,'FCM setup diagnostics are exposed');
+assert.match(push,/pushSetupDiagnostics\(\)/,'FCM diagnostic uses the real browser environment');
+assert.match(push,/fcmregistrations.googleapis.com|Firebase Cloud Messaging Registration API/,'Nightjar explains the FCM Registration API check');
+assert.doesNotMatch(push.slice(push.indexOf('const pushSetupDiagnostics ='),push.indexOf('const describeFcmError =')),/getToken\(|registerCall\(/,'diagnostics do not register a push device');
+assert.match(preferences,/Diagnose notification setup/,'a useful diagnostic action is visible beside Enable');
+assert.match(preferences,/setPushError\(message\)/,'FCM enable error is retained for the user');
+assert.match(preferences,/nj-push-diagnostics/,'setup guidance is visible on screen');
+
 console.log('Nightjar explicit opt-in FCM, 401 recovery and per-device revocation contracts passed.');

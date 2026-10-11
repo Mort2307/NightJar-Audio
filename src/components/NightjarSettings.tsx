@@ -2,6 +2,7 @@ import { Accessibility, ArrowRight, Bell, BookOpenText, CreditCard, FileText, Lo
 import AccessibilityPreferences from './AccessibilityPreferences';
 import AppUpdateControl from './AppUpdateControl';
 import NotificationPreferences from './NotificationPreferences';
+import ThemePreferences from './ThemePreferences';
 
 type Props = {
   email?: string | null;
@@ -43,7 +44,7 @@ export default function NightjarSettings({ email, administrator, simulationMode,
 
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-display">
           <div className="nj-settings-section-head"><Palette size={19} /><div><span className="mini-label">EXPERIENCE</span><h2 id="nj-settings-display">Appearance and playback</h2></div></div>
-          <div className="nj-settings-info"><strong>Appearance</strong><span>Nightjar currently uses its signature dark theme. Additional themes aren't available yet.</span></div>
+          <ThemePreferences simulationMode={simulationMode} notify={notify}/>
           <div className="nj-settings-info"><BookOpenText size={17}/><span>Audio transcript defaults, text size and playback-following preferences can be configured under Accessibility below.</span></div>
         </section>
 

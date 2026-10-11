@@ -4057,6 +4057,7 @@ const accessibilityPreferencesPayload = (data: Record<string, any>) => ({
   transcriptFollowPlayback: data.transcriptFollowPlayback !== false,
   transcriptTextSize: cleanTranscriptTextSize(data.transcriptTextSize),
   transcriptHighContrast: data.transcriptHighContrast === true,
+  theme: ['nocturne','aubergine','midnight','ember','obsidian'].includes(String(data.theme)) ? String(data.theme) : 'nocturne',
 });
 
 export const getAccessibilityPreferences = onCall({ region: REGION }, async (request) => {
@@ -8980,7 +8981,8 @@ type AdminEmailAudience =
   | 'editor'
   | 'artist'
   | 'all_testers'
-  | 'all_members';
+  | 'all_members'
+  | 'selected_members';
 
 type AdminEmailCategory =
   | 'testing_update'
@@ -9004,6 +9006,7 @@ const EMAIL_AUDIENCES = new Set<AdminEmailAudience>([
   'artist',
   'all_testers',
   'all_members',
+  'selected_members',
 ]);
 
 const EMAIL_CATEGORIES = new Set<AdminEmailCategory>([
@@ -9022,6 +9025,7 @@ const adminEmailAudienceLabel = (audience: AdminEmailAudience) => ({
   artist: 'Artists',
   all_testers: 'Founding / private-beta testers',
   all_members: 'All active Nightjar members',
+  selected_members: 'Selected Nightjar members',
 }[audience]);
 
 const adminEmailCategoryLabel = (category: AdminEmailCategory) => ({
@@ -9150,6 +9154,40 @@ const emailFooterText = (category: AdminEmailCategory) => {
     return 'This is a Nightjar creator-operations message about the platform or your creator participation.';
   }
   return 'This is a Nightjar account/service communication.';
+};
+
+const resolveSelectedMemberEmails = async (rawIds: unknown): Promise<AdminEmailRecipient[]> => {
+  if (!Array.isArray(rawIds) || !rawIds.length || rawIds.length > 25) {
+    throw new HttpsError('invalid-argument', 'Select between 1 and 25 existing Nightjar members.');
+  }
+  const ids = rawIds.map((value)=>cleanText(value,160));
+  if (ids.some(id=>!/^[-A-Za-z0-9_]{6,160}$/.test(id)) || new Set(ids).size!==ids.length) {
+    throw new HttpsError('invalid-argument','Select a valid unique member list.');
+  }
+  // IDs, not caller-supplied email addresses: every recipient is reverified
+  // against Firestore at preview AND send time, without an auth bypass.
+  const accounts = await Promise.all(ids.map(id=>accountRef(id).get()));
+  const profiles = await db.getAll(...ids.map(id=>profileRef(id)));
+  const recipients: AdminEmailRecipient[] = [];
+  for (let i=0;i<ids.length;i++) {
+    const data = accounts[i].data() ?? {};
+    const email = cleanEmail(data.email);
+    if (!accounts[i].exists || String(data.status ?? 'active')!=='active' || !validEmailAddress(email)
+        || ADMIN_EMAILS.has(email) || data.role==='admin') {
+      throw new HttpsError('failed-precondition','A selected account is inactive, an administrator, or has no valid email. Refresh the member selection.');
+    }
+    const profile = profiles[i].data() ?? {};
+    const displayName = cleanText(profile.displayName,80) || cleanText(data.displayName,80) || displayNameFromEmail(email);
+    recipients.push({
+      email, displayName, firstName:firstNameFromDisplayName(displayName),
+      roleLabel:professionalRoleLabel(professionalRolesForAccount(data)),
+      userId:ids[i], source:'account',
+    });
+  }
+  if(new Set(recipients.map(item=>item.email)).size!==recipients.length) {
+    throw new HttpsError('failed-precondition','Two selected accounts share an email address. Select each recipient only once.');
+  }
+  return recipients;
 };
 
 const renderAdminEmail = (
@@ -9843,7 +9881,10 @@ export const adminEmailAudiencePreview = onCall({ region: REGION }, async (reque
   if (!EMAIL_AUDIENCES.has(audience)) {
     throw new HttpsError('invalid-argument', 'Choose a valid Nightjar email audience.');
   }
-  const recipients = await resolveAdminEmailAudience(audience);
+  const selectedUserIds = (request.data as Record<string,unknown> | undefined)?.selectedUserIds;
+  const recipients = audience === 'selected_members'
+    ? await resolveSelectedMemberEmails(selectedUserIds)
+    : await resolveAdminEmailAudience(audience);
   return {
     audience,
     audienceLabel: adminEmailAudienceLabel(audience),
@@ -9982,6 +10023,7 @@ export const adminSendEmailCampaign = onCall({
   const subjectTemplate = cleanText(input.subject, 180);
   const bodyTemplate = cleanText(input.body, 12000);
   const audience = cleanText(input.audience, 40) as AdminEmailAudience;
+  const selectedUserIds = input.selectedUserIds;
   const category = cleanText(input.category, 40) as AdminEmailCategory;
   const clientRequestId = cleanText(input.clientRequestId, 120);
   const confirmed = input.confirmPrivateIndividualDelivery === true;
@@ -10008,7 +10050,9 @@ export const adminSendEmailCampaign = onCall({
     return { campaign: publicCampaignSummary(campaignId, existingCampaign.data() ?? {}), duplicateRequest: true };
   }
 
-  const recipients = await resolveAdminEmailAudience(audience);
+  const recipients = audience === 'selected_members'
+    ? await resolveSelectedMemberEmails(selectedUserIds)
+    : await resolveAdminEmailAudience(audience);
   if (!recipients.length) throw new HttpsError('failed-precondition', 'That audience currently has no deliverable email addresses.');
   if (recipients.length > MAX_EMAIL_CAMPAIGN_RECIPIENTS) {
     throw new HttpsError(
@@ -10024,6 +10068,7 @@ export const adminSendEmailCampaign = onCall({
     category,
     audience,
     audienceLabel: adminEmailAudienceLabel(audience),
+    ...(audience === 'selected_members' ? { selectedUserIds: recipients.map(item=>item.userId) } : {}),
     status: 'sending',
     recipientCount: recipients.length,
     sentCount: 0,

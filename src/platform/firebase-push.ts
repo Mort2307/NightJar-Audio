@@ -81,6 +81,44 @@ const savedDevice = () => {
     return key ? window.localStorage.getItem(key) : null;
   } catch { return null; }
 };
+export type PushSetupDiagnostics = {
+  projectId: string;
+  origin: string;
+  https: boolean;
+  vapidConfigured: boolean;
+  vapidFormatOk: boolean;
+  browserSupported: boolean;
+  browserPermission: NotificationPermission | 'unsupported';
+  workerScope: string | null;
+  workerActive: boolean;
+  advice: string[];
+};
+
+const pushSetupDiagnostics = async (): Promise<PushSetupDiagnostics> => {
+  const supported = await isSupported().catch(() => false);
+  const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration('/').catch(() => undefined) : undefined;
+  const https = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+  const vapidFormatOk = /^[A-Za-z0-9_-]{80,110}$/.test(vapidKey);
+  const advice: string[] = [];
+  if (!https) advice.push('Open Nightjar using HTTPS.');
+  if (!vapidKey) advice.push('Configure VITE_FIREBASE_VAPID_KEY using the public key from Firebase Console → Project settings → Cloud Messaging → Web Push certificates, then rebuild Hosting.');
+  else if (!vapidFormatOk) advice.push('The configured VAPID public key does not look like a valid Web Push key. Compare it with the Firebase Console public key.');
+  if (!supported) advice.push('Web Push is not supported or is blocked in this browser or device.');
+  if (typeof Notification !== 'undefined' && Notification.permission === 'denied') advice.push('Allow Nightjar notifications in browser and phone settings before retrying.');
+  if (!registration?.active) advice.push('The Nightjar service worker is not active. Reopen the latest deployed Nightjar site and refresh.');
+  advice.push('For FCM HTTP 401: check Google Cloud → APIs & Services → Enabled APIs → Firebase Cloud Messaging Registration API for project nightjar-audio.');
+  advice.push('Confirm Web API-key restrictions permit Firebase Installations and Firebase Cloud Messaging calls, and that the Web Push certificate belongs to nightjar-audio.');
+  return {
+    projectId: firebaseApp.options.projectId ?? 'unknown',
+    origin: window.location.origin,
+    https, vapidConfigured: Boolean(vapidKey), vapidFormatOk,
+    browserSupported: supported,
+    browserPermission: typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+    workerScope: registration?.scope ?? null, workerActive: Boolean(registration?.active),
+    advice,
+  };
+};
+
 const describeFcmError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? 'Unknown messaging problem');
   if (/messaging\/token-subscribe-failed|missing required authentication credential|UNAUTHENTICATED|\b401\b/i.test(message)) {
@@ -92,6 +130,11 @@ const describeFcmError = (error: unknown) => {
 export const nightjarPush = {
   configured() {
     return Boolean(vapidKey);
+  },
+
+  async diagnostics() {
+    // Inspection only: never request permission or call getToken here.
+    return pushSetupDiagnostics();
   },
 
   permission() {
@@ -107,6 +150,9 @@ export const nightjarPush = {
   async enable() {
     if (!vapidKey) {
       throw new Error('Nightjar push is not configured yet. Add the Firebase Web Push VAPID public key.');
+    }
+    if (!/^[A-Za-z0-9_-]{80,110}$/.test(vapidKey)) {
+      throw new Error('The Web Push public key is invalid. Update VITE_FIREBASE_VAPID_KEY and redeploy Nightjar Hosting.');
     }
     if (!(await this.supported())) throw new Error('Push notifications are not supported by this browser.');
     const permission = await Notification.requestPermission();

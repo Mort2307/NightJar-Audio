@@ -10191,3 +10191,36 @@ textarea:focus-visible,
 .nightjar-role-qa-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 8px; }
 .nightjar-role-qa-actions button { min-height: 44px; }
 @media (max-width: 680px) { .nightjar-role-qa-actions { flex: 1 1 100%; } .nightjar-role-qa-actions button { flex: 1 1 130px; } }
+
+
+/* Named Nightjar appearances. Always maintain a dark, legible foundation
+   because protected player/publication surfaces must remain discreet. */
+:root[data-nightjar-theme="aubergine"] {
+  --bg:#130e18;--panel:#201527;--panel-soft:#281b30;
+  --line:rgba(237,218,249,.18);--line-soft:rgba(237,218,249,.11);
+  --muted:#b5a2bb;--muted-2:#918098;--ivory:#f3e9f5;
+  --plum:#b19acb;--plum-soft:#dfc8eb;--wine:#744765;
+}
+:root[data-nightjar-theme="midnight"] {
+  --bg:#0a101c;--panel:#131d2e;--panel-soft:#1b293c;
+  --line:rgba(203,222,244,.18);--line-soft:rgba(203,222,244,.09);
+  --muted:#a5b3ca;--muted-2:#8392a9;--ivory:#eaf0fa;
+  --plum:#89a9d1;--plum-soft:#c0d5f0;--wine:#47658c;
+}
+:root[data-nightjar-theme="ember"] {
+  --bg:#170d12;--panel:#24171c;--panel-soft:#2b1e22;
+  --line:rgba(242,212,199,.18);--line-soft:rgba(242,212,199,.09);
+  --muted:#c4a7a5;--muted-2:#998380;--ivory:#f7e8de;
+  --plum:#c69680;--plum-soft:#f0cfb9;--wine:#935464;
+}
+:root[data-nightjar-theme="obsidian"] {
+  --bg:#080a0c;--panel:#131619;--panel-soft:#1a1e22;
+  --line:rgba(220,231,242,.18);--line-soft:rgba(220,231,242,.09);
+  --muted:#aeb8c0;--muted-2:#858f98;--ivory:#edf1f3;
+  --plum:#bbc5ce;--plum-soft:#e0e8ee;--wine:#5b6d7b;
+}
+:root[data-nightjar-theme]:not([data-nightjar-theme="nocturne"]) .app-shell {
+  background:radial-gradient(circle at 82% 1%,color-mix(in srgb,var(--plum) 13%,transparent),transparent 34%),
+  radial-gradient(circle at 14% 60%,color-mix(in srgb,var(--wine) 18%,transparent),transparent 31%),var(--bg);
+}
+:root[data-nightjar-theme]:not([data-nightjar-theme="nocturne"]) body {background:var(--bg);color:var(--ivory);}

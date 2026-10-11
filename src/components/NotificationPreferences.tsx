@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, RefreshCw, Save, Send, ShieldCheck, Smartphone } from 'lucide-react';
 import { nightjarNotifications } from '../platform/firebase-notifications';
-import { nightjarPush } from '../platform/firebase-push';
+import { nightjarPush, type PushSetupDiagnostics } from '../platform/firebase-push';
 
 type Props = { notify: (message: string) => void; simulationMode?: boolean };
 
@@ -22,6 +22,8 @@ export default function NotificationPreferences({ notify, simulationMode = false
   const [pushStatus, setPushStatus] = useState<any | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<PushSetupDiagnostics | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
 
   useEffect(() => {
     if (simulationMode) {
@@ -39,7 +41,6 @@ export default function NotificationPreferences({ notify, simulationMode = false
     }
     try {
       setPushStatus(await nightjarPush.status());
-      setPushError(null);
     } catch (error) {
       setPushError(error instanceof Error ? error.message.slice(0, 200) : 'A Nightjar push service call failed.');
       setPushStatus({ configured:nightjarPush.configured(), supported:await nightjarPush.supported().catch(()=>false), browserPermission:nightjarPush.permission(), activeDeviceCount:0, thisDeviceRegistered:false, devices:[] });
@@ -48,8 +49,16 @@ export default function NotificationPreferences({ notify, simulationMode = false
 
   useEffect(() => { void refreshPush(); }, [simulationMode]);
 
+  const inspectPush = async () => {
+    setDiagnosing(true);
+    try { setDiagnostics(await nightjarPush.diagnostics()); }
+    catch (error) { setPushError(error instanceof Error ? error.message : 'Cannot inspect this browser.'); }
+    finally { setDiagnosing(false); }
+  };
+
   const enablePush = async () => {
     setPushBusy(true);
+    setPushError(null);
     try {
       if (simulationMode) notify('Simulation: this device is now registered for push notifications.');
       else {
@@ -58,7 +67,10 @@ export default function NotificationPreferences({ notify, simulationMode = false
       }
       await refreshPush();
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'Push notifications could not be enabled.');
+      const message = error instanceof Error ? error.message : 'Push notifications could not be enabled.';
+      setPushError(message);
+      notify('Notifications could not be enabled. See the diagnostics below.');
+      if (!simulationMode) await inspectPush();
     } finally { setPushBusy(false); }
   };
 
@@ -156,7 +168,26 @@ export default function NotificationPreferences({ notify, simulationMode = false
         <button className="ghost-button" disabled={pushBusy} onClick={() => void refreshPush()}>
           <RefreshCw size={14}/> Refresh status
         </button>
+        <button className="secondary-button" disabled={pushBusy || diagnosing} onClick={() => void inspectPush()}>
+          <ShieldCheck size={14}/> {diagnosing ? 'Checking setup…' : 'Diagnose notification setup'}
+        </button>
       </div>
+      {pushError && <div className="nj-push-diagnostic-error" role="alert"><strong>Notification registration needs attention</strong><p>{pushError}</p><small>Push is optional; Nightjar and your in-app notifications remain available.</small></div>}
+      {diagnostics && <section className="nj-push-diagnostics" aria-label="Nightjar push configuration diagnostics">
+        <strong>Device and Firebase checks</strong>
+        <div className="nj-push-diagnostic-grid">
+          <span>Firebase project <b>{diagnostics.projectId}</b></span>
+          <span>HTTPS <b>{diagnostics.https ? 'Yes' : 'No'}</b></span>
+          <span>VAPID public key <b>{!diagnostics.vapidConfigured ? 'Missing' : diagnostics.vapidFormatOk ? 'Present' : 'Invalid format'}</b></span>
+          <span>Service worker <b>{diagnostics.workerActive ? 'Active' : 'Inactive'}</b></span>
+          <span>Web Push support <b>{diagnostics.browserSupported ? 'Supported' : 'Unavailable'}</b></span>
+          <span>Phone permission <b>{diagnostics.browserPermission}</b></span>
+        </div>
+        <p>These checks are read-only. They never re-subscribe your device or expose a private device token.</p>
+        <ol>{diagnostics.advice.map((advice)=> <li key={advice}>{advice}</li>)}</ol>
+        <a href="https://console.cloud.google.com/apis/library/fcmregistrations.googleapis.com?project=nightjar-audio" target="_blank" rel="noopener noreferrer">Open Nightjar's FCM Registration API settings ↗</a>
+        <a href="https://console.firebase.google.com/project/nightjar-audio/settings/cloudmessaging" target="_blank" rel="noopener noreferrer">Open Nightjar's Web Push certificates ↗</a>
+      </section>}
       {!pushStatus?.supported && /iphone|ipad|ipod/i.test(navigator.userAgent) &&
         <p className="access-fine">On iPhone, install Nightjar on your Home Screen from Safari, then open the installed app to enable notifications. iOS web push is available on supported iOS versions.</p>}
       {pushStatus?.thisDeviceRegistered && <p className="access-fine">Keep Nightjar installed and allow notifications in your phone's system settings. A sent test is not proof of on-screen delivery until you see it on your device.</p>}

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import assert from 'node:assert/strict';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -34,4 +35,19 @@ if (failures.length) {
   for (const failure of failures) console.error('-', failure);
   process.exit(1);
 }
+
+// Theme customisation is account-backed but never bypasses existing transcript controls.
+const backend=fs.readFileSync('functions/src/index.ts','utf8');
+const themeUi=fs.readFileSync('src/components/ThemePreferences.tsx','utf8');
+const themePlatform=fs.readFileSync('src/platform/nightjar-theme.ts','utf8');
+const settings=fs.readFileSync('src/components/NightjarSettings.tsx','utf8');
+const main=fs.readFileSync('src/main.tsx','utf8');
+assert.match(themeUi,/nightjarAccessibility\.save\(\{\.\.\.current,theme:next\}\)/,'theme saves alongside existing preferences');
+assert.match(themeUi,/nightjarThemes\.map/,'theme swatches are selectable');
+assert.match(themeUi,/simulationMode/,'theme preview preserves role-simulation separation');
+assert.match(themePlatform,/nightjar\.appearance\.theme\.v1/,'theme is cached locally for instant bootstrap');
+assert.match(main,/nightjarTheme\.initialise\(\)/,'theme applies before rendering the app');
+assert.match(settings,/<ThemePreferences/,'Settings exposes theme choices');
+assert.match(backend,/theme: \['nocturne','aubergine','midnight','ember','obsidian'\]/,'theme preference is whitelist validated by Firebase');
+
 console.log('Nightjar accessibility contracts passed.');

@@ -3441,3 +3441,52 @@ textarea {
   .nj-profile-viewer-role-card {padding:15px;}
   .nj-profile-viewer-head h2 {font-size:27px;}
 }
+
+
+/* Preferences for account-synced Nightjar appearance and FCM diagnostics. */
+.nj-theme-picker {display:grid;gap:14px;}
+.nj-theme-picker>p {max-width:650px;color:var(--muted);font-size:13px;line-height:1.6;margin:0;}
+.nj-theme-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:10px;}
+.nj-theme-choice {display:grid;align-content:start;gap:9px;min-width:0;padding:12px;color:var(--ivory);background:var(--panel-soft);text-align:left;border:1px solid var(--line);border-radius:14px;}
+.nj-theme-choice.selected {border-color:var(--plum-soft);box-shadow:0 0 0 1px var(--plum-soft) inset;}
+.nj-theme-choice:focus-visible {outline:2px solid var(--plum-soft);outline-offset:3px;}
+.nj-theme-choice:disabled {opacity:.72;}
+.nj-theme-choice strong {font-size:13px;}
+.nj-theme-choice small {font-size:11px;color:var(--muted);line-height:1.45;}
+.nj-theme-swatch {display:flex;align-items:flex-end;gap:8px;position:relative;height:58px;padding:10px;border-radius:9px;border:1px solid var(--line);overflow:hidden;}
+.nj-theme-swatch>span {width:25px;height:25px;border-radius:50%;border:1px solid rgba(255,255,255,.28);}
+.nj-theme-swatch>svg {position:absolute;top:6px;right:6px;color:var(--ivory);}
+.nj-theme-picker-note {display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;line-height:1.5;}
+.nj-push-diagnostic-error {margin:12px 0;padding:14px 16px;border-radius:11px;border:1px solid rgba(225,146,137,.45);background:rgba(149,57,66,.13);}
+.nj-push-diagnostic-error strong {font-size:14px;}
+.nj-push-diagnostic-error p {margin:8px 0;font-size:13px;line-height:1.55;}
+.nj-push-diagnostic-error small {font-size:11px;color:var(--muted);}
+.nj-push-diagnostics {display:grid;gap:12px;margin-top:10px;padding:16px;border:1px solid var(--line);border-radius:13px;background:var(--panel);}
+.nj-push-diagnostics>strong {font-size:15px;}
+.nj-push-diagnostic-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:7px;}
+.nj-push-diagnostic-grid span {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px;background:var(--panel-soft);border-radius:7px;font-size:12px;}
+.nj-push-diagnostic-grid b {font-weight:650;color:var(--plum-soft);}
+.nj-push-diagnostics p,.nj-push-diagnostics li {font-size:12px;line-height:1.6;color:var(--muted);}
+.nj-push-diagnostics ol {margin:0;padding-left:22px;}
+.nj-push-diagnostics a {display:inline-flex;align-items:center;max-width:max-content;font-size:12px;min-height:36px;color:var(--plum-soft);text-decoration:underline;}
+
+
+/* Private recipient selection in Nightjar Mail */
+.nj-mail-member-picker {display:grid;gap:12px;margin:12px 0 20px;padding:17px;border:1px solid var(--line);border-radius:14px;background:var(--panel);}
+.nj-mail-member-picker-head {display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.nj-mail-member-picker-head>div {display:grid;gap:4px;}
+.nj-mail-member-picker-head strong {font-size:15px;}
+.nj-mail-member-picker-head small,.nj-mail-member-picker>small {font-size:12px;color:var(--muted);line-height:1.5;}
+.nj-mail-member-picker>input {width:100%;min-height:44px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-soft);color:var(--ivory);font-size:14px;}
+.nj-mail-member-list {display:grid;gap:7px;max-height:290px;overflow:auto;overscroll-behavior:contain;}
+.nj-mail-member-list>p {color:var(--muted);font-size:13px;}
+.nj-mail-member-row {display:flex;align-items:center;gap:10px;min-height:58px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;}
+.nj-mail-member-row.selected {border-color:var(--plum-soft);background:color-mix(in srgb,var(--plum) 13%,transparent);}
+.nj-mail-member-row input {flex:0 0 auto;accent-color:var(--plum-soft);width:17px;height:17px;}
+.nj-mail-member-row>span:nth-child(2) {display:grid;gap:4px;flex:1;min-width:0;}
+.nj-mail-member-row strong {font-size:13px;overflow-wrap:anywhere;}
+.nj-mail-member-row small {font-size:12px;color:var(--muted);overflow-wrap:anywhere;}
+.nj-mail-member-row>span:last-child {font-size:11px;color:var(--plum-soft);text-align:right;max-width:35%;}
+.nj-mail-member-review {display:flex;flex-wrap:wrap;gap:10px;}
+.nj-mail-member-review button {min-height:43px;}
+@media(max-width:620px) {.nj-mail-member-row {flex-wrap:wrap;}.nj-mail-member-row>span:last-child {max-width:none;flex-basis:100%;text-align:left;padding-left:27px;}}

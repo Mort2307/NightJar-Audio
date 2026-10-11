@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import './styles/product-system.css';
 import App from './App';
+import { nightjarTheme } from './platform/nightjar-theme';
 import AccountPortal from './components/AccountPortal';
 import AppRecoveryBoundary from './components/AppRecoveryBoundary';
 import LegalDocumentPage from './components/LegalDocumentPage';
@@ -26,6 +27,7 @@ try {
   // URL cleanup is cosmetic and must never block Nightjar.
 }
 
+nightjarTheme.initialise();
 registerNightjarServiceWorker();
 
 createRoot(root).render(

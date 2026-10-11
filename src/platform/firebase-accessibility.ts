@@ -11,6 +11,7 @@ export type AccessibilityPreferences = {
   transcriptFollowPlayback: boolean;
   transcriptTextSize: TranscriptTextSize;
   transcriptHighContrast: boolean;
+  theme?: import('./nightjar-theme').NightjarTheme;
 };
 
 const getPreferencesCall = httpsCallable<void, { preferences: AccessibilityPreferences }>(
@@ -27,6 +28,7 @@ export const DEFAULT_ACCESSIBILITY_PREFERENCES: AccessibilityPreferences = {
   transcriptFollowPlayback: true,
   transcriptTextSize: 'standard',
   transcriptHighContrast: false,
+  theme: 'nocturne',
 };
 
 export const nightjarAccessibility = {
