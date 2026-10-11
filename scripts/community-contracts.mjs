@@ -177,6 +177,34 @@ requireText(creatorPipeline,'Unlinked / external credit · no account access','E
 if (exists('src/components/ReleaseCommunity.tsx')) failures.push('Obsolete duplicate ReleaseCommunity component still exists');
 if (exists('src/components/ProfessionalInbox.tsx')) failures.push('Obsolete duplicate ProfessionalInbox component still exists');
 
+
+// SPOTLIGHT EXPERIENCE: visual recognition, real delivery, privacy and fair
+// one-per-day idempotence. Source-level checks complement device QA.
+const spotlightUi=read('src/components/SpotlightExperience.tsx');
+const productStyles=read('src/styles/product-system.css');
+requireText(app,'<SpotlightExperience','Nightjar discover must use the premium spotlight component');
+requireText(app,"if (item.type === 'spotlight')", 'Spotlight bell notification must open the featured section');
+requireText(app,"'/people/' + encodeURIComponent(spotlight.targetId)",'Shared Spotlight must link to the featured member rather than generic Discover');
+requireText(spotlightUi,'THE NIGHTJAR SPOTLIGHT', 'Premium spotlight should have its own editorial identity');
+requireText(spotlightUi,'IT’S YOUR SPOTLIGHT DAY!', 'Featured member must see the celebratory in-app state');
+requireText(spotlightUi,'!simulationMode && viewerUserId', 'Personal spotlight must not treat owner simulations as real users');
+requireText(spotlightUi,'calendarDay % available.length', 'Editorial lead billing must rotate among live role spotlights');
+requireText(spotlightUi,'person.publicProfile !== false', 'Sharing and profile links must respect privacy');
+requireText(spotlightUi,'available.length', 'Empty profession lanes should not dominate the premium spotlight');
+requireText(productStyles,'.nj-spotlight-editorial-grid', 'Premium Spotlight responsive cards are missing');
+requireText(functions,"export const notifyDailySpotlights = onSchedule({", 'UK-morning Spotlight notification scheduling is missing');
+requireText(functions,"timeZone: 'Europe/London'",'Daily spotlight dispatch must respect UK daylight saving');
+requireText(functions,"await ref.create({", 'Concurrent Spotlight updates must create the one-time notification atomically');
+requireText(functions,"collection('notificationDispatches').doc('spotlight_' + date)", 'FCM push must be claimed once by UK date per person regardless of professional role');
+requireText(functions,"if (localHour < 9 || localHour >= 21) return;",'Nightjar must never deliver promotional phone pushes during UK night hours');
+requireText(functions,"collection('spotlightDailySelections').doc(dateKey + '_' + role)",'A spotlight person must retain their entire featured UK day despite new approvals');
+requireText(functions,"doc('spotlight_' + date + '_' + kind)", 'Spotlight notification must be unique by London date and professional role');
+requireText(functions,"preferences.followedProfiles === false", 'Spotlight push must respect existing member opt-out');
+requireText(functions,"if (item.publicProfile === false) return;", 'Private spotlight accounts must not receive promotional pushes');
+requireText(functions,"await deliverPushNotification(targetId, mobilePayload, displayMode, ref.id)", 'Featured members need an actual FCM phone notification');
+requireText(functions,"const mobilePayload = displayMode === 'full'", 'Push notification must respect display privacy levels');
+requireText(functions,"Promise.allSettled(spotlights.map", 'Push availability must not break daily Spotlight state');
+
 if (failures.length) {
   console.error('COMMUNITY CONTRACT FAILURES');
   failures.forEach((failure)=>console.error('-',failure));

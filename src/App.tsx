@@ -13,6 +13,7 @@ import { nightjarListening } from './platform/firebase-listening';
 import { nightjarNotifications } from './platform/firebase-notifications';
 import { nightjarPush } from './platform/firebase-push';
 import AdminInstallBranding from './components/AdminInstallBranding';
+import SpotlightExperience from './components/SpotlightExperience';
 import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { nightjarAge } from './platform/firebase-age';
 import { nightjarScripts } from './platform/firebase-scripts';
@@ -1368,9 +1369,9 @@ function App() {
       setNotificationUnreadCount(Number(data.unreadCount ?? 0));
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const personalSpotlight = nextNotifications.find((item: any) => item.type === 'spotlight' && item.spotlightDate === today && item.read !== true);
-      if (personalSpotlight && window.sessionStorage.getItem('nightjar_spotlight_notice:' + today) !== 'shown') {
-        window.sessionStorage.setItem('nightjar_spotlight_notice:' + today, 'shown');
-        notify(personalSpotlight.title + ' — ' + personalSpotlight.message);
+      if (personalSpotlight && window.sessionStorage.getItem('nightjar_spotlight_notice:' + today + ':' + personalSpotlight.subtype) !== 'shown') {
+        window.sessionStorage.setItem('nightjar_spotlight_notice:' + today + ':' + personalSpotlight.subtype, 'shown');
+        notify('It’s your Nightjar Spotlight day! ✨ Open Discover to celebrate and share your feature.');
       }
     } catch { /* notifications remain non-blocking */ }
   };
@@ -1435,6 +1436,16 @@ function App() {
     await markNotificationRead(item);
     setNotificationsOpen(false);
 
+    if (item.type === 'spotlight') {
+      navigate('discover');
+      window.setTimeout(() => {
+        const kind = ['creator','writer','editor','artist','listener'].includes(String(item.subtype)) ? String(item.subtype) : null;
+        const target = kind ? document.getElementById('spotlight-' + kind) : document.getElementById('daily-spotlights-title');
+        target?.scrollIntoView({ behavior:'smooth', block:'start' });
+      }, 180);
+      return;
+    }
+
     if (item.type === 'message' && item.conversationId && ['creator','writer','editor','artist'].includes(String(effectiveRole))) {
       setMessageConversationId(String(item.conversationId));
       setMessageRecipientUserId(null);
@@ -1470,10 +1481,16 @@ function App() {
 
   const shareSpotlight = async (spotlight: Spotlight) => {
     const kindLabel = spotlight.kind === 'creator' ? 'VA Creator' : spotlight.kind === 'editor' ? 'Audio Editor' : spotlight.kind === 'artist' ? 'Artist' : 'Writer';
-    const text = spotlight.kind === 'listener'
-      ? `Nightjar is recognising ${spotlight.name} today as a Listener Spotlight. Thank you for being part of the listening community.`
-      : `Today on Nightjar: ${spotlight.name} is our ${kindLabel} Spotlight. Discover the people shaping Nightjar's independent productions.`;
-    const url = window.location.origin + '/discover';
+    const isMySpotlight = Boolean(user?.userId && user.userId === spotlight.targetId && !simulationMode);
+    const text = isMySpotlight
+      ? `It's my day in the Nightjar Spotlight! ✨ Come celebrate with me and discover my work on Nightjar. #NightjarSpotlight`
+      : spotlight.kind === 'listener'
+        ? `Today Nightjar is celebrating ${spotlight.name} in our Listener Spotlight. Come meet the people who make this community special. #NightjarSpotlight`
+        : `The Nightjar Spotlight belongs to ${spotlight.name} today — our featured ${kindLabel}. Discover and celebrate their work! #NightjarSpotlight`;
+    // Shared features lead to the member's lasting public profile.
+    const url = spotlight.targetId && spotlight.publicProfile !== false
+      ? window.location.origin + '/people/' + encodeURIComponent(spotlight.targetId)
+      : window.location.origin + '/discover';
     try {
       if (navigator.share) await navigator.share({ title: 'Nightjar Spotlight', text, url });
       else if (navigator.clipboard) {
@@ -3987,7 +4004,7 @@ function App() {
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
               <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => void openNotification(item)}>
-                <span className="notification-row-icon">{item.type === 'admin_action' ? <ShieldCheck size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
+                <span className="notification-row-icon">{item.type === 'admin_action' ? <ShieldCheck size={15}/> : item.type === 'spotlight' ? <Star size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small></span>
               </button>)}</div>)}</div> : <div className="notification-empty"><Bell size={17} /><span>No new activity. You’re caught up.</span></div>}
             </section>}
@@ -4095,32 +4112,18 @@ function App() {
 
             <section className="editorial-strip"><span>VOICE</span><span>STORY</span><span>ATMOSPHERE</span><span>CHARACTER</span><span>SOUND DESIGN</span><span>AFTER DARK</span></section>
 
-            <section className="spotlight-section section-wrap" aria-labelledby="daily-spotlights-title">
-              <div className="section-head spotlight-heading"><div><p className="eyebrow"><Sparkles size={14} /> INCLUSION ROTATION</p><h2 id="daily-spotlights-title">Today in the spotlight.</h2></div><span className="spotlight-cycle">04 LANES · 01 DAY EACH · FAIR ROTATION</span></div>
-              <div className="spotlight-grid">
-                {creatorSpotlight ? <article className="spotlight-tile creator-spotlight-tile">
-                  <div className="spotlight-art">{creatorSpotlight.imageUrl ? <img className="spotlight-profile-image" src={creatorSpotlight.imageUrl} alt="" loading="lazy" decoding="async" /> : <span className="spotlight-initials">{creatorSpotlight.initials || 'NJ'}</span>}<span className="spotlight-art-mark"><Mic2 size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">CREATOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{creatorSpotlight.name}</h3><p className="spotlight-handle">{creatorSpotlight.handle ? '@' + creatorSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{creatorSpotlight.edition || 'Creator Spotlight'}</span><strong>{creatorSpotlight.title || 'Creator profile'}</strong><p>{creatorSpotlight.detail || 'A full day of discovery for this Nightjar creator.'}</p></div><div className="spotlight-actions">{creatorSpotlight.releaseId && tracks.some((track) => track.id === String(creatorSpotlight.releaseId)) ? <button className="secondary-button" onClick={() => { const track = tracks.find((item) => item.id === String(creatorSpotlight.releaseId)); if (track) togglePlayback(track); }}>Listen to highlighted release <Play size={14} /></button> : <button className="secondary-button" onClick={() => setCreatorProfileUserId(creatorSpotlight.targetId ?? null)}>Meet {creatorSpotlight.name} <ArrowRight size={14} /></button>}{creatorSpotlight.publicProfile !== false && creatorSpotlight.targetId && creatorSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(creatorSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(creatorSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(creatorSpotlight.targetId) ? 'Following' : 'Follow creator'}</button>}{creatorSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(creatorSpotlight)} aria-label={`Share ${creatorSpotlight.name}'s creator spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
-                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">CREATOR SPOTLIGHT</span><h3>Awaiting creators</h3><p className="spotlight-handle">Every active Creator joins the daily rotation automatically.</p></div></div>}
-                {writerSpotlight ? <article className="spotlight-tile writer-spotlight-tile">
-                  <div className="spotlight-art">{writerSpotlight.imageUrl ? <img className="spotlight-profile-image" src={writerSpotlight.imageUrl} alt="" loading="lazy" decoding="async" /> : <span className="spotlight-initials">{writerSpotlight.initials || 'NJ'}</span>}<span className="spotlight-art-mark"><FileText size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">WRITER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{writerSpotlight.name}</h3><p className="spotlight-handle">{writerSpotlight.handle ? '@' + writerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{writerSpotlight.edition || 'Writer Spotlight'}</span><strong>{writerSpotlight.title || 'Writer profile'}</strong><p>{writerSpotlight.detail || 'A full day of discovery for this Nightjar writer.'}</p></div><div className="spotlight-actions"><button className="secondary-button" onClick={() => document.getElementById('writer-discovery-title')?.scrollIntoView({ behavior: 'smooth' })}>Explore writer <ArrowRight size={14} /></button>{writerSpotlight.publicProfile !== false && writerSpotlight.targetId && writerSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(writerSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(writerSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(writerSpotlight.targetId) ? 'Following' : 'Follow writer'}</button>}{writerSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(writerSpotlight)} aria-label={`Share ${writerSpotlight.name}'s writer spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
-                </article> : <div className="spotlight-tile"><div className="spotlight-copy"><span className="mini-label">WRITER SPOTLIGHT</span><h3>Awaiting writers</h3><p className="spotlight-handle">Every active Writer joins the daily rotation automatically.</p></div></div>}
-                {editorSpotlight ? <article className="spotlight-tile editor-spotlight-tile">
-                  <div className="spotlight-art">{editorSpotlight.imageUrl ? <img className="spotlight-profile-image" src={editorSpotlight.imageUrl} alt="" loading="lazy" decoding="async" /> : <span className="spotlight-initials">{editorSpotlight.initials || 'NJ'}</span>}<span className="spotlight-art-mark"><FileCheck2 size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">AUDIO EDITOR SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{editorSpotlight.name}</h3><p className="spotlight-handle">{editorSpotlight.handle ? '@' + editorSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{editorSpotlight.edition || 'Audio Editor Spotlight'}</span><strong>{editorSpotlight.title || 'Audio Editor profile'}</strong><p>{editorSpotlight.detail || 'A full day of recognition for an Audio Editor shaping Nightjar productions.'}</p></div><div className="spotlight-actions">{editorSpotlight.publicProfile !== false && editorSpotlight.targetId && <button className="secondary-button" onClick={() => openPublicProfile(editorSpotlight.targetId!)}>View Audio Editor profile <ArrowRight size={14}/></button>}{editorSpotlight.publicProfile !== false && editorSpotlight.targetId && editorSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(editorSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(editorSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(editorSpotlight.targetId) ? 'Following' : 'Follow Audio Editor'}</button>}{editorSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(editorSpotlight)} aria-label={`Share ${editorSpotlight.name}'s Audio Editor spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
-                </article> : <div className="spotlight-tile editor-spotlight-tile"><div className="spotlight-copy"><span className="mini-label">AUDIO EDITOR SPOTLIGHT</span><h3>Awaiting Audio Editors</h3><p className="spotlight-handle">Every active public Audio Editor joins the daily rotation automatically.</p></div></div>}
-                {artistSpotlight ? <article className="spotlight-tile artist-spotlight-tile">
-                  <div className="spotlight-art">{artistSpotlight.imageUrl ? <img className="spotlight-profile-image" src={artistSpotlight.imageUrl} alt="" loading="lazy" decoding="async" /> : <span className="spotlight-initials">{artistSpotlight.initials || 'NJ'}</span>}<span className="spotlight-art-mark"><ImagePlus size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">ARTIST SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{artistSpotlight.name}</h3><p className="spotlight-handle">{artistSpotlight.handle ? '@' + artistSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{artistSpotlight.edition || 'Artist Spotlight'}</span><strong>{artistSpotlight.title || 'Artist profile'}</strong><p>{artistSpotlight.detail || 'A full day of discovery for a human Artist shaping Nightjar visual work.'}</p></div><div className="spotlight-actions">{artistSpotlight.publicProfile !== false && artistSpotlight.targetId && <button className="secondary-button" onClick={() => openPublicProfile(artistSpotlight.targetId!)}>View Artist profile <ArrowRight size={14}/></button>}{artistSpotlight.publicProfile !== false && artistSpotlight.targetId && artistSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(artistSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(artistSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(artistSpotlight.targetId) ? 'Following' : 'Follow Artist'}</button>}{artistSpotlight.publicProfile !== false && <button className="ghost-button" onClick={() => void shareSpotlight(artistSpotlight)} aria-label={`Share ${artistSpotlight.name}'s Artist spotlight`}><Share2 size={15} /> Share spotlight</button>}</div></div>
-                </article> : <div className="spotlight-tile artist-spotlight-tile"><div className="spotlight-copy"><span className="mini-label">ARTIST SPOTLIGHT</span><h3>Awaiting Artists</h3><p className="spotlight-handle">Every active public Artist joins the daily rotation automatically.</p></div></div>}
-                {listenerSpotlight ? <article className="spotlight-tile listener-spotlight-tile">
-                  <div className="spotlight-art"><span className="spotlight-initials">{listenerSpotlight.initials || 'NJ'}</span><span className="spotlight-art-mark"><Headphones size={20} /></span></div>
-                  <div className="spotlight-copy"><div className="spotlight-topline"><span className="mini-label">LISTENER SPOTLIGHT</span><span className="spotlight-day">TODAY · 24 HOURS</span></div><h3>{listenerSpotlight.name}</h3><p className="spotlight-handle">{listenerSpotlight.handle ? '@' + listenerSpotlight.handle.replace(/^@/,'') : 'Handle not set'}</p><div className="spotlight-edition"><span>{listenerSpotlight.edition || 'WEEKLY TOP 7'}</span><strong>{listenerSpotlight.title || 'Community listener'}</strong><p>{listenerSpotlight.detail || 'Recognised for the most tracked listening activity in the previous completed week.'}</p></div><div className="spotlight-listener-meta"><span>TOP {spotlightMeta.listenerTopSevenCount || 0}</span><span>DAY {spotlightMeta.listenerSpotlightDay || 1} / 7</span></div><div className="spotlight-thanks"><Headphones size={14} /><span>Thank you for helping make Nightjar’s listening community what it is.</span></div>{listenerSpotlight.publicProfile !== false && listenerSpotlight.targetId && <div className="spotlight-actions"><button className="secondary-button" onClick={() => openPublicProfile(listenerSpotlight.targetId!)}>View listener profile <ArrowRight size={14}/></button>{listenerSpotlight.targetId !== user?.userId && <button className="ghost-button" onClick={() => void toggleProfileFollow(listenerSpotlight.targetId!)}><Heart size={15} fill={followingProfileIds.includes(listenerSpotlight.targetId) ? 'currentColor' : 'none'} /> {followingProfileIds.includes(listenerSpotlight.targetId) ? 'Following' : 'Follow listener'}</button>}</div>}</div>
-                </article> : <div className="spotlight-tile listener-spotlight-tile"><div className="spotlight-copy"><span className="mini-label">LISTENER SPOTLIGHT</span><h3>Weekly listener recognition</h3><p className="spotlight-handle">The previous completed week’s top seven tracked Listeners rotate one per day. The seven refresh together when the new week begins.</p></div></div>}
-              </div>
-              <p className="spotlight-note">Every active VA Creator, Writer, Audio Editor and Artist receives a full day in deterministic rotation, with a shareable spotlight to help the community naturally discover the people shaping Nightjar. Listener Spotlight recognises the previous completed week’s top seven Listeners, one per day, and thanks them for helping Nightjar thrive.</p>
-            </section>
+            <SpotlightExperience
+              spotlightMeta={spotlightMeta}
+              spotlights={[creatorSpotlight, writerSpotlight, editorSpotlight, artistSpotlight, listenerSpotlight].filter((person): person is Spotlight => person !== null)}
+              viewerUserId={simulationMode ? null : user?.userId}
+              followingIds={followingProfileIds}
+              simulationMode={simulationMode}
+              simulationRole={simulationMode ? previewRole : null}
+              onProfile={openPublicProfile}
+              onFollow={toggleProfileFollow}
+              onShare={shareSpotlight}
+              onListen={(releaseId) => { const track = tracks.find((item)=>item.id===releaseId); if (track) togglePlayback(track); }}
+            />
 
             <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} />
 

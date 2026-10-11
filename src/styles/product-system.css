@@ -3267,3 +3267,108 @@ textarea {
   .admin-live-preview-diagnostic {display:grid;grid-template-columns:minmax(0,1fr);gap:11px;}
   .admin-live-preview-diagnostic .status-pill {justify-self:start;}
 }
+
+
+/* NIGHTJAR SPOTLIGHT — editorial recognition, not miniature directory cards.
+   Each professional role rotates through the hero position; blank roles do
+   not appear as oversized empty cards. */
+.nj-spotlight-experience {
+  --nj-sp-gold: #ead0a7;
+  --nj-sp-gold-soft: rgba(234,208,167,.52);
+  padding-top: clamp(42px,6vw,76px);
+  padding-bottom: clamp(45px,6vw,76px);
+  border-top: 1px solid rgba(234,208,167,.23);
+  color:#f6ecf1;
+}
+.nj-spotlight-section-head {position:relative;display:grid;gap:13px;margin-bottom:26px;padding:0 0 23px;border-bottom:1px solid rgba(234,208,167,.17);}
+.nj-spotlight-section-kicker {display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--nj-sp-gold);font-size:12px;font-weight:800;letter-spacing:.16em;}
+.nj-spotlight-kicker-icon {display:grid;place-items:center;width:34px;height:34px;border:1px solid rgba(234,208,167,.4);border-radius:50%;background:rgba(234,208,167,.06);}
+.nj-spotlight-live {display:inline-flex;align-items:center;gap:7px;margin-left:auto;letter-spacing:.1em;font-size:11px;color:#e4d5c3;}
+.nj-spotlight-live > span {width:7px;height:7px;border-radius:50%;background:#dec59d;box-shadow:0 0 13px rgba(234,208,167,.6);}
+.nj-spotlight-section-head h2 {font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:clamp(39px,6.8vw,73px);line-height:1.02;letter-spacing:-.035em;margin:0;}
+.nj-spotlight-section-head h2 em {font-style:italic;color:var(--nj-sp-gold);}
+.nj-spotlight-section-head > p {max-width:680px;font-size:clamp(14px,1.7vw,17px);line-height:1.65;color:#cfc1cc;margin:0;}
+.nj-spotlight-promises {display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap;margin-top:5px;}
+.nj-spotlight-promises span {display:inline-flex;align-items:center;gap:7px;font-size:12px;line-height:1.45;color:#d7c9d1;}
+.nj-spotlight-promises svg {color:var(--nj-sp-gold);flex:0 0 auto;}
+.nj-spotlight-editorial-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px;min-width:0;}
+.nj-spotlight-card {min-width:0;display:grid;grid-template-columns:minmax(155px,.78fr) minmax(0,1.22fr);overflow:hidden;isolation:isolate;position:relative;
+  border:1px solid rgba(234,208,167,.2);border-radius:20px;
+  background:radial-gradient(ellipse at 98% 0%,rgba(103,56,91,.22),transparent 56%),linear-gradient(150deg,#241d27,#131017 83%);
+  box-shadow:0 21px 60px rgba(0,0,0,.19);}
+.nj-spotlight-card::after {content:'';position:absolute;inset:6px;border:1px solid rgba(234,208,167,.055);border-radius:15px;pointer-events:none;z-index:2;}
+.nj-spotlight-card:hover {border-color:rgba(234,208,167,.47);}
+.nj-spotlight-card.nj-spotlight-lead {grid-column:1 / -1;grid-template-columns:minmax(260px,.88fr) minmax(0,1.12fr);min-height:375px;border-color:rgba(234,208,167,.43);
+  box-shadow:0 22px 80px rgba(0,0,0,.25),inset 0 1px 0 rgba(234,208,167,.07);}
+.nj-spotlight-portrait {min-width:0;min-height:225px;position:relative;display:grid;place-items:center;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 34%,rgba(201,167,198,.23),transparent 40%),
+    linear-gradient(156deg,#493247 4%,#231923 63%,#140f19 100%);}
+.nj-spotlight-portrait::after {content:'';position:absolute;inset:0;box-shadow:inset 0 0 62px rgba(10,8,13,.25);pointer-events:none;}
+.nj-spotlight-card[data-role="writer"] .nj-spotlight-portrait {background:linear-gradient(150deg,#423144,#191422);}
+.nj-spotlight-card[data-role="editor"] .nj-spotlight-portrait {background:linear-gradient(150deg,#333147,#171321);}
+.nj-spotlight-card[data-role="artist"] .nj-spotlight-portrait {background:linear-gradient(150deg,#573647,#211522);}
+.nj-spotlight-card[data-role="listener"] .nj-spotlight-portrait {background:linear-gradient(150deg,#30324b,#151421);}
+.nj-spotlight-portrait-img {width:100%;height:100%;min-height:100%;object-fit:cover;object-position:center 25%;position:absolute;inset:0;}
+.nj-spotlight-monogram {font-family:Georgia,serif;font-size:clamp(55px,8vw,100px);color:#f5e9ed;letter-spacing:-.06em;opacity:.85;}
+.nj-spotlight-portrait-stamp {position:absolute;left:16px;bottom:16px;z-index:3;display:inline-flex;align-items:center;gap:8px;padding:9px 12px;
+  background:rgba(15,12,19,.87);border:1px solid rgba(234,208,167,.42);color:var(--nj-sp-gold);font-size:11px;font-weight:800;letter-spacing:.1em;border-radius:9px;backdrop-filter:blur(10px);}
+.nj-spotlight-story {min-width:0;display:flex;flex-direction:column;gap:10px;padding:clamp(20px,2.8vw,34px);}
+.nj-spotlight-eyebrow {display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:10px;font-weight:800;letter-spacing:.13em;color:#ded0dc;}
+.nj-spotlight-eyebrow span:first-child {display:inline-flex;align-items:center;gap:7px;color:var(--nj-sp-gold);}
+.nj-spotlight-editorial {color:var(--nj-sp-gold);font-size:13px;line-height:1.4;letter-spacing:.04em;margin:9px 0 0;}
+.nj-spotlight-story h3 {font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:clamp(29px,3.3vw,43px);line-height:1.08;letter-spacing:-.035em;overflow-wrap:break-word;margin:0;}
+.nj-spotlight-lead .nj-spotlight-story h3 {font-size:clamp(40px,5vw,64px);}
+.nj-spotlight-handle {font-size:13px;color:#d7bbcb;margin:0;overflow-wrap:anywhere;}
+.nj-spotlight-headline {font-size:clamp(15px,1.5vw,18px);line-height:1.48;font-weight:650;color:#fff4f5;margin:8px 0 0;overflow-wrap:break-word;}
+.nj-spotlight-story-text {font-size:13px;line-height:1.6;color:#c5b6c2;margin:2px 0 12px;}
+.nj-spotlight-listener-recognition {display:flex;align-items:center;gap:9px;font-size:12px;line-height:1.5;color:#e0c8d4;}
+.nj-spotlight-personal-moment {display:flex;align-items:flex-start;gap:11px;padding:15px;border:1px solid rgba(234,208,167,.44);border-radius:12px;
+  background:linear-gradient(120deg,rgba(234,208,167,.16),rgba(179,111,149,.1));}
+.nj-spotlight-personal-moment > svg {color:var(--nj-sp-gold);flex:0 0 auto;}
+.nj-spotlight-personal-moment > span {display:grid;gap:5px;min-width:0;}
+.nj-spotlight-personal-moment strong {color:#ffedcb;font-size:13px;letter-spacing:.06em;}
+.nj-spotlight-personal-moment small {font-size:12px;line-height:1.5;color:#eedfe4;}
+.nj-spotlight-card-actions {display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:auto;padding-top:12px;}
+.nj-spotlight-card-actions button {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:43px;flex:1 1 auto;
+  padding:10px 13px;font-size:12px;line-height:1.3;white-space:normal;}
+.nj-spotlight-card-actions .primary-button {background:#e8ceaa;color:#201620;border:1px solid #f0dcbb;font-weight:800;}
+.nj-spotlight-card-actions .primary-button:hover {background:#f9e5c4;}
+.nj-spotlight-card-actions .secondary-button {border-color:rgba(234,208,167,.27);background:rgba(234,208,167,.055);color:#f1e8eb;}
+.nj-spotlight-card-actions .nj-spotlight-share {border-color:rgba(234,208,167,.42);}
+.nj-spotlight-outro {display:flex;align-items:center;justify-content:center;gap:8px;margin:20px auto 0;max-width:700px;color:#c8bac8;
+  text-align:center;font-size:13px;line-height:1.5;}
+.nj-spotlight-outro svg {color:var(--nj-sp-gold);flex:0 0 auto;}
+.nj-spotlight-empty {display:grid;justify-items:center;gap:12px;padding:46px 22px;border:1px dashed rgba(234,208,167,.28);border-radius:18px;text-align:center;}
+.nj-spotlight-empty svg {color:var(--nj-sp-gold);}
+.nj-spotlight-empty strong {font-family:Georgia,serif;font-size:26px;font-weight:400;}
+.nj-spotlight-empty p {max-width:460px;line-height:1.6;color:#cbbfc8;margin:0;font-size:13px;}
+.nj-spotlight-card :where(button):focus-visible {outline:2px solid var(--nj-sp-gold);outline-offset:3px;}
+@media(max-width:1050px) {
+  .nj-spotlight-editorial-grid {grid-template-columns:minmax(0,1fr);}
+  .nj-spotlight-card {grid-template-columns:minmax(190px,.6fr) minmax(0,1.4fr);}
+  .nj-spotlight-card.nj-spotlight-lead {grid-column:auto;grid-template-columns:minmax(200px,.75fr) minmax(0,1.25fr);}
+}
+@media(max-width:680px) {
+  .nj-spotlight-experience {padding-top:42px;padding-bottom:42px;}
+  .nj-spotlight-section-head {gap:12px;margin-bottom:17px;}
+  .nj-spotlight-section-kicker {font-size:10px;letter-spacing:.1em;}
+  .nj-spotlight-live {font-size:10px;}
+  .nj-spotlight-section-head h2 {font-size:clamp(37px,10vw,52px);}
+  .nj-spotlight-editorial-grid {gap:16px;}
+  .nj-spotlight-card,.nj-spotlight-card.nj-spotlight-lead {grid-template-columns:minmax(0,1fr);min-height:0;}
+  .nj-spotlight-portrait {min-height:0;height:230px;}
+  .nj-spotlight-lead .nj-spotlight-portrait {height:268px;}
+  .nj-spotlight-story {padding:22px;gap:9px;}
+  .nj-spotlight-lead .nj-spotlight-story h3 {font-size:42px;}
+  .nj-spotlight-story h3 {font-size:35px;}
+  .nj-spotlight-portrait-stamp {left:13px;bottom:13px;}
+  .nj-spotlight-card-actions button {min-height:46px;flex:1 1 46%;}
+  .nj-spotlight-card-actions .primary-button,.nj-spotlight-card-actions .nj-spotlight-share {flex-basis:100%;}
+  .nj-spotlight-promises {gap:8px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .nj-spotlight-card,.nj-spotlight-card button {transition:none;}
+}
+
+/* Weekly listener appreciation is deliberately editorial, not a leaderboard. */
+.nj-spotlight-weekly-note {margin:10px 0 0;text-align:center;font-size:12px;line-height:1.6;color:#bcaebd;}
