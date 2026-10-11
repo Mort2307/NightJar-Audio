@@ -4329,7 +4329,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
+  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
 
   const update = {
     title: cleanText(input.title ?? current.title, 160),
@@ -4380,8 +4380,8 @@ const removeOwnedRelease = async (releaseId: string, actorUserId: string, admini
     return { deleted: true };
   }
   const ownerUserId = String(current.creatorUserId);
-  const previousStatus = String(current.status ?? 'draft');
-  await ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const previousStatus = String(current.removalOriginalStatus ?? current.status ?? 'draft');
+  await ref.set({ status: 'removing', removalOriginalStatus: previousStatus, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 
   // The actual audio file must be deleted, not merely detached from its record.
   const audioPath = cleanText(current.audioStoragePath, 500);
@@ -4471,7 +4471,7 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
+  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
 
   const file = getStorage().bucket().file(storagePath);
   const [exists] = await file.exists();
@@ -4509,7 +4509,7 @@ export const removeReleaseAudio = onCall({ region: REGION }, async (request) => 
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
+  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
 
   const path = cleanText(current.audioStoragePath, 500);
   if (path) {
@@ -4680,7 +4680,7 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
 
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
-  if (!data || data.status === 'removed') throw new HttpsError('not-found', 'Release transcript not found.');
+  if (!data || ['removed', 'removing'].includes(String(data.status))) throw new HttpsError('not-found', 'Release transcript not found.');
 
   const transcriptText = cleanReleaseTranscript(data.transcriptText);
   if (!transcriptText) throw new HttpsError('not-found', 'This release does not have a transcript yet.');
@@ -5376,7 +5376,7 @@ export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (reque
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
-  if (!data || data.status === 'removed' || !data.audioStoragePath) throw new HttpsError('not-found', 'Release audio not found.');
+  if (!data || ['removed', 'removing'].includes(String(data.status)) || !data.audioStoragePath) throw new HttpsError('not-found', 'Release audio not found.');
   const [url] = await getStorage().bucket().file(String(data.audioStoragePath)).getSignedUrl({
     action: 'read',
     expires: Date.now() + 10 * 60 * 1000,
