@@ -76,6 +76,7 @@ import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalC
 import MobileNavigation from './components/MobileNavigation';
 import NightjarSettings from './components/NightjarSettings';
 import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
+import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
 import ProductExperience from './components/ProductExperience';
 import AdminMemberRoleEditor from './components/AdminMemberRoleEditor';
 import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
@@ -508,7 +509,7 @@ function App() {
   const [securityAlertsLoading, setSecurityAlertsLoading] = useState(false);
   const [authenticationEvents, setAuthenticationEvents] = useState<AuthenticationSecurityEvent[]>([]);
   const [authenticationEventsLoading, setAuthenticationEventsLoading] = useState(false);
-  const [securityEvidenceReview, setSecurityEvidenceReview] = useState<{ alert: any; evidence: any[] } | null>(null);
+  const [securityEvidenceReview, setSecurityEvidenceReview] = useState<SecurityEvidenceReviewData | null>(null);
   const [securityEvidenceLoading, setSecurityEvidenceLoading] = useState(false);
   const [adminPanel, setAdminPanel] = useState<'approvals' | 'suggestions' | 'reports' | 'reviews' | 'revenue' | 'subscriptions' | 'economics' | 'editorial' | 'images' | 'tags' | 'branding' | 'live-preview' | null>(() => {
     const panelFromPath = window.location.pathname.match(/^\/admin\/(approvals|suggestions|reports|reviews|revenue|subscriptions|economics|editorial|images|tags|branding|live-preview)\/?$/)?.[1];
@@ -5060,31 +5061,7 @@ function App() {
 
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal">T&Cs Centre</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 
-      {securityEvidenceReview && <div className="security-evidence-backdrop" role="dialog" aria-modal="true" aria-label="Security alert evidence review" onClick={()=>setSecurityEvidenceReview(null)}>
-        <section className="security-evidence-modal" onClick={(event)=>event.stopPropagation()}>
-          <header className="security-evidence-head">
-            <div><span className="mini-label">SECURITY / EVIDENCE REVIEW</span><h2>{String(securityEvidenceReview.alert?.severity ?? 'medium').toUpperCase()} · Risk {securityEvidenceReview.alert?.riskScore ?? '—'}</h2><p>{securityEvidenceReview.alert?.reason ?? 'Protected-content activity retained for human review.'}</p></div>
-            <button className="icon-button" onClick={()=>setSecurityEvidenceReview(null)} aria-label="Close security evidence review"><X size={18}/></button>
-          </header>
-          <div className="security-evidence-principle"><ShieldCheck size={16}/><div><strong>Evidence is contextual, not a finding of wrongdoing.</strong><span>{securityEvidenceReview.alert?.category === 'authentication' ? 'Authentication evidence here is observed through Nightjar’s own account portal. Passwords are never captured, and direct Firebase requests outside Nightjar require separate Google/Firebase audit logging for complete coverage.' : 'Browser capture shortcuts are labelled possible. Native callbacks are stronger OS-level signals. No screenshot contents, clipboard contents or private device files are collected.'}</span></div></div>
-          <div className="security-evidence-list">
-            {securityEvidenceReview.evidence.length ? securityEvidenceReview.evidence.map((item:any)=><article key={item.id} className="security-evidence-row">
-              <div className="security-evidence-row-head"><strong>{protectionEventLabel(item.eventType)}</strong><span>{protectionConfidenceLabel(item.detectionConfidence) ?? 'Recorded interaction'}</span></div>
-              <p>{item.summary || 'Protected interaction recorded by Nightjar.'}</p>
-              <dl>
-                <div><dt>Time</dt><dd>{item.createdAt ? new Date(item.createdAt).toLocaleString('en-GB') : '—'}</dd></div>
-                <div><dt>Script / item</dt><dd>{item.relatedId ?? '—'}</dd></div>
-                <div><dt>Reader session</dt><dd>{item.readerSessionId ?? '—'}</dd></div>
-                <div><dt>Device token</dt><dd>{item.deviceId ?? '—'}</dd></div>
-                <div><dt>Platform</dt><dd>{item.clientPlatform ?? '—'}</dd></div>
-                <div><dt>Source</dt><dd>{item.detectionSource ? String(item.detectionSource).replaceAll('_',' ') : '—'}</dd></div>
-                <div><dt>Route</dt><dd>{item.route ?? '—'}</dd></div>
-                <div><dt>Visibility</dt><dd>{item.visibilityState ?? '—'}</dd></div>
-              </dl>
-            </article>) : <div className="people-empty"><ShieldCheck size={18}/><strong>No retained events for this alert.</strong><span>The alert record remains available, but no supporting protection events were returned.</span></div>}
-          </div>
-        </section>
-      </div>}
+      {securityEvidenceReview && <SecurityEvidenceReview review={securityEvidenceReview} onClose={() => setSecurityEvidenceReview(null)} />}
 
       {moderationPreviewAsset?.previewUrl && <div className="image-moderation-fullscreen" role="dialog" aria-modal="true" aria-label="Full-screen image moderation preview" onClick={()=>setModerationPreviewAsset(null)}>
         <div className="image-moderation-fullscreen-shell" onClick={(event)=>event.stopPropagation()}>
