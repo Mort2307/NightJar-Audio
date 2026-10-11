@@ -41,7 +41,7 @@ export default function ThemePreferences({ simulationMode, notify }:Props) {
   };
 
   return <div className="nj-theme-picker">
-    <p>Choose a Nightjar atmosphere. All five keep the dark, discreet player and premium editorial look. Your saved choice follows your account across devices.</p>
+    <p>Choose a Nightjar atmosphere. All six keep the dark, discreet player and premium editorial look. <strong>Bronze Noir</strong> matches Nightjar's black-and-gold N from the startup screen. Your saved choice follows your account across devices.</p>
     <div className="nj-theme-grid" role="group" aria-label="Choose Nightjar theme">
       {nightjarThemes.map((theme)=><button type="button" key={theme.id}
         className={selected===theme.id?'nj-theme-choice selected':'nj-theme-choice'}
@@ -50,7 +50,7 @@ export default function ThemePreferences({ simulationMode, notify }:Props) {
           {theme.swatches.map((color,i)=><span key={i} style={{background:color}}/>)}
           {selected===theme.id&&<Check size={16}/>}
         </span>
-        <strong>{theme.label}</strong>
+        <strong>{theme.label}{theme.id==='bronze' && <span className="nj-theme-new-tag"> · NEW</span>}</strong>
         <small>{theme.description}</small>
       </button>)}
     </div>
