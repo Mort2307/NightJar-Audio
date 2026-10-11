@@ -6433,6 +6433,7 @@ export const securityAlertEvidence = onCall({ region: REGION }, async (request) 
         if (matchesTarget && accountSnapshot.exists) {
           const access = await closedBetaAccessFor(email, account);
           const eligible = authUser.emailVerified === true
+            && authUser.disabled !== true
             && account.status !== 'suspended'
             && access.allowed === true;
           const presenter = eligible ? await accountPresentation(targetUid) : null;
