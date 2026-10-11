@@ -194,7 +194,7 @@ requireText(spotlightUi,'SPOTLIGHT DAY', 'Featured members must have an accurate
 if (spotlightUi.includes('TODAY ONLY') || spotlightUi.includes('nj-spotlight-lead') || spotlightUi.includes('featured={index===0}')) failures.push('Spotlight must not diminish other roles through ranked hero layout or a misleading today-only label');
 requireText(productStyles,'.nj-spotlight-experience .nj-spotlight-editorial-grid>.nj-spotlight-card', 'All desktop Spotlight cards must match the Maze-sized feature');
 requireText(spotlightUi,'person.publicProfile !== false', 'Sharing and profile links must respect privacy');
-requireText(spotlightUi,'available.length', 'Empty profession lanes should not dominate the premium spotlight');
+requireText(spotlightUi,'const available = props.spotlights.filter', 'Empty profession lanes should not dominate the premium spotlight');
 requireText(productStyles,'.nj-spotlight-editorial-grid', 'Premium Spotlight responsive cards are missing');
 requireText(functions,"export const notifyDailySpotlights = onSchedule({", 'UK-morning Spotlight notification scheduling is missing');
 requireText(functions,"timeZone: 'Europe/London'",'Daily spotlight dispatch must respect UK daylight saving');
