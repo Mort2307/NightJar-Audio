@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { Bell, Check, Heart, ImagePlus, ShieldCheck, Sparkles, Star, UserCircle2 } from 'lucide-react';
 import SearchableMultiSelect from './SearchableMultiSelect';
+import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
 import AccountSecurityActivity from './AccountSecurityActivity';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import LegalAgreementPanel from './LegalAgreementPanel';
@@ -63,6 +64,8 @@ export default function UserProfileStudio({
   onRevert,
   onOpenEditorStudio,
 }: Props) {
+  const handleProblem = nightjarHandleError(profile.handle);
+  const suggestedHandle = handleProblem ? suggestNightjarHandle(profile.handle) : '';
   const displayName = profile.displayName || userName || userEmail?.split('@')[0] || 'Nightjar member';
   const handle = profile.handle ? '@' + String(profile.handle).replace(/^@/,'') : '@yourhandle';
   const initials = profile.avatarInitials || displayName.split(/\s+/).map((part:string)=>part[0]).join('').slice(0,2).toUpperCase() || 'NJ';
@@ -129,7 +132,20 @@ export default function UserProfileStudio({
 
         <div className="premium-form-two">
           <label>Chosen name<input maxLength={80} value={profile.displayName ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,displayName:event.target.value}))} placeholder="How Nightjar should call you"/></label>
-          <label>@handle<input maxLength={30} value={profile.handle ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,handle:event.target.value}))} placeholder="youruniquehandle"/></label>
+          <label>@handle <span className="optional-label">optional</span>
+            <input maxLength={50} value={profile.handle ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,handle:event.target.value}))}
+              placeholder="youruniquehandle" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={!!handleProblem} aria-describedby="nightjar-handle-guidance"/>
+            <small id="nightjar-handle-guidance" role={handleProblem ? 'alert' : undefined}>
+              {handleProblem || 'Use 3–30 letters, numbers, _ or -. Spaces and other symbols are not permitted. Blank is fine.'}
+            </small>
+            {handleProblem && <span className="profile-handle-fixes">
+              {suggestedHandle && suggestedHandle !== normaliseNightjarHandle(profile.handle)
+                && <button type="button" className="ghost-button" onClick={()=>setProfile((current:any)=>({...current,handle:suggestedHandle}))}>
+                  Use @{suggestedHandle}
+                </button>}
+              <button type="button" className="ghost-button" onClick={()=>setProfile((current:any)=>({...current,handle:''}))}>Save without a handle</button>
+            </span>}
+          </label>
           <label>Pronouns <span className="optional-label">optional</span><input maxLength={60} value={profile.pronouns ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,pronouns:event.target.value}))} placeholder="e.g. they/them"/></label>
           <label>Profile tone<select value={profile.avatarTone || 'plum'} onChange={(event)=>setProfile((current:any)=>({...current,avatarTone:event.target.value}))}><option value="plum">Plum</option><option value="wine">Wine</option><option value="mauve">Mauve</option><option value="ivory">Ivory</option></select></label>
         </div>

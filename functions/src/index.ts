@@ -1114,7 +1114,12 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const accountData = accountSnapshot.data() ?? {};
   const approvedRoles = professionalRolesForAccount(accountData);
   const requestedProfileRole = cleanText(input.profileRole, 30);
-  const fallbackProfileRole = cleanText(accountData.role, 30) || 'listener';
+  const assignedRole = cleanText(accountData.role, 30) || 'listener';
+  // Pending or historic accounts can have a professional primary role before
+  // that role is actually approved. They must still be able to edit Listener.
+  const fallbackProfileRole = identity.admin || assignedRole === 'listener' || approvedRoles.includes(assignedRole as AccountRole)
+    ? assignedRole
+    : 'listener';
   const profileRole = identity.admin ? 'admin' : (requestedProfileRole || fallbackProfileRole);
   if (!identity.admin && profileRole !== 'listener' && !approvedRoles.includes(profileRole as AccountRole)) {
     throw new HttpsError('permission-denied', 'That professional profile role has not been approved for this account.');
@@ -1170,6 +1175,21 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
     updatedAt: FieldValue.serverTimestamp(),
   };
+
+  // The app sends role drafts together, not via one callable per role.
+  // Accept only approved role keys and normalise every field using the
+  // existing server-side profile sanitizer. Unapproved roles are never stored.
+  const suppliedRoleProfiles = input.roleProfiles && typeof input.roleProfiles === 'object' && !Array.isArray(input.roleProfiles)
+    ? input.roleProfiles as Record<string, unknown>
+    : {};
+  const validatedRoleProfiles: Record<string, ReturnType<typeof roleProfileSlice>> = {};
+  for (const allowedRole of identity.admin ? [] : ['listener', ...approvedRoles]) {
+    const draft = suppliedRoleProfiles[allowedRole];
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft)) continue;
+    const cleaned = roleProfileSlice({ roleProfiles: { [allowedRole]: draft } }, allowedRole);
+    cleaned.featuredPortfolioIds = await validatedPortfolioIdsFor(identity.uid, allowedRole, cleaned.featuredPortfolioIds);
+    validatedRoleProfiles[allowedRole] = cleaned;
+  }
 
   const activeWorkspaceRole = identity.admin ? 'admin' : fallbackProfileRole;
   const roleCompatibilityFields = new Set([
@@ -1259,6 +1279,10 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
       };
     }
 
+    // Apply the approved, sanitised role drafts to the same atomic write.
+    // This preserves the details a member edited before switching tabs.
+    Object.assign(roleProfiles, validatedRoleProfiles);
+
     transaction.set(targetProfileRef, {
       ...topLevelProfileWrite,
       roleProfiles,
@@ -1266,21 +1290,32 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     }, { merge: true });
   });
 
+  // Discovery tag indexing and release-name propagation are secondary tasks.
+  // An error there must never tell a member their profile failed after the
+  // Firestore transaction has committed successfully.
   if (profileStatus === 'active' && approvedRoles.includes('creator')) {
-    await syncCreatorCustomTagUsage(identity.uid);
+    try {
+      await syncCreatorCustomTagUsage(identity.uid);
+    } catch (error) {
+      console.error('Profile saved; creator tag indexing failed', { userId: identity.uid, error });
+    }
   }
 
-  const releases = await db.collection('releases').where('creatorUserId', '==', identity.uid).limit(450).get();
-  if (!releases.empty) {
-    const batch = db.batch();
-    for (const release of releases.docs) {
-      batch.set(release.ref, {
-        creatorName: nextProfile.displayName,
-        creatorHandle: nextProfile.handle,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+  try {
+    const releases = await db.collection('releases').where('creatorUserId', '==', identity.uid).limit(450).get();
+    if (!releases.empty) {
+      const batch = db.batch();
+      for (const release of releases.docs) {
+        batch.set(release.ref, {
+          creatorName: nextProfile.displayName,
+          creatorHandle: nextProfile.handle,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      await batch.commit();
     }
-    await batch.commit();
+  } catch (error) {
+    console.error('Profile saved; release display-name sync failed', { userId: identity.uid, error });
   }
 
   const saved = await targetProfileRef.get();

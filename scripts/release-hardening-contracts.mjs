@@ -48,7 +48,8 @@ requireText(functions,"role:'writer'",'Writer directory cards must remain explic
 requireText(functions,"professionalRolesForAccount(target.data() ?? {}).includes('creator')",'Backward-compatible Creator follows must support multi-role Creator accounts.');
 requireText(app,'captureProfileRoleDraft','Multi-role profile drafts must be isolated before role switching.');
 requireText(app,'profile-identity-tabs','Unified profile identity tabs are missing.');
-requireText(app,'saveMyProfile(payload, targetRole)','Save-all must persist each approved role slice independently.');
+requireText(app,'saveMyProfile(payload, profileEditRole)','Save-all must submit one approved multi-role profile bundle.');
+requireText(functions,'Object.assign(roleProfiles, validatedRoleProfiles)','Save-all must persist approved role slices atomically in one Firestore transaction.');
 requireText(app,'getMyProfilePortfolioOptions(nextRole)','Role switching must load role-specific showcase options without changing workspace.');
 requireText(roleProfile,"role === 'editor'",'Audio Editor must participate in the unified professional profile editor.');
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Check, Sparkles, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
+import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import {
   PROFILE_CATEGORY_OPTIONS,
@@ -70,16 +71,24 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   );
   const step = steps[Math.min(stepIndex, steps.length - 1)];
   const initials = (profile.displayName || 'NJ').split(/\s+/).map((part:string)=>part[0]).join('').slice(0,2).toUpperCase();
+  const handleProblem = nightjarHandleError(profile.handle);
+  const suggestedHandle = handleProblem ? suggestNightjarHandle(profile.handle) : '';
   const roleLabel = role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Nightjar member';
 
   const update = (key: string, value: unknown) => setProfile((current:any)=>({...current,[key]:value}));
 
   const finish = async () => {
+    if (handleProblem) {
+      setStepIndex(0);
+      notify(handleProblem);
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         ...(initialProfile ?? {}),
         ...profile,
+        handle: normaliseNightjarHandle(profile.handle),
         avatarInitials: initialProfile?.avatarInitials || initials,
         onboardingComplete: true,
         onboardingVersion: 3,
@@ -89,8 +98,9 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
       notify(role === 'editor'
         ? 'Your Nightjar profile is ready. Build your professional Audio Editor identity inside Editor Studio.'
         : 'Your Nightjar profile is ready.');
-    } catch {
-      notify('Nightjar could not save your profile yet.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nightjar could not save your profile yet.';
+      notify(message);
     } finally {
       setSaving(false);
     }
@@ -105,7 +115,19 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         </div>
         <div className="premium-onboarding-two">
           <label>Chosen name<input maxLength={80} value={profile.displayName} onChange={(event)=>update('displayName',event.target.value)} placeholder="How should Nightjar know you?"/></label>
-          <label>@handle<input maxLength={30} value={profile.handle} onChange={(event)=>update('handle',event.target.value)} placeholder="your-nightjar-name"/></label>
+          <label>@handle <span className="optional-label">optional</span>
+            <input maxLength={50} value={profile.handle} onChange={(event)=>update('handle',event.target.value)}
+              placeholder="your-nightjar-name" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              aria-invalid={!!handleProblem} aria-describedby="nightjar-onboarding-handle-hint"/>
+            <small id="nightjar-onboarding-handle-hint" role={handleProblem ? 'alert' : undefined}>
+              {handleProblem || '3–30 letters, numbers, underscores or hyphens. Leave blank to choose later.'}
+            </small>
+            {handleProblem && <span className="profile-handle-fixes">
+              {suggestedHandle && suggestedHandle !== normaliseNightjarHandle(profile.handle) &&
+                <button type="button" className="ghost-button" onClick={()=>update('handle',suggestedHandle)}>Use @{suggestedHandle}</button>}
+              <button type="button" className="ghost-button" onClick={()=>update('handle','')}>Continue without a handle</button>
+            </span>}
+          </label>
         </div>
         <label>Pronouns <span className="optional-label">optional</span><input maxLength={60} value={profile.pronouns} onChange={(event)=>update('pronouns',event.target.value)} placeholder="e.g. she/her"/></label>
         <label className="profile-toggle premium-onboarding-public"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(event)=>update('publicProfile',event.target.checked)}/> Let other Nightjar members discover my profile</label>

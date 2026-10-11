@@ -3,6 +3,7 @@ import { readDemo, writeDemo, resetDemo } from './demo/demoSession';
 import { nightjarAuth } from './platform/firebase-auth';
 import { nightjarAccount } from './platform/firebase-account';
 import { nightjarCommunity } from './platform/firebase-community';
+import { nightjarHandleError, normaliseNightjarHandle } from './platform/profile-handle';
 import { nightjarMedia } from './platform/firebase-media';
 import { optimiseProfileImage, formatProfileImageBytes } from './platform/profile-image-optimizer';
 import { nightjarCommercial, type CommercialOverview, type CommercialSettings } from './platform/firebase-commercial';
@@ -437,6 +438,8 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
   reader.readAsDataURL(file);
 });
 
+const EMPTY_PROFILE = { displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, creatorLanguages: [], creatorDirectionModes: [], creatorDeliveryFormats: [], creatorTurnaround: '', creatorEquipment: '', writerScriptLengths: [], writerCollaborationPreferences: [], writerTurnaround: '', writerRightsNote: '', artistMediums: [], artistDeliveryFormats: [], artistTurnaround: '', artistSoftware: [], listenerCommunityStyle: [], publicProfile: true };
+
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
@@ -505,7 +508,7 @@ function App() {
     const roleFromPath = window.location.pathname.match(/^\/admin\/people\/(listener|creator|writer|editor|artist|admin)\/?$/)?.[1];
     return (roleFromPath ?? null) as 'listener' | 'creator' | 'writer' | 'editor' | 'artist' | 'admin' | null;
   });
-  const [profile, setProfile] = useState<any>({ displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, creatorLanguages: [], creatorDirectionModes: [], creatorDeliveryFormats: [], creatorTurnaround: '', creatorEquipment: '', writerScriptLengths: [], writerCollaborationPreferences: [], writerTurnaround: '', writerRightsNote: '', artistMediums: [], artistDeliveryFormats: [], artistTurnaround: '', artistSoftware: [], listenerCommunityStyle: [], publicProfile: true });
+  const [profile, setProfile] = useState<any>(() => structuredClone(EMPTY_PROFILE));
   const [profileEditRole, setProfileEditRole] = useState<PreviewRole>('listener');
   const [profileTagCatalogue, setProfileTagCatalogue] = useState<string[]>([]);
   const [profilePortfolioOptions, setProfilePortfolioOptions] = useState<any[]>([]);
@@ -633,6 +636,7 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [profileBaseline, setProfileBaseline] = useState<any | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState('');
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
@@ -990,9 +994,15 @@ function App() {
         setProfileEditRole(targetRole);
         setShowOnboarding(nextProfile.onboardingComplete !== true);
       } else {
+        // New accounts do not have a profiles document yet. Give their blank
+        // editor a real baseline so editing enables Save rather than locking it.
+        const empty = { ...structuredClone(EMPTY_PROFILE), roles: ['listener'] };
+        setProfile(empty);
+        setProfileBaseline(structuredClone(empty));
+        setProfileEditRole('listener');
         setShowOnboarding(true);
       }
-    }).catch(() => { /* onboarding remains optional if the profile endpoint is unavailable */ });
+    }).catch(() => { /* A later explicit profile load can retry without losing local edits. */ });
     return () => { cancelled = true; };
   }, [user, ageVerified, role]);
 
@@ -2147,7 +2157,7 @@ function App() {
           : 'listener';
       const [profileData, tasteData, tagData, portfolioData] = await Promise.all([
         nightjarCommunity.getMyProfile(),
-        nightjarListening.taste(),
+        nightjarListening.taste().catch(() => ({ vector: [] })),
         nightjarCommunity.profileTagCatalogue().catch(() => ({ tags: [] })),
         nightjarCommunity.getMyProfilePortfolioOptions(requestedEditRole).catch(() => ({ role:requestedEditRole, options: [], completedCollaborations: 0 })),
       ]);
@@ -2167,6 +2177,12 @@ function App() {
         setProfile(mergedProfile);
         setProfileBaseline(structuredClone(mergedProfile));
         setProfileEditRole(targetRole);
+      } else {
+        // No saved profile yet: allow the first edit to be persisted.
+        const empty = { ...structuredClone(EMPTY_PROFILE), roles: role === 'admin' ? ['admin'] : ['listener'] };
+        setProfile(empty);
+        setProfileBaseline(structuredClone(empty));
+        setProfileEditRole('listener');
       }
       setTasteVector(tasteData.vector ?? []);
       setProfileTagCatalogue(Array.isArray(tagData?.tags) ? tagData.tags : []);
@@ -2203,47 +2219,68 @@ function App() {
   };
 
   const saveProfile = async () => {
-    if (!user) return;
+    if (!user || profileLoading) return;
+    const invalidHandle = nightjarHandleError(profile.handle);
+    if (invalidHandle) {
+      setProfileSaveError(invalidHandle);
+      notify(invalidHandle);
+      return;
+    }
+    setProfileSaveError('');
     setProfileLoading(true);
     try {
-      const capturedProfile = captureProfileRoleDraft(profile, profileEditRole);
+      const capturedProfile = captureProfileRoleDraft({
+        ...profile,
+        handle: normaliseNightjarHandle(profile.handle),
+      }, profileEditRole);
+      // Keep unsaved drafts on-screen while the request is in flight.
       setProfile(capturedProfile);
       if (demoMode) {
-        if (simulationMode) writeDemo('profile:' + (previewRole ?? profileEditRole), capturedProfile);
-        setProfileBaseline(structuredClone(capturedProfile));
-        notify(simulationMode ? 'Simulation: the combined profile was saved for this testing session.' : 'Demo data is read-only. Profile changes were not written to your live account.');
+        if (simulationMode) {
+          writeDemo('profile:' + (previewRole ?? profileEditRole), capturedProfile);
+          setProfileBaseline(structuredClone(capturedProfile));
+          notify('Simulation: profile saved locally for this testing session.');
+        } else {
+          const message = 'Demo data is read-only. Leave Demo Mode to save your actual Nightjar account.';
+          setProfileSaveError(message);
+          notify(message);
+        }
         return;
       }
 
-      const editableRoles: PreviewRole[] = (Array.isArray(capturedProfile.roles) ? capturedProfile.roles : [profileEditRole])
-        .filter((item: unknown): item is PreviewRole =>
-          typeof item === 'string'
-          && ['listener','creator','writer','editor','artist'].includes(item),
-        );
-      const rolesToSave: PreviewRole[] = editableRoles.length
-        ? Array.from(new Set<PreviewRole>(editableRoles))
-        : [profileEditRole];
+      // Save the personal identity and all approved professional drafts in ONE
+      // server transaction. Multiple calls used to report "failed" after an
+      // earlier role had already saved, and made multi-role profiles fragile.
+      const payload = applyProfileRoleDraft(capturedProfile, profileEditRole);
+      const result = await nightjarCommunity.saveMyProfile(payload, profileEditRole);
+      if (!result?.profile) throw new Error('The server did not confirm your profile save.');
 
-      for (const targetRole of rolesToSave) {
-        const payload = applyProfileRoleDraft(capturedProfile, targetRole);
-        await nightjarCommunity.saveMyProfile(payload, targetRole);
-      }
-
-      const refreshed = await nightjarCommunity.getMyProfile();
-      if (refreshed?.profile) {
-        const mergedProfile = applyProfileRoleDraft(refreshed.profile, profileEditRole);
-        setProfile(mergedProfile);
-        setProfileBaseline(structuredClone(mergedProfile));
-      } else {
-        setProfileBaseline(structuredClone(capturedProfile));
-      }
-      notify(rolesToSave.length > 1
-        ? 'Your full Nightjar profile has been saved across all of your roles.'
-        : 'Your Nightjar profile has been saved.');
+      // A successful callable already includes a Firestore read-back. The
+      // additional refresh is optional: an unrelated read outage must not
+      // turn a committed save into a false failure.
+      const refreshed = await nightjarCommunity.getMyProfile().catch(() => null);
+      const mergedProfile = applyProfileRoleDraft(refreshed?.profile ?? result.profile, profileEditRole);
+      setProfile(mergedProfile);
+      setProfileBaseline(structuredClone(mergedProfile));
+      notify('Your Nightjar profile and all approved role details have been saved.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      notify(message.includes('already-exists') ? 'That @handle is already in use.' : 'Profile could not be saved.');
-    } finally { setProfileLoading(false); }
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+      const raw = error instanceof Error ? error.message : '';
+      const detail = raw.replace(/^Firebase(?:Error)?:\s*/i, '').replace(/\s*\(functions\/[^)]+\)\.?$/, '').trim();
+      const message = code.includes('already-exists') ? 'That @handle is already in use. Please try a different one.'
+        : code.includes('invalid-argument') ? (detail || 'Check your @handle: use 3–30 letters, numbers, underscores or hyphens.')
+        : code.includes('permission-denied') ? (detail || 'This account cannot edit one of the selected roles. Check your approved roles.')
+        : code.includes('unauthenticated') ? 'Your sign-in has expired. Sign in again, then save your profile.'
+        : code.includes('unavailable') || code.includes('deadline-exceeded') ? 'The profile service is temporarily unavailable. Your changes are still on this page.'
+        : detail && !/^(internal|unknown)$/i.test(detail) ? detail
+        : 'Profile could not be saved. Your changes are still here; try again.';
+      setProfileSaveError(message);
+      notify(message);
+    } finally {
+      setProfileLoading(false);
+    }
   };
 
   const switchProfileEditRole = async (nextRole: PreviewRole) => {
@@ -4423,6 +4460,7 @@ function App() {
               </>}
               <p className="nj-didit-member-footnote">Nightjar keeps only the server-verified age-assurance result and provider reference—not your raw identity images or a reusable login token stored in your browser. A new ID check is requested only if verification is revoked or a valid recheck is required.</p>
             </section>}
+            {profileSaveError && <div className="admin-note" role="alert"><ShieldAlert size={17}/><div><strong>Profile save unsuccessful</strong><span>{profileSaveError} Your edited fields have not been cleared.</span></div></div>}
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
               <UserProfileStudio
                 profile={profile}
@@ -5144,7 +5182,7 @@ function App() {
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
-      {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { setProfile((current: any) => ({ ...current, ...nextProfile })); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
+      {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
       {user && !rolePicker && !liveRolePreview && !(view === 'profile' && profileDirty) && (
