@@ -1,0 +1,92 @@
+
+/* VA release journey: make the next action obvious on both desktop and mobile. */
+.nj-creator-workflow-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+  margin: 1rem 0;
+}
+.nj-creator-workflow-switch button {
+  cursor: pointer;
+  text-align: center;
+  padding: .9rem .75rem;
+  border: 1px solid var(--line, rgba(255,255,255,.18));
+  border-radius: 12px;
+  color: inherit;
+  background: var(--surface, rgba(255,255,255,.045));
+  font: inherit;
+  font-weight: 650;
+}
+.nj-creator-workflow-switch button.is-active {
+  border-color: var(--accent, #caa579);
+  background: rgba(196,157,107,.14);
+}
+.nj-continue-review {
+  border: 1px solid rgba(200,165,115,.45);
+  border-radius: 14px;
+  background: rgba(196,157,107,.08);
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1.1rem 0;
+}
+.nj-continue-review div, .nj-workflow-section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.nj-continue-review small, .nj-workflow-section-heading small { opacity: .75; }
+.nj-workflow-section-heading { scroll-margin-top: 6rem; margin: 1.5rem 0 .8rem; }
+#release-audio, #release-rights, #release-transcript { scroll-margin-top: 6rem; }
+.nj-release-review {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.3rem;
+  padding: clamp(1rem, 3vw, 1.6rem);
+  border: 1px solid var(--line, rgba(255,255,255,.18));
+  border-radius: 16px;
+  background: var(--surface, rgba(255,255,255,.035));
+}
+.nj-review-heading h3 { margin: .3rem 0 .5rem; font-size: clamp(1.25rem, 2.4vw, 1.7rem); }
+.nj-review-heading p { margin: 0; opacity: .8; }
+.nj-review-checklist { display: grid; gap: .5rem; }
+.nj-review-check {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  border: 1px solid var(--line, rgba(255,255,255,.12));
+  border-radius: 10px;
+  padding: .75rem;
+  min-width: 0;
+}
+.nj-review-check > span:first-child {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  font-weight: 750;
+  background: rgba(255,255,255,.10);
+}
+.nj-review-check.passed > span:first-child { background: rgba(89,179,124,.18); color: #8fd7a7; }
+.nj-review-check.missing > span:first-child { background: rgba(201,160,95,.18); color: #e6be87; }
+.nj-review-check > div { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: .2rem; }
+.nj-review-check strong { font-size: .95rem; }
+.nj-review-check small { opacity: .75; font-size: .8rem; }
+.nj-review-check button { flex-shrink: 0; }
+.nj-review-submit { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; }
+.nj-review-submit p { width: 100%; margin: 0; opacity: .9; }
+.nj-review-submit .primary-button { min-height: 46px; }
+@media (max-width: 720px) {
+  .nj-creator-workflow-switch { grid-template-columns: 1fr 1fr; }
+  .nj-creator-workflow-switch button { padding: .85rem .4rem; font-size: .78rem; }
+  .nj-continue-review > div, .nj-continue-review > button { width: 100%; }
+  .nj-continue-review .primary-button { justify-content: center; }
+  .nj-review-submit > button { width: 100%; justify-content: center; }
+  .nj-review-check { align-items: flex-start; }
+}
