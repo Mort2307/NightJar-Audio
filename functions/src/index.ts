@@ -3767,6 +3767,36 @@ export const notifyDailySpotlights = onSchedule({
   console.info('Nightjar daily spotlight dispatch', { date, spotlightCount: result.spotlights.length });
 });
 
+
+// Minute-precision publisher: approval places a release in 'scheduled'. Only
+// this server-side job changes it to 'released'; public catalogue requires
+// released status, so private content cannot leak before the selected instant.
+export const publishScheduledReleases = onSchedule({
+  region:REGION,schedule:'every 1 minutes',timeZone:'UTC',retryCount:1,
+},async () => {
+  const due = await db.collection('releases').where('status','==','scheduled').limit(250).get();
+  const now = Date.now();
+  let published = 0;
+  for (const doc of due.docs) {
+    if (!doc.data().scheduledAt || Date.parse(String(doc.data().scheduledAt)) > now) continue;
+    const released = await db.runTransaction(async (tx) => {
+      const latest = await tx.get(doc.ref);
+      const value = latest.data();
+      if (!value || value.status !== 'scheduled' || !value.scheduledAt || Date.parse(String(value.scheduledAt)) > Date.now()) return null;
+      tx.update(doc.ref,{status:'released',releaseDate:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+      return {creatorUserId:String(value.creatorUserId),title:cleanText(value.title,160)};
+    }).catch((error)=>{console.warn('Scheduled release publish retry',doc.id,error);return null;});
+    if (!released) continue;
+    published++;
+    await createNotification(released.creatorUserId,{
+      type:'content',subtype:'release',title:'Your scheduled recording is live',
+      message:'“'+released.title+'” has reached its chosen publication time and is now published.',
+      releaseId:doc.id,dedupeKey:'scheduled-live-'+doc.id,
+    }).catch((error)=>console.warn('Scheduled release notification failed',error));
+  }
+  console.info('Nightjar scheduled publication sweep',{considered:due.size,published});
+});
+
 export const adminAccountOverview = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const [accountsSnapshot, testerSnapshot, profilesSnapshot] = await Promise.all([
@@ -4037,7 +4067,7 @@ export const listBillingSubscriptions = onCall({ region: REGION }, async (reques
   return { subscriptions };
 });
 
-type ReleaseStatus = 'draft' | 'pending_review' | 'released' | 'rejected';
+type ReleaseStatus = 'draft' | 'pending_review' | 'released' | 'scheduled' | 'rejected';
 
 const releaseRef = (releaseId: string) => db.collection('releases').doc(releaseId);
 
@@ -4222,9 +4252,40 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   communityReactionCount: Math.max(0, Number(data.communityReactionCount ?? 0)),
   communityCommentCount: Math.max(0, Number(data.communityCommentCount ?? 0)),
   releaseDate: toIso(data.releaseDate),
+  scheduledAt: cleanText(data.scheduledAt, 40) || null,
+  scheduledTimeZone: cleanText(data.scheduledTimeZone, 100) || null,
+  scheduledLocal: cleanText(data.scheduledLocal, 16) || null,
   createdAt: toIso(data.createdAt),
   updatedAt: toIso(data.updatedAt),
 });
+
+
+// Creator-selected publishing time is an exact UTC instant plus the wall-time and
+// IANA time zone it was chosen in. No implicit UK time zone or DST adjustment.
+const scheduleReleaseInput = (atInput: unknown, zoneInput: unknown, localInput: unknown) => {
+  if (atInput == null || atInput === '') return { scheduledAt:null, scheduledTimeZone:null, scheduledLocal:null };
+  const at = cleanText(atInput, 40);
+  const zone = cleanText(zoneInput, 100);
+  const local = cleanText(localInput, 16);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at) || !Number.isFinite(Date.parse(at))) {
+    throw new HttpsError('invalid-argument', 'Choose an exact release date and time.');
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) throw new HttpsError('invalid-argument', 'Choose a local date and time.');
+  if (!zone) throw new HttpsError('invalid-argument', 'Release time zone is required.');
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone:zone, hourCycle:'h23', year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',
+    }).formatToParts(new Date(at));
+  } catch { throw new HttpsError('invalid-argument', 'Unsupported release time zone.'); }
+  const field = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  const actual = field('year')+'-'+field('month')+'-'+field('day')+'T'+field('hour')+':'+field('minute');
+  if (actual !== local) throw new HttpsError('invalid-argument', 'The selected time is invalid in this time zone (possibly a daylight-saving change).');
+  const offset = Date.parse(at) - Date.now();
+  if (offset <= 60000) throw new HttpsError('failed-precondition', 'Choose a release time at least one minute in the future.');
+  if (offset > 2 * 365 * 86400000) throw new HttpsError('invalid-argument', 'Schedule up to two years ahead.');
+  return { scheduledAt:at, scheduledTimeZone:zone, scheduledLocal:local };
+};
 
 const releaseOwnerPayload = (data: Record<string, unknown>, id: string) => ({
   ...releasePayload(data, id),
@@ -4308,6 +4369,9 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     pendingArtworkAssetId: null,
     pendingArtworkStatus: null,
     status: 'draft' as ReleaseStatus,
+    scheduledAt: null,
+    scheduledTimeZone: null,
+    scheduledLocal: null,
     moderationNote: null,
     version: 1,
     createdAt: FieldValue.serverTimestamp(),
@@ -4355,6 +4419,9 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
       ? input.transcriptAccessibilityReviewed === true
       : current.transcriptAccessibilityReviewed === true,
     transcriptUpdatedAt: typeof input.transcriptText !== 'undefined' ? FieldValue.serverTimestamp() : current.transcriptUpdatedAt ?? null,
+    ...(typeof input.scheduledAt !== 'undefined'
+      ? scheduleReleaseInput(input.scheduledAt, input.scheduledTimeZone, input.scheduledLocal)
+      : { scheduledAt:current.scheduledAt ?? null, scheduledTimeZone:current.scheduledTimeZone ?? null, scheduledLocal:current.scheduledLocal ?? null }),
     durationMinutes: typeof input.durationMinutes === 'number' && Number.isFinite(input.durationMinutes)
       ? Math.max(0, Math.min(1440, input.durationMinutes))
       : current.durationMinutes ?? 0,
@@ -4534,6 +4601,7 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
   const data = snapshot.data();
   if (!data || data.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
   if (data.status !== 'draft') throw new HttpsError('failed-precondition', 'Only saved drafts can be submitted for review.');
+  if (data.scheduledAt) scheduleReleaseInput(data.scheduledAt, data.scheduledTimeZone, data.scheduledLocal);
   if (!data.title || !data.description || !data.category || !data.audioStoragePath) {
     throw new HttpsError('failed-precondition', 'Complete title, description, category and audio before submitting.');
   }
@@ -4976,6 +5044,46 @@ const createNotification = async (userId: string, payload: Record<string, unknow
   });
 };
 
+
+// Moderation feedback is a genuine administrator-authored message using the same
+// conversation collection as Nightjar's Inbox. It can be replied to normally.
+const sendModerationInboxMessage = async (adminId: string, creatorId: string, releaseId: string, body: string) => {
+  if (adminId === creatorId) return null;
+  const id = directConversationId(adminId, creatorId);
+  const ref = db.collection('directConversations').doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) await ref.set({
+    participantUserIds:[adminId,creatorId].sort(),
+    participantRoles:{[adminId]:'admin',[creatorId]:'creator'},
+    unreadCounts:{[adminId]:0,[creatorId]:0},
+    collaborationIds:[], collaborationId:null,
+    createdAt:FieldValue.serverTimestamp(),
+  }, {merge:true});
+  const messageRef = ref.collection('messages').doc('release_moderation_'+releaseId+'_'+Date.now());
+  await messageRef.set({
+    conversationId:id, senderUserId:adminId, senderName:'Nightjar moderation',
+    body, releaseId, status:'visible', collaborationId:null, readBy:[adminId],
+    readAt:{[adminId]:new Date().toISOString()},
+    createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+  });
+  const saved = await ref.get();
+  const counters = { ...(saved.data()?.unreadCounts ?? {}) };
+  counters[creatorId] = Number(counters[creatorId] ?? 0) + 1;
+  counters[adminId] = 0;
+  await ref.set({
+    unreadCounts:counters,lastMessagePreview:body.slice(0,180),
+    lastSenderUserId:adminId,lastMessageAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    resolvedForLastMessageAt:null,resolvedAt:null,resolvedByUserId:null,
+  },{merge:true});
+  await createNotification(creatorId,{
+    type:'message',subtype:'direct_message',
+    title:'A message from Nightjar moderation',
+    message:'Your release has an update and a message you can reply to.',
+    conversationId:id, releaseId,senderUserId:adminId,
+  }).catch((error)=>console.warn('Moderation DM notification failed',error));
+  return id;
+};
+
 export const moderateRelease = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -4991,34 +5099,54 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
   if (!data) throw new HttpsError('not-found', 'Release not found.');
   if (data.status !== 'pending_review') throw new HttpsError('failed-precondition', 'Release is not awaiting moderation.');
 
-  const status: ReleaseStatus = decision === 'approved' ? 'released' : decision === 'changes' ? 'draft' : 'rejected';
-  await ref.set({
-    status,
-    moderationNote: note || null,
-    moderatedBy: admin.uid,
-    moderatedAt: FieldValue.serverTimestamp(),
-    releaseDate: decision === 'approved' ? FieldValue.serverTimestamp() : data.releaseDate ?? null,
-    nightjarOriginal: decision === 'approved' ? nightjarOriginal : data.nightjarOriginal === true,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  if ((decision === 'changes' || decision === 'rejected') && !note) {
+    throw new HttpsError('invalid-argument', 'Provide a reason so the creator understands the decision.');
+  }
+  const scheduledFor = data.scheduledAt ? Date.parse(String(data.scheduledAt)) : null;
+  if (decision === 'approved' && scheduledFor != null && (!Number.isFinite(scheduledFor) || scheduledFor <= Date.now())) {
+    throw new HttpsError('failed-precondition', 'The requested release time has passed. Request a new date from the creator before approval.');
+  }
+  const scheduled = decision === 'approved' && scheduledFor != null;
+  const status: ReleaseStatus = decision === 'approved' ? (scheduled ? 'scheduled' : 'released') : decision === 'changes' ? 'draft' : 'rejected';
+  await db.runTransaction(async (transaction) => {
+    const latest = await transaction.get(ref);
+    if (latest.data()?.status !== 'pending_review') throw new HttpsError('failed-precondition', 'This submission has already been reviewed or withdrawn.');
+    transaction.set(ref, {
+      status,
+      moderationNote:note || null,
+      moderatedBy:admin.uid,
+      moderatedAt:FieldValue.serverTimestamp(),
+      releaseDate:decision === 'approved' && !scheduled ? FieldValue.serverTimestamp() : null,
+      nightjarOriginal:decision === 'approved' ? nightjarOriginal : data.nightjarOriginal === true,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+  });
 
   if (data.creatorUserId) {
     await createNotification(String(data.creatorUserId), {
       type: 'content',
       subtype: 'release',
       title: decision === 'approved'
-        ? 'Your release is live on Nightjar'
+        ? scheduled ? 'Approved · Scheduled for publication' : 'Your release is live on Nightjar'
         : decision === 'changes'
           ? 'Changes requested for your release'
           : 'Your release was not approved',
       message: decision === 'approved'
-        ? 'Your release has passed Nightjar moderation and is available to age-verified listeners.'
+        ? scheduled ? 'Your release is approved and will stay private until the date and time you selected.' : 'Your release has passed Nightjar moderation and is available to age-verified listeners.'
         : decision === 'changes'
           ? 'Nightjar moderation requested changes before this release can be published.'
           : 'Your release was not approved for publication. Open Creator Studio to review the moderation note.',
       releaseId,
       moderationNote: note || null,
-    });
+    }).catch((error) => console.warn('Moderation notification failed',error));
+    const dateLine = scheduled ? 'It is scheduled for '+String(data.scheduledLocal)+' ('+String(data.scheduledTimeZone)+').' : '';
+    const body = decision === 'approved'
+      ? 'Nightjar has approved “'+cleanText(data.title,160)+'”. '+(scheduled ? dateLine+' Your release will not be visible until that time.' : 'It is now published.')+(note ? '\n\nNote: '+note : '')
+      : decision === 'changes'
+        ? 'Nightjar has reviewed “'+cleanText(data.title,160)+'” and requested changes:\n\n'+note+'\n\nYou can update your draft and resubmit it for review.'
+        : 'Nightjar could not approve “'+cleanText(data.title,160)+'”. Reason:\n\n'+note+'\n\nReply here if you need clarification.';
+    await sendModerationInboxMessage(admin.uid,String(data.creatorUserId),releaseId,body)
+      .catch((error)=>console.warn('Moderation Inbox message failed',error));
   }
 
   const saved = await ref.get();
