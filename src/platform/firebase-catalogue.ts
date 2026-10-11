@@ -11,6 +11,7 @@ const listCatalogueCall = httpsCallable<{ q?: string; category?: string }, { cat
 const createReleaseCall = httpsCallable<Record<string, unknown>, { release: any }>(functions, 'createRelease');
 const updateReleaseCall = httpsCallable<Record<string, unknown>, { release: any }>(functions, 'updateRelease');
 const deleteReleaseCall = httpsCallable<{ releaseId: string }, { deleted: boolean }>(functions, 'deleteRelease');
+const adminRemoveReleaseCall = httpsCallable<{ releaseId: string }, { deleted: boolean }>(functions, 'adminRemoveRelease');
 const finalizeAudioCall = httpsCallable<{ releaseId: string; storagePath: string; durationMinutes?: number | null }, { release: any }>(functions, 'finalizeReleaseAudio');
 const removeAudioCall = httpsCallable<{ releaseId: string }, { removed: boolean }>(functions, 'removeReleaseAudio');
 const submitReleaseCall = httpsCallable<{ releaseId: string }, { release: any }>(functions, 'submitReleaseForModeration');
@@ -47,6 +48,10 @@ export const nightjarCatalogue = {
 
   async remove(releaseId: string) {
     return (await deleteReleaseCall({ releaseId })).data;
+  },
+
+  async adminRemove(releaseId: string) {
+    return (await adminRemoveReleaseCall({ releaseId })).data;
   },
 
   async uploadAudio(releaseId: string, file: File, durationMinutes?: number | null, onProgress?: (stage: 'uploading' | 'verifying', percent: number) => void) {
