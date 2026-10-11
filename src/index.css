@@ -10370,3 +10370,31 @@ textarea:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .nj-launch-unlock *, .nj-launch-unlock *::before, .nj-launch-unlock *::after { animation: none !important; transition: none !important; }
 }
+
+
+/* A saved Android passkey opens directly over Nightjar's brand, rather
+ * than requiring a second in-app Unlock tap before Google's system prompt. */
+.nj-launch-unlock-auto .nj-launch-unlock-waiting {
+  gap: 22px;
+  padding: 25px 18px;
+}
+.nj-launch-unlock-auto .nj-launch-unlock-logo {
+  width: clamp(132px, 38vw, 188px);
+  height: clamp(132px, 38vw, 188px);
+  border-radius: 30px;
+  margin-bottom: 0;
+}
+.nj-launch-unlock-auto .nj-launch-unlock-waiting > p {
+  margin: 0;
+  font-size: 13px;
+  color: #baaeb4;
+}
+.nj-launch-unlock-auto .nj-launch-unlock-fallback {
+  width: auto;
+  min-height: 44px;
+  padding: 0 22px;
+  background: transparent;
+  border-color: rgba(219,198,179,.15);
+  font-size: 12px;
+}
+.nj-launch-unlock-diagnostic { display: block; font-size: 11px; margin-top: 9px; color: #e4afac; }
