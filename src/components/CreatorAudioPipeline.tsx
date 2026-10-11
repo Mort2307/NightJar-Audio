@@ -175,8 +175,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       .then((data) => setCreditDirectory(data.people ?? []))
       .catch(() => setCreditDirectory([]));
   }, [simulationMode]);
-  const statusLabel = current?.status === 'scheduled' ? 'APPROVED · SCHEDULED' : current?.status === 'removing' ? 'REMOVAL PENDING' : current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
-  const statusHint = current?.status === 'scheduled' ? 'Approved. Publication is automatic at your selected date and time; not visible to listeners yet.' : current?.status === 'removing' ? 'This recording is hidden while Nightjar finishes deleting its files. Retry removal if necessary.' : current?.status === 'pending_review'
+  const statusLabel = current?.status === 'rejected' ? 'REJECTED' : current?.status === 'scheduled' ? 'APPROVED · SCHEDULED' : current?.status === 'removing' ? 'REMOVAL PENDING' : current?.status === 'pending_review' ? 'IN MODERATION' : current?.status === 'released' ? 'LIVE' : current?.status === 'draft' ? 'DRAFT' : String(current?.status ?? 'NEW').toUpperCase();
+  const statusHint = current?.status === 'rejected' ? (current.moderationNote || 'This release was not approved. Check Nightjar Messages for the decision and contact the review team.') : current?.status === 'scheduled' ? 'Approved. Publication is automatic at your selected date and time; not visible to listeners yet.' : current?.status === 'removing' ? 'This recording is hidden while Nightjar finishes deleting its files. Retry removal if necessary.' : current?.status === 'pending_review'
     ? 'Your submission is with Nightjar moderation.'
     : current?.status === 'released'
       ? 'Published and available to age-verified listeners.'
@@ -198,7 +198,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const incompleteChecks = reviewChecks.filter((check) => !check.passed);
   const complete = incompleteChecks.length === 0;
   const removalPending = current?.status === 'removing';
-  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'scheduled' || current?.status === 'released' || removalPending;
+  const submittedOrPublished = current?.status === 'pending_review' || current?.status === 'scheduled' || current?.status === 'rejected' || current?.status === 'released' || removalPending;
   const scheduleZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London';
   const scheduleReadable = (release: Release) => release.scheduledAt ? new Intl.DateTimeFormat('en-GB', { dateStyle:'full',timeStyle:'short',timeZone:release.scheduledTimeZone || scheduleZone }).format(new Date(release.scheduledAt)) + ' (' + (release.scheduledTimeZone || scheduleZone) + ')' : 'Immediately after Nightjar approval';
   const formatLocal = (date:Date) => [date.getFullYear(), String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-')+'T'+[String(date.getHours()).padStart(2,'0'),String(date.getMinutes()).padStart(2,'0')].join(':');
@@ -551,7 +551,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     <div className="creator-pipeline-grid">
       <aside className="pipeline-library">
-        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
+        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'rejected' ? 'Rejected · Review feedback' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
@@ -564,11 +564,13 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           <div className="pipeline-status"><div><span>{statusLabel}</span><strong>{statusHint}</strong></div><Check size={18} /></div>
           {submittedOrPublished && <section className="nj-submission-confirmation" role="status" aria-live="polite">
             <Check size={28} aria-hidden="true"/>
-            <div><span className="mini-label">{removalPending ? 'NIGHTJAR · REMOVAL PENDING' : current.status === 'scheduled' ? 'NIGHTJAR · APPROVED & SCHEDULED' : current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>
-              <h3>{removalPending ? 'Your recording is hidden.' : current.status === 'scheduled' ? 'Approved! Your release is scheduled.' : current.status === 'released' ? 'Your recording is live.' : 'Your recording has been submitted!'}</h3>
-              <p><strong>{current.title}</strong> {removalPending ? 'is no longer publicly accessible. Storage cleanup is still pending; select Remove recording to retry.' : current.status === 'scheduled' ? 'has passed Nightjar review and is safely waiting for its scheduled publication.' : current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
-              <small>{submissionConfirmed ? 'Submission confirmed just now · ' : ''}Status: {removalPending ? 'Removal pending' : current.status === 'scheduled' ? 'Scheduled · '+scheduleReadable(current) : current.status === 'released' ? 'Published' : 'Awaiting review'}</small>
+            <div><span className="mini-label">{removalPending ? 'NIGHTJAR · REMOVAL PENDING' : current.status === 'rejected' ? 'NIGHTJAR · MODERATION DECISION' : current.status === 'scheduled' ? 'NIGHTJAR · APPROVED & SCHEDULED' : current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>
+              <h3>{removalPending ? 'Your recording is hidden.' : current.status === 'rejected' ? 'This recording was not approved.' : current.status === 'scheduled' ? 'Approved! Your release is scheduled.' : current.status === 'released' ? 'Your recording is live.' : 'Your recording has been submitted!'}</h3>
+              <p><strong>{current.title}</strong> {removalPending ? 'is no longer publicly accessible. Storage cleanup is still pending; select Remove recording to retry.' : current.status === 'rejected' ? 'was not approved. Review the reason below and reply to the Nightjar moderation conversation if you have questions.' : current.status === 'scheduled' ? 'has passed Nightjar review and is safely waiting for its scheduled publication.' : current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
+              <small>{submissionConfirmed ? 'Submission confirmed just now · ' : ''}Status: {removalPending ? 'Removal pending' : current.status === 'rejected' ? 'Rejected' : current.status === 'scheduled' ? 'Scheduled · '+scheduleReadable(current) : current.status === 'released' ? 'Published' : 'Awaiting review'}</small>
             </div>
+            {current.scheduledAt && current.status !== 'released' && <small className="nj-creator-scheduled-confirmation">{current.status === 'scheduled' ? 'Approved publication date' : 'Requested publication date'}: {scheduleReadable(current)}</small>}
+            {current.status === 'rejected' && current.moderationNote && <p className="nj-creator-moderation-feedback">Reason: {current.moderationNote}</p>}
             <button className="secondary-button" type="button" onClick={() => void onRefresh()}>Refresh status</button>
           </section>}
           {!submittedOrPublished && <div className="nj-creator-workflow-switch" role="group" aria-label="Release workflow">
