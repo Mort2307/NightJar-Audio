@@ -133,6 +133,7 @@ const sendEmailTestCall = httpsCallable<{
   body: string;
   category: AdminEmailCategory;
   recipientEmails?: string[];
+  personalisationOverrides?: Partial<Record<'firstName' | 'displayName' | 'role', string>>;
 }, {
   sent: boolean;
   recipientEmail: string | null;
@@ -149,6 +150,7 @@ const sendEmailCampaignCall = httpsCallable<{
   clientRequestId: string;
   confirmPrivateIndividualDelivery: boolean;
   selectedUserIds?: string[];
+  personalisationOverrides?: Partial<Record<'firstName' | 'displayName' | 'role', string>>;
 }, { campaign: AdminEmailCampaign; duplicateRequest: boolean }>(functions, 'adminSendEmailCampaign');
 const retryEmailCampaignCall = httpsCallable<{ campaignId: string }, {
   campaign: AdminEmailCampaign;
@@ -230,11 +232,12 @@ export const nightjarAdministration = {
     return repairMojibakeDisplayData((await emailCampaignsCall()).data);
   },
 
-  async sendEmailTest(subject: string, body: string, category: AdminEmailCategory, recipientEmails: string[] = []) {
+  async sendEmailTest(subject: string, body: string, category: AdminEmailCategory, recipientEmails: string[] = [], personalisationOverrides: Partial<Record<'firstName' | 'displayName' | 'role', string>> = {}) {
     return (await sendEmailTestCall({
       subject,
       body,
       category,
+      personalisationOverrides,
       ...(recipientEmails.length ? { recipientEmails } : {}),
     })).data;
   },
@@ -247,6 +250,7 @@ export const nightjarAdministration = {
     clientRequestId: string;
     confirmPrivateIndividualDelivery: boolean;
     selectedUserIds?: string[];
+    personalisationOverrides?: Partial<Record<'firstName' | 'displayName' | 'role', string>>;
   }) {
     return (await sendEmailCampaignCall(input)).data;
   },
