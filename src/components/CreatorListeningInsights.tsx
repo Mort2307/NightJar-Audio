@@ -55,12 +55,12 @@ export default function CreatorListeningInsights({ releases, verifiedMinutes = 0
         <h3><Headphones size={16}/> Listens by audio</h3>
         <span>{published.length > 8 ? 'Top 8 released audios' : 'Your published audios'}</span>
       </div>
-      <div className="nj-listening-plot-scroll" role="region" aria-label="Horizontal bar chart of qualified listens for each recording" tabIndex={0}>
+      <div className="nj-listening-plot-scroll" role="region" aria-label="Scrollable column chart of qualified listens by recording" tabIndex={0}>
         <div className="nj-listening-plot" role="list">
           {top.map((release, index) => <div className="nj-listening-column" role="listitem" key={release.id} aria-label={release.title + ': ' + release.listens + ' qualified listens'}>
             <div className="nj-listening-column-plot">
               <span className="nj-listening-column-count">{release.listens.toLocaleString('en-GB')}</span>
-              <span className={index === 0 && release.listens > 0 ? 'nj-listening-column-bar leading' : 'nj-listening-column-bar'} style={{ height: release.listens > 0 ? Math.max(3, Math.round(release.listens / maximum * 100)) + '%' : '0%' }} aria-hidden="true" />
+              <span className={index === 0 && release.listens > 0 ? 'nj-listening-column-bar leading' : 'nj-listening-column-bar'} style={{ height: release.listens > 0 ? Math.max(3, Math.round(release.listens / maximum * 140)) + 'px' : '0px' }} aria-hidden="true" />
             </div>
             <span className="nj-listening-column-title" title={release.title}>{release.title}</span>
           </div>)}
