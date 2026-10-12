@@ -5084,7 +5084,15 @@ select:disabled {
 }
 .premium-onboarding-card {
   position:relative;
-  overflow:hidden;
+  /* The original overflow:hidden trapped long VA/Listener forms on touch devices. */
+  overflow-x:hidden;
+  overflow-y:auto;
+  touch-action:pan-y;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  scroll-padding-bottom:120px;
+  min-height:0;
+  max-height:min(90dvh,900px);
   width:min(840px,calc(100vw - 28px));
   border-color:rgba(222,199,216,.19);
   box-shadow:0 42px 130px rgba(0,0,0,.72);
@@ -10477,4 +10485,50 @@ textarea:focus-visible,
   border-color: #d4a773;
   background: linear-gradient(125deg,#e0b37b,#b88a52,#8c5d32);
   color: #120d08;
+}
+
+/* Mobile onboarding: one touch-scrollable modal, not a body-locked form.
+   Buttons remain reachable even while an on-screen keyboard reduces height. */
+.nj-onboarding-mobile-hint { margin:9px 20px 0;color:#cbb5c8;font-size:12px;line-height:1.5; }
+.premium-onboarding-footer {
+  position:sticky;
+  bottom:0;
+  z-index:4;
+  background:#121014;
+  box-shadow:0 -12px 30px rgba(13,10,16,.9);
+}
+.premium-onboarding-footer button { min-height:44px; }
+.nj-profile-setup-resume {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:18px;
+  margin:16px 0;
+}
+.nj-profile-setup-resume > div { min-width:0; }
+.nj-profile-setup-resume h2 { margin:8px 0;font:normal 24px Georgia,serif; }
+.nj-profile-setup-resume p { margin:0;color:var(--muted);font-size:13px;line-height:1.6; }
+.nj-profile-setup-resume > button { flex-shrink:0;min-height:45px; }
+@media(max-width:760px) {
+  .premium-onboarding-backdrop {
+    padding:8px;
+    overflow-y:auto;
+    align-items:center;
+  }
+  .premium-onboarding-card {
+    width:100%;
+    max-height:calc(100dvh - 16px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    min-height:0;
+    border-radius:15px;
+  }
+  .premium-onboarding-stagebar { margin-bottom:10px; }
+  .premium-onboarding-group { padding:14px; }
+  .premium-onboarding-fields input,
+  .premium-onboarding-fields textarea { font-size:16px;min-height:44px; }
+  .premium-onboarding-footer { padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px)); }
+  .premium-onboarding-footer > div { display:flex;gap:8px; }
+  .premium-onboarding-footer button { min-height:46px; }
+  .nj-profile-setup-resume { flex-direction:column;align-items:stretch; }
+  .nj-profile-setup-resume > button { width:100%;justify-content:center; }
 }
