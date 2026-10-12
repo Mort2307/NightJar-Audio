@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, Fragment, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, Copy, RefreshCw } from 'lucide-react';
 
 type Props = { title: string; children: ReactNode };
@@ -39,7 +39,7 @@ export default class ProfileSectionBoundary extends Component<Props, State> {
   };
 
   render() {
-    if (!this.state.failed) return <div key={this.state.attempt}>{this.props.children}</div>;
+    if (!this.state.failed) return <Fragment key={this.state.attempt}>{this.props.children}</Fragment>;
 
     return <section className="nj-profile-section-failed panel" role="alert" aria-label={this.props.title + ' recovery'}>
       <AlertTriangle size={22} aria-hidden="true" />
