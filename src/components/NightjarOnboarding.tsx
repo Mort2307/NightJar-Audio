@@ -315,6 +315,10 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
 
       <div className="onboarding-footer premium-onboarding-footer">
         <span role="status" className="nj-onboarding-sync-label">{syncStatus==='saved'?'Saved across devices':syncStatus==='saving'?'Saving to your account…':syncStatus==='conflict'?'Newer draft detected':syncStatus==='offline'?'Cloud sync unavailable':'Loading cloud draft…'}</span>
+        {draftHydrated && (syncStatus==='saving'||syncStatus==='offline') && <button type="button" className="secondary-button" disabled={saving} onClick={()=>{
+          void saveLatestDraft().then(()=>notify('Your latest profile progress is saved across devices.'))
+            .catch((error)=>notify(error instanceof Error?error.message:'Cloud sync is unavailable. Try again when connected.'));
+        }}>Save progress now</button>}
         {syncStatus==='conflict' && <button type="button" className="secondary-button" onClick={()=>{
           if(window.confirm('Load the newer saved draft from another device? Unsynced changes here will be replaced.'))void loadCloudDraft();
         }}>Load latest version</button>}
