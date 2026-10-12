@@ -83,8 +83,8 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
 
   const decide = async (decision: 'approved' | 'changes' | 'rejected') => {
     if (!selected?.id) return;
-    if (decision === 'approved' && !demoMode && (!String(selected.transcriptText ?? '').trim() || selected.transcriptAccessibilityReviewed !== true)) {
-      notify('This release needs a reviewed final transcript before it can be published.');
+    if (decision === 'approved' && !demoMode && String(selected.transcriptText ?? '').trim() && selected.transcriptAccessibilityReviewed !== true) {
+      notify('An optional transcript was supplied but not accuracy-checked. Ask the creator to confirm it, or remove the transcript before approval.');
       return;
     }
     const note = reviewNote.trim();
@@ -167,19 +167,19 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
             <div className="moderation-transcript-head">
               <div><span className="mini-label">ACCESSIBILITY TRANSCRIPT</span><strong><BookOpenText size={15}/> Final-release text alternative</strong></div>
               <span className={String(selected.transcriptText ?? '').trim() && selected.transcriptAccessibilityReviewed === true ? 'status-pill' : 'status-pill muted'}>
-                {String(selected.transcriptText ?? '').trim() && selected.transcriptAccessibilityReviewed === true ? 'CREATOR REVIEWED' : 'NOT READY'}
+                {!String(selected.transcriptText ?? '').trim() ? 'OPTIONAL · NOT PROVIDED' : selected.transcriptAccessibilityReviewed === true ? 'CREATOR REVIEWED' : 'NEEDS CREATOR CHECK'}
               </span>
             </div>
             {String(selected.transcriptText ?? '').trim()
               ? <pre className="moderation-transcript-copy">{String(selected.transcriptText)}</pre>
-              : <div className="people-empty"><BookOpenText size={16}/><strong>No transcript supplied.</strong><span>Request changes before publishing this release.</span></div>}
+              : <div className="people-empty"><BookOpenText size={16}/><strong>No transcript supplied.</strong><span>Optional accessibility enhancement. Absence of a transcript does not prevent approval.</span></div>}
             <small>{selected.transcriptLanguage || 'en'} · {Math.max(0, Number(selected.transcriptWordCount ?? 0)).toLocaleString('en-GB')} words</small>
           </section>
           <div className="moderation-tags">{[...(selected.tags || []), ...(selected.tropes || [])].map((tag:string) => <span key={tag}>{tag}</span>)}</div>{!!selected.contributors?.length && <div className="moderation-credit-list">{selected.contributors.map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}{selected.status === 'pending_review' && <label className="rights-check moderation-original-check"><input type="checkbox" checked={nightjarOriginal} onChange={(e)=>setNightjarOriginal(e.target.checked)}/> Designate as a Nightjar Original on approval</label>}</div>{selected.status === 'pending_review' && <div className="nj-admin-decision">
             <div className="moderation-actions">
               <button type="button" className="secondary-button" onClick={()=>{setReviewDecision('changes');setReviewNote('');}}><MessageSquare size={14}/> Request changes</button>
               <button type="button" className="ghost-button" onClick={()=>{setReviewDecision('rejected');setReviewNote('');}}><X size={14}/> Reject</button>
-              <button type="button" className="primary-button" disabled={!demoMode && (!String(selected.transcriptText ?? '').trim() || selected.transcriptAccessibilityReviewed !== true)} onClick={()=>{setReviewDecision('approved');setReviewNote('');}}><Check size={14}/> {selected.scheduledAt?'Approve & schedule':'Approve & publish'}</button>
+              <button type="button" className="primary-button" disabled={!demoMode && Boolean(String(selected.transcriptText ?? '').trim()) && selected.transcriptAccessibilityReviewed !== true} onClick={()=>{setReviewDecision('approved');setReviewNote('');}}><Check size={14}/> {selected.scheduledAt?'Approve & schedule':'Approve & publish'}</button>
             </div>
             {reviewDecision && <section className="nj-admin-decision-editor" aria-label="Moderation decision and message">
               <h4>{reviewDecision==='approved' ? selected.scheduledAt ? 'Approve for the scheduled release' : 'Approve and publish now' : reviewDecision==='changes'?'Request changes from the creator':'Reject this recording'}</h4>

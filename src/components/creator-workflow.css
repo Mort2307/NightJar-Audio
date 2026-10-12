@@ -201,3 +201,63 @@
 
 .nj-submission-confirmation .nj-creator-scheduled-confirmation,.nj-submission-confirmation .nj-creator-moderation-feedback{flex-basis:100%;font-size:13px;line-height:1.55;color:#ead6e4;}
 .nj-creator-moderation-feedback{border-top:1px solid var(--line,rgba(255,255,255,.12));padding-top:10px;white-space:pre-wrap;}
+
+/* Creator mobile upload form: independent layout/repaint regions and legible
+   non-zooming inputs. In particular, date inputs and long form sections must
+   not overlay each other when scrolling in Chromium-based Android browsers. */
+.nj-optional-transcript > summary {
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+}
+.nj-optional-transcript > summary::-webkit-details-marker { display: none; }
+.nj-optional-transcript > summary:focus-visible {
+  outline: 2px solid var(--plum-soft, #d5b6d5);
+  outline-offset: 5px;
+}
+.nj-optional-transcript:not([open]) > :not(summary) { display: none; }
+.nj-optional-transcript[open] > summary { margin-bottom: 16px; }
+.nj-optional-transcript summary .status-pill { white-space: nowrap; }
+@media (max-width: 760px) {
+  .creator-pipeline-card,
+  .creator-pipeline-card .creator-pipeline-grid,
+  .creator-pipeline-card .pipeline-editor { min-width: 0; max-width: 100%; }
+  .creator-pipeline-card .pipeline-editor { isolation: isolate; }
+  .creator-pipeline-card .nj-release-schedule-panel,
+  .creator-pipeline-card .nj-scheduled-input,
+  .creator-pipeline-card .pipeline-form-grid,
+  .creator-pipeline-card .release-rights-attestation,
+  .creator-pipeline-card .release-transcript-editor,
+  .creator-pipeline-card .release-credits-editor {
+    min-width: 0;
+    max-width: 100%;
+    contain: layout;
+    overflow-wrap: anywhere;
+  }
+  .creator-pipeline-card .nj-scheduled-input > *,
+  .creator-pipeline-card .pipeline-form-grid > *,
+  .creator-pipeline-card .release-transcript-head > * { min-width: 0; }
+  .creator-pipeline-card .nj-release-schedule-panel > label,
+  .creator-pipeline-card .nj-scheduled-input label,
+  .creator-pipeline-card .pipeline-form-grid > label {
+    font-size: max(13px, .875rem);
+    line-height: 1.5;
+  }
+  .creator-pipeline-card .nj-scheduled-input input,
+  .creator-pipeline-card .pipeline-form-grid :is(input, select, textarea),
+  .creator-pipeline-card .release-transcript-editor :is(input, textarea) {
+    font-size: 16px;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .creator-pipeline-card .nj-release-schedule-panel :is(small, strong),
+  .creator-pipeline-card .nj-scheduled-input :is(small, strong),
+  .creator-pipeline-card .nj-workflow-section-heading :is(strong, small),
+  .creator-pipeline-card .release-rights-attestation :is(strong, small, p),
+  .creator-pipeline-card .release-transcript-editor :is(strong, small, p) {
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+  .creator-pipeline-card .nj-optional-transcript > summary { align-items: flex-start; }
+  .creator-pipeline-card .nj-optional-transcript summary .status-pill { white-space: normal; flex-shrink: 0; }
+}

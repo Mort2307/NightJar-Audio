@@ -191,8 +191,9 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     { label: 'Description', passed: Boolean(current?.description?.trim()), target: 'release-details', help: 'Add a short listener-facing description.' },
     { label: 'Publishing rights confirmed', passed: current?.rightsConfirmed === true, target: 'release-rights', help: 'Confirm you control the publishing rights.' },
     { label: 'Contributor permissions confirmed', passed: current?.contributorPermissionsConfirmed === true, target: 'release-rights', help: 'Confirm any necessary permissions for included work.' },
-    { label: 'Finished-audio transcript', passed: Boolean(current?.transcriptText?.trim()), target: 'release-transcript', help: 'Provide a readable transcript of the finished audio.' },
-    { label: 'Transcript accuracy confirmed', passed: current?.transcriptAccessibilityReviewed === true, target: 'release-transcript', help: 'Check the transcript against the recording.' },
+    ...(current?.transcriptText?.trim()
+      ? [{ label: 'Optional transcript accuracy confirmed', passed: current?.transcriptAccessibilityReviewed === true, target: 'release-transcript', help: 'Check the transcript against the finished audio, or remove it to submit without a transcript.' }]
+      : []),
     ...(current?.scheduledAt ? [{label:'Future publication time',passed:Date.parse(current.scheduledAt) > Date.now() + 60000,target:'release-schedule',help:'Choose a future release time. Review and approval must happen before publication.'}] : []),
   ];
   const incompleteChecks = reviewChecks.filter((check) => !check.passed);
@@ -218,7 +219,12 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const openDetails = (target?: string) => {
     setWorkflowStep('prepare');
-    if (target) window.requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    if (target) window.requestAnimationFrame(() => {
+      const element = document.getElementById(target);
+      if (element instanceof HTMLDetailsElement) element.open = true;
+      // Avoid long compositor-based smooth scrolls on Android upload forms.
+      element?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    });
   };
 
   const setRelease = (patch: Partial<Release>) => setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
@@ -505,7 +511,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const submit = async () => {
     if (!current?.id) return;
-    if (!complete) return notify('Add the release details, audio, final transcript and transcript accuracy confirmation before submitting.');
+    if (!complete) return notify('Complete the release details, audio and rights confirmations. If you added a transcript, also confirm its accuracy.');
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator publishing stays locked until your account is approved.');
     setSubmitting(true);
     try {
@@ -582,7 +588,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <div className="nj-release-journey-steps">
               <div className="done"><Check size={14}/> 1. Draft created</div>
               <div className={current.audioAvailable ? 'done' : 'next'}>{current.audioAvailable ? <Check size={14}/> : <Music2 size={14}/>} 2. Audio uploaded and verified</div>
-              <div className={complete ? 'done' : current.audioAvailable ? 'next' : ''}>{complete ? <Check size={14}/> : <BookOpenText size={14}/>} 3. Details, rights and transcript</div>
+              <div className={complete ? 'done' : current.audioAvailable ? 'next' : ''}>{complete ? <Check size={14}/> : <BookOpenText size={14}/>} 3. Details and publishing rights</div>
               <div className={current.status === 'pending_review' || current.status === 'released' ? 'done' : complete ? 'next' : ''}>{current.status === 'pending_review' || current.status === 'released' ? <Check size={14}/> : <Send size={14}/>} 4. Submit for review</div>
             </div>
             <p role="status">{current.status === 'pending_review' ? 'Your release has reached the administrator moderation queue. No public listening is possible until it is approved.' : current.status === 'released' ? 'Nightjar approved and published this release.' : current.audioAvailable ? 'Your audio is stored privately, but has NOT been submitted. Complete the release information, then select Submit to moderation.' : 'Choose a supported audio file below. Selecting a file starts an upload; it does not publish or submit your release.'}</p>
@@ -675,20 +681,17 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </label>
           </section>
 
-          <section className="release-transcript-editor" id="release-transcript">
-            <div className="release-transcript-head">
+          <details className="release-transcript-editor nj-optional-transcript" id="release-transcript">
+            <summary className="release-transcript-head" aria-label="Optional release transcript, expand or collapse">
               <div>
-                <span className="mini-label">ACCESSIBILITY · FINAL RELEASE TRANSCRIPT</span>
-                <strong><BookOpenText size={16}/> Give every release a readable version.</strong>
-                <p>
-                  This should reflect the finished audio, not simply the original script. Include meaningful non-speech cues where they affect the experience.
-                  Optional timestamps let Nightjar follow playback and create a true read-along experience.
-                </p>
+                <span className="mini-label">ACCESSIBILITY · OPTIONAL TRANSCRIPT</span>
+                <strong><BookOpenText size={16}/> Add a readable version (optional)</strong>
+                <p>Transcripts improve accessibility but are not required for submission. Expand to add or review yours; it should match the finished audio rather than the original script.</p>
               </div>
               <span className={current.transcriptText?.trim() && current.transcriptAccessibilityReviewed ? 'status-pill' : 'status-pill muted'}>
-                {current.transcriptText?.trim() && current.transcriptAccessibilityReviewed ? 'READY' : 'REQUIRED'}
+                {!current.transcriptText?.trim() ? 'OPTIONAL' : current.transcriptAccessibilityReviewed ? 'READY' : 'CHECK ACCURACY'}
               </span>
-            </div>
+            </summary>
 
             <div className="release-transcript-meta">
               <label>
@@ -741,7 +744,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
                 <small>Dialogue, meaningful sound cues and material changes from the original script are represented accurately.</small>
               </span>
             </label>
-          </section>
+          </details>
 
           <section className="release-credits-editor">
             <div className="release-credits-head"><div><span className="mini-label">PRODUCTION CREDITS</span><strong>Credit everyone involved.</strong><p>Voice Actors, Writers, Audio Editors and other collaborators stay attached to the release. Linking a Nightjar professional account also grants that credited person access to this release without needing a separate Listener subscription.</p></div><button className="secondary-button" type="button" onClick={addContributor}>Add credit</button></div>
