@@ -9,6 +9,8 @@ readonly REPOSITORY="Mort2307/NightJar-Audio"
 readonly REPOSITORY_ID="1389067180"
 readonly POOL_ID="nightjar-github"
 readonly PROVIDER_ID="nightjar-main"
+readonly PROVIDER_DISPLAY_NAME="Nightjar backend deploy"
+[[ ${#PROVIDER_DISPLAY_NAME} -le 32 ]] || { echo "Invalid WIF provider display name length" >&2; exit 1; }
 readonly SA_ID="nightjar-backend-deploy"
 readonly SA_EMAIL="${SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 readonly CONDITION="assertion.repository_id == '${REPOSITORY_ID}' && assertion.repository == '${REPOSITORY}' && assertion.ref == 'refs/heads/main' && assertion.event_name == 'workflow_dispatch' && assertion.workflow_ref == '${REPOSITORY}/.github/workflows/firebase-backend-deploy.yml@refs/heads/main'"
@@ -44,9 +46,15 @@ fi
 # may return NOT_FOUND on a describe call immediately after creation.
 # Recover safely on re-runs instead of creating an existing pool a second time.
 if ! gcloud iam workload-identity-pools describe "$POOL_ID" --location=global --project="$PROJECT_ID" >/dev/null 2>&1; then
-  if ! gcloud iam workload-identity-pools create "$POOL_ID" --location=global --project="$PROJECT_ID" \
-    --display-name="Nightjar GitHub Actions" --quiet; then
-    echo "Pool creation returned an error; checking for an already-created pool before failing." >&2
+  if ! CREATE_OUTPUT="$(gcloud iam workload-identity-pools create "$POOL_ID" --location=global --project="$PROJECT_ID" \
+    --display-name="Nightjar GitHub Actions" --quiet 2>&1)"; then
+    if grep -Eiq 'ALREADY_EXISTS|already exists' <<< "$CREATE_OUTPUT"; then
+      echo "Pool already exists; checking eventual consistency." >&2
+    else
+      echo "STOP: Google Cloud rejected pool creation:" >&2
+      echo "$CREATE_OUTPUT" >&2
+      exit 1
+    fi
   fi
 fi
 
@@ -74,14 +82,20 @@ readonly POOL_PATH="$(wait_for_pool)"
 # the final condition and attribute mapping, even for newly created providers.
 if ! gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
   --workload-identity-pool="$POOL_ID" --location=global --project="$PROJECT_ID" >/dev/null 2>&1; then
-  if ! gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
+  if ! CREATE_OUTPUT="$(gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
     --location=global --project="$PROJECT_ID" \
     --workload-identity-pool="$POOL_ID" \
-    --display-name="Nightjar main backend manual releases" \
+    --display-name="$PROVIDER_DISPLAY_NAME" \
     --issuer-uri="https://token.actions.githubusercontent.com" \
     --attribute-mapping="$ATTRIBUTE_MAPPING" \
-    --attribute-condition="$CONDITION" --quiet; then
-    echo "Provider creation returned an error; checking for an already-created provider before failing." >&2
+    --attribute-condition="$CONDITION" --quiet 2>&1)"; then
+    if grep -Eiq 'ALREADY_EXISTS|already exists' <<< "$CREATE_OUTPUT"; then
+      echo "Provider already exists; checking eventual consistency." >&2
+    else
+      echo "STOP: Google Cloud rejected provider creation (no retries for invalid arguments):" >&2
+      echo "$CREATE_OUTPUT" >&2
+      exit 1
+    fi
   fi
 fi
 
