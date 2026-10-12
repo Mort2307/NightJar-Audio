@@ -138,6 +138,39 @@ for role in roles/cloudfunctions.developer roles/firebaserules.admin roles/datas
     --member="$MEMBER" --role="$role" --quiet >/dev/null
 done
 
+# Firebase CLI inspects declared Functions secrets during source analysis,
+# including when deploying a single selected Function. Permit metadata inspection
+# only for the six known, explicitly declared Nightjar secrets; this role does NOT
+# grant secretmanager.versions.access (the secret payload).
+# Missing secrets are never created, populated or read by this script.
+echo "Granting metadata-only access to declared Nightjar Functions secrets..."
+readonly NIGHTJAR_FUNCTION_SECRETS=(
+  DIDIT_API_KEY
+  DIDIT_WORKFLOW_ID
+  DIDIT_WEBHOOK_SECRET
+  DIDIT_ENVIRONMENT
+  NIGHTJAR_GMAIL_CLIENT_ID
+  NIGHTJAR_GMAIL_CLIENT_SECRET
+)
+missing_secrets=()
+for secret_id in "${NIGHTJAR_FUNCTION_SECRETS[@]}"; do
+  if gcloud secrets describe "$secret_id" --project="$PROJECT_ID" >/dev/null 2>&1; then
+    echo "Granting Secret Manager Viewer (metadata only) on: $secret_id"
+    gcloud secrets add-iam-policy-binding "$secret_id" \
+      --project="$PROJECT_ID" \
+      --member="$MEMBER" \
+      --role=roles/secretmanager.viewer \
+      --quiet >/dev/null
+  else
+    echo "WARNING: Cannot inspect secret $secret_id. No access granted; check whether it exists and whether this Cloud Shell user can view it." >&2
+    missing_secrets+=("$secret_id")
+  fi
+done
+if (( ${#missing_secrets[@]} > 0 )); then
+  echo "WARNING: Missing/unreadable Nightjar secrets: ${missing_secrets[*]}" >&2
+  echo "Firebase Functions deployment can fail if it references these secrets." >&2
+fi
+
 # Firebase Functions 2nd gen can use the default Compute runtime identity.
 # Grant actAs only on existing runtime/build identities, not on every account.
 SA_LIST="$(gcloud iam service-accounts list --project="$PROJECT_ID" --format='value(email)')"
