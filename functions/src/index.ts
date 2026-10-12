@@ -5110,17 +5110,14 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
       { code:'content_rights_attestation_required' },
     );
   }
-  if (!cleanReleaseTranscript(data.transcriptText)) {
+  // A transcript is encouraged, not a publishing prerequisite. When one is
+  // supplied, require its creator to verify that it matches the finished audio.
+  // The protected transcript endpoint continues to return not-found for audio
+  // with no transcript; do not synthesize or expose an original script.
+  if (cleanReleaseTranscript(data.transcriptText) && data.transcriptAccessibilityReviewed !== true) {
     throw new HttpsError(
       'failed-precondition',
-      'Add a final-release transcript before submitting. Nightjar requires a text alternative for prerecorded audio.',
-      { code:'transcript_required' },
-    );
-  }
-  if (data.transcriptAccessibilityReviewed !== true) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Confirm that the transcript reflects the finished audio, including meaningful non-speech sound cues where relevant.',
+      'Please confirm that your optional transcript accurately reflects the finished audio, or remove the draft transcript before submitting.',
       { code:'transcript_review_required' },
     );
   }
