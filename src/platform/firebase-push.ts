@@ -264,6 +264,33 @@ export const nightjarPush = {
     return (await testCall({ deviceId })).data;
   },
 
+  // Directly request an operating-system notification. This does not use FCM
+  // and is useful for distinguishing Android/browser display restrictions from
+  // remote message delivery. A resolved promise is NOT evidence the user saw it.
+  async showPhoneNotification(title: string, body: string, notificationId?: string, route = '/discover') {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+      throw new Error('Allow Nightjar notifications in Android and browser settings before checking phone display.');
+    }
+    const registration = await getRegistration();
+    await registration.showNotification(title.slice(0, 120), {
+      body: body.slice(0, 240),
+      icon: '/nightjar-home-192.png',
+      badge: '/nightjar-home-192.png',
+      tag: notificationId ? 'nightjar:' + notificationId : undefined,
+      data: { route, notificationId: notificationId ?? null },
+    });
+    return { requested: true };
+  },
+
+  async checkPhoneDisplay() {
+    return this.showPhoneNotification(
+      'Nightjar phone notification check',
+      'This alert tests your phone notifications directly, without Firebase Cloud Messaging.',
+      undefined,
+      '/settings',
+    );
+  },
+
   async listenForeground(callback: (payload: MessagePayload) => void) {
     if (!(await this.supported())) return () => {};
     const messaging = getMessaging(firebaseApp);

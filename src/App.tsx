@@ -1171,6 +1171,15 @@ function App() {
       const title = payload.data?.title || payload.notification?.title || 'Nightjar update';
       const body = payload.data?.body || payload.notification?.body || '';
       notify(body ? title + ' — ' + body : title);
+      // FCM delivers open-app messages to onMessage rather than the background
+      // worker. Show an OS notification too so a same-phone test is visible in
+      // Android notifications, not just as an in-app toast.
+      void nightjarPush.showPhoneNotification(
+        title,
+        body || 'Open Nightjar to view this update.',
+        payload.data?.notificationId,
+        payload.data?.route || '/discover',
+      ).catch(() => { /* in-app toast remains available if OS alerts are blocked */ });
       void loadNotifications(productLoadEpoch.current);
     }).then((unsubscribe) => {
       if (cancelled) unsubscribe();

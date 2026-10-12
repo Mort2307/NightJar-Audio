@@ -50,4 +50,12 @@ assert.ok(repair.indexOf('await deleteToken(getMessaging(firebaseApp))') < repai
 assert.doesNotMatch(status, /deleteToken|requestPermission|unregisterCall|registerCall|getToken/, 'passive status must not mutate device registration');
 
 
-console.log('Nightjar explicit opt-in FCM, 401 recovery and per-device revocation contracts passed.');
+assert.match(push, /async showPhoneNotification\(/, 'system notification helper exists for foreground FCM');
+assert.match(push, /registration\.showNotification\(/, 'phone display uses the real service worker registration');
+assert.match(push, /async checkPhoneDisplay\(/, 'direct OS notification check does not depend on FCM');
+assert.match(preferences, /Check phone display/, 'device notification diagnostics can be invoked by the user');
+assert.match(app, /nightjarPush\.showPhoneNotification\(/, 'foreground FCM messages request an OS notification');
+const worker = fs.readFileSync('public/service-worker.js', 'utf8');
+assert.match(worker, /return self\.registration\.showNotification\(/, 'background notification callback returns the notification promise');
+
+console.log('Nightjar explicit opt-in FCM, 401 recovery, per-device revocation and device-display contracts passed.');

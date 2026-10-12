@@ -49,7 +49,7 @@ try {
     const body = data.body || 'Open Nightjar to view this update.';
     const route = data.route || '/discover';
 
-    self.registration.showNotification(title, {
+    return self.registration.showNotification(title, {
       body,
       icon: '/nightjar-home-192.png',
       badge: '/nightjar-home-192.png',

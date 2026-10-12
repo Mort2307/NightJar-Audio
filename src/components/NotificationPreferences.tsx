@@ -118,6 +118,21 @@ export default function NotificationPreferences({ notify, simulationMode = false
     } finally { setPushBusy(false); }
   };
 
+  const checkPhoneDisplay = async () => {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      if (simulationMode) notify('Simulation: phone notification display check requested.');
+      else {
+        await nightjarPush.checkPhoneDisplay();
+        notify('Nightjar asked Android to show a notification. Check your notification shade; this is a device check, not a Firebase delivery confirmation.');
+      }
+    } catch (error) {
+      setPushError(error instanceof Error ? error.message : 'Unable to request a phone notification.');
+      notify('Phone notification display check failed. Review device notification settings below.');
+    } finally { setPushBusy(false); }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -186,6 +201,9 @@ export default function NotificationPreferences({ notify, simulationMode = false
         {senderMismatch && <button className="primary-button" disabled={pushBusy} onClick={() => void repairPush()}>
           <RefreshCw size={14}/> {pushBusy ? 'Repairing…' : 'Repair this device'}
         </button>}
+        <button className="secondary-button" disabled={pushBusy || !pushStatus?.supported || pushStatus?.browserPermission !== 'granted'} onClick={() => void checkPhoneDisplay()}>
+          <Smartphone size={14}/> Check phone display
+        </button>
         <button className="ghost-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered} onClick={() => void disablePush()}>
           Disable this device
         </button>
@@ -219,7 +237,8 @@ export default function NotificationPreferences({ notify, simulationMode = false
       </section>}
       {!pushStatus?.supported && /iphone|ipad|ipod/i.test(navigator.userAgent) &&
         <p className="access-fine">On iPhone, install Nightjar on your Home Screen from Safari, then open the installed app to enable notifications. iOS web push is available on supported iOS versions.</p>}
-      {pushStatus?.thisDeviceRegistered && <p className="access-fine">Tests are sent only to this signed-in device, not every device linked to your account. Firebase acceptance is not proof of on-screen delivery; confirm the notification appeared with the app in the background.</p>}
+      <p className="access-fine">Check phone display bypasses Firebase and asks this device to show a Nightjar alert. If no alert appears, check Android notification permissions for Nightjar (or your browser), notification categories and Do Not Disturb. If the local alert appears but background FCM does not, investigate the service worker and FCM delivery instead.</p>
+      {pushStatus?.thisDeviceRegistered && <p className="access-fine">Firebase acceptance is not proof of on-screen delivery. For a background delivery check, trigger a real Nightjar notification from another device while this phone is locked. The same-phone instant test can arrive while Nightjar is still in the foreground.</p>}
       {pushStatus?.devices?.length > 0 && <div className="push-device-list">
         {pushStatus.devices.map((device:any)=><div key={device.id}>
           <span><strong>{device.platform}</strong><small>{device.standalone ? 'Installed app' : 'Browser'} · {device.active ? 'Active' : 'Inactive'}</small></span>
