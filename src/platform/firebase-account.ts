@@ -34,6 +34,12 @@ export type ProfessionalRoleState = {
 };
 
 const professionalRolesCall = httpsCallable<void, ProfessionalRoleState>(functions, 'myProfessionalRoles');
+export type NightjarApplicationDraft = {
+  selectedRoles:NightjarProfessionalRole[];
+  statement:string;experience:string;portfolioUrl:string;socialUrl:string;
+};
+const getApplicationDraftCall=httpsCallable<void,{draft:NightjarApplicationDraft|null;revision:number}>(functions,'getMyProfessionalApplicationDraft');
+const saveApplicationDraftCall=httpsCallable<{draft:NightjarApplicationDraft;revision:number},{revision:number}>(functions,'saveMyProfessionalApplicationDraft');
 const submitProfessionalApplicationCall = httpsCallable<{
   roles: NightjarProfessionalRole[];
   statement?: string;
@@ -82,6 +88,14 @@ export const nightjarAccount = {
 
   async professionalRoles() {
     return (await professionalRolesCall()).data;
+  },
+
+  async getApplicationDraft() {
+    return (await getApplicationDraftCall()).data;
+  },
+
+  async saveApplicationDraft(draft:NightjarApplicationDraft,revision:number) {
+    return (await saveApplicationDraftCall({draft,revision})).data;
   },
 
   async applyForProfessionalRoles(roles: NightjarProfessionalRole[], details: { statement?: string; experience?: string; portfolioUrl?: string; socialUrl?: string; note?: string } = {}) {

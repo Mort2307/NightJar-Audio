@@ -1050,7 +1050,7 @@ function App() {
         setProfile(mergedProfile);
         setProfileBaseline(structuredClone(mergedProfile));
         setProfileEditRole(targetRole);
-        setShowOnboarding(nextProfile.onboardingComplete !== true && nextProfile.onboardingDeferred !== true);
+        setShowOnboarding(nextProfile.onboardingComplete !== true && nextProfile.onboardingDeferred !== true && nextProfile.onboardingDismissed !== true);
       } else {
         // New accounts do not have a profiles document yet. Give their blank
         // editor a real baseline so editing enables Save rather than locking it.
@@ -2364,18 +2364,15 @@ function App() {
     }
   };
 
-  const finishOnboardingLater = async () => {
-    // Unblock the user immediately, then save the choice to their account so
-    // mobile and desktop logins do not reopen the same unfinished profile.
+  const finishOnboardingLater = async (draft: any, stepIndex: number, revision: number) => {
+    const stored = await nightjarCommunity.pauseOnboarding(draft, stepIndex, revision);
+    if (stored.completed) { setShowOnboarding(false); return; }
+    const saved = { ...profile, onboardingDismissed:true, onboardingDeferred:true,
+      onboardingDraft:{ ...draft, stepIndex }, onboardingDraftRevision:stored.revision };
+    setProfile(saved);
+    setProfileBaseline(structuredClone(saved));
     setShowOnboarding(false);
-    try {
-      const saved = await nightjarCommunity.deferMyProfileOnboarding();
-      if (!saved.deferred) throw new Error('Nightjar could not confirm this preference.');
-      setProfile((current:any)=>({...current,onboardingDeferred:true}));
-      setProfileBaseline((current:any)=>current ? {...current,onboardingDeferred:true} : current);
-    } catch (error) {
-      notify('Your profile is still editable, but Nightjar could not save Finish later across devices. Please try again when connected.');
-    }
+    notify('Progress saved to Nightjar. Resume from My Profile on any device.');
   };
 
   const saveProfile = async () => {
@@ -4672,6 +4669,19 @@ function App() {
               </>}
               <p className="nj-didit-member-footnote">Nightjar keeps only the server-verified age-assurance result and provider reference—not your raw identity images or a reusable login token stored in your browser. A new ID check is requested only if verification is revoked or a valid recheck is required.</p>
             </section>}
+
+            {effectiveRole !== 'admin' && profile?.onboardingComplete !== true && !demoMode && (
+              <section className="panel nj-profile-setup-resume" aria-label="Finish your personal Nightjar profile">
+                <div>
+                  <span className="mini-label">YOUR PROFILE · FINISH WHEN READY</span>
+                  <h2>Your Nightjar setup is waiting for you.</h2>
+                  <p>Complete the remaining personal profile fields whenever it suits you. Your Listener access and any approved professional roles stay available.</p>
+                </div>
+                <button type="button" className="primary-button" onClick={()=>setShowOnboarding(true)}>
+                  <UserCircle2 size={16}/> Finish profile setup
+                </button>
+              </section>
+            )}
             {profileSaveError && <div className="admin-note" role="alert"><ShieldAlert size={17}/><div><strong>Profile save unsuccessful</strong><span>{profileSaveError} Your edited fields have not been cleared.</span></div></div>}
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
               <UserProfileStudio
@@ -5401,7 +5411,7 @@ function App() {
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} onOpenProfile={(userId, role) => { setReviewTrack(null); openPublicProfile(userId, role); }} /></Suspense>}
-      {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={() => { void finishOnboardingLater(); }} notify={notify} /></Suspense>}
+      {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={(draft,stepIndex,revision)=>finishOnboardingLater(draft,stepIndex,revision)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
       {user && !rolePicker && !liveRolePreview && !(view === 'profile' && profileDirty) && (
