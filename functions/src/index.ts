@@ -13,6 +13,12 @@ import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, d
 import { hasPaidEntitlement } from './entitlements';
 export { diditWebhook, processDiditWebhook } from './didit';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
+export {
+  getAdminAttentionPreferences, saveAdminAttentionPreferences,
+  adminAttentionProfessionalApplications, adminAttentionReleases, adminAttentionScripts,
+  adminAttentionImages, adminAttentionReviews, adminAttentionEditorPortfolio,
+  adminAttentionReports, adminAttentionSecurity, adminAttentionSuggestions, adminAttentionBilling,
+} from './admin-attention';
 
 initializeApp();
 
@@ -5398,11 +5404,17 @@ export const trendingReleases = onCall({ region: REGION }, async (request) => {
 });
 
 const adminActionNotifications = async () => {
-  const [intake, imageCount, releaseCount, reviewCount] = await Promise.all([
+  const [intake, imageCount, releaseCount, reviewCount, scriptQueue, editorCount, reportCount, securityCount, suggestionCount, billingCount] = await Promise.all([
     db.collection('professionalApplications').where('status', 'in', ['banked','waitlist']).limit(250).get(),
     db.collection('imageAssets').where('status', '==', 'pending').count().get(),
     db.collection('releases').where('status', '==', 'pending_review').count().get(),
     db.collection('releaseReviews').where('status', '==', 'pending').count().get(),
+    db.collection('scripts').where('status', '==', 'Submitted').limit(250).get(),
+    db.collection('editorPortfolio').where('status', '==', 'pending_review').count().get(),
+    db.collection('communityReports').where('status', '==', 'open').count().get(),
+    db.collection('securityAlerts').where('status', '==', 'open').count().get(),
+    db.collection('creatorSuggestions').where('status', '==', 'new').count().get(),
+    db.collection('subscriptions').where('status', 'in', ['past_due','unpaid','failed','incomplete_expired']).count().get(),
   ]);
   const professionalCount = intake.docs.filter((doc) => {
     const item = doc.data() ?? {};
@@ -5414,6 +5426,12 @@ const adminActionNotifications = async () => {
     { id:'admin_action_images', subtype:'image_verification', count:imageCount.data().count, label:'image awaiting verification', route:'/admin/images' },
     { id:'admin_action_releases', subtype:'release_verification', count:releaseCount.data().count, label:'release awaiting moderation', route:'/admin?work=release-moderation' },
     { id:'admin_action_reviews', subtype:'review_verification', count:reviewCount.data().count, label:'review awaiting moderation', route:'/admin/reviews' },
+    { id:'admin_action_editor_portfolio', subtype:'editor_portfolio', count:editorCount.data().count, label:'Editor showcase awaiting review', route:'/admin/editorial' },
+    { id:'admin_action_manuscripts', subtype:'script_submission', count:scriptQueue.docs.filter(d => !d.data().editorUserId).length, label:'manuscript awaiting assignment', route:'/admin/editorial' },
+    { id:'admin_action_reports', subtype:'report_review', count:reportCount.data().count, label:'report awaiting moderation', route:'/admin/reports' },
+    { id:'admin_action_security', subtype:'security_alert', count:securityCount.data().count, label:'open security alert', route:'/admin/workspace/security' },
+    { id:'admin_action_suggestions', subtype:'creator_suggestion', count:suggestionCount.data().count, label:'creator recommendation', route:'/admin/suggestions' },
+    { id:'admin_action_billing', subtype:'payment_attention', count:billingCount.data().count, label:'subscription issue', route:'/admin/subscriptions' },
   ];
   return counts.filter((item) => item.count > 0).map((item) => ({
     id:item.id,
@@ -5461,6 +5479,9 @@ export const listNotifications = onCall({ region: REGION }, async (request) => {
   };
 
   const present = (item: Record<string, any>) => {
+    // Admin-only task labels contain no personal or explicit content; keep them
+    // actionable inside Nightjar even when device lock screens are discreet.
+    if (identity.admin && item.type === 'admin_attention') return item;
     if (preferences.displayMode === 'full') return item;
     if (preferences.displayMode === 'minimal') {
       return { ...item, title: 'Nightjar', message: 'You have a new Nightjar notification.' };

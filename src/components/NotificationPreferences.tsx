@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Bell, RefreshCw, Save, Send, ShieldCheck, Smartphone } from 'lucide-react';
 import { nightjarNotifications } from '../platform/firebase-notifications';
 import { nightjarPush, type PushSetupDiagnostics } from '../platform/firebase-push';
+import AdminAttentionPreferences from './AdminAttentionPreferences';
 
-type Props = { notify: (message: string) => void; simulationMode?: boolean };
+type Props = { notify: (message: string) => void; simulationMode?: boolean; isAdministrator?: boolean };
 
 const defaults = {
   displayMode: 'discreet',
@@ -16,7 +17,7 @@ const defaults = {
   announcements: true,
 };
 
-export default function NotificationPreferences({ notify, simulationMode = false }: Props) {
+export default function NotificationPreferences({ notify, simulationMode = false, isAdministrator = false }: Props) {
   const [preferences, setPreferences] = useState<any>(defaults);
   const [saving, setSaving] = useState(false);
   const [pushStatus, setPushStatus] = useState<any | null>(null);
@@ -169,6 +170,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
     </div>
     <div className="rights-ai-lock"><ShieldCheck size={16}/><div><strong>Discreet by default</strong><span>New accounts default to discreet wording rather than exposing adult-content detail on a lock screen.</span></div></div>
 
+    {isAdministrator && !simulationMode && <AdminAttentionPreferences notify={notify}/>}
     <section className="push-device-panel">
       <div className="push-device-head">
         <Smartphone size={18}/>

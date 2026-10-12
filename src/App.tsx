@@ -1196,10 +1196,22 @@ function App() {
 
     const onWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'NIGHTJAR_PUSH_OPEN') return;
-      const route = String(event.data.route ?? '/discover').replace(/^\//, '');
+      const url = String(event.data.route ?? '/discover');
+      if (url.startsWith('/admin') && canAdmin) {
+        navigate('admin');
+        if (url.includes('release-moderation')) setModerationOpen(true);
+        else if (url === '/admin/workspace/security') setAdminWorkspace('security');
+        else {
+          const panel = url.split('/')[2]?.split('?')[0];
+          if (['approvals','images','reviews','reports','editorial','suggestions','subscriptions'].includes(panel)) {
+            setAdminPanel(panel as 'approvals'|'images'|'reviews'|'reports'|'editorial'|'suggestions'|'subscriptions');
+          }
+        }
+        return;
+      }
+      const route = url.replace(/^\//, '');
       const target = (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(route)
-        ? route
-        : 'discover') as View;
+        ? route : 'discover') as View;
       navigate(target);
     };
 
@@ -1515,7 +1527,8 @@ function App() {
   };
 
   const openNotification = async (item:any) => {
-    if (item.type === 'admin_action' && canAdmin && !simulationMode) {
+    if ((item.type === 'admin_action' || item.type === 'admin_attention') && canAdmin && !simulationMode) {
+      if (item.type === 'admin_attention') await markNotificationRead(item);
       setNotificationsOpen(false);
       navigate('admin');
       if (item.subtype === 'release_verification') {
@@ -1526,6 +1539,16 @@ function App() {
         openAdminPanel('images');
       } else if (item.subtype === 'review_verification') {
         openAdminPanel('reviews');
+      } else if (item.subtype === 'report_review') {
+        openAdminPanel('reports');
+      } else if (item.subtype === 'script_submission' || item.subtype === 'editor_portfolio') {
+        openAdminPanel('editorial');
+      } else if (item.subtype === 'security_alert') {
+        openAdminWorkspace('security');
+      } else if (item.subtype === 'creator_suggestion') {
+        openAdminPanel('suggestions');
+      } else if (item.subtype === 'payment_attention') {
+        openAdminPanel('subscriptions');
       }
       return;
     }
@@ -4073,7 +4096,7 @@ function App() {
   ];
 
   const notificationGroups = Object.entries(notifications.slice(0,20).reduce((groups:Record<string,any[]>, item:any) => {
-    const key = item.type === 'admin_action' ? 'Owner action required' : item.type === 'spotlight' ? 'Spotlights' : item.type === 'message' ? 'Messages' : item.type === 'comment' ? 'Comments' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
+    const key = item.type === 'admin_action' || item.type === 'admin_attention' ? 'Owner action required' : item.type === 'spotlight' ? 'Spotlights' : item.type === 'message' ? 'Messages' : item.type === 'comment' ? 'Comments' : item.subtype === 'creator' ? 'Creators' : item.subtype === 'writer' ? 'Writers' : item.subtype === 'editor' ? 'Editorial' : item.type === 'collaboration' ? 'Collaborations' : 'Updates';
     (groups[key] ??= []).push(item);
     return groups;
   }, {}));
@@ -4179,7 +4202,7 @@ function App() {
                 <button type="button" className="primary-button" onClick={() => void installNightjarUpdate()} disabled={nightjarUpdating}><Download size={14}/>{nightjarUpdating ? 'Updating…' : 'Update now'}</button>
               </div>}
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => { if (nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title)))) void installNightjarUpdate(); else void openNotification(item); }}>
-                <span className="notification-row-icon">{item.type === 'admin_action' ? <ShieldCheck size={15}/> : item.type === 'spotlight' ? <Star size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
+                <span className="notification-row-icon">{item.type === 'admin_action' || item.type === 'admin_attention' ? <ShieldCheck size={15}/> : item.type === 'spotlight' ? <Star size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small>{nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title))) && <span className="notification-inline-update"><Download size={12} aria-hidden="true" /> Update now</span>}</span>
               </button>)}</div>)}</div> : !nightjarUpdate?.updateAvailable && <div className="notification-empty"><Bell size={17} /><span>No new activity. You’re caught up.</span></div>}
             </section>}
@@ -4691,7 +4714,7 @@ function App() {
                   {!notifications.length && <div className="people-empty"><Bell size={17}/><strong>Quiet for now.</strong><span>Account and community updates will appear here when something changes.</span></div>}
                 </div>
               </article>
-              <NotificationPreferences key={'notification-prefs-' + demoSessionKey} notify={notify} simulationMode={demoMode} />
+              <NotificationPreferences key={'notification-prefs-' + demoSessionKey} notify={notify} simulationMode={demoMode} isAdministrator={canAdmin && !demoMode && !simulationMode && !liveRolePreview} />
             </div>
           </section>
         )}
