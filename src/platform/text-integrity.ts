@@ -51,6 +51,22 @@ const mojibakePattern = new RegExp(
   'g',
 );
 
+/**
+ * Decode only apostrophe entities within transcript content for presentation.
+ *
+ * Some imported transcripts contain already-encoded apostrophes (&#39;).
+ * React displays such strings as literal text; this restores punctuation
+ * without interpreting HTML, touching any other entities, or changing the
+ * original Firebase record. A bounded, targeted replacement avoids the XSS
+ * and author-text corruption risks of general-purpose HTML decoding.
+ */
+export function restoreTranscriptApostrophes(value: string): string {
+  return value
+    .replace(/(?:&#0*39;|&#x0*27;|&apos;)/gi, "'")
+    .replace(/(?:&#0*8217;|&#x0*2019;|&rsquo;)/gi, '’')
+    .replace(/(?:&#0*8216;|&#x0*2018;|&lsquo;)/gi, '‘');
+}
+
 export function repairMojibakeText(value: string): string {
   if (!/[ÂÃâï]/.test(value)) return value;
   let result = value;
@@ -65,12 +81,18 @@ export function repairMojibakeText(value: string): string {
 /**
  * Normalise only human-readable fields of a JSON-like callable response.
  * IDs, email addresses, URLs, message bodies, script text, legal terms and
- * financial metadata remain unchanged. Never mutates the original response.
+ * financial metadata remain unchanged. The dedicated transcript fields get
+ * a narrow apostrophe-entity display correction. No source records are changed.
  */
 export function repairMojibakeDisplayData<T>(data: T): T {
   const visit = (value: unknown, field: string, depth: number): unknown => {
     if (depth > 12 || value == null) return value;
-    if (typeof value === 'string') return readableFields.has(field) ? repairMojibakeText(value) : value;
+    if (typeof value === 'string') {
+      // Authored transcript text is only repaired for known apostrophe entities;
+      // script bodies, legal text, messages, IDs and URLs remain untouched.
+      if (field === 'transcriptText' || field === 'transcript') return restoreTranscriptApostrophes(value);
+      return readableFields.has(field) ? repairMojibakeText(value) : value;
+    }
     if (Array.isArray(value)) return value.map((item) => visit(item, field, depth + 1));
     if (typeof value !== 'object') return value;
     if (Object.getPrototypeOf(value) !== Object.prototype) return value;
