@@ -1235,6 +1235,61 @@ export const deleteMySocialLink = onCall({region:REGION},async(request)=>{
   return {deleted:true};
 });
 
+// Finishing later must persist across devices and role switches. Store the
+// unfinished personal profile privately; it is NOT made public or marked as
+// completed until the member deliberately finishes the onboarding flow.
+export const pauseProfileOnboarding = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) throw new HttpsError('permission-denied', 'Administrators do not use personal onboarding.');
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const provided = input.draft && typeof input.draft === 'object' && !Array.isArray(input.draft)
+    ? input.draft as Record<string, unknown>
+    : {};
+  const stepNumber = Number(input.stepIndex);
+  const stepIndex = Number.isFinite(stepNumber) ? Math.max(0, Math.min(2, Math.floor(stepNumber))) : 0;
+  const expectedRevision = Number(input.revision ?? 0);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new HttpsError('invalid-argument','Profile draft revision is invalid.');
+  }
+  const draft = {
+    displayName:cleanText(provided.displayName,80),
+    handle:cleanText(provided.handle,50),
+    pronouns:cleanText(provided.pronouns,60),
+    headline:cleanText(provided.headline,140),
+    bio:cleanText(provided.bio,1200),
+    welcomeMessage:cleanText(provided.welcomeMessage,300),
+    favouriteTags:cleanStringList(provided.favouriteTags),
+    favouriteTropes:cleanStringList(provided.favouriteTropes),
+    favouriteCategories:cleanStringList(provided.favouriteCategories),
+    publicProfile:provided.publicProfile !== false,
+    stepIndex,
+  };
+  const dismiss = input.dismiss !== false;
+  return db.runTransaction(async(transaction)=>{
+    const ref=profileRef(identity.uid);
+    const prior=await transaction.get(ref);
+    const data=prior.data()??{};
+    if(data.onboardingComplete===true)return {dismissed:false,completed:true,revision:Number(data.onboardingDraftRevision??0)};
+    const currentRevision=Number(data.onboardingDraftRevision??0);
+    if(currentRevision!==expectedRevision){
+      throw new HttpsError('aborted','A newer version of this profile was saved on another device. Refresh Nightjar to load it before saving.');
+    }
+    transaction.set(ref,{
+      onboardingDismissed:dismiss,
+      onboardingDraft:draft,
+      onboardingDraftRevision:currentRevision+1,
+      onboardingPausedAt:FieldValue.serverTimestamp(),
+      // An autosaved draft alone is not permission to publish a profile.
+      ...(prior.exists?{}:{
+        publicProfile:false,
+        onboardingComplete:false,
+        createdAt:FieldValue.serverTimestamp(),
+      }),
+    },{merge:true});
+    return {dismissed:dismiss,completed:false,revision:currentRevision+1};
+  });
+});
+
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -1414,9 +1469,18 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     // This preserves the details a member edited before switching tabs.
     Object.assign(roleProfiles, validatedRoleProfiles);
 
+    const onboardingWasComplete = currentProfileData.onboardingComplete === true;
+    const onboardingNowComplete = nextProfile.onboardingComplete || onboardingWasComplete;
     transaction.set(targetProfileRef, {
       ...topLevelProfileWrite,
       roleProfiles,
+      // A later role/profile edit must never revert an already finished
+      // account to onboarding-incomplete and reopen the modal on sign-in.
+      onboardingComplete:onboardingNowComplete,
+      ...(onboardingNowComplete ? {
+        onboardingDismissed:false,
+        onboardingDraft:FieldValue.delete(),
+      } : {}),
       ...(currentProfile.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
   });
@@ -8892,6 +8956,43 @@ const cleanProfessionalRoles = (value: unknown): ProfessionalRole[] => {
   ));
 };
 
+
+// Drafts of professional applications are account-owned. These are NOT
+// submitted applications and must never appear in the administrator bank.
+const applicationDraftRef=(uid:string)=>accountRef(uid).collection('memberDrafts').doc('professionalApplication');
+
+export const getMyProfessionalApplicationDraft = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  if(identity.admin) return {draft:null,revision:0};
+  const snapshot=await applicationDraftRef(identity.uid).get();
+  return {draft:snapshot.exists ? snapshot.data()?.draft??null : null,revision:Number(snapshot.data()?.revision??0)};
+});
+
+export const saveMyProfessionalApplicationDraft = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  if(identity.admin) throw new HttpsError('permission-denied','Administrators cannot submit professional applications.');
+  const input=(request.data??{}) as Record<string,unknown>;
+  const draftInput=input.draft && typeof input.draft==='object' && !Array.isArray(input.draft)
+    ? input.draft as Record<string,unknown>:{};
+  const expected=Number(input.revision??0);
+  if(!Number.isSafeInteger(expected)||expected<0)throw new HttpsError('invalid-argument','Draft revision is invalid.');
+  const draft={
+    selectedRoles:cleanProfessionalRoles(draftInput.selectedRoles),
+    statement:cleanText(draftInput.statement,2400),
+    experience:cleanText(draftInput.experience,1600),
+    portfolioUrl:cleanText(draftInput.portfolioUrl,500),
+    socialUrl:cleanText(draftInput.socialUrl,500),
+  };
+  return db.runTransaction(async(tx)=>{
+    const ref=applicationDraftRef(identity.uid);
+    const prior=await tx.get(ref);
+    const revision=Number(prior.data()?.revision??0);
+    if(expected!==revision)throw new HttpsError('aborted','Your professional application was edited on another device. Refresh to load the latest saved draft.');
+    tx.set(ref,{draft,revision:revision+1,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    return {revision:revision+1};
+  });
+});
+
 export const myProfessionalRoles = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   if (identity.admin) {
@@ -8971,6 +9072,9 @@ export const submitProfessionalApplication = onCall({ region: REGION }, async (r
     ...(currentApplication.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge:true });
 
+  // A successfully submitted application is durable in the bank. Clear only
+  // this member's *unsubmitted* draft, never the actual application record.
+  await applicationDraftRef(identity.uid).delete();
   return {
     status: 'banked',
     requestedRoles: requested,
