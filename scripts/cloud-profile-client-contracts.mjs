@@ -4,7 +4,7 @@ const app=fs.readFileSync('src/App.tsx','utf8');
 const ui=fs.readFileSync('src/components/CloudProfileDraft.tsx','utf8');
 const api=fs.readFileSync('src/platform/firebase-profile-drafts.ts','utf8');
 const server=fs.readFileSync('functions/src/index.ts','utf8');
-assert.match(app,/profileCloudDraftRef=useRef<ProfileDraftController/,'controller retained by profile page');
+assert.match(app,/profileCloudDraftRef\s*=\s*useRef<ProfileDraftController/,'controller retained by profile page');
 assert.match(app,/await controller\.flush\(\)/,'publishing waits for private draft sync');
 assert.match(app,/await profileCloudDraftRef\.current\.flush\(\)/,'switching role waits for latest draft');
 assert.match(app,/profileCloudDraftRef\.current\.clear\(\)/,'published draft cleared only after save');
