@@ -910,6 +910,122 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
   };
 };
 
+// Cross-device WORKING drafts are not public profiles. They are always stored
+// under the authenticated account, rather than device storage, and use
+// optimistic revision checks to avoid silently overwriting another device.
+const PROFILE_DRAFT_SHARED_FIELDS = new Set([
+  'displayName','handle','pronouns','headline','bio','welcomeMessage',
+  'favouriteTags','favouriteTropes','favouriteCategories','publicProfile',
+  'avatarInitials','avatarTone',
+]);
+const PROFILE_DRAFT_ROLE_FIELDS = new Set([
+  'roleFocus','roleSpecialties','roleSecondary','roleAvailability','roleHeadline',
+  'roleBio','roleDetailOne','roleDetailTwo','portfolioNote','featuredPortfolioIds',
+  'creatorLanguages','creatorDirectionModes','creatorDeliveryFormats','creatorTurnaround','creatorEquipment',
+  'writerScriptLengths','writerCollaborationPreferences','writerTurnaround','writerRightsNote',
+  'editorSoftware','editorProjectTypes','editorDeliveryFormats','editorCollaborationPreferences',
+  'editorTurnaround','editorExperienceYears','editorSkillLevels',
+  'artistMediums','artistDeliveryFormats','artistTurnaround','artistSoftware','listenerCommunityStyle',
+]);
+const profileDraftScope = (raw:unknown) => {
+  const scope=cleanText(raw,40);
+  if(scope==='onboarding'||/^profile-(listener|creator|writer|editor|artist|admin)$/.test(scope))return scope;
+  throw new HttpsError('invalid-argument','Unknown Nightjar profile draft.');
+};
+const scopedProfileDraftRef=(uid:string,scope:string)=>profileRef(uid).collection('workingDrafts').doc(scope);
+const assertProfileDraftAccess=async(uid:string,scope:string)=>{
+  const role=scope.startsWith('profile-')?scope.slice(8):'listener';
+  if(role==='listener'||scope==='onboarding')return;
+  const account=await accountRef(uid).get();
+  if(role==='admin'){
+    if(account.data()?.role!=='admin')throw new HttpsError('permission-denied','Administrator profile required.');
+    return;
+  }
+  if(!professionalRolesForAccount(account.data()??{}).includes(role as AccountRole)){
+    throw new HttpsError('permission-denied','An approved professional role is required for this draft.');
+  }
+};
+const profileDraftData=(raw:unknown,scope:string)=>{
+  if(!raw || typeof raw!=='object' || Array.isArray(raw))throw new HttpsError('invalid-argument','A profile draft object is required.');
+  const result:Record<string,unknown>={};
+  const validFields=scope==='onboarding'?PROFILE_DRAFT_SHARED_FIELDS:new Set([...PROFILE_DRAFT_SHARED_FIELDS,...PROFILE_DRAFT_ROLE_FIELDS]);
+  for(const [key,value] of Object.entries(raw as Record<string,unknown>)){
+    if(key==='stepIndex'&&scope==='onboarding'){
+      result.stepIndex=Math.max(0,Math.min(2,Math.floor(Number(value)||0)));
+      continue;
+    }
+    if(!validFields.has(key))continue;
+    if(value===null||typeof value==='boolean'||typeof value==='string'||typeof value==='number'){
+      if(typeof value==='string' && value.length>3000)throw new HttpsError('invalid-argument','Profile draft field is too long.');
+      result[key]=value;
+    }else if(Array.isArray(value)){
+      if(value.length>40 || value.some(item=>typeof item!=='string'||item.length>180))throw new HttpsError('invalid-argument','Profile draft selection is too large.');
+      result[key]=value;
+    }else if(key==='editorSkillLevels'&&value&&typeof value==='object'&&!Array.isArray(value)){
+      const levels=Object.entries(value as Record<string,unknown>);
+      if(levels.length>40||levels.some(([k,v])=>k.length>180||typeof v!=='string'||v.length>80))
+        throw new HttpsError('invalid-argument','Profile draft skills are too large.');
+      result[key]=Object.fromEntries(levels);
+    }
+  }
+  if(JSON.stringify(result).length>32000)throw new HttpsError('invalid-argument','Profile draft is too large.');
+  return result;
+};
+const profileDraftSnapshot=(data:Record<string,any>|undefined)=>{
+  if(!data)return {revision:0,payload:null,updatedAt:null};
+  return {
+    revision:Math.max(0,Number(data.revision??0)),
+    payload:data.payload??null,
+    updatedAt:data.updatedAt?.toDate?.()?.toISOString?.()??null,
+  };
+};
+export const getMyProfileWorkingDraft=onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const scope=profileDraftScope((request.data as Record<string,unknown>|undefined)?.scope);
+  await assertProfileDraftAccess(identity.uid,scope);
+  const snap=await scopedProfileDraftRef(identity.uid,scope).get();
+  return {scope,...profileDraftSnapshot(snap.data())};
+});
+export const saveMyProfileWorkingDraft=onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const scope=profileDraftScope(input.scope);
+  await assertProfileDraftAccess(identity.uid,scope);
+  const expectedRevision=Number(input.expectedRevision);
+  if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)
+    throw new HttpsError('invalid-argument','Invalid profile draft version.');
+  const payload=profileDraftData(input.payload,scope);
+  const ref=scopedProfileDraftRef(identity.uid,scope);
+  return db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    const existing=snap.data();
+    const current=profileDraftSnapshot(existing);
+    if(current.revision!==expectedRevision){
+      return {saved:false,scope,...current};
+    }
+    const revision=expectedRevision+1;
+    tx.set(ref,{payload,revision,updatedAt:FieldValue.serverTimestamp(),ownerUserId:identity.uid});
+    return {saved:true,scope,revision,payload,updatedAt:null};
+  });
+});
+export const clearMyProfileWorkingDraft=onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const scope=profileDraftScope(input.scope);
+  await assertProfileDraftAccess(identity.uid,scope);
+  const expectedRevision=Number(input.expectedRevision);
+  if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)
+    throw new HttpsError('invalid-argument','Invalid profile draft version.');
+  const ref=scopedProfileDraftRef(identity.uid,scope);
+  return db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    const current=profileDraftSnapshot(snap.data());
+    if(current.revision!==expectedRevision)return {cleared:false,revision:current.revision};
+    if(snap.exists)tx.delete(ref);
+    return {cleared:true,revision:0};
+  });
+});
+
 export const getMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, accountSnapshot] = await Promise.all([
