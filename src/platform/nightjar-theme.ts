@@ -6,14 +6,14 @@ export const nightjarThemes: { id: NightjarTheme; label: string; description: st
   { id:'midnight',label:'Midnight Blue',description:'Ink navy and silver-blue highlights.',swatches:['#0a101c','#89a9d1','#eaf0fa'] },
   { id:'ember',label:'Ember',description:'Burgundy, copper and candlelit warmth.',swatches:['#170d12','#c69680','#f7e8de'] },
   { id:'obsidian',label:'Obsidian',description:'Pure charcoal with restrained metallic accents.',swatches:['#080a0c','#bbc5ce','#edf1f3'] },
-  { id:'bronze',label:'Bronze Noir',description:'Jet black, burnished bronze and warm ivory — inspired by the Nightjar N.',swatches:['#080809','#b88a52','#f3e7d8'] },
+  { id:'bronze',label:'Bronze Noir',description:'Near-black graphite, discreet burnished bronze and soft ivory — inspired by the Nightjar N.',swatches:['#08090b','#b78b59','#f0ece8'] },
 ];
 const storageKey = 'nightjar.appearance.theme.v1';
 const isTheme = (value:unknown):value is NightjarTheme => nightjarThemes.some((item)=>item.id===value);
 
 const updateBrowserChrome = (theme: NightjarTheme) => {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = theme === 'bronze' ? '#080809' : '#0c0b0d';
+  if (meta) meta.content = theme === 'bronze' ? '#08090b' : '#0c0b0d';
 };
 
 export const nightjarTheme = {
