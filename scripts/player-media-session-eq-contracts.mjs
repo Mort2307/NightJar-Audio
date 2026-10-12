@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const read = (f) => readFileSync(f, 'utf8');
+const player = read('src/components/NightjarPlayer.tsx');
+const media = read('src/hooks/useNightjarMediaSession.ts');
+const eq = read('src/hooks/useNightjarEqualizer.ts');
+const cors = read('scripts/prepare-nightjar-audio-cors.mjs');
+const workflow = read('.github/workflows/nightjar-audio-eq-cors.yml');
+assert.match(player, /useNightjarMediaSession\(/, 'lock-screen integration is mounted');
+assert.match(player, /playableQueue = queue\.filter/, 'next/previous skip inaccessible recordings');
+assert.match(media, /navigator\.mediaSession/, 'uses the official Media Session API');
+for (const action of ['play','pause','previoustrack','nexttrack','seekbackward','seekforward','seekto'])
+  assert.ok(media.includes("safeRegister('" + action + "'"), action + ' is implemented');
+assert.match(media, /new MediaMetadata\(/, 'lock screen uses release metadata');
+assert.match(media, /\.setPositionState\(/, 'lock screen position stays current');
+assert.match(media, /for \(const action of actions\) safeRegister\(action, null\)/, 'media actions cleaned up');
+assert.match(eq, /desiredLevelsRef\.current = levels/, 'EQ stores latest selected sound levels');
+assert.match(eq, /else if \(!configuring\.current\) void toggle\(levels\)/, 'choosing EQ preset actually starts processing');
+assert.match(eq, /updateGains\(desiredLevelsRef\.current\)/, 'EQ starts with most recent selected settings');
+assert.match(player, /EQ ACTIVE · On/, 'listener can distinguish actual EQ status');
+assert.match(cors, /Existing CORS policy must not be discarded/, 'bucket update preserves upload CORS');
+assert.match(cors, /nightjar-audio\.firebasestorage\.app/, 'CORS restricted to exact Nightjar bucket');
+assert.match(workflow, /ENABLE-NIGHTJAR-AUDIO-EQ/, 'storage write needs explicit human action');
+assert.match(workflow, /production-backend/, 'storage update uses protected production environment');
+assert.match(workflow, /gcloud storage buckets update/, 'CORS update targets Google Cloud Storage bucket');
+assert.doesNotMatch(workflow, /firebase deploy --only storage/, 'must not overwrite Storage security rules');
+console.log('Nightjar Android Media Session and real EQ activation contracts PASS.');

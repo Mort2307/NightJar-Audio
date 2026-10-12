@@ -46,6 +46,7 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
   const [busy, setBusy] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [settings, setSettings] = useState(readStored);
+  const desiredLevelsRef = useRef<Levels>(settings.levels);
   const [message, setMessage] = useState('');
 
   const updateGains = useCallback((next: Levels) => {
@@ -78,7 +79,7 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
     });
   }, []);
 
-  const toggle = useCallback(async () => {
+  const toggle = useCallback(async (desired?: Levels) => {
     if (configuring.current) return;
     if (enabled) {
       route(false);
@@ -96,6 +97,7 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
     setBusy(true);
     setMessage('');
     let context: AudioContext | null = null;
+    if (desired) desiredLevelsRef.current = desired;
     let switchedToCors = false;
     let position = 0;
     let previouslyPlaying = false;
@@ -159,10 +161,12 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
       }
 
       if (graph.current.context.state !== 'running') await graph.current.context.resume();
-      updateGains(settings.levels);
+      // Presets can change during the asynchronous CORS check; use the
+      // latest user-selected levels instead of a stale closure.
+      updateGains(desiredLevelsRef.current);
       route(true);
       setEnabled(true);
-      setMessage('EQ is on — use the sliders or choose a sound preset.');
+      setMessage('EQ active · sound processing connected.');
       // Re-activating a cross-origin media element can cost mobile browsers the
       // previous play permission. Make an attempt and explain any interruption.
       if (switchedToCors && previouslyPlaying) {
@@ -191,19 +195,23 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
       configuring.current = false;
       setBusy(false);
     }
-  }, [audioRef, enabled, route, settings.levels, updateGains]);
+  }, [audioRef, enabled, route, updateGains]);
 
   const applyPreset = (preset: Exclude<EqualizerPreset, 'custom'>) => {
     const levels = { ...presets[preset] };
+    desiredLevelsRef.current = levels;
     setSettings({ preset, levels });
     saveStored(preset, levels);
     if (enabled) updateGains(levels);
+    else if (!configuring.current) void toggle(levels);
   };
   const updateBand = (band: EqualizerBand, gain: number) => {
-    const levels = { ...settings.levels, [band]: clampGain(gain) };
+    const levels = { ...desiredLevelsRef.current, [band]: clampGain(gain) };
+    desiredLevelsRef.current = levels;
     setSettings({ preset: 'custom', levels });
     saveStored('custom', levels);
     if (enabled) updateGains(levels);
+    else if (!configuring.current) void toggle(levels);
   };
 
   useEffect(() => () => {
