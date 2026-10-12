@@ -52,7 +52,7 @@ assert.match(catalogue,/adminAudioLibrary\(\)/, 'Client can fetch owner-only aud
 assert.match(moderation,/All attached audio \(/, 'Admin can see saved draft audio separately from submissions');
 assert.match(moderation,/Awaiting moderation \(/, 'Admin can switch to submission queue');
 assert.match(moderation,/nightjarCatalogue\.adminPreview\(selected\.id\)/, 'Admin can actually listen using a protected signed URL');
-assert.match(moderation,/selected\.status === 'pending_review' \? <div className="moderation-actions">/, 'Moderation actions must be restricted to submitted items');
+assert.match(moderation,/selected\.status === 'pending_review' && <div className="nj-admin-decision">/, 'Moderation actions must be restricted to submitted items');
 assert.match(app,/Open audio library &amp; moderation/, 'Audio review is discoverable from admin Content workpage');
 assert.match(styles,/\.nj-audio-upload-progress/, 'Creator progress indicator must be styled');
 assert.match(styles,/\.nj-audio-review-tabs/, 'Admin review tabs must be styled');
