@@ -64,5 +64,23 @@ assert.match(launch, /manualUnlockVisible && supported/, 'normal launch does not
 assert.match(launch, /void unlock\(true\)/, 'saved Android passkeys open immediately without another tap');
 assert.match(launch, /setManualUnlockVisible\(true\)/, 'failed prompts expose manual retry and password recovery');
 assert.match(launch, /Use email and password/, 'password fallback always remains available');
+const appStartup=fs.readFileSync('src/App.tsx','utf8');
+const firebaseSession=fs.readFileSync('src/platform/firebase-auth.ts','utf8');
+assert.match(preference, /continuityKey = 'nightjar.passkeys.continuity.v1'/, 'verified browser tab records secure refresh continuity');
+assert.match(preference, /continuityMillis = 4 \* 60 \* 60_000/, 'refresh continuity expires instead of lasting indefinitely');
+assert.match(preference, /backgroundLockMillis = 2 \* 60_000/, 'background idle relock remains enabled');
+assert.match(preference, /value.userId !== userId \|\| value.expiresAt <= Date.now\(\)/, 'a refresh cannot restore a different account or expired grant');
+assert.match(preference, /sessionStorage.removeItem\(continuityKey\)/, 'locking clears the persisted tab grant');
+assert.match(firebaseSession, /nightjarQuickUnlock.lock\(\);\s*await signOut\(firebaseAuth\)/, 'explicit sign-out clears the refresh grant');
+assert.match(launch, /if \(identity && canResume\)/, 'startup allows matching Firebase identity to survive refresh');
+assert.match(launch, /if \(identity\) \{\s*void nightjarAuth.signOut\(\)/, 'fresh biometric launch still clears persisted Firebase auth');
+assert.match(launch, /nightjarQuickUnlock.markBackground\(preference.userId\)/, 'background start is persisted across reloads');
+assert.match(launch, /nightjarQuickUnlock.markForeground\(preference.userId\)/, 'short background resumes remain fluid');
+assert.match(launch, /if \(canResume && !authReady\)/, 'refresh must not expose workspace before identity hydration');
+assert.match(launch, /attemptedAutomatically.current = true;\s*void unlock\(true\)/, 'autoprompt survives React StrictMode effect replay');
+assert.match(appStartup, /if \(sessionHydrating\)/, 'no misleading sign-in screen during auth hydration');
+assert.match(appStartup, /await loadAccount\(\);[\s\S]*?const verified = await refreshAgeStatus\(\)/, 'on resume role and age permissions are rechecked');
+assert.match(appStartup, /setSessionHydrating\(false\)/, 'auth boot guard resolves for legitimate signed-out sessions');
+
 
 console.log('Nightjar WebAuthn passkey security contracts passed (source checks only).');
