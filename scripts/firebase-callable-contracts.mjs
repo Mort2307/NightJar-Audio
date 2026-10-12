@@ -29,7 +29,8 @@ if(missing.length){
 }
 
 const requiredRoleContracts=[
-  ['postReleaseComment',"requireAccountRole(request, ['listener'])"],
+  ['postReleaseComment',"requireActiveIdentity(request)"],
+  ['setReleaseCommentReaction',"requireActiveIdentity(request)"],
   ['setReleaseReaction',"requireAccountRole(request, ['listener'])"],
   ['submitReleaseReview',"requireAccountRole(request, ['listener'])"],
   ['listMessageConversations',"requireCreativeMessagingIdentity(request)"],
