@@ -88,6 +88,7 @@ import AdminMemberRoleEditor from './components/AdminMemberRoleEditor';
 import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashboard';
 import WorkspaceSwitcher from './components/WorkspaceSwitcher';
 import NightjarSkeleton from './components/NightjarSkeleton';
+import type { ProfileDraftController } from './components/CloudProfileDraft';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
@@ -96,6 +97,7 @@ const CreatorLivePreviewOverview = lazy(() => import('./components/CreatorLivePr
 const CreatorProfile = lazy(() => import('./components/CreatorProfile'));
 const ContentModeration = lazy(() => import('./components/ContentModeration'));
 const NightjarOnboarding = lazy(() => import('./components/NightjarOnboarding'));
+const CloudProfileDraft = lazy(() => import('./components/CloudProfileDraft'));
 const PublicProfile = lazy(() => import('./components/PublicProfile'));
 const CollaborationHub = lazy(() => import('./components/CollaborationHub'));
 const WriterRightsPanel = lazy(() => import('./components/WriterRightsPanel'));
@@ -642,6 +644,7 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [profileBaseline, setProfileBaseline] = useState<any | null>(null);
+  const profileCloudDraftRef=useRef<ProfileDraftController|null>(null);
   const [profileSaveError, setProfileSaveError] = useState('');
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
@@ -2282,6 +2285,13 @@ function App() {
       notify(invalidHandle);
       return;
     }
+    if(!demoMode && profileDirty){
+      const controller=profileCloudDraftRef.current;
+      if(!controller || !await controller.flush()){
+        notify('Your account draft is still saving, offline, or changed elsewhere. Resolve the sync status before publishing profile edits.');
+        return;
+      }
+    }
     setProfileSaveError('');
     setProfileLoading(true);
     try {
@@ -2318,6 +2328,11 @@ function App() {
       const mergedProfile = applyProfileRoleDraft(refreshed?.profile ?? result.profile, profileEditRole);
       setProfile(mergedProfile);
       setProfileBaseline(structuredClone(mergedProfile));
+      // The public profile is committed; clear only our own last-known draft.
+      // Never erase a newer working draft edited on another device.
+      if(profileCloudDraftRef.current){
+        try{await profileCloudDraftRef.current.clear();}catch{notify('Your profile saved, but its draft cleanup could not be confirmed.');}
+      }
       notify('Your Nightjar profile and all approved role details have been saved.');
     } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error
@@ -2347,6 +2362,10 @@ function App() {
         && ['listener','creator','writer','editor','artist'].includes(item),
       );
     if (!availableRoles.includes(nextRole)) return;
+    if(!demoMode && profileDirty && (!profileCloudDraftRef.current || !await profileCloudDraftRef.current.flush())){
+      notify('Please wait for your changes to sync to Nightjar before switching profile roles.');
+      return;
+    }
 
     setProfile((current:any) => applyProfileRoleDraft(captureProfileRoleDraft(current, profileEditRole), nextRole));
     setProfileBaseline((current:any) => current ? applyProfileRoleDraft(current, nextRole) : current);
@@ -4537,6 +4556,12 @@ function App() {
               <p className="nj-didit-member-footnote">Nightjar keeps only the server-verified age-assurance result and provider reference—not your raw identity images or a reusable login token stored in your browser. A new ID check is requested only if verification is revoked or a valid recheck is required.</p>
             </section>}
             {profileSaveError && <div className="admin-note" role="alert"><ShieldAlert size={17}/><div><strong>Profile save unsuccessful</strong><span>{profileSaveError} Your edited fields have not been cleared.</span></div></div>}
+            {!demoMode && user && profileBaseline && <Suspense fallback={<div className="nj-cloud-profile-draft">Checking saved account draft…</div>}>
+              <CloudProfileDraft key={user.userId+':'+(effectiveRole==='admin'?'admin':profileEditRole)}
+                role={effectiveRole==='admin'?'admin':profileEditRole}
+                profile={profile} dirty={profileDirty} setProfile={setProfile}
+                register={(controller)=>{profileCloudDraftRef.current=controller;}} notify={notify}/>
+            </Suspense>}
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
               <UserProfileStudio
                 profile={profile}
