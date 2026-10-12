@@ -61,7 +61,7 @@ export const saveAdminAttentionPreferences = onCall({ region: REGION }, async re
     adminAttentionPreferencesUpdatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   return { preferences };
-};
+});
 
 const isPending = (category: Category, data: Record<string, any> | undefined) => {
   if (!data) return false;
@@ -168,7 +168,11 @@ const onAttentionWrite = (category: Category, collection: string) =>
           (role: string) => !Array.isArray(after?.approvedRoles) || !after?.approvedRoles.includes(role),
         ).sort().join(',')
       : '';
-    const key = category + ':' + recordId + ':' + extra;
+    // Re-submissions after a completed review must produce a fresh alert.
+    // Stable event timestamps keep retries of the same write deduplicated.
+    const stamp = after?.submittedAt ?? after?.bankedAt ?? after?.updatedAt ?? after?.createdAt;
+    const revision = typeof stamp?.toMillis === 'function' ? String(stamp.toMillis()) : '';
+    const key = category + ':' + recordId + ':' + extra + ':' + revision;
     await Promise.all(ADMIN_EMAILS.map(async email => {
       try {
         const owner = await getAuth().getUserByEmail(email);
