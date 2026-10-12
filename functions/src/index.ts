@@ -1223,8 +1223,10 @@ export const pauseProfileOnboarding = onCall({ region: REGION }, async (request)
     : {};
   const stepNumber = Number(input.stepIndex);
   const stepIndex = Number.isFinite(stepNumber) ? Math.max(0, Math.min(2, Math.floor(stepNumber))) : 0;
-  const snapshot = await profileRef(identity.uid).get();
-  if (snapshot.data()?.onboardingComplete === true) return { dismissed:true, completed:true };
+  const expectedRevision = Number(input.revision ?? 0);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new HttpsError('invalid-argument','Profile draft revision is invalid.');
+  }
   const draft = {
     displayName:cleanText(provided.displayName,80),
     handle:cleanText(provided.handle,50),
@@ -1238,12 +1240,24 @@ export const pauseProfileOnboarding = onCall({ region: REGION }, async (request)
     publicProfile:provided.publicProfile !== false,
     stepIndex,
   };
-  await profileRef(identity.uid).set({
-    onboardingDismissed:true,
-    onboardingDraft:draft,
-    onboardingPausedAt:FieldValue.serverTimestamp(),
-  },{merge:true});
-  return { dismissed:true, completed:false };
+  const dismiss = input.dismiss !== false;
+  return db.runTransaction(async(transaction)=>{
+    const ref=profileRef(identity.uid);
+    const prior=await transaction.get(ref);
+    const data=prior.data()??{};
+    if(data.onboardingComplete===true)return {dismissed:false,completed:true,revision:Number(data.onboardingDraftRevision??0)};
+    const currentRevision=Number(data.onboardingDraftRevision??0);
+    if(currentRevision!==expectedRevision){
+      throw new HttpsError('aborted','A newer version of this profile was saved on another device. Refresh Nightjar to load it before saving.');
+    }
+    transaction.set(ref,{
+      onboardingDismissed:dismiss,
+      onboardingDraft:draft,
+      onboardingDraftRevision:currentRevision+1,
+      onboardingPausedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return {dismissed:dismiss,completed:false,revision:currentRevision+1};
+  });
 });
 
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
