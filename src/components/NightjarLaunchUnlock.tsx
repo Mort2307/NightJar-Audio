@@ -81,11 +81,9 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
         setAuthReady(true);
         return;
       }
-      if (identity && !redirectGrace && !allowedFlow) {
-        void nightjarAuth.signOut().catch(() => { /* locked screen still protects entry */ })
-          .finally(() => { if (alive.current) setAuthReady(true); });
-        return;
-      }
+      // A refresh is not a logout. Firebase already restores this authenticated
+      // session; keep it while the biometric overlay protects the workspace.
+      // A passkey assertion is still required before revealing the app.
       setAuthReady(true);
     });
     return () => {
@@ -108,6 +106,9 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       if (!alive.current || controller.signal.aborted) return;
       // Only a full-page account-to-workspace redirect needs a one-time pass.
       // Main app unlocks never create a bypass for the next cold launch.
+      // A successful server-verified passkey must not be followed by a
+      // redundant password screen. Preserve the authenticated Firebase user
+      // and grant the one-page redirect allowance only on /account.
       if (window.location.pathname.startsWith('/account')) nightjarQuickUnlock.markUnlocked(identity.userId);
       setLocked(false);
     } catch (error) {
@@ -152,9 +153,9 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
         setMessage('');
         setDiagnostic('');
         setManualUnlockVisible(!supported);
-        // Relock is also a real session boundary when returning to Nightjar.
-        void nightjarAuth.signOut().catch(() => { /* user can still use password */ })
-          .finally(() => { if (alive.current) setAuthReady(true); });
+        // Protect the existing authenticated session behind the lock screen.
+        // Do not sign out on backgrounding or force a second login afterward.
+        setAuthReady(true);
       }
     };
     document.addEventListener('visibilitychange', visibility);
