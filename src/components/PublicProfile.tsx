@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { scrollNightjarToTop } from '../platform/scroll-navigation';
-import { Bird, BookOpenText, Brush, FileCheck2, Handshake, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
+import { Bird, BookOpenText, Brush, FileCheck2, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -11,6 +11,7 @@ import NightjarGiftPanel from './NightjarGiftPanel';
 import PublicEditorShowcase from './PublicEditorShowcase';
 import PublicWriterPortfolio from './PublicWriterPortfolio';
 import { SocialLinksDisplay } from './SocialLinksEditor';
+import CollaborationHistoryButton from './CollaborationHistoryButton';
 
 type Props = {
   userId: string;
@@ -379,7 +380,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
         {(roleDetails.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
           {roleDetails.portfolioNote && <p>{roleDetails.portfolioNote}</p>}
-          {(profile.completedCollaborations ?? 0) > 0 && <span><Handshake size={14}/>{profile.completedCollaborations} completed Nightjar collaboration{profile.completedCollaborations === 1 ? '' : 's'}</span>}
+          {(profile.completedCollaborations ?? 0) > 0 && <CollaborationHistoryButton userId={userId} displayName={profile.displayName ?? 'Nightjar member'} count={profile.completedCollaborations ?? 0} demoMode={demoMode} />}
         </section>}
 
         <div className="writer-public-note">

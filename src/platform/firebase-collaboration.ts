@@ -13,6 +13,18 @@ export type CollaborationStatus =
   | 'in_production'
   | 'completed';
 
+export type VerifiedCollaborationHistory = {
+  userId: string;
+  count: number;
+  workflowOnlyCount: number;
+  published: Array<{
+    releaseId: string;
+    title: string;
+    releaseDate: string | null;
+    contributors: Array<{ userId: string; name: string; role: string }>;
+  }>;
+};
+const historyCall = httpsCallable<{ userId: string }, VerifiedCollaborationHistory>(functions, 'getVerifiedCollaborationHistory');
 const directoryCall = httpsCallable<void, { people: any[] }>(functions, 'collaborationDirectory');
 const sendCall = httpsCallable<Record<string, unknown>, { proposal: any }>(functions, 'sendCollaborationProposal');
 const listCall = httpsCallable<void, { proposals: any[] }>(functions, 'listMyCollaborations');
@@ -21,6 +33,10 @@ const respondCall = httpsCallable<{ collaborationId: string; status: Collaborati
 const statusCall = httpsCallable<{ collaborationId: string; status: CollaborationStatus }, { proposal: any }>(functions, 'updateCollaborationStatus');
 
 export const nightjarCollaboration = {
+  async history(userId: string) {
+    return (await historyCall({ userId })).data;
+  },
+
   async directory() {
     return (await directoryCall()).data;
   },
