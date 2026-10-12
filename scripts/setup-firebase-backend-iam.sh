@@ -14,7 +14,7 @@ readonly SA_EMAIL="${SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 readonly CONDITION="assertion.repository_id == '${REPOSITORY_ID}' && assertion.repository == '${REPOSITORY}' && assertion.ref == 'refs/heads/main' && assertion.event_name == 'workflow_dispatch' && assertion.workflow_ref == '${REPOSITORY}/.github/workflows/firebase-backend-deploy.yml@refs/heads/main'"
 readonly ATTRIBUTE_MAPPING="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_id=assertion.repository_id,attribute.ref=assertion.ref,attribute.event_name=assertion.event_name"
 
-for executable in gcloud grep; do
+for executable in gcloud grep python3; do
   command -v "$executable" >/dev/null 2>&1 || { echo "Required command is missing: $executable" >&2; exit 1; }
 done
 
@@ -40,43 +40,74 @@ if ! gcloud iam service-accounts describe "$SA_EMAIL" --project="$PROJECT_ID" >/
     --display-name="Nightjar restricted GitHub backend deploy" --quiet
 fi
 
+# Google Cloud resource creation is eventually consistent. A newly created pool
+# may return NOT_FOUND on a describe call immediately after creation.
+# Recover safely on re-runs instead of creating an existing pool a second time.
 if ! gcloud iam workload-identity-pools describe "$POOL_ID" --location=global --project="$PROJECT_ID" >/dev/null 2>&1; then
-  gcloud iam workload-identity-pools create "$POOL_ID" --location=global --project="$PROJECT_ID" \
-    --display-name="Nightjar GitHub Actions" --quiet
+  if ! gcloud iam workload-identity-pools create "$POOL_ID" --location=global --project="$PROJECT_ID" \
+    --display-name="Nightjar GitHub Actions" --quiet; then
+    echo "Pool creation returned an error; checking for an already-created pool before failing." >&2
+  fi
 fi
 
-readonly POOL_PATH="$(gcloud iam workload-identity-pools describe "$POOL_ID" \
-    --location=global --project="$PROJECT_ID" --format='value(name)')"
-[[ "$POOL_PATH" == projects/*/locations/global/workloadIdentityPools/* ]] || {
-  echo "Unexpected workload identity pool path: $POOL_PATH" >&2; exit 1;
+wait_for_pool() {
+  local attempt pool_path
+  for ((attempt=1; attempt<=24; attempt++)); do
+    pool_path="$(gcloud iam workload-identity-pools describe "$POOL_ID" \
+      --location=global --project="$PROJECT_ID" --format='value(name)' 2>/dev/null)" || pool_path=""
+    if [[ "$pool_path" == projects/*/locations/global/workloadIdentityPools/"$POOL_ID" ]]; then
+      printf '%s\n' "$pool_path"
+      return 0
+    fi
+    if (( attempt < 24 )); then
+      echo "Waiting for Google Cloud to expose workload identity pool (attempt $attempt/24)..." >&2
+      sleep 5
+    fi
+  done
+  echo "STOP: Pool nightjar-github still unavailable. Check Google Cloud IAM Workload Identity Pools and project permissions." >&2
+  return 1
 }
 
-if gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
+readonly POOL_PATH="$(wait_for_pool)"
+
+# A provider also needs a propagation window after creation. Always validate
+# the final condition and attribute mapping, even for newly created providers.
+if ! gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
   --workload-identity-pool="$POOL_ID" --location=global --project="$PROJECT_ID" >/dev/null 2>&1; then
-  ACTUAL_CONDITION="$(gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
-    --workload-identity-pool="$POOL_ID" --location=global --project="$PROJECT_ID" \
-    --format='value(attributeCondition)')"
-  if [[ "$ACTUAL_CONDITION" != "$CONDITION" ]]; then
-    echo "STOP: Existing provider has a different access condition. Review it manually, do not overwrite." >&2
-    echo "Expected: $CONDITION" >&2
-    echo "Existing: $ACTUAL_CONDITION" >&2
-    exit 1
-  fi
-  ACTUAL_MAP="$(gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
-    --workload-identity-pool="$POOL_ID" --location=global --project="$PROJECT_ID" \
-    --format=json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("attributeMapping", {}).get("attribute.repository_id", ""))')"
-  if [[ "$ACTUAL_MAP" != "assertion.repository_id" ]]; then
-    echo "STOP: Existing provider does not map immutable repository_id; review manually." >&2
-    exit 1
-  fi
-else
-  gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
+  if ! gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
     --location=global --project="$PROJECT_ID" \
     --workload-identity-pool="$POOL_ID" \
     --display-name="Nightjar main backend manual releases" \
     --issuer-uri="https://token.actions.githubusercontent.com" \
     --attribute-mapping="$ATTRIBUTE_MAPPING" \
-    --attribute-condition="$CONDITION" --quiet
+    --attribute-condition="$CONDITION" --quiet; then
+    echo "Provider creation returned an error; checking for an already-created provider before failing." >&2
+  fi
+fi
+
+PROVIDER_JSON=""
+for ((attempt=1; attempt<=24; attempt++)); do
+  PROVIDER_JSON="$(gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
+    --workload-identity-pool="$POOL_ID" --location=global --project="$PROJECT_ID" \
+    --format=json 2>/dev/null)" || PROVIDER_JSON=""
+  if [[ -n "$PROVIDER_JSON" ]]; then break; fi
+  if (( attempt < 24 )); then
+    echo "Waiting for Google Cloud to expose workload identity provider (attempt $attempt/24)..." >&2
+    sleep 5
+  fi
+done
+[[ -n "$PROVIDER_JSON" ]] || {
+  echo "STOP: Provider nightjar-main still unavailable; inspect IAM before retrying." >&2
+  exit 1
+}
+ACTUAL_CONDITION="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("attributeCondition", ""))' <<< "$PROVIDER_JSON")"
+ACTUAL_MAP="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("attributeMapping", {}).get("attribute.repository_id", ""))' <<< "$PROVIDER_JSON")"
+if [[ "$ACTUAL_CONDITION" != "$CONDITION" || "$ACTUAL_MAP" != "assertion.repository_id" ]]; then
+  echo "STOP: Provider exists but its trust policy does not match. Never overwrite it automatically." >&2
+  echo "Expected condition: $CONDITION" >&2
+  echo "Actual condition:   $ACTUAL_CONDITION" >&2
+  echo "Repository ID mapping: $ACTUAL_MAP" >&2
+  exit 1
 fi
 
 gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
