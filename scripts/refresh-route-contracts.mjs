@@ -23,4 +23,12 @@ assert.match(css, /\.app-shell\s*\{[^}]*overflow-x:\s*clip;[^}]*overflow-y:\s*vi
 assert.doesNotMatch(navigation, /document\.addEventListener\(['"]click['"]/, 'navigation must not globally hijack taps');
 assert.match(navigation, /behavior:\s*'instant'/, 'route changes must not animate across an endless page');
 
+const unlock = read('src/components/NightjarLaunchUnlock.tsx');
+assert.match(app, /const \[sessionHydrating, setSessionHydrating\] = useState\(true\)/, 'initial refresh must block workspace rendering');
+assert.match(app, /if \(sessionHydrating\) \{[\s\S]*?Restoring your secure session/, 'refresh must show a neutral waiting screen');
+assert.match(app, /await loadAccount\(\);[\s\S]*?const verified = await refreshAgeStatus\(\)/, 'account and age checks complete before resuming');
+assert.match(app, /setSessionHydrating\(false\)/, 'normal signed-out users are released from the wait');
+assert.match(unlock, /const timer = window\.setTimeout\(\(\) => \{\s*attemptedAutomatically\.current = true;/,
+  'biometric prompt is not lost when React StrictMode cancels effect setup');
+
 console.log('Nightjar startup, nested-route refresh and recovery contracts passed.');
