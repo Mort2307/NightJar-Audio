@@ -6,6 +6,18 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 
 type Profile = Record<string, any>;
 
+export type NightjarOnboardingFields = {
+  displayName:string;handle:string;pronouns:string;headline:string;bio:string;
+  welcomeMessage:string;favouriteTags:string[];favouriteTropes:string[];
+  favouriteCategories:string[];publicProfile:boolean;
+};
+export type NightjarOnboardingDraft = {
+  fields:NightjarOnboardingFields;stepIndex:number;revision:number;
+  updatedAt:string|null;
+};
+const getOnboardingDraftCall=httpsCallable<void,{draft:NightjarOnboardingDraft|null}>(functions,'getMyOnboardingDraft');
+const saveOnboardingDraftCall=httpsCallable<{fields:NightjarOnboardingFields;stepIndex:number;revision:number},{revision:number}>(functions,'saveMyOnboardingDraft');
+const clearOnboardingDraftCall=httpsCallable<void,{cleared:boolean}>(functions,'clearMyOnboardingDraft');
 const getMyProfileCall = httpsCallable<void, { profile: Profile | null }>(functions, 'getMyProfile');
 const saveMyProfileCall = httpsCallable<Profile, { profile: Profile | null }>(functions, 'saveMyProfile');
 const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'listCreators');
@@ -24,6 +36,15 @@ const setProfileFollowCall = httpsCallable<{ targetUserId: string; following: bo
 const setFavouriteReleaseCall = httpsCallable<{ releaseId: string; favourite: boolean }, { releaseId: string; favourite: boolean }>(functions, 'setFavouriteRelease');
 
 export const nightjarCommunity = {
+  async getOnboardingDraft(){
+    return (await getOnboardingDraftCall()).data.draft;
+  },
+  async saveOnboardingDraft(fields:NightjarOnboardingFields,stepIndex:number,revision:number){
+    return (await saveOnboardingDraftCall({fields,stepIndex,revision})).data;
+  },
+  async clearOnboardingDraft(){
+    return (await clearOnboardingDraftCall()).data.cleared;
+  },
   async getMyProfile() {
     return repairMojibakeDisplayData((await getMyProfileCall()).data);
   },
