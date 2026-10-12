@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Flag, Heart, MessageSquare, Reply, ShieldCheck, Star, ThumbsUp, Trash2, X } from 'lucide-react';
+import { MessageSquare, Reply, ShieldCheck, Star, Trash2, X } from 'lucide-react';
 import { nightjarReviews } from '../platform/firebase-reviews';
 import { nightjarEngagement } from '../platform/firebase-engagement';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
@@ -13,6 +13,7 @@ type Props = {
   viewerRole?: string | null;
   currentUserId?: string | null;
   onCommunityChanged?: (summary: { likes:number; loves:number; total:number; comments:number }) => void;
+  onOpenProfile?: (userId: string, role?: string) => void;
 };
 
 export default function ReleaseReviews({
@@ -24,6 +25,7 @@ export default function ReleaseReviews({
   viewerRole = null,
   currentUserId = null,
   onCommunityChanged,
+  onOpenProfile,
 }: Props) {
   const canCommunityInteract = viewerRole === 'listener';
   const creativeViewer = ['creator','writer','editor'].includes(String(viewerRole));
@@ -38,7 +40,11 @@ export default function ReleaseReviews({
   const dialogRef = useRef<HTMLElement | null>(null);
   const [tab, setTab] = useState<'comments' | 'reviews'>('comments');
   const [reviews, setReviews] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
-  const [community, setCommunity] = useState<any>({ comments: [], reactions: { likes:0, loves:0, total:0, myReaction:null }, canInteract:canCommunityInteract });
+  const [community, setCommunity] = useState<any>({ comments: [], reactions: { likes:0, loves:0, total:0, myReaction:null }, canInteract:canCommunityInteract, commentReactionsEnabled:false });
+  // Support old deployed Functions safely: professional posting and emoji buttons
+  // appear only after the backend explicitly advertises those capabilities.
+  const canComment = Boolean(currentUserId && (canCommunityInteract || community.canInteract === true));
+  const commentReactionsEnabled = Boolean(demoMode || community.commentReactionsEnabled === true);
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState('');
   const [comment, setComment] = useState('');
@@ -49,6 +55,7 @@ export default function ReleaseReviews({
   const [savingReview, setSavingReview] = useState(false);
   const [savingComment, setSavingComment] = useState(false);
   const [reacting, setReacting] = useState(false);
+  const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
@@ -72,7 +79,8 @@ export default function ReleaseReviews({
             { id:'demo-comment-2', userId:'demo-listener-lex', commenterName:'Lex', commenterHandle:'lexlistens', commenterRole:'listener', teamReply:false, parentCommentId:null, body:'Would absolutely listen to another episode in this series.', createdAt:new Date(Date.now()-1800000).toISOString() },
           ],
           reactions:{ likes:18, loves:37, total:55, myReaction:null },
-          canInteract:canCommunityInteract,
+          canInteract:true,
+          commentReactionsEnabled:true,
         });
         onCommunityChanged?.({ likes:18, loves:37, total:55, comments:3 });
       } else {
@@ -125,7 +133,7 @@ export default function ReleaseReviews({
 
   const submitComment = async () => {
     const body = comment.trim();
-    if (!canCommunityInteract) return notify('Listener accounts can comment on published work.');
+    if (!canComment) return notify('Sign in with a verified Nightjar account to comment.');
     if (!body) return;
     setSavingComment(true);
     try {
@@ -242,6 +250,60 @@ export default function ReleaseReviews({
     }
   };
 
+  const reactToComment = async (item:any, kind:'like'|'love') => {
+    if (!canComment || !commentReactionsEnabled) return notify('Comment reactions are not ready on this version of Nightjar yet.');
+    if (busyCommentId) return;
+    if (demoMode && !simulationMode) return notify('Demo is read-only. Start Simulation to react.');
+    setBusyCommentId(String(item.id));
+    try {
+      const nextReaction = item.myReaction === kind ? null : kind;
+      let result: { likes:number; loves:number; myReaction:'like'|'love'|null };
+      if (simulationMode) {
+        let likes = Math.max(0,Number(item.reactionLikeCount ?? 0));
+        let loves = Math.max(0,Number(item.reactionLoveCount ?? 0));
+        if (item.myReaction === 'like') likes = Math.max(0, likes - 1);
+        if (item.myReaction === 'love') loves = Math.max(0, loves - 1);
+        if (nextReaction === 'like') likes++;
+        if (nextReaction === 'love') loves++;
+        result = { likes, loves, myReaction:nextReaction };
+      } else {
+        result = await nightjarEngagement.reactToComment(String(item.id), nextReaction);
+      }
+      setCommunity((current:any) => ({
+        ...current,
+        comments:(current.comments ?? []).map((commentItem:any) => String(commentItem.id) === String(item.id)
+          ? { ...commentItem, reactionLikeCount:result.likes, reactionLoveCount:result.loves, myReaction:result.myReaction }
+          : commentItem),
+      }));
+    } catch {
+      notify('Comment reaction could not be saved.');
+    } finally {
+      setBusyCommentId(null);
+    }
+  };
+
+  const commentReactionButtons = (item:any) => commentReactionsEnabled ? (
+    <div className="release-comment-actions" aria-label="Comment reactions and moderation">
+      <button type="button" className={item.myReaction === 'like' ? 'active' : ''} aria-label={'Like comment by ' + (item.commenterName ?? 'member')} aria-pressed={item.myReaction === 'like'} disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)} onClick={() => void reactToComment(item, 'like')}>
+        <span aria-hidden="true">👍</span> <span>{Number(item.reactionLikeCount ?? 0)}</span>
+      </button>
+      <button type="button" className={item.myReaction === 'love' ? 'active' : ''} aria-label={'Heart comment by ' + (item.commenterName ?? 'member')} aria-pressed={item.myReaction === 'love'} disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)} onClick={() => void reactToComment(item, 'love')}>
+        <span aria-hidden="true">❤️</span> <span>{Number(item.reactionLoveCount ?? 0)}</span>
+      </button>
+      {currentUserId && item.userId !== currentUserId && (
+        <button type="button" className="release-comment-flag" aria-label={'Flag comment by ' + (item.commenterName ?? 'member') + ' for admin review'} onClick={() => void reportComment(item)}>
+          <span aria-hidden="true">⛳️</span> <span>Flag</span>
+        </button>
+      )}
+    </div>
+  ) : (currentUserId && item.userId !== currentUserId ? (
+    <div className="release-comment-actions">
+      <button type="button" className="release-comment-flag" aria-label={'Flag comment by ' + (item.commenterName ?? 'member') + ' for admin review'} onClick={() => void reportComment(item)}>
+        <span aria-hidden="true">⛳️</span><span>Flag</span>
+      </button>
+    </div>
+  ) : null);
+
   const reportComment = async (item:any) => {
     const reason=window.prompt('Why are you reporting this comment?') ?? '';
     if (!reason.trim()) return;
@@ -277,8 +339,8 @@ export default function ReleaseReviews({
 
       <div className="release-community-reactions">
         <div><span className="mini-label">LISTENER REACTIONS</span><strong>{community.reactions?.total ?? 0} reaction{community.reactions?.total === 1 ? '' : 's'}</strong></div>
-        <button type="button" className={community.reactions?.myReaction==='like'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('like')}><ThumbsUp size={16} fill={community.reactions?.myReaction==='like'?'currentColor':'none'}/> Like <span>{community.reactions?.likes ?? 0}</span></button>
-        <button type="button" className={community.reactions?.myReaction==='love'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('love')}><Heart size={16} fill={community.reactions?.myReaction==='love'?'currentColor':'none'}/> Love <span>{community.reactions?.loves ?? 0}</span></button>
+        <button type="button" className={community.reactions?.myReaction==='like'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('like')}><span aria-hidden="true">👍</span> Like <span>{community.reactions?.likes ?? 0}</span></button>
+        <button type="button" className={community.reactions?.myReaction==='love'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('love')}><span aria-hidden="true">❤️</span> Heart <span>{community.reactions?.loves ?? 0}</span></button>
       </div>
 
       <div className="release-community-tabs" role="tablist" aria-label="Release community sections">
@@ -287,24 +349,26 @@ export default function ReleaseReviews({
       </div>
 
       {tab==='comments' && <>
-        {canCommunityInteract && <article className="research-panel release-comment-compose">
+        {canComment && <article className="research-panel release-comment-compose">
           <span className="mini-label">JOIN THE CONVERSATION</span>
-          <p>Comments publish directly. Keep discussion about the work itself and use Report if something crosses a line.</p>
+          <p>Comments appear immediately without prior approval. Use ⛳️ Flag if something needs administrator review.</p>
           <textarea value={comment} onChange={(event)=>setComment(event.target.value)} maxLength={1200} placeholder="Comment on this published work…"/>
           <div><small>{comment.length}/1200</small><button className="primary-button" disabled={savingComment||!comment.trim()} onClick={()=>void submitComment()}>{savingComment?'Posting…':'Post comment'}</button></div>
         </article>}
         <div className="release-comment-list">
-          {loading ? <div className="people-empty">Loading comments…</div> : !topLevelComments.length ? <div className="people-empty"><MessageSquare size={18}/><strong>No comments yet.</strong><span>Listener discussion will appear here without affecting creator compensation.</span></div> : topLevelComments.map((item:any)=>{
+          {loading ? <div className="people-empty">Loading comments…</div> : !topLevelComments.length ? <div className="people-empty"><MessageSquare size={18}/><strong>No comments yet.</strong><span>Community comments will appear immediately without affecting creator compensation.</span></div> : topLevelComments.map((item:any)=>{
             const replies=repliesByParent.get(String(item.id)) ?? [];
             return <article className="release-comment-thread" key={item.id}>
               <div className="release-comment-card">
-                <div className="release-comment-head"><div><strong>{item.commenterName ?? 'Nightjar listener'}</strong><span>{item.commenterHandle ? '@'+String(item.commenterHandle).replace(/^@/,'') : 'Listener'}{item.createdAt ? ' · '+new Date(item.createdAt).toLocaleString('en-GB') : ''}</span></div><div>{currentUserId && item.userId===currentUserId ? <button className="icon-button" onClick={()=>void deleteComment(item)} aria-label="Delete your comment"><Trash2 size={13}/></button> : <button className="icon-button" onClick={()=>void reportComment(item)} aria-label="Report comment"><Flag size={13}/></button>}</div></div>
+                <div className="release-comment-head"><div>{item.userId && onOpenProfile ? <button type="button" className="release-comment-author" onClick={()=>onOpenProfile(String(item.userId),String(item.commenterRole ?? 'listener'))}>{item.commenterName ?? 'Nightjar member'}</button> : <strong>{item.commenterName ?? 'Nightjar member'}</strong>}<span>{item.commenterHandle ? '@'+String(item.commenterHandle).replace(/^@/,'') : 'Listener'}{item.createdAt ? ' · '+new Date(item.createdAt).toLocaleString('en-GB') : ''}</span></div><div>{currentUserId && item.userId===currentUserId ? <button className="icon-button" onClick={()=>void deleteComment(item)} aria-label="Delete your comment"><Trash2 size={13}/></button> : null}</div></div>
                 <p>{item.body}</p>
+                {commentReactionButtons(item)}
                 {canTeamReply && <button className="text-button release-team-reply-button" onClick={()=>{setReplyTargetId(replyTargetId===item.id?null:item.id);setReplyBody('');}}><Reply size={12}/>{replyTargetId===item.id?'Cancel reply':'Reply as work team'}</button>}
               </div>
               {!!replies.length && <div className="release-comment-replies">{replies.map((reply:any)=><article className="release-comment-card team-reply" key={reply.id}>
-                <div className="release-comment-head"><div><strong>{reply.commenterName ?? 'Nightjar work team'} <span className="work-team-badge"><ShieldCheck size={10}/> Work team · {reply.commenterRole === 'editor' ? 'Audio Editor' : reply.commenterRole === 'writer' ? 'Writer' : 'Creator'}</span></strong><span>{reply.commenterHandle ? '@'+String(reply.commenterHandle).replace(/^@/,'') : 'Nightjar professional'}{reply.createdAt ? ' · '+new Date(reply.createdAt).toLocaleString('en-GB') : ''}</span></div><div>{currentUserId && reply.userId===currentUserId ? <button className="icon-button" onClick={()=>void deleteComment(reply)} aria-label="Delete your reply"><Trash2 size={13}/></button> : <button className="icon-button" onClick={()=>void reportComment(reply)} aria-label="Report reply"><Flag size={13}/></button>}</div></div>
+                <div className="release-comment-head"><div><strong>{reply.userId && onOpenProfile ? <button type="button" className="release-comment-author" onClick={()=>onOpenProfile(String(reply.userId),String(reply.commenterRole ?? 'creator'))}>{reply.commenterName ?? 'Nightjar work team'}</button> : (reply.commenterName ?? 'Nightjar work team')} <span className="work-team-badge"><ShieldCheck size={10}/> Work team · {reply.commenterRole === 'editor' ? 'Audio Editor' : reply.commenterRole === 'writer' ? 'Writer' : 'Creator'}</span></strong><span>{reply.commenterHandle ? '@'+String(reply.commenterHandle).replace(/^@/,'') : 'Nightjar professional'}{reply.createdAt ? ' · '+new Date(reply.createdAt).toLocaleString('en-GB') : ''}</span></div><div>{currentUserId && reply.userId===currentUserId ? <button className="icon-button" onClick={()=>void deleteComment(reply)} aria-label="Delete your reply"><Trash2 size={13}/></button> : null}</div></div>
                 <p>{reply.body}</p>
+                {commentReactionButtons(reply)}
               </article>)}</div>}
               {replyTargetId===item.id && <div className="release-team-reply-compose">
                 <div><ShieldCheck size={14}/><span>Your reply will be labelled as coming from the credited work team.</span></div>
