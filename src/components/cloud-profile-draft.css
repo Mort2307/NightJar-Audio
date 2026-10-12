@@ -1,0 +1,10 @@
+.nj-cloud-profile-draft,.nj-cloud-draft-status{display:flex;flex-wrap:wrap;align-items:center;gap:9px 13px;padding:13px 17px;border-radius:14px;border:1px solid rgba(214,183,209,.24);background:rgba(124,83,113,.10);font-size:13px;color:#dfd0dc;line-height:1.5;}
+.nj-cloud-profile-draft{margin:14px 0;}
+.nj-cloud-profile-draft svg{flex-shrink:0;color:#d6bacf;}
+.nj-cloud-profile-draft>span,.nj-cloud-draft-status>span{flex:1;min-width:175px;}
+.nj-cloud-profile-draft.is-conflict{border-color:rgba(244,194,111,.5);}
+.nj-cloud-draft-choices,.nj-cloud-draft-conflict{display:flex;flex-wrap:wrap;gap:8px;width:100%;}
+.nj-cloud-draft-choices button,.nj-cloud-draft-conflict button{min-height:42px;}
+.nj-cloud-draft-status{margin:6px 0 12px;}
+.nj-cloud-draft-loading{color:var(--muted);font-size:14px;line-height:1.6;padding:12px 0;}
+@media(max-width:600px){.nj-cloud-profile-draft,.nj-cloud-draft-status{padding:12px;font-size:12px;}.nj-cloud-draft-choices button,.nj-cloud-draft-conflict button{width:100%;justify-content:center;}}
