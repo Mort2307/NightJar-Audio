@@ -1278,6 +1278,9 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     listenerCommunityStyle: cleanStringList(input.listenerCommunityStyle, 12),
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
+    // Explicitly persist "Finish later" across sign-ins and devices; ordinary
+    // unrelated saves must never silently erase a previous dismissal.
+    ...(typeof input.onboardingDismissed === 'boolean' ? { onboardingDismissed: input.onboardingDismissed } : {}),
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
     updatedAt: FieldValue.serverTimestamp(),
   };
