@@ -16,6 +16,7 @@ const finalizeAudioCall = httpsCallable<{ releaseId: string; storagePath: string
 const removeAudioCall = httpsCallable<{ releaseId: string }, { removed: boolean }>(functions, 'removeReleaseAudio');
 const submitReleaseCall = httpsCallable<{ releaseId: string }, { release: any }>(functions, 'submitReleaseForModeration');
 const dashboardCall = httpsCallable<{ creatorUserId?: string }, { releases: any[]; metrics: any }>(functions, 'creatorDashboard');
+const listenCountsCall = httpsCallable<void, { counts: { releaseId: string; listens: number }[]; refreshedAt: string }>(functions, 'getReleaseListenCounts');
 const playbackCall = httpsCallable<{ releaseId: string }, { releaseId: string; url: string; expiresInSeconds: number; accessReason: 'admin' | 'credited_work' | 'subscription' }>(functions, 'getReleasePlaybackUrl');
 const transcriptCall = httpsCallable<{ releaseId: string }, {
   releaseId: string;
@@ -94,6 +95,10 @@ export const nightjarCatalogue = {
 
   async dashboard(creatorUserId?: string) {
     return repairMojibakeDisplayData((await dashboardCall(creatorUserId ? { creatorUserId } : {})).data);
+  },
+
+  async listenCounts() {
+    return (await listenCountsCall()).data;
   },
 
   async playback(releaseId: string) {

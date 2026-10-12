@@ -4634,6 +4634,8 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   communityLoveCount: Math.max(0, Number(data.communityLoveCount ?? 0)),
   communityReactionCount: Math.max(0, Number(data.communityReactionCount ?? 0)),
   communityCommentCount: Math.max(0, Number(data.communityCommentCount ?? 0)),
+  // Denormalised server-qualified listens. Never count Play-button presses.
+  listenCount: Math.max(0, Math.floor(Number(data.listenCount ?? 0))),
   releaseDate: toIso(data.releaseDate),
   scheduledAt: cleanText(data.scheduledAt, 40) || null,
   scheduledTimeZone: cleanText(data.scheduledTimeZone, 100) || null,
@@ -4757,6 +4759,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     transcriptAccessibilityReviewed: input.transcriptAccessibilityReviewed === true,
     transcriptUpdatedAt: cleanReleaseTranscript(input.transcriptText) ? FieldValue.serverTimestamp() : null,
     durationMinutes: 0,
+    listenCount: 0,
     audioStoragePath: null,
     artworkAssetId: null,
     artworkUrl: null,
@@ -5055,6 +5058,7 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
   const verified = calculateVerifiedListening(listeningSnapshot.docs.map((doc) => doc.data()));
   const listeningSeconds = verified.byCreator.get(targetCreatorId) ?? 0;
   const listeners = verified.listenersByCreator.get(targetCreatorId) ?? new Set<string>();
+  const qualifiedListens = releases.reduce((sum, release) => sum + release.listenCount, 0);
 
   return {
     releases,
@@ -5063,6 +5067,7 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
       drafts: releases.filter((release) => release.status !== 'released').length,
       verifiedListeningMinutes: Math.round((listeningSeconds / 60) * 10) / 10,
       uniqueListeners: listeners.size,
+      qualifiedListens,
     },
   };
 });
@@ -5564,6 +5569,75 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
   return { release: releasePayload(saved.data() ?? {}, releaseId) };
 });
 
+// A qualified listen is 30 seconds of plausible, forward playback (or half of a
+// shorter release, minimum five seconds). One listener/release can contribute
+// at most one count per 30 minutes. The server checks elapsed time and a
+// playback grant, so pressing Play, seeking, reloading or retrying is not enough.
+// The event history remains the source for verified listening MINUTES.
+const QUALIFIED_LISTEN_COOLDOWN_MS = 30 * 60 * 1000;
+const creditQualifiedListen = async (input: {
+  userId: string; releaseId: string; sessionId: string;
+  eventType: string; positionSeconds: number; durationSeconds: number;
+}) => {
+  const now = Date.now();
+  const releaseDocument = releaseRef(input.releaseId);
+  const sessionDocument = releaseDocument.collection('listenerSessions').doc(input.userId);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(sessionDocument);
+    const previous = snapshot.data() ?? {};
+    const lastCountedAtMs = Math.max(0, Number(previous.lastCountedAtMs ?? 0));
+    if (previous.sessionId !== input.sessionId) {
+      // A progress-only request may not invent a listening session.
+      if (input.eventType !== 'start') return false;
+      transaction.set(sessionDocument, {
+        sessionId: input.sessionId,
+        lastPositionSeconds: input.positionSeconds,
+        lastEventAtMs: now,
+        progressSeconds: 0,
+        qualified: false,
+        lastCountedAtMs,
+      }, { merge: true });
+      return false;
+    }
+    if (input.eventType === 'start' || previous.qualified === true) return false;
+    const elapsed = (now - Number(previous.lastEventAtMs ?? now)) / 1000;
+    const forward = Math.max(0, input.positionSeconds - Number(previous.lastPositionSeconds ?? 0));
+    // 15-second client progress cadence: cap each contribution, reject huge
+    // seek jumps, clock reversals and long pauses without a progress signal.
+    const increment = elapsed > 0 && elapsed <= 90
+      ? Math.min(forward, elapsed + 2, 20)
+      : 0;
+    const progressSeconds = Math.max(0, Number(previous.progressSeconds ?? 0)) + increment;
+    const threshold = input.durationSeconds > 0 && Number.isFinite(input.durationSeconds)
+      ? Math.min(30, Math.max(5, input.durationSeconds * 0.5))
+      : 30;
+    const qualified = progressSeconds >= threshold
+      && (lastCountedAtMs === 0 || now - lastCountedAtMs >= QUALIFIED_LISTEN_COOLDOWN_MS);
+    transaction.set(sessionDocument, {
+      lastPositionSeconds: input.positionSeconds,
+      lastEventAtMs: now,
+      progressSeconds,
+      qualified,
+      ...(qualified ? { lastCountedAtMs: now } : {}),
+    }, { merge: true });
+    if (qualified) transaction.update(releaseDocument, { listenCount: FieldValue.increment(1) });
+    return qualified;
+  });
+};
+
+export const getReleaseListenCounts = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('releases').where('status', '==', 'released').limit(500).get();
+  return {
+    counts: snapshot.docs.map((doc) => ({
+      releaseId: doc.id,
+      listens: Math.max(0, Math.floor(Number(doc.data().listenCount ?? 0))),
+    })),
+    refreshedAt: new Date().toISOString(),
+  };
+});
+
 export const recordListeningEvent = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -5600,6 +5674,22 @@ export const recordListeningEvent = onCall({ region: REGION }, async (request) =
     createdAt: FieldValue.serverTimestamp(),
   };
   await db.collection('listeningEvents').add(event);
+  let qualifiedListen = false;
+  const sessionId = cleanText(input.sessionId, 80);
+  const isCreditedContributor = normaliseReleaseContributors(releaseData.contributors)
+    .some((credit) => credit.userId === identity.uid);
+  if (['start', 'progress', 'complete'].includes(eventType)
+    && /^[A-Za-z0-9-]{8,80}$/.test(sessionId)
+    && !identity.admin && releaseData.creatorUserId !== identity.uid && !isCreditedContributor) {
+    qualifiedListen = await creditQualifiedListen({
+      userId: identity.uid,
+      releaseId,
+      sessionId,
+      eventType,
+      positionSeconds: Number.isFinite(event.positionSeconds) ? event.positionSeconds : 0,
+      durationSeconds: Number.isFinite(event.durationSeconds) ? event.durationSeconds : 0,
+    });
+  }
 
   await accountRef(identity.uid).collection('tasteEvents').add({
     type: eventType,
@@ -5609,7 +5699,7 @@ export const recordListeningEvent = onCall({ region: REGION }, async (request) =
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  return { recorded: true };
+  return { recorded: true, qualifiedListen };
 });
 
 export const listeningResume = onCall({ region: REGION }, async (request) => {
@@ -5716,19 +5806,16 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
 export const trendingReleases = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [releasesSnapshot, listeningSnapshot, subscription] = await Promise.all([
+  const [releasesSnapshot, subscription] = await Promise.all([
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
-    db.collection('listeningEvents').limit(5000).get(),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
-  const counts = new Map<string, number>();
-  for (const doc of listeningSnapshot.docs) {
-    const releaseId = cleanText(doc.data().releaseId, 160);
-    if (releaseId) counts.set(releaseId, (counts.get(releaseId) ?? 0) + 1);
-  }
+  // Trending and creator statistics must use the same qualified-listen
+  // definition. Raw progress telemetry must not make a release "popular".
   const trending = releasesSnapshot.docs
-    .map((doc) => ({ ...decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }), listeningEvents: counts.get(doc.id) ?? 0 }))
-    .sort((a, b) => b.listeningEvents - a.listeningEvents)
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }))
+    .sort((a, b) => (b.listenCount - a.listenCount)
+      || String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')))
     .slice(0, 24);
   return { trending };
 });
