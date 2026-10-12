@@ -168,11 +168,10 @@ const onAttentionWrite = (category: Category, collection: string) =>
           (role: string) => !Array.isArray(after?.approvedRoles) || !after?.approvedRoles.includes(role),
         ).sort().join(',')
       : '';
-    // Re-submissions after a completed review must produce a fresh alert.
-    // Stable event timestamps keep retries of the same write deduplicated.
-    const stamp = after?.submittedAt ?? after?.bankedAt ?? after?.updatedAt ?? after?.createdAt;
-    const revision = typeof stamp?.toMillis === 'function' ? String(stamp.toMillis()) : '';
-    const key = category + ':' + recordId + ':' + extra + ':' + revision;
+    // Firestore event IDs remain stable across retries of one write, but change
+    // for a genuinely new submission. Timestamp-based keys could permanently
+    // hide a re-submission when an older submittedAt value was retained.
+    const key = category + ':' + recordId + ':' + extra + ':' + event.id;
     await Promise.all(ADMIN_EMAILS.map(async email => {
       try {
         const owner = await getAuth().getUserByEmail(email);

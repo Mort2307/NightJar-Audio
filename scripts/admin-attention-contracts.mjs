@@ -35,6 +35,9 @@ assert.match(workflow,/workflow_dispatch:/,'Backend needs explicit manual deploy
 assert.match(workflow,/DEPLOY-NIGHTJAR/,'Backend production deploy requires confirmation');
 assert.match(backend,/onDocumentWritten\(/,'Admin attention must monitor real data writes');
 assert.match(backend,/if \(!newAttention\(category, before, after\)\) return;/,'Pending edits must not re-notify');
+assert.match(backend,/const key = category \+ ':' \+ recordId \+ ':' \+ extra \+ ':' \+ event\.id;/,'Firestore retry uses stable event IDs but new submissions get fresh alerts');
+assert.match(index,/identity\.admin \|\| item\.type !== 'admin_attention'/,'Old admin-only notifications cannot leak to members');
+assert.match(app,/\[user\?\.userId, canAdmin\]/,'Foreground push deep links refresh when admin access resolves');
 assert.match(backend,/await notificationRef\.create\(/,'Attention alerts should be idempotent');
 assert.match(backend,/!owner\.emailVerified/,'Only verified admin identities may receive alerts');
 assert.match(backend,/getAuth\(\)\.getUserByEmail\(email\)/,'Admin list must be resolved from Auth');

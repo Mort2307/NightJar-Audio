@@ -1221,7 +1221,7 @@ function App() {
       unsubscribeForeground?.();
       navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
     };
-  }, [user?.userId]);
+  }, [user?.userId, canAdmin]);
 
   // NIGHTJAR_ROUTE_SCROLL_RESET: reset only after the newly selected route/profile has rendered.
   useEffect(() => {
