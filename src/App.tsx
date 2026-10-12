@@ -4633,7 +4633,7 @@ function App() {
             <div className="page-heading premium-profile-page-heading">
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
               <div className="profile-heading-actions">
-                {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole)}>View my public profile</button>}
+                {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole ?? undefined)}>View my public profile</button>}
                 {user?.userId && profile.publicProfile !== false && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && !demoMode && <button type="button" className="secondary-button" onClick={()=>void shareNightjarProfile({
                   url:publicProfileUrl(window.location.origin,user.userId,effectiveRole as ShareableProfileRole),
                   name:String(profile.displayName || user.name || 'Nightjar creator'),
