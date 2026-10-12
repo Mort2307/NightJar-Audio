@@ -50,7 +50,7 @@ assert.match(live, /readOnlyPreview/, 'live preview cannot create interest\/coll
 assert.match(marketplace, /if \(readOnlyPreview\)/, 'runtime checks forbid read-only preview writes');
 assert.match(marketplace, /Preview only — enquiry disabled/, 'interactions visibly disabled');
 assert.match(backend, /export const adminPreviewScriptMarketplace = onCall/, 'admin-only availability diagnostic is implemented');
-assert.match(backend, /listing\.visibility === 'marketplace' && \['Approved','Published'\]\.includes\(status\)/, 'diagnostic matches marketplace discoverability');
+assert.match(backend, /listing\.visibility === 'marketplace' && Boolean\(listing\.synopsis\.trim\(\)\) && \['Approved','Published'\]\.includes\(status\)/, 'diagnostic matches marketplace discoverability');
 assert.match(backend, /No protected script text is included/, 'privacy requirement documented in diagnostic');
 assert.match(css, /\.admin-member-multi-role-options/, 'checkboxes are styled for touch');
 assert.match(css, /\.admin-live-preview/, 'preview remains responsive');

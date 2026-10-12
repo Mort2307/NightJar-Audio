@@ -6755,6 +6755,87 @@ export const adminListScripts = onCall({ region: REGION }, async (request) => {
   };
 });
 
+// Administrators must be able to read an uploaded manuscript before approving it.
+// Never include protected contents in adminListScripts or the public marketplace.
+// These signed links expire quickly and every preview is audited.
+export const getAdminScriptReview = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const scriptId = cleanText((request.data as {scriptId?:unknown}|undefined)?.scriptId, 160);
+  if (!scriptId) throw new HttpsError('invalid-argument', 'Choose a script to review.');
+  const snapshot = await scriptRef(scriptId).get();
+  const data = snapshot.data();
+  if (!data) throw new HttpsError('not-found', 'Script not found.');
+  await db.collection('protectionEvents').add({
+    userId:admin.uid,eventType:'script_moderation_preview',relatedType:'script',relatedId:scriptId,
+    summary:'Administrator accessed protected source for manuscript moderation.',createdAt:FieldValue.serverTimestamp(),
+  });
+  const sourcePath = cleanText(data.originalUpload?.storagePath,500);
+  let sourceFile:null|{fileName:string;url:string;expiresAt:string} = null;
+  if (sourcePath) {
+    const expiration = new Date(Date.now()+10*60*1000);
+    const [url] = await getStorage().bucket().file(sourcePath).getSignedUrl({action:'read',expires:expiration});
+    sourceFile={fileName:cleanText(data.originalUpload?.fileName,180)||'Uploaded manuscript',url,expiresAt:expiration.toISOString()};
+  }
+  return { script:scriptPayload(data,scriptId,true),sourceFile };
+});
+
+// Editorial review is optional production assistance, never a prerequisite for
+// making a writer-approved manuscript discoverable to Nightjar voice actors.
+// The Writer alone controls marketplace visibility and synopsis; admin approval
+// cannot change a private manuscript into a public listing.
+export const adminReviewWriterScript = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const decision = cleanText(input.decision, 30);
+  const note = cleanText(input.note, 2000);
+  if (!scriptId || !['approved','changes','rejected'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'Select a submitted manuscript and a valid moderation decision.');
+  }
+  if (decision !== 'approved' && !note) {
+    throw new HttpsError('invalid-argument', 'Explain the requested changes or rejection to the Writer.');
+  }
+  const ref = scriptRef(scriptId);
+  const result = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.data();
+    if (!data) throw new HttpsError('not-found', 'Manuscript not found.');
+    if (!['Submitted','Under review'].includes(String(data.status ?? ''))) {
+      throw new HttpsError('failed-precondition', 'Only submitted manuscripts awaiting a decision can be reviewed.');
+    }
+    const rights = normaliseScriptRights(data.rights);
+    if (decision === 'approved' && (rights.ownershipAttested !== true || rights.contributorPermissionsConfirmed !== true)) {
+      throw new HttpsError('failed-precondition', 'Writer rights and contributor permissions must be confirmed before approval.');
+    }
+    if (decision === 'approved' && !cleanText(data.content, 200000) && !cleanText(data.originalUpload?.storagePath, 500)) {
+      throw new HttpsError('failed-precondition', 'There is no protected manuscript to approve.');
+    }
+    const nextStatus = decision === 'approved' ? 'Approved' : decision === 'changes' ? 'Revision requested' : 'Rejected';
+    const listing = normaliseScriptMarketplace(data.marketplace);
+    const marketplaceVisible = decision === 'approved' && listing.visibility === 'marketplace' && Boolean(listing.synopsis.trim());
+    transaction.set(ref, {
+      status:nextStatus,
+      lastEditorialComment:note || null,
+      reviewedBy:admin.uid,
+      reviewedAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp(),
+    }, {merge:true});
+    return {writerUserId:String(data.writerUserId ?? ''),title:cleanText(data.title,180),nextStatus,marketplaceVisible};
+  });
+  if (result.writerUserId) {
+    await createNotification(result.writerUserId, {
+      type:'editorial', subtype:'script_review',
+      title:result.nextStatus === 'Approved' ? 'Your manuscript has been approved' : result.nextStatus === 'Revision requested' ? 'Nightjar has requested manuscript changes' : 'Nightjar manuscript review completed',
+      message:result.nextStatus === 'Approved'
+        ? result.marketplaceVisible ? 'Your manuscript synopsis is now listed in the Creator Script Marketplace. The full manuscript remains protected.' : 'Your manuscript is approved. Open Writer Studio to choose Marketplace visibility and add a synopsis when you want creators to discover it.'
+        : note,
+      scriptId,
+    }).catch((error)=>console.warn('Script review notification failed',error));
+  }
+  const saved = await ref.get();
+  return {script:scriptPayload(saved.data() ?? {},scriptId,false),marketplaceVisible:result.marketplaceVisible};
+});
+
 export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -7894,10 +7975,11 @@ export const adminPreviewScriptMarketplace = onCall({ region: REGION }, async (r
     const data = doc.data() ?? {};
     const listing = normaliseScriptMarketplace(data.marketplace);
     const status = cleanText(data.status, 50) || 'Draft';
-    const visible = listing.visibility === 'marketplace' && ['Approved','Published'].includes(status);
+    const visible = listing.visibility === 'marketplace' && Boolean(listing.synopsis.trim()) && ['Approved','Published'].includes(status);
     const reasons = [
       ...(!['Approved','Published'].includes(status) ? ['Not approved or published'] : []),
       ...(listing.visibility !== 'marketplace' ? ['Not listed in the marketplace'] : []),
+      ...(listing.visibility === 'marketplace' && !listing.synopsis.trim() ? ['Public synopsis is missing'] : []),
     ];
     return {
       id: doc.id,
@@ -7912,7 +7994,7 @@ export const adminPreviewScriptMarketplace = onCall({ region: REGION }, async (r
     diagnostics,
     eligible: diagnostics.filter((entry) => entry.visibleToProfessionals).length,
     total: diagnostics.length,
-    rule: 'Approved or Published AND marketplace visibility. No protected script text is included.',
+    rule: 'Approved or Published AND Writer-selected marketplace visibility AND public synopsis. No protected script text is included.',
   };
 });
 
@@ -7923,7 +8005,7 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
   const scripts = (await Promise.all(snapshot.docs
     .filter((doc) => {
       const listing = normaliseScriptMarketplace(doc.data().marketplace);
-      return listing.visibility === 'marketplace' && ['Approved','Published'].includes(String(doc.data().status ?? ''));
+      return listing.visibility === 'marketplace' && Boolean(listing.synopsis.trim()) && ['Approved','Published'].includes(String(doc.data().status ?? ''));
     })
     .map(async (doc) => {
       const data = doc.data();
