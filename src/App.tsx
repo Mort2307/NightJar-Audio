@@ -4250,8 +4250,8 @@ function App() {
                 <div className="featured-card">
                   {featured ? <>
                     <div className="featured-top"><span className="mini-label">NIGHTJAR / FEATURED</span><span className="status-dot"><span /> LIVE RELEASE</span></div>
-                    <div className="cover-art" style={featured.artworkUrl ? { backgroundImage: 'url("' + featured.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
-                      {!featured.artworkUrl && <div className="cover-crescent"><Moon size={54} /></div>}
+                    <div className="cover-art release-cover">
+                      <ReleaseCoverVisual artworkUrl={featured.artworkUrl} brandLogoUrl={logoUrl ?? '/brand-logo'} />
                       <span>{featured.title.toUpperCase()}</span>
                       <small>{featured.creator}</small>
                     </div>
@@ -4290,7 +4290,7 @@ function App() {
                 <select value={catalogueDuration} onChange={(event)=>setCatalogueDuration(event.target.value)} aria-label="Audio duration"><option value="all">Any length</option><option value="short">Under 10 min</option><option value="medium">10–24 min</option><option value="full">25–44 min</option><option value="long">45+ min</option></select>
               </div>
               <div className="track-grid">
-                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />)}
+                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} brandLogoUrl={logoUrl ?? '/brand-logo'} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />)}
                 {!filteredTracks.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
               </div>
             </section>
@@ -4306,7 +4306,7 @@ function App() {
 ].map(([value,label])=><button type="button" key={value || 'open'} className={currentIntent===value?'active':''} aria-pressed={currentIntent===value} onClick={()=>setCurrentIntent(value)}>{label}</button>)}</div></div>
               <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
               <div className="track-grid">
-                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
+                {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} brandLogoUrl={logoUrl ?? '/brand-logo'} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
                 {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
               </div>
             </section>
@@ -4314,7 +4314,7 @@ function App() {
             <section className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
               <div className="track-grid">
-                {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />; })}
+                {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} brandLogoUrl={logoUrl ?? '/brand-logo'} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />; })}
                 {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
               </div>
             </section>
@@ -5322,11 +5322,28 @@ function releaseToTrack(release: any): Track {
   };
 }
 
-function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, onRead, onFavourite, onReaction, onCommunity, reason }: { track: Track; playing: boolean; favourite: boolean; reaction: ReleaseReaction; canReact: boolean; onPlay: (track: Track) => void; onRead: (track: Track) => void; onFavourite: () => void; onReaction: (reaction: Exclude<ReleaseReaction,null>) => void; onCommunity: () => void; reason?: string }) {
+function ReleaseCoverVisual({ artworkUrl, brandLogoUrl }: { artworkUrl?: string | null; brandLogoUrl: string }) {
+  const [artworkFailed, setArtworkFailed] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => setArtworkFailed(false), [artworkUrl]);
+  useEffect(() => setLogoFailed(false), [brandLogoUrl]);
+
+  return artworkUrl?.trim() && !artworkFailed ? (
+    <img className="release-cover-media" src={artworkUrl} alt="" loading="lazy" onError={() => setArtworkFailed(true)} />
+  ) : (
+    <div className="release-cover-brand" aria-hidden="true">
+      {logoFailed
+        ? <span className="release-cover-wordmark">NIGHTJAR</span>
+        : <img className="release-cover-brand-logo" src={brandLogoUrl} alt="" loading="lazy" onError={() => setLogoFailed(true)} />}
+    </div>
+  );
+}
+
+function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, onRead, onFavourite, onReaction, onCommunity, reason, brandLogoUrl }: { track: Track; playing: boolean; favourite: boolean; reaction: ReleaseReaction; canReact: boolean; onPlay: (track: Track) => void; onRead: (track: Track) => void; onFavourite: () => void; onReaction: (reaction: Exclude<ReleaseReaction,null>) => void; onCommunity: () => void; reason?: string; brandLogoUrl: string }) {
   return <article className="track-card">
-    <div className="track-cover" style={track.artworkUrl ? { backgroundImage: 'url("' + track.artworkUrl + '")', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
+    <div className="track-cover release-cover">
+      <ReleaseCoverVisual artworkUrl={track.artworkUrl} brandLogoUrl={brandLogoUrl} />
       <span className="track-index">{track.category}</span>
-      {!track.artworkUrl && <div className="track-cover-mark"><Moon size={22} /></div>}
       <button className="cover-play" disabled={!track.audioAvailable && !track.audioUrl} onClick={() => onPlay(track)} aria-label={!track.audioAvailable && !track.audioUrl ? 'Audio not connected' : playing ? 'Pause ' + track.title : 'Play ' + track.title}>
         {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
       </button>
