@@ -113,5 +113,26 @@ assert.match(app,/Resume profile setup/,
   'member can reopen setup intentionally from their profile');
 assert.match(server,/typeof input\.onboardingDismissed === 'boolean'/,
   'server persists dismissal without erasing it during unrelated saves');
+assert.match(server,/export const getMyOnboardingDraft = onCall/,
+  'member can restore cloud-stored personal setup on another device');
+assert.match(server,/export const saveMyOnboardingDraft = onCall/,
+  'member has an account-owned cloud draft writer');
+assert.match(server,/current!==revision/,
+  'an old device cannot overwrite a newer cloud draft');
+assert.match(server,/privateDrafts'\)\.doc\('onboarding'/,
+  'onboarding drafts use private account-scoped storage');
+assert.match(onboarding,/nightjarCommunity\.getOnboardingDraft\(\)/,
+  'mobile form restores cloud details and the last completed step');
+assert.match(onboarding,/nightjarCommunity\.saveOnboardingDraft\(fields,index,revisionRef\.current\)/,
+  'mobile form autosaves with expected cloud revision');
+assert.match(onboarding,/setStepIndex\(draft\.stepIndex\)/,
+  'member resumes at the same onboarding step');
+assert.match(onboarding,/setTimeout\(\(\)=>\{void persistDraft/,
+  'form autosaves after changes rather than requiring a laptop');
+assert.match(onboarding,/Saved across devices/,
+  'member can tell when the edits are actually synced');
+assert.match(onboarding,/syncStatus==='conflict'/,
+  'stale device conflicts are exposed, never silently overwritten');
+
 
 console.log('Nightjar mobile dock, save-bar visibility and responsive touch-feedback contracts passed.');
