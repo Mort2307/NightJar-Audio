@@ -179,7 +179,7 @@ jobs:
             admin-attention)
               # Deliberately fixed set of owner-only callables and event listeners.
               # Never deploy other backend functions from this release preset.
-              DEPLOY_SCOPE="functions:getAdminAttentionPreferences,functions:saveAdminAttentionPreferences,functions:adminAttentionProfessionalApplications,functions:adminAttentionReleases,functions:adminAttentionScripts,functions:adminAttentionImages,functions:adminAttentionReviews,functions:adminAttentionEditorPortfolio,functions:adminAttentionReports,functions:adminAttentionSecurity,functions:adminAttentionSuggestions,functions:adminAttentionBilling" ;;
+              DEPLOY_SCOPE="functions:getAdminAttentionPreferences,functions:saveAdminAttentionPreferences,functions:adminAttentionProfessionalApplications,functions:adminAttentionReleases,functions:adminAttentionScripts,functions:adminAttentionImages,functions:adminAttentionReviews,functions:adminAttentionEditorPortfolio,functions:adminAttentionReports,functions:adminAttentionSecurity,functions:adminAttentionSuggestions,functions:adminAttentionBilling,functions:listNotifications" ;;
             all-backend)
               DEPLOY_SCOPE="functions,firestore,storage" ;;
             *)
