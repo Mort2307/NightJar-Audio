@@ -4813,6 +4813,8 @@ function App() {
                 onOpenImages={() => openAdminPanel('images')}
                 onOpenApplications={() => openAdminPanel('approvals')}
                 onOpenAppUpdates={() => navigate('settings')}
+                onOpenFinance={() => openAdminWorkspace('finance')}
+                onOpenLegalReadiness={() => document.querySelector<HTMLElement>('.admin-legal-readiness')?.scrollIntoView({ behavior:'instant', block:'start' })}
               />
             </Suspense>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
