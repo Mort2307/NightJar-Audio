@@ -452,6 +452,7 @@ function App() {
   const [liveRoleMenuOpen, setLiveRoleMenuOpen] = useState(false);
   const liveRoleMenuRef = useRef<HTMLDivElement | null>(null);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
+  const [sessionHydrating, setSessionHydrating] = useState(true);
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
@@ -890,12 +891,16 @@ function App() {
     let cancelled = false;
     const unsubscribe = nightjarAuth.observe((identity) => {
       if (cancelled) return;
+      setSessionHydrating(true);
       if (!identity) {
         setDemoMode(false);
         setSimulationMode(false);
         setPreviewRole(null);
         setUser(null);
         setRole(null);
+        setAgeVerified(false);
+        setAgeStage('gate');
+        setSessionHydrating(false);
         return;
       }
 
@@ -907,13 +912,23 @@ function App() {
 
       if (!identity.emailVerified) {
         setAgeStage('gate');
+        setSessionHydrating(false);
         return;
       }
 
       void (async () => {
-        await loadAccount();
-        const verified = await refreshAgeStatus();
-        if (!verified) setAgeStage('assurance');
+        try {
+          await loadAccount();
+          // A stale backend callback cannot release a new/signed-out session.
+          if (cancelled || nightjarAuth.current()?.userId !== identity.userId) return;
+          const verified = await refreshAgeStatus();
+          if (cancelled || nightjarAuth.current()?.userId !== identity.userId) return;
+          if (!verified) setAgeStage('assurance');
+        } finally {
+          if (!cancelled && nightjarAuth.current()?.userId === identity.userId) {
+            setSessionHydrating(false);
+          }
+        }
       })();
     });
 
@@ -3755,6 +3770,15 @@ function App() {
     void loadAdminOverview();
     notify('Returned to Administrator view.');
   };
+
+  if (sessionHydrating) {
+    return <main className="access-shell" role="status" aria-live="polite">
+      <section className="access-card nj-launch-unlock-waiting">
+        <span className="brand-lockup"><img className="brand-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar"/> NIGHTJAR</span>
+        <p className="access-lede">Restoring your secure session and checking account access…</p>
+      </section>
+    </main>;
+  }
 
   if (ageStage === 'gate') {
     return (
