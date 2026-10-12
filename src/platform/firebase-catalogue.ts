@@ -101,7 +101,7 @@ export const nightjarCatalogue = {
   },
 
   async transcript(releaseId: string) {
-    return (await transcriptCall({ releaseId })).data;
+    return repairMojibakeDisplayData((await transcriptCall({ releaseId })).data);
   },
 
   async moderationQueue() {
