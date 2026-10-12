@@ -9,5 +9,7 @@ assert.match(src, /releaseDistributionConfirmed: cleanReleaseDistribution\(input
 assert.match(src, /export const updateRelease = onCall[\s\S]*?releaseDistributionConfirmed:/);
 assert.match(src, /export const submitReleaseForModeration = onCall[\s\S]*?code:'release_distribution_unconfirmed'/);
 assert.match(src, /nightjarOriginal:decision === 'approved' \? nightjarOriginal/);
+assert.match(src, /code:'nightjar_original_commission_unconfirmed'/);
+assert.doesNotMatch(src, /value === 'nightjar_exclusive'/);
 assert.match(src, /\/\/ A transcript is encouraged, not a publishing prerequisite/);
 console.log('Release distribution backend contract PASS: standard and Nightjar First (no exclusivity); attestation; paid Original gate.');
