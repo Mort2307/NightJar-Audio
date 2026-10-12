@@ -1,0 +1,63 @@
+# Nightjar PR previews only: never deploy untrusted forks with production credentials.
+name: Deploy to Firebase Hosting on PR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: nightjar-hosting-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_preview:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Firebase Web Push VAPID is a PUBLIC key, but must be embedded by Vite at build time.
+      VITE_FIREBASE_VAPID_KEY: ${{ vars.VITE_FIREBASE_VAPID_KEY || secrets.VITE_FIREBASE_VAPID_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify Firebase Web Push build configuration
+        shell: bash
+        run: |
+          if [[ ! "$VITE_FIREBASE_VAPID_KEY" =~ ^[A-Za-z0-9_-]{80,110}$ ]]; then
+            echo "::error::VITE_FIREBASE_VAPID_KEY is missing or invalid. Configure the PUBLIC VAPID key in GitHub Actions Variables before merging."
+            exit 1
+          fi
+
+      - name: Install and validate
+        run: npm ci --no-fund && npm run validate
+
+      - name: Deploy Hosting preview
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NIGHTJAR_AUDIO }}
+          expires: 7d
+          projectId: nightjar-audio
+
+      - name: Summarise preview
+        if: success()
+        env:
+          PREVIEW_URLS: ${{ steps.deploy.outputs.urls }}
+        run: |
+          echo "### Nightjar Firebase Hosting preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: $PREVIEW_URLS" >> "$GITHUB_STEP_SUMMARY"

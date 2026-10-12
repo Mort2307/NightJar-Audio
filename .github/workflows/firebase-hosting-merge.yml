@@ -1,0 +1,73 @@
+# Production Hosting only. Backend resources require a separate approved workflow.
+name: Deploy to Firebase Hosting on merge
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightjar-hosting-live
+  cancel-in-progress: false
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Use a GitHub Actions repository variable (preferred) or secret for this PUBLIC VAPID key.
+      VITE_FIREBASE_VAPID_KEY: ${{ vars.VITE_FIREBASE_VAPID_KEY || secrets.VITE_FIREBASE_VAPID_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Protect production push notifications
+        shell: bash
+        run: |
+          if [[ ! "$VITE_FIREBASE_VAPID_KEY" =~ ^[A-Za-z0-9_-]{80,110}$ ]]; then
+            echo "::error::Nightjar Hosting deployment halted: VITE_FIREBASE_VAPID_KEY is missing or malformed. Set the PUBLIC Firebase Web Push key in GitHub Actions Variables."
+            exit 1
+          fi
+
+      - name: Install and validate
+        run: npm ci --no-fund && npm run validate
+
+      - name: Deploy Hosting live
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NIGHTJAR_AUDIO }}
+          channelId: live
+          projectId: nightjar-audio
+
+      - name: Verify deployed version matches commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error --location --max-time 15 \
+              "https://nightjar-audio.web.app/version.json?verify=$GITHUB_SHA" \
+              | jq -e --arg sha "$GITHUB_SHA" '.sourceCommit == $sha' >/dev/null; then
+              echo "Nightjar Hosting smoke test passed for $GITHUB_SHA"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Live Hosting version.json did not match the deployed commit. Verify Hosting immediately."
+          exit 1
+
+      - name: Summarise release
+        if: always()
+        run: |
+          echo "### Nightjar Firebase Hosting production" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Hosting: https://nightjar-audio.web.app" >> "$GITHUB_STEP_SUMMARY"
