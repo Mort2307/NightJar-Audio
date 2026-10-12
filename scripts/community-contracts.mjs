@@ -44,6 +44,10 @@ requireText(engagementClient,"'setReleaseCommentReaction'",'Comment reaction cli
 requireText(functions,"db.collection('releaseCommentReactions').doc(commentId + '__' + identity.uid)",'One-reaction-per-comment-per-user contract missing');
 requireText(functions,'db.runTransaction(async (transaction)', 'Atomic reaction counter protection missing');
 requireText(community,'commentReactionButtons(item)','Comment emoji reaction controls missing');
+requireText(community,"'creator','writer','editor','artist','admin'",'Creative and admin accounts must see comment composer');
+requireText(community,'WRITE A COMMENT','Comment composer is not clearly discoverable');
+requireText(community,'release-community-new-comment','Accessible comment field is missing');
+requireText(community,'Posting is not permitted for this account yet.','Denied comments must return clear feedback without losing drafts');
 requireText(community,'⛳️','Comment flag emoji missing');
 requireText(app,'featured-discussion-button','Featured audio missing visible comment entry');
 requireText(app,'featured-credit-link','Featured release credits no longer open public profiles');
