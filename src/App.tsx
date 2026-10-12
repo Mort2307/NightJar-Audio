@@ -443,6 +443,20 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 
 const EMPTY_PROFILE = { displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, creatorLanguages: [], creatorDirectionModes: [], creatorDeliveryFormats: [], creatorTurnaround: '', creatorEquipment: '', writerScriptLengths: [], writerCollaborationPreferences: [], writerTurnaround: '', writerRightsNote: '', artistMediums: [], artistDeliveryFormats: [], artistTurnaround: '', artistSoftware: [], listenerCommunityStyle: [], publicProfile: true };
 
+// A device-local fallback prevents an offline "Finish later" from
+// trapping the member in the same modal on every subsequent sign-in.
+const profileOnboardingDismissalKey = (userId:string) => 'nightjar.profile.onboarding.dismissed.v1:'+userId;
+const onboardingDismissedHere = (userId:string) => {
+  try {return window.localStorage.getItem(profileOnboardingDismissalKey(userId))==='yes';}
+  catch{return false;}
+};
+const rememberOnboardingDismissal = (userId:string, dismissed:boolean) => {
+  try {
+    if(dismissed)window.localStorage.setItem(profileOnboardingDismissalKey(userId),'yes');
+    else window.localStorage.removeItem(profileOnboardingDismissalKey(userId));
+  }catch{/* Backend persistence remains authoritative. */}
+};
+
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
@@ -998,7 +1012,7 @@ function App() {
         setProfile(mergedProfile);
         setProfileBaseline(structuredClone(mergedProfile));
         setProfileEditRole(targetRole);
-        setShowOnboarding(nextProfile.onboardingComplete !== true);
+        setShowOnboarding(nextProfile.onboardingComplete !== true && nextProfile.onboardingDismissed !== true && !onboardingDismissedHere(user.userId));
       } else {
         // New accounts do not have a profiles document yet. Give their blank
         // editor a real baseline so editing enables Save rather than locking it.
@@ -1006,7 +1020,7 @@ function App() {
         setProfile(empty);
         setProfileBaseline(structuredClone(empty));
         setProfileEditRole('listener');
-        setShowOnboarding(true);
+        setShowOnboarding(!onboardingDismissedHere(user.userId));
       }
     }).catch(() => { /* A later explicit profile load can retry without losing local edits. */ });
     return () => { cancelled = true; };
@@ -4534,6 +4548,16 @@ function App() {
               </>}
               <p className="nj-didit-member-footnote">Nightjar keeps only the server-verified age-assurance result and provider reference—not your raw identity images or a reusable login token stored in your browser. A new ID check is requested only if verification is revoked or a valid recheck is required.</p>
             </section>}
+            {effectiveRole !== 'admin' && !simulationMode && profile.onboardingComplete !== true && (
+              <section className="panel nj-onboarding-resume-prompt" aria-label="Optional profile setup">
+                <div>
+                  <span className="mini-label">OPTIONAL PROFILE SETUP</span>
+                  <h2>Finish your personal profile whenever you're ready.</h2>
+                  <p>Your Listener account and approved professional roles stay available. This introduction is optional and can be reopened without starting a new application.</p>
+                </div>
+                <button type="button" className="secondary-button" onClick={() => setShowOnboarding(true)}>Resume profile setup</button>
+              </section>
+            )}
             {profileSaveError && <div className="admin-note" role="alert"><ShieldAlert size={17}/><div><strong>Profile save unsuccessful</strong><span>{profileSaveError} Your edited fields have not been cleared.</span></div></div>}
             <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
               <UserProfileStudio
@@ -5261,7 +5285,26 @@ function App() {
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
-      {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={() => setShowOnboarding(false)} notify={notify} /></Suspense>}
+      {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}>
+        <NightjarOnboarding initialProfile={profile} role={role}
+          onComplete={(nextProfile) => {
+            rememberOnboardingDismissal(user.userId,false);
+            const merged = applyProfileRoleDraft(nextProfile,profileEditRole);
+            setProfile(merged);
+            setProfileBaseline(structuredClone(merged));
+            setProfileSaveError('');
+            setShowOnboarding(false);
+          }}
+          onSkip={(savedProfile) => {
+            rememberOnboardingDismissal(user.userId,true);
+            if(savedProfile) {
+              const merged=applyProfileRoleDraft(savedProfile,profileEditRole);
+              setProfile(merged);
+              setProfileBaseline(structuredClone(merged));
+            }
+            setShowOnboarding(false);
+          }} notify={notify}/>
+      </Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
       {user && !rolePicker && !liveRolePreview && !(view === 'profile' && profileDirty) && (
