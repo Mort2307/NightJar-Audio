@@ -8,6 +8,8 @@ const frontend = fs.readFileSync('src/platform/firebase-push.ts', 'utf8');
 const preferences = fs.readFileSync('src/components/NotificationPreferences.tsx', 'utf8');
 const sw = fs.readFileSync('public/service-worker.js', 'utf8');
 const roles = fs.readFileSync('src/components/AdminMemberRoleEditor.tsx', 'utf8');
+const roleApplications = fs.readFileSync('src/components/ProfessionalRoleManager.tsx', 'utf8');
+const css = fs.readFileSync('src/index.css', 'utf8');
 const readiness = fs.readFileSync('src/components/AdminReleaseReadiness.tsx', 'utf8');
 
 test('test push targets one short-ID device belonging to the authenticated account', () => {
@@ -61,4 +63,12 @@ test('launch readiness never treats unsigned-off payments and legal review as cl
   assert.match(readiness, /state: pendingApplications \? 'attention' : 'pass'/);
   assert.match(readiness, /onOpenFinance/);
   assert.match(readiness, /onOpenLegalReadiness/);
+});
+
+test('professional applications expose a mobile-friendly continuation instead of requiring keyboard Tab', () => {
+  assert.match(roleApplications, /professional-role-scroll-to-application/);
+  assert.match(roleApplications, /applicationDetailsRef\\.current\\?\\.scrollIntoView/);
+  assert.match(roleApplications, /aria-label="Professional application details"/);
+  assert.match(css, /\\.professional-role-application-fields[\\s\\S]*?scroll-margin-top/);
+  assert.match(css, /\\.professional-role-scroll-to-application[\\s\\S]*?min-height: 44px/);
 });
