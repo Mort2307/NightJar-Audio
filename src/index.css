@@ -10478,3 +10478,63 @@ textarea:focus-visible,
   background: linear-gradient(125deg,#e0b37b,#b88a52,#8c5d32);
   color: #120d08;
 }
+
+
+/* Mobile onboarding regression: the premium skin used overflow:hidden and
+   overrode .onboarding-card {overflow:auto}. A fixed overlay then trapped touch
+   scrolling below the fold. Keep ONE real scroll container, with visible actions. */
+.onboarding-backdrop.premium-onboarding-backdrop {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.onboarding-card.premium-onboarding-card {
+  min-height: 0;
+  max-height: calc(100vh - 30px);
+  max-height: calc(100dvh - 30px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scroll-padding-top: 12px;
+  scroll-padding-bottom: 110px;
+}
+.onboarding-card.premium-onboarding-card > .premium-onboarding-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: #121014;
+  box-shadow: 0 -10px 25px rgba(5,4,6,.54);
+}
+@media (max-width: 640px) {
+  .onboarding-backdrop.premium-onboarding-backdrop {
+    padding: 8px;
+  }
+  .onboarding-card.premium-onboarding-card {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 16px;
+  }
+  .onboarding-card.premium-onboarding-card > .premium-onboarding-footer {
+    gap: 10px;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  }
+  .onboarding-card.premium-onboarding-card > .premium-onboarding-footer > div {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+  .premium-onboarding-footer .primary-button,
+  .premium-onboarding-footer .secondary-button,
+  .premium-onboarding-footer .ghost-button {
+    min-height: 44px;
+  }
+  .premium-onboarding-group {
+    padding: 15px;
+  }
+  .premium-onboarding-fields input,
+  .premium-onboarding-fields textarea {
+    font-size: 16px;
+  }
+}
