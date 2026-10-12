@@ -904,6 +904,77 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
   };
 };
 
+// Universal-account onboarding draft: one private, cross-device copy per
+// authenticated Nightjar identity. It is separate from the published profile
+// and professional-role application so editing never prematurely publishes.
+const onboardingDraftRef = (userId:string) => profileRef(userId).collection('privateDrafts').doc('onboarding');
+const onboardingDraftFields = (raw:unknown) => {
+  const input=raw && typeof raw==='object' && !Array.isArray(raw) ? raw as Record<string,unknown> : {};
+  return {
+    displayName:cleanText(input.displayName,80),
+    handle:cleanText(input.handle,50),
+    pronouns:cleanText(input.pronouns,60),
+    headline:cleanText(input.headline,140),
+    bio:cleanText(input.bio,1200),
+    welcomeMessage:cleanText(input.welcomeMessage,300),
+    favouriteTags:cleanStringList(input.favouriteTags,24),
+    favouriteTropes:cleanStringList(input.favouriteTropes,24),
+    favouriteCategories:cleanStringList(input.favouriteCategories,24),
+    publicProfile:input.publicProfile!==false,
+  };
+};
+const onboardingDraftPayload = (data:Record<string,any>|undefined) => {
+  if(!data)return null;
+  return {
+    fields:onboardingDraftFields(data.fields),
+    stepIndex:Math.max(0,Math.min(2,Math.floor(Number(data.stepIndex)||0))),
+    revision:Math.max(0,Math.floor(Number(data.revision)||0)),
+    updatedAt:data.updatedAt?.toDate?.().toISOString?.()??null,
+  };
+};
+
+export const getMyOnboardingDraft = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const snap=await onboardingDraftRef(identity.uid).get();
+  return {draft:onboardingDraftPayload(snap.data())};
+});
+
+export const saveMyOnboardingDraft = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const revision=Number(input.revision);
+  if(!Number.isSafeInteger(revision)||revision<0)
+    throw new HttpsError('invalid-argument','A draft revision is required.');
+  const index=Number(input.stepIndex);
+  if(!Number.isInteger(index)||index<0||index>2)
+    throw new HttpsError('invalid-argument','An onboarding step is required.');
+  const fields=onboardingDraftFields(input.fields);
+  const ref=onboardingDraftRef(identity.uid);
+  const updatedRevision=await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    const current=Math.max(0,Math.floor(Number(snap.data()?.revision)||0));
+    if(current!==revision){
+      throw new HttpsError('aborted','Your profile setup was changed on another device. Load the latest draft before saving more changes.');
+    }
+    tx.set(ref,{
+      fields,stepIndex:index,revision:current+1,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return current+1;
+  });
+  return {revision:updatedRevision};
+});
+
+export const clearMyOnboardingDraft = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const profile=await profileRef(identity.uid).get();
+  if(profile.data()?.onboardingComplete!==true){
+    throw new HttpsError('failed-precondition','Complete profile creation before clearing your saved onboarding draft.');
+  }
+  await onboardingDraftRef(identity.uid).delete();
+  return {cleared:true};
+});
+
 export const getMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, accountSnapshot] = await Promise.all([
