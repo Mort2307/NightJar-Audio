@@ -30,7 +30,7 @@ assert.match(onboarding, /ref=\{scrollContainerRef\}/, 'wizard scrolls its own p
 assert.match(onboarding, /scrollContainerRef\.current\?\.scrollTo/, 'changing wizard steps starts at the next heading');
 assert.match(onboarding, /onSkip/, 'wizard exposes a Finish later exit');
 assert.match(app, /nextProfile\.onboardingComplete !== true && nextProfile\.onboardingDeferred !== true/, 'deferred onboarding does not reopen on later logins');
-assert.match(app, /nightjarCommunity\.deferMyProfileOnboarding\(\)/, 'Finish later is persisted to the authenticated account');
+assert.match(app, /nightjarCommunity\.(?:pauseOnboarding\(draft, stepIndex, revision\)|deferMyProfileOnboarding\(\))/, 'Finish later is persisted to the authenticated account');
 const community=fs.readFileSync('src/platform/firebase-community.ts','utf8');
 const backend=fs.readFileSync('functions/src/index.ts','utf8');
 assert.match(community, /deferMyProfileOnboardingCall/, 'client has a durable onboarding deferral action');
