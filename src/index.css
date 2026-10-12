@@ -10532,3 +10532,6 @@ textarea:focus-visible,
   .nj-profile-setup-resume { flex-direction:column;align-items:stretch; }
   .nj-profile-setup-resume > button { width:100%;justify-content:center; }
 }
+
+.nj-onboarding-cloud-status {display:inline-flex;align-items:center;gap:6px;margin-top:10px;color:#d8bfd0;font-size:11px;line-height:1.55;}
+.nj-account-draft-status {padding:10px 12px;border:1px solid rgba(218,178,208,.18);background:rgba(106,73,101,.13);border-radius:11px;font-size:12px;color:#d8c2d0;line-height:1.5;margin:12px 0;}
