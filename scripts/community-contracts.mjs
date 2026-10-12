@@ -23,6 +23,7 @@ const creatorPipeline=read('src/components/CreatorAudioPipeline.tsx');
   'releaseCommunity',
   'setReleaseReaction',
   'postReleaseComment',
+  'setReleaseCommentReaction',
   'replyToReleaseComment',
   'deleteOwnReleaseComment',
   'reportReleaseComment',
@@ -38,7 +39,14 @@ const creatorPipeline=read('src/components/CreatorAudioPipeline.tsx');
   'adminResolveCommunityReport',
 ].forEach((name)=>requireText(functions,'export const '+name,name+' callable is missing'));
 
-requireText(functions,"requireAccountRole(request, ['listener'])",'Listener-only community posting contract is missing');
+requireText(functions,"export const postReleaseComment = onCall({ region: REGION }, async (request) => {\n  const identity = await requireActiveIdentity(request);",'Authenticated immediate-comment posting contract is missing');
+requireText(engagementClient,"'setReleaseCommentReaction'",'Comment reaction client does not call the backend');
+requireText(functions,"db.collection('releaseCommentReactions').doc(commentId + '__' + identity.uid)",'One-reaction-per-comment-per-user contract missing');
+requireText(functions,'db.runTransaction(async (transaction)', 'Atomic reaction counter protection missing');
+requireText(community,'commentReactionButtons(item)','Comment emoji reaction controls missing');
+requireText(community,'⛳️','Comment flag emoji missing');
+requireText(app,'featured-discussion-button','Featured audio missing visible comment entry');
+requireText(app,'featured-credit-link','Featured release credits no longer open public profiles');
 requireText(functions,"requireAccountRole(request, ['creator','writer','editor','artist'])",'Professional-message role gate is missing');
 requireText(functions,'Only credited members of this release can reply as the work team.','Credited work-team reply boundary is missing');
 requireText(functions,'hideReleaseCommentReplies','Parent-comment deletion no longer hides orphaned work-team replies');
