@@ -22,5 +22,13 @@ assert.match(app, /profileRolesPage/, 'professional role deep links must load wi
 assert.match(css, /\.app-shell\s*\{[^}]*overflow-x:\s*clip;[^}]*overflow-y:\s*visible;/s, 'app shell must not lock vertical scrolling');
 assert.doesNotMatch(navigation, /document\.addEventListener\(['"]click['"]/, 'navigation must not globally hijack taps');
 assert.match(navigation, /behavior:\s*'instant'/, 'route changes must not animate across an endless page');
+const launch=read('src/components/NightjarLaunchUnlock.tsx');
+const quick=read('src/platform/nightjar-quick-unlock.ts');
+const auth=read('src/platform/firebase-auth.ts');
+assert.match(launch,/if \(canResume && !authReady\)/,'reload blocks both sign-in and protected UI until Firebase restores session');
+assert.match(launch,/nightjarQuickUnlock.markUnlocked\(identity.userId\)/,'WebAuthn unlock enables safe same-tab refresh');
+assert.match(quick,/canRestoreSession\(userId:string\):boolean/,'reloading preserves only verified session grant for the matching user');
+assert.match(auth,/browserLocalPersistence/,'Firebase persistence is available on page reload');
+
 
 console.log('Nightjar startup, nested-route refresh and recovery contracts passed.');
