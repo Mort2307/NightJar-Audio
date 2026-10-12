@@ -46,7 +46,7 @@ jobs:
       - name: Test planner and report contracts
         run: node --test scripts/firebase-backend-tools.test.mjs
       - name: Upload suggested batches JSON (no secrets)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nightjar-backend-plan-${{ github.event.pull_request.number }}
           path: ${{ runner.temp }}/nightjar-backend-plan.json
