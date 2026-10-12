@@ -6,7 +6,8 @@ import {
   nightjarAccessibility,
   type AccessibilityPreferences,
 } from '../platform/firebase-accessibility';
-import { BookOpenText, ChevronLeft, ChevronRight, Clock3, Moon, Pause, Play, Volume2, X } from 'lucide-react';
+import { AudioLines, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, Clock3, Headphones, Pause, Play, Settings2, Volume2, X } from 'lucide-react';
+import { useNightjarEqualizer } from '../hooks/useNightjarEqualizer';
 import './nightjar-player-premium.css';
 
 export type NightjarPlayerTrack = {
@@ -19,6 +20,7 @@ export type NightjarPlayerTrack = {
   audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
+  contributors?: Array<{ name?: string; role?: string; userId?: string | null }>;
   transcriptAvailable?: boolean;
   transcriptLanguage?: string;
   transcriptWordCount?: number;
@@ -117,6 +119,17 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const [transcriptText, setTranscriptText] = useState('');
   const [transcriptLanguage, setTranscriptLanguage] = useState('en');
   const [transcriptError, setTranscriptError] = useState('');
+  const [artworkFailed, setArtworkFailed] = useState(false);
+  const [showEq, setShowEq] = useState(false);
+  const [showTextOptions, setShowTextOptions] = useState(false);
+  const [transcriptHeight, setTranscriptHeight] = useState(() => {
+    try { const value = Number(window.localStorage.getItem('nightjar.player.transcript-height.v1')); return Number.isFinite(value) && value >= 160 && value <= 520 ? value : 290; }
+    catch { return 290; }
+  });
+  const dragRef = useRef<{ y: number; height: number } | null>(null);
+  const equalizer = useNightjarEqualizer(audioRef);
+  const writerCredit = track?.contributors?.find((credit) => credit.role === 'Writer' && credit.name?.trim())?.name ?? '';
+  const artwork = track?.artworkUrl && !artworkFailed ? track.artworkUrl : '/nightjar-home-512.png';
 
   const currentIndex = track ? queue.findIndex((item) => item.id === track.id) : -1;
   const previousTrack = currentIndex > 0 ? queue[currentIndex - 1] : null;
@@ -190,6 +203,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     transcriptRequestRef.current += 1;
     setTranscriptText('');
     setTranscriptError('');
+    setArtworkFailed(false);
     setTranscriptLanguage(track?.transcriptLanguage || 'en');
     const shouldOpen = Boolean(track?.transcriptAvailable || simulationMode)
       && (initialTranscriptOpen || accessibility.transcriptMode === 'always_open');
@@ -199,10 +213,12 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
 
   useEffect(() => {
     if (!transcriptOpen || !accessibility.transcriptFollowPlayback || !activeTranscriptCueId) return;
-    transcriptCueRefs.current[activeTranscriptCueId]?.scrollIntoView({
-      block: 'center',
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-    });
+    const cue = transcriptCueRefs.current[activeTranscriptCueId];
+    const scrollbox = cue?.closest('.nj-up-transcript-body');
+    if (cue && scrollbox) {
+      const top = cue.offsetTop - scrollbox.clientHeight / 2 + cue.clientHeight / 2;
+      scrollbox.scrollTo({ top: Math.max(0, top), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    }
   }, [activeTranscriptCueId, transcriptOpen, accessibility.transcriptFollowPlayback]);
 
   useEffect(() => {
@@ -345,9 +361,20 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     if (next) void loadTranscript();
   };
 
-  return <div className={transcriptOpen ? 'nightjar-player-shell transcript-open' : 'nightjar-player-shell'}>
-    <div className="player-dock" role="region" aria-label="Nightjar audio player">
-      <button type="button" className="dock-close" onClick={onClose} aria-label="Close audio player"><X size={21} aria-hidden="true" /></button>
+  return <div className="nj-up-root">
+    <div className="nj-up-scrim" aria-hidden="true" />
+    <section className="nj-up-sheet" role="region" aria-label={'Nightjar player: ' + track.title}>
+      <div className="nj-up-grip" aria-hidden="true"/>
+      <div className="nj-up-header">
+        <div className="nj-up-cover"><img src={artwork} alt={track.artworkUrl && !artworkFailed ? 'Release cover artwork' : 'Nightjar default cover artwork'} onError={() => setArtworkFailed(true)} /></div>
+        <div className="nj-up-identity">
+          <span className="nj-up-kicker">{track.category || 'Audio'}</span>
+          <h2>{track.title}</h2>
+          <p>{track.creator}</p>
+          {writerCredit && <small>Written by {writerCredit}</small>}
+        </div>
+        <button className="nj-up-close" type="button" onClick={onClose} aria-label="Close audio player"><X size={21}/></button>
+      </div>
       {!simulationMode && <audio
         ref={audioRef}
         src={playbackUrl ?? undefined}
@@ -377,130 +404,90 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
           setIsPlaying(false);
           setPosition(duration);
           void nightjarListening.record({ releaseId: track.id, eventType: 'complete', sessionId: listeningSessionId.current, positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
-          if (sleepTimer === 'end') {
-            setSleepTimer('off');
-            return;
-          }
+          if (sleepTimer === 'end') { setSleepTimer('off'); return; }
           if (nextTrack && onSelectTrack) window.setTimeout(() => onSelectTrack(nextTrack), 350);
         }}
         onError={() => notify('Nightjar could not play this audio file.')}
       />}
-      <div className="dock-art">{track.artworkUrl ? <img src={track.artworkUrl} alt="" /> : <Moon size={16} />}</div>
-      <div className="dock-copy"><span>{track.category || 'Audio'}</span><strong>{track.title}</strong><small>{track.creator}</small></div>
-      <div className="dock-time">{formatTime(position)} / {formatTime(duration)}</div>
-      <input className="dock-progress" type="range" min="0" max={duration} step="0.1" value={Math.min(position, duration)} onChange={(event) => seekTo(Number(event.target.value))} aria-label="Playback position" />
-      <div className="dock-nav">
-        <button className="dock-nav-button" disabled={!previousTrack || !onSelectTrack} onClick={() => choose(previousTrack)} aria-label="Previous release"><ChevronLeft size={15} /></button>
-        <button className="dock-play" onClick={() => { if (simulationMode) { setIsPlaying((value) => !value); return; } const node = audioRef.current; if (!node) return; if (node.paused) void node.play(); else node.pause(); }} aria-label={isPlaying ? 'Pause' : 'Play'}>{isPlaying ? <Pause size={17} /> : <Play size={17} fill="currentColor" />}</button>
-        <button className="dock-nav-button" disabled={!nextTrack || !onSelectTrack} onClick={() => choose(nextTrack)} aria-label="Next release"><ChevronRight size={15} /></button>
+      <div className="nj-up-progress">
+        <input type="range" min="0" max={Math.max(duration, 1)} step="0.1" value={Math.min(position, duration)}
+          onChange={(event) => seekTo(Number(event.target.value))}
+          style={{ '--nj-up-fill': Math.min(100, 100 * position / Math.max(duration, 1)) + '%' } as React.CSSProperties}
+          aria-label="Playback position" />
+        <div className="nj-up-times"><span>{formatTime(position)}</span><span>{formatTime(duration)}</span></div>
       </div>
-      <button
-        className={transcriptOpen ? 'dock-transcript active' : 'dock-transcript'}
-        type="button"
-        onClick={toggleTranscript}
-        aria-expanded={transcriptOpen}
-        aria-controls="nightjar-transcript-panel"
-        aria-label={transcriptOpen ? 'Hide transcript' : 'Show transcript'}
-      >
-        <BookOpenText size={15}/>
-        <span>Transcript</span>
-      </button>
-      <div className="dock-volume"><Volume2 size={15} /><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume" /></div>
-      <label className="dock-sleep"><Clock3 size={14}/><select value={sleepTimer} onChange={(event) => setSleepTimer(event.target.value as typeof sleepTimer)} aria-label="Sleep timer"><option value="off">Sleep off</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="end">End of audio</option></select></label>
-
-    </div>
-
-    {transcriptOpen && <aside
-      id="nightjar-transcript-panel"
-      className={[
-        'nightjar-transcript-panel',
-        'text-' + accessibility.transcriptTextSize,
-        accessibility.transcriptHighContrast ? 'high-contrast' : '',
-      ].filter(Boolean).join(' ')}
-      aria-label={'Transcript for ' + track.title}
-      lang={transcriptLanguage}
-    >
-      <header className="nightjar-transcript-head">
-        <div>
-          <span className="mini-label">ACCESSIBLE TEXT · READ ALONG</span>
-          <h2>{track.title}</h2>
-          <p>{timedTranscript ? 'Timed transcript · select a timestamp to jump playback.' : 'Full text transcript · available alongside playback.'}</p>
+      <div className="nj-up-transport" aria-label="Playback controls">
+        <button type="button" className="nj-up-skip" onClick={() => previousTrack ? choose(previousTrack) : seekTo(Math.max(0, position - 15))}
+          aria-label={previousTrack ? 'Previous release' : 'Rewind 15 seconds'}><ChevronLeft size={25}/><small>{previousTrack ? 'PREV' : '15'}</small></button>
+        <button type="button" className="nj-up-play" onClick={() => { if (simulationMode) { setIsPlaying((v) => !v); return; } const node = audioRef.current; if (!node) return; if (node.paused) void node.play().catch(() => notify('Playback could not start.')); else node.pause(); }}
+          aria-label={isPlaying ? 'Pause playback' : 'Play audio'}>{isPlaying ? <Pause size={31} fill="currentColor"/> : <Play size={31} fill="currentColor"/>}</button>
+        <button type="button" className="nj-up-skip" onClick={() => nextTrack ? choose(nextTrack) : seekTo(Math.min(duration, position + 15))}
+          aria-label={nextTrack ? 'Next release' : 'Forward 15 seconds'}><ChevronRight size={25}/><small>{nextTrack ? 'NEXT' : '15'}</small></button>
+      </div>
+      <div className="nj-up-tools">
+        <label className="nj-up-volume"><Volume2 size={18} aria-hidden="true"/><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume"/></label>
+        <button className={showEq ? 'nj-up-tool active' : 'nj-up-tool'} type="button" onClick={() => setShowEq((v) => !v)} aria-expanded={showEq} aria-controls="nj-up-eq"><AudioLines size={17}/> EQ</button>
+        <label className="nj-up-sleep"><Clock3 size={17}/><select value={sleepTimer} onChange={(event) => setSleepTimer(event.target.value as typeof sleepTimer)} aria-label="Sleep timer"><option value="off">Sleep off</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="end">End of audio</option></select><ChevronDown size={14}/></label>
+      </div>
+      {showEq && <div id="nj-up-eq" className="nj-up-eq">
+        <div className="nj-up-eq-head"><div><strong>Audio equalizer</strong><small>Real-time sound shaping</small></div>
+          <button type="button" className={equalizer.enabled ? 'nj-up-eq-enable on' : 'nj-up-eq-enable'} onClick={() => void equalizer.toggle()} aria-pressed={equalizer.enabled}>{equalizer.enabled ? 'EQ on' : 'Enable EQ'}</button>
         </div>
-        <button className="icon-button" type="button" onClick={() => setTranscriptOpen(false)} aria-label="Close transcript"><X size={17}/></button>
-      </header>
-
-      <div className="nightjar-transcript-controls" aria-label="Transcript preferences">
-        <label>
-          <input
-            type="checkbox"
-            checked={accessibility.transcriptMode === 'always_open'}
-            onChange={(event) => void saveAccessibility({
-              ...accessibility,
-              transcriptMode: event.target.checked ? 'always_open' : 'on_demand',
-            })}
-          />
-          Always open transcripts when available
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={accessibility.transcriptFollowPlayback}
-            onChange={(event) => void saveAccessibility({
-              ...accessibility,
-              transcriptFollowPlayback: event.target.checked,
-            })}
-          />
-          Follow playback
-        </label>
-        <label>
-          Text size
-          <select
-            value={accessibility.transcriptTextSize}
-            onChange={(event) => void saveAccessibility({
-              ...accessibility,
-              transcriptTextSize: event.target.value as AccessibilityPreferences['transcriptTextSize'],
-            })}
-          >
-            <option value="standard">Standard</option>
-            <option value="large">Large</option>
-            <option value="extra_large">Extra large</option>
-          </select>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={accessibility.transcriptHighContrast}
-            onChange={(event) => void saveAccessibility({
-              ...accessibility,
-              transcriptHighContrast: event.target.checked,
-            })}
-          />
-          Higher transcript contrast
-        </label>
+        <div className="nj-up-presets" aria-label="Equalizer presets">
+          {(['flat', 'voice', 'warm', 'bright'] as const).map((preset) => <button key={preset} type="button" className={equalizer.preset === preset ? 'active' : ''} onClick={() => equalizer.applyPreset(preset)} aria-pressed={equalizer.preset === preset}>{preset === 'voice' ? 'Voice' : preset === 'warm' ? 'Warmth' : preset === 'bright' ? 'Clarity' : 'Flat'}</button>)}
+        </div>
+        <div className="nj-up-eq-bands">{(['bass', 'mid', 'treble'] as const).map((band) => <label key={band}><span>{band === 'mid' ? 'Mids' : band === 'treble' ? 'Treble' : 'Bass'} <strong>{equalizer.levels[band] > 0 ? '+' : ''}{equalizer.levels[band]} dB</strong></span><input type="range" min="-12" max="12" step="1" value={equalizer.levels[band]} onChange={(event) => equalizer.updateBand(band, Number(event.target.value))} aria-label={band + ' EQ gain in decibels'}/></label>)}</div>
+        {equalizer.message && <p className="nj-up-eq-message" role="status">{equalizer.message}</p>}
+        <small className="nj-up-eq-footnote">EQ requires your browser to permit audio processing. Playback remains available even when EQ is unavailable.</small>
+      </div>}
+      <div className="nj-up-section-toggle">
+        <span><Headphones size={17}/> Now playing</span>
+        <button type="button" className={transcriptOpen ? 'nj-up-transcript-toggle on' : 'nj-up-transcript-toggle'}
+          onClick={toggleTranscript} aria-expanded={transcriptOpen} aria-controls="nightjar-transcript-panel"
+          aria-pressed={transcriptOpen} disabled={!track.transcriptAvailable && !simulationMode}>
+          <BookOpenText size={17}/> Transcript <span className="nj-up-switch" aria-hidden="true"/><strong>{transcriptOpen ? 'On' : 'Off'}</strong>
+        </button>
       </div>
-
-      <div className="nightjar-transcript-body" tabIndex={0}>
-        {transcriptBusy && <div className="people-empty"><BookOpenText size={18}/><strong>Opening transcript…</strong></div>}
-        {!transcriptBusy && transcriptError && <div className="people-empty"><strong>Transcript unavailable</strong><span>{transcriptError}</span></div>}
-        {!transcriptBusy && !transcriptError && transcriptCues.map((cue) => (
-          <div
-            key={cue.id}
-            ref={(node) => { transcriptCueRefs.current[cue.id] = node; }}
-            className={cue.id === activeTranscriptCueId ? 'nightjar-transcript-cue active' : 'nightjar-transcript-cue'}
-            aria-current={cue.id === activeTranscriptCueId ? 'true' : undefined}
-          >
-            {cue.timeSeconds != null && <button
-              type="button"
-              className="nightjar-transcript-time"
-              onClick={() => seekTo(cue.timeSeconds as number)}
-              aria-label={'Jump playback to ' + formatTime(cue.timeSeconds)}
-            >
-              {formatTime(cue.timeSeconds)}
-            </button>}
+      {transcriptOpen && <section
+        id="nightjar-transcript-panel"
+        className={['nj-up-transcript', 'text-' + accessibility.transcriptTextSize, accessibility.transcriptHighContrast ? 'high-contrast' : ''].filter(Boolean).join(' ')}
+        aria-label={'Transcript for ' + track.title} lang={transcriptLanguage}>
+        <div className="nj-up-transcript-resizer"
+          role="slider" tabIndex={0} aria-label="Transcript height" aria-valuemin={160} aria-valuemax={520} aria-valuenow={transcriptHeight}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+              event.preventDefault();
+              const next = Math.min(520, Math.max(160, transcriptHeight + (event.key === 'ArrowUp' ? 24 : -24)));
+              setTranscriptHeight(next);
+              try { window.localStorage.setItem('nightjar.player.transcript-height.v1', String(next)); } catch {}
+            }
+          }}
+          onPointerDown={(event) => { dragRef.current = { y: event.clientY, height: transcriptHeight }; event.currentTarget.setPointerCapture(event.pointerId); }}
+          onPointerMove={(event) => { if (!dragRef.current) return; setTranscriptHeight(Math.min(520, Math.max(160, dragRef.current.height + dragRef.current.y - event.clientY))); }}
+          onPointerUp={(event) => { if (!dragRef.current) return; dragRef.current = null; try { window.localStorage.setItem('nightjar.player.transcript-height.v1', String(transcriptHeight)); } catch {} event.currentTarget.releasePointerCapture(event.pointerId); }}
+          onPointerCancel={() => { dragRef.current = null; }}
+        ><span aria-hidden="true"/></div>
+        <div className="nj-up-transcript-heading"><span><BookOpenText size={17}/> Read along {timedTranscript ? '· timed' : ''}</span>
+          <button type="button" onClick={() => setShowTextOptions((v) => !v)} aria-expanded={showTextOptions} aria-controls="nj-up-text-options" aria-label="Transcript reading preferences"><Settings2 size={17}/></button>
+        </div>
+        {showTextOptions && <div className="nj-up-text-options" id="nj-up-text-options">
+          <label>Text size <select value={accessibility.transcriptTextSize} onChange={(event) => void saveAccessibility({ ...accessibility, transcriptTextSize: event.target.value as AccessibilityPreferences['transcriptTextSize'] })}><option value="standard">Standard</option><option value="large">Large</option><option value="extra_large">Extra large</option></select></label>
+          <label><input type="checkbox" checked={accessibility.transcriptFollowPlayback} onChange={(event) => void saveAccessibility({ ...accessibility, transcriptFollowPlayback: event.target.checked })}/> Follow playback</label>
+          <label><input type="checkbox" checked={accessibility.transcriptHighContrast} onChange={(event) => void saveAccessibility({ ...accessibility, transcriptHighContrast: event.target.checked })}/> High contrast</label>
+          <label><input type="checkbox" checked={accessibility.transcriptMode === 'always_open'} onChange={(event) => void saveAccessibility({ ...accessibility, transcriptMode: event.target.checked ? 'always_open' : 'on_demand' })}/> Open transcripts automatically</label>
+        </div>}
+        <div className="nj-up-transcript-body" style={{ height: Math.min(transcriptHeight, Math.max(160, window.innerHeight * .48)) }} tabIndex={0}>
+          {transcriptBusy && <p role="status">Opening the transcript…</p>}
+          {!transcriptBusy && transcriptError && <p role="alert">{transcriptError}</p>}
+          {!transcriptBusy && !transcriptError && !transcriptCues.length && <p>There is no transcript text available for this recording yet.</p>}
+          {!transcriptBusy && !transcriptError && transcriptCues.map((cue) => <div key={cue.id} ref={(node) => { transcriptCueRefs.current[cue.id] = node; }}
+            className={cue.id === activeTranscriptCueId ? 'nj-up-cue active' : 'nj-up-cue'} aria-current={cue.id === activeTranscriptCueId ? 'true' : undefined}>
+            {cue.timeSeconds != null && <button type="button" className="nj-up-cue-time" onClick={() => seekTo(cue.timeSeconds as number)} aria-label={'Jump playback to ' + formatTime(cue.timeSeconds)}>{formatTime(cue.timeSeconds)}</button>}
             <p>{cue.text}</p>
-          </div>
-        ))}
-      </div>
-    </aside>}
+          </div>)}
+        </div>
+      </section>}
+      {!track.transcriptAvailable && !simulationMode && <div className="nj-up-transcript-unavailable"><BookOpenText size={14}/> Transcript not published for this recording.</div>}
+    </section>
   </div>;
 }
