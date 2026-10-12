@@ -143,3 +143,18 @@ For Firestore indexes/rules and Storage rules, the CLI deploy status and duratio
 - Firebase deploy can incur paid Cloud Functions/GCP usage, and GitHub Actions workflows consume runner minutes where applicable. Automation reduces manual operations; duplicate CI workflows and deploying numerous Functions still take time.
 - For the current CI, `build.yml` and `validate.yml` preserve existing check names; do not disable required branch-protection checks without auditing rulesets.
 - Pull-request preview URLs are temporary (seven days). Nightjar's protected backend must still enforce age/authorization regardless of preview Hosting URL.
+
+## Administrator Attention rollout (manual, admin-only)
+
+Nightjar has a separate Administrator Attention preference panel under Settings > Notifications, visible only to verified Administrators. Ten Firestore listeners issue discreet administrator push alerts for new professional applications, releases, scripts, images, reviews, Editor portfolios, flagged content, security, recommendations and billing exceptions. Each administrator can mute categories without affecting standard users.
+
+Backend deployment remains deliberately manual and scoped to the fixed admin-attention preset: ten Firestore listeners, two preference callables and the live listNotifications callable. The preset does not alter rules, secrets, payments or unrelated Functions.
+
+1. Go to https://github.com/Mort2307/NightJar-Audio/actions/workflows/firebase-backend-deploy.yml and select Run workflow on main.
+2. First select scope=auth-check (no writes). The run must pass.
+3. Rerun with scope=admin-attention, confirmation=DEPLOY-NIGHTJAR. Approve the production-backend environment if required.
+4. Require full validate/build, deployment and read-only post-deploy metadata verification to pass before announcing the backend live.
+5. Test a controlled new moderation item from a non-admin test account, check the Administrator notification feed and Android push, then review/resolve the test item.
+
+IMPORTANT: The workload identity provider explicitly requires assertion.event_name == 'workflow_dispatch' and the matching backend workflow_ref. An earlier push-triggered workflow was correctly rejected by its Google Cloud attribute condition (unauthorized_client). Do not weaken the provider policy; use the authorised manual workflow dispatch. Cloud Functions deployments and runtime triggers may incur Firebase/Google Cloud charges.
+

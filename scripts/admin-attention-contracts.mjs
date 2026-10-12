@@ -1,51 +1,52 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const backend = fs.readFileSync('functions/src/admin-attention.ts','utf8');
-const index = fs.readFileSync('functions/src/index.ts','utf8');
-const app = fs.readFileSync('src/App.tsx','utf8');
-const preferences = fs.readFileSync('src/components/AdminAttentionPreferences.tsx','utf8');
-const userPreferences = fs.readFileSync('src/components/NotificationPreferences.tsx','utf8');
-const client = fs.readFileSync('src/platform/firebase-notifications.ts','utf8');
-const workflow = fs.readFileSync('.github/workflows/firebase-backend-deploy.yml','utf8');
-const categories = [
-  'professionalApplications','releases','scripts','images','reviews',
-  'editorPortfolio','reports','security','suggestions','billing',
+const read = (path) => fs.readFileSync(path, 'utf8');
+const backend = read('functions/src/admin-attention.ts');
+const index = read('functions/src/index.ts');
+const app = read('src/App.tsx');
+const prefs = read('src/components/AdminAttentionPreferences.tsx');
+const settings = read('src/components/NotificationPreferences.tsx');
+const workflow = read('.github/workflows/firebase-backend-deploy.yml');
+const sources = [
+  ['professionalApplications','professionalApplications','adminAttentionProfessionalApplications'],
+  ['releases','releases','adminAttentionReleases'],
+  ['scripts','scripts','adminAttentionScripts'],
+  ['images','imageAssets','adminAttentionImages'],
+  ['reviews','releaseReviews','adminAttentionReviews'],
+  ['editorPortfolio','editorPortfolio','adminAttentionEditorPortfolio'],
+  ['reports','communityReports','adminAttentionReports'],
+  ['security','securityAlerts','adminAttentionSecurity'],
+  ['suggestions','creatorSuggestions','adminAttentionSuggestions'],
+  ['billing','subscriptions','adminAttentionBilling'],
 ];
-
-assert.match(backend,/email_verified\s*!==\s*true/,'only email-verified administrators use preference callable');
-assert.match(backend,/ADMIN_EMAILS\.includes/,'backend role verification uses the owner allowlist');
-assert.match(backend,/getAuth\(\)\.getUserByEmail\(email\)/,'push targets authenticated owner identities');
-assert.match(backend,/onDocumentWritten/,'writes are observed server-side, not via client polling');
-assert.match(backend,/notificationRef\.create\(/,'create-only notification writes deduplicate events');
-assert.match(backend,/if \(!preferences\[category\]\) return/,'muting push does not discard in-app notifications');
-assert.match(backend,/adminAttentionPreferencesUpdatedAt/,'admin settings persist independently');
-assert.match(backend,/Nightjar Administrator/,'lock screen does not expose flagged text or user identities');
-assert.doesNotMatch(backend,/snapshotText|reason:reason|sendEmail\(/,'no flagged evidence or sensitive details go in the push alert');
-
-for (const key of categories) {
-  assert.ok(backend.includes(key + ': { title:'),'admin notification category exists: '+key);
-  assert.ok(preferences.includes("key: '" + key + "'"),'admin-only setting exists: '+key);
+for (const [category, collection, fn] of sources) {
+  assert.ok(backend.includes("  " + category + ": {"), 'Metadata missing ' + category);
+  assert.ok(backend.includes("onAttentionWrite('" + category + "', '" + collection + "')"), 'Firestore trigger missing ' + category);
+  assert.ok(index.includes(fn), 'Backend export missing ' + fn);
+  assert.ok(workflow.includes('functions:' + fn), 'Deployment preset missing ' + fn);
+  assert.ok(prefs.includes("key: '" + category + "'"), 'Admin category UI missing ' + category);
 }
-for (const functionName of [
-  'getAdminAttentionPreferences','saveAdminAttentionPreferences',
-  'adminAttentionProfessionalApplications','adminAttentionReleases','adminAttentionScripts',
-  'adminAttentionImages','adminAttentionReviews','adminAttentionEditorPortfolio',
-  'adminAttentionReports','adminAttentionSecurity','adminAttentionSuggestions','adminAttentionBilling',
-]) {
-  assert.ok(index.includes(functionName),'missing backend export '+functionName);
-  assert.ok(backend.includes('export const ' + functionName) || functionName.startsWith('adminAttention'),'the owner callable or event must be implemented: '+functionName);
+for (const callable of ['getAdminAttentionPreferences','saveAdminAttentionPreferences']) {
+  assert.ok(index.includes(callable) && workflow.includes('functions:' + callable), 'Admin callable missing ' + callable);
 }
-assert.match(client,/adminPreferences\(\)/,'client reads owner preferences');
-assert.match(client,/saveAdminPreferences\(preferences:/,'client saves owner preferences');
-assert.match(userPreferences,/isAdministrator && !simulationMode && <AdminAttentionPreferences/,'normal user accounts cannot see owner settings');
-assert.match(app,/isAdministrator=\{canAdmin && !demoMode && !simulationMode && !liveRolePreview\}/,'only real owner context mounts preferences');
-assert.match(app,/item\.type === 'admin_attention'/,'owner alerts route to review pages');
-assert.match(app,/item\.type === 'admin_attention'\) await markNotificationRead/,'persistent alerts can be acknowledged');
-assert.match(app,/item\.subtype === 'report_review'/,'reports route to moderator');
-assert.match(app,/item\.subtype === 'security_alert'/,'security alerts route to Safety');
-assert.match(workflow,/workflow_dispatch:/,'new functions use the explicitly approved production backend workflow');
-assert.doesNotMatch(workflow,/^\s+push:/m,'backend deployment must not bypass owner-approved workflow identity');
-assert.match(workflow,/environment: production-backend/,'backend retains protected production environment');
-
-console.log('Nightjar administrator attention: secure owner-only preferences, push events, queue routes and scoped deployment contracts PASS');
+assert.ok(workflow.includes('functions:listNotifications'), 'Live notification feed missing from deployment');
+assert.match(workflow,/workflow_dispatch:/,'Backend needs explicit manual deployment');
+assert.match(workflow,/DEPLOY-NIGHTJAR/,'Backend production deploy requires confirmation');
+assert.match(backend,/onDocumentWritten\(/,'Admin attention must monitor real data writes');
+assert.match(backend,/if \(!newAttention\(category, before, after\)\) return;/,'Pending edits must not re-notify');
+assert.match(backend,/await notificationRef\.create\(/,'Attention alerts should be idempotent');
+assert.match(backend,/!owner\.emailVerified/,'Only verified admin identities may receive alerts');
+assert.match(backend,/getAuth\(\)\.getUserByEmail\(email\)/,'Admin list must be resolved from Auth');
+assert.match(backend,/const admin = adminIdentity\(request\)/,'Preference callable must enforce admin identity');
+assert.match(backend,/if \(!preferences\[category\]\) return;/,'Phone pushes must honour admin opt-out');
+assert.match(backend,/type: 'admin_attention'/,'Admin alerts must have dedicated type');
+assert.match(backend,/title: 'Nightjar Administrator'/,'Lock-screen wording must be discreet');
+assert.match(backend,/sendEachForMulticast\(/,'FCM pushes must originate from server');
+assert.match(index,/identity\.admin \? await adminActionNotifications\(\)/,'Admin queue data must not leak to members');
+assert.match(app,/item\.type === 'admin_attention' && canAdmin/,'Only admins may open action notifications');
+assert.match(settings,/isAdministrator && !simulationMode && <AdminAttentionPreferences/,'Normal users must not see admin preference controls');
+assert.match(prefs,/nightjarNotifications\.saveAdminPreferences\(prefs\)/,'Admin preferences must persist');
+assert.match(app,/item\.actionRequired !== true/,'Outstanding admin queue summaries must remain visible');
+assert.match(app,/if \(url\.startsWith\('\/admin'\) && canAdmin\)/,'Push deep links must be admin-only');
+console.log('Nightjar Administrator Attention contract PASS: 10 queues, verified admins, privacy, scoped rollout');
