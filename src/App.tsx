@@ -65,6 +65,7 @@ import {
   ImagePlus,
   RefreshCw,
   MessageCircle,
+  CalendarDays,
   Share2,
 } from 'lucide-react';
 import NightjarPlayer from './components/NightjarPlayer';
@@ -98,6 +99,7 @@ const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipelin
 const CreatorLivePreviewOverview = lazy(() => import('./components/CreatorLivePreviewOverview'));
 const CreatorProfile = lazy(() => import('./components/CreatorProfile'));
 const ContentModeration = lazy(() => import('./components/ContentModeration'));
+const PersonalCalendar = lazy(() => import('./components/PersonalCalendar'));
 const NightjarOnboarding = lazy(() => import('./components/NightjarOnboarding'));
 const CloudProfileDraft = lazy(() => import('./components/CloudProfileDraft'));
 const PublicProfile = lazy(() => import('./components/PublicProfile'));
@@ -126,7 +128,7 @@ const AdminLiveProfileViewer = lazy(() => import('./components/AdminLiveProfileV
 const EditorShowcaseModeration = lazy(() => import('./components/EditorShowcaseModeration'));
 
 
-type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'settings';
+type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'calendar' | 'settings';
 type AgeStage = 'gate' | 'assurance' | 'app';
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -448,7 +450,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
 const EMPTY_PROFILE = { displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, creatorLanguages: [], creatorDirectionModes: [], creatorDeliveryFormats: [], creatorTurnaround: '', creatorEquipment: '', writerScriptLengths: [], writerCollaborationPreferences: [], writerTurnaround: '', writerRightsNote: '', artistMediums: [], artistDeliveryFormats: [], artistTurnaround: '', artistSoftware: [], listenerCommunityStyle: [], publicProfile: true };
 
 function App() {
-  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
+  const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','calendar','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
   const [playing, setPlaying] = useState<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
@@ -912,7 +914,7 @@ function App() {
         setAdminPanel(null);
         setAdminPeopleRole(null);
       }
-      setView((['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(topLevel) ? topLevel : 'discover') as View);
+      setView((['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','calendar','settings'].includes(topLevel) ? topLevel : 'discover') as View);
     };
     window.addEventListener('popstate', onPop);
     void (async () => {
@@ -1238,7 +1240,7 @@ function App() {
         return;
       }
       const route = url.replace(/^\//, '');
-      const target = (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(route)
+      const target = (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','calendar','settings'].includes(route)
         ? route : 'discover') as View;
       navigate(target);
     };
@@ -1273,7 +1275,7 @@ function App() {
     setPublicProfileUserId(null);
     setPublicProfileInitialRole(null);
     const value = returnPath.replace(/^\/+|\/+$/g, '');
-    if (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(value)) setView(value as View);
+    if (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','calendar','settings'].includes(value)) setView(value as View);
   };
 
   const recommendCreator = async (person: PublicDirectoryProfile, selectedRole: ShareableProfileRole) => {
@@ -1567,7 +1569,7 @@ function App() {
       if (item.type === 'admin_attention') await markNotificationRead(item);
       setNotificationsOpen(false);
       navigate('admin');
-      if (item.subtype === 'release_verification') {
+      if (item.subtype === 'release_verification' || item.subtype === 'release_submitted') {
         setModerationOpen(true);
       } else if (item.subtype === 'professional_approval') {
         openAdminPanel('approvals');
@@ -1620,7 +1622,7 @@ function App() {
       return;
     }
 
-    if (item.type === 'message' && item.conversationId && ['creator','writer','editor','artist'].includes(String(effectiveRole))) {
+    if (item.type === 'message' && item.conversationId && (['creator','writer','editor','artist'].includes(String(effectiveRole)) || role === 'admin')) {
       setMessageConversationId(String(item.conversationId));
       setMessageRecipientUserId(null);
       setMessageCollaborationId(item.collaborationId ? String(item.collaborationId) : null);
@@ -4130,6 +4132,7 @@ function App() {
     ...(effectiveRole === 'writer' ? [{ id:'nav-writer', group:'Studio', label:'Writer Studio', detail:'Manuscripts, rights and collaborations', keywords:['script','write'], icon:<FileText size={15}/>, action:()=>{ navigate('writer'); void loadWriterScripts(); } }] : []),
     ...(effectiveRole === 'editor' ? [{ id:'nav-editor', group:'Studio', label:'Editor Studio', detail:'Professional profile, portfolio, projects and collaborations', keywords:['edit','review','portfolio','services'], icon:<FileCheck2 size={15}/>, action:()=>{ navigate('editor'); void loadEditorQueue(); void loadProfile(); } }] : []),
     ...(effectiveRole === 'artist' ? [{ id:'nav-artist', group:'Studio', label:'Artist Studio', detail:'Artwork, portfolio and collaboration opportunities', keywords:['artist','artwork','commission','illustration','portfolio'], icon:<ImagePlus size={15}/>, action:()=>navigate('artist') }] : []),
+    { id:'nav-calendar', group:'Account', label:'My calendar', detail:'Your local date, private plans and scheduled audio releases',keywords:['calendar','date','schedule','release','appointment'],icon:<CalendarDays size={15}/>,action:()=>navigate('calendar') },
     { id:'nav-profile', group:'Account', label:'Profile', detail:'Identity, public showcase and preferences', keywords:['settings','bio'], icon:<UserCircle2 size={15}/>, action:openProfileEditor },
     { id:'nav-protection', group:'Account', label:'Protection Centre', detail:'Reports, evidence and account safety', keywords:['security','safety'], icon:<ShieldCheck size={15}/>, action:()=>{ navigate('protection'); void loadProtection(); } },
     ...(canAdmin && !simulationMode ? [{ id:'nav-admin', group:'Administration', label:'Owner Console', detail:'People, content, security and commercial operations', keywords:['admin','moderation'], icon:<Settings2 size={15}/>, action:()=>{ navigate('admin'); void loadAdminOverview(); } }] : []),
@@ -4211,11 +4214,12 @@ function App() {
           {effectiveRole === 'writer' && !liveRolePreview && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && !liveRolePreview && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
           {effectiveRole === 'artist' && !liveRolePreview && <button className={view === 'artist' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('artist')}>Artist Studio</button>}
-          {!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
+          {!liveRolePreview && (['creator','writer','editor','artist'].includes(String(effectiveRole)) || role === 'admin') && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && !liveRolePreview && <button className={view === 'profile' && !profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && (!canAdmin || interactiveRoleTest) && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && !liveRolePreview && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
           {canAdmin && !simulationMode && <button className={view === 'admin' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}>Admin</button>}
+          {user && !liveRolePreview && <button className={view === 'calendar' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('calendar')}>Calendar</button>}
           {user && !liveRolePreview && <button className={view === 'settings' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('settings')}>Settings</button>}
         </nav>
 
@@ -4543,10 +4547,10 @@ function App() {
           </section>
         )}
 
-        {view === 'messages' && !liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && (role === 'admin' || accountStatus === 'active' || demoMode) && (
+        {view === 'messages' && !liveRolePreview && (['creator','writer','editor','artist'].includes(String(effectiveRole)) || role === 'admin') && (role === 'admin' || accountStatus === 'active' || demoMode) && (
           <section className="page-wrap messages-page">
-            <div className="page-heading"><div><p className="eyebrow"><MessageCircle size={14}/> PRIVATE MESSAGING</p><h1>Keep creative conversations moving.</h1><p>VA Creators, Writers, Audio Editors and Artists can communicate directly inside Nightjar without changing rights, credits or access permissions.</p></div></div>
-            <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading private messages" />}><MessagingHub role={effectiveRole as 'creator'|'writer'|'editor'|'artist'} currentUserId={user?.userId} initialRecipientUserId={messageRecipientUserId} initialConversationId={messageConversationId} initialCollaborationId={messageCollaborationId} onRecipientHandled={()=>{setMessageRecipientUserId(null);setMessageConversationId(null);setMessageCollaborationId(null);}} onUnreadChange={setMessageUnreadCount} onStatusChange={({unread,needsReply,awaitingReply})=>{setMessageUnreadCount(unread);setMessageNeedsReplyCount(needsReply);setMessageAwaitingReplyCount(awaitingReply);}} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
+            <div className="page-heading"><div><p className="eyebrow"><MessageCircle size={14}/> PRIVATE MESSAGING</p><h1>Keep creative conversations moving.</h1><p>Creators and Nightjar administrators can communicate directly inside Nightjar without changing rights, credits or access permissions.</p></div></div>
+            <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading private messages" />}><MessagingHub role={role === 'admin' ? 'admin' : effectiveRole as 'creator'|'writer'|'editor'|'artist'} currentUserId={user?.userId} initialRecipientUserId={messageRecipientUserId} initialConversationId={messageConversationId} initialCollaborationId={messageCollaborationId} onRecipientHandled={()=>{setMessageRecipientUserId(null);setMessageConversationId(null);setMessageCollaborationId(null);}} onUnreadChange={setMessageUnreadCount} onStatusChange={({unread,needsReply,awaitingReply})=>{setMessageUnreadCount(unread);setMessageNeedsReplyCount(needsReply);setMessageAwaitingReplyCount(awaitingReply);}} notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>
           </section>
         )}
 
@@ -4630,6 +4634,23 @@ function App() {
           </section>
         )}
 
+        {view === 'calendar' && user && ageVerified && !liveRolePreview && (
+          <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Opening your Nightjar calendar" />}>
+            <PersonalCalendar role={effectiveRole ?? 'listener'} showCreatorReleases={uniqueProfileEditableRoles.includes('creator') || effectiveRole === 'creator'} simulationMode={simulationMode || demoMode} notify={notify}
+              onOpenStudio={() => {void (async()=>{
+                try {
+                  if (!canAdmin && effectiveRole !== 'creator') {
+                    const result = await nightjarAccount.setActiveRole('creator');
+                    if (result.activeRole !== 'creator') throw new Error('Nightjar could not switch to your approved VA Creator workspace.');
+                    setRole('creator');void loadProfile('creator');
+                  }
+                  navigate('creator');void loadCreatorDashboard();
+                  window.setTimeout(()=>document.getElementById('creator-pipeline')?.scrollIntoView({behavior:'smooth',block:'start'}),150);
+                } catch(error) {notify(error instanceof Error?error.message:'Could not open VA Creator Studio.');}
+              })();}}
+              onOpenModeration={() => setModerationOpen(true)}/>
+          </Suspense>
+        )}
         {view === 'settings' && (
           <NightjarSettings
             email={simulationMode ? undefined : user?.email}
@@ -4637,6 +4658,7 @@ function App() {
             simulationMode={demoMode}
             notify={notify}
             onProfile={() => { navigate('profile'); void loadProfile(); }}
+            onCalendar={() => navigate('calendar')}
             onRoles={openMyRoles}
             onProtection={() => { navigate('protection'); void loadProtection(); }}
             onAdmin={() => { navigate('admin'); void loadAdminOverview(); void loadSecurityAlerts(); }}
@@ -5434,7 +5456,7 @@ function App() {
         <NightjarGiftPanel recipientUserId={supportTarget.userId} recipientName={supportTarget.name} recipientRole={supportTarget.role} recipientRoles={supportTarget.roles} onClose={()=>setSupportTarget(null)} notify={notify}/>
       </Suspense>}
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
-      <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
+      <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onMessageCreator={(creatorId) => { setModerationOpen(false);setMessageRecipientUserId(creatorId);setMessageConversationId(null);setMessageCollaborationId(null);navigate('messages'); }} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} onOpenProfile={(userId, role) => { setReviewTrack(null); openPublicProfile(userId, role); }} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={(draft,stepIndex,revision)=>finishOnboardingLater(draft,stepIndex,revision)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
