@@ -57,9 +57,14 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
     let switchedToCors = false;
     let resumeTime = 0;
     let wasPlaying = false;
+    // Unlock the context while the EQ button's user gesture is still active,
+    // before awaiting signed-media network checks.
+    const available = 'AudioContext' in window;
+    const preparationContext = available && !graph.current ? new AudioContext() : null;
+    if (preparationContext) void preparationContext.resume().catch(() => {});
     try {
       if (!graph.current) {
-        if (!('AudioContext' in window)) throw new Error('Web Audio is not available on this device.');
+        if (!available) throw new Error('Web Audio is not available on this device.');
         const src = audio.currentSrc || audio.src;
         if (src && new URL(src, window.location.href).origin !== window.location.origin) {
           // Never replace an actively playing track with an unverified
@@ -89,7 +94,7 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
           if (resumeTime > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(resumeTime, Math.max(0, audio.duration - 0.5));
           if (wasPlaying) void audio.play().catch(() => {});
         }
-        const context = new AudioContext();
+        const context = preparationContext ?? new AudioContext();
         const source = context.createMediaElementSource(audio);
         const bass = context.createBiquadFilter();
         bass.type = 'lowshelf'; bass.frequency.value = 180;
@@ -105,6 +110,7 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
       setMessage('EQ processing active.');
     } catch (error) {
       if (graph.current) route(false);
+      else if (preparationContext) void preparationContext.close().catch(() => {});
       // If the source cannot reload with CORS, restore the original media
       // request so signed/private audio remains playable without EQ.
       if (switchedToCors && !graph.current) {
