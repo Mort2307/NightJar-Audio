@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, RefreshCw, Rocket, ShieldCheck, WifiOff } from 'lucide-react';
 import { checkNightjarUpdate, type NightjarUpdateStatus } from '../platform/pwa';
 
-type GateId = 'age' | 'bypass' | 'beta' | 'security' | 'images' | 'applications' | 'build' | 'rules';
+type GateId = 'age' | 'bypass' | 'beta' | 'payments' | 'legal' | 'security' | 'images' | 'applications' | 'build' | 'rules';
 
 type Props = {
   testing?: {
@@ -25,6 +25,8 @@ type Props = {
   onOpenImages: () => void;
   onOpenApplications: () => void;
   onOpenAppUpdates: () => void;
+  onOpenFinance?: () => void;
+  onOpenLegalReadiness?: () => void;
 };
 
 type Gate = {
@@ -40,6 +42,7 @@ type Gate = {
 export default function AdminReleaseReadiness({
   testing, provider, openSecurityAlerts, pendingImages, pendingApplications,
   onOpenDidit, onOpenTesters, onOpenSecurityAlerts, onOpenImages, onOpenApplications, onOpenAppUpdates,
+  onOpenFinance, onOpenLegalReadiness,
 }: Props) {
   const [update, setUpdate] = useState<NightjarUpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
@@ -118,6 +121,34 @@ export default function AdminReleaseReadiness({
       action: onOpenTesters,
     },
     {
+      id: 'payments',
+      label: 'Subscriptions and payment processing',
+      detail: 'No production payment-provider acceptance or paid consumer flow has been independently attested. Beta development may continue.',
+      state: 'blocker',
+      next: [
+        'Obtain written confirmation that the chosen processor accepts Nightjar’s adult-audio business model and creator-payment structure.',
+        'Test an authorised subscription, renewal, cancellation, refunds, failed payments and entitlements without using live customer data.',
+        'Validate the advertised price, automatic-renewal disclosures, consumer support and creator payout rules with professional advisers.',
+        'Record processor approval, test evidence and a separate explicit public-launch decision before switching on paid subscriptions.',
+      ],
+      actionLabel: 'Open finance workspace',
+      action: onOpenFinance,
+    },
+    {
+      id: 'legal',
+      label: 'Legal and privacy launch sign-off',
+      detail: 'Operator identity, UK legal review, data processing records and safeguarding evidence still require human sign-off.',
+      state: 'blocker',
+      next: [
+        'Confirm the final legal operator, registered business details and customer support/contact arrangements.',
+        'Complete professional legal review of adult-content access, age assurance, consumer subscriptions and contributor agreements.',
+        'Document information security, privacy records, moderation, reporting, data retention and appropriate Online Safety Act compliance assessments.',
+        'Do not treat a clean build or a green Firebase deploy as legal or regulatory approval.',
+      ],
+      actionLabel: 'Open legal readiness checklist',
+      action: onOpenLegalReadiness,
+    },
+    {
       id: 'security',
       label: 'Security review queue',
       detail: openSecurityAlerts ? `${openSecurityAlerts} open security alert${openSecurityAlerts === 1 ? '' : 's'} require human review.` : 'No open security alerts.',
@@ -147,7 +178,7 @@ export default function AdminReleaseReadiness({
       id: 'applications',
       label: 'Professional application bank',
       detail: pendingApplications ? `${pendingApplications} new application${pendingApplications === 1 ? '' : 's'} await a decision.` : 'No pending professional applications.',
-      state: 'pass',
+      state: pendingApplications ? 'attention' : 'pass',
       next: [
         'Review only outstanding applications; previously approved users belong in Already Approved.',
         'Approve VA, Writer, Audio Editor and Artist roles independently without changing a suspended account’s status.',
