@@ -31,6 +31,7 @@ type Props = {
   notify: (message:string) => void;
   simulationMode?:boolean;
   onOpenEditorStudio?: () => void;
+  onResumeOnboarding?: () => void;
 };
 
 const roleLabel = (role: AccountRole | null) => {
@@ -68,6 +69,7 @@ export default function UserProfileStudio({
   notify,
   simulationMode=false,
   onOpenEditorStudio,
+  onResumeOnboarding,
 }: Props) {
   const handleProblem = nightjarHandleError(profile.handle);
   const suggestedHandle = handleProblem ? suggestNightjarHandle(profile.handle) : '';
@@ -106,6 +108,16 @@ export default function UserProfileStudio({
         <small>{profileCompletion >= 85 ? 'Your profile feels established.' : profileCompletion >= 60 ? 'Looking good — a few details will make it richer.' : 'Build this into a profile people remember.'}</small>
       </div>
     </section>
+
+    {profile.onboardingComplete !== true && role !== 'admin' && !simulationMode && onResumeOnboarding && (
+      <section className="panel nj-profile-setup-continue" aria-label="Finish setting up your Nightjar profile">
+        <div><span className="mini-label">YOUR PROFILE · FINISH ANYTIME</span>
+          <strong>Pick up where you left off.</strong>
+          <p>You're free to use your Listener account while you complete your Nightjar profile. Your saved details are still here, and the guided setup won't keep popping up at login.</p>
+        </div>
+        <button type="button" className="secondary-button" onClick={onResumeOnboarding}>Resume profile setup</button>
+      </section>
+    )}
 
     <div className="premium-user-value-strip">
       <div><UserCircle2 size={16}/><span><strong>Personal identity</strong><small>One profile across Nightjar</small></span></div>
