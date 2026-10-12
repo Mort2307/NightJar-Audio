@@ -3652,9 +3652,45 @@ textarea {
   font-weight: 800;
 }
 :root[data-nightjar-theme="bronze"] .nj-theme-choice.selected {
-  background: linear-gradient(150deg,#251b13,#13100e);
-  border-color: #d4a773;
-  box-shadow: 0 0 0 1px rgba(226,186,131,.45) inset, 0 12px 32px rgba(122,79,36,.13);
+  background: linear-gradient(150deg, #1b1d21, #111317);
+  border-color: #b78b59;
+  box-shadow: 0 0 0 1px rgba(223,185,133,.26) inset, 0 12px 32px rgba(0,0,0,.26);
+}
+/* The creator library uses hard-coded editorial hues; give Bronze Noir its own
+   graphite surfaces rather than inheriting the pink collection artwork. */
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-hero {
+  border-color: var(--line);
+  background: radial-gradient(ellipse at 94% 14%, rgba(183,139,89,.065), transparent 32%),
+    linear-gradient(150deg, #1b1d21, #0e1013 87%);
+  color: var(--ivory);
+}
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-category,
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-release {
+  border-color: var(--line);
+  background: linear-gradient(148deg, #1b1d21, #111317 85%);
+  color: var(--ivory);
+}
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-category:hover,
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-category.active {
+  border-color: var(--nj-line-strong);
+  background: linear-gradient(148deg, #25272c, #15171a 85%);
+}
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-avatar {
+  background: #25272c;
+}
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-eyebrow,
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-category-icon,
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-copy h2 em {
+  color: var(--plum-soft);
+}
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-copy > p,
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-category small {
+  color: var(--muted);
+}
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-value span,
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-category > span:last-child,
+:root[data-nightjar-theme="bronze"] .nj-listener-discovery-credit-list button small {
+  color: var(--plum-soft);
 }
 
 
