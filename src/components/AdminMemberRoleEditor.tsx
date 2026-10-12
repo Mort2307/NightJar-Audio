@@ -41,6 +41,19 @@ export default function AdminMemberRoleEditor({
     setError('');
   }, [account.userId, JSON.stringify(account.roles)]);
 
+  const applyAccountChange = async (change: () => Promise<void>, fallback: string) => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await change();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : fallback);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const approved = validRoles(account);
   const changed = selected.length !== approved.length || selected.some((role) => !approved.includes(role));
   const pending = Array.isArray(account.pendingProfessionalRoles)
@@ -89,29 +102,30 @@ export default function AdminMemberRoleEditor({
     <div className="people-row-controls">
       <button type="button" className={expanded ? 'primary-button' : 'secondary-button'}
         aria-expanded={expanded} aria-label={'Manage multiple roles for ' + (account.name ?? account.email ?? 'this member')}
-        onClick={() => { setExpanded((value) => !value); setError(''); }}>
+        disabled={busy} onClick={() => { setExpanded((value) => !value); setError(''); }}>
         <Users size={15}/> {expanded ? 'Hide role manager' : 'Manage Roles & Access'}
       </button>
       <label>Active workspace
         <select disabled={busy} value={account.role ?? 'listener'}
-          onChange={(event) => void onActiveRoleChange(account, event.target.value as 'listener' | NightjarManagedProfessionalRole)}>
+          onChange={(event) => void applyAccountChange(() => onActiveRoleChange(account, event.target.value as 'listener' | NightjarManagedProfessionalRole), 'Workspace could not be changed.')}>
           <option value="listener">Listener</option>
           {approved.map((role) => <option key={role} value={role}>{PROFESSION_OPTIONS.find((item) => item.id === role)?.name}</option>)}
         </select>
       </label>
       <label>Account status
         <select disabled={busy} value={account.status ?? 'active'}
-          onChange={(event) => void onStatusChange(account, event.target.value as 'active' | 'pending_review' | 'suspended')}>
+          onChange={(event) => void applyAccountChange(() => onStatusChange(account, event.target.value as 'active' | 'pending_review' | 'suspended'), 'Account status could not be changed.')}>
           <option value="active">Active</option>
           <option value="pending_review">Pending review</option>
           <option value="suspended">Suspended</option>
         </select>
       </label>
       <button type="button" className={account.testAccess ? 'secondary-button' : 'ghost-button'}
-        disabled={busy} onClick={() => void onTestAccessChange(account, !account.testAccess)}>
+        disabled={busy} onClick={() => void applyAccountChange(() => onTestAccessChange(account, !account.testAccess), 'Tester access could not be updated.')}>
         {account.testAccess ? 'Remove tester access' : 'Enable tester access'}
       </button>
     </div>
+    {error && <div className="nj-role-save-error" role="alert">{error}</div>}
     {expanded && <div className="admin-member-multi-role-editor" role="group" aria-label="Select multiple professional roles">
       <div className="admin-member-multi-role-heading">
         <ShieldCheck size={17}/><div><strong>One account. Multiple professional roles.</strong>
@@ -148,7 +162,6 @@ export default function AdminMemberRoleEditor({
           onClick={() => void queueRoles()}>{busy ? 'Updating roles…' : 'Queue selected roles for review'}</button>
       </div>
 
-      {error && <div className="nj-role-save-error" role="alert">{error}</div>}
       <div className="admin-member-multi-role-actions">
         <button type="button" className="ghost-button" disabled={busy} onClick={() => setSelected(approved)}><X size={15}/> Reset selection</button>
         <button type="button" className="primary-button" disabled={busy || !changed} onClick={() => void save()}>
