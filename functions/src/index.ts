@@ -1472,6 +1472,8 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     artistSoftware: cleanStringList(input.artistSoftware, 12),
     listenerCommunityStyle: cleanStringList(input.listenerCommunityStyle, 12),
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
+    // Separate explicit opt-in: historic admin profiles can never become public by accident.
+    adminCommunityVisible: identity.admin && input.adminCommunityVisible === true,
     onboardingComplete: input.onboardingComplete === true,
     ...(input.onboardingComplete === true ? { onboardingDeferred: false } : {}),
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
@@ -1646,7 +1648,8 @@ const publicProfilePayload = (
   accountData: Record<string, any>,
   data: Record<string, any> | undefined,
 ) => {
-  if (!data || data.publicProfile === false) return null;
+  const nightjarTeam = accountData.role === 'admin';
+  if (!data || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)) return null;
   const roles = professionalRolesForAccount(accountData);
   const activeRole = cleanText(accountData.role, 30);
   const publicRole = activeRole === 'listener' || roles.includes(activeRole as AccountRole)
@@ -1655,7 +1658,8 @@ const publicProfilePayload = (
   return {
     userId,
     role: publicRole,
-    roles: ['listener', ...roles],
+    roles: nightjarTeam ? ['listener'] : ['listener', ...roles],
+    nightjarTeam,
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
     handle: data.handle ?? null,
@@ -1818,11 +1822,12 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
 
   const allowedRoles = new Set(['creator','writer','editor','artist','listener']);
   const profiles = (await Promise.all(accounts.docs
-    .filter((doc) => doc.data().status === 'active' && (allowedRoles.has(String(doc.data().role ?? '')) || professionalRolesForAccount(doc.data() ?? {}).length > 0))
+    .filter((doc) => doc.data().status === 'active' && (doc.data().role === 'admin' || allowedRoles.has(String(doc.data().role ?? '')) || professionalRolesForAccount(doc.data() ?? {}).length > 0))
     .map(async (doc) => {
       const data = profileByUser.get(doc.id);
-      if (!data || data.publicProfile === false) return null;
       const accountData = doc.data() ?? {};
+      const nightjarTeam = accountData.role === 'admin';
+      if (!data || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)) return null;
       const professionalRoles = professionalRolesForAccount(accountData);
       const activeRole = cleanText(accountData.role, 30);
       const role = activeRole === 'listener' || professionalRoles.includes(activeRole as AccountRole)
@@ -1836,7 +1841,8 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
-        roles: ['listener', ...professionalRoles],
+        roles: nightjarTeam ? ['listener'] : ['listener', ...professionalRoles],
+        nightjarTeam,
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
@@ -1885,12 +1891,12 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
 
   const accountData = account.data();
   const data = profile.data();
+  const nightjarTeam = accountData?.role === 'admin';
   if (
     !account.exists
     || !data
     || accountData?.status !== 'active'
-    || accountData?.role === 'admin'
-    || data.publicProfile === false
+    || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)
   ) {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
@@ -2008,7 +2014,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     profile: {
       userId,
       role,
-      roles: ['listener', ...professionalRoles],
+      roles: nightjarTeam ? ['listener'] : ['listener', ...professionalRoles],
+      nightjarTeam,
       displayName: data.displayName ?? 'Nightjar member',
       name: data.displayName ?? 'Nightjar member',
       handle: data.handle ?? null,
@@ -2216,10 +2223,12 @@ export const setProfileFollow = onCall({ region: REGION }, async (request) => {
     accountRef(targetUserId).get(),
     profileRef(targetUserId).get(),
   ]);
-  if (!target.exists || target.data()?.status !== 'active' || target.data()?.role === 'admin') {
+  if (!target.exists || target.data()?.status !== 'active') {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
-  if (!profile.exists || profile.data()?.publicProfile === false) {
+  if (!profile.exists || (target.data()?.role === 'admin'
+    ? profile.data()?.adminCommunityVisible !== true
+    : profile.data()?.publicProfile === false)) {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
 
