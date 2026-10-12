@@ -299,8 +299,8 @@ export default function ReleaseReviews({
       <button type="button" className={item.myReaction === 'like' ? 'active' : ''} aria-label={'Like comment by ' + (item.commenterName ?? 'member')} aria-pressed={item.myReaction === 'like'} disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)} onClick={() => void reactToComment(item, 'like')}>
         <span aria-hidden="true">👍</span> <span>{Number(item.reactionLikeCount ?? 0)}</span>
       </button>
-      <button type="button" className={item.myReaction === 'love' ? 'active' : ''} aria-label={'Heart comment by ' + (item.commenterName ?? 'member')} aria-pressed={item.myReaction === 'love'} disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)} onClick={() => void reactToComment(item, 'love')}>
-        <span aria-hidden="true">❤️</span> <span>{Number(item.reactionLoveCount ?? 0)}</span>
+      <button type="button" className={item.myReaction === 'love' ? 'active' : ''} aria-label={'Love comment by ' + (item.commenterName ?? 'member')} aria-pressed={item.myReaction === 'love'} disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)} onClick={() => void reactToComment(item, 'love')}>
+        <span aria-hidden="true">❤️</span> Love <span>{Number(item.reactionLoveCount ?? 0)}</span>
       </button>
       {currentUserId && item.userId !== currentUserId && (
         <button type="button" className="release-comment-flag" aria-label={'Flag comment by ' + (item.commenterName ?? 'member') + ' for admin review'} onClick={() => void reportComment(item)}>
@@ -352,7 +352,7 @@ export default function ReleaseReviews({
       <div className="release-community-reactions">
         <div><span className="mini-label">LISTENER REACTIONS</span><strong>{community.reactions?.total ?? 0} reaction{community.reactions?.total === 1 ? '' : 's'}</strong></div>
         <button type="button" className={community.reactions?.myReaction==='like'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('like')}><span aria-hidden="true">👍</span> Like <span>{community.reactions?.likes ?? 0}</span></button>
-        <button type="button" className={community.reactions?.myReaction==='love'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('love')}><span aria-hidden="true">❤️</span> Heart <span>{community.reactions?.loves ?? 0}</span></button>
+        <button type="button" className={community.reactions?.myReaction==='love'?'active':''} disabled={!canCommunityInteract||reacting} onClick={()=>void react('love')}><span aria-hidden="true">❤️</span> Love <span>{community.reactions?.loves ?? 0}</span></button>
       </div>
 
       <div className="release-community-tabs" role="tablist" aria-label="Release community sections">
