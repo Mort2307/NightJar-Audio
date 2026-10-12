@@ -1211,6 +1211,41 @@ export const deleteMySocialLink = onCall({region:REGION},async(request)=>{
   return {deleted:true};
 });
 
+// Finishing later must persist across devices and role switches. Store the
+// unfinished personal profile privately; it is NOT made public or marked as
+// completed until the member deliberately finishes the onboarding flow.
+export const pauseProfileOnboarding = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) throw new HttpsError('permission-denied', 'Administrators do not use personal onboarding.');
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const provided = input.draft && typeof input.draft === 'object' && !Array.isArray(input.draft)
+    ? input.draft as Record<string, unknown>
+    : {};
+  const stepNumber = Number(input.stepIndex);
+  const stepIndex = Number.isFinite(stepNumber) ? Math.max(0, Math.min(2, Math.floor(stepNumber))) : 0;
+  const snapshot = await profileRef(identity.uid).get();
+  if (snapshot.data()?.onboardingComplete === true) return { dismissed:true, completed:true };
+  const draft = {
+    displayName:cleanText(provided.displayName,80),
+    handle:cleanText(provided.handle,50),
+    pronouns:cleanText(provided.pronouns,60),
+    headline:cleanText(provided.headline,140),
+    bio:cleanText(provided.bio,1200),
+    welcomeMessage:cleanText(provided.welcomeMessage,300),
+    favouriteTags:cleanStringList(provided.favouriteTags),
+    favouriteTropes:cleanStringList(provided.favouriteTropes),
+    favouriteCategories:cleanStringList(provided.favouriteCategories),
+    publicProfile:provided.publicProfile !== false,
+    stepIndex,
+  };
+  await profileRef(identity.uid).set({
+    onboardingDismissed:true,
+    onboardingDraft:draft,
+    onboardingPausedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  return { dismissed:true, completed:false };
+});
+
 export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -1389,9 +1424,18 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     // This preserves the details a member edited before switching tabs.
     Object.assign(roleProfiles, validatedRoleProfiles);
 
+    const onboardingWasComplete = currentProfileData.onboardingComplete === true;
+    const onboardingNowComplete = nextProfile.onboardingComplete || onboardingWasComplete;
     transaction.set(targetProfileRef, {
       ...topLevelProfileWrite,
       roleProfiles,
+      // A later role/profile edit must never revert an already finished
+      // account to onboarding-incomplete and reopen the modal on sign-in.
+      onboardingComplete:onboardingNowComplete,
+      ...(onboardingNowComplete ? {
+        onboardingDismissed:false,
+        onboardingDraft:FieldValue.delete(),
+      } : {}),
       ...(currentProfile.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
   });
