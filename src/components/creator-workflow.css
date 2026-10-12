@@ -201,3 +201,16 @@
 
 .nj-submission-confirmation .nj-creator-scheduled-confirmation,.nj-submission-confirmation .nj-creator-moderation-feedback{flex-basis:100%;font-size:13px;line-height:1.55;color:#ead6e4;}
 .nj-creator-moderation-feedback{border-top:1px solid var(--line,rgba(255,255,255,.12));padding-top:10px;white-space:pre-wrap;}
+
+/* Distribution labels are creator-declared, separate from Nightjar Originals. */
+.nj-release-distribution-panel{display:grid;gap:14px;min-width:0;margin:18px 0;padding:clamp(14px,3vw,20px);border:1px solid rgba(210,175,201,.28);border-radius:14px;background:rgba(164,115,157,.05)}
+.nj-release-distribution-options{display:grid;gap:10px;min-width:0}
+.nj-release-distribution-option{display:flex;align-items:flex-start;gap:12px;min-width:0;padding:12px;border:1px solid var(--line,rgba(255,255,255,.14));border-radius:10px;cursor:pointer;line-height:1.4;overflow-wrap:anywhere}
+.nj-release-distribution-option.selected{border-color:rgba(210,175,201,.8);background:rgba(210,175,201,.08)}
+.nj-release-distribution-option input{flex:0 0 18px;width:18px;height:18px;margin:2px 0 0;accent-color:#d8a5cb}
+.nj-release-distribution-option span{display:grid;gap:4px;min-width:0}
+.nj-release-distribution-option small{color:var(--muted,#c0b3bf);line-height:1.45;overflow-wrap:anywhere}
+.nj-release-distribution-attest{min-width:0;align-items:flex-start;line-height:1.45}
+.nj-admin-release-distribution{overflow-wrap:anywhere;line-height:1.5}
+.nj-admin-release-distribution small{display:block;opacity:.8;margin-top:5px}
+@media(max-width:720px){.nj-release-distribution-panel{padding:12px}.nj-release-distribution-option{font-size:14px;line-height:1.5}}

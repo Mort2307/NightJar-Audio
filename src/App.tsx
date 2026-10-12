@@ -288,6 +288,7 @@ type Track = {
   seriesTitle?: string | null;
   episodeNumber?: number | null;
   nightjarOriginal?: boolean;
+  releaseDistribution?: 'standard' | 'nightjar_first';
   productionNote?: string | null;
   communityLikeCount?: number;
   communityLoveCount?: number;
@@ -1388,6 +1389,7 @@ function App() {
         seriesTitle: release.seriesTitle ?? null,
         episodeNumber: release.episodeNumber ?? null,
         nightjarOriginal: release.nightjarOriginal === true,
+        releaseDistribution: release.releaseDistribution ?? 'standard',
         productionNote: release.productionNote ?? null,
         communityLikeCount: Math.max(0, Number(release.communityLikeCount ?? 0)),
         communityLoveCount: Math.max(0, Number(release.communityLoveCount ?? 0)),
@@ -5552,6 +5554,7 @@ function releaseToTrack(release: any): Track {
     seriesTitle: release.seriesTitle ?? null,
     episodeNumber: release.episodeNumber ?? null,
     nightjarOriginal: release.nightjarOriginal === true,
+    releaseDistribution: release.releaseDistribution ?? 'standard',
     productionNote: release.productionNote ?? null,
     communityLikeCount: Math.max(0, Number(release.communityLikeCount ?? 0)),
     communityLoveCount: Math.max(0, Number(release.communityLoveCount ?? 0)),
@@ -5593,7 +5596,7 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
       <div className="track-type"><span>{track.creator}</span><span>{track.duration}</span></div>
       <h3>{track.title}</h3>
       <small className="track-verified-listens"><Headphones size={13} aria-hidden="true"/> {Number(track.listenCount ?? 0).toLocaleString('en-GB')} qualified listens</small>
-      {(track.seriesTitle || track.contentRating || track.nightjarOriginal || track.transcriptAvailable) && <div className="track-meta-line">{track.nightjarOriginal && <span>NIGHTJAR ORIGINAL</span>}{track.transcriptAvailable && <span>TRANSCRIPT AVAILABLE</span>}{track.seriesTitle && <span>{track.seriesTitle}{track.episodeNumber != null ? ' · Episode ' + track.episodeNumber : ''}</span>}<span>{String(track.contentRating ?? 'adult').toUpperCase()}</span></div>}
+      {(track.seriesTitle || track.contentRating || track.nightjarOriginal || (track.releaseDistribution && track.releaseDistribution !== 'standard') || track.transcriptAvailable) && <div className="track-meta-line">{track.nightjarOriginal && <span>NIGHTJAR ORIGINAL</span>}{track.releaseDistribution === 'nightjar_first' && <span>FIRST ON NIGHTJAR</span>}{track.transcriptAvailable && <span>TRANSCRIPT AVAILABLE</span>}{track.seriesTitle && <span>{track.seriesTitle}{track.episodeNumber != null ? ' · Episode ' + track.episodeNumber : ''}</span>}<span>{String(track.contentRating ?? 'adult').toUpperCase()}</span></div>}
       <p>{track.descriptor}</p>
       {track.productionNote && <p className="track-production-note"><strong>Behind the scenes:</strong> {track.productionNote}</p>}
       {!!track.contributors?.length && <div className="track-credit-line">{track.contributors.slice(0,4).map((credit)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}
