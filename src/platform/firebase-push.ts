@@ -26,7 +26,7 @@ const statusCall = httpsCallable<void, {
     lastError: string | null;
   }>;
 }>(functions, 'myPushNotificationStatus');
-const testCall = httpsCallable<void, { attempted: number; sent: number; failed: number }>(functions, 'sendTestPushNotification');
+const testCall = httpsCallable<{ deviceId: string }, { attempted: number; sent: number; failed: number }>(functions, 'sendTestPushNotification');
 
 const vapidKey = String(import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '').trim();
 
@@ -216,7 +216,13 @@ export const nightjarPush = {
   },
 
   async test() {
-    return (await testCall()).data;
+    const deviceId = savedDevice();
+    if (!deviceId || !/^[0-9a-f]{16}$/.test(deviceId)) {
+      throw new Error('Enable push on this device before requesting a test notification.');
+    }
+    // Explicit opt-in only: a test targets THIS device rather than every
+    // account session, which may include a shared or sleeping browser.
+    return (await testCall({ deviceId })).data;
   },
 
   async listenForeground(callback: (payload: MessagePayload) => void) {
