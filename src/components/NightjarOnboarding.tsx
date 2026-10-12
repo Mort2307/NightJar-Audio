@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Check, Sparkles, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
+import { nightjarProfileDrafts } from '../platform/firebase-profile-drafts';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import {
@@ -43,6 +44,13 @@ const steps: { id: Step; label: string; title: string; description: string }[] =
 export default function NightjarOnboarding({ initialProfile, role, onComplete, onSkip, notify }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
   const cardRef = useRef<HTMLElement | null>(null);
+  const revisionRef = useRef(0);
+  const lastSyncedRef = useRef('');
+  const pendingSaveRef = useRef<Promise<boolean>|null>(null);
+  const stopSyncRef = useRef(false);
+  const [draftReady,setDraftReady] = useState(false);
+  const [draftStatus,setDraftStatus] = useState<'loading'|'saved'|'saving'|'unsaved'|'conflict'|'offline'>('loading');
+  const [draftConflict,setDraftConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
   const [profile, setProfile] = useState<any>({
@@ -57,6 +65,108 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     favouriteCategories: initialProfile?.favouriteCategories || [],
     publicProfile: initialProfile?.publicProfile !== false,
   });
+
+  // Drafts live in Firestore under the signed-in account, not localStorage.
+  // The next phone, PC, browser or installed app sees the same draft.
+  useEffect(() => {
+    let cancelled=false;
+    stopSyncRef.current=false;
+    void nightjarProfileDrafts.get('onboarding').then((draft)=>{
+      if(cancelled)return;
+      revisionRef.current=draft.revision;
+      const saved=draft.payload;
+      if(saved){
+        const {stepIndex:restoredStep,...fields}=saved;
+        setProfile((prev:any)=>({...prev,...fields}));
+        setStepIndex(Math.max(0,Math.min(2,Number(restoredStep??0))));
+        lastSyncedRef.current=JSON.stringify({profile:{...profile,...fields},stepIndex:Number(restoredStep??0)});
+      }else{
+        lastSyncedRef.current=JSON.stringify({profile,stepIndex:0});
+      }
+      setDraftReady(true);
+      setDraftStatus('saved');
+    }).catch(()=>{
+      if(cancelled)return;
+      // Do not allow an unversioned device to overwrite an unseen cloud draft.
+      setDraftReady(false);
+      setDraftStatus('offline');
+      notify('Nightjar could not load your saved progress. Reconnect and retry before editing.');
+    });
+    return()=>{cancelled=true;stopSyncRef.current=true;};
+  },[]);
+
+  const workingProfileRef=useRef(profile);
+  const workingStepRef=useRef(stepIndex);
+  workingProfileRef.current=profile;
+  workingStepRef.current=stepIndex;
+  const createDraftPayload=()=>{
+    const p=workingProfileRef.current;
+    return {
+      displayName:p.displayName??'',handle:p.handle??'',pronouns:p.pronouns??'',
+      headline:p.headline??'',bio:p.bio??'',welcomeMessage:p.welcomeMessage??'',
+      favouriteTags:p.favouriteTags??[],favouriteTropes:p.favouriteTropes??[],
+      favouriteCategories:p.favouriteCategories??[],publicProfile:p.publicProfile!==false,
+      stepIndex:workingStepRef.current,
+    };
+  };
+  const syncDraft=async():Promise<boolean>=>{
+    if(!draftReady||draftConflict||stopSyncRef.current)return false;
+    if(pendingSaveRef.current)return pendingSaveRef.current.then((done)=>done && syncDraft());
+    const fullSignature=JSON.stringify({profile:workingProfileRef.current,stepIndex:workingStepRef.current});
+    if(fullSignature===lastSyncedRef.current){setDraftStatus('saved');return true;}
+    setDraftStatus('saving');
+    const pending=(async()=>{
+      try{
+        const result=await nightjarProfileDrafts.save('onboarding',createDraftPayload(),revisionRef.current);
+        if(stopSyncRef.current)return false;
+        if(!result.saved){
+          setDraftConflict(true);setDraftStatus('conflict');
+          return false;
+        }
+        revisionRef.current=result.revision;
+        lastSyncedRef.current=fullSignature;
+        setDraftStatus('saved');
+        return true;
+      }catch{
+        if(!stopSyncRef.current)setDraftStatus('offline');
+        return false;
+      }
+    })();
+    pendingSaveRef.current=pending;
+    try{return await pending;}finally{pendingSaveRef.current=null;}
+  };
+  useEffect(()=>{
+    if(!draftReady||draftConflict||stopSyncRef.current)return;
+    const signature=JSON.stringify({profile,stepIndex});
+    if(signature===lastSyncedRef.current)return;
+    setDraftStatus('unsaved');
+    const timer=window.setTimeout(()=>{void syncDraft();},1100);
+    return()=>window.clearTimeout(timer);
+  },[profile,stepIndex,draftReady,draftConflict]);
+
+  const restoreLatest=async()=>{
+    setDraftStatus('loading');
+    try{
+      const draft=await nightjarProfileDrafts.get('onboarding');
+      revisionRef.current=draft.revision;
+      const {stepIndex:restoredStep,...fields}=draft.payload??{};
+      const nextProfile={...initialProfile,...fields};
+      const nextStep=Math.max(0,Math.min(2,Number(restoredStep??0)));
+      workingProfileRef.current=nextProfile;workingStepRef.current=nextStep;
+      setProfile(nextProfile);setStepIndex(nextStep);
+      lastSyncedRef.current=JSON.stringify({profile:nextProfile,stepIndex:nextStep});
+      setDraftConflict(false);setDraftReady(true);setDraftStatus('saved');
+    }catch{setDraftStatus('offline');}
+  };
+  const keepLocalChanges=async()=>{
+    try{
+      const latest=await nightjarProfileDrafts.get('onboarding');
+      revisionRef.current=latest.revision;
+      setDraftConflict(false);setDraftStatus('unsaved');
+      // The user has explicitly chosen this device's draft over the newer
+      // remote draft; the next autosave performs the version-guarded write.
+    }catch{setDraftStatus('offline');}
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +200,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
       notify(handleProblem);
       return;
     }
+    if (!await syncDraft()){notify('Your profile draft has not synced. Resolve the connection or version conflict before finishing.');return;}
     setSaving(true);
     try {
       const payload = {
@@ -101,7 +212,10 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         onboardingVersion: 3,
       };
       const data = await nightjarCommunity.saveMyProfile(payload);
-      onComplete(data?.profile ?? payload);
+      if(!data?.profile?.onboardingComplete)throw new Error('Nightjar did not confirm your profile is complete.');
+      stopSyncRef.current=true;
+      await nightjarProfileDrafts.clear('onboarding',revisionRef.current).catch(()=>({cleared:false}));
+      onComplete(data.profile);
       notify(role === 'editor'
         ? 'Your Nightjar profile is ready. Build your professional Audio Editor identity inside Editor Studio.'
         : 'Your Nightjar profile is ready.');
@@ -115,6 +229,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
 
   const finishLater = async () => {
     if (saving) return;
+    if (!await syncDraft()){notify('Your draft is not synced yet. Please reconnect or resolve the conflict before leaving.');return;}
     setSaving(true);
     try {
       // Save whatever they completed as an ordinary incomplete profile.
@@ -132,6 +247,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
       if (!data?.profile?.onboardingDismissedAt) {
         throw new Error('Nightjar did not confirm that your profile can be finished later.');
       }
+      stopSyncRef.current=true;
       onSkip(data.profile);
       notify(handleProblem
         ? 'Your progress was saved. The invalid @handle was left blank so you can choose it later from your profile.'
@@ -189,7 +305,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   };
 
   return <div className="onboarding-backdrop premium-onboarding-backdrop" role="dialog" aria-modal="true" aria-labelledby="nightjar-onboarding-title">
-    <section ref={cardRef} className="onboarding-card premium-onboarding-card" aria-describedby="nightjar-onboarding-guidance">
+    <section ref={cardRef} className="onboarding-card premium-onboarding-card" aria-describedby="nightjar-onboarding-guidance" aria-busy={!draftReady || saving}>
       <div className="premium-onboarding-aura" aria-hidden="true"/>
       <header>
         <div>
@@ -198,9 +314,22 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
           <h2 id="nightjar-onboarding-title">You belong here.</h2>
           <p id="nightjar-onboarding-guidance">Nightjar profiles are designed to feel considered and personal. You can scroll through every field on your phone or save your progress and finish later.</p>
         </div>
-        <button type="button" className="icon-button" onClick={() => void finishLater()} disabled={saving} aria-label="Save profile progress and close setup"><X size={18}/></button>
+        <button type="button" className="icon-button" onClick={() => void finishLater()} disabled={saving||!draftReady||draftConflict} aria-label="Save profile progress and close setup"><X size={18}/></button>
       </header>
 
+      <div className="nj-cloud-draft-status" role="status" aria-live="polite">
+        <span>{draftStatus==='saved'?'Saved to your Nightjar account · available on other devices':
+          draftStatus==='saving'?'Saving your changes across devices…':
+          draftStatus==='unsaved'?'Changes pending cloud save…':
+          draftStatus==='conflict'?'This draft changed on another device. Choose which version to use.':
+          draftStatus==='offline'?'Unable to sync. Check your connection; your draft has not been overwritten.':
+          'Checking your Nightjar account for saved progress…'}</span>
+        {draftConflict && <div className="nj-cloud-draft-conflict">
+          <button type="button" className="secondary-button" onClick={()=>void restoreLatest()}>Load latest saved version</button>
+          <button type="button" className="ghost-button" onClick={()=>void keepLocalChanges()}>Keep my current edits</button>
+        </div>}
+        {!draftReady && <button type="button" className="ghost-button" onClick={()=>void restoreLatest()}>Retry sync</button>}
+      </div>
       <div className="premium-onboarding-stagebar">
         {steps.map((item,index)=><div className={index===stepIndex?'active':index<stepIndex?'complete':''} key={item.id}><span>{index<stepIndex?<Check size={11}/>:index+1}</span><small>{item.label}</small></div>)}
       </div>
@@ -209,7 +338,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         <span className="mini-label">{step.label}</span>
         <h3>{step.title}</h3>
         <p>{step.description}</p>
-        {renderStep()}
+        {draftReady ? renderStep() : <p className="nj-cloud-draft-loading">Waiting for your saved account profile…</p>}
       </article>
 
       <div className="onboarding-footer premium-onboarding-footer" aria-label="Profile setup navigation">
@@ -217,9 +346,9 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         <div>
           {stepIndex > 0 && <button className="secondary-button" onClick={()=>setStepIndex((index)=>index-1)}>Back</button>}
           {stepIndex < steps.length - 1
-            ? <button className="primary-button" onClick={()=>setStepIndex((index)=>index+1)}>Continue <ArrowRight size={14}/></button>
-            : <button className="primary-button" disabled={saving} onClick={()=>void finish()}><Check size={14}/>{saving?'Creating profile…':'Create my Nightjar profile'}</button>}
-          <button type="button" className="ghost-button" disabled={saving} onClick={() => void finishLater()}>{saving ? 'Saving progress…' : 'Save & finish later'}</button>
+            ? <button className="primary-button" disabled={!draftReady||draftConflict||saving} onClick={()=>setStepIndex((index)=>index+1)}>Continue <ArrowRight size={14}/></button>
+            : <button className="primary-button" disabled={saving||!draftReady||draftConflict} onClick={()=>void finish()}><Check size={14}/>{saving?'Creating profile…':'Create my Nightjar profile'}</button>}
+          <button type="button" className="ghost-button" disabled={saving||!draftReady||draftConflict} onClick={() => void finishLater()}>{saving ? 'Saving progress…' : 'Save & finish later'}</button>
         </div>
       </div>
     </section>
