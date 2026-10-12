@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Accessibility, Eye, RotateCcw, X } from 'lucide-react';
+import { nightjarAuth } from '../platform/firebase-auth';
 import { DEFAULT_VISION, nightjarVision, VISION_MODES, VISION_SIZES, type VisionMode, type VisionSize } from '../platform/nightjar-vision';
 
 /** The exact same accessible controls are usable in Settings and without signing in. */
@@ -65,6 +66,11 @@ export function VisionAccessControls() {
 export default function VisionAccessLauncher() {
   const dialog = useRef<HTMLDialogElement>(null);
   const [opened, setOpened] = useState(false);
+  // Only show an entry shortcut while signed out. After sign-in the full
+  // controls live in Settings → Accessibility, not over the player or menus.
+  // Wait for Firebase to hydrate so an existing session never flashes a button.
+  const [signedOut, setSignedOut] = useState(false);
+  useEffect(() => nightjarAuth.observe(identity => setSignedOut(identity === null)), []);
   const open = () => {
     const node = dialog.current;
     if (node && !node.open) node.showModal();
@@ -74,10 +80,13 @@ export default function VisionAccessLauncher() {
     dialog.current?.close();
     setOpened(false);
   };
+  if (!signedOut) return null;
+
   return <>
     <button type="button" className="nj-vision-launcher" onClick={open}
+      aria-label="Accessibility: adjust Nightjar display" title="Accessibility"
       aria-haspopup="dialog" aria-expanded={opened} aria-controls="nj-vision-dialog">
-      <Accessibility size={21} aria-hidden="true"/><span>Display options</span>
+      <Accessibility size={18} aria-hidden="true"/><span>Accessibility</span>
     </button>
     <dialog id="nj-vision-dialog" ref={dialog} className="nj-vision-dialog" aria-labelledby="nj-vision-title"
       onClose={() => setOpened(false)}>

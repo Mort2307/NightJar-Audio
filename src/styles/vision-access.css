@@ -102,13 +102,14 @@
   transition-duration:0.01ms!important;scroll-behavior:auto!important;
 }
 
-/* Visible before sign-in, throughout the app and on protected entry screens. */
+/* Compact, opt-in entry shortcut only while signed out.
+   Signed-in users change these controls inside Settings. */
 .nj-vision-launcher {
-  position:fixed;z-index:4000;left:14px;bottom:calc(18px + env(safe-area-inset-bottom));
-  display:inline-flex;align-items:center;gap:8px;min-height:48px;
-  padding:11px 14px;border:2px solid #fff;border-radius:999px;
-  font:700 14px/1.25 system-ui,sans-serif;letter-spacing:normal;
-  background:#0b0b0b;color:#fff;box-shadow:0 3px 20px #0009;
+  position:fixed;z-index:4000;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));
+  display:inline-flex;align-items:center;gap:7px;min-height:44px;
+  padding:8px 11px;border:2px solid #fff;border-radius:12px;
+  font:700 12px/1.25 system-ui,sans-serif;letter-spacing:normal;
+  background:#0b0b0b;color:#fff;box-shadow:0 2px 12px #0008;
   cursor:pointer;
 }
 .nj-vision-launcher:focus-visible,.nj-vision-close:focus-visible {
@@ -151,14 +152,27 @@
 .nj-vision-reset {justify-self:start;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 14px;border:2px solid #aaa;border-radius:9px;background:transparent;color:inherit;font:700 15px system-ui,sans-serif;}
 .nj-vision-footnote {margin:0;color:inherit;font-size:13px;line-height:1.5;}
 .nj-vision-done {width:100%;margin-top:18px;min-height:52px;border:2px solid #fff;border-radius:9px;background:#fff;color:#090909;font:800 17px system-ui,sans-serif;}
-/* In account settings, the user can also reach the same controls without opening the overlay. */
-.nj-settings-vision {max-width:900px;padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--panel);}
-.nj-settings-vision > h3 {font-size:clamp(20px,2.5vw,26px);margin:0 0 9px;}
-.nj-settings-vision > p {font-size:14px;line-height:1.6;margin:0 0 15px;}
+/* Settings-first design. The controls remain full-size when expanded,
+   but no longer occupy the Settings page until explicitly requested. */
+.nj-settings-vision {max-width:900px;padding:0;border:1px solid var(--line);border-radius:16px;background:var(--panel);}
+.nj-vision-summary {
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  cursor:pointer;min-height:54px;padding:15px 18px;
+  color:var(--ivory);list-style:none;
+}
+.nj-vision-summary::-webkit-details-marker {display:none;}
+.nj-vision-summary > span {display:grid;gap:4px;min-width:0;}
+.nj-vision-summary strong {font-size:17px;font-weight:800;}
+.nj-vision-summary small {font-size:12px;color:var(--muted);line-height:1.45;}
+.nj-vision-summary > svg {flex:0 0 auto;color:var(--plum-soft);}
+.nj-vision-summary:focus-visible {outline:3px solid var(--plum-soft);outline-offset:3px;}
+.nj-settings-vision[open] .nj-vision-summary {border-bottom:1px solid var(--line);}
+.nj-vision-settings-expanded {padding:17px 18px 20px;}
+.nj-vision-settings-expanded > p {font-size:14px;line-height:1.6;margin:0 0 15px;}
 .nj-settings-vision .nj-vision-mode {min-height:145px;}
 .nj-settings-vision .nj-vision-mode-grid {grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));}
 @media(max-width:480px) {
-  .nj-vision-launcher {bottom:calc(82px + env(safe-area-inset-bottom));left:10px;padding:10px 12px;font-size:12px;}
+  .nj-vision-launcher {bottom:calc(12px + env(safe-area-inset-bottom));left:10px;padding:8px 10px;font-size:12px;}
   .nj-vision-dialog {max-height:calc(100dvh - 16px);width:calc(100vw - 16px);padding:16px;border-radius:12px;}
   .nj-vision-mode {min-height:120px;}
   .nj-settings-vision {padding:14px;}

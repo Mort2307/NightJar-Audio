@@ -65,11 +65,16 @@ export default function NightjarSettings({ email, administrator, simulationMode,
       </div>
       <div className="nj-settings-tools">
         <div className="nj-settings-tool-heading"><Accessibility size={19}/><div><span className="mini-label">READABILITY</span><h2>Accessibility and transcripts</h2></div></div>
-        <section className="nj-settings-vision" aria-label="Vision access and low-vision reading options">
-          <h3>Vision Access</h3>
-          <p>Designed for blurred vision, reduced contrast and visual comfort. Changes are device-local; Nightjar account themes and transcript settings remain separate.</p>
-          <VisionAccessControls />
-        </section>
+        <details className="nj-settings-vision" aria-label="Vision access and low-vision reading options">
+          <summary className="nj-vision-summary">
+            <span><strong>Vision Access</strong><small>Low-vision colours, larger text and reduced motion</small></span>
+            <Accessibility size={21} aria-hidden="true"/>
+          </summary>
+          <div className="nj-vision-settings-expanded">
+            <p>Choose comfortable colours and readable text. Your choices stay on this device, separate from your Nightjar account theme.</p>
+            <VisionAccessControls />
+          </div>
+        </details>
         {simulationMode ? <p className="nj-settings-explanation">Live account preferences are not changed during role simulation.</p> : <AccessibilityPreferences />}
       </div>
       <div className="nj-settings-tools">

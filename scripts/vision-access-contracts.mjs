@@ -15,6 +15,17 @@ const themes = read('src/platform/nightjar-theme.ts');
 assert.match(main,/nightjarTheme\.initialise\(\);[\s\S]*nightjarVision\.initialise\(\);/, 'apply vision before any app screen mounts');
 assert.match(main,/<VisionAccessLauncher \/>/, 'a visitor can change display settings without signing in');
 assert.match(settings,/<VisionAccessControls \/>/, 'Settings has the same controls');
+assert.match(settings, /<details className="nj-settings-vision"/,
+  'vision controls are collapsed by default in Settings instead of occupying the whole page');
+assert.match(settings, /<summary className="nj-vision-summary"/,
+  'the Settings disclosure is discoverable and keyboard accessible');
+assert.match(controls, /nightjarAuth\.observe\(identity => setSignedOut\(identity === null\)\)/,
+  'the floating shortcut is only visible to signed-out visitors');
+assert.match(controls, /if \(!signedOut\) return null;/,
+  'signed-in members use Settings, not a floating button over Nightjar');
+assert.match(controls, /aria-label="Accessibility: adjust Nightjar display"/,
+  'compact pre-login button remains announced to screen readers');
+
 assert.match(controls,/<dialog/, 'browser-native dialog provides modal focus management and Escape handling');
 assert.match(controls,/aria-labelledby="nj-vision-title"/, 'dialog has an accessible name');
 assert.match(controls,/aria-pressed=\{prefs\.mode === mode\.id\}/, 'palettes have announced selections');
