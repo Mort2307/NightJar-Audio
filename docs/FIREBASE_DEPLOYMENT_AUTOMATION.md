@@ -144,6 +144,46 @@ For Firestore indexes/rules and Storage rules, the CLI deploy status and duratio
 - For the current CI, `build.yml` and `validate.yml` preserve existing check names; do not disable required branch-protection checks without auditing rulesets.
 - Pull-request preview URLs are temporary (seven days). Nightjar's protected backend must still enforce age/authorization regardless of preview Hosting URL.
 
+## Cloud Run invoker IAM requirement for new callable functions
+
+The GitHub backend identity `nightjar-backend-deploy@nightjar-audio.iam.gserviceaccount.com`
+must be able to update an HTTPS callable function's Cloud Run invoker IAM policy.
+Nightjar's original bootstrap granted `roles/cloudfunctions.developer`, which
+can create background Firestore functions but **does not** allow
+`run.services.setIamPolicy`. The Administrator Attention backend deployment
+[run 38280877508](https://github.com/Mort2307/NightJar-Audio/actions/runs/38280877508)
+confirmed this exact partial deployment on 12 October 2026: ten Firestore
+attention listeners and `listNotifications` deployed, while
+`getAdminAttentionPreferences` and `saveAdminAttentionPreferences` failed
+when Firebase attempted to set their invoker policies.
+
+**One-time operator action (Google Cloud Shell, project Owner or IAM administrator):**
+
+```bash
+gcloud projects add-iam-policy-binding nightjar-audio \
+  --member="serviceAccount:nightjar-backend-deploy@nightjar-audio.iam.gserviceaccount.com" \
+  --role="roles/cloudfunctions.admin"
+```
+
+This grants the existing GitHub service account the documented function-admin
+permission and does not expose service-account keys or make Firestore public.
+It gives project-wide Cloud Functions administrative powers to the already
+restricted, manual-GitHub-workflow identity, so retain the `workflow_dispatch`
+OIDC condition, protected production environment and release confirmation.
+
+If permission is still denied after IAM propagation, investigate
+`constraints/iam.allowedPolicyMemberDomains`, organization restrictions,
+and the required `run.services.setIamPolicy` permission; do not change
+anonymous access for unrelated functions as a workaround.
+
+**Recovery:** Execute the approved manual `admin-attention` deployment again
+on `main`, with confirmation `DEPLOY-NIGHTJAR`. Failed callable creation may
+leave Cloud Run services partially provisioned, so a fresh scoped deployment is
+preferable to an automated unreviewed retry. Check the two preferences callables
+and all ten listeners in the sanitized release report and manually test a new
+administrator attention event on a controlled test account. Do not declare
+admin push fully operational solely because the CLI reports success.
+
 ## Administrator Attention rollout (manual, admin-only)
 
 Nightjar has a separate Administrator Attention preference panel under Settings > Notifications, visible only to verified Administrators. Ten Firestore listeners issue discreet administrator push alerts for new professional applications, releases, scripts, images, reviews, Editor portfolios, flagged content, security, recommendations and billing exceptions. Each administrator can mute categories without affecting standard users.
