@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const server=fs.readFileSync('functions/src/index.ts','utf8');
+const submit=server.slice(server.indexOf('export const submitReleaseForModeration = '),server.indexOf('export const creatorDashboard = '));
+assert.match(submit,/if \(cleanReleaseTranscript\(data\.transcriptText\) && data\.transcriptAccessibilityReviewed !== true\)/,'only a supplied transcript requires accuracy confirmation');
+assert.doesNotMatch(submit,/transcript_required/,'no transcript must never block submission');
+assert.match(submit,/data\.rightsConfirmed !== true \|\| data\.contributorPermissionsConfirmed !== true/,'rights and contributor permissions remain mandatory');
+assert.match(submit,/!data\.title \|\| !data\.description \|\| !data\.category \|\| !data\.audioStoragePath/,'release details and audio remain mandatory');
+assert.match(submit,/data\.scheduledAt\) scheduleReleaseInput/,'future dates remain validated');
+const transcript=server.slice(server.indexOf('export const getReleaseTranscript = '),server.indexOf('export const getReleaseTranscript = ')+3200);
+assert.match(transcript,/if \(!transcriptText\) throw new HttpsError\('not-found'/,'no unavailable transcript represented as playback text');
+console.log('Optional-transcript backend contract passed.');
