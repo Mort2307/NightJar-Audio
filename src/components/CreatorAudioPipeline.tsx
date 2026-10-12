@@ -37,6 +37,8 @@ type Release = {
   seriesTitle?: string | null;
   episodeNumber?: number | null;
   nightjarOriginal?: boolean;
+  releaseDistribution?: 'standard' | 'nightjar_first';
+  releaseDistributionConfirmed?: boolean;
   productionNote?: string | null;
   rightsConfirmed?: boolean;
   contributorPermissionsConfirmed?: boolean;
@@ -191,8 +193,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     { label: 'Description', passed: Boolean(current?.description?.trim()), target: 'release-details', help: 'Add a short listener-facing description.' },
     { label: 'Publishing rights confirmed', passed: current?.rightsConfirmed === true, target: 'release-rights', help: 'Confirm you control the publishing rights.' },
     { label: 'Contributor permissions confirmed', passed: current?.contributorPermissionsConfirmed === true, target: 'release-rights', help: 'Confirm any necessary permissions for included work.' },
-    { label: 'Finished-audio transcript', passed: Boolean(current?.transcriptText?.trim()), target: 'release-transcript', help: 'Provide a readable transcript of the finished audio.' },
-    { label: 'Transcript accuracy confirmed', passed: current?.transcriptAccessibilityReviewed === true, target: 'release-transcript', help: 'Check the transcript against the recording.' },
+    ...(current?.transcriptText?.trim() ? [{ label: 'Optional transcript accuracy confirmed', passed: current?.transcriptAccessibilityReviewed === true, target: 'release-transcript', help: 'Check your optional transcript against the finished recording, or clear the text to submit without one.' }] : []),
+    ...(current?.releaseDistribution && current.releaseDistribution !== 'standard' ? [{ label: 'Creator release-label declaration', passed: current.releaseDistributionConfirmed === true, target: 'release-distribution', help: 'Choose First on Nightjar only if this recording is being released here for the first time.' }] : []),
     ...(current?.scheduledAt ? [{label:'Future publication time',passed:Date.parse(current.scheduledAt) > Date.now() + 60000,target:'release-schedule',help:'Choose a future release time. Review and approval must happen before publication.'}] : []),
   ];
   const incompleteChecks = reviewChecks.filter((check) => !check.passed);
@@ -505,7 +507,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const submit = async () => {
     if (!current?.id) return;
-    if (!complete) return notify('Add the release details, audio, final transcript and transcript accuracy confirmation before submitting.');
+    if (!complete) return notify('Complete required release details and rights declarations. If you supplied a transcript or special label, confirm its accuracy.');
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator publishing stays locked until your account is approved.');
     setSubmitting(true);
     try {
@@ -517,7 +519,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         notify('Simulation: release moved to pending moderation locally.');
         return;
       }
-      // Persist unsaved title, transcript and attestation edits BEFORE the
+      // Persist unsaved title, optional transcript, label and rights edits BEFORE the
       // server reviews the submission. Previously the UI could show complete
       // data while submit() still saw stale draft fields on Firestore.
       const saved = await nightjarCatalogue.update(current.id, {
@@ -582,7 +584,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <div className="nj-release-journey-steps">
               <div className="done"><Check size={14}/> 1. Draft created</div>
               <div className={current.audioAvailable ? 'done' : 'next'}>{current.audioAvailable ? <Check size={14}/> : <Music2 size={14}/>} 2. Audio uploaded and verified</div>
-              <div className={complete ? 'done' : current.audioAvailable ? 'next' : ''}>{complete ? <Check size={14}/> : <BookOpenText size={14}/>} 3. Details, rights and transcript</div>
+              <div className={complete ? 'done' : current.audioAvailable ? 'next' : ''}>{complete ? <Check size={14}/> : <BookOpenText size={14}/>} 3. Details & rights (transcript optional)</div>
               <div className={current.status === 'pending_review' || current.status === 'released' ? 'done' : complete ? 'next' : ''}>{current.status === 'pending_review' || current.status === 'released' ? <Check size={14}/> : <Send size={14}/>} 4. Submit for review</div>
             </div>
             <p role="status">{current.status === 'pending_review' ? 'Your release has reached the administrator moderation queue. No public listening is possible until it is approved.' : current.status === 'released' ? 'Nightjar approved and published this release.' : current.audioAvailable ? 'Your audio is stored privately, but has NOT been submitted. Complete the release information, then select Submit to moderation.' : 'Choose a supported audio file below. Selecting a file starts an upload; it does not publish or submit your release.'}</p>
@@ -675,18 +677,32 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </label>
           </section>
 
+          <section className="nj-release-distribution-panel" id="release-distribution" aria-label="Release debut and distribution">
+            <div className="release-transcript-head"><div><span className="mini-label">RELEASE IDENTITY · CREATOR DECLARED</span><strong>Where does this recording debut?</strong><p>Choose First on NightJar only if this is its first public release. You remain free to publish anywhere else. NightJar Original is reserved for productions commissioned and paid for by NightJar.</p></div></div>
+            <div className="nj-release-distribution-options" role="radiogroup" aria-label="Release distribution label">
+              {([
+                {value:'standard',label:'Standard release',help:'Available elsewhere already, or no special release label.'},
+                {value:'nightjar_first',label:'First on NightJar',help:'This is its first public release. You may distribute it elsewhere later.'},
+              ] as const).map((option)=><label key={option.value} className={(current.releaseDistribution || 'standard') === option.value ? 'nj-release-distribution-option selected':'nj-release-distribution-option'}>
+                <input type="radio" name="nightjar-release-distribution" checked={(current.releaseDistribution || 'standard') === option.value} onChange={()=>setRelease({releaseDistribution:option.value,releaseDistributionConfirmed:option.value === 'nightjar_first'})}/>
+                <span><strong>{option.label}</strong><small>{option.help}</small></span>
+              </label>)}
+            </div>
+            {current.releaseDistribution === 'nightjar_first' && <p className="nj-release-distribution-note">By selecting First on NightJar, you confirm this is its first public release. You remain free to publish this recording on other platforms at any time. No exclusivity or rights transfer applies.</p>}
+          </section>
+
           <section className="release-transcript-editor" id="release-transcript">
             <div className="release-transcript-head">
               <div>
-                <span className="mini-label">ACCESSIBILITY · FINAL RELEASE TRANSCRIPT</span>
-                <strong><BookOpenText size={16}/> Give every release a readable version.</strong>
+                <span className="mini-label">ACCESSIBILITY · OPTIONAL TRANSCRIPT</span>
+                <strong><BookOpenText size={16}/> Add a transcript if you have one.</strong>
                 <p>
-                  This should reflect the finished audio, not simply the original script. Include meaningful non-speech cues where they affect the experience.
+                  Transcripts help listeners who prefer or need text, but you can publish audio without one. If supplied, use the finished recording rather than the original script and include meaningful non-speech cues.
                   Optional timestamps let Nightjar follow playback and create a true read-along experience.
                 </p>
               </div>
               <span className={current.transcriptText?.trim() && current.transcriptAccessibilityReviewed ? 'status-pill' : 'status-pill muted'}>
-                {current.transcriptText?.trim() && current.transcriptAccessibilityReviewed ? 'READY' : 'REQUIRED'}
+                {current.transcriptText?.trim() ? current.transcriptAccessibilityReviewed ? 'READY' : 'REVIEW TEXT' : 'OPTIONAL'}
               </span>
             </div>
 
@@ -710,7 +726,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </div>
 
             <label className="release-transcript-text">
-              Transcript
+              Transcript (optional)
               <textarea
                 rows={14}
                 maxLength={120000}
@@ -738,7 +754,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               />
               <span>
                 <strong>I have checked this against the finished audio.</strong>
-                <small>Dialogue, meaningful sound cues and material changes from the original script are represented accurately.</small>
+                <small>Only needed when a transcript is included. Check dialogue, sound cues and changes from the original script.</small>
               </span>
             </label>
           </section>
