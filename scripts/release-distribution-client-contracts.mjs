@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const creator=readFileSync('src/components/CreatorAudioPipeline.tsx','utf8');
+const moderate=readFileSync('src/components/ContentModeration.tsx','utf8');
+const app=readFileSync('src/App.tsx','utf8');
+assert.match(creator,/First on NightJar/);
+assert.match(creator,/NightJar Exclusive/);
+assert.match(creator,/releaseDistributionConfirmed:false/);
+assert.match(creator,/Creator release-label declaration/);
+assert.match(creator,/ACCESSIBILITY · OPTIONAL TRANSCRIPT/);
+assert.doesNotMatch(creator,/label: 'Finished-audio transcript', passed:/);
+assert.doesNotMatch(creator,/final transcript and transcript accuracy confirmation before submitting/);
+assert.match(moderate,/Transcripts are optional\. You may approve/);
+assert.doesNotMatch(moderate,/This release needs a reviewed final transcript before it can be published/);
+assert.match(moderate,/Creator-declared label:/);
+assert.match(app,/FIRST ON NIGHTJAR/);
+assert.match(app,/NIGHTJAR EXCLUSIVE/);
+console.log('Release distribution and optional transcript UI contracts PASS.');
