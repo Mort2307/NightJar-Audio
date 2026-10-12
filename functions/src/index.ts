@@ -1255,6 +1255,12 @@ export const pauseProfileOnboarding = onCall({ region: REGION }, async (request)
       onboardingDraft:draft,
       onboardingDraftRevision:currentRevision+1,
       onboardingPausedAt:FieldValue.serverTimestamp(),
+      // An autosaved draft alone is not permission to publish a profile.
+      ...(prior.exists?{}:{
+        publicProfile:false,
+        onboardingComplete:false,
+        createdAt:FieldValue.serverTimestamp(),
+      }),
     },{merge:true});
     return {dismissed:dismiss,completed:false,revision:currentRevision+1};
   });
