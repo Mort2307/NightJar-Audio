@@ -5394,7 +5394,7 @@ function App() {
     </article>;
   })}
   {!adminScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Writer submissions awaiting approval appear here without requiring an Editor assignment.</span></div>}
-</div>}</div></div>}{adminPanel === 'tags' && <div className="admin-data-list">
+</div>}</div>}{adminPanel === 'tags' && <div className="admin-data-list">
   {adminPanelLoading ? <div className="people-empty">Loading custom tag catalogue…</div> : adminProfileTags.length === 0 ? <div className="people-empty"><Search size={18}/><strong>No custom tag candidates yet</strong><span>Creator-made tags will appear here as they are used. Automatic shared-catalogue promotion starts at {adminProfileTagThreshold} distinct approved Creators.</span></div> : adminProfileTags.map((tag:any)=><article className="admin-data-row" key={tag.id}>
     <div>
       <strong>{tag.label}</strong>
