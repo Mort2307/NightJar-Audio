@@ -486,12 +486,48 @@ button:focus-visible {
   border: 1px solid rgba(222, 190, 211, .12);
   border-radius: 50%;
 }
-.cover-crescent {
+.release-cover-media {
   position: absolute;
-  top: 68px;
-  right: 55px;
-  color: rgba(233,219,230,.68);
-  filter: drop-shadow(0 0 24px rgba(219, 183, 208, .16));
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.release-cover-brand {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(84, 62, 80, .23), transparent 67%);
+}
+
+.release-cover-brand-logo {
+  width: min(62%, 220px);
+  max-height: 63%;
+  object-fit: contain;
+  opacity: .9;
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, .38));
+}
+
+.track-cover .release-cover-brand-logo {
+  width: min(62%, 165px);
+}
+
+.release-cover-wordmark {
+  color: #e7d7df;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(18px, 3vw, 30px);
+  letter-spacing: .23em;
+  text-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+}
+
+.track-cover .release-cover-wordmark {
+  font-size: 18px;
 }
 .cover-art > span {
   position: relative;
