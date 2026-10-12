@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Check, Sparkles, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
@@ -13,7 +13,7 @@ type Props = {
   initialProfile?: any;
   role: 'listener' | 'creator' | 'writer' | 'admin' | 'editor' | 'artist' | null;
   onComplete: (profile: any) => void;
-  onSkip: () => void;
+  onSkip: (savedProfile?:any) => void;
   notify: (message: string) => void;
 };
 
@@ -42,6 +42,8 @@ const steps: { id: Step; label: string; title: string; description: string }[] =
 
 export default function NightjarOnboarding({ initialProfile, role, onComplete, onSkip, notify }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
+  const scrollRef = useRef<HTMLElement|null>(null);
+  const stepHeadingRef = useRef<HTMLHeadingElement|null>(null);
   const [saving, setSaving] = useState(false);
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
   const [profile, setProfile] = useState<any>({
@@ -64,6 +66,13 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
       .catch(() => { if (!cancelled) setPromotedTags([]); });
     return () => { cancelled = true; };
   }, []);
+
+  // Each step begins at the top of the accessible, finger-scrollable dialog.
+  // Never force a user to use keyboard Tab to reach hidden fields.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({top:0,behavior:'instant'});
+    stepHeadingRef.current?.focus({preventScroll:true});
+  },[stepIndex]);
 
   const combinedTags = useMemo(
     () => Array.from(new Set([...PROFILE_TAG_OPTIONS, ...promotedTags])).sort((a, b) => a.localeCompare(b)),
@@ -91,6 +100,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         handle: normaliseNightjarHandle(profile.handle),
         avatarInitials: initialProfile?.avatarInitials || initials,
         onboardingComplete: true,
+        onboardingDismissed: false,
         onboardingVersion: 3,
       };
       const data = await nightjarCommunity.saveMyProfile(payload);
@@ -101,6 +111,35 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Nightjar could not save your profile yet.';
       notify(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Closing the introduction means 'let me work on this later', not
+  // 'force me through the same VA/profile form every time I sign in'.
+  // Save any fields they already typed without marking the profile complete.
+  const finishLater = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const payload = {
+        ...(initialProfile ?? {}),
+        ...profile,
+        handle: handleProblem ? '' : normaliseNightjarHandle(profile.handle),
+        avatarInitials: initialProfile?.avatarInitials || initials,
+        onboardingDismissed:true,
+        onboardingComplete:false,
+        onboardingVersion:3,
+      };
+      const result = await nightjarCommunity.saveMyProfile(payload);
+      onSkip(result?.profile ?? payload);
+      notify('Your profile progress is saved. Finish setup any time from Profile.');
+    } catch {
+      // Closing the dialog must still work when a network request fails.
+      // The parent remembers the dismissal on this device, without claiming a save.
+      onSkip();
+      notify('Setup closed. Changes not saved; open Profile to finish when connected.');
     } finally {
       setSaving(false);
     }
@@ -152,16 +191,16 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   };
 
   return <div className="onboarding-backdrop premium-onboarding-backdrop" role="dialog" aria-modal="true" aria-labelledby="nightjar-onboarding-title">
-    <section className="onboarding-card premium-onboarding-card">
+    <section className="onboarding-card premium-onboarding-card" ref={scrollRef} tabIndex={-1} aria-label="Scrollable Nightjar profile setup">
       <div className="premium-onboarding-aura" aria-hidden="true"/>
       <header>
         <div>
           <span className="mini-label">NIGHTJAR / PROFILE CREATION</span>
           <p className="eyebrow"><UserCircle2 size={13}/> YOUR SPACE AFTER DARK</p>
           <h2 id="nightjar-onboarding-title">You belong here.</h2>
-          <p>Nightjar profiles are designed to feel considered and personal — not like a username attached to a database row.</p>
+          <p>This is your shared Nightjar profile, not a mandatory VA application. You can finish it later from Profile and keep using your Listener access.</p>
         </div>
-        <button className="icon-button" onClick={onSkip} aria-label="Close profile creation"><X size={18}/></button>
+        <button className="icon-button" disabled={saving} onClick={()=>void finishLater()} aria-label="Save progress and close profile creation"><X size={18}/></button>
       </header>
 
       <div className="premium-onboarding-stagebar">
@@ -170,7 +209,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
 
       <article className="onboarding-group premium-onboarding-group">
         <span className="mini-label">{step.label}</span>
-        <h3>{step.title}</h3>
+        <h3 ref={stepHeadingRef} tabIndex={-1} className="premium-onboarding-step-intro">{step.title}</h3>
         <p>{step.description}</p>
         {renderStep()}
       </article>
@@ -182,7 +221,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
           {stepIndex < steps.length - 1
             ? <button className="primary-button" onClick={()=>setStepIndex((index)=>index+1)}>Continue <ArrowRight size={14}/></button>
             : <button className="primary-button" disabled={saving} onClick={()=>void finish()}><Check size={14}/>{saving?'Creating profile…':'Create my Nightjar profile'}</button>}
-          <button className="ghost-button" disabled={saving} onClick={onSkip}>Finish later</button>
+          <button className="ghost-button" disabled={saving} onClick={()=>void finishLater()}>{saving?'Saving…':'Save & finish later'}</button>
         </div>
       </div>
     </section>
