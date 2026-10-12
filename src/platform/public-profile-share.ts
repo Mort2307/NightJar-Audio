@@ -1,7 +1,7 @@
 /** A share link always opens the selected public professional identity.
  * The Firebase UID is URL-encoded and no private account details are embedded.
  */
-export type ShareableProfileRole = 'creator' | 'writer' | 'editor' | 'artist';
+export type ShareableProfileRole = 'creator' | 'writer' | 'editor' | 'artist' | 'listener';
 export const publicProfileUrl = (origin: string, userId: string, role: ShareableProfileRole) =>
   origin.replace(/\/$/, '') + '/people/' + encodeURIComponent(userId) + '?role=' + encodeURIComponent(role);
 
