@@ -1,4 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
+import { nightjarQuickUnlock } from './nightjar-quick-unlock';
 import {
   browserLocalPersistence,
   createUserWithEmailAndPassword,
@@ -69,6 +70,8 @@ export const nightjarAuth = {
   },
 
   async signOut() {
+    // Explicit sign-out and cold-launch relock must invalidate refresh grants.
+    nightjarQuickUnlock.lock();
     await signOut(firebaseAuth);
   },
 
