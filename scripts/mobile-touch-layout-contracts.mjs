@@ -100,4 +100,33 @@ assert.match(artist, /<ArtistPortfolioManager notify=\{notify\} demoMode=\{demoM
 assert.match(portfolio, /formOpen && <div className="artist-portfolio-form">/, 'Artwork upload is collapsed until user requests it');
 assert.match(product, /\.nj-artist-studio-actions\s*\{/, 'Artist actions have responsive layout');
 
+const onboarding = fs.readFileSync('src/components/NightjarOnboarding.tsx','utf8');
+const server = fs.readFileSync('functions/src/index.ts','utf8');
+const community = fs.readFileSync('src/platform/firebase-community.ts','utf8');
+
+assert.match(styles, /\.premium-onboarding-card\s*\{[^}]*overflow-y:auto;/, 'onboarding modal must support touch scrolling');
+assert.match(styles, /\.premium-onboarding-card\s*\{[^}]*touch-action:pan-y;/, 'touch swipes can scroll the onboarding form');
+assert.match(styles, /\.premium-onboarding-footer\s*\{[^}]*position:sticky;/, 'the onboarding action bar stays reachable on narrow screens');
+assert.match(styles, /\.premium-onboarding-card\s*\{[^}]*100dvh/, 'mobile onboarding height respects visual viewport');
+assert.match(onboarding, /cardRef\.current\?\.scrollTo/, 'switching onboarding steps resets the inner form scroll');
+assert.match(onboarding, /Save &amp; finish later/, 'member can intentionally postpone onboarding');
+assert.match(onboarding, /savedDraft\?\.displayName/, 'saved onboarding draft prepopulates the resumed form');
+assert.match(server, /export const pauseProfileOnboarding = onCall/, 'profile postponement persists through an authenticated server operation');
+assert.match(server, /onboardingDismissed:dismiss/, 'the server persists whether the member actively postponed setup');
+assert.match(app, /nextProfile\.onboardingComplete !== true && nextProfile\.onboardingDismissed !== true/, 'completed or postponed onboarding does not interrupt future logins');
+assert.match(app, /Finish profile setup/, 'postponed setup has a visible profile-page resume action');
+assert.match(app, /await nightjarCommunity\.pauseOnboarding\(draft,stepIndex,revision\)/, 'the save and finish later action persists the versioned cloud draft before closing');
+assert.match(community, /pauseOnboardingCall/, 'client sends pause request to the correct backend callable');
+
+const roleManager = fs.readFileSync('src/components/ProfessionalRoleManager.tsx','utf8');
+const accountClient = fs.readFileSync('src/platform/firebase-account.ts','utf8');
+assert.match(server,/export const getMyProfessionalApplicationDraft = onCall/, 'professional application drafts are cloud-readable');
+assert.match(server,/export const saveMyProfessionalApplicationDraft = onCall/, 'professional application drafts are cloud-persisted');
+assert.match(server,/currentRevision!==expectedRevision|currentRevision!==expected|expected!==revision/, 'draft cloud saving rejects stale versions across devices');
+assert.match(onboarding,/nightjarCommunity\.saveOnboardingDraft/, 'onboarding fields autosave during input');
+assert.match(onboarding,/cloudRevision\.current/, 'onboarding autosave preserves the account draft revision');
+assert.match(roleManager,/nightjarAccount\.getApplicationDraft/, 'application draft is recovered on another device');
+assert.match(roleManager,/nightjarAccount\.saveApplicationDraft/, 'application edits autosave to Firebase');
+assert.match(accountClient,/getApplicationDraftCall/, 'professional draft read has a Firebase client connector');
+assert.match(accountClient,/saveApplicationDraftCall/, 'professional draft write has a Firebase client connector');
 console.log('Nightjar mobile dock, save-bar visibility and responsive touch-feedback contracts passed.');

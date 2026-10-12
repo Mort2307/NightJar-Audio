@@ -7,6 +7,7 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 type Profile = Record<string, any>;
 
 const getMyProfileCall = httpsCallable<void, { profile: Profile | null }>(functions, 'getMyProfile');
+const pauseOnboardingCall = httpsCallable<{draft:Profile;stepIndex:number;revision:number;dismiss:boolean},{dismissed:boolean;completed:boolean;revision:number}>(functions,'pauseProfileOnboarding');
 const saveMyProfileCall = httpsCallable<Profile, { profile: Profile | null }>(functions, 'saveMyProfile');
 const deferMyProfileOnboardingCall = httpsCallable<void, { deferred: boolean }>(functions, 'deferMyProfileOnboarding');
 const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'listCreators');
@@ -27,6 +28,13 @@ const setFavouriteReleaseCall = httpsCallable<{ releaseId: string; favourite: bo
 export const nightjarCommunity = {
   async getMyProfile() {
     return repairMojibakeDisplayData((await getMyProfileCall()).data);
+  },
+
+  async pauseOnboarding(draft: Profile, stepIndex: number, revision: number) {
+    return (await pauseOnboardingCall({draft,stepIndex,revision,dismiss:true})).data;
+  },
+  async saveOnboardingDraft(draft: Profile, stepIndex: number, revision: number) {
+    return (await pauseOnboardingCall({draft,stepIndex,revision,dismiss:false})).data;
   },
 
   async saveMyProfile(profile: Profile, profileRole?: string) {
