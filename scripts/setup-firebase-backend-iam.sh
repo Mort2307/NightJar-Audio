@@ -87,7 +87,7 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
 # Scope project access to functions development, Rules and index publishing.
 # Avoid project Owner/Editor and project-wide Service Account User.
 readonly MEMBER="serviceAccount:${SA_EMAIL}"
-for role in roles/cloudfunctions.developer roles/firebaserules.admin roles/datastore.indexAdmin roles/serviceusage.serviceUsageConsumer; do
+for role in roles/cloudfunctions.developer roles/firebaserules.admin roles/datastore.indexAdmin roles/serviceusage.serviceUsageConsumer roles/firebase.viewer; do
   echo "Ensuring project role: $role"
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="$MEMBER" --role="$role" --quiet >/dev/null
