@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Brush, FileText, Mic2, Scissors, ShieldCheck, X } from 'lucide-react';
-import { nightjarAccount, type NightjarProfessionalRole, type ProfessionalRoleState } from '../platform/firebase-account';
+import { nightjarAccount, type NightjarProfessionalRole, type ProfessionalRoleState, type NightjarApplicationDraft } from '../platform/firebase-account';
 import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
 import { readDemo, writeDemo } from '../demo/demoSession';
 
@@ -41,6 +41,16 @@ export default function ProfessionalRoleManager({
   const [legalDocuments, setLegalDocuments] = useState<LegalAgreementStatus[] | null>(null);
   const [legalError, setLegalError] = useState('');
   const [termsConfirmed, setTermsConfirmed] = useState(false);
+  const [draftHydrated,setDraftHydrated]=useState(simulationMode);
+  const [draftSync,setDraftSync]=useState<'saved'|'waiting'|'saving'|'error'>('saved');
+  const cloudRevision=useRef(0);
+  const draftTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const draftWrite=useRef<Promise<void>>(Promise.resolve());
+  const autosaveReady=useRef(false);
+  const draftChangeCounter=useRef(0);
+  const draftTouched=useRef(false);
+  const submitted=useRef(false);
+  const stopAutosave=useRef(false);
   const demoInitialState: ProfessionalRoleState = {
     listener: true,
     approvedProfessionalRoles: initialRole === 'listener' ? [] : [initialRole],
@@ -97,6 +107,60 @@ export default function ProfessionalRoleManager({
     setLoading(false);
   };
 
+  useEffect(()=>{
+    if(simulationMode)return;
+    let cancelled=false;
+    void nightjarAccount.getApplicationDraft().then(({draft,revision})=>{
+      if(cancelled)return;
+      cloudRevision.current=revision;
+      if(draft && !draftTouched.current){
+        setSelected(draft.selectedRoles??[]);
+        setStatement(draft.statement??'');
+        setExperience(draft.experience??'');
+        setPortfolioUrl(draft.portfolioUrl??'');
+        setSocialUrl(draft.socialUrl??'');
+      }
+      setDraftHydrated(true);
+    }).catch((error)=>{
+      if(cancelled)return;
+      setDraftHydrated(true);
+      setDraftSync('error');
+      notify(error instanceof Error?error.message:'Nightjar could not load the cloud application draft.');
+    });
+    return()=>{cancelled=true;};
+  },[simulationMode]);
+
+  useEffect(()=>{
+    if(!draftHydrated||simulationMode||submitted.current||stopAutosave.current)return;
+    if(!autosaveReady.current){autosaveReady.current=true;return;}
+    const version=++draftChangeCounter.current;
+    const snapshot:NightjarApplicationDraft={
+      selectedRoles:selected,statement,experience,portfolioUrl,socialUrl,
+    };
+    setDraftSync('waiting');
+    if(draftTimer.current)clearTimeout(draftTimer.current);
+    draftTimer.current=setTimeout(()=>{
+      draftTimer.current=null;
+      setDraftSync('saving');
+      const next=draftWrite.current.catch(()=>undefined).then(async()=>{
+        if(submitted.current||stopAutosave.current)return;
+        const result=await nightjarAccount.saveApplicationDraft(snapshot,cloudRevision.current);
+        cloudRevision.current=result.revision;
+        if(version===draftChangeCounter.current)setDraftSync('saved');
+      }).catch((error)=>{
+        if(version===draftChangeCounter.current)setDraftSync('error');
+        console.warn('Nightjar application cloud draft could not sync',error);
+      });
+      draftWrite.current=next;
+    },900);
+    return()=>{if(draftTimer.current){clearTimeout(draftTimer.current);draftTimer.current=null;}};
+  },[selected,statement,experience,portfolioUrl,socialUrl,draftHydrated,simulationMode]);
+
+  useEffect(()=>()=>{
+    stopAutosave.current=true;
+    if(draftTimer.current)clearTimeout(draftTimer.current);
+  },[]);
+
   useEffect(() => {
     void load();
     const refreshWhenActive = () => {
@@ -106,12 +170,15 @@ export default function ProfessionalRoleManager({
     return () => document.removeEventListener('visibilitychange', refreshWhenActive);
   }, []);
 
-  const toggle = (role: NightjarProfessionalRole) =>
+  const toggle = (role: NightjarProfessionalRole) => {
+    draftTouched.current=true;
+    submitted.current=false;
     setSelected((items) =>
       items.includes(role)
         ? items.filter((item) => item !== role)
         : [...items, role],
     );
+  };
 
   const acceptProfessionalTerms = async () => {
     if (!legalDocuments) {
@@ -164,12 +231,18 @@ export default function ProfessionalRoleManager({
         });
         notify('Simulation: professional application added to the local review queue.');
       } else {
+        submitted.current=true;
+        if(draftTimer.current){clearTimeout(draftTimer.current);draftTimer.current=null;}
+        await draftWrite.current;
+        if(draftSync==='error') throw new Error('Nightjar could not safely sync your application draft. Refresh the form to load its newest saved version before submitting.');
         const result = await nightjarAccount.applyForProfessionalRoles(selected, {
           statement,
           experience,
           portfolioUrl,
           socialUrl,
         });
+        cloudRevision.current=0; // A submitted application clears its unsubmitted draft.
+        setDraftSync('saved');
         notify(result.message);
       }
       setConfirmRemove(null);
@@ -180,6 +253,7 @@ export default function ProfessionalRoleManager({
       setSocialUrl('');
       if (!simulationMode) await load();
     } catch (error) {
+      submitted.current=false;
       notify(error instanceof Error ? error.message : 'Professional application could not be stored.');
     } finally {
       setBusy(false);
@@ -264,12 +338,18 @@ export default function ProfessionalRoleManager({
 
   const applicationFields = selected.length > 0 ? (
     <>
+      {!simulationMode && <p className="nj-account-draft-status" role="status">
+        {draftSync==='saving' ? 'Saving your application draft to Nightjar…'
+          : draftSync==='waiting' ? 'New changes · saving shortly'
+          : draftSync==='error' ? 'Cloud sync is unavailable or a newer version exists on another device. Refresh before leaving or submitting.'
+          : 'Draft saved to your account · continue on any device'}
+      </p>}
       <label>
         About your work
         <textarea
           maxLength={2400}
           value={statement}
-          onChange={(event) => setStatement(event.target.value)}
+          onChange={(event) => {draftTouched.current=true;submitted.current=false;setStatement(event.target.value);}}
         />
       </label>
       <label>
@@ -277,7 +357,7 @@ export default function ProfessionalRoleManager({
         <textarea
           maxLength={1600}
           value={experience}
-          onChange={(event) => setExperience(event.target.value)}
+          onChange={(event) => {draftTouched.current=true;submitted.current=false;setExperience(event.target.value);}}
         />
       </label>
       <div className="profile-inline-fields">
@@ -285,14 +365,14 @@ export default function ProfessionalRoleManager({
           Portfolio URL
           <input
             value={portfolioUrl}
-            onChange={(event) => setPortfolioUrl(event.target.value)}
+            onChange={(event) => {draftTouched.current=true;submitted.current=false;setPortfolioUrl(event.target.value);}}
           />
         </label>
         <label>
           Public link
           <input
             value={socialUrl}
-            onChange={(event) => setSocialUrl(event.target.value)}
+            onChange={(event) => {draftTouched.current=true;submitted.current=false;setSocialUrl(event.target.value);}}
           />
         </label>
       </div>
