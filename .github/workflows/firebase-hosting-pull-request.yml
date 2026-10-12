@@ -44,6 +44,20 @@ jobs:
       - name: Install and validate
         run: npm ci --no-fund && npm run validate
 
+      - name: Authenticate for preview housekeeping
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NIGHTJAR_AUDIO }}
+
+      - name: Clean previews from closed Nightjar PRs only
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NIGHTJAR_PREVIEW_PR: ${{ github.event.pull_request.number }}
+        run: |
+          npm install --global firebase-tools@15.33.0 --no-fund --no-audit
+          node scripts/cleanup-merged-nightjar-preview-channels.mjs
+
       - name: Deploy Hosting preview
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
