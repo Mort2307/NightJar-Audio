@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Copy, RefreshCw, ShieldCheck } from 'lucide-react';
+import './profile-error-recovery.css';
 
 type Props = { children: ReactNode };
 type State = { failed: boolean; errorId: string | null; diagnostic: string };
