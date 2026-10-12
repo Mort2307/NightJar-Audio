@@ -44,8 +44,8 @@ assert.match(app,/item\.type === 'admin_attention'/,'owner alerts route to revie
 assert.match(app,/item\.type === 'admin_attention'\) await markNotificationRead/,'persistent alerts can be acknowledged');
 assert.match(app,/item\.subtype === 'report_review'/,'reports route to moderator');
 assert.match(app,/item\.subtype === 'security_alert'/,'security alerts route to Safety');
-assert.match(workflow,/paths:\s*\n\s*- 'functions\/src\/admin-attention\.ts'/,'auto backend deploy only for administrator attention module changes');
-assert.doesNotMatch(workflow,/paths:\s*\n\s*- 'functions\/src\/index\.ts'/,'unrelated backend edits never implicitly deploy');
+assert.match(workflow,/workflow_dispatch:/,'new functions use the explicitly approved production backend workflow');
+assert.doesNotMatch(workflow,/^\s+push:/m,'backend deployment must not bypass owner-approved workflow identity');
 assert.match(workflow,/environment: production-backend/,'backend retains protected production environment');
 
 console.log('Nightjar administrator attention: secure owner-only preferences, push events, queue routes and scoped deployment contracts PASS');

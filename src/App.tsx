@@ -1527,7 +1527,7 @@ function App() {
   };
 
   const openNotification = async (item:any) => {
-    if ((item.type === 'admin_action' || item.type === 'admin_attention') && canAdmin && !simulationMode) {
+    if ((item.type === 'admin_action' && canAdmin || item.type === 'admin_attention' && canAdmin) && !simulationMode) {
       if (item.type === 'admin_attention') await markNotificationRead(item);
       setNotificationsOpen(false);
       navigate('admin');

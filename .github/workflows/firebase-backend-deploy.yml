@@ -3,10 +3,6 @@
 name: Deploy Nightjar Firebase backend (manual)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'functions/src/admin-attention.ts'
   workflow_dispatch:
     inputs:
       scope:
@@ -52,9 +48,9 @@ jobs:
     timeout-minutes: 120
     environment: production-backend
     env:
-      REQUESTED_SCOPE: ${{ github.event_name == 'push' && 'functions:selected' || inputs.scope }}
-      SELECTED_FUNCTIONS: ${{ github.event_name == 'push' && 'getAdminAttentionPreferences,saveAdminAttentionPreferences,adminAttentionProfessionalApplications,adminAttentionReleases,adminAttentionScripts,adminAttentionImages,adminAttentionReviews,adminAttentionEditorPortfolio,adminAttentionReports,adminAttentionSecurity,adminAttentionSuggestions,adminAttentionBilling' || inputs.function_names }}
-      RELEASE_CONFIRMATION: ${{ github.event_name == 'push' && 'DEPLOY-NIGHTJAR' || inputs.confirmation }}
+      REQUESTED_SCOPE: ${{ inputs.scope }}
+      SELECTED_FUNCTIONS: ${{ inputs.function_names }}
+      RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
       FIREBASE_CLI_EXPERIMENTS: ''
     steps:
       - name: Verify release intent
@@ -126,7 +122,7 @@ jobs:
           echo "Firebase CLI authenticated to nightjar-audio via keyless OIDC."
 
       - name: Propose conservative release batches (read-only)
-        if: ${{ env.REQUESTED_SCOPE == 'plan' }}
+        if: ${{ inputs.scope == 'plan' }}
         env:
           BASE_INPUT: ${{ inputs.compare_ref }}
         shell: bash
@@ -146,11 +142,11 @@ jobs:
             --output "$RUNNER_TEMP/nightjar-backend-plan.json" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Validate frontend and contracts
-        if: ${{ env.REQUESTED_SCOPE != 'auth-check' && env.REQUESTED_SCOPE != 'plan' }}
+        if: ${{ inputs.scope != 'auth-check' && inputs.scope != 'plan' }}
         run: npm ci --no-fund && npm run validate
 
       - name: Install, check and build backend
-        if: ${{ env.REQUESTED_SCOPE == 'functions' || env.REQUESTED_SCOPE == 'functions:selected' || env.REQUESTED_SCOPE == 'all-backend' }}
+        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'all-backend' }}
         run: |
           npm --prefix functions ci --no-fund
           npm --prefix functions run check
@@ -158,7 +154,7 @@ jobs:
           npm --prefix functions run build
 
       - name: Deploy exact requested backend resources
-        if: ${{ env.REQUESTED_SCOPE != 'auth-check' && env.REQUESTED_SCOPE != 'plan' }}
+        if: ${{ inputs.scope != 'auth-check' && inputs.scope != 'plan' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -193,13 +189,13 @@ jobs:
       # Post-deploy verification is read-only. No webhooks, scheduled jobs,
       # auth callables, email sends, age checks, payments or write APIs are invoked.
       - name: Prepare Google Cloud CLI for function metadata checks
-        if: ${{ success() && (env.REQUESTED_SCOPE == 'functions:selected' || env.REQUESTED_SCOPE == 'functions' || env.REQUESTED_SCOPE == 'all-backend') }}
+        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'all-backend') }}
         uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: nightjar-audio
 
       - name: Verify live Cloud Functions and safe HTTP endpoints
-        if: ${{ success() && (env.REQUESTED_SCOPE == 'functions:selected' || env.REQUESTED_SCOPE == 'functions' || env.REQUESTED_SCOPE == 'all-backend') }}
+        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'all-backend') }}
         run: node scripts/firebase-backend-verify.mjs
 
       - name: Write sanitized release report
