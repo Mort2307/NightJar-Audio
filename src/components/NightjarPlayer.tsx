@@ -99,6 +99,8 @@ const parseTranscript = (transcript: string): TranscriptCue[] => {
 export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify, simulationMode = false, initialTranscriptOpen = false }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastProgressEvent = useRef(0);
+  const listeningSessionId = useRef(crypto.randomUUID());
+  const startedListeningSession = useRef('');
   const transcriptCueRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const transcriptRequestRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -257,12 +259,13 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     const node = audioRef.current;
     if (!node || !playbackUrl || !track?.id) return;
     lastProgressEvent.current = 0;
+    listeningSessionId.current = crypto.randomUUID();
+    startedListeningSession.current = '';
     setPosition(0);
     setDuration(1);
     setIsPlaying(false);
     if (!initialTranscriptOpen) {
       void node.play().catch(() => notify('Press play to start this release.'));
-      void nightjarListening.record({ releaseId: track.id, eventType: 'start', positionSeconds: rememberedPosition || 0, durationSeconds: 0, intent }).catch(() => {});
     }
     return () => { node.pause(); };
   }, [track?.id, playbackUrl, simulationMode, initialTranscriptOpen]);
@@ -350,20 +353,30 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         src={playbackUrl ?? undefined}
         preload="metadata"
         onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 1)}
-        onPlay={() => setIsPlaying(true)}
+        onPlay={(event) => {
+          setIsPlaying(true);
+          if (startedListeningSession.current !== listeningSessionId.current) {
+            startedListeningSession.current = listeningSessionId.current;
+            const node = event.currentTarget;
+            void nightjarListening.record({
+              releaseId: track.id, eventType: 'start', sessionId: listeningSessionId.current,
+              positionSeconds: node.currentTime, durationSeconds: node.duration || 0, intent,
+            }).catch(() => {});
+          }
+        }}
         onPause={() => setIsPlaying(false)}
         onTimeUpdate={(event) => {
           const node = event.currentTarget;
           setPosition(node.currentTime);
-          if (node.currentTime - lastProgressEvent.current >= 15) {
+          if (!node.paused && !node.seeking && node.currentTime - lastProgressEvent.current >= 15) {
             lastProgressEvent.current = node.currentTime;
-            void nightjarListening.record({ releaseId: track.id, eventType: 'progress', positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {});
+            void nightjarListening.record({ releaseId: track.id, eventType: 'progress', sessionId: listeningSessionId.current, positionSeconds: node.currentTime, durationSeconds: node.duration || duration, intent }).catch(() => {});
           }
         }}
         onEnded={() => {
           setIsPlaying(false);
           setPosition(duration);
-          void nightjarListening.record({ releaseId: track.id, eventType: 'complete', positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
+          void nightjarListening.record({ releaseId: track.id, eventType: 'complete', sessionId: listeningSessionId.current, positionSeconds: duration, durationSeconds: duration, completed: true, intent }).catch(() => {});
           if (sleepTimer === 'end') {
             setSleepTimer('off');
             return;
