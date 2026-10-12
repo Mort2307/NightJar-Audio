@@ -84,4 +84,34 @@ assert.match(artist, /<ArtistPortfolioManager notify=\{notify\} demoMode=\{demoM
 assert.match(portfolio, /formOpen && <div className="artist-portfolio-form">/, 'Artwork upload is collapsed until user requests it');
 assert.match(product, /\.nj-artist-studio-actions\s*\{/, 'Artist actions have responsive layout');
 
+// Regression: on Android/iOS the premium onboarding card overrode its base
+// scroll container with overflow:hidden. Tab on a desktop was the only way
+// to reach the bottom of the profile form, while the modal reappeared at login.
+const onboarding = fs.readFileSync('src/components/NightjarOnboarding.tsx','utf8');
+const server = fs.readFileSync('functions/src/index.ts','utf8');
+assert.match(styles,/\.premium-onboarding-card\s*\{[^}]*overflow-y:auto;/,
+  'premium profile dialog must allow vertical touch scrolling');
+assert.doesNotMatch(styles,/\.premium-onboarding-card\s*\{[^}]*overflow:hidden;/,
+  'premium profile styling must not remove the base scroll container');
+assert.match(styles,/\.premium-onboarding-card\s*\{[^}]*touch-action:pan-y;/,
+  'onboarding must allow vertical touch gestures');
+assert.match(styles,/\.premium-onboarding-card \.premium-onboarding-footer\s*\{[^}]*position:sticky;/,
+  'step buttons remain visible while the member scrolls');
+assert.match(styles,/\.access-shell\s*\{overflow-x:clip;overflow-y:visible;/,
+  'mobile registration form cannot be clipped vertically');
+assert.match(onboarding,/scrollRef\.current\?\.scrollTo/,
+  'each step returns to the top of the scrollable form');
+assert.match(onboarding,/onSkip\(result\?\.profile \?\? payload\)/,
+  'Finish later sends back saved progress');
+assert.match(onboarding,/onboardingDismissed:true/,
+  'Finish later marks onboarding as dismissed');
+assert.match(onboarding,/Save & finish later/,
+  'the dismissal button clearly promises to preserve progress');
+assert.match(app,/nextProfile\.onboardingDismissed !== true && !onboardingDismissedHere\(user\.userId\)/,
+  'successful dismissal prevents repeated mobile login interruptions');
+assert.match(app,/Resume profile setup/,
+  'member can reopen setup intentionally from their profile');
+assert.match(server,/typeof input\.onboardingDismissed === 'boolean'/,
+  'server persists dismissal without erasing it during unrelated saves');
+
 console.log('Nightjar mobile dock, save-bar visibility and responsive touch-feedback contracts passed.');
