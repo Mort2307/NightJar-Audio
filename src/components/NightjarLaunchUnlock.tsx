@@ -127,8 +127,12 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   // requires user activation, the prominent Unlock button remains available.
   useEffect(() => {
     if (!locked || !authReady || !supported || attemptedAutomatically.current) return;
-    attemptedAutomatically.current = true;
-    const timer = window.setTimeout(() => { void unlock(true); }, 80);
+    // StrictMode may cancel the first effect's timer on replay: only mark an
+    // automatic attempt when the prompt actually starts.
+    const timer = window.setTimeout(() => {
+      attemptedAutomatically.current = true;
+      void unlock(true);
+    }, 80);
     return () => window.clearTimeout(timer);
   }, [locked, authReady, supported]);
 
