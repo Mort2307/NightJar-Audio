@@ -452,6 +452,9 @@ function App() {
   const [liveRoleMenuOpen, setLiveRoleMenuOpen] = useState(false);
   const liveRoleMenuRef = useRef<HTMLDivElement | null>(null);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
+  // Never show account entry or an adult workspace while Firebase and the
+  // backend are restoring this session on refresh.
+  const [sessionHydrating, setSessionHydrating] = useState(true);
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
@@ -917,12 +920,16 @@ function App() {
     let cancelled = false;
     const unsubscribe = nightjarAuth.observe((identity) => {
       if (cancelled) return;
+      setSessionHydrating(true);
       if (!identity) {
         setDemoMode(false);
         setSimulationMode(false);
         setPreviewRole(null);
         setUser(null);
         setRole(null);
+        setAgeVerified(false);
+        setAgeStage('gate');
+        setSessionHydrating(false);
         return;
       }
 
@@ -934,13 +941,29 @@ function App() {
 
       if (!identity.emailVerified) {
         setAgeStage('gate');
+        setSessionHydrating(false);
         return;
       }
 
       void (async () => {
-        await loadAccount();
-        const verified = await refreshAgeStatus();
-        if (!verified) setAgeStage('assurance');
+        try {
+          await loadAccount();
+          if (cancelled || nightjarAuth.current()?.userId !== identity.userId) return;
+          const verified = await refreshAgeStatus();
+          if (cancelled || nightjarAuth.current()?.userId !== identity.userId) return;
+          if (!verified) setAgeStage('assurance');
+        } catch (error) {
+          // A failed restore cannot grant access. Keep the ordinary sign-in
+          // route available; all privileged actions remain server-checked.
+          if (!cancelled && nightjarAuth.current()?.userId === identity.userId) {
+            console.warn('Nightjar session restore failed', error);
+            setAgeStage('gate');
+          }
+        } finally {
+          if (!cancelled && nightjarAuth.current()?.userId === identity.userId) {
+            setSessionHydrating(false);
+          }
+        }
       })();
     });
 
@@ -3814,6 +3837,15 @@ function App() {
     void loadAdminOverview();
     notify('Returned to Administrator view.');
   };
+
+  if (sessionHydrating) {
+    return <main className="access-shell" role="status" aria-live="polite">
+      <section className="access-card nj-launch-unlock-waiting">
+        <span className="brand-lockup"><img className="brand-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar"/> NIGHTJAR</span>
+        <p className="access-lede">Restoring your secure session and checking account access…</p>
+      </section>
+    </main>;
+  }
 
   if (ageStage === 'gate') {
     return (
