@@ -721,25 +721,33 @@ function App() {
   }, [user?.userId]);
 
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
-  // Every recorded contributor gets the same readable credit treatment as the main creator.
-  // Deduplicate identical role/name pairs without dropping distinct roles held by one person.
+  // Only link people to a verified account ID from the release credit or a unique
+  // exact-name, matching-role public directory entry. Never guess an identity from a name.
   const featuredCredits = useMemo(() => {
-    if (!featured) return [] as { role: string; name: string }[];
+    if (!featured) return [] as { role: string; name: string; userId: string | null; profileRole: string }[];
     const credits = [
-      { role: 'Creator', name: featured.creator },
+      { role:'Creator', name:featured.creator, userId:featured.creatorUserId ?? null },
       ...(featured.contributors ?? []),
     ];
     const seen = new Set<string>();
-    return credits.flatMap(({ role, name }) => {
+    return credits.flatMap(({ role, name, userId }) => {
       const cleanName = String(name ?? '').trim();
       const cleanRole = String(role ?? '').trim() || 'Contributor';
       if (!cleanName) return [];
       const key = cleanRole.toLocaleLowerCase() + ':' + cleanName.toLocaleLowerCase();
       if (seen.has(key)) return [];
       seen.add(key);
-      return [{ role: cleanRole, name: cleanName }];
+      const roleName = cleanRole.toLowerCase();
+      const profileRole = roleName.includes('writ') || roleName.includes('script') ? 'writer'
+        : roleName.includes('edit') || roleName.includes('sound') ? 'editor'
+        : roleName.includes('art') || roleName.includes('illustrat') ? 'artist' : 'creator';
+      const matches = profileDirectory.filter((person) =>
+        person.name.trim().toLowerCase() === cleanName.toLowerCase()
+        && (person.roles ?? [person.role]).includes(profileRole as Exclude<AccountRole, 'admin'>));
+      const verifiedUserId = String(userId ?? '').trim() || (matches.length === 1 ? matches[0].userId : '');
+      return [{ role:cleanRole, name:cleanName, userId:verifiedUserId || null, profileRole }];
     });
-  }, [featured]);
+  }, [featured, profileDirectory]);
   const communityByRelease = useMemo(() => Object.fromEntries(tracks.map((track) => [track.id, {
     likes:Number(track.communityLikeCount ?? 0),
     loves:Number(track.communityLoveCount ?? 0),
@@ -4291,11 +4299,19 @@ function App() {
                         {featuredCredits.map((credit) => (
                           <div className="featured-credit-item" key={credit.role.toLocaleLowerCase() + ':' + credit.name.toLocaleLowerCase()}>
                             <span className="featured-credit-role">{credit.role}</span>
-                            <strong className="featured-credit-name">{credit.name}</strong>
+                            {credit.userId
+                              ? <button type="button" className="featured-credit-name featured-credit-link" aria-label={'View ' + credit.name + ' public profile'} onClick={() => openPublicProfile(credit.userId!, credit.profileRole)}>{credit.name}<ChevronRight size={13} aria-hidden="true" /></button>
+                              : <strong className="featured-credit-name">{credit.name}</strong>}
                           </div>
                         ))}
                       </div>
                     )}
+                    <button type="button" className="featured-discussion-button" onClick={() => setReviewTrack(featured)} aria-label={'Open comments and community for ' + featured.title}>
+                      <MessageCircle size={17} aria-hidden="true" />
+                      <span>Join the conversation</span>
+                      <small>{Number(featured.communityCommentCount ?? 0)} comments</small>
+                      <ChevronRight size={15} aria-hidden="true" />
+                    </button>
                     <div className="player-meta"><span>{featured.duration}</span><span>{featured.audioAvailable || featured.audioUrl ? 'Private audio connected' : 'Audio not connected'}</span></div>
                   </> : <div className="empty-feature"><Moon size={40}/><strong>No featured release yet.</strong><span>Published catalogue records will appear here as creators release audio.</span></div>}
                 </div>
@@ -5313,7 +5329,7 @@ function App() {
       </Suspense>}
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
-      {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} /></Suspense>}
+      {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} onOpenProfile={(userId, role) => { setReviewTrack(null); openPublicProfile(userId, role); }} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={() => { void finishOnboardingLater(); }} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
