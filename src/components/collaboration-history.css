@@ -22,6 +22,7 @@
 .nj-handshake-private{padding:.7rem .9rem;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:10px}
 .nj-handshake-help{font-size:.8rem!important}
 .nj-handshake-dialog>.secondary-button{width:100%;margin-top:.5rem;min-height:44px}
+.collaborator-directory-card:has(.nj-collab-select){grid-template-columns:minmax(0,1fr) auto;cursor:default}
 .collaborator-directory-card .nj-collab-select{display:flex;align-items:center;min-width:0;flex:1;gap:9px;text-align:left;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 .collaborator-directory-card .nj-collab-select:focus-visible{outline:2px solid var(--plum-soft,#d2b9cf);outline-offset:3px}
 @media(max-width:650px){.nj-handshake-summary{flex-wrap:wrap}.nj-handshake-summary button{margin-left:auto}.nj-handshake-overlay{padding:.5rem}.nj-handshake-dialog{max-height:93dvh}}
