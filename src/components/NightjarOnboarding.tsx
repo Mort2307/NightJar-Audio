@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Check, Sparkles, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
@@ -42,6 +42,8 @@ const steps: { id: Step; label: string; title: string; description: string }[] =
 
 export default function NightjarOnboarding({ initialProfile, role, onComplete, onSkip, notify }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
   const [profile, setProfile] = useState<any>({
@@ -64,6 +66,13 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
       .catch(() => { if (!cancelled) setPromotedTags([]); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    // Each screen starts where its heading and instructions can be read.
+    // The scrollable modal, not the document behind it, owns touch scrolling.
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+    stepHeadingRef.current?.focus({ preventScroll: true });
+  }, [stepIndex]);
 
   const combinedTags = useMemo(
     () => Array.from(new Set([...PROFILE_TAG_OPTIONS, ...promotedTags])).sort((a, b) => a.localeCompare(b)),
@@ -152,7 +161,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   };
 
   return <div className="onboarding-backdrop premium-onboarding-backdrop" role="dialog" aria-modal="true" aria-labelledby="nightjar-onboarding-title">
-    <section className="onboarding-card premium-onboarding-card">
+    <section ref={scrollContainerRef} className="onboarding-card premium-onboarding-card" tabIndex={-1} aria-label="Nightjar profile creation steps">
       <div className="premium-onboarding-aura" aria-hidden="true"/>
       <header>
         <div>
@@ -170,7 +179,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
 
       <article className="onboarding-group premium-onboarding-group">
         <span className="mini-label">{step.label}</span>
-        <h3>{step.title}</h3>
+        <h3 ref={stepHeadingRef} tabIndex={-1}>{step.title}</h3>
         <p>{step.description}</p>
         {renderStep()}
       </article>
@@ -182,7 +191,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
           {stepIndex < steps.length - 1
             ? <button className="primary-button" onClick={()=>setStepIndex((index)=>index+1)}>Continue <ArrowRight size={14}/></button>
             : <button className="primary-button" disabled={saving} onClick={()=>void finish()}><Check size={14}/>{saving?'Creating profile…':'Create my Nightjar profile'}</button>}
-          <button className="ghost-button" disabled={saving} onClick={onSkip}>Finish later</button>
+          <button type="button" className="ghost-button" disabled={saving} onClick={onSkip}>Finish later</button>
         </div>
       </div>
     </section>
