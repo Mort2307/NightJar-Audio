@@ -95,6 +95,7 @@ import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWri
 
 const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
 const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipeline'));
+const CreatorListeningInsights = lazy(() => import('./components/CreatorListeningInsights'));
 const CreatorLivePreviewOverview = lazy(() => import('./components/CreatorLivePreviewOverview'));
 const CreatorProfile = lazy(() => import('./components/CreatorProfile'));
 const ContentModeration = lazy(() => import('./components/ContentModeration'));
@@ -287,6 +288,7 @@ type Track = {
   communityLoveCount?: number;
   communityReactionCount?: number;
   communityCommentCount?: number;
+  listenCount?: number;
   playbackAllowed?: boolean;
   playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'subscription_required' | null;
 };
@@ -884,6 +886,7 @@ function App() {
     ['Draft releases', String(creatorDashboard.metrics?.drafts ?? 0)],
     ['Verified listening', String(creatorDashboard.metrics?.verifiedListeningMinutes ?? 0) + ' min'],
     ['Unique listeners', String(creatorDashboard.metrics?.uniqueListeners ?? 0)],
+    ['Qualified listens', String(creatorDashboard.metrics?.qualifiedListens ?? 0)],
   ];
 
   useEffect(() => {
@@ -1384,6 +1387,7 @@ function App() {
         communityLoveCount: Math.max(0, Number(release.communityLoveCount ?? 0)),
         communityReactionCount: Math.max(0, Number(release.communityReactionCount ?? 0)),
         communityCommentCount: Math.max(0, Number(release.communityCommentCount ?? 0)),
+        listenCount: Math.max(0, Number(release.listenCount ?? 0)),
         playbackAllowed: typeof release.playbackAllowed === 'boolean' ? release.playbackAllowed : undefined,
         playbackAccessReason: release.playbackAccessReason ?? null,
       })) as Track[];
@@ -1691,6 +1695,48 @@ function App() {
       setCreatorDashboardLoading(false);
     }
   };
+
+  // All listeners receive the same backend-qualified counts. Avoid polling the
+  // protected catalogue, profile directory and spotlights just for metrics.
+  useEffect(() => {
+    if (!user?.userId || !ageVerified || demoMode || liveRolePreview || (view !== 'discover' && view !== 'creator')) return;
+    let cancelled = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (cancelled || inFlight || document.visibilityState === 'hidden') return;
+      inFlight = true;
+      try {
+        const result = await nightjarCatalogue.listenCounts();
+        if (cancelled) return;
+        const counts = new Map((result.counts ?? []).map((entry) => [entry.releaseId, Math.max(0, Number(entry.listens) || 0)]));
+        setTracks((current) => current.map((track) => counts.has(track.id)
+          ? { ...track, listenCount: counts.get(track.id) }
+          : track));
+        if (view === 'creator' && (role === 'creator' || canAdmin)) {
+          const dashboard = await nightjarCatalogue.dashboard();
+          if (!cancelled) setCreatorDashboard({ metrics: dashboard.metrics ?? {}, releases: dashboard.releases ?? [] });
+        }
+      } catch {
+        // A missing/deploying callable must not break listening or creator tools.
+      } finally {
+        inFlight = false;
+      }
+    };
+    const onFocus = () => { void refresh(); };
+    const onVisibility = () => { if (document.visibilityState === 'visible') void refresh(); };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    window.addEventListener('nightjar:qualified-listen', onFocus);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('nightjar:qualified-listen', onFocus);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user?.userId, ageVerified, demoMode, liveRolePreview, view, role, canAdmin]);
 
   const loadWriterScripts = async () => {
     if (!user) return;
@@ -4393,7 +4439,7 @@ function App() {
                       <small>{Number(featured.communityCommentCount ?? 0)} comments</small>
                       <ChevronRight size={15} aria-hidden="true" />
                     </button>
-                    <div className="player-meta"><span>{featured.duration}</span><span>{featured.audioAvailable || featured.audioUrl ? 'Private audio connected' : 'Audio not connected'}</span></div>
+                    <div className="player-meta"><span>{featured.duration}</span><span>{featured.audioAvailable || featured.audioUrl ? 'Private audio connected' : 'Audio not connected'}</span><span><Headphones size={13}/> {Number(featured.listenCount ?? 0).toLocaleString('en-GB')} listens</span></div>
                   </> : <div className="empty-feature"><Moon size={40}/><strong>No featured release yet.</strong><span>Published catalogue records will appear here as creators release audio.</span></div>}
                 </div>
               </div>
@@ -4576,6 +4622,7 @@ function App() {
               description="Publishing, profile and community actions surfaced from your current Nightjar state."
               metrics={[
                 {label:'Releases',value:creatorDashboard.releases.length,detail:'Current catalogue records',destination:'the release pipeline',onClick:()=>document.getElementById('creator-pipeline')?.scrollIntoView({behavior:'smooth',block:'start'})},
+                {label:'Qualified listens',value:creatorDashboard.metrics?.qualifiedListens ?? 0,detail:'Verified audience plays',destination:'listening insights',onClick:()=>document.querySelector('.nj-listening-insights')?.scrollIntoView({behavior:'smooth',block:'start'})},
                 {label:'Featured',value:(profile.featuredPortfolioIds ?? []).length,detail:'Profile showcase',destination:'your profile',onClick:openProfileEditor},
                 {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar',destination:'the collaboration workspace',onClick:()=>{const target=document.querySelector('.collaboration-hub');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});else navigate('profile');}},
                 {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads',destination:'messages',onClick:()=>navigate('messages')},
@@ -4588,6 +4635,9 @@ function App() {
             {!liveRolePreview && <div className="dashboard-metric-grid">
               {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
             </div>}
+            {!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading creator listening insights" />}>
+              <CreatorListeningInsights releases={creatorDashboard.releases} verifiedMinutes={Number(creatorDashboard.metrics?.verifiedListeningMinutes ?? 0)} loading={creatorDashboardLoading} onRefresh={() => { void loadCreatorDashboard(); }} />
+            </Suspense>}
             {!liveRolePreview && <div id="creator-pipeline">
               {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} focusReleaseId={focusedReleaseId} onSubmitted={() => { void loadNotifications(productLoadEpoch.current); }} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); setReviewTrack((track) => track?.id === releaseId ? null : track); setFocusedReleaseId((id) => id === releaseId ? null : id); }} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
             </div>}
@@ -5476,6 +5526,7 @@ function releaseToTrack(release: any): Track {
     communityLoveCount: Math.max(0, Number(release.communityLoveCount ?? 0)),
     communityReactionCount: Math.max(0, Number(release.communityReactionCount ?? 0)),
     communityCommentCount: Math.max(0, Number(release.communityCommentCount ?? 0)),
+    listenCount: Math.max(0, Number(release.listenCount ?? 0)),
     playbackAllowed: typeof release.playbackAllowed === 'boolean' ? release.playbackAllowed : undefined,
     playbackAccessReason: release.playbackAccessReason ?? null,
   };
@@ -5510,6 +5561,7 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
     <div className="track-body">
       <div className="track-type"><span>{track.creator}</span><span>{track.duration}</span></div>
       <h3>{track.title}</h3>
+      <small className="track-verified-listens"><Headphones size={13} aria-hidden="true"/> {Number(track.listenCount ?? 0).toLocaleString('en-GB')} qualified listens</small>
       {(track.seriesTitle || track.contentRating || track.nightjarOriginal || track.transcriptAvailable) && <div className="track-meta-line">{track.nightjarOriginal && <span>NIGHTJAR ORIGINAL</span>}{track.transcriptAvailable && <span>TRANSCRIPT AVAILABLE</span>}{track.seriesTitle && <span>{track.seriesTitle}{track.episodeNumber != null ? ' · Episode ' + track.episodeNumber : ''}</span>}<span>{String(track.contentRating ?? 'adult').toUpperCase()}</span></div>}
       <p>{track.descriptor}</p>
       {track.productionNote && <p className="track-production-note"><strong>Behind the scenes:</strong> {track.productionNote}</p>}
