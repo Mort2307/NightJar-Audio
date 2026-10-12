@@ -41,9 +41,11 @@ export default function ReleaseReviews({
   const [tab, setTab] = useState<'comments' | 'reviews'>('comments');
   const [reviews, setReviews] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
   const [community, setCommunity] = useState<any>({ comments: [], reactions: { likes:0, loves:0, total:0, myReaction:null }, canInteract:canCommunityInteract, commentReactionsEnabled:false });
-  // Support old deployed Functions safely: professional posting and emoji buttons
-  // appear only after the backend explicitly advertises those capabilities.
-  const canComment = Boolean(currentUserId && (canCommunityInteract || community.canInteract === true));
+  // Comment composer should not disappear for administrators, multi-role creatives or
+  // older backend responses. Server authentication, age assurance and account status
+  // remain the source of truth when a comment is actually submitted.
+  const canComment = Boolean(currentUserId && ['listener','creator','writer','editor','artist','admin'].includes(String(viewerRole)));
+  const commentingReadOnly = Boolean(demoMode && !simulationMode);
   const commentReactionsEnabled = Boolean(demoMode || community.commentReactionsEnabled === true);
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState('');
@@ -54,6 +56,7 @@ export default function ReleaseReviews({
   const [loading, setLoading] = useState(true);
   const [savingReview, setSavingReview] = useState(false);
   const [savingComment, setSavingComment] = useState(false);
+  const [commentError, setCommentError] = useState('');
   const [reacting, setReacting] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
 
@@ -133,11 +136,12 @@ export default function ReleaseReviews({
 
   const submitComment = async () => {
     const body = comment.trim();
-    if (!canComment) return notify('Sign in with a verified Nightjar account to comment.');
-    if (!body) return;
+    if (!canComment) return notify('Sign in to add a comment.');
+    if (!body || savingComment) return;
+    setCommentError('');
     setSavingComment(true);
     try {
-      if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Listener Simulation to comment.');
+      if (commentingReadOnly) return notify('Demo data is read-only. Start Simulation to comment.');
       if (simulationMode) {
         const next={ id:'demo-comment-'+Date.now(), userId:currentUserId ?? 'demo-listener', commenterName:'You', commenterHandle:'you', body, createdAt:new Date().toISOString() };
         const nextComments=[...(community.comments??[]),next];
@@ -157,8 +161,16 @@ export default function ReleaseReviews({
       }
       setComment('');
       notify('Comment posted.');
-    } catch {
-      notify('Comment could not be posted.');
+    } catch (error) {
+      const code = String((error as { code?: string })?.code ?? '');
+      const message = code.includes('resource-exhausted')
+        ? 'Please wait a few minutes before posting another comment.'
+        : code.includes('permission-denied') || code.includes('unauthenticated')
+          ? 'Posting is not permitted for this account yet. Check age verification and backend permissions.'
+          : 'Comment could not be posted. Please try again.';
+      // Preserve the draft so nobody loses a carefully written response.
+      setCommentError(message);
+      notify(message);
     } finally {
       setSavingComment(false);
     }
@@ -349,12 +361,27 @@ export default function ReleaseReviews({
       </div>
 
       {tab==='comments' && <>
-        {canComment && <article className="research-panel release-comment-compose">
-          <span className="mini-label">JOIN THE CONVERSATION</span>
-          <p>Comments appear immediately without prior approval. Use ⛳️ Flag if something needs administrator review.</p>
-          <textarea value={comment} onChange={(event)=>setComment(event.target.value)} maxLength={1200} placeholder="Comment on this published work…"/>
-          <div><small>{comment.length}/1200</small><button className="primary-button" disabled={savingComment||!comment.trim()} onClick={()=>void submitComment()}>{savingComment?'Posting…':'Post comment'}</button></div>
-        </article>}
+        <article className="research-panel release-comment-compose" aria-label="Write a release comment">
+          <label className="mini-label" htmlFor="release-community-new-comment">WRITE A COMMENT</label>
+          <p>Comments are published immediately, without admin approval. Use ⛳️ Flag if anything needs review.</p>
+          <textarea
+            id="release-community-new-comment"
+            value={comment}
+            onChange={(event)=>{setComment(event.target.value); if(commentError) setCommentError('');}}
+            maxLength={1200}
+            disabled={!canComment || commentingReadOnly || savingComment}
+            placeholder={canComment ? 'Share your thoughts on this release…' : 'Sign in to join the conversation…'}
+            aria-invalid={Boolean(commentError)}
+            aria-describedby={commentError ? 'release-community-comment-error' : undefined}
+          />
+          {commentError && <p id="release-community-comment-error" className="release-comment-error" role="alert">{commentError}</p>}
+          {commentingReadOnly && <p className="release-comment-helper">Demo is read-only. Use Simulation or return to your live account to post.</p>}
+          {!canComment && !commentingReadOnly && <p className="release-comment-helper">Sign in with a Nightjar account to comment.</p>}
+          <div className="release-comment-compose-actions">
+            <small>{comment.length}/1200</small>
+            <button type="button" className="primary-button" disabled={!canComment || commentingReadOnly || savingComment || !comment.trim()} onClick={()=>void submitComment()}>{savingComment?'Posting…':'Post comment'}</button>
+          </div>
+        </article>
         <div className="release-comment-list">
           {loading ? <div className="people-empty">Loading comments…</div> : !topLevelComments.length ? <div className="people-empty"><MessageSquare size={18}/><strong>No comments yet.</strong><span>Community comments will appear immediately without affecting creator compensation.</span></div> : topLevelComments.map((item:any)=>{
             const replies=repliesByParent.get(String(item.id)) ?? [];

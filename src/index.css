@@ -10804,6 +10804,30 @@ textarea:focus-visible,
 .release-community-tabs button.active { color: #f6eee5; border-color: rgba(222, 185, 142, .7); }
 .release-comment-compose { display: grid; gap: 10px; margin: 6px 22px 16px; padding: 16px; }
 .release-comment-compose p { margin: 0; font-size: 12px; color: var(--muted); }
+.release-comment-compose > label {
+  display: block;
+  color: #f0d3b3;
+  font-size: 11px;
+  letter-spacing: .13em;
+}
+.release-comment-compose textarea {
+  min-height: 106px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.release-comment-compose textarea:focus-visible {
+  outline: 2px solid rgba(238, 194, 142, .88);
+  outline-offset: 2px;
+}
+.release-comment-compose-actions .primary-button {
+  min-height: 42px;
+  padding: 9px 16px;
+}
+.release-comment-error { color: #ffb6ad !important; font-weight: 650; }
+.release-comment-helper { color: #d7c0ad !important; }
+@media(max-width:480px) {
+  .release-comment-compose-actions .primary-button { min-width: 136px; }
+}
 .release-comment-compose textarea, .release-team-reply-compose textarea {
   width: 100%; min-height: 88px; padding: 12px;
   background: rgba(0,0,0,.21); color: var(--ivory);
