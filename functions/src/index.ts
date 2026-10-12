@@ -8833,6 +8833,43 @@ const cleanProfessionalRoles = (value: unknown): ProfessionalRole[] => {
   ));
 };
 
+
+// Drafts of professional applications are account-owned. These are NOT
+// submitted applications and must never appear in the administrator bank.
+const applicationDraftRef=(uid:string)=>accountRef(uid).collection('memberDrafts').doc('professionalApplication');
+
+export const getMyProfessionalApplicationDraft = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  if(identity.admin) return {draft:null,revision:0};
+  const snapshot=await applicationDraftRef(identity.uid).get();
+  return {draft:snapshot.exists ? snapshot.data()?.draft??null : null,revision:Number(snapshot.data()?.revision??0)};
+});
+
+export const saveMyProfessionalApplicationDraft = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  if(identity.admin) throw new HttpsError('permission-denied','Administrators cannot submit professional applications.');
+  const input=(request.data??{}) as Record<string,unknown>;
+  const draftInput=input.draft && typeof input.draft==='object' && !Array.isArray(input.draft)
+    ? input.draft as Record<string,unknown>:{};
+  const expected=Number(input.revision??0);
+  if(!Number.isSafeInteger(expected)||expected<0)throw new HttpsError('invalid-argument','Draft revision is invalid.');
+  const draft={
+    selectedRoles:cleanProfessionalRoles(draftInput.selectedRoles),
+    statement:cleanText(draftInput.statement,2400),
+    experience:cleanText(draftInput.experience,1600),
+    portfolioUrl:cleanText(draftInput.portfolioUrl,500),
+    socialUrl:cleanText(draftInput.socialUrl,500),
+  };
+  return db.runTransaction(async(tx)=>{
+    const ref=applicationDraftRef(identity.uid);
+    const prior=await tx.get(ref);
+    const revision=Number(prior.data()?.revision??0);
+    if(expected!==revision)throw new HttpsError('aborted','Your professional application was edited on another device. Refresh to load the latest saved draft.');
+    tx.set(ref,{draft,revision:revision+1,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    return {revision:revision+1};
+  });
+});
+
 export const myProfessionalRoles = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   if (identity.admin) {
@@ -8912,6 +8949,9 @@ export const submitProfessionalApplication = onCall({ region: REGION }, async (r
     ...(currentApplication.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
   }, { merge:true });
 
+  // A successfully submitted application is durable in the bank. Clear only
+  // this member's *unsubmitted* draft, never the actual application record.
+  await applicationDraftRef(identity.uid).delete();
   return {
     status: 'banked',
     requestedRoles: requested,
