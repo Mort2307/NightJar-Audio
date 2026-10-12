@@ -4141,6 +4141,36 @@ export const notifyDailySpotlights = onSchedule({
   console.info('Nightjar daily spotlight dispatch', { date, spotlightCount: result.spotlights.length });
 });
 
+
+// Minute-precision publisher: approval places a release in 'scheduled'. Only
+// this server-side job changes it to 'released'; public catalogue requires
+// released status, so private content cannot leak before the selected instant.
+export const publishScheduledReleases = onSchedule({
+  region:REGION,schedule:'every 1 minutes',timeZone:'UTC',retryCount:1,
+},async () => {
+  const due = await db.collection('releases').where('status','==','scheduled').where('scheduledAt','<=',new Date().toISOString()).orderBy('scheduledAt').limit(250).get();
+  const now = Date.now();
+  let published = 0;
+  for (const doc of due.docs) {
+    if (!doc.data().scheduledAt || Date.parse(String(doc.data().scheduledAt)) > now) continue;
+    const released = await db.runTransaction(async (tx) => {
+      const latest = await tx.get(doc.ref);
+      const value = latest.data();
+      if (!value || value.status !== 'scheduled' || !value.scheduledAt || Date.parse(String(value.scheduledAt)) > Date.now()) return null;
+      tx.update(doc.ref,{status:'released',releaseDate:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+      return {creatorUserId:String(value.creatorUserId),title:cleanText(value.title,160)};
+    }).catch((error)=>{console.warn('Scheduled release publish retry',doc.id,error);return null;});
+    if (!released) continue;
+    published++;
+    await createNotification(released.creatorUserId,{
+      type:'content',subtype:'release',title:'Your scheduled recording is live',
+      message:'“'+released.title+'” has reached its chosen publication time and is now published.',
+      releaseId:doc.id,dedupeKey:'scheduled-live-'+doc.id,
+    }).catch((error)=>console.warn('Scheduled release notification failed',error));
+  }
+  console.info('Nightjar scheduled publication sweep',{considered:due.size,published});
+});
+
 export const adminAccountOverview = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const [accountsSnapshot, testerSnapshot, profilesSnapshot] = await Promise.all([
@@ -4411,7 +4441,7 @@ export const listBillingSubscriptions = onCall({ region: REGION }, async (reques
   return { subscriptions };
 });
 
-type ReleaseStatus = 'draft' | 'pending_review' | 'released' | 'rejected';
+type ReleaseStatus = 'draft' | 'pending_review' | 'released' | 'scheduled' | 'rejected';
 
 const releaseRef = (releaseId: string) => db.collection('releases').doc(releaseId);
 
@@ -4596,9 +4626,52 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   communityReactionCount: Math.max(0, Number(data.communityReactionCount ?? 0)),
   communityCommentCount: Math.max(0, Number(data.communityCommentCount ?? 0)),
   releaseDate: toIso(data.releaseDate),
+  scheduledAt: cleanText(data.scheduledAt, 40) || null,
+  scheduledTimeZone: cleanText(data.scheduledTimeZone, 100) || null,
+  scheduledLocal: cleanText(data.scheduledLocal, 16) || null,
   createdAt: toIso(data.createdAt),
   updatedAt: toIso(data.updatedAt),
 });
+
+
+// Creator-selected publishing time is an exact UTC instant plus the wall-time and
+// IANA time zone it was chosen in. No implicit UK time zone or DST adjustment.
+const scheduleReleaseInput = (atInput: unknown, zoneInput: unknown, localInput: unknown) => {
+  if (atInput == null || atInput === '') return { scheduledAt:null, scheduledTimeZone:null, scheduledLocal:null };
+  const at = cleanText(atInput, 40);
+  const zone = cleanText(zoneInput, 100);
+  const local = cleanText(localInput, 16);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at) || !Number.isFinite(Date.parse(at))) {
+    throw new HttpsError('invalid-argument', 'Choose an exact release date and time.');
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) throw new HttpsError('invalid-argument', 'Choose a local date and time.');
+  if (!zone) throw new HttpsError('invalid-argument', 'Release time zone is required.');
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone:zone, hourCycle:'h23', year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',
+    }).formatToParts(new Date(at));
+  } catch { throw new HttpsError('invalid-argument', 'Unsupported release time zone.'); }
+  const field = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  const actual = field('year')+'-'+field('month')+'-'+field('day')+'T'+field('hour')+':'+field('minute');
+  if (actual !== local) throw new HttpsError('invalid-argument', 'The selected time is invalid in this time zone (possibly a daylight-saving change).');
+  // Autumn clock changes can repeat the same local hour; do not guess which
+  // of the two possible instants the creator intended.
+  const formatsToLocal = (candidate:number) => {
+    const p = new Intl.DateTimeFormat('en-GB',{
+      timeZone:zone,hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',
+    }).formatToParts(new Date(candidate));
+    const part=(kind:string)=>p.find((item)=>item.type===kind)?.value??'';
+    return part('year')+'-'+part('month')+'-'+part('day')+'T'+part('hour')+':'+part('minute');
+  };
+  if ([-90,-60,-30,30,60,90].some((minutes)=>formatsToLocal(Date.parse(at)+minutes*60000)===local)) {
+    throw new HttpsError('invalid-argument','That local time occurs twice during a clock change. Choose another time.');
+  }
+  const offset = Date.parse(at) - Date.now();
+  if (offset <= 60000) throw new HttpsError('failed-precondition', 'Choose a release time at least one minute in the future.');
+  if (offset > 2 * 365 * 86400000) throw new HttpsError('invalid-argument', 'Schedule up to two years ahead.');
+  return { scheduledAt:at, scheduledTimeZone:zone, scheduledLocal:local };
+};
 
 const releaseOwnerPayload = (data: Record<string, unknown>, id: string) => ({
   ...releasePayload(data, id),
@@ -4682,6 +4755,9 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     pendingArtworkAssetId: null,
     pendingArtworkStatus: null,
     status: 'draft' as ReleaseStatus,
+    scheduledAt: null,
+    scheduledTimeZone: null,
+    scheduledLocal: null,
     moderationNote: null,
     version: 1,
     createdAt: FieldValue.serverTimestamp(),
@@ -4703,7 +4779,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
+  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
 
   const update = {
     title: cleanText(input.title ?? current.title, 160),
@@ -4729,6 +4805,9 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
       ? input.transcriptAccessibilityReviewed === true
       : current.transcriptAccessibilityReviewed === true,
     transcriptUpdatedAt: typeof input.transcriptText !== 'undefined' ? FieldValue.serverTimestamp() : current.transcriptUpdatedAt ?? null,
+    ...(typeof input.scheduledAt !== 'undefined'
+      ? scheduleReleaseInput(input.scheduledAt, input.scheduledTimeZone, input.scheduledLocal)
+      : { scheduledAt:current.scheduledAt ?? null, scheduledTimeZone:current.scheduledTimeZone ?? null, scheduledLocal:current.scheduledLocal ?? null }),
     durationMinutes: typeof input.durationMinutes === 'number' && Number.isFinite(input.durationMinutes)
       ? Math.max(0, Math.min(1440, input.durationMinutes))
       : current.durationMinutes ?? 0,
@@ -4845,7 +4924,7 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
+  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
 
   const file = getStorage().bucket().file(storagePath);
   const [exists] = await file.exists();
@@ -4883,7 +4962,7 @@ export const removeReleaseAudio = onCall({ region: REGION }, async (request) => 
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
+  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
 
   const path = cleanText(current.audioStoragePath, 500);
   if (path) {
@@ -4908,6 +4987,7 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
   const data = snapshot.data();
   if (!data || data.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
   if (data.status !== 'draft') throw new HttpsError('failed-precondition', 'Only saved drafts can be submitted for review.');
+  if (data.scheduledAt) scheduleReleaseInput(data.scheduledAt, data.scheduledTimeZone, data.scheduledLocal);
   if (!data.title || !data.description || !data.category || !data.audioStoragePath) {
     throw new HttpsError('failed-precondition', 'Complete title, description, category and audio before submitting.');
   }
@@ -5129,6 +5209,7 @@ export const releaseModerationQueue = onCall({ region: REGION }, async (request)
 const notificationRouteFor = (payload: Record<string, unknown>) => {
   const type = cleanText(payload.type, 40);
   const subtype = cleanText(payload.subtype, 60);
+  if (type === 'admin_action' && subtype === 'release_submitted') return '/admin';
   if (type === 'message' || subtype === 'professional_message' || subtype === 'direct_message') return '/messages';
   if (type === 'collaboration') return '/messages';
   if (type === 'payment' || subtype === 'payment') return '/profile';
@@ -5365,6 +5446,46 @@ const createNotification = async (userId: string, payload: Record<string, unknow
   });
 };
 
+
+// Moderation feedback is a genuine administrator-authored message using the same
+// conversation collection as Nightjar's Inbox. It can be replied to normally.
+const sendModerationInboxMessage = async (adminId: string, creatorId: string, releaseId: string, body: string) => {
+  if (adminId === creatorId) return null;
+  const id = directConversationId(adminId, creatorId);
+  const ref = db.collection('directConversations').doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) await ref.set({
+    participantUserIds:[adminId,creatorId].sort(),
+    participantRoles:{[adminId]:'admin',[creatorId]:'creator'},
+    unreadCounts:{[adminId]:0,[creatorId]:0},
+    collaborationIds:[], collaborationId:null,
+    createdAt:FieldValue.serverTimestamp(),
+  }, {merge:true});
+  const messageRef = ref.collection('messages').doc('release_moderation_'+releaseId+'_'+Date.now());
+  await messageRef.set({
+    conversationId:id, senderUserId:adminId, senderName:'Nightjar moderation',
+    body, releaseId, status:'visible', collaborationId:null, readBy:[adminId],
+    readAt:{[adminId]:new Date().toISOString()},
+    createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+  });
+  const saved = await ref.get();
+  const counters = { ...(saved.data()?.unreadCounts ?? {}) };
+  counters[creatorId] = Number(counters[creatorId] ?? 0) + 1;
+  counters[adminId] = 0;
+  await ref.set({
+    unreadCounts:counters,lastMessagePreview:body.slice(0,180),
+    lastSenderUserId:adminId,lastMessageAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    resolvedForLastMessageAt:null,resolvedAt:null,resolvedByUserId:null,
+  },{merge:true});
+  await createNotification(creatorId,{
+    type:'message',subtype:'direct_message',
+    title:'A message from Nightjar moderation',
+    message:'Your release has an update and a message you can reply to.',
+    conversationId:id, releaseId,senderUserId:adminId,
+  }).catch((error)=>console.warn('Moderation DM notification failed',error));
+  return id;
+};
+
 export const moderateRelease = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -5380,34 +5501,54 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
   if (!data) throw new HttpsError('not-found', 'Release not found.');
   if (data.status !== 'pending_review') throw new HttpsError('failed-precondition', 'Release is not awaiting moderation.');
 
-  const status: ReleaseStatus = decision === 'approved' ? 'released' : decision === 'changes' ? 'draft' : 'rejected';
-  await ref.set({
-    status,
-    moderationNote: note || null,
-    moderatedBy: admin.uid,
-    moderatedAt: FieldValue.serverTimestamp(),
-    releaseDate: decision === 'approved' ? FieldValue.serverTimestamp() : data.releaseDate ?? null,
-    nightjarOriginal: decision === 'approved' ? nightjarOriginal : data.nightjarOriginal === true,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  if ((decision === 'changes' || decision === 'rejected') && !note) {
+    throw new HttpsError('invalid-argument', 'Provide a reason so the creator understands the decision.');
+  }
+  const scheduledFor = data.scheduledAt ? Date.parse(String(data.scheduledAt)) : null;
+  if (decision === 'approved' && scheduledFor != null && (!Number.isFinite(scheduledFor) || scheduledFor <= Date.now())) {
+    throw new HttpsError('failed-precondition', 'The requested release time has passed. Request a new date from the creator before approval.');
+  }
+  const scheduled = decision === 'approved' && scheduledFor != null;
+  const status: ReleaseStatus = decision === 'approved' ? (scheduled ? 'scheduled' : 'released') : decision === 'changes' ? 'draft' : 'rejected';
+  await db.runTransaction(async (transaction) => {
+    const latest = await transaction.get(ref);
+    if (latest.data()?.status !== 'pending_review') throw new HttpsError('failed-precondition', 'This submission has already been reviewed or withdrawn.');
+    transaction.set(ref, {
+      status,
+      moderationNote:note || null,
+      moderatedBy:admin.uid,
+      moderatedAt:FieldValue.serverTimestamp(),
+      releaseDate:decision === 'approved' && !scheduled ? FieldValue.serverTimestamp() : null,
+      nightjarOriginal:decision === 'approved' ? nightjarOriginal : data.nightjarOriginal === true,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+  });
 
   if (data.creatorUserId) {
     await createNotification(String(data.creatorUserId), {
       type: 'content',
       subtype: 'release',
       title: decision === 'approved'
-        ? 'Your release is live on Nightjar'
+        ? scheduled ? 'Approved · Scheduled for publication' : 'Your release is live on Nightjar'
         : decision === 'changes'
           ? 'Changes requested for your release'
           : 'Your release was not approved',
       message: decision === 'approved'
-        ? 'Your release has passed Nightjar moderation and is available to age-verified listeners.'
+        ? scheduled ? 'Your release is approved and will stay private until the date and time you selected.' : 'Your release has passed Nightjar moderation and is available to age-verified listeners.'
         : decision === 'changes'
           ? 'Nightjar moderation requested changes before this release can be published.'
           : 'Your release was not approved for publication. Open Creator Studio to review the moderation note.',
       releaseId,
       moderationNote: note || null,
-    });
+    }).catch((error) => console.warn('Moderation notification failed',error));
+    const dateLine = scheduled ? 'It is scheduled for '+String(data.scheduledLocal)+' ('+String(data.scheduledTimeZone)+').' : '';
+    const body = decision === 'approved'
+      ? 'Nightjar has approved “'+cleanText(data.title,160)+'”. '+(scheduled ? dateLine+' Your release will not be visible until that time.' : 'It is now published.')+(note ? '\n\nNote: '+note : '')
+      : decision === 'changes'
+        ? 'Nightjar has reviewed “'+cleanText(data.title,160)+'” and requested changes:\n\n'+note+'\n\nYou can update your draft and resubmit it for review.'
+        : 'Nightjar could not approve “'+cleanText(data.title,160)+'”. Reason:\n\n'+note+'\n\nReply here if you need clarification.';
+    await sendModerationInboxMessage(admin.uid,String(data.creatorUserId),releaseId,body)
+      .catch((error)=>console.warn('Moderation Inbox message failed',error));
   }
 
   const saved = await ref.get();
@@ -5626,6 +5767,83 @@ const adminActionNotifications = async () => {
     createdAt:new Date().toISOString(),
   }));
 };
+
+// Personal calendar: dates are all-day civil dates (YYYY-MM-DD). No implicit
+// conversion of all-day dates to UTC instants, which would shift across zones.
+const personalCalendarDate = (input: unknown) => {
+  const date = cleanText(input, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpsError('invalid-argument', 'Choose a valid calendar date.');
+  const [year, month, day] = date.split('-').map(Number);
+  if (year < 2000 || year > 2100 || !month || month > 12 || day < 1 || day > 31 ||
+      new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== date) {
+    throw new HttpsError('invalid-argument', 'Choose a real calendar date.');
+  }
+  return date;
+};
+
+const personalCalendarZone = (input: unknown) => {
+  const zone = cleanText(input, 100) || 'auto';
+  if (zone === 'auto') return zone;
+  try { new Intl.DateTimeFormat('en-GB', { timeZone: zone }).format(new Date()); }
+  catch { throw new HttpsError('invalid-argument', 'Choose a recognised time zone.'); }
+  return zone;
+};
+
+export const getMyCalendar = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const [account, snapshot] = await Promise.all([
+    accountRef(identity.uid).get(),
+    accountRef(identity.uid).collection('personalCalendar').limit(251).get(),
+  ]);
+  return {
+    timeZone: personalCalendarZone(account.data()?.personalCalendarTimeZone ?? 'auto'),
+    events: snapshot.docs.map((item) => ({
+      id: item.id, title: cleanText(item.data().title, 120),
+      note: cleanText(item.data().note, 1500),
+      date: personalCalendarDate(item.data().date),
+    })).sort((a,b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)),
+    limited: snapshot.size > 250,
+  };
+});
+
+export const saveMyCalendarTimeZone = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const timeZone = personalCalendarZone((request.data as Record<string, unknown> | undefined)?.timeZone);
+  await accountRef(identity.uid).set({
+    personalCalendarTimeZone: timeZone,
+    personalCalendarUpdatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { timeZone };
+});
+
+export const saveMyCalendarEvent = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const title = cleanText(input.title, 120);
+  const date = personalCalendarDate(input.date);
+  const note = cleanText(input.note, 1500);
+  if (!title) throw new HttpsError('invalid-argument', 'Enter an event title.');
+  const rawId = cleanText(input.id, 80);
+  if (rawId && !/^[a-zA-Z0-9_-]{5,80}$/.test(rawId)) throw new HttpsError('invalid-argument', 'Calendar event ID is invalid.');
+  const collection = accountRef(identity.uid).collection('personalCalendar');
+  const target = rawId ? collection.doc(rawId) : collection.doc();
+  const prior = await target.get();
+  if (!prior.exists) {
+    const count = await collection.count().get();
+    if (count.data().count >= 250) throw new HttpsError('resource-exhausted', 'You have reached 250 personal calendar dates. Remove one to create another.');
+  }
+  await target.set({ title, date, note, updatedAt: FieldValue.serverTimestamp(),
+    ...(prior.exists ? {} : { createdAt: FieldValue.serverTimestamp() }) }, { merge: true });
+  return { event: { id: target.id, title, date, note } };
+});
+
+export const deleteMyCalendarEvent = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const id = cleanText((request.data as Record<string, unknown> | undefined)?.id, 80);
+  if (!/^[a-zA-Z0-9_-]{5,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Calendar event ID is invalid.');
+  await accountRef(identity.uid).collection('personalCalendar').doc(id).delete();
+  return { deleted: true };
+});
 
 export const listNotifications = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
@@ -8436,7 +8654,7 @@ export const reportReleaseComment = onCall({ region: REGION }, async (request) =
 const requireCreativeMessagingIdentity = async (
   request: { auth?: { uid: string; token: Record<string, unknown> } | null },
 ) => {
-  const identity = await requireAccountRole(request, ['creator','writer','editor','artist']);
+  const identity = await requireAccountRole(request, ['creator','writer','editor','artist','admin']);
   await requireAgeVerified(identity.uid);
   return identity;
 };
@@ -8536,7 +8754,8 @@ export const startDirectConversation = onCall({ region: REGION }, async (request
 
   const target = await accountRef(targetUserId).get();
   const targetRoles = target.exists ? professionalRolesForAccount(target.data() ?? {}) : [];
-  if (!target.exists || target.data()?.status !== 'active' || !targetRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role))) {
+  const targetCreative = targetRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role)) || target.data()?.role === 'admin';
+  if (!target.exists || target.data()?.status !== 'active' || !targetCreative) {
     throw new HttpsError('not-found', 'Eligible creative account not found.');
   }
   if (await directMessagingBlockedBetween(identity.uid, targetUserId)) {
@@ -8651,7 +8870,7 @@ export const sendDirectMessage = onCall({ region: REGION }, async (request) => {
   const recipientUserId = data.participantUserIds.find((id: string) => id !== identity.uid);
   const recipient = recipientUserId ? await accountRef(recipientUserId).get() : null;
   const recipientRoles = recipient?.exists ? professionalRolesForAccount(recipient.data() ?? {}) : [];
-  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !recipientRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role))) {
+  if (!recipientUserId || !recipient?.exists || recipient.data()?.status !== 'active' || !(recipientRoles.some((role) => CREATIVE_MESSAGE_ROLES.has(role)) || recipient.data()?.role === 'admin')) {
     throw new HttpsError('failed-precondition', 'The recipient account is no longer available for creative messaging.');
   }
   if (await directMessagingBlockedBetween(identity.uid, recipientUserId)) {
