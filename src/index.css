@@ -10716,3 +10716,133 @@ textarea:focus-visible,
     width: 100%;
   }
 }
+
+
+/* Featured release profiles and accessible community entry point */
+.featured-credit-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(223, 189, 151, .42);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.featured-credit-link:hover, .featured-credit-link:focus-visible {
+  color: #f2d3ac;
+  border-color: #f2d3ac;
+}
+.featured-discussion-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 10px;
+  margin: 2px 0 12px;
+  border: 1px solid rgba(223, 189, 151, .26);
+  border-radius: 12px;
+  background: rgba(223, 189, 151, .07);
+  color: #f6eee5;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.featured-discussion-button > span { flex: 1; font-size: 11px; font-weight: 750; }
+.featured-discussion-button small { font-size: 9px; color: #dfc7ad; }
+.featured-discussion-button:hover, .featured-discussion-button:focus-visible {
+  border-color: rgba(223, 189, 151, .7);
+  background: rgba(223, 189, 151, .12);
+}
+
+/* Immediate-release comments, reaction buttons and reporting */
+.release-community-modal { width: min(100%, 720px); }
+.release-community-reactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 16px 22px;
+}
+.release-community-reactions > div:first-child { flex: 1; min-width: 120px; display: grid; gap: 5px; }
+.release-community-reactions > div:first-child strong { font-size: 12px; }
+.release-community-reactions button, .release-comment-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid rgba(232, 210, 221, .18);
+  border-radius: 999px;
+  background: rgba(255,255,255,.035);
+  color: #f5efe9;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.release-community-reactions button.active, .release-comment-actions button.active {
+  border-color: rgba(222, 185, 142, .75);
+  background: rgba(222, 185, 142, .16);
+}
+.release-community-reactions button:disabled, .release-comment-actions button:disabled {
+  opacity: .5; cursor: not-allowed;
+}
+.release-community-tabs { display: flex; gap: 8px; padding: 0 22px 12px; }
+.release-community-tabs button {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 12px; border: 1px solid var(--line-soft);
+  border-radius: 9px; color: var(--muted); background: transparent; cursor: pointer;
+}
+.release-community-tabs button.active { color: #f6eee5; border-color: rgba(222, 185, 142, .7); }
+.release-comment-compose { display: grid; gap: 10px; margin: 6px 22px 16px; padding: 16px; }
+.release-comment-compose p { margin: 0; font-size: 12px; color: var(--muted); }
+.release-comment-compose textarea, .release-team-reply-compose textarea {
+  width: 100%; min-height: 88px; padding: 12px;
+  background: rgba(0,0,0,.21); color: var(--ivory);
+  border: 1px solid var(--line); border-radius: 10px;
+  resize: vertical; font: inherit; font-size: 13px;
+}
+.release-comment-compose > div:last-child, .release-team-reply-compose > div:last-child {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.release-comment-list { display: grid; gap: 12px; padding: 6px 22px 24px; }
+.release-comment-thread { display: grid; gap: 10px; }
+.release-comment-card {
+  display: grid; gap: 9px; min-width: 0; padding: 15px;
+  border: 1px solid var(--line-soft); border-radius: 13px;
+  background: rgba(255,255,255,.025);
+}
+.release-comment-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.release-comment-head > div:first-child { display: grid; gap: 5px; min-width: 0; }
+.release-comment-head > div:first-child > span { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.release-comment-card p { margin: 0; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; white-space: pre-wrap; }
+.release-comment-author {
+  width: fit-content; padding: 0;
+  border: 0; border-bottom: 1px solid rgba(223, 189, 151, .4);
+  background: transparent; color: #f5efe9; font: inherit; font-weight: 800;
+  font-size: 13px; text-align: left; cursor: pointer;
+}
+.release-comment-author:hover, .release-comment-author:focus-visible { color: #f2d3ac; border-color: #f2d3ac; }
+.release-comment-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.release-comment-actions button { min-height: 34px; padding: 6px 12px; }
+.release-comment-actions .release-comment-flag { margin-left: auto; }
+.release-comment-replies { display: grid; gap: 8px; padding-left: min(20px, 4vw); border-left: 2px solid rgba(222,185,142,.3); }
+.release-team-reply-compose { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line-soft); border-radius: 12px; }
+.release-team-reply-compose > div:first-child { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:11px; }
+.release-team-reply-button { display: inline-flex; align-items: center; gap: 6px; width: fit-content; }
+.work-team-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: #e7be8e; }
+@media (max-width: 480px) {
+  .release-community-reactions { padding: 12px 14px; }
+  .release-community-tabs { padding: 0 14px 10px; }
+  .release-comment-compose { margin: 6px 14px 12px; }
+  .release-comment-list { padding: 6px 14px 22px; }
+  .featured-discussion-button { gap: 7px; }
+}
