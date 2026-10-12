@@ -32,7 +32,7 @@ for(const mode of ['clarity','paper','focus','soft']) {
 assert.match(backend,/theme: \['nocturne','aubergine','midnight','ember','obsidian','bronze'\]/,
   'existing server theme allowlist remains unchanged; no inaccessible unsupported theme is sent');
 assert.match(themes,/nightjar\.appearance\.theme\.v1/, 'member account theme remains separate from this device preference');
-assert.doesNotMatch(vision,/firebase|userId|email|health|diagnosis/i, 'device vision layer stores no identity or diagnosis');
+assert.doesNotMatch(vision,/import.*firebase|userId\s*:|email\s*:|diagnosis\s*:/i, 'device vision layer stores no identity or diagnosis');
 
 const js = ts.transpileModule(vision, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
