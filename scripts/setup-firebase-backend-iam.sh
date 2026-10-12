@@ -129,10 +129,14 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
   --member="principalSet://iam.googleapis.com/${POOL_PATH}/attribute.repository_id/${REPOSITORY_ID}" \
   --quiet >/dev/null
 
-# Scope project access to functions development, Rules and index publishing.
-# Avoid project Owner/Editor and project-wide Service Account User.
+# Cloud Functions (2nd gen) HTTPS callable creation also modifies the
+# Cloud Run invoker policy (run.services.setIamPolicy). The Developer role
+# cannot perform that step: functions may create successfully but Firebase
+# will fail to make new callable endpoints invokable by signed-in users.
+# Cloud Functions Admin includes that permission. Avoid Owner/Editor,
+# project-wide Service Account User, and any long-lived JSON credentials.
 readonly MEMBER="serviceAccount:${SA_EMAIL}"
-for role in roles/cloudfunctions.developer roles/firebaserules.admin roles/datastore.indexAdmin roles/serviceusage.serviceUsageConsumer roles/firebase.viewer; do
+for role in roles/cloudfunctions.admin roles/firebaserules.admin roles/datastore.indexAdmin roles/serviceusage.serviceUsageConsumer roles/firebase.viewer; do
   echo "Ensuring project role: $role"
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="$MEMBER" --role="$role" --quiet >/dev/null
