@@ -2234,7 +2234,12 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
 export const listWriters = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const accounts = await db.collection('accounts').limit(1000).get();
+  const [accounts, releases, proposals] = await Promise.all([
+    db.collection('accounts').limit(1000).get(),
+    db.collection('releases').where('status', '==', 'released').limit(1000).get(),
+    db.collection('collaborationProposals').limit(1000).get(),
+  ]);
+  const completedByWriter = verifiedCollaborationEvidence(releases.docs, proposals.docs).counts;
   const writers = (await Promise.all(
     accounts.docs
       .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('writer'))
@@ -2245,7 +2250,7 @@ export const listWriters = onCall({ region: REGION }, async (request) => {
         const writerData = writerProfile.data() ?? {};
         const scripts = await db.collection('scripts').where('writerUserId', '==', doc.id).limit(500).get();
         const publishedWorkCount = scripts.docs.filter((script) => ['Approved','Published'].includes(String(script.data().status))).length;
-        return { ...base, ...roleProfileSlice(writerData, 'writer'), role:'writer', publishedWorkCount };
+        return { ...base, ...roleProfileSlice(writerData, 'writer'), role:'writer', publishedWorkCount, completedCollaborations: completedByWriter.get(doc.id) ?? 0 };
       }),
   )).filter(Boolean);
 
