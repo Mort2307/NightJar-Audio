@@ -5084,11 +5084,47 @@ select:disabled {
 }
 .premium-onboarding-card {
   position:relative;
-  overflow:hidden;
+  /* Premium styling must never override the base .onboarding-card scroller.
+     On mobile this is the ONLY scroll container for the onboarding dialog. */
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scroll-padding-block:12px 120px;
+  max-height:min(90vh,calc(100dvh - 30px));
   width:min(840px,calc(100vw - 28px));
   border-color:rgba(222,199,216,.19);
   box-shadow:0 42px 130px rgba(0,0,0,.72);
 }
+.premium-onboarding-card .premium-onboarding-footer {
+  position:sticky;
+  bottom:0;
+  z-index:5;
+  background:#171119;
+  border-top:1px solid rgba(239,231,223,.16);
+  padding-bottom:calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.premium-onboarding-card .premium-onboarding-step-intro:focus {
+  outline:none;
+}
+@media(max-width:760px) {
+  .premium-onboarding-backdrop {
+    padding:max(8px,env(safe-area-inset-top,0px)) 8px max(8px,env(safe-area-inset-bottom,0px));
+  }
+  .premium-onboarding-card {
+    max-height:calc(100dvh - 16px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    width:100%;
+    min-height:0;
+    border-radius:16px;
+    scroll-padding-bottom:160px;
+  }
+  .premium-onboarding-card .premium-onboarding-footer {
+    padding:14px 14px calc(12px + env(safe-area-inset-bottom,0px));
+  }
+  .premium-onboarding-footer button {min-height:44px;}
+}
+
 .premium-onboarding-aura {
   position:absolute;
   width:480px;
