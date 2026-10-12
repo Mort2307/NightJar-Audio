@@ -21,6 +21,7 @@ const reviewCall = httpsCallable<{ scriptId: string; status: string; comment?: s
 const editorAccountsCall = httpsCallable<void, { editors: any[] }>(functions, 'listEditorAccounts');
 const adminScriptsCall = httpsCallable<void, { scripts: any[] }>(functions, 'adminListScripts');
 const assignEditorCall = httpsCallable<{ scriptId: string; editorUserId: string }, { script: any }>(functions, 'adminAssignEditor');
+const adminReviewWriterCall = httpsCallable<{ scriptId: string; decision:'approved'|'changes'|'rejected'; note?:string }, {script:any; marketplaceVisible:boolean}>(functions,'adminReviewWriterScript');
 const protectedCatalogueCall = httpsCallable<void, { scripts: any[] }>(functions, 'listProtectedScripts');
 const openProtectedCall = httpsCallable<{ scriptId: string }, any>(functions, 'openProtectedScript');
 const permissionsCall = httpsCallable<{ scriptId: string }, { permissions: any[] }>(functions, 'listScriptPermissions');
@@ -75,6 +76,10 @@ export const nightjarScripts = {
 
   async assignEditor(scriptId: string, editorUserId: string) {
     return (await assignEditorCall({ scriptId, editorUserId })).data;
+  },
+
+  async adminReview(scriptId:string, decision:'approved'|'changes'|'rejected', note = '') {
+    return (await adminReviewWriterCall({scriptId,decision,note})).data;
   },
 
   async protectedCatalogue() {

@@ -559,6 +559,8 @@ function App() {
   const [adminCreatorSuggestions, setAdminCreatorSuggestions] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
   const [adminScripts, setAdminScripts] = useState<any[]>([]);
+  const [adminScriptDecisionNote, setAdminScriptDecisionNote] = useState<Record<string,string>>({});
+  const [adminScriptDecisionBusyId, setAdminScriptDecisionBusyId] = useState<string | null>(null);
   const [adminEditors, setAdminEditors] = useState<any[]>([]);
   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
   const [imageModeration, setImageModeration] = useState<any[]>([]);
@@ -3292,6 +3294,35 @@ function App() {
     }
   };
 
+  const decideAdminScript = async (script:any, decision:'approved'|'changes'|'rejected') => {
+    if (!canAdmin || !script?.id || adminScriptDecisionBusyId) return;
+    const note=String(adminScriptDecisionNote[script.id] ?? '').trim();
+    if (decision !== 'approved' && !note) {
+      notify('Enter a clear reason for this manuscript review decision.');
+      return;
+    }
+    const optedIn = script.marketplace?.visibility === 'marketplace' && Boolean(String(script.marketplace?.synopsis ?? '').trim());
+    if (decision === 'approved' && !window.confirm(optedIn
+      ? 'Approve this manuscript and publish its Writer-approved synopsis in the Creator Marketplace? The full file stays private.'
+      : 'Approve this manuscript? It will stay out of the Creator Marketplace until its Writer chooses Marketplace visibility and adds a synopsis.')) return;
+    setAdminScriptDecisionBusyId(script.id);
+    try {
+      if (demoMode) {
+        const status=decision==='approved'?'Approved':decision==='changes'?'Revision requested':'Rejected';
+        const items=adminScripts.map((item:any)=>item.id===script.id?{...item,status,lastEditorialComment:note||null}:item);
+        setAdminScripts(items);
+        writeDemo('adminScripts',items);
+        notify('Simulation: manuscript '+status.toLowerCase()+'.');
+      } else {
+        const response=await nightjarScripts.adminReview(script.id,decision,note);
+        await loadAdminEditorial();
+        notify(decision==='approved' ? response.marketplaceVisible ? 'Manuscript approved and public synopsis released to the Creator Marketplace.' : 'Manuscript approved. Writer must opt in and add a synopsis for marketplace visibility.' : 'Script decision saved and Writer notified.');
+      }
+      setAdminScriptDecisionNote(current=>({...current,[script.id]:''}));
+    } catch(error) {notify(error instanceof Error ? error.message : 'Manuscript decision could not be saved.');}
+    finally {setAdminScriptDecisionBusyId(null);}
+  };
+
   const assignEditor = async (scriptId: string, editorUserId: string) => {
     if (!canAdmin || !scriptId || !editorUserId) return;
     try {
@@ -5347,7 +5378,23 @@ function App() {
             </div>}
           </article>;
         })}
-</div>}{adminPanel === 'editorial' && <div>{adminPanelLoading ? <div className="people-empty">Loading editorial controls…</div> : <div className="admin-data-list">{adminScripts.map((script) => <article className="admin-data-row" key={script.id}><div><strong>{script.title}</strong><span>{script.status ?? 'Draft'} · v{script.version ?? 1}</span></div><select className="admin-select" defaultValue={script.editorUserId ?? ''} onChange={(event) => { if (event.target.value) void assignEditor(script.id, event.target.value); }}><option value="" disabled>{script.editorUserId ? 'Reassign editor' : 'Assign editor'}</option>{adminEditors.map((editor) => <option key={editor.userId} value={editor.userId}>{editor.name ?? editor.email ?? editor.userId}</option>)}</select></article>)}{!adminScripts.length && <div className="people-empty"><FileText size={18} /><strong>No manuscripts available.</strong><span>Submitted live scripts will appear here for assignment.</span></div>}</div>}</div>}{adminPanel === 'tags' && <div className="admin-data-list">
+</div>}{adminPanel === 'editorial' && <div>{adminPanelLoading ? <div className="people-empty">Loading manuscript decisions…</div> : <div className="admin-data-list">
+  <div className="admin-script-review-intro"><strong>Manuscript decisions · no Audio Editor required</strong><p>Approve Writer submissions for the Creator Marketplace independently of production editing. A listing is visible only when the Writer has selected Marketplace visibility and supplied a public synopsis. Full scripts remain protected.</p><span>{adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length} awaiting review</span></div>
+  {[...adminScripts].sort((left:any,right:any)=>Number(['Submitted','Under review'].includes(String(right.status)))-Number(['Submitted','Under review'].includes(String(left.status)))).map((script:any)=>{
+    const reviewing=['Submitted','Under review'].includes(String(script.status));
+    const optedIn=script.marketplace?.visibility==='marketplace' && Boolean(String(script.marketplace?.synopsis??'').trim());
+    return <article className="admin-data-row nj-manuscript-review-row" key={script.id}>
+      <div><strong>{script.title}</strong><span>{script.status??'Draft'} · v{script.version??1}</span><small>{optedIn?'Writer chose Creator Marketplace · synopsis ready':script.marketplace?.visibility==='marketplace'?'Writer chose Marketplace but needs a public synopsis':'Private or invitation only — Writer has not opted in to the marketplace'}</small>{script.lastEditorialComment&&<small>Previous review: {script.lastEditorialComment}</small>}</div>
+      {reviewing&&<div className="nj-admin-script-review-actions">
+        <button type="button" className="primary-button" disabled={adminScriptDecisionBusyId===script.id} onClick={()=>void decideAdminScript(script,'approved')}>{optedIn?'Approve & list for creators':'Approve manuscript'}</button>
+        <label>Reason for requested changes or rejection<textarea rows={2} maxLength={2000} value={adminScriptDecisionNote[script.id]??''} onChange={e=>setAdminScriptDecisionNote(current=>({...current,[script.id]:e.target.value}))} placeholder="Provide a clear explanation for the Writer…" /></label>
+        <div className="admin-data-actions"><button type="button" className="secondary-button" disabled={adminScriptDecisionBusyId===script.id} onClick={()=>void decideAdminScript(script,'changes')}>Request changes</button><button type="button" className="ghost-button" disabled={adminScriptDecisionBusyId===script.id} onClick={()=>void decideAdminScript(script,'rejected')}>Reject</button></div>
+      </div>}
+      <details className="nj-editor-optional-assignment"><summary>Optional Audio Editor assignment</summary><p>Assign an Editor for requested editorial support, not to make this manuscript available to Voice Actors.</p><select className="admin-select" value={script.editorUserId??''} onChange={event=>{if(event.target.value)void assignEditor(script.id,event.target.value);}}><option value="">Choose Editor (optional)</option>{adminEditors.map((editor:any)=><option key={editor.userId} value={editor.userId}>{editor.name??editor.email??editor.userId}</option>)}</select></details>
+    </article>;
+  })}
+  {!adminScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Writer submissions awaiting approval appear here without requiring an Editor assignment.</span></div>}
+</div>}</div></div>}{adminPanel === 'tags' && <div className="admin-data-list">
   {adminPanelLoading ? <div className="people-empty">Loading custom tag catalogue…</div> : adminProfileTags.length === 0 ? <div className="people-empty"><Search size={18}/><strong>No custom tag candidates yet</strong><span>Creator-made tags will appear here as they are used. Automatic shared-catalogue promotion starts at {adminProfileTagThreshold} distinct approved Creators.</span></div> : adminProfileTags.map((tag:any)=><article className="admin-data-row" key={tag.id}>
     <div>
       <strong>{tag.label}</strong>
