@@ -95,10 +95,10 @@ export default function WriterRightsPanel({ script, onUpdated, notify, simulatio
     <div className="nj-writer-marketplace-journey" role="status">
       <strong>Script to Creator Marketplace</strong>
       <p>{['Approved','Published'].includes(String(script.status ?? ''))
-        ? marketplace.visibility === 'marketplace' ? 'Approved and selected for Creator discovery. Your synopsis is public; the full manuscript stays protected.' : 'Your manuscript is approved. Add a public synopsis and use the action below to release its listing to Voice Actors.'
+        ? marketplace.visibility === 'marketplace' && Boolean(String(marketplace.synopsis ?? '').trim()) ? 'Approved and listed for Creator discovery. Your synopsis is public; the full manuscript stays protected.' : 'Your manuscript is approved. Add a public synopsis and use the action below to release its listing to Voice Actors.'
         : ['Submitted','Under review'].includes(String(script.status ?? '')) ? 'Your script is awaiting Nightjar approval. Assigning an Audio Editor is optional. You may set Marketplace visibility now and the synopsis will go live only after approval.'
         : 'First save your manuscript, choose Marketplace visibility, confirm rights, then submit it for Nightjar approval. Audio Editor assignment is optional.'}</p>
-      {['Approved','Published'].includes(String(script.status ?? '')) && marketplace.visibility !== 'marketplace' &&
+      {['Approved','Published'].includes(String(script.status ?? '')) && (marketplace.visibility !== 'marketplace' || !String(marketplace.synopsis ?? '').trim()) &&
         <button className="primary-button" type="button" disabled={saving} onClick={()=>void save(true)}><Save size={14}/> {saving?'Listing…':'List approved script for creators'}</button>}
     </div>
 
