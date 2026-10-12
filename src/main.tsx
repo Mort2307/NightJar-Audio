@@ -2,8 +2,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import './styles/product-system.css';
+import './styles/vision-access.css';
 import App from './App';
 import { nightjarTheme } from './platform/nightjar-theme';
+import { nightjarVision } from './platform/nightjar-vision';
+import VisionAccessLauncher from './components/VisionAccess';
 import AccountPortal from './components/AccountPortal';
 import AppRecoveryBoundary from './components/AppRecoveryBoundary';
 import LegalDocumentPage from './components/LegalDocumentPage';
@@ -29,6 +32,7 @@ try {
 }
 
 nightjarTheme.initialise();
+nightjarVision.initialise();
 registerNightjarServiceWorker();
 
 createRoot(root).render(
@@ -36,6 +40,7 @@ createRoot(root).render(
     <AppRecoveryBoundary>
       {isLegalCentre ? <LegalCentrePage /> : isLegalDocument ? <LegalDocumentPage /> :
         <NightjarLaunchUnlock>{isAccountPortal ? <AccountPortal /> : <App />}</NightjarLaunchUnlock>}
+      <VisionAccessLauncher />
     </AppRecoveryBoundary>
   </StrictMode>,
 );

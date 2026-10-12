@@ -1,5 +1,6 @@
 import { Accessibility, ArrowRight, Bell, BookOpenText, CreditCard, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
 import AccessibilityPreferences from './AccessibilityPreferences';
+import { VisionAccessControls } from './VisionAccess';
 import AppUpdateControl from './AppUpdateControl';
 import NotificationPreferences from './NotificationPreferences';
 import ThemePreferences from './ThemePreferences';
@@ -64,6 +65,11 @@ export default function NightjarSettings({ email, administrator, simulationMode,
       </div>
       <div className="nj-settings-tools">
         <div className="nj-settings-tool-heading"><Accessibility size={19}/><div><span className="mini-label">READABILITY</span><h2>Accessibility and transcripts</h2></div></div>
+        <section className="nj-settings-vision" aria-label="Vision access and low-vision reading options">
+          <h3>Vision Access</h3>
+          <p>Designed for blurred vision, reduced contrast and visual comfort. Changes are device-local; Nightjar account themes and transcript settings remain separate.</p>
+          <VisionAccessControls />
+        </section>
         {simulationMode ? <p className="nj-settings-explanation">Live account preferences are not changed during role simulation.</p> : <AccessibilityPreferences />}
       </div>
       <div className="nj-settings-tools">
