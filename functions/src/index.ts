@@ -5090,6 +5090,9 @@ export const myPushNotificationStatus = onCall({ region: REGION }, async (reques
   });
   return {
     activeDeviceCount: devices.filter((device) => device.active).length,
+    // Clients must confirm this feature before invoking a targeted test.
+    // Older deployed Functions without this marker may broadcast tests.
+    targetedTestsSupported: true,
     devices,
   };
 });
