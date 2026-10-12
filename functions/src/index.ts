@@ -7801,6 +7801,8 @@ const commentPayload = (data: Record<string, any>, id: string) => ({
   status: data.status ?? 'visible',
   createdAt: toIso(data.createdAt),
   updatedAt: toIso(data.updatedAt),
+  reactionLikeCount: Math.max(0, Number(data.reactionLikeCount ?? 0)),
+  reactionLoveCount: Math.max(0, Number(data.reactionLoveCount ?? 0)),
 });
 
 const hideReleaseCommentReplies = async (parentCommentId: string, status: 'parent_deleted' | 'parent_removed') => {
@@ -7831,10 +7833,13 @@ const directMessagePayload = (data: Record<string, any>, id: string) => ({
 });
 
 const releaseCommunityState = async (releaseId: string, viewerUserId: string) => {
-  const [legacyLoves, reactionsSnapshot, commentsSnapshot] = await Promise.all([
+  const [legacyLoves, reactionsSnapshot, commentsSnapshot, myCommentReactions] = await Promise.all([
     db.collection('releaseLoves').where('releaseId', '==', releaseId).limit(5000).get(),
     db.collection('releaseReactions').where('releaseId', '==', releaseId).limit(5000).get(),
     db.collection('releaseComments').where('releaseId', '==', releaseId).limit(500).get(),
+    viewerUserId
+      ? db.collection('releaseCommentReactions').where('userId', '==', viewerUserId).limit(2000).get()
+      : Promise.resolve(null),
   ]);
 
   const reactionByUser = new Map<string,string>();
@@ -7856,9 +7861,17 @@ const releaseCommunityState = async (releaseId: string, viewerUserId: string) =>
     if (reaction === 'love') loves += 1;
   }
 
+  const myCommentReactionById = new Map<string, string>();
+  for (const doc of myCommentReactions?.docs ?? []) {
+    const data = doc.data();
+    if (data.releaseId !== releaseId) continue;
+    const commentId = cleanText(data.commentId, 160);
+    const reaction = cleanText(data.reaction, 20);
+    if (commentId && (reaction === 'like' || reaction === 'love')) myCommentReactionById.set(commentId, reaction);
+  }
   const comments = commentsSnapshot.docs
     .filter((doc) => doc.data().status === 'visible')
-    .map((doc) => commentPayload(doc.data(), doc.id))
+    .map((doc) => ({ ...commentPayload(doc.data(), doc.id), myReaction:myCommentReactionById.get(doc.id) ?? null }))
     .sort((a,b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
 
   const myReaction = reactionByUser.get(viewerUserId) ?? null;
@@ -7988,8 +8001,54 @@ export const setReleaseLove = onCall({ region: REGION }, async (request) => {
   return { releaseId, loved, loveCount:state.reactions.loves };
 });
 
+/**
+ * Reactions are scoped to one comment and one authenticated account.
+ * A transaction prevents double-counting across repeated taps or concurrent devices.
+ * Comments remain instantly published; reports use the existing admin moderation queue.
+ */
+export const setReleaseCommentReaction = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const commentId = cleanText(input.commentId, 160);
+  const reaction = cleanText(input.reaction, 20);
+  if (!commentId || (reaction && reaction !== 'like' && reaction !== 'love')) {
+    throw new HttpsError('invalid-argument', 'Choose Like, Heart or remove your reaction.');
+  }
+  const commentRef = db.collection('releaseComments').doc(commentId);
+  const reactionRef = db.collection('releaseCommentReactions').doc(commentId + '__' + identity.uid);
+  const result = await db.runTransaction(async (transaction) => {
+    const [commentSnap, previousSnap] = await Promise.all([
+      transaction.get(commentRef), transaction.get(reactionRef),
+    ]);
+    const data = commentSnap.data();
+    if (!data || data.status !== 'visible') throw new HttpsError('not-found', 'Comment not found.');
+    const releaseId = cleanText(data.releaseId, 160);
+    const previous = cleanText(previousSnap.data()?.reaction, 20);
+    let likes = Math.max(0, Number(data.reactionLikeCount ?? 0));
+    let loves = Math.max(0, Number(data.reactionLoveCount ?? 0));
+    if (previous !== reaction) {
+      if (previous === 'like') likes = Math.max(0, likes - 1);
+      if (previous === 'love') loves = Math.max(0, loves - 1);
+      if (reaction === 'like') likes += 1;
+      if (reaction === 'love') loves += 1;
+      transaction.set(commentRef, {
+        reactionLikeCount:likes, reactionLoveCount:loves, updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+      if (reaction) {
+        transaction.set(reactionRef, {
+          commentId, releaseId, userId:identity.uid, reaction,
+          updatedAt:FieldValue.serverTimestamp(),
+        }, { merge:true });
+      } else if (previousSnap.exists) transaction.delete(reactionRef);
+    }
+    return { commentId, releaseId, likes, loves, myReaction:reaction || null };
+  });
+  return result;
+});
+
 export const postReleaseComment = onCall({ region: REGION }, async (request) => {
-  const identity = await requireAccountRole(request, ['listener']);
+  const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
