@@ -127,9 +127,24 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     catch { return 290; }
   });
   const dragRef = useRef<{ y: number; height: number } | null>(null);
+  const transcriptHeightRef = useRef(transcriptHeight);
   const equalizer = useNightjarEqualizer(audioRef);
   const writerCredit = track?.contributors?.find((credit) => credit.role === 'Writer' && credit.name?.trim())?.name ?? '';
   const artwork = track?.artworkUrl && !artworkFailed ? track.artworkUrl : '/nightjar-home-512.png';
+
+  useEffect(() => {
+    // Player acts as a contained modal; don't scroll the page beneath it.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', dismiss);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', dismiss);
+    };
+  }, [onClose]);
 
   const currentIndex = track ? queue.findIndex((item) => item.id === track.id) : -1;
   const previousTrack = currentIndex > 0 ? queue[currentIndex - 1] : null;
@@ -382,6 +397,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 1)}
         onPlay={(event) => {
           setIsPlaying(true);
+          equalizer.resumeProcessing();
           if (startedListeningSession.current !== listeningSessionId.current) {
             startedListeningSession.current = listeningSessionId.current;
             const node = event.currentTarget;
@@ -431,12 +447,13 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
       </div>
       {showEq && <div id="nj-up-eq" className="nj-up-eq">
         <div className="nj-up-eq-head"><div><strong>Audio equalizer</strong><small>Real-time sound shaping</small></div>
-          <button type="button" className={equalizer.enabled ? 'nj-up-eq-enable on' : 'nj-up-eq-enable'} onClick={() => void equalizer.toggle()} aria-pressed={equalizer.enabled}>{equalizer.enabled ? 'EQ on' : 'Enable EQ'}</button>
+          <button type="button" className={equalizer.enabled ? 'nj-up-eq-enable on' : 'nj-up-eq-enable'} onClick={() => void equalizer.toggle()} aria-pressed={equalizer.enabled} disabled={equalizer.busy || simulationMode} aria-busy={equalizer.busy}>{simulationMode ? 'Live only' : equalizer.busy ? 'Setting up…' : equalizer.enabled ? 'EQ on' : 'Enable EQ'}</button>
         </div>
         <div className="nj-up-presets" aria-label="Equalizer presets">
           {(['flat', 'voice', 'warm', 'bright'] as const).map((preset) => <button key={preset} type="button" className={equalizer.preset === preset ? 'active' : ''} onClick={() => equalizer.applyPreset(preset)} aria-pressed={equalizer.preset === preset}>{preset === 'voice' ? 'Voice' : preset === 'warm' ? 'Warmth' : preset === 'bright' ? 'Clarity' : 'Flat'}</button>)}
         </div>
         <div className="nj-up-eq-bands">{(['bass', 'mid', 'treble'] as const).map((band) => <label key={band}><span>{band === 'mid' ? 'Mids' : band === 'treble' ? 'Treble' : 'Bass'} <strong>{equalizer.levels[band] > 0 ? '+' : ''}{equalizer.levels[band]} dB</strong></span><input type="range" min="-12" max="12" step="1" value={equalizer.levels[band]} onChange={(event) => equalizer.updateBand(band, Number(event.target.value))} aria-label={band + ' EQ gain in decibels'}/></label>)}</div>
+        {simulationMode && <p className="nj-up-eq-message" role="status">Audio EQ works on actual Nightjar recordings. Simulation mode has no audio stream to process.</p>}
         {equalizer.message && <p className="nj-up-eq-message" role="status">{equalizer.message}</p>}
         <small className="nj-up-eq-footnote">EQ requires your browser to permit audio processing. Playback remains available even when EQ is unavailable.</small>
       </div>}
@@ -458,13 +475,24 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
             if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
               event.preventDefault();
               const next = Math.min(520, Math.max(160, transcriptHeight + (event.key === 'ArrowUp' ? 24 : -24)));
+              transcriptHeightRef.current = next;
               setTranscriptHeight(next);
               try { window.localStorage.setItem('nightjar.player.transcript-height.v1', String(next)); } catch {}
             }
           }}
           onPointerDown={(event) => { dragRef.current = { y: event.clientY, height: transcriptHeight }; event.currentTarget.setPointerCapture(event.pointerId); }}
-          onPointerMove={(event) => { if (!dragRef.current) return; setTranscriptHeight(Math.min(520, Math.max(160, dragRef.current.height + dragRef.current.y - event.clientY))); }}
-          onPointerUp={(event) => { if (!dragRef.current) return; dragRef.current = null; try { window.localStorage.setItem('nightjar.player.transcript-height.v1', String(transcriptHeight)); } catch {} event.currentTarget.releasePointerCapture(event.pointerId); }}
+          onPointerMove={(event) => {
+            if (!dragRef.current) return;
+            const next = Math.min(520, Math.max(160, dragRef.current.height + dragRef.current.y - event.clientY));
+            transcriptHeightRef.current = next;
+            setTranscriptHeight(next);
+          }}
+          onPointerUp={(event) => {
+            if (!dragRef.current) return;
+            dragRef.current = null;
+            try { window.localStorage.setItem('nightjar.player.transcript-height.v1', String(transcriptHeightRef.current)); } catch {}
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
           onPointerCancel={() => { dragRef.current = null; }}
         ><span aria-hidden="true"/></div>
         <div className="nj-up-transcript-heading"><span><BookOpenText size={17}/> Read along {timedTranscript ? '· timed' : ''}</span>

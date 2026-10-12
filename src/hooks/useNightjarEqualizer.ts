@@ -14,130 +14,198 @@ type Graph = {
   source: MediaElementAudioSourceNode;
   filters: Record<EqualizerBand, BiquadFilterNode>;
 };
+const clampGain = (n: number) => Math.min(12, Math.max(-12, Number.isFinite(n) ? n : 0));
+const presetKey = 'nightjar.player.equalizer.v1';
+const readStored = (): { preset: EqualizerPreset; levels: Levels } => {
+  const fallback = { preset: 'flat' as EqualizerPreset, levels: { ...presets.flat } };
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(presetKey) || 'null');
+    if (!stored || !['flat', 'voice', 'warm', 'bright', 'custom'].includes(stored.preset)) return fallback;
+    if (stored.preset !== 'custom') return { preset: stored.preset, levels: { ...presets[stored.preset as Exclude<EqualizerPreset, 'custom'>] } };
+    if (!stored.levels || !['bass', 'mid', 'treble'].every((band) => Number.isFinite(stored.levels[band]))) return fallback;
+    return { preset: 'custom', levels: { bass: clampGain(stored.levels.bass), mid: clampGain(stored.levels.mid), treble: clampGain(stored.levels.treble) } };
+  } catch { return fallback; }
+};
+const saveStored = (preset: EqualizerPreset, levels: Levels) => {
+  try { window.localStorage.setItem(presetKey, JSON.stringify({ preset, levels })); }
+  catch { /* private browser: audio processing still works for this session */ }
+};
 
-// Audio routing is only created following an explicit listener action. Browser
-// media security requires a CORS-enabled source for cross-origin EQ processing.
-// If it is not available the original unprocessed audio remains unaffected.
+/**
+ * Three real BiquadFilterNodes, chained after the protected media element.
+ * Playback never has to pass through a broken filter: inactive graphs route
+ * through the audio context's direct output.
+ *
+ * Protected cross-origin GCS URLs need bucket CORS permission for EQ. We
+ * check it ONLY when the listener enables EQ (no extra network per play).
+ * A failure leaves standard signed-URL playback intact and reports why.
+ */
 export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null>) {
   const graph = useRef<Graph | null>(null);
+  const configuring = useRef(false);
+  const [busy, setBusy] = useState(false);
   const [enabled, setEnabled] = useState(false);
-  const [preset, setPreset] = useState<EqualizerPreset>('flat');
-  const [levels, setLevels] = useState<Levels>(presets.flat);
+  const [settings, setSettings] = useState(readStored);
   const [message, setMessage] = useState('');
 
-  const route = useCallback((on: boolean, input?: Levels) => {
+  const updateGains = useCallback((next: Levels) => {
     const g = graph.current;
     if (!g) return;
-    const values = input ?? levels;
+    for (const band of ['bass', 'mid', 'treble'] as const) {
+      g.filters[band].gain.setTargetAtTime(next[band], g.context.currentTime, 0.025);
+    }
+  }, []);
+
+  const route = useCallback((on: boolean) => {
+    const g = graph.current;
+    if (!g) return;
     g.source.disconnect();
     for (const filter of Object.values(g.filters)) filter.disconnect();
     if (!on) {
       g.source.connect(g.context.destination);
-    } else {
-      g.filters.bass.gain.value = values.bass;
-      g.filters.mid.gain.value = values.mid;
-      g.filters.treble.gain.value = values.treble;
-      g.source.connect(g.filters.bass);
-      g.filters.bass.connect(g.filters.mid);
-      g.filters.mid.connect(g.filters.treble);
-      g.filters.treble.connect(g.context.destination);
+      return;
     }
-  }, [levels]);
+    g.source.connect(g.filters.bass);
+    g.filters.bass.connect(g.filters.mid);
+    g.filters.mid.connect(g.filters.treble);
+    g.filters.treble.connect(g.context.destination);
+  }, []);
+
+  const resumeProcessing = useCallback(() => {
+    const context = graph.current?.context;
+    if (context && context.state === 'suspended') void context.resume().catch(() => {
+      setMessage('Your browser paused the audio engine. Tap Play to resume.');
+    });
+  }, []);
 
   const toggle = useCallback(async () => {
+    if (configuring.current) return;
     if (enabled) {
       route(false);
       setEnabled(false);
-      setMessage('Equalizer bypassed; original audio unchanged.');
+      setMessage('EQ bypassed — original sound restored.');
       return;
     }
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio) {
+      setMessage('Open a playable Nightjar recording to use the equalizer.');
+      return;
+    }
+
+    configuring.current = true;
+    setBusy(true);
     setMessage('');
+    let context: AudioContext | null = null;
     let switchedToCors = false;
-    let resumeTime = 0;
-    let wasPlaying = false;
-    // Unlock the context while the EQ button's user gesture is still active,
-    // before awaiting signed-media network checks.
-    const available = 'AudioContext' in window;
-    const preparationContext = available && !graph.current ? new AudioContext() : null;
-    if (preparationContext) void preparationContext.resume().catch(() => {});
+    let position = 0;
+    let previouslyPlaying = false;
     try {
       if (!graph.current) {
-        if (!available) throw new Error('Web Audio is not available on this device.');
+        if (!('AudioContext' in window)) throw new Error('This device does not support Web Audio equalizers.');
+        // Context created and unlocked synchronously from the listener's tap.
+        context = new AudioContext();
+        void context.resume().catch(() => { /* status is checked below */ });
         const src = audio.currentSrc || audio.src;
-        if (src && new URL(src, window.location.href).origin !== window.location.origin) {
-          // Never replace an actively playing track with an unverified
-          // crossorigin request: it could turn a playable track into an error.
-          // Signed Firebase/GCS playback URLs commonly permit GET, not HEAD.
-          // Request one byte, then cancel the body immediately to avoid
-          // downloading the entire recording merely to check CORS support.
-          const response = await fetch(src, {
-            method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
-            headers: { Range: 'bytes=0-0' },
-          });
+        if (!src) throw new Error('Wait for the recording to load before enabling EQ.');
+        if (new URL(src, window.location.href).origin !== window.location.origin) {
+          // Request a one-byte range to establish CORS without fetching the
+          // full audio. Signed URLs are never logged or stored.
+          let response: Response;
+          try {
+            response = await fetch(src, {
+              method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+              headers: { Range: 'bytes=0-0' },
+            });
+          } catch {
+            throw new Error('This recording cannot be equalized until its audio storage allows browser CORS. Playback is unaffected.');
+          }
           void response.body?.cancel().catch(() => {});
-          if (!response.ok) throw new Error('This audio source does not permit EQ processing in your browser.');
-          wasPlaying = !audio.paused;
-          resumeTime = audio.currentTime;
+          if (!response.ok) throw new Error('EQ is unavailable for this audio source. Standard listening is unaffected.');
+
+          position = audio.currentTime;
+          previouslyPlaying = !audio.paused;
           audio.crossOrigin = 'anonymous';
           switchedToCors = true;
-          audio.load();
-          await new Promise<void>((resolve, reject) => {
-            const id = window.setTimeout(() => reject(new Error('Audio processing setup timed out.')), 8000);
-            const done = () => { window.clearTimeout(id); audio.removeEventListener('loadedmetadata', ok); audio.removeEventListener('error', fail); };
-            const ok = () => { done(); resolve(); };
-            const fail = () => { done(); reject(new Error('Audio source could not be reloaded for EQ.')); };
-            audio.addEventListener('loadedmetadata', ok);
-            audio.addEventListener('error', fail);
+          const metadata = new Promise<void>((resolve, reject) => {
+            const timeout = window.setTimeout(() => finish(false), 9000);
+            const finish = (ok: boolean) => {
+              window.clearTimeout(timeout);
+              audio.removeEventListener('loadedmetadata', loaded);
+              audio.removeEventListener('error', failed);
+              if (ok) resolve();
+              else reject(new Error('EQ-compatible audio reload failed; returning to standard playback.'));
+            };
+            const loaded = () => finish(true);
+            const failed = () => finish(false);
+            audio.addEventListener('loadedmetadata', loaded);
+            audio.addEventListener('error', failed);
           });
-          if (resumeTime > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(resumeTime, Math.max(0, audio.duration - 0.5));
-          if (wasPlaying) void audio.play().catch(() => {});
+          audio.load();
+          await metadata;
+          if (position > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(position, Math.max(0, audio.duration - .5));
         }
-        const context = preparationContext ?? new AudioContext();
-        const source = context.createMediaElementSource(audio);
+
         const bass = context.createBiquadFilter();
         bass.type = 'lowshelf'; bass.frequency.value = 180;
         const mid = context.createBiquadFilter();
-        mid.type = 'peaking'; mid.frequency.value = 1200; mid.Q.value = 0.85;
+        mid.type = 'peaking'; mid.frequency.value = 1200; mid.Q.value = .85;
         const treble = context.createBiquadFilter();
         treble.type = 'highshelf'; treble.frequency.value = 4200;
+        // Create the source LAST. Immediately connect it directly so even a
+        // later routing failure doesn't leave the media node disconnected.
+        const source = context.createMediaElementSource(audio);
+        source.connect(context.destination);
         graph.current = { context, source, filters: { bass, mid, treble } };
       }
-      await graph.current.context.resume();
+
+      if (graph.current.context.state !== 'running') await graph.current.context.resume();
+      updateGains(settings.levels);
       route(true);
       setEnabled(true);
-      setMessage('EQ processing active.');
+      setMessage('EQ is on — use the sliders or choose a sound preset.');
+      // Re-activating a cross-origin media element can cost mobile browsers the
+      // previous play permission. Make an attempt and explain any interruption.
+      if (switchedToCors && previouslyPlaying) {
+        try { await audio.play(); }
+        catch { setMessage('EQ is ready. Tap Play once to continue this recording.'); }
+      }
     } catch (error) {
       if (graph.current) route(false);
-      else if (preparationContext) void preparationContext.close().catch(() => {});
-      // If the source cannot reload with CORS, restore the original media
-      // request so signed/private audio remains playable without EQ.
+      if (context && !graph.current) void context.close().catch(() => {});
       if (switchedToCors && !graph.current) {
+        // Restore the original protected request if CORS reload fails.
         audio.crossOrigin = null;
+        const restore = () => {
+          audio.removeEventListener('error', restore);
+          if (position > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(position, Math.max(0, audio.duration - .5));
+          if (previouslyPlaying) void audio.play().catch(() => {
+            setMessage('Standard playback restored. Tap Play to continue.');
+          });
+        };
+        audio.addEventListener('loadedmetadata', restore, { once: true });
         audio.load();
-        audio.addEventListener('loadedmetadata', () => {
-          if (resumeTime > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(resumeTime, Math.max(0, audio.duration - .5));
-          if (wasPlaying) void audio.play().catch(() => {});
-        }, { once: true });
       }
       setEnabled(false);
-      setMessage(error instanceof Error ? error.message : 'EQ is not supported for this audio source.');
+      setMessage(error instanceof Error ? error.message : 'Equalizer unavailable; standard playback remains available.');
+    } finally {
+      configuring.current = false;
+      setBusy(false);
     }
-  }, [audioRef, enabled, route]);
+  }, [audioRef, enabled, route, settings.levels, updateGains]);
 
-  const applyPreset = (value: Exclude<EqualizerPreset, 'custom'>) => {
-    const next = { ...presets[value] };
-    setPreset(value);
-    setLevels(next);
-    if (enabled) route(true, next);
+  const applyPreset = (preset: Exclude<EqualizerPreset, 'custom'>) => {
+    const levels = { ...presets[preset] };
+    setSettings({ preset, levels });
+    saveStored(preset, levels);
+    if (enabled) updateGains(levels);
   };
   const updateBand = (band: EqualizerBand, gain: number) => {
-    const next = { ...levels, [band]: Math.min(12, Math.max(-12, gain)) };
-    setPreset('custom');
-    setLevels(next);
-    if (enabled) route(true, next);
+    const levels = { ...settings.levels, [band]: clampGain(gain) };
+    setSettings({ preset: 'custom', levels });
+    saveStored('custom', levels);
+    if (enabled) updateGains(levels);
   };
+
   useEffect(() => () => {
     if (graph.current) {
       void graph.current.context.close().catch(() => {});
@@ -145,5 +213,5 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
     }
   }, []);
 
-  return { enabled, preset, levels, message, toggle, applyPreset, updateBand };
+  return { enabled, busy, preset: settings.preset, levels: settings.levels, message, toggle, applyPreset, updateBand, resumeProcessing };
 }
