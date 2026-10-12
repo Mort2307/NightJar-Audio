@@ -8,6 +8,7 @@ import {
 } from '../platform/firebase-accessibility';
 import { AudioLines, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, Clock3, Headphones, Pause, Play, Settings2, Volume2, X } from 'lucide-react';
 import { useNightjarEqualizer } from '../hooks/useNightjarEqualizer';
+import { useNightjarMediaSession } from '../hooks/useNightjarMediaSession';
 import './nightjar-player-premium.css';
 
 export type NightjarPlayerTrack = {
@@ -146,9 +147,23 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     };
   }, [onClose]);
 
-  const currentIndex = track ? queue.findIndex((item) => item.id === track.id) : -1;
-  const previousTrack = currentIndex > 0 ? queue[currentIndex - 1] : null;
-  const nextTrack = currentIndex >= 0 && currentIndex < queue.length - 1 ? queue[currentIndex + 1] : null;
+  // Hardware Previous/Next should never route a subscriber to a release they
+  // cannot play or to an audio card with no uploaded media.
+  const playableQueue = queue.filter((item) => (item.audioAvailable || item.audioUrl)
+    && item.playbackAllowed !== false
+    && item.playbackAccessReason !== 'subscription_required');
+  const currentIndex = track ? playableQueue.findIndex((item) => item.id === track.id) : -1;
+  const previousTrack = currentIndex > 0 ? playableQueue[currentIndex - 1] : null;
+  const nextTrack = currentIndex >= 0 && currentIndex < playableQueue.length - 1 ? playableQueue[currentIndex + 1] : null;
+
+  useNightjarMediaSession({
+    track: track ? { id: track.id, title: track.title, creator: track.creator, artworkUrl: track.artworkUrl } : null,
+    previousTrack, nextTrack, enabled: !simulationMode && Boolean(track?.id),
+    playing: isPlaying, position, duration,
+    audio: () => audioRef.current,
+    onSelectTrack: onSelectTrack as ((next: { id: string; title: string; creator: string }) => void) | undefined,
+    onClose,
+  });
   const transcriptCues = useMemo(() => parseTranscript(transcriptText), [transcriptText]);
   const timedTranscript = useMemo(() => transcriptCues.some((cue) => cue.timeSeconds != null), [transcriptCues]);
   const activeTranscriptCueId = useMemo(() => {
@@ -446,8 +461,8 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         <label className="nj-up-sleep"><Clock3 size={17}/><select value={sleepTimer} onChange={(event) => setSleepTimer(event.target.value as typeof sleepTimer)} aria-label="Sleep timer"><option value="off">Sleep off</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="end">End of audio</option></select><ChevronDown size={14}/></label>
       </div>
       {showEq && <div id="nj-up-eq" className="nj-up-eq">
-        <div className="nj-up-eq-head"><div><strong>Audio equalizer</strong><small>Real-time sound shaping</small></div>
-          <button type="button" className={equalizer.enabled ? 'nj-up-eq-enable on' : 'nj-up-eq-enable'} onClick={() => void equalizer.toggle()} aria-pressed={equalizer.enabled} disabled={equalizer.busy || simulationMode} aria-busy={equalizer.busy}>{simulationMode ? 'Live only' : equalizer.busy ? 'Setting up…' : equalizer.enabled ? 'EQ on' : 'Enable EQ'}</button>
+        <div className="nj-up-eq-head"><div><strong>Audio equalizer</strong><small>Choose a preset to turn EQ on automatically.</small></div>
+          <button type="button" className={equalizer.enabled ? 'nj-up-eq-enable on' : 'nj-up-eq-enable'} onClick={() => void equalizer.toggle()} aria-pressed={equalizer.enabled} disabled={equalizer.busy || simulationMode} aria-busy={equalizer.busy}>{simulationMode ? 'Live only' : equalizer.busy ? 'Connecting…' : equalizer.enabled ? 'EQ ACTIVE · On' : 'EQ Off · Enable'}</button>
         </div>
         <div className="nj-up-presets" aria-label="Equalizer presets">
           {(['flat', 'voice', 'warm', 'bright'] as const).map((preset) => <button key={preset} type="button" className={equalizer.preset === preset ? 'active' : ''} onClick={() => equalizer.applyPreset(preset)} aria-pressed={equalizer.preset === preset}>{preset === 'voice' ? 'Voice' : preset === 'warm' ? 'Warmth' : preset === 'bright' ? 'Clarity' : 'Flat'}</button>)}
@@ -455,7 +470,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         <div className="nj-up-eq-bands">{(['bass', 'mid', 'treble'] as const).map((band) => <label key={band}><span>{band === 'mid' ? 'Mids' : band === 'treble' ? 'Treble' : 'Bass'} <strong>{equalizer.levels[band] > 0 ? '+' : ''}{equalizer.levels[band]} dB</strong></span><input type="range" min="-12" max="12" step="1" value={equalizer.levels[band]} onChange={(event) => equalizer.updateBand(band, Number(event.target.value))} aria-label={band + ' EQ gain in decibels'}/></label>)}</div>
         {simulationMode && <p className="nj-up-eq-message" role="status">Audio EQ works on actual Nightjar recordings. Simulation mode has no audio stream to process.</p>}
         {equalizer.message && <p className="nj-up-eq-message" role="status">{equalizer.message}</p>}
-        <small className="nj-up-eq-footnote">EQ requires your browser to permit audio processing. Playback remains available even when EQ is unavailable.</small>
+        <small className="nj-up-eq-footnote">Presets and sliders enable EQ automatically. If sound does not change, check the status above. Signed Nightjar recordings need browser audio CORS permissions.</small>
       </div>}
       <div className="nj-up-section-toggle">
         <span><Headphones size={17}/> Now playing</span>
