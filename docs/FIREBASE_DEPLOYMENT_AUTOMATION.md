@@ -14,7 +14,7 @@ These deployments do **not** migrate live Firestore data, alter Firebase Authent
 
 ## Mandatory production Web Push key
 
-The frontend reads `VITE_FIREBASE_VAPID_KEY` at **build time** in `src/platform/firebase-push.ts`. A local `.env` file is NOT uploaded to GitHub Actions; without setting this value, a build can pass while disabling push subscription. Therefore the live Hosting workflow **fails before deploying** when the key is missing or malformed. The PR preview workflow emits a visible warning instead.
+The frontend reads `VITE_FIREBASE_VAPID_KEY` at **build time** in `src/platform/firebase-push.ts`. A local `.env` file is NOT uploaded to GitHub Actions; without setting this value, a build can pass while disabling push subscription. Therefore the live Hosting workflow **fails before deploying** when the key is missing or malformed. The PR preview workflow also fails early if the key is missing or malformed.
 
 1. Open Firebase Console → Nightjar Audio → Project settings → **Cloud Messaging** → **Web Push certificates**.
 2. Copy the existing **public** VAPID key (not the private key or a Firebase service account key).
@@ -35,54 +35,69 @@ The frontend reads `VITE_FIREBASE_VAPID_KEY` at **build time** in `src/platform/
 
 A local `firebase init hosting:github` generates workflow files that can differ from committed workflows. Before pulling on a Windows checkout with local untracked generated workflows, back up/reconcile them; never discard changes without inspecting the diff. Agent Skills created locally are optional and are not included in this change.
 
-## Backend authentication: keyless GitHub → Google Cloud
+## Backend authentication: one-time Cloud Shell setup (no keys)
 
-Backend release support is intentionally opt-in because the generated Firebase Hosting service account has **Hosting privileges**, not broad Cloud Functions/Rules privileges. Do not give that service account `Owner` or repurpose its JSON key for all Firebase services.
+The Hosting service account is only used for Hosting. Never grant it broad backend roles.
 
-An administrator must perform **one-time** Google Cloud IAM configuration (for example in Cloud Shell). Create a dedicated backend deployment service account, a GitHub Workload Identity Federation pool/provider, and an IAM binding restricted to **this exact repository** and manual workflows on `main`:
+A dedicated identity uses **GitHub OIDC → Google Cloud Workload Identity Federation → impersonated deploy service account**. Trust is restricted by immutable GitHub repository ID `1389067180`, the `main` branch, the `workflow_dispatch` event and the exact backend workflow path. No service-account JSON key, GitHub personal-access token or Firebase refresh token is required.
+
+### 1. Run the idempotent bootstrap script from Google Cloud Shell
+
+Open [Google Cloud Shell](https://console.cloud.google.com/cloudshell?project=nightjar-audio), sign in with a Google account allowed to manage project IAM, and run:
 
 ```bash
-PROJECT_ID=nightjar-audio
-REPO=Mort2307/NightJar-Audio
-SERVICE_ACCOUNT=nightjar-backend-deploy@${PROJECT_ID}.iam.gserviceaccount.com
-
-gcloud config set project "$PROJECT_ID"
-gcloud iam service-accounts create nightjar-backend-deploy \
-  --display-name="Nightjar backend deploy automation" \
-  --project="$PROJECT_ID"
-
-gcloud iam workload-identity-pools create nightjar-github \
-  --location=global --project="$PROJECT_ID" \
-  --display-name="Nightjar GitHub Actions"
-
-POOL_PATH=$(gcloud iam workload-identity-pools describe nightjar-github \
-  --location=global --project="$PROJECT_ID" --format="value(name)")
-
-gcloud iam workload-identity-pools providers create-oidc nightjar-main \
-  --location=global --project="$PROJECT_ID" \
-  --workload-identity-pool=nightjar-github \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref,attribute.event_name=assertion.event_name" \
-  --attribute-condition="assertion.repository == 'Mort2307/NightJar-Audio' && assertion.ref == 'refs/heads/main' && assertion.event_name == 'workflow_dispatch'"
-
-gcloud iam service-accounts add-iam-policy-binding "$SERVICE_ACCOUNT" \
-  --project="$PROJECT_ID" \
-  --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/${POOL_PATH}/attribute.repository/${REPO}"
-
-gcloud iam workload-identity-pools providers describe nightjar-main \
-  --location=global --project="$PROJECT_ID" \
-  --workload-identity-pool=nightjar-github --format="value(name)"
+curl -fL --retry 3 \
+  "https://raw.githubusercontent.com/Mort2307/NightJar-Audio/main/scripts/setup-firebase-backend-iam.sh" \
+  -o setup-firebase-backend-iam.sh
+less setup-firebase-backend-iam.sh
+bash setup-firebase-backend-iam.sh
 ```
 
-If any IAM resources already exist, **inspect and reuse** them rather than repeatedly creating them. **The service account also needs narrowly scoped Google Cloud permissions for the exact backend resources being deployed.** Typical permissions cover Firebase Rules administration, Firestore index administration, and (for 2nd-generation Functions) Cloud Functions, Cloud Run, Cloud Build/Artifact Registry and runtime-service-account impersonation. The appropriate minimal permissions depend on current functions/triggers, and must be reviewed in Google Cloud IAM before enabling the manual deployment. Do not grant project-wide Owner/Editor just to bypass a permission error.
+The script asks for the literal word `NIGHTJAR` before it modifies IAM. It checks/reuses an existing service account, WIF pool/provider and role bindings. It refuses to overwrite a differently configured identity provider.
 
-In GitHub → **Settings → Environments**, create the `production-backend` environment and add required reviewers if supported on your plan. Restrict allowed deployment branch to `main`. Add environment **variables** (not secrets because these are public resource identifiers):
+The bootstrap grants limited backend *deployment* roles (Cloud Functions Developer, Firebase Rules Admin, Datastore Index Admin, Firebase Viewer and Service Usage Consumer); it grants `roles/iam.serviceAccountUser` only on existing default runtime/build service accounts. Cloud Functions v2 can require additional permissions, depending on function triggers, build service-account configuration and runtime accounts; investigate the exact deployment error rather than granting Owner or Editor. Check whether default runtime service accounts already have overly broad permissions. An identity with `iam.serviceAccountUser` can act with its runtime account's privileges.
 
-- `NIGHTJAR_GCP_WIF_PROVIDER` = full `projects/.../locations/global/workloadIdentityPools/nightjar-github/providers/nightjar-main` from the last command.
+### 2. Set two repository variables
+
+The script prints these exact variable names and values at the end. Copy them to GitHub → `Mort2307/NightJar-Audio` → **Settings → Secrets and variables → Actions → Variables**:
+
+- `NIGHTJAR_GCP_WIF_PROVIDER` = the script's complete `projects/NUMBER/locations/global/workloadIdentityPools/nightjar-github/providers/nightjar-main` value.
 - `NIGHTJAR_GCP_DEPLOY_SERVICE_ACCOUNT` = `nightjar-backend-deploy@nightjar-audio.iam.gserviceaccount.com`.
 
-Then go to GitHub → Actions → **Deploy Nightjar Firebase backend (manual)** → Run workflow → choose `main` and the exact scope. Recommended: test `firestore:rules` or `storage` separately after validation; never select `all-backend` by default. The workflow runs validation and requires successful keyless authentication. It does **not** use `--force`; deletions/destructive prompts fail closed rather than silently removing functions.
+These identifiers are not secrets. Do not confuse them with the public Web Push VAPID key.
+
+### 3. Create and protect the backend release environment
+
+In GitHub → **Settings → Environments**, create `production-backend`. Set allowed deployment branch to `main` and enable required reviewers when supported by your repository/plan. GitHub can otherwise auto-create a referenced environment without review; a named environment alone is NOT proof of approval.
+
+### 4. Perform the no-write integration test
+
+GitHub → Actions → **Deploy Nightjar Firebase backend (manual)** → **Run workflow** on `main`:
+
+- `scope`: `auth-check` (default)
+- `function_names`: leave blank
+- `confirmation`: leave blank
+
+The workflow authenticates with a short-lived Google identity and checks the Firebase CLI can see `nightjar-audio`. It does **not deploy anything**.
+
+When this is green, selected backend releases are available:
+
+| Scope | What changes | Required confirmation |
+| --- | --- | --- |
+| `functions:selected` | Only named exported functions; comma-separated `function_names`, maximum 20 | `DEPLOY-NIGHTJAR` |
+| `functions` | All functions in current source (potentially a very large operation) | `DEPLOY-NIGHTJAR` |
+| `firestore:rules` | Replaces live Firestore rules with `firestore.rules` | `DEPLOY-NIGHTJAR` |
+| `firestore:indexes` | Applies indexes from `firestore.indexes.json` | `DEPLOY-NIGHTJAR` |
+| `storage` | Replaces live Storage rules with `storage.rules` | `DEPLOY-NIGHTJAR` |
+| `all-backend` | All above; advanced last-resort release | `ALL-BACKEND-NIGHTJAR` |
+
+Existing Firebase Rules in the Console can be overwritten by CLI deployment. Review diffs, backups, and access paths before changing the production rules. Never use `--force` for backend deployments: missing functions or destructive changes must not be silently deleted.
+
+### 5. Functions rollout and performance
+
+Nightjar's `functions/src/index.ts` is a large module. A first full deployment can still take a long time or hit Firebase deployment limits; GitHub automates the work, not Google's backend rollout latency. Use `functions:selected` for 1–20 exports when testing an incremental change, then deploy remaining batches after results are verified. Functions sharing one codebase may still be rebuilt/uploaded together; selecting functions does not guarantee separate binaries or zero shared-build overhead.
+
+The workflow runs Node.js 22 and a pinned Firebase CLI version (`15.33.0`), prepares Functions only for Functions scopes, validates frontend contracts before writes, and serializes backend releases. It uses Firebase CLI's Application Default Credentials from keyless GitHub OIDC; the historical June 2026 ADC issue was resolved in recent CLI/Node versions, but the `auth-check` must prove the real environment works before making live changes.
 
 ## Security and spend
 

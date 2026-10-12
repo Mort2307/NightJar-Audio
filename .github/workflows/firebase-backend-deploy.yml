@@ -1,19 +1,31 @@
-# Manual, reviewed Firebase backend releases. Never auto-deploy Functions/rules on a web commit.
+# Nightjar production backend: explicit, scoped deployments only.
+# OIDC is restricted to this workflow on main by the GCP WIF provider.
 name: Deploy Nightjar Firebase backend (manual)
 
 on:
   workflow_dispatch:
     inputs:
       scope:
-        description: Select ONLY the backend resource intended for this release
+        description: Check connection or select a backend resource to deploy
         required: true
+        default: auth-check
         type: choice
         options:
+          - auth-check
+          - functions:selected
           - functions
           - firestore:rules
           - firestore:indexes
           - storage
           - all-backend
+      function_names:
+        description: Only for functions:selected, comma-separated exported function names
+        required: false
+        type: string
+      confirmation:
+        description: For writes type DEPLOY-NIGHTJAR; all-backend requires ALL-BACKEND-NIGHTJAR
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -27,10 +39,36 @@ jobs:
   backend_deploy:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     environment: production-backend
+    env:
+      REQUESTED_SCOPE: ${{ inputs.scope }}
+      SELECTED_FUNCTIONS: ${{ inputs.function_names }}
+      RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+      FIREBASE_CLI_EXPERIMENTS: ''
     steps:
-      - name: Checkout main
+      - name: Verify release intent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$REQUESTED_SCOPE" == "auth-check" ]]; then
+            echo "Read-only authentication check; no Firebase resources will be deployed."
+          elif [[ "$REQUESTED_SCOPE" == "all-backend" ]]; then
+            [[ "$RELEASE_CONFIRMATION" == "ALL-BACKEND-NIGHTJAR" ]] || {
+              echo "::error::All-backend deploy requires ALL-BACKEND-NIGHTJAR confirmation."; exit 1;
+            }
+          else
+            [[ "$RELEASE_CONFIRMATION" == "DEPLOY-NIGHTJAR" ]] || {
+              echo "::error::Backend writes require DEPLOY-NIGHTJAR confirmation."; exit 1;
+            }
+          fi
+          if [[ "$REQUESTED_SCOPE" == "functions:selected" ]]; then
+            [[ -n "$SELECTED_FUNCTIONS" ]] || {
+              echo "::error::Enter one or more function names."; exit 1;
+            }
+          fi
+
+      - name: Checkout the production branch
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -41,62 +79,93 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check identity federation configuration
+      - name: Verify WIF GitHub Actions variables
         env:
           PROVIDER: ${{ vars.NIGHTJAR_GCP_WIF_PROVIDER }}
           SERVICE_ACCOUNT: ${{ vars.NIGHTJAR_GCP_DEPLOY_SERVICE_ACCOUNT }}
         shell: bash
         run: |
-          if [[ -z "$PROVIDER" || -z "$SERVICE_ACCOUNT" ]]; then
-            echo "::error::Configure production-backend variables NIGHTJAR_GCP_WIF_PROVIDER and NIGHTJAR_GCP_DEPLOY_SERVICE_ACCOUNT first. See docs/FIREBASE_DEPLOYMENT_AUTOMATION.md."
-            exit 1
-          fi
+          set -euo pipefail
+          [[ "$PROVIDER" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[^/]+/providers/[^/]+$ ]] || {
+            echo "::error::Set NIGHTJAR_GCP_WIF_PROVIDER as a full projects/NUMBER/... provider path in GitHub Actions Variables."; exit 1;
+          }
+          [[ "$SERVICE_ACCOUNT" == "nightjar-backend-deploy@nightjar-audio.iam.gserviceaccount.com" ]] || {
+            echo "::error::Set NIGHTJAR_GCP_DEPLOY_SERVICE_ACCOUNT to the dedicated Nightjar deployment account."; exit 1;
+          }
 
-      - name: Install and validate frontend/security contracts
+      - name: Install Firebase CLI (pinned)
+        run: npm install --global firebase-tools@15.33.0 --no-fund --no-audit
+
+      - name: Authenticate to Google Cloud (short-lived, no stored key)
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: nightjar-audio
+          workload_identity_provider: ${{ vars.NIGHTJAR_GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.NIGHTJAR_GCP_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Verify Firebase CLI access to exact project
+        shell: bash
+        run: |
+          set -euo pipefail
+          firebase --version
+          firebase projects:list --json |
+            jq -e '(.result // []) | any(.[]; .projectId == "nightjar-audio")' >/dev/null
+          echo "Firebase CLI authenticated to nightjar-audio via keyless OIDC."
+
+      - name: Validate frontend and contracts
+        if: ${{ inputs.scope != 'auth-check' }}
         run: npm ci --no-fund && npm run validate
 
-      - name: Install, check and build Functions
+      - name: Install, check and build backend
+        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'all-backend' }}
         run: |
           npm --prefix functions ci --no-fund
           npm --prefix functions run check
           npm --prefix functions run audit:guard
           npm --prefix functions run build
 
-      - name: Authenticate using short-lived Google credentials (no JSON key)
-        uses: google-github-actions/auth@v3
-        with:
-          project_id: nightjar-audio
-          workload_identity_provider: ${{ vars.NIGHTJAR_GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.NIGHTJAR_GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Deploy chosen backend scope
+      - name: Deploy exact requested backend resources
+        if: ${{ inputs.scope != 'auth-check' }}
         shell: bash
-        env:
-          REQUESTED_SCOPE: ${{ inputs.scope }}
         run: |
           set -euo pipefail
           case "$REQUESTED_SCOPE" in
             functions|firestore:rules|firestore:indexes|storage)
               DEPLOY_SCOPE="$REQUESTED_SCOPE" ;;
+            functions:selected)
+              IFS=',' read -r -a names <<< "$SELECTED_FUNCTIONS"
+              (( ${#names[@]} > 0 && ${#names[@]} <= 20 )) || {
+                echo "::error::Select between 1 and 20 functions per batch."; exit 1;
+              }
+              targets=()
+              for name in "${names[@]}"; do
+                name="${name//[[:space:]]/}"
+                [[ "$name" =~ ^[A-Za-z][A-Za-z0-9_-]{0,100}$ ]] || {
+                  echo "::error::Invalid function name. Use exported names separated by commas."; exit 1;
+                }
+                targets+=("functions:$name")
+              done
+              DEPLOY_SCOPE="$(IFS=,; echo "${targets[*]}")" ;;
             all-backend)
               DEPLOY_SCOPE="functions,firestore,storage" ;;
             *)
-              echo "::error::Unexpected deployment scope"
-              exit 1 ;;
+              echo "::error::Unexpected scope."; exit 1 ;;
           esac
-          echo "Deploying Nightjar backend scope: $DEPLOY_SCOPE"
-          npm exec --yes --package=firebase-tools@15.30.2 -- firebase deploy \
-            --only "$DEPLOY_SCOPE" \
-            --project nightjar-audio \
-            --non-interactive
+          echo "Nightjar project=nightjar-audio; scope=$DEPLOY_SCOPE; commit=$GITHUB_SHA"
+          firebase deploy --only "$DEPLOY_SCOPE" --project nightjar-audio --non-interactive
 
-      - name: Summarise backend release
+      - name: Summarise result
         if: always()
         env:
-          DEPLOYED_SCOPE: ${{ inputs.scope }}
+          OUTCOME: ${{ job.status }}
         shell: bash
         run: |
-          echo "### Nightjar Firebase backend deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Nightjar Firebase backend workflow" >> "$GITHUB_STEP_SUMMARY"
           echo "Commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Requested scope: \`$DEPLOYED_SCOPE\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Result: \`$([[ '${{ job.status }}' == success ]] && echo success || echo check-logs)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Scope: \`$REQUESTED_SCOPE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Result: \`$OUTCOME\`" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$REQUESTED_SCOPE" == auth-check ]]; then
+            echo "Read-only: no backend was deployed." >> "$GITHUB_STEP_SUMMARY"
+          fi
