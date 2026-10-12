@@ -206,7 +206,7 @@ jobs:
 
       - name: Upload sanitized deployment report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nightjar-backend-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
