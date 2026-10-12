@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const server=fs.readFileSync('functions/src/index.ts','utf8');
+const indexes=JSON.parse(fs.readFileSync('firestore.indexes.json','utf8'));
+const required=['publishScheduledReleases','getMyCalendar','saveMyCalendarTimeZone','saveMyCalendarEvent','deleteMyCalendarEvent'];
+for(const name of required)assert.match(server,new RegExp('export const '+name+' = on(?:Call|Schedule)\\('),'required scheduled release or calendar function '+name);
+assert.match(server,/where\('status','==','scheduled'\)/,'publisher only sees approved scheduled releases');
+assert.match(server,/value\.status !== 'scheduled'/,'publisher rechecks status in transaction');
+assert.match(server,/transaction\.set\(ref,\s*\{/,'moderation updates state transactionally');
+assert.match(server,/decision === 'approved' && scheduledFor != null/,'cannot approve overdue scheduled releases');
+assert.match(server,/data\.status !== 'released' && !ownDraft && !adminPreview/,'unreleased media guard preserved');
+assert.match(server,/directConversationId\(adminId, creatorId\)/,'moderation messages use existing Nightjar inbox');
+assert.match(server,/requireActiveIdentity\(request\)/,'personal calendar requires authenticated account');
+assert.match(server,/collection\('personalCalendar'\)/,'calendar stored under owner account');
+assert.match(server,/new Date\(Date.UTC\(year, month - 1, day\)\)/,'civil dates validated');
+assert.match(server,/scheduleReleaseInput\(input\.scheduledAt/,'release scheduling validates IANA zone and DST');
+assert.ok(indexes.indexes.some(i=>i.collectionGroup==='releases'&&i.fields?.some(f=>f.fieldPath==='scheduledAt')),'scheduled release composite index required');
+console.log('Nightjar schedule and private-calendar backend source contracts passed.');
