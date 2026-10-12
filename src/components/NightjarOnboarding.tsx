@@ -52,6 +52,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   const mountedOnce = useRef(false);
   const draftVersion = useRef(0);
   const savingFinished = useRef(false);
+  const cloudConflict = useRef(false);
   const [draftStatus,setDraftStatus] = useState<'saved'|'unsaved'|'saving'|'error'>('saved');
   const [saving, setSaving] = useState(false);
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
@@ -109,8 +110,10 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         if(savingFinished.current)return;
         const stored=await nightjarCommunity.saveOnboardingDraft(snapshot,atStep,cloudRevision.current);
         cloudRevision.current=stored.revision;
+        cloudConflict.current=false;
         if(version===draftVersion.current)setDraftStatus('saved');
       }).catch((error)=>{
+        if(String((error as {code?:string})?.code??'').includes('aborted'))cloudConflict.current=true;
         if(version===draftVersion.current)setDraftStatus('error');
         // Never claim that a draft was saved after a network failure.
         console.warn('Nightjar onboarding cloud autosave failed',error);
@@ -141,6 +144,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     setSaving(true);
     try {
       await awaitOutstandingSave();
+      if(cloudConflict.current) throw new Error('Your onboarding draft changed on another device. Refresh Nightjar to load the newest version before completing your profile.');
       const payload = {
         ...(initialProfile ?? {}),
         ...profile,
@@ -168,6 +172,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     setSaving(true);
     try {
       await awaitOutstandingSave();
+      if(cloudConflict.current) throw new Error('A newer onboarding draft exists on another device. Refresh before saving your progress here.');
       await onSkip(profile,stepIndex,cloudRevision.current);
       savingFinished.current=true;
     } catch(error) {
