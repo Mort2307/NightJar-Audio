@@ -156,7 +156,12 @@ export const nightjarPush = {
       throw new Error('The Web Push public key is invalid. Update VITE_FIREBASE_VAPID_KEY and redeploy Nightjar Hosting.');
     }
     if (!(await this.supported())) throw new Error('Push notifications are not supported by this browser.');
-    const permission = await Notification.requestPermission();
+    // Repair performs a read and local token deletion before re-registration.
+    // Reuse an existing grant rather than showing a second browser permission
+    // prompt after the original click activation may have expired.
+    const permission = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
     if (permission !== 'granted') throw new Error(permission === 'denied'
       ? 'Push notifications are blocked in this browser or device settings.'
       : 'Push notification permission was not granted.');
