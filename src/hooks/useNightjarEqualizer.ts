@@ -54,6 +54,9 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
     const audio = audioRef.current;
     if (!audio) return;
     setMessage('');
+    let switchedToCors = false;
+    let resumeTime = 0;
+    let wasPlaying = false;
     try {
       if (!graph.current) {
         if (!('AudioContext' in window)) throw new Error('Web Audio is not available on this device.');
@@ -63,9 +66,10 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
           // crossorigin request: it could turn a playable track into an error.
           const response = await fetch(src, { method: 'HEAD', mode: 'cors', credentials: 'omit' });
           if (!response.ok) throw new Error('This audio source does not permit EQ processing in your browser.');
-          const wasPlaying = !audio.paused;
-          const currentTime = audio.currentTime;
+          wasPlaying = !audio.paused;
+          resumeTime = audio.currentTime;
           audio.crossOrigin = 'anonymous';
+          switchedToCors = true;
           audio.load();
           await new Promise<void>((resolve, reject) => {
             const id = window.setTimeout(() => reject(new Error('Audio processing setup timed out.')), 8000);
@@ -75,7 +79,7 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
             audio.addEventListener('loadedmetadata', ok);
             audio.addEventListener('error', fail);
           });
-          if (currentTime > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(currentTime, Math.max(0, audio.duration - 0.5));
+          if (resumeTime > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(resumeTime, Math.max(0, audio.duration - 0.5));
           if (wasPlaying) void audio.play().catch(() => {});
         }
         const context = new AudioContext();
@@ -94,7 +98,16 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
       setMessage('EQ processing active.');
     } catch (error) {
       if (graph.current) route(false);
-      // Retain normal playback if an external source cannot be processed.
+      // If the source cannot reload with CORS, restore the original media
+      // request so signed/private audio remains playable without EQ.
+      if (switchedToCors && !graph.current) {
+        audio.crossOrigin = null;
+        audio.load();
+        audio.addEventListener('loadedmetadata', () => {
+          if (resumeTime > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(resumeTime, Math.max(0, audio.duration - .5));
+          if (wasPlaying) void audio.play().catch(() => {});
+        }, { once: true });
+      }
       setEnabled(false);
       setMessage(error instanceof Error ? error.message : 'EQ is not supported for this audio source.');
     }
