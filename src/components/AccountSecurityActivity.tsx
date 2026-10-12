@@ -12,7 +12,7 @@ export default function AccountSecurityActivity() {
     setError('');
     try {
       const data=await nightjarAuthSecurity.myActivity();
-      setActivity(data.activity ?? []);
+      setActivity(Array.isArray(data?.activity) ? data.activity.filter((item): item is SignInActivity => Boolean(item && typeof item === 'object')) : []);
     } catch {
       setError('Nightjar could not load recent sign-in activity.');
     } finally {

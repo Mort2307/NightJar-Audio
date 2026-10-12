@@ -92,6 +92,7 @@ import RoleDashboard, { type RoleDashboardAction } from './components/RoleDashbo
 import WorkspaceSwitcher from './components/WorkspaceSwitcher';
 import NightjarSkeleton from './components/NightjarSkeleton';
 import type { ProfileDraftController } from './components/CloudProfileDraft';
+import ProfileSectionBoundary from './components/ProfileSectionBoundary';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
@@ -4759,13 +4760,13 @@ function App() {
               </section>
             )}
             {profileSaveError && <div className="admin-note" role="alert"><ShieldAlert size={17}/><div><strong>Profile save unsuccessful</strong><span>{profileSaveError} Your edited fields have not been cleared.</span></div></div>}
-            {!demoMode && user && profileBaseline && <Suspense fallback={<div className="nj-cloud-profile-draft">Checking your account draft…</div>}>
+            {!demoMode && user && profileBaseline && <ProfileSectionBoundary title="Cloud profile draft"><Suspense fallback={<div className="nj-cloud-profile-draft">Checking your account draft…</div>}>
               <CloudProfileDraft key={user.userId+':'+(effectiveRole==='admin'?'admin':profileEditRole)}
                 role={effectiveRole==='admin'?'admin':profileEditRole}
                 profile={profile} dirty={profileDirty} setProfile={setProfile}
                 register={(controller)=>{profileCloudDraftRef.current=controller;}} notify={notify}/>
-            </Suspense>}
-            <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
+            </Suspense></ProfileSectionBoundary>}
+            <ProfileSectionBoundary title="Your profile editor"><Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Loading your Nightjar profile" />}>
               <UserProfileStudio
                 profile={profile}
                 setProfile={setProfile}
@@ -4788,7 +4789,7 @@ function App() {
                 simulationMode={demoMode}
                 onOpenEditorStudio={effectiveRole==='editor'?()=>{navigate('editor'); void loadEditorQueue(); void loadProfile();}:undefined}
               />
-            </Suspense>
+            </Suspense></ProfileSectionBoundary>
 
             {effectiveRole !== 'admin' && <section className="profile-identity-switcher panel">
               <div className="profile-identity-switcher-head">
@@ -4801,7 +4802,7 @@ function App() {
               <div className="profile-identity-context"><span>Editing <strong>{roleMeta[profileEditRole].label}</strong></span><span>Workspace <strong>{effectiveRole ? roleMeta[effectiveRole].label : 'Listener'}</strong></span>{uniqueProfileEditableRoles.length>1&&<span><strong>{uniqueProfileEditableRoles.length}</strong> identities on one public profile</span>}</div>
             </section>}
 
-            {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading role profile" />}>
+            {effectiveRole !== 'admin' && <ProfileSectionBoundary title="Professional identity editor"><Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading role profile" />}>
               <RoleProfileExtension
                 role={profileEditRole}
                 profile={profile}
@@ -4809,7 +4810,7 @@ function App() {
                 portfolioOptions={profilePortfolioOptions}
                 completedCollaborations={profileCompletedCollaborations}
               />
-            </Suspense>}
+            </Suspense></ProfileSectionBoundary>}
 
             {profileEditRole === 'artist' && <section className="panel nj-profile-artist-handoff">
               <div><span className="mini-label">ARTIST / ARTWORK</span><h2>Your portfolio lives in Artist Studio.</h2><p>Your Artist identity is edited here, alongside your other approved roles. Uploads, artwork approvals and portfolio management have their own focused workspace.</p></div>

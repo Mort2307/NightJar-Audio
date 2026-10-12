@@ -1,0 +1,11 @@
+.nj-profile-section-failed { display:flex; gap:1rem; align-items:flex-start; margin:1rem 0; padding:clamp(1rem,3vw,1.5rem); border:1px solid rgba(218,174,158,.42); border-radius:16px; background:var(--panel,#18151b); color:var(--ivory,#eee7df); }
+.nj-profile-section-failed > svg { color:#e0c7b0; flex:0 0 auto; }
+.nj-profile-section-failed > div { min-width:0; flex:1; }
+.nj-profile-section-failed strong { display:block; font-size:1rem; }
+.nj-profile-section-failed p { color:var(--muted,#aaa); line-height:1.55; }
+.nj-profile-section-failed small { color:var(--muted,#aaa); }
+.nj-profile-section-recovery-actions { display:flex; flex-wrap:wrap; gap:.6rem; margin:1rem 0; }
+.nj-profile-section-failed details, .nj-recovery-details { max-width:100%; margin-top:1rem; font-size:.78rem; }
+.nj-profile-section-failed summary, .nj-recovery-details summary { cursor:pointer; padding:.5rem 0; }
+.nj-profile-section-failed pre, .nj-recovery-details pre { overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; max-height:200px; font-size:.75rem; line-height:1.5; background:rgba(0,0,0,.24); padding:.8rem; border-radius:10px; }
+@media(max-width:600px){.nj-profile-section-recovery-actions>button { width:100%; justify-content:center; }}

@@ -83,7 +83,7 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
     return {...current,featuredPortfolioIds:checked?[...ids,id].slice(0,6):ids.filter((value:string)=>value!==id)};
   });
 
-  const displayName = profile.displayName || (role === 'listener' ? 'Nightjar Listener' : role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'editor' ? 'Audio Editor' : 'Artist');
+  const displayName = String(profile.displayName || (role === 'listener' ? 'Nightjar Listener' : role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'editor' ? 'Audio Editor' : 'Artist'));
   const initials = profile.avatarInitials || displayName.split(/\s+/).map((part:string)=>part[0]).join('').slice(0,2).toUpperCase() || 'NJ';
   const roleName = role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'editor' ? 'Audio Editor' : role === 'artist' ? 'Artist' : 'Listener';
   const turnaround = role === 'creator'
@@ -96,9 +96,9 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
           ? profile.artistTurnaround
           : null;
   const sharedInterestCount = [
-    ...(profile.roleFocus ?? []),
-    ...(profile.roleSpecialties ?? []),
-    ...(profile.roleSecondary ?? []),
+    ...(Array.isArray(profile.roleFocus) ? profile.roleFocus : []),
+    ...(Array.isArray(profile.roleSpecialties) ? profile.roleSpecialties : []),
+    ...(Array.isArray(profile.roleSecondary) ? profile.roleSecondary : []),
   ].length;
   const headline = profile.roleHeadline || (role === 'listener'
     ? 'A curated corner of Nightjar.'
@@ -152,7 +152,7 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
             <SearchableMultiSelect label="Best collaboration fit" options={EDITOR_COLLABORATION_OPTIONS} values={profile.editorCollaborationPreferences ?? []} onChange={(values)=>setProfile((current:any)=>({...current,editorCollaborationPreferences:values}))}/>
             <label>Typical turnaround<select value={profile.editorTurnaround ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,editorTurnaround:event.target.value}))}><option value="">Project dependent / not stated</option>{EDITOR_TURNAROUND_OPTIONS.map((option)=><option key={option}>{option}</option>)}</select></label>
             <label>Years actively editing<input type="number" min="0" max="60" inputMode="numeric" value={profile.editorExperienceYears ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,editorExperienceYears:event.target.value === '' ? '' : Math.min(60,Math.max(0,Number(event.target.value)))}))}/></label>
-            {(profile.roleSpecialties ?? []).length > 0 && <div className="editor-skill-matrix-editor"><span className="mini-label">SKILL MATRIX</span><div className="editor-skill-matrix-list">{(profile.roleSpecialties ?? []).map((skill:string)=><label key={skill}><span>{skill}</span><select value={profile.editorSkillLevels?.[skill] ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,editorSkillLevels:{...(current.editorSkillLevels??{}),[skill]:event.target.value}}))}><option value="">Not stated</option>{EDITOR_PROFICIENCY_OPTIONS.map((level)=><option key={level} value={level}>{level}</option>)}</select></label>)}</div></div>}
+            {Array.isArray(profile.roleSpecialties) && profile.roleSpecialties.length > 0 && <div className="editor-skill-matrix-editor"><span className="mini-label">SKILL MATRIX</span><div className="editor-skill-matrix-list">{(Array.isArray(profile.roleSpecialties) ? profile.roleSpecialties : []).map((skill:string)=><label key={skill}><span>{skill}</span><select value={profile.editorSkillLevels?.[skill] ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,editorSkillLevels:{...(current.editorSkillLevels??{}),[skill]:event.target.value}}))}><option value="">Not stated</option>{EDITOR_PROFICIENCY_OPTIONS.map((level)=><option key={level} value={level}>{level}</option>)}</select></label>)}</div></div>}
           </article>
       : role === 'artist'
         ? <article className="panel premium-role-extension-card premium-role-specialist-card artist">

@@ -18,8 +18,9 @@ export default function AccessibilityPreferences() {
     void nightjarAccessibility.get()
       .then((value) => {
         if (cancelled) return;
-        setPreferences(value);
-        setBaseline(value);
+        const safe = { ...DEFAULT_ACCESSIBILITY_PREFERENCES, ...(value && typeof value === 'object' ? value : {}) };
+        setPreferences(safe);
+        setBaseline(safe);
       })
       .catch(() => {
         if (!cancelled) setMessage('Nightjar could not load accessibility preferences yet.');
@@ -37,8 +38,9 @@ export default function AccessibilityPreferences() {
     setMessage('');
     try {
       const next = await nightjarAccessibility.save(preferences);
-      setPreferences(next);
-      setBaseline(next);
+      const safe = { ...DEFAULT_ACCESSIBILITY_PREFERENCES, ...(next && typeof next === 'object' ? next : {}) };
+      setPreferences(safe);
+      setBaseline(safe);
       setMessage('Accessibility preferences saved.');
     } catch {
       setMessage('Nightjar could not save accessibility preferences yet.');

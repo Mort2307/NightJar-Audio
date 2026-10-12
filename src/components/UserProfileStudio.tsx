@@ -6,6 +6,7 @@ import AccountSecurityActivity from './AccountSecurityActivity';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import SocialLinksEditor from './SocialLinksEditor';
 import LegalAgreementPanel from './LegalAgreementPanel';
+import ProfileSectionBoundary from './ProfileSectionBoundary';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -43,7 +44,7 @@ const roleLabel = (role: AccountRole | null) => {
 };
 
 const roleSummary = (roles: AccountRole[] | undefined, fallback: AccountRole | null) => {
-  const unique = Array.from(new Set((roles ?? []).filter(Boolean)));
+  const unique = Array.from(new Set((Array.isArray(roles) ? roles : []).filter(Boolean)));
   return unique.length ? unique.map((item) => roleLabel(item)).join(' · ') : roleLabel(fallback);
 };
 
@@ -71,13 +72,13 @@ export default function UserProfileStudio({
 }: Props) {
   const handleProblem = nightjarHandleError(profile.handle);
   const suggestedHandle = handleProblem ? suggestNightjarHandle(profile.handle) : '';
-  const displayName = profile.displayName || userName || userEmail?.split('@')[0] || 'Nightjar member';
+  const displayName = String(profile.displayName || userName || userEmail?.split('@')[0] || 'Nightjar member');
   const handle = profile.handle ? '@' + String(profile.handle).replace(/^@/,'') : '@yourhandle';
   const initials = profile.avatarInitials || displayName.split(/\s+/).map((part:string)=>part[0]).join('').slice(0,2).toUpperCase() || 'NJ';
   const topTags = [
-    ...(profile.favouriteTags ?? []),
-    ...(profile.favouriteCategories ?? []),
-    ...(profile.favouriteTropes ?? []),
+    ...(Array.isArray(profile.favouriteTags) ? profile.favouriteTags : []),
+    ...(Array.isArray(profile.favouriteCategories) ? profile.favouriteCategories : []),
+    ...(Array.isArray(profile.favouriteTropes) ? profile.favouriteTropes : []),
   ].slice(0, 8);
 
   const discoverable = role === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false;
@@ -183,10 +184,10 @@ export default function UserProfileStudio({
         </div>
       </article>
 
-      <SocialLinksEditor notify={notify} simulationMode={simulationMode} />
-      <AccessibilityPreferences />
-      <LegalAgreementPanel />
-      <AccountSecurityActivity />
+      <ProfileSectionBoundary title="Social links"><SocialLinksEditor notify={notify} simulationMode={simulationMode} /></ProfileSectionBoundary>
+      <ProfileSectionBoundary title="Accessibility preferences"><AccessibilityPreferences /></ProfileSectionBoundary>
+      <ProfileSectionBoundary title="Legal agreements"><LegalAgreementPanel /></ProfileSectionBoundary>
+      <ProfileSectionBoundary title="Sign-in activity"><AccountSecurityActivity /></ProfileSectionBoundary>
     </div>
 
     <div className="premium-profile-savebar">
