@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory } from '../demo/nightjarDemo';
-import { FileText, Handshake, Heart, Search, Share2, ShieldCheck, X } from 'lucide-react';
+import { FileText, Heart, Search, Share2, ShieldCheck, X } from 'lucide-react';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
 
