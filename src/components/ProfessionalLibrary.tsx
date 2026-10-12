@@ -45,7 +45,7 @@ type Props = {
   onOpen: (userId: string, role: ProfileRole) => void;
   onFollow: (userId: string) => void | Promise<void>;
   followingIds: string[];
-  onRecommend: (person: LibraryProfile) => void | Promise<void>;
+  onRecommend: (person: LibraryProfile, role: LibraryRole) => void | Promise<void>;
   onMessage: (userId: string) => void;
   canMessage: boolean;
   readOnly: boolean;
@@ -69,7 +69,7 @@ function PersonCard({
 }: {
   person:LibraryProfile;category:ProfileRole;readOnly:boolean;followingIds:string[];canMessage:boolean;audience:'listener'|'professional';
   onOpen:(id:string,role:ProfileRole)=>void;onFollow:(id:string)=>void|Promise<void>;
-  onRecommend:(profile:LibraryProfile)=>void|Promise<void>;onMessage:(id:string)=>void;
+  onRecommend:(profile:LibraryProfile,role:LibraryRole)=>void|Promise<void>;onMessage:(id:string)=>void;
   onSupport?:(person:LibraryProfile,role:LibraryRole)=>void;
 }) {
   const slice=person.roleProfiles?.[category] ?? {};
@@ -113,7 +113,7 @@ function PersonCard({
       {!readOnly&&<button className="secondary-button" type="button" aria-label={followingIds.includes(person.userId)?'Unfollow '+person.name:'Follow '+person.name}
         onClick={()=>void onFollow(person.userId)}><Heart size={15} fill={followingIds.includes(person.userId)?'currentColor':'none'}/>{audience==='listener'?followingIds.includes(person.userId)?' Following':' Follow':null}</button>}
       {!readOnly&&audience==='listener'&&category!=='listener'&&onSupport&&<button className="secondary-button" type="button" onClick={()=>onSupport(person,category as LibraryRole)}>Support with Nightjars</button>}
-      {!readOnly&&category==='creator'&&<button className="secondary-button" type="button" aria-label={'Recommend '+person.name} onClick={()=>void onRecommend(person)}><Share2 size={15}/></button>}
+      {!readOnly&&category!=='listener'&&<button className="secondary-button" type="button" aria-label={'Share '+person.name+' — '+roleName[category]+' profile'} onClick={()=>void onRecommend(person,category as LibraryRole)}><Share2 size={15} aria-hidden="true"/> Share</button>}
       {!readOnly&&canMessage&&category!=='listener'&&<button className="secondary-button" type="button" aria-label={'Message '+person.name} onClick={()=>onMessage(person.userId)}><MessageCircle size={15}/></button>}
     </div>
   </article>;
