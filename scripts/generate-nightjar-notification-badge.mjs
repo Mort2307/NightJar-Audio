@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 // Generate the Android badge from Nightjar's REAL, committed brand artwork.
 // Android expects a monochrome alpha mask in the status bar, not square app art.
-const sourcePath = 'public/nightjar-home-192.png';
+const sourcePath = 'public/favicon.svg';
 const badgePath = 'public/nightjar-notification-badge.png';
 const size = 96;
 const signature = Buffer.from('89504e470d0a1a0a', 'hex');
@@ -147,7 +147,11 @@ function badgeFromLogo({width,height,pixels}) {
   }
   return {pixels:out,active,bounds:[minX,minY,maxX,maxY]};
 }
-const original=decodePng(fs.readFileSync(sourcePath));
+// The official favicon contains the real Nightjar logo as an embedded PNG.
+const favicon=fs.readFileSync(sourcePath,'utf8');
+const embedded=favicon.match(/<image\b[^>]*\bhref="data:image\/png;base64,([^"]+)"/);
+assert.ok(embedded?.[1], 'Nightjar favicon must contain its official brand artwork');
+const original=decodePng(Buffer.from(embedded[1],'base64'));
 const badge=badgeFromLogo(original);
 fs.writeFileSync(badgePath,encodePng(size,size,badge.pixels));
 console.log('Nightjar: generated real-logo Android notification badge from '+sourcePath+
