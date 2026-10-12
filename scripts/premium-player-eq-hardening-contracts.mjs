@@ -7,7 +7,7 @@ assert.match(eq, /configuring\.current/, 'EQ activation is idempotent during asy
 assert.match(eq, /setBusy\(true\)/, 'EQ setup gives active progress feedback');
 assert.match(eq, /source\.connect\(context\.destination\)/, 'Web Audio connects through clean bypass before EQ filters');
 assert.match(eq, /setTargetAtTime/, 'EQ levels change smoothly without disconnecting audio');
-assert.match(eq, /const response = await fetch\(src,/, 'CORS is tested only when EQ is requested');
+assert.match(eq, /response = await fetch\(src,/, 'CORS is tested only when EQ is requested');
 assert.match(eq, /if \(switchedToCors && !graph\.current\)/, 'a CORS failure restores normal playback');
 assert.match(eq, /audio\.crossOrigin = null/, 'original media request is restored after CORS failure');
 assert.match(eq, /const readStored/, 'sound preferences are retrieved between player sessions');
