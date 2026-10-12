@@ -135,6 +135,8 @@ export function markdownPlan(plan) {
     plan.batches.forEach((group, idx) => lines.push(
       '- Batch ' + (idx + 1) + ': ' + tick + group.join(',') + tick,
     ));
+  } else if (plan.mode === 'none') {
+    lines.push('No backend source change was detected. No Functions deployment indicated by this comparison.', '');
   } else {
     lines.push('No complete deployable batch was inferred. Manually assess affected functions.', '');
   }
