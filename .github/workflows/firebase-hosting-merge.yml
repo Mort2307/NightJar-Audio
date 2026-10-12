@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+  # Manual recovery path if a GitHub API-triggered merge does not emit a push workflow.
+  workflow_dispatch:
 
 permissions:
   contents: read
