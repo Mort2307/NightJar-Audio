@@ -1123,14 +1123,117 @@ export const adminSetProfileTagStatus = onCall({ region: REGION }, async (reques
   return { tagId, status };
 });
 
-const completedCollaborationCountFor = async (userId: string) => {
-  const snapshot = await db.collection('collaborationProposals').limit(1000).get();
-  return snapshot.docs.filter((doc) => {
+// Nightjar's handshake is an evidence-backed portfolio statistic. Earlier
+// public releases count even if the collaboration proposal feature did not yet
+// exist. Never infer participants from names alone: require linked account IDs.
+// A proposal and a published release by the same pair are reconciled instead
+// of counted twice. Private proposal titles and terms are never disclosed.
+type CollaborationEvidenceDoc = { id: string; data: () => Record<string, any> };
+const verifiedCollaborationEvidence = (
+  released: CollaborationEvidenceDoc[],
+  proposals: CollaborationEvidenceDoc[],
+) => {
+  type PublishedWork = {
+    releaseId: string; title: string; releaseDate: string | null;
+    contributors: Array<{ userId: string; name: string; role: string }>;
+  };
+  const releasesByUser = new Map<string, PublishedWork[]>();
+  const publishedPairCount = new Map<string, number>();
+  const pairKey = (left: string, right: string) => [left, right].sort().join('|');
+  for (const doc of released) {
     const data = doc.data() ?? {};
-    return data.status === 'completed'
-      && (data.writerUserId === userId || data.recipientUserId === userId);
-  }).length;
+    if (data.status !== 'released') continue;
+    const team = new Map<string, { userId: string; name: string; role: string }>();
+    const ownerId = cleanText(data.creatorUserId, 160);
+    if (ownerId) team.set(ownerId, {
+      userId: ownerId, name: cleanText(data.creatorName, 100) || 'Nightjar creator', role: 'Voice Actor',
+    });
+    for (const credit of normaliseReleaseContributors(data.contributors)) {
+      if (!credit.userId) continue;
+      if (!team.has(credit.userId)) team.set(credit.userId, {
+        userId: credit.userId, name: credit.name, role: credit.role,
+      });
+    }
+    if (team.size < 2) continue;
+    const members = [...team.values()];
+    const item: PublishedWork = {
+      releaseId: doc.id,
+      title: cleanText(data.title, 160) || 'Untitled release',
+      releaseDate: toIso(data.releaseDate) ?? toIso(data.releasedAt) ?? null,
+      contributors: members,
+    };
+    for (const member of members) {
+      const list = releasesByUser.get(member.userId) ?? [];
+      list.push(item);
+      releasesByUser.set(member.userId, list);
+    }
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        const key = pairKey(members[i].userId, members[j].userId);
+        publishedPairCount.set(key, (publishedPairCount.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  const proposalPairs = new Map<string, { left: string; right: string; count: number }>();
+  for (const doc of proposals) {
+    const data = doc.data() ?? {};
+    if (data.status !== 'completed') continue;
+    const left = cleanText(data.writerUserId, 160);
+    const right = cleanText(data.recipientUserId, 160);
+    if (!left || !right || left === right) continue;
+    const key = pairKey(left, right);
+    const previous = proposalPairs.get(key);
+    proposalPairs.set(key, { left, right, count: (previous?.count ?? 0) + 1 });
+  }
+  const workflowOnlyByUser = new Map<string, number>();
+  for (const [key, pair] of proposalPairs) {
+    const additional = Math.max(0, pair.count - (publishedPairCount.get(key) ?? 0));
+    if (!additional) continue;
+    for (const userId of [pair.left, pair.right]) {
+      workflowOnlyByUser.set(userId, (workflowOnlyByUser.get(userId) ?? 0) + additional);
+    }
+  }
+  const counts = new Map<string, number>();
+  for (const [userId, works] of releasesByUser) counts.set(userId, works.length);
+  for (const [userId, count] of workflowOnlyByUser) counts.set(userId, (counts.get(userId) ?? 0) + count);
+  return { counts, releasesByUser, workflowOnlyByUser };
 };
+
+const completedCollaborationCountFor = async (userId: string) => {
+  const [releases, proposals] = await Promise.all([
+    db.collection('releases').where('status', '==', 'released').limit(1000).get(),
+    db.collection('collaborationProposals').limit(1000).get(),
+  ]);
+  return verifiedCollaborationEvidence(releases.docs, proposals.docs).counts.get(userId) ?? 0;
+};
+
+export const getVerifiedCollaborationHistory = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as { userId?: unknown };
+  const requestedUserId = cleanText(input.userId, 160) || identity.uid;
+  const [account, profile, releases, proposals] = await Promise.all([
+    accountRef(requestedUserId).get(),
+    profileRef(requestedUserId).get(),
+    db.collection('releases').where('status', '==', 'released').limit(1000).get(),
+    db.collection('collaborationProposals').limit(1000).get(),
+  ]);
+  const a = account.data() ?? {};
+  const p = profile.data() ?? {};
+  const isOwner = requestedUserId === identity.uid;
+  const publiclyAvailable = a.status === 'active'
+    && (a.role === 'admin' ? p.adminCommunityVisible === true : p.publicProfile !== false);
+  if (!isOwner && !publiclyAvailable) throw new HttpsError('not-found', 'Profile not available.');
+  const evidence = verifiedCollaborationEvidence(releases.docs, proposals.docs);
+  const published = evidence.releasesByUser.get(requestedUserId) ?? [];
+  return {
+    userId: requestedUserId,
+    count: evidence.counts.get(requestedUserId) ?? 0,
+    published: published.sort((a, b) =>
+      String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? ''))).slice(0, 100),
+    workflowOnlyCount: evidence.workflowOnlyByUser.get(requestedUserId) ?? 0,
+  };
+});
 
 const publicActivityBadges = (
   role: string,
@@ -1810,15 +1913,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
     if (writerUserId) publishedScriptsByWriter.set(writerUserId, (publishedScriptsByWriter.get(writerUserId) ?? 0) + 1);
   }
 
-  const collaborationCountByUser = new Map<string, number>();
-  for (const collaboration of collaborations.docs) {
-    const data = collaboration.data() ?? {};
-    if (data.status !== 'completed') continue;
-    const writerUserId = cleanText(data.writerUserId, 160);
-    const recipientUserId = cleanText(data.recipientUserId, 160);
-    if (writerUserId) collaborationCountByUser.set(writerUserId, (collaborationCountByUser.get(writerUserId) ?? 0) + 1);
-    if (recipientUserId) collaborationCountByUser.set(recipientUserId, (collaborationCountByUser.get(recipientUserId) ?? 0) + 1);
-  }
+  const collaborationCountByUser = verifiedCollaborationEvidence(releases.docs, collaborations.docs).counts;
 
   const allowedRoles = new Set(['creator','writer','editor','artist','listener']);
   const profiles = (await Promise.all(accounts.docs
@@ -7715,14 +7810,7 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
     db.collection('releases').where('status', '==', 'released').limit(1000).get(),
     db.collection('scripts').limit(1000).get(),
   ]);
-  const completedByUser = new Map<string, number>();
-  for (const collaboration of collaborations.docs) {
-    const data = collaboration.data() ?? {};
-    if (data.status !== 'completed') continue;
-    for (const userId of [cleanText(data.writerUserId, 160), cleanText(data.recipientUserId, 160)].filter(Boolean)) {
-      completedByUser.set(userId, (completedByUser.get(userId) ?? 0) + 1);
-    }
-  }
+  const completedByUser = verifiedCollaborationEvidence(publicReleases.docs, collaborations.docs).counts;
 
   const releaseCountByCreator = new Map<string, number>();
   const creditedReleaseCountByUser = new Map<string, number>();
