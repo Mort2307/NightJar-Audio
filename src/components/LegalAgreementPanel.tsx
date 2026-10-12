@@ -14,7 +14,7 @@ export default function LegalAgreementPanel() {
     setLoading(true);
     try{
       const data=await nightjarLegal.status();
-      setDocuments(data.documents??[]);
+      setDocuments(Array.isArray(data?.documents) ? data.documents.filter((doc): doc is LegalAgreementStatus => Boolean(doc && typeof doc === 'object' && typeof doc.id === 'string')) : []);
       setSelected({});
     }catch{setMessage('Nightjar could not load your legal agreement record.');}
     finally{setLoading(false);}
