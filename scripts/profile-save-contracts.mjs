@@ -57,4 +57,28 @@ assert.match(app, /onResumeOnboarding=\{\(\) => setShowOnboarding\(true\)\}/,
   'Profile page resumes setup explicitly');
 assert.match(onboarding, /Save & finish later/, 'The voluntary deferral action is clearly labelled');
 
+// DEVICE CONTINUITY: draft sync must not be device-only or blindly
+// last-writer-wins. Each role is scoped to the authenticated account.
+const drafts=read('src/platform/firebase-profile-drafts.ts');
+const draftUI=read('src/components/CloudProfileDraft.tsx');
+assert.match(server,/export const getMyProfileWorkingDraft=onCall/, 'cloud drafts readable by authenticated member');
+assert.match(server,/export const saveMyProfileWorkingDraft=onCall/, 'cloud drafts persist changes');
+assert.match(server,/export const clearMyProfileWorkingDraft=onCall/, 'published profiles can clear drafts');
+assert.match(server,/profileRef\(uid\)\.collection\('workingDrafts'\)/, 'drafts are private and account-scoped');
+assert.match(server,/current\.revision!==expectedRevision/, 'draft saves require compare-and-swap');
+assert.match(server,/profileDraftScope\(input\.scope\)/, 'draft route validates profile scope');
+assert.match(server,/professionalRolesForAccount\(account\.data\(\)\?\?\{\}\)/, 'only approved roles can save their role draft');
+assert.match(drafts,/httpsCallable/, 'device continuity uses an authenticated Firebase callable');
+assert.match(onboarding,/nightjarProfileDrafts\.get\('onboarding'\)/, 'onboarding restores in-progress form from account');
+assert.match(onboarding,/nightjarProfileDrafts\.save\('onboarding'/, 'onboarding saves progress while user edits');
+assert.match(onboarding,/lastSyncedRef\.current/, 'onboarding distinguishes pending versus synced fields');
+assert.match(onboarding,/setDraftConflict\(true\)/, 'onboarding never silently overwrites conflicting edits');
+assert.match(draftUI,/const scope=\('profile-'\+role\)/, 'each professional role has its own cloud draft');
+assert.match(draftUI,/nightjarProfileDrafts\.save\(scope,payload,revisionRef\.current\)/, 'role profile autosaves revisions');
+assert.match(draftUI,/Use latest saved version/, 'the member can restore another device\'s changes');
+assert.match(app,/await profileCloudDraftRef\.current\.flush\(\)/, 'role switching awaits cloud save');
+assert.match(app,/await controller\.flush\(\)/, 'publishing profile awaits cloud draft');
+assert.match(app,/profileCloudDraftRef\.current\.clear\(\)/, 'successful published profile clears its own draft');
+assert.doesNotMatch(draftUI,/localStorage|sessionStorage/, 'cloud draft editor is not browser-local');
+
 console.log('Nightjar profile persistence and optional @handle regression contracts passed.');
