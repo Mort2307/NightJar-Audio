@@ -108,6 +108,7 @@ const CreatorCapacityBank = lazy(() => import('./components/CreatorCapacityBank'
 const ScriptMarketplace = lazy(() => import('./components/ScriptMarketplace'));
 const ReleaseReviews = lazy(() => import('./components/ReleaseReviews'));
 const CreatorSuggestionBox = lazy(() => import('./components/CreatorSuggestionBox'));
+const NightjarTeamCommunity = lazy(() => import('./components/NightjarTeamCommunity'));
 const MessagingHub = lazy(() => import('./components/MessagingHub'));
 const ProfessionalRoleManager = lazy(() => import('./components/ProfessionalRoleManager'));
 const ArtistStudio = lazy(() => import('./components/ArtistStudio'));
@@ -4479,6 +4480,9 @@ function App() {
                 </select>}
               </div>
             </div>
+            <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Team updates" />}>
+              <NightjarTeamCommunity admin={canAdmin&&!liveRolePreview} readOnly={liveRolePreview||demoMode} notify={notify} demoMode={demoMode}/>
+            </Suspense>
             <div className="nj-directory-viewbar">
               <div className="nj-directory-view-actions">
                 {!liveRolePreview && <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>}
