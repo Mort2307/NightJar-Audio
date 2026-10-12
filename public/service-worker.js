@@ -62,7 +62,7 @@ try {
   // Core PWA behaviour remains available even if messaging SDK loading fails.
 }
 
-const CACHE = 'nightjar-shell-v13';
+const CACHE = 'nightjar-shell-v12';
 const SHELL = ['/'];
 
 self.addEventListener('install', (event) => {
