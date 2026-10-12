@@ -111,7 +111,12 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   };
   const syncDraft=async():Promise<boolean>=>{
     if(!draftReady||draftConflict||stopSyncRef.current)return false;
-    if(pendingSaveRef.current)return pendingSaveRef.current.then((done)=>done && syncDraft());
+    if(pendingSaveRef.current){
+      const inflight=pendingSaveRef.current;
+      const completed=await inflight;
+      if(!completed)return false;
+      if(pendingSaveRef.current===inflight)pendingSaveRef.current=null;
+    }
     const fullSignature=JSON.stringify({profile:workingProfileRef.current,stepIndex:workingStepRef.current});
     if(fullSignature===lastSyncedRef.current){setDraftStatus('saved');return true;}
     setDraftStatus('saving');
