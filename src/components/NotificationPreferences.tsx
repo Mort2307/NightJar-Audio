@@ -35,7 +35,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
 
   const refreshPush = async () => {
     if (simulationMode) {
-      setPushStatus({ configured:true, supported:true, browserPermission:'granted', activeDeviceCount:1, thisDeviceRegistered:true, devices:[], standalone:true });
+      setPushStatus({ configured:true, supported:true, browserPermission:'granted', activeDeviceCount:1, targetedTestsSupported:true, thisDeviceRegistered:true, devices:[], standalone:true });
       setPushError(null);
       return;
     }
@@ -43,7 +43,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
       setPushStatus(await nightjarPush.status());
     } catch (error) {
       setPushError(error instanceof Error ? error.message.slice(0, 200) : 'A Nightjar push service call failed.');
-      setPushStatus({ configured:nightjarPush.configured(), supported:await nightjarPush.supported().catch(()=>false), browserPermission:nightjarPush.permission(), activeDeviceCount:0, thisDeviceRegistered:false, devices:[] });
+      setPushStatus({ configured:nightjarPush.configured(), supported:await nightjarPush.supported().catch(()=>false), browserPermission:nightjarPush.permission(), activeDeviceCount:0, targetedTestsSupported:false, thisDeviceRegistered:false, devices:[] });
     }
   };
 
@@ -159,7 +159,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
         <button className="secondary-button" disabled={pushBusy || !pushStatus?.configured || !pushStatus?.supported} onClick={() => void enablePush()}>
           <Bell size={14}/> Enable on this device
         </button>
-        <button className="secondary-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered} onClick={() => void testPush()}>
+        <button className="secondary-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered || !pushStatus?.targetedTestsSupported} onClick={() => void testPush()}>
           <Send size={14}/> Test this device only
         </button>
         <button className="ghost-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered} onClick={() => void disablePush()}>
@@ -172,6 +172,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
           <ShieldCheck size={14}/> {diagnosing ? 'Checking setup…' : 'Diagnose notification setup'}
         </button>
       </div>
+      {pushStatus?.thisDeviceRegistered && !pushStatus?.targetedTestsSupported && <p className="access-fine" role="status">A safe single-device test needs the latest Nightjar notification service. Push remains enabled; test sending will unlock after the backend update.</p>}
       {pushError && <div className="nj-push-diagnostic-error" role="alert"><strong>Notification registration needs attention</strong><p>{pushError}</p><small>Push is optional; Nightjar and your in-app notifications remain available.</small></div>}
       {diagnostics && <section className="nj-push-diagnostics" aria-label="Nightjar push configuration diagnostics">
         <strong>Device and Firebase checks</strong>
