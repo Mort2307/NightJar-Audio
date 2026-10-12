@@ -155,7 +155,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       }
     }
     await shareNightjarProfile({ url, name: String(profile.displayName || 'Nightjar creator'),
-      roleLabel: roleLabel(profileRole), notify });
+      roleLabel: profile.nightjarTeam === true ? 'Nightjar Team' : roleLabel(profileRole), notify });
   };
 
   const following = Boolean(profile?.userId && followingIds.includes(profile.userId));
@@ -215,7 +215,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal premium-public-profile">
       <header className="creator-profile-head">
         <div>
-          <span className="mini-label">NIGHTJAR / {profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
+          <span className="mini-label">NIGHTJAR / {profile?.nightjarTeam ? 'OFFICIAL TEAM' : profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
           <h2>{loading ? 'Loading profile…' : profile?.displayName ?? 'Nightjar profile'}</h2>
           <p>{profile?.handle ? '@' + String(profile.handle).replace(/^@/, '') : roleLabel(profileRole)}</p>
         </div>
@@ -232,7 +232,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <h3>{profile.displayName}</h3>
             <p>{roleDetails.roleHeadline || profile.headline || (profileRole === 'editor' ? 'Audio Editor on Nightjar.' : profileRole === 'listener' ? 'A curated corner of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
-            {availableProfileRoles.length > 0 && <div className="profile-role-chips" role="tablist" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" role="tab" aria-selected={profileRole===role} data-nightjar-scroll-top className={profileRole===role?'active':''} key={role} onClick={()=>{ setSelectedProfileRole(role); scrollNightjarToTop(); }}>{roleLabel(role)}</button>)}</div>}
+            {profile.nightjarTeam === true && <div className="profile-activity-badges public-profile-badges"><span><ShieldCheck size={12}/>Official Nightjar Team</span></div>}
+            {availableProfileRoles.length > 0 && <div className="profile-role-chips" role="tablist" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" role="tab" aria-selected={profileRole===role} data-nightjar-scroll-top className={profileRole===role?'active':''} key={role} onClick={()=>{ setSelectedProfileRole(role); scrollNightjarToTop(); }}>{profile.nightjarTeam === true ? 'Nightjar Team' : roleLabel(role)}</button>)}</div>}
           </div>
           <div className="writer-discovery-actions">
             {!readOnlyPreview && <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>}
