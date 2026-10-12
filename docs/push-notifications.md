@@ -64,9 +64,11 @@ The Android notification status bar requires a monochrome symbol on a transparen
 background. Using Nightjar's full-square launcher artwork as the `badge` caused a
 solid white square in the status bar on Samsung Android.
 
-Nightjar now uses `/nightjar-notification-badge.png`, a transparent 96×96 white
-silhouette of the Nightjar N and bird, in both foreground/local-test notifications
-and background Firebase push. The expanded notification retains the full colour
+Nightjar now uses `/nightjar-notification-badge.png`, a 96×96 Android-compatible
+monochrome alpha silhouette generated automatically at build time from the **actual**
+`public/nightjar-home-192.png` Nightjar brand asset, not a hand-drawn N/bird
+substitute. This is used in both foreground/local-test notifications and
+background Firebase push. The expanded notification retains the full colour
 Nightjar logo via `icon: '/nightjar-home-192.png'`.
 
 This only affects new notifications after the updated service worker is activated.

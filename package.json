@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-nightjar-notification-badge.mjs",
+    "prebuild:firebase": "node scripts/generate-nightjar-notification-badge.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "build:firebase": "vite build",

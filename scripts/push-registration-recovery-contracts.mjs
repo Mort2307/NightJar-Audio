@@ -58,6 +58,14 @@ assert.match(app, /nightjarPush\.showPhoneNotification\(/, 'foreground FCM messa
 const worker = fs.readFileSync('public/service-worker.js', 'utf8');
 assert.match(worker, /return self\.registration\.showNotification\(/, 'background notification callback returns the notification promise');
 
+const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const generator = fs.readFileSync('scripts/generate-nightjar-notification-badge.mjs', 'utf8');
+assert.equal(packageJson.scripts.prebuild, 'node scripts/generate-nightjar-notification-badge.mjs', 'standard builds regenerate branded badge');
+assert.equal(packageJson.scripts['prebuild:firebase'], 'node scripts/generate-nightjar-notification-badge.mjs', 'Firebase builds regenerate branded badge');
+assert.match(generator,/sourcePath = 'public\/nightjar-home-192\.png'/,'badge generator uses the actual Nightjar logo asset');
+assert.match(generator,/fs\.readFileSync\(sourcePath\)/,'badge generator reads source artwork');
+assert.match(generator,/active<width\*height\*\.78/,'badge generator refuses solid white squares');
+
 // Android status-bar icons require an alpha-only silhouette, not a square launcher icon.
 const badgePath = '/nightjar-notification-badge.png';
 const badge = fs.readFileSync('public' + badgePath);
