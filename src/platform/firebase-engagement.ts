@@ -17,6 +17,10 @@ const reactionCall = httpsCallable<{ releaseId: string; reaction: ReleaseReactio
 const commentCall = httpsCallable<{ releaseId: string; body: string }, { comment: any; reactions?: { likes:number; loves:number; total:number; myReaction:ReleaseReaction }; commentCount?: number }>(functions, 'postReleaseComment');
 const replyCall = httpsCallable<{ parentCommentId: string; body: string }, { comment: any; reactions?: { likes:number; loves:number; total:number; myReaction:ReleaseReaction }; commentCount?: number }>(functions, 'replyToReleaseComment');
 const deleteCommentCall = httpsCallable<{ commentId: string }, { deleted: boolean; commentId: string }>(functions, 'deleteOwnReleaseComment');
+const commentReactionCall = httpsCallable<
+  { commentId: string; reaction: ReleaseReaction },
+  { commentId: string; releaseId: string; likes: number; loves: number; myReaction: ReleaseReaction }
+>(functions, 'setReleaseCommentReaction');
 const reportCommentCall = httpsCallable<{ commentId: string; reason?: string }, { reported: boolean; commentId: string }>(functions, 'reportReleaseComment');
 const adminReportsCall = httpsCallable<void, { reports: any[] }>(functions, 'adminListCommunityReports');
 const adminModerateCall = httpsCallable<{ reportId: string; decision: 'dismiss' | 'remove' }, { reportId: string; decision: string }>(functions, 'adminResolveCommunityReport');
@@ -39,6 +43,9 @@ export const nightjarEngagement = {
   },
   async deleteComment(commentId: string) {
     return (await deleteCommentCall({ commentId })).data;
+  },
+  async reactToComment(commentId: string, reaction: ReleaseReaction) {
+    return (await commentReactionCall({ commentId, reaction })).data;
   },
   async reportComment(commentId: string, reason = '') {
     return (await reportCommentCall({ commentId, reason })).data;
