@@ -5797,19 +5797,16 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
 export const trendingReleases = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [releasesSnapshot, listeningSnapshot, subscription] = await Promise.all([
+  const [releasesSnapshot, subscription] = await Promise.all([
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
-    db.collection('listeningEvents').limit(5000).get(),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
-  const counts = new Map<string, number>();
-  for (const doc of listeningSnapshot.docs) {
-    const releaseId = cleanText(doc.data().releaseId, 160);
-    if (releaseId) counts.set(releaseId, (counts.get(releaseId) ?? 0) + 1);
-  }
+  // Trending and creator statistics must use the same qualified-listen
+  // definition. Raw progress telemetry must not make a release "popular".
   const trending = releasesSnapshot.docs
-    .map((doc) => ({ ...decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }), listeningEvents: counts.get(doc.id) ?? 0 }))
-    .sort((a, b) => b.listeningEvents - a.listeningEvents)
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }))
+    .sort((a, b) => (b.listenCount - a.listenCount)
+      || String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')))
     .slice(0, 24);
   return { trending };
 });
