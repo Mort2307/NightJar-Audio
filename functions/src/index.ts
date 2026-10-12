@@ -7929,7 +7929,7 @@ export const releaseCommunity = onCall({ region: REGION }, async (request) => {
   const account = identity.admin ? null : await accountRef(identity.uid).get();
   const viewerRole = identity.admin ? 'admin' : String(account?.data()?.role ?? '');
   const state = await releaseCommunityState(releaseId, identity.uid);
-  return { ...state, canInteract:viewerRole === 'listener' };
+  return { ...state, canInteract:Boolean(viewerRole), commentReactionsEnabled:true };
 });
 
 export const setReleaseReaction = onCall({ region: REGION }, async (request) => {
