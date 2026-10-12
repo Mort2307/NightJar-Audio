@@ -1,4 +1,5 @@
-# Production Hosting only. Backend resources require a separate approved workflow.
+# Production Hosting, with a one-time explicit Nightjar Team backend-first release gate.
+# All other merges retain the original Hosting-only behaviour.
 name: Deploy to Firebase Hosting on merge
 
 on:
@@ -10,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: write # Dispatch the existing protected backend workflow for this one tagged release only.
 
 concurrency:
   group: nightjar-hosting-live
@@ -18,7 +20,7 @@ concurrency:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       # Use a GitHub Actions repository variable (preferred) or secret for this PUBLIC VAPID key.
       VITE_FIREBASE_VAPID_KEY: ${{ vars.VITE_FIREBASE_VAPID_KEY || secrets.VITE_FIREBASE_VAPID_KEY }}
@@ -42,6 +44,44 @@ jobs:
 
       - name: Install and validate
         run: npm ci --no-fund && npm run validate
+
+      # The one-time PR #102 release marker is supplied only by the deliberate
+      # squash merge commit. Ordinary pushes and manual Hosting recovery do NOT
+      # deploy backend resources. We never deploy the frontend if this step fails.
+      - name: Release Nightjar Team backend before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-team-102-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Coordinating the Nightjar Team release for ${GITHUB_SHA}."
+          test -f src/components/NightjarTeamCommunity.tsx
+          test -f src/platform/firebase-team-community.ts
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=saveMyProfile,listPublicProfiles,getPublicProfile,setProfileFollow,listNightjarTeamUpdates,saveNightjarTeamUpdate,submitNightjarTeamFeedback,reviewNightjarTeamFeedback' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          echo "Backend release requested; awaiting confirmed workflow success."
+          BACKEND_RUN_ID=""
+          for attempt in $(seq 1 48); do
+            BACKEND_RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "$GITHUB_SHA" --arg start "$START_TIME" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$BACKEND_RUN_ID" ]]; then
+              break
+            fi
+            sleep 10
+          done
+          if [[ -z "$BACKEND_RUN_ID" ]]; then
+            echo "::error::Could not identify this release's backend workflow. Hosting remains unchanged."
+            exit 1
+          fi
+          echo "Backend run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${BACKEND_RUN_ID}"
+          gh run watch "$BACKEND_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status --interval 15
+          echo "Protected backend deployment succeeded. Hosting may now release."
 
       - name: Deploy Hosting live
         id: deploy
