@@ -1279,6 +1279,11 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
+    // "Finish later" is an explicit, account-persistent opt-out of the
+    // first-login overlay, NOT a claim that their profile is complete.
+    ...(input.deferOnboarding === true && input.onboardingComplete !== true
+      ? { onboardingDismissedAt: FieldValue.serverTimestamp() }
+      : {}),
     updatedAt: FieldValue.serverTimestamp(),
   };
 
