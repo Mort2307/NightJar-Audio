@@ -22,7 +22,7 @@ export const shareNightjarProfile = async ({
       notify('Profile sharing is unavailable on this device.');
     }
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') return;
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') return;
     notify('Unable to share this profile right now.');
   }
 };
