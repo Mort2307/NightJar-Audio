@@ -37,7 +37,7 @@ type Release = {
   seriesTitle?: string | null;
   episodeNumber?: number | null;
   nightjarOriginal?: boolean;
-  releaseDistribution?: 'standard' | 'nightjar_first' | 'nightjar_exclusive';
+  releaseDistribution?: 'standard' | 'nightjar_first';
   releaseDistributionConfirmed?: boolean;
   productionNote?: string | null;
   rightsConfirmed?: boolean;
@@ -194,7 +194,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     { label: 'Publishing rights confirmed', passed: current?.rightsConfirmed === true, target: 'release-rights', help: 'Confirm you control the publishing rights.' },
     { label: 'Contributor permissions confirmed', passed: current?.contributorPermissionsConfirmed === true, target: 'release-rights', help: 'Confirm any necessary permissions for included work.' },
     ...(current?.transcriptText?.trim() ? [{ label: 'Optional transcript accuracy confirmed', passed: current?.transcriptAccessibilityReviewed === true, target: 'release-transcript', help: 'Check your optional transcript against the finished recording, or clear the text to submit without one.' }] : []),
-    ...(current?.releaseDistribution && current.releaseDistribution !== 'standard' ? [{ label: 'Creator release-label declaration', passed: current.releaseDistributionConfirmed === true, target: 'release-distribution', help: 'Confirm your premiere or exclusivity declaration, or choose Standard release.' }] : []),
+    ...(current?.releaseDistribution && current.releaseDistribution !== 'standard' ? [{ label: 'Creator release-label declaration', passed: current.releaseDistributionConfirmed === true, target: 'release-distribution', help: 'Choose First on Nightjar only if this recording is being released here for the first time.' }] : []),
     ...(current?.scheduledAt ? [{label:'Future publication time',passed:Date.parse(current.scheduledAt) > Date.now() + 60000,target:'release-schedule',help:'Choose a future release time. Review and approval must happen before publication.'}] : []),
   ];
   const incompleteChecks = reviewChecks.filter((check) => !check.passed);
@@ -678,21 +678,17 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </section>
 
           <section className="nj-release-distribution-panel" id="release-distribution" aria-label="Release debut and distribution">
-            <div className="release-transcript-head"><div><span className="mini-label">RELEASE IDENTITY · CREATOR DECLARED</span><strong>Where does this recording debut?</strong><p>Choose the description that is true for this recording. NightJar Original is a separate designation for Nightjar-produced work. Your rights remain yours.</p></div></div>
+            <div className="release-transcript-head"><div><span className="mini-label">RELEASE IDENTITY · CREATOR DECLARED</span><strong>Where does this recording debut?</strong><p>Choose First on NightJar only if this is its first public release. You remain free to publish anywhere else. NightJar Original is reserved for productions commissioned and paid for by NightJar.</p></div></div>
             <div className="nj-release-distribution-options" role="radiogroup" aria-label="Release distribution label">
               {([
                 {value:'standard',label:'Standard release',help:'Available elsewhere already, or no special release label.'},
                 {value:'nightjar_first',label:'First on NightJar',help:'This is its first public release. You may distribute it elsewhere later.'},
-                {value:'nightjar_exclusive',label:'NightJar Exclusive',help:'Currently publicly available only on NightJar. Notify Nightjar if that changes.'},
               ] as const).map((option)=><label key={option.value} className={(current.releaseDistribution || 'standard') === option.value ? 'nj-release-distribution-option selected':'nj-release-distribution-option'}>
-                <input type="radio" name="nightjar-release-distribution" checked={(current.releaseDistribution || 'standard') === option.value} onChange={()=>setRelease({releaseDistribution:option.value,releaseDistributionConfirmed:false})}/>
+                <input type="radio" name="nightjar-release-distribution" checked={(current.releaseDistribution || 'standard') === option.value} onChange={()=>setRelease({releaseDistribution:option.value,releaseDistributionConfirmed:option.value === 'nightjar_first'})}/>
                 <span><strong>{option.label}</strong><small>{option.help}</small></span>
               </label>)}
             </div>
-            {current.releaseDistribution && current.releaseDistribution !== 'standard' && <label className="rights-check nj-release-distribution-attest">
-              <input type="checkbox" checked={current.releaseDistributionConfirmed === true} onChange={(event)=>setRelease({releaseDistributionConfirmed:event.target.checked})}/>
-              <span>I confirm this release statement is accurate. This is not a transfer of copyright or an exclusive licence to NightJar.</span>
-            </label>}
+            {current.releaseDistribution === 'nightjar_first' && <p className="nj-release-distribution-note">By selecting First on NightJar, you confirm this is its first public release. You remain free to publish this recording on other platforms at any time. No exclusivity or rights transfer applies.</p>}
           </section>
 
           <section className="release-transcript-editor" id="release-transcript">
