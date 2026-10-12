@@ -13,7 +13,7 @@ type Props = {
   initialProfile?: any;
   role: 'listener' | 'creator' | 'writer' | 'admin' | 'editor' | 'artist' | null;
   onComplete: (profile: any) => void;
-  onSkip: (draft: any, stepIndex: number) => Promise<void>;
+  onSkip: (draft: any, stepIndex: number, revision: number) => Promise<void>;
   notify: (message: string) => void;
 };
 
@@ -46,6 +46,13 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   const [stepIndex, setStepIndex] = useState(() =>
     Number.isInteger(savedDraft?.stepIndex) ? Math.max(0,Math.min(2,savedDraft.stepIndex)) : 0);
   const cardRef = useRef<HTMLElement | null>(null);
+  const cloudRevision = useRef<number>(Math.max(0,Number(initialProfile?.onboardingDraftRevision??0)));
+  const pendingSave = useRef<Promise<void>>(Promise.resolve());
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedOnce = useRef(false);
+  const draftVersion = useRef(0);
+  const savingFinished = useRef(false);
+  const [draftStatus,setDraftStatus] = useState<'saved'|'unsaved'|'saving'|'error'>('saved');
   const [saving, setSaving] = useState(false);
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
   const [profile, setProfile] = useState<any>({
@@ -85,6 +92,44 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   const suggestedHandle = handleProblem ? suggestNightjarHandle(profile.handle) : '';
   const roleLabel = role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Nightjar member';
 
+  // Authenticated Firebase is the source of truth. No phone/browser-only
+  // draft: the same signed-in account can resume on a laptop.
+  useEffect(() => {
+    if(!mountedOnce.current){mountedOnce.current=true;return;}
+    if(savingFinished.current)return;
+    const version=++draftVersion.current;
+    setDraftStatus('unsaved');
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>{
+      saveTimer.current=null;
+      setDraftStatus('saving');
+      const snapshot={...profile};
+      const atStep=stepIndex;
+      const next=pendingSave.current.catch(()=>undefined).then(async()=>{
+        if(savingFinished.current)return;
+        const stored=await nightjarCommunity.saveOnboardingDraft(snapshot,atStep,cloudRevision.current);
+        cloudRevision.current=stored.revision;
+        if(version===draftVersion.current)setDraftStatus('saved');
+      }).catch((error)=>{
+        if(version===draftVersion.current)setDraftStatus('error');
+        // Never claim that a draft was saved after a network failure.
+        console.warn('Nightjar onboarding cloud autosave failed',error);
+      });
+      pendingSave.current=next;
+    },900);
+    return ()=>{if(saveTimer.current){clearTimeout(saveTimer.current);saveTimer.current=null;}};
+  },[profile,stepIndex]);
+
+  useEffect(()=>()=>{
+    savingFinished.current=true;
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+  },[]);
+
+  const awaitOutstandingSave = async () => {
+    if(saveTimer.current){clearTimeout(saveTimer.current);saveTimer.current=null;}
+    await pendingSave.current;
+  };
+
   const update = (key: string, value: unknown) => setProfile((current:any)=>({...current,[key]:value}));
 
   const finish = async () => {
@@ -95,6 +140,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     }
     setSaving(true);
     try {
+      await awaitOutstandingSave();
       const payload = {
         ...(initialProfile ?? {}),
         ...profile,
@@ -104,6 +150,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         onboardingVersion: 3,
       };
       const data = await nightjarCommunity.saveMyProfile(payload);
+      savingFinished.current=true;
       onComplete(data?.profile ?? payload);
       notify(role === 'editor'
         ? 'Your Nightjar profile is ready. Build your professional Audio Editor identity inside Editor Studio.'
@@ -120,7 +167,9 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     if(saving) return;
     setSaving(true);
     try {
-      await onSkip(profile,stepIndex);
+      await awaitOutstandingSave();
+      await onSkip(profile,stepIndex,cloudRevision.current);
+      savingFinished.current=true;
     } catch(error) {
       notify(error instanceof Error ? error.message : 'Could not pause your profile setup.');
     } finally {
@@ -181,6 +230,12 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
           <span className="mini-label">NIGHTJAR / PROFILE CREATION</span>
           <p className="eyebrow"><UserCircle2 size={13}/> YOUR SPACE AFTER DARK</p>
           <h2 id="nightjar-onboarding-title">You belong here.</h2>
+          <small className="nj-onboarding-cloud-status" role="status">
+            {draftStatus==='saving' ? 'Saving to Nightjar…'
+              : draftStatus==='unsaved' ? 'Unsaved changes · saving shortly'
+              : draftStatus==='error' ? 'Cloud save interrupted · use Save & finish later to retry'
+              : 'Progress backed up to your Nightjar account'}
+          </small>
           <p>Nightjar profiles are designed to feel considered and personal — not like a username attached to a database row.</p>
         </div>
         <button type="button" className="icon-button" disabled={saving} onClick={()=>void finishLater()} aria-label="Save progress and finish setup later"><X size={18}/></button>
