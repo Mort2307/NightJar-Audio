@@ -22,6 +22,22 @@ assert.ok(mainEnd > mainStart && mobileSave > mainStart && mobileSave < mainEnd,
 const pageEnd = app.indexOf('      </main>', mainStart);
 assert.ok(pageEnd >= 0 && mobileSave > pageEnd, 'fixed save is outside animated page, not trapped by its transform');
 
+const onboarding=fs.readFileSync('src/components/NightjarOnboarding.tsx','utf8');
+assert.match(styles, /\.onboarding-card\.premium-onboarding-card\s*\{[^}]*overflow-y:\s*auto;/, 'premium onboarding restores vertical touch scrolling');
+assert.match(styles, /\.onboarding-card\.premium-onboarding-card\s*\{[^}]*max-height:\s*calc\(100dvh\s*-\s*30px\)/, 'onboarding height tracks mobile browser and keyboard viewport');
+assert.match(styles, /\.onboarding-card\.premium-onboarding-card\s*>\s*\.premium-onboarding-footer\s*\{[^}]*position:\s*sticky;/, 'onboarding actions stay reachable while scrolling');
+assert.match(onboarding, /ref=\{scrollContainerRef\}/, 'wizard scrolls its own panel instead of requiring keyboard tab');
+assert.match(onboarding, /scrollContainerRef\.current\?\.scrollTo/, 'changing wizard steps starts at the next heading');
+assert.match(onboarding, /onSkip/, 'wizard exposes a Finish later exit');
+assert.match(app, /nextProfile\.onboardingComplete !== true && nextProfile\.onboardingDeferred !== true/, 'deferred onboarding does not reopen on later logins');
+assert.match(app, /nightjarCommunity\.deferMyProfileOnboarding\(\)/, 'Finish later is persisted to the authenticated account');
+const community=fs.readFileSync('src/platform/firebase-community.ts','utf8');
+const backend=fs.readFileSync('functions/src/index.ts','utf8');
+assert.match(community, /deferMyProfileOnboardingCall/, 'client has a durable onboarding deferral action');
+assert.match(backend, /export const deferMyProfileOnboarding = onCall/, 'server persists the account-level deferral');
+assert.match(backend, /onboardingDeferredAt: FieldValue\.serverTimestamp\(\)/, 'deferral stores an audit timestamp');
+assert.match(backend, /input\.onboardingComplete === true \? \{ onboardingDeferred: false \}/, 'completing onboarding clears the deferral safely');
+
 assert.match(styles, /\.premium-profile-page \.premium-profile-floating-save\s*\{\s*\/\*[^]*?display: none;/, 'old sticky save is not duplicated on mobile');
 assert.match(styles, /\.nj-mobile-profile-save\s*\{[^]*?position: fixed;/, 'save CTA is fixed and remains accessible while editing');
 assert.match(styles, /\.nj-mobile-profile-save\s*\{[^]*?bottom: calc\(var\(--nj-mobile-dock-clearance/, 'save CTA clears mobile navigation');
