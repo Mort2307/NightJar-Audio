@@ -170,8 +170,8 @@ requireText(functions,"const PROFESSIONAL_ROLE_KEYS = ['creator','writer','edito
 requireText(referralsClient,'suggestCreator','Creator suggestion client is missing');
 requireText(referralsClient,'recommendCreator','Creator recommendation-link client is missing');
 requireText(app,'CreatorSuggestionBox','Directory Creator suggestion experience is missing');
-requireText(app,'onRecommend={(person) => void recommendCreator(', 'Existing Creator recommendation action must be delegated into Professional Library');
-requireText(read('src/components/ProfessionalLibrary.tsx'),"category==='creator'&&<button", 'Creator recommendation must remain available in the VA category');
+requireText(app,'onRecommend={(person, selectedRole) => void recommendCreator(', 'Profession-specific sharing must be delegated to the public professional library');
+requireText(read('src/components/ProfessionalLibrary.tsx'),"category!=='listener'&&<button", 'Share controls must include VA Creators, Writers, Editors and Artists');
 
 requireText(functions,'releaseWorkAccess','Credited-work playback entitlement helper is missing');
 // PR #14 hardening replaced the unsafe status-only active/trialing rule.
