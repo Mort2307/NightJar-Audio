@@ -1713,7 +1713,7 @@ function App() {
         setTracks((current) => current.map((track) => counts.has(track.id)
           ? { ...track, listenCount: counts.get(track.id) }
           : track));
-        if (view === 'creator' && (role === 'creator' || canAdmin)) {
+        if (view === 'creator' && (role === 'creator' || role === 'admin')) {
           const dashboard = await nightjarCatalogue.dashboard();
           if (!cancelled) setCreatorDashboard({ metrics: dashboard.metrics ?? {}, releases: dashboard.releases ?? [] });
         }
@@ -1737,7 +1737,7 @@ function App() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [user?.userId, ageVerified, demoMode, liveRolePreview, view, role, canAdmin]);
+  }, [user?.userId, ageVerified, demoMode, liveRolePreview, view, role]);
 
   const loadWriterScripts = async () => {
     if (!user) return;
