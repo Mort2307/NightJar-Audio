@@ -30,7 +30,7 @@ const transcriptCall = httpsCallable<{ releaseId: string }, {
 const moderationQueueCall = httpsCallable<void, { releases: any[] }>(functions, 'releaseModerationQueue');
 const audioLibraryCall = httpsCallable<void, { releases: any[]; totalInspected: number; truncated: boolean }>(functions, 'adminReleaseAudioLibrary');
 const adminPreviewCall = httpsCallable<{ releaseId: string }, { releaseId: string; url: string; expiresInSeconds: number }>(functions, 'getAdminReleasePreviewUrl');
-const moderateReleaseCall = httpsCallable<{ releaseId: string; decision: 'approved' | 'changes' | 'rejected'; note?: string; nightjarOriginal?: boolean }, { release: any }>(functions, 'moderateRelease');
+const moderateReleaseCall = httpsCallable<{ releaseId: string; decision: 'approved' | 'changes' | 'rejected'; note?: string; nightjarOriginal?: boolean; originalCommissionConfirmed?: boolean }, { release: any }>(functions, 'moderateRelease');
 const recommendationsCall = httpsCallable<{ intent?: string }, { recommendations: any[]; model: any }>(functions, 'recommendations');
 const trendingCall = httpsCallable<void, { trending: any[] }>(functions, 'trendingReleases');
 
@@ -121,8 +121,8 @@ export const nightjarCatalogue = {
     return (await adminPreviewCall({ releaseId })).data;
   },
 
-  async moderate(releaseId: string, decision: 'approved' | 'changes' | 'rejected', note?: string, nightjarOriginal = false) {
-    return (await moderateReleaseCall({ releaseId, decision, note, nightjarOriginal })).data;
+  async moderate(releaseId: string, decision: 'approved' | 'changes' | 'rejected', note?: string, nightjarOriginal = false, originalCommissionConfirmed = false) {
+    return (await moderateReleaseCall({ releaseId, decision, note, nightjarOriginal, originalCommissionConfirmed })).data;
   },
 
   async recommendations(intent = '') {
