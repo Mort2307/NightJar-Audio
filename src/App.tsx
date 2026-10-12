@@ -5502,6 +5502,7 @@ function App() {
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType, context) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, context)} notify={notify} />}
       {playing && <NightjarPlayer
+        key={playing}
         track={tracks.find((track) => track.id === playing) ?? null}
         queue={tracks}
         onSelectTrack={(next) => togglePlayback(next as Track)}
