@@ -20,6 +20,7 @@ for (const title of ['Social links', 'Accessibility preferences', 'Legal agreeme
 assert.match(section, /static getDerivedStateFromError/, 'render or chunk load errors are contained');
 assert.match(section, /Try this section again/, 'failing section can retry without global navigation');
 assert.match(section, /Copy error details/, 'support can obtain original error without reproducing it');
+assert.match(section, /applyNightjarSafeUpdate/, 'stale profile code offers safe installed-app refresh');
 assert.match(root, /Copy error details/, 'global fallback includes actionable error details');
 assert.match(root, /componentStack/, 'global fallback includes local React component trace');
 assert.match(profile, /Array\.isArray\(profile\.favouriteTags\)/, 'legacy tags cannot crash profile rendering');
