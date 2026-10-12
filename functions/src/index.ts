@@ -3075,7 +3075,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
   if (asset.kind === 'script_artwork' && asset.targetId) {
     const scriptRefForArtwork = db.collection('scripts').doc(String(asset.targetId));
     const script = await scriptRefForArtwork.get();
-    if (!script.exists || script.data()?.pendingArtworkAssetId !== assetId || (script.data()?.writerUserId !== asset.ownerUserId && !admin)) {
+    if (!script.exists || script.data()?.pendingArtworkAssetId !== assetId) {
       await clearAssetFile(asset);
       await ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
       throw new HttpsError('failed-precondition', 'This image is no longer the pending manuscript artwork.');
@@ -3152,7 +3152,14 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
   const snapshot = await ref.get();
   const asset = snapshot.data();
   if (!asset) throw new HttpsError('not-found', 'Image record not found.');
-  if (!identity.admin && asset.ownerUserId !== identity.uid) {
+  let manuscriptAuthor = false;
+  if (asset.kind === 'script_artwork' && asset.targetId) {
+    const manuscript = await db.collection('scripts').doc(String(asset.targetId)).get();
+    manuscriptAuthor = manuscript.exists
+      && manuscript.data()?.writerUserId === identity.uid
+      && [manuscript.data()?.artworkAssetId, manuscript.data()?.pendingArtworkAssetId].includes(assetId);
+  }
+  if (!identity.admin && asset.ownerUserId !== identity.uid && !manuscriptAuthor) {
     throw new HttpsError('permission-denied', 'You cannot remove this image.');
   }
 
@@ -6411,8 +6418,8 @@ const scriptPayload = (data: Record<string, any>, id: string, includeContent = t
   artworkAssetId: data.artworkStatus === 'approved' ? data.artworkAssetId ?? null : null,
   artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
   artworkStatus: data.artworkStatus === 'approved' ? 'approved' : null,
-  pendingArtworkAssetId: data.pendingArtworkAssetId ?? null,
-  pendingArtworkStatus: data.pendingArtworkStatus ?? null,
+  pendingArtworkAssetId: includeContent ? data.pendingArtworkAssetId ?? null : null,
+  pendingArtworkStatus: includeContent ? data.pendingArtworkStatus ?? null : null,
   rights: normaliseScriptRights(data.rights),
   marketplace: normaliseScriptMarketplace(data.marketplace),
   createdAt: toIso(data.createdAt),
