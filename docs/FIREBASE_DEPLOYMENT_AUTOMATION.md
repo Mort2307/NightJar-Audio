@@ -59,7 +59,7 @@ The script asks for the literal word `NIGHTJAR` before it modifies IAM. It check
 
 **If provider creation returns `INVALID_ARGUMENT: display name must be less than or equal to 32 characters`:** the earlier bootstrap script used a 37-character label. Stop the old script with Ctrl+C rather than exhausting its retries. Download the updated version from `main`, which uses `Nightjar backend deploy` (23 characters) and stops immediately on permanent API validation errors. No duplicate account or pool is needed.
 
-The bootstrap grants limited backend *deployment* roles (Cloud Functions Developer, Firebase Rules Admin, Datastore Index Admin, Firebase Viewer and Service Usage Consumer); it grants `roles/iam.serviceAccountUser` only on existing default runtime/build service accounts. Cloud Functions v2 can require additional permissions, depending on function triggers, build service-account configuration and runtime accounts; investigate the exact deployment error rather than granting Owner or Editor. Check whether default runtime service accounts already have overly broad permissions. An identity with `iam.serviceAccountUser` can act with its runtime account's privileges.
+The bootstrap grants limited backend *deployment* roles (Cloud Functions Developer, Firebase Rules Admin, Datastore Index Admin, Firebase Viewer and Service Usage Consumer), plus **Secret Manager Viewer on the six individually declared Nightjar Functions secrets** (metadata only; never secret values); it grants `roles/iam.serviceAccountUser` only on existing default runtime/build service accounts. Cloud Functions v2 can require additional permissions, depending on function triggers, build service-account configuration and runtime accounts; investigate the exact deployment error rather than granting Owner or Editor. Check whether default runtime service accounts already have overly broad permissions. An identity with `iam.serviceAccountUser` can act with its runtime account's privileges.
 
 ### 2. Set two repository variables
 
@@ -96,6 +96,19 @@ When this is green, selected backend releases are available:
 | `all-backend` | All above; advanced last-resort release | `ALL-BACKEND-NIGHTJAR` |
 
 Existing Firebase Rules in the Console can be overwritten by CLI deployment. Review diffs, backups, and access paths before changing the production rules. Never use `--force` for backend deployments: missing functions or destructive changes must not be silently deleted.
+
+### Functions secret metadata access
+
+During the first `functions:selected` test (GitHub Actions run `38234520414`), authentication, full validation and TypeScript compilation succeeded, but Firebase CLI failed source preparation on `secretmanager.secrets.get` for `DIDIT_API_KEY`. Firebase can examine secret bindings across the Functions codebase even for a targeted `brandIcon192` deployment.
+
+The bootstrap grants `roles/secretmanager.viewer` **per secret**, not project-wide, for the existing declarations:
+
+- `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID`, `DIDIT_WEBHOOK_SECRET`, `DIDIT_ENVIRONMENT`
+- `NIGHTJAR_GMAIL_CLIENT_ID`, `NIGHTJAR_GMAIL_CLIENT_SECRET`
+
+Viewer can inspect metadata and versions but **cannot access secret payloads** (requires `secretmanager.versions.access`). If any of these secrets do not exist or the administrator lacks permission to inspect them, the script warns and skips rather than creating a secret or granting a broad project role. New secrets added in the future must be approved and included explicitly in the allowlist.
+
+To apply this after a previous bootstrap success, re-download the latest `scripts/setup-firebase-backend-iam.sh` from `main` in Google Cloud Shell and rerun it. Re-running reuses existing IAM resources. After the metadata grants, start a **new** `functions:selected` workflow run, not a retry against an outdated commit. Never paste secret values into chat or GitHub Actions logs.
 
 ### 5. Functions rollout and performance
 
