@@ -2377,7 +2377,7 @@ export const setFavouriteRelease = onCall({ region: REGION }, async (request) =>
   return { releaseId, favourite: input.favourite !== false };
 });
 
-type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'artist_portfolio' | 'social_avatar';
+type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'script_artwork' | 'artist_portfolio' | 'social_avatar';
 
 const IMAGE_CONTENT_TYPES = new Map([
   ['image/png', 'png'],
@@ -2444,7 +2444,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const kind = cleanText(input.kind, 40) as ModeratedImageKind;
-  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'artist_portfolio', 'social_avatar'].includes(kind)) {
+  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'script_artwork', 'artist_portfolio', 'social_avatar'].includes(kind)) {
     throw new HttpsError('invalid-argument', 'Unsupported image type.');
   }
   if (kind === 'brand_logo' && !identity.admin) {
@@ -2455,7 +2455,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     ? identity.uid
     : cleanText(input.targetId, 160);
 
-  if ((kind === 'release_artwork' || kind === 'artist_portfolio') && !targetId) {
+  if ((kind === 'release_artwork' || kind === 'script_artwork' || kind === 'artist_portfolio') && !targetId) {
     throw new HttpsError('invalid-argument', kind === 'artist_portfolio' ? 'Artist portfolio artwork requires a portfolio item ID.' : 'Release artwork requires a release ID.');
   }
 
@@ -2491,6 +2491,20 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       }
       if (release.data()?.status === 'released') {
         throw new HttpsError('failed-precondition', 'Live release artwork cannot be replaced directly.');
+      }
+    }
+  }
+
+  if (kind === 'script_artwork') {
+    const script = await db.collection('scripts').doc(targetId).get();
+    if (!script.exists) throw new HttpsError('not-found', 'Manuscript not found.');
+    if (!identity.admin) {
+      const account = await accountRef(identity.uid).get();
+      if (!professionalRolesForAccount(account.data() ?? {}).includes('writer') || account.data()?.status !== 'active') {
+        throw new HttpsError('permission-denied', 'Approved Writer access is required for manuscript artwork.');
+      }
+      if (script.data()?.writerUserId !== identity.uid) {
+        throw new HttpsError('permission-denied', 'Only the manuscript author may change its artwork.');
       }
     }
   }
@@ -2605,6 +2619,29 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       pendingArtworkStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+  }
+
+  if (kind === 'script_artwork') {
+    const scriptRefForArtwork = db.collection('scripts').doc(targetId);
+    const script = await scriptRefForArtwork.get();
+    if (!script.exists) {
+      await clearAssetFile(record);
+      await db.collection('imageAssets').doc(assetId).set({status:'removed',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      throw new HttpsError('not-found', 'Manuscript no longer exists.');
+    }
+    const previousPendingId = cleanText(script.data()?.pendingArtworkAssetId, 160);
+    if (previousPendingId && previousPendingId !== assetId) {
+      const previousPending = await db.collection('imageAssets').doc(previousPendingId).get();
+      if (previousPending.exists && previousPending.data()?.status === 'pending') {
+        await clearAssetFile(previousPending.data() ?? {});
+        await previousPending.ref.set({status:'removed',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      }
+    }
+    await scriptRefForArtwork.set({
+      pendingArtworkAssetId: assetId,
+      pendingArtworkStatus: 'pending',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge:true});
   }
 
   return { assetId, status: 'pending' };
@@ -2867,6 +2904,18 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       }
     }
 
+    if (asset.kind === 'script_artwork' && asset.targetId) {
+      const scriptRefForArtwork = db.collection('scripts').doc(String(asset.targetId));
+      const script = await scriptRefForArtwork.get();
+      if (script.exists && script.data()?.pendingArtworkAssetId === assetId) {
+        await scriptRefForArtwork.set({
+          pendingArtworkAssetId: null,
+          pendingArtworkStatus: 'rejected',
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge:true});
+      }
+    }
+
     if (asset.ownerUserId) {
       await createNotification(String(asset.ownerUserId), {
         type: 'image_moderation',
@@ -2875,6 +2924,8 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
           ? 'Profile picture not approved'
           : asset.kind === 'release_artwork'
             ? 'Release artwork not approved'
+            : asset.kind === 'script_artwork'
+              ? 'Manuscript artwork not approved'
             : asset.kind === 'artist_portfolio'
               ? 'Portfolio artwork not approved'
               : asset.kind === 'social_avatar' ? 'Social profile picture not approved'
@@ -3021,6 +3072,32 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
     }
   }
 
+  if (asset.kind === 'script_artwork' && asset.targetId) {
+    const scriptRefForArtwork = db.collection('scripts').doc(String(asset.targetId));
+    const script = await scriptRefForArtwork.get();
+    if (!script.exists || script.data()?.pendingArtworkAssetId !== assetId || (script.data()?.writerUserId !== asset.ownerUserId && !admin)) {
+      await clearAssetFile(asset);
+      await ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      throw new HttpsError('failed-precondition', 'This image is no longer the pending manuscript artwork.');
+    }
+    const previousAssetId = cleanText(script.data()?.artworkAssetId, 160);
+    await scriptRefForArtwork.set({
+      artworkAssetId: assetId,
+      artworkUrl: url,
+      artworkStatus: 'approved',
+      pendingArtworkAssetId: null,
+      pendingArtworkStatus: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge:true});
+    if (previousAssetId && previousAssetId !== assetId) {
+      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
+      if (previous.exists) {
+        await clearAssetFile(previous.data() ?? {});
+        await previous.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      }
+    }
+  }
+
   if (asset.ownerUserId) {
     await createNotification(String(asset.ownerUserId), {
       type: 'image_moderation',
@@ -3029,13 +3106,17 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         ? 'Profile picture approved'
         : asset.kind === 'release_artwork'
           ? 'Release artwork approved'
+          : asset.kind === 'script_artwork'
+            ? 'Manuscript artwork approved'
           : asset.kind === 'artist_portfolio'
             ? 'Portfolio artwork approved'
             : asset.kind === 'social_avatar' ? 'Social profile picture approved'
             : 'Nightjar image approved',
       message: asset.kind === 'release_artwork'
         ? 'Your artwork passed Nightjar image moderation and is now available to the release.'
-        : 'Your image passed Nightjar moderation and is now approved for use.',
+        : asset.kind === 'script_artwork'
+          ? 'Your manuscript artwork has been approved and is now visible wherever your script is listed.'
+          : 'Your image passed Nightjar moderation and is now approved for use.',
       assetId,
       imageKind: asset.kind,
       targetId: asset.targetId ?? null,
@@ -3127,6 +3208,24 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
         update.artworkStatus = null;
       }
       if (Object.keys(update).length > 1) await releaseRefForArtwork.set(update, { merge: true });
+    }
+  }
+
+  if (asset.kind === 'script_artwork' && asset.targetId) {
+    const scriptRefForArtwork = db.collection('scripts').doc(String(asset.targetId));
+    const script = await scriptRefForArtwork.get();
+    if (script.exists) {
+      const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+      if (script.data()?.pendingArtworkAssetId === assetId) {
+        update.pendingArtworkAssetId = null;
+        update.pendingArtworkStatus = null;
+      }
+      if (script.data()?.artworkAssetId === assetId) {
+        update.artworkAssetId = null;
+        update.artworkUrl = null;
+        update.artworkStatus = null;
+      }
+      if (Object.keys(update).length > 1) await scriptRefForArtwork.set(update,{merge:true});
     }
   }
 
@@ -6309,6 +6408,11 @@ const scriptPayload = (data: Record<string, any>, id: string, includeContent = t
   editorUserId: data.editorUserId ?? null,
   lastEditorialComment: data.lastEditorialComment ?? null,
   sourceFile: writerUploadPublicMeta(data.originalUpload),
+  artworkAssetId: data.artworkStatus === 'approved' ? data.artworkAssetId ?? null : null,
+  artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
+  artworkStatus: data.artworkStatus === 'approved' ? 'approved' : null,
+  pendingArtworkAssetId: data.pendingArtworkAssetId ?? null,
+  pendingArtworkStatus: data.pendingArtworkStatus ?? null,
   rights: normaliseScriptRights(data.rights),
   marketplace: normaliseScriptMarketplace(data.marketplace),
   createdAt: toIso(data.createdAt),
@@ -6494,11 +6598,19 @@ export const deleteWriterScript = onCall({ region: REGION }, async (request) => 
   for (const doc of versions.docs) batch.delete(doc.ref);
   for (const doc of permissions.docs) batch.delete(doc.ref);
   const originalStoragePath = cleanText(data.originalUpload?.storagePath, 500);
+  const artworkIds = [data.artworkAssetId, data.pendingArtworkAssetId]
+    .map((id: unknown) => cleanText(id, 160)).filter(Boolean);
   batch.delete(ref);
   await batch.commit();
   if (originalStoragePath) {
     await getStorage().bucket().file(originalStoragePath).delete({ ignoreNotFound: true }).catch(() => undefined);
   }
+  await Promise.all(artworkIds.map(async (assetId) => {
+    const asset = await db.collection('imageAssets').doc(assetId).get();
+    if (!asset.exists || asset.data()?.kind !== 'script_artwork' || asset.data()?.targetId !== scriptId) return;
+    await clearAssetFile(asset.data() ?? {});
+    await asset.ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() },{merge:true});
+  }));
   return { deleted: true };
 });
 
@@ -7817,6 +7929,7 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
         writerHandle: writer.handle,
         rights: normaliseScriptRights(data.rights),
         marketplace: normaliseScriptMarketplace(data.marketplace),
+        artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
         updatedAt: toIso(data.updatedAt),
       };
     })));
