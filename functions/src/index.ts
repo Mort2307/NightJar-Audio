@@ -4682,11 +4682,11 @@ const requireAccountRole = async (
   return { ...identity, role: allowedRole as AccountRole, activeRole: activeRole || 'listener', approvedProfessionalRoles, status };
 };
 
-// A creator's distribution claim is distinct from a Nightjar-produced Original.
-// A Nightjar-first premiere may later be distributed elsewhere; exclusive means
-// not available on another platform at the time of publication.
-const cleanReleaseDistribution = (value: unknown): 'standard' | 'nightjar_first' | 'nightjar_exclusive' =>
-  value === 'nightjar_first' || value === 'nightjar_exclusive' ? value : 'standard';
+// A creator's verified debut is distinct from a Nightjar-commissioned Original.
+// First on Nightjar is a historical release claim, NOT an exclusive licence:
+// creators retain the ability to publish their work elsewhere.
+const cleanReleaseDistribution = (value: unknown): 'standard' | 'nightjar_first' =>
+  value === 'nightjar_first' ? value : 'standard';
 
 const cleanReleaseTranscript = (value: unknown) =>
   String(value ?? '')
@@ -5621,6 +5621,9 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
   const decision = cleanText(input.decision, 30);
   const note = cleanText(input.note, 1200);
   const nightjarOriginal = input.nightjarOriginal === true;
+  if (decision === 'approved' && nightjarOriginal && input.originalCommissionConfirmed !== true) {
+    throw new HttpsError('failed-precondition', 'Nightjar Original is reserved for work commissioned and paid for by Nightjar. Confirm that funding before applying the label.', {code:'nightjar_original_commission_unconfirmed'});
+  }
   if (!['approved','changes','rejected'].includes(decision)) throw new HttpsError('invalid-argument', 'Invalid release moderation decision.');
 
   const ref = releaseRef(releaseId);
