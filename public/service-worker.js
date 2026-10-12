@@ -52,7 +52,7 @@ try {
     return self.registration.showNotification(title, {
       body,
       icon: '/nightjar-home-192.png',
-      badge: '/nightjar-home-192.png',
+      badge: '/nightjar-notification-badge.png',
       tag: data.notificationId ? 'nightjar:' + data.notificationId : undefined,
       renotify: false,
       data: { route, notificationId: data.notificationId || null },
@@ -62,7 +62,7 @@ try {
   // Core PWA behaviour remains available even if messaging SDK loading fails.
 }
 
-const CACHE = 'nightjar-shell-v12';
+const CACHE = 'nightjar-shell-v13';
 const SHELL = ['/'];
 
 self.addEventListener('install', (event) => {

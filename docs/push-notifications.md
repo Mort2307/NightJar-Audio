@@ -58,6 +58,21 @@ After repairing, press **Test this device only**, then background the app and co
 
 The self-service repair is not a substitute for investigating an incorrect production messaging project or credential. When several *freshly* registered devices fail with the same mismatch, prioritize server/project configuration rather than asking every tester to re-enrol repeatedly.
 
+## Android status-bar icon
+
+The Android notification status bar requires a monochrome symbol on a transparent
+background. Using Nightjar's full-square launcher artwork as the `badge` caused a
+solid white square in the status bar on Samsung Android.
+
+Nightjar now uses `/nightjar-notification-badge.png`, a transparent 96×96 white
+silhouette of the Nightjar N and bird, in both foreground/local-test notifications
+and background Firebase push. The expanded notification retains the full colour
+Nightjar logo via `icon: '/nightjar-home-192.png'`.
+
+This only affects new notifications after the updated service worker is activated.
+Android/Chrome may monochromatically tint the glyph depending on system theme;
+the small status bar icon is not intended to display bronze gradients.
+
 ## Privacy
 
 Lock-screen wording follows each user's Nightjar notification privacy mode:

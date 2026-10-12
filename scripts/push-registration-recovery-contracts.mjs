@@ -58,4 +58,16 @@ assert.match(app, /nightjarPush\.showPhoneNotification\(/, 'foreground FCM messa
 const worker = fs.readFileSync('public/service-worker.js', 'utf8');
 assert.match(worker, /return self\.registration\.showNotification\(/, 'background notification callback returns the notification promise');
 
+// Android status-bar icons require an alpha-only silhouette, not a square launcher icon.
+const badgePath = '/nightjar-notification-badge.png';
+const badge = fs.readFileSync('public' + badgePath);
+assert.equal(badge.subarray(0,8).toString('hex'),'89504e470d0a1a0a','badge is a PNG');
+assert.equal(badge.readUInt32BE(16),96,'badge is 96 pixels wide');
+assert.equal(badge.readUInt32BE(20),96,'badge is 96 pixels high');
+assert.equal(badge[25],6,'badge contains an alpha channel (RGBA)');
+assert.match(push, /badge: '\/nightjar-notification-badge\.png'/,'foreground and phone test use the real Nightjar glyph');
+assert.match(worker, /badge: '\/nightjar-notification-badge\.png'/,'background push uses the real Nightjar glyph');
+assert.doesNotMatch(push, /badge: '\/nightjar-home-192\.png'/, 'no opaque square on foreground notifications');
+assert.doesNotMatch(worker, /badge: '\/nightjar-home-192\.png'/, 'no opaque square on background notifications');
+
 console.log('Nightjar explicit opt-in FCM, 401 recovery, per-device revocation and device-display contracts passed.');

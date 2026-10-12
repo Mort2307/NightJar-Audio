@@ -275,7 +275,7 @@ export const nightjarPush = {
     await registration.showNotification(title.slice(0, 120), {
       body: body.slice(0, 240),
       icon: '/nightjar-home-192.png',
-      badge: '/nightjar-home-192.png',
+      badge: '/nightjar-notification-badge.png',
       tag: notificationId ? 'nightjar:' + notificationId : undefined,
       data: { route, notificationId: notificationId ?? null },
     });
