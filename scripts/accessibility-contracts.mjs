@@ -54,9 +54,11 @@ assert.match(themePlatform, /updateBrowserChrome\(theme\)/, 'system browser chro
 assert.match(themeUi, /Bronze Noir/, 'member-facing appearance choice explains new black and bronze style');
 const themeStyles = fs.readFileSync('src/index.css','utf8');
 assert.match(themeStyles, /:root\[data-nightjar-theme="bronze"\]/, 'Bronze Noir provides its own scoped brand tokens');
-assert.match(themeStyles, /--nj-accent:\s*#e2ba83/, 'professional workspaces inherit bronze premium accents');
-assert.match(themeStyles, /--bg:\s*#080809/, 'Bronze Noir retains jet-black discreet backgrounds');
+assert.match(themeStyles, /--nj-accent:\s*#dfb985/, 'professional workspaces inherit bronze premium accents');
+assert.match(themeStyles, /--bg:\s*#08090b/, 'Bronze Noir retains jet-black discreet backgrounds');
 assert.match(themeStyles, /:root\[data-nightjar-theme="bronze"\] \.primary-button/, 'primary actions have matching bronze gradients');
+assert.match(themeStyles, /--panel-soft:\s*#1b1d21/, 'Bronze Noir panels remain graphite, not warm brown');
+assert.doesNotMatch(themeStyles.slice(themeStyles.indexOf('/* BRONZE NOIR'), themeStyles.indexOf('/* Mobile onboarding regression:')), /#1a1511|rgba\(31,24,18/, 'Bronze Noir avoids its previous brown panel paints');
 
 assert.match(backend,/theme: \['nocturne','aubergine','midnight','ember','obsidian','bronze'\]/,'theme preference is whitelist validated by Firebase');
 
