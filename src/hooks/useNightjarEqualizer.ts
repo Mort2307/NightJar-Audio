@@ -64,7 +64,14 @@ export function useNightjarEqualizer(audioRef: RefObject<HTMLAudioElement | null
         if (src && new URL(src, window.location.href).origin !== window.location.origin) {
           // Never replace an actively playing track with an unverified
           // crossorigin request: it could turn a playable track into an error.
-          const response = await fetch(src, { method: 'HEAD', mode: 'cors', credentials: 'omit' });
+          // Signed Firebase/GCS playback URLs commonly permit GET, not HEAD.
+          // Request one byte, then cancel the body immediately to avoid
+          // downloading the entire recording merely to check CORS support.
+          const response = await fetch(src, {
+            method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+            headers: { Range: 'bytes=0-0' },
+          });
+          void response.body?.cancel().catch(() => {});
           if (!response.ok) throw new Error('This audio source does not permit EQ processing in your browser.');
           wasPlaying = !audio.paused;
           resumeTime = audio.currentTime;
