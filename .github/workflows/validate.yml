@@ -48,3 +48,6 @@ jobs:
       - name: Audit Firebase Functions production dependencies
         working-directory: functions
         run: npm run audit:guard
+
+      - name: Test Firebase release planner and verification safeguards
+        run: node --test scripts/firebase-backend-tools.test.mjs
