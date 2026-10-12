@@ -65,6 +65,7 @@ import {
   ImagePlus,
   RefreshCw,
   MessageCircle,
+  Share2,
 } from 'lucide-react';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
@@ -75,6 +76,7 @@ import TransparencyPanel from './components/TransparencyPanel';
 import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
 import { nightjarReferrals } from './platform/firebase-referrals';
+import { publicProfileUrl, shareNightjarProfile, type ShareableProfileRole } from './platform/public-profile-share';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
 import MobileNavigation from './components/MobileNavigation';
 import NightjarSettings from './components/NightjarSettings';
@@ -1271,23 +1273,29 @@ function App() {
     if (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','settings'].includes(value)) setView(value as View);
   };
 
-  const recommendCreator = async (creator: PublicDirectoryProfile) => {
-    if (creator.role !== 'creator') return;
-    try {
-      let url = window.location.origin + '/people/' + encodeURIComponent(creator.userId);
-      if (!demoMode) {
-        const data = await nightjarReferrals.recommendCreator(creator.userId);
-        url = window.location.origin + data.path;
-      }
-      const text = 'I recommend ' + creator.name + ' on Nightjar.';
-      if (navigator.share) await navigator.share({ title:'Nightjar · ' + creator.name, text, url });
-      else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(text + ' ' + url);
-        notify('Creator recommendation link copied.');
-      } else notify('Sharing is not available in this browser.');
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) notify('Creator recommendation link could not be created.');
+  const recommendCreator = async (person: PublicDirectoryProfile, selectedRole: ShareableProfileRole) => {
+    // The directory contains server-checked public profiles. Never publish
+    // fictional simulation identities as links to real member profiles.
+    if (demoMode) {
+      notify('Simulation profiles cannot be shared outside Nightjar.');
+      return;
     }
+    let url = publicProfileUrl(window.location.origin, person.userId, selectedRole);
+    // Keep existing VA referral tracking. Writer, Editor and Artist sharing
+    // must not call the voice-creator-only recommendation backend.
+    if (selectedRole === 'creator') {
+      try {
+        const result = await nightjarReferrals.recommendCreator(person.userId);
+        if (typeof result.path === 'string' && result.path.startsWith('/') && !result.path.startsWith('//')) {
+          url = window.location.origin + result.path + (result.path.includes('?') ? '&' : '?') + 'role=creator';
+        }
+      } catch {
+        // An unavailable recommendation service must not prevent direct sharing.
+      }
+    }
+    const roleLabel = selectedRole === 'creator' ? 'VA Creator' : selectedRole === 'editor' ? 'Audio Editor'
+      : selectedRole === 'writer' ? 'Writer' : 'Artist';
+    await shareNightjarProfile({ url, name: person.name, roleLabel, notify });
   };
 
   useEffect(() => {
@@ -1380,6 +1388,8 @@ function App() {
       setProfileDirectory((directoryResponse.profiles ?? []).map((item:any) => ({
         userId:String(item.userId),
         role:item.role,
+        roles:Array.isArray(item.roles) ? item.roles : [item.role],
+        roleProfiles:item.roleProfiles ?? {},
         name:item.displayName ?? item.name ?? 'Nightjar member',
         handle:item.handle ?? null,
         headline:item.headline ?? null,
@@ -4509,7 +4519,7 @@ function App() {
               onOpen={openPublicProfile}
               onFollow={toggleProfileFollow}
               followingIds={followingProfileIds}
-              onRecommend={(person) => void recommendCreator(person as PublicDirectoryProfile)}
+              onRecommend={(person, selectedRole) => void recommendCreator(person as PublicDirectoryProfile, selectedRole)}
               onMessage={(recipient) => { setMessageRecipientUserId(recipient); setMessageCollaborationId(null); navigate('messages'); }}
               canMessage={['creator','writer','editor','artist'].includes(String(effectiveRole)) && !liveRolePreview}
               readOnly={liveRolePreview||(demoMode&&!simulationMode)}
@@ -4623,7 +4633,13 @@ function App() {
             <div className="page-heading premium-profile-page-heading">
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
               <div className="profile-heading-actions">
-                {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId)}>View my public profile</button>}
+                {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole ?? undefined)}>View my public profile</button>}
+                {user?.userId && profile.publicProfile !== false && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && !demoMode && <button type="button" className="secondary-button" onClick={()=>void shareNightjarProfile({
+                  url:publicProfileUrl(window.location.origin,user.userId,effectiveRole as ShareableProfileRole),
+                  name:String(profile.displayName || user.name || 'Nightjar creator'),
+                  roleLabel:effectiveRole === 'creator' ? 'VA Creator' : effectiveRole === 'editor' ? 'Audio Editor' : effectiveRole === 'writer' ? 'Writer' : 'Artist',
+                  notify,
+                })}><Share2 size={15} aria-hidden="true"/> Share my profile</button>}
                 {(!canAdmin || interactiveRoleTest) && <button type="button" className="primary-button" onClick={openMyRoles}><ShieldCheck size={16} /> My Roles · Apply or switch</button>}
               </div>
             </div>
