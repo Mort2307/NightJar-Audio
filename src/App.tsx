@@ -110,6 +110,7 @@ const CreatorCapacityBank = lazy(() => import('./components/CreatorCapacityBank'
 const ScriptMarketplace = lazy(() => import('./components/ScriptMarketplace'));
 const ReleaseReviews = lazy(() => import('./components/ReleaseReviews'));
 const CreatorSuggestionBox = lazy(() => import('./components/CreatorSuggestionBox'));
+const NightjarTeamCommunity = lazy(() => import('./components/NightjarTeamCommunity'));
 const MessagingHub = lazy(() => import('./components/MessagingHub'));
 const ProfessionalRoleManager = lazy(() => import('./components/ProfessionalRoleManager'));
 const ArtistStudio = lazy(() => import('./components/ArtistStudio'));
@@ -340,6 +341,7 @@ type PublicDirectoryProfile = {
   creditedReleaseCount?: number;
   completedCollaborations?: number;
   activityBadges?: { id: string; label: string; detail: string }[];
+  nightjarTeam?: boolean;
 };
 
 type Spotlight = {
@@ -1392,6 +1394,7 @@ function App() {
         userId:String(item.userId),
         role:item.role,
         roles:Array.isArray(item.roles) ? item.roles : [item.role],
+        nightjarTeam:item.nightjarTeam === true,
         roleProfiles:item.roleProfiles ?? {},
         name:item.displayName ?? item.name ?? 'Nightjar member',
         handle:item.handle ?? null,
@@ -4496,6 +4499,9 @@ function App() {
                 </select>}
               </div>
             </div>
+            <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar Team updates" />}>
+              <NightjarTeamCommunity admin={canAdmin&&!liveRolePreview} readOnly={liveRolePreview||demoMode} notify={notify} demoMode={demoMode}/>
+            </Suspense>
             <div className="nj-directory-viewbar">
               <div className="nj-directory-view-actions">
                 {!liveRolePreview && <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>}
@@ -4649,11 +4655,11 @@ function App() {
             <div className="page-heading premium-profile-page-heading">
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
               <div className="profile-heading-actions">
-                {user?.userId && effectiveRole !== 'admin' && profile.publicProfile !== false && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole ?? undefined)}>View my public profile</button>}
-                {user?.userId && profile.publicProfile !== false && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && !demoMode && <button type="button" className="secondary-button" onClick={()=>void shareNightjarProfile({
-                  url:publicProfileUrl(window.location.origin,user.userId,effectiveRole as ShareableProfileRole),
+                {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole === 'admin' ? 'listener' : effectiveRole ?? undefined)}>View my public profile</button>}
+                {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && (effectiveRole === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) && !demoMode && <button type="button" className="secondary-button" onClick={()=>void shareNightjarProfile({
+                  url:publicProfileUrl(window.location.origin,user.userId,effectiveRole === 'admin' ? 'listener' : effectiveRole as ShareableProfileRole),
                   name:String(profile.displayName || user.name || 'Nightjar creator'),
-                  roleLabel:effectiveRole === 'creator' ? 'VA Creator' : effectiveRole === 'editor' ? 'Audio Editor' : effectiveRole === 'writer' ? 'Writer' : 'Artist',
+                  roleLabel:effectiveRole === 'admin' ? 'Nightjar Team' : effectiveRole === 'creator' ? 'VA Creator' : effectiveRole === 'editor' ? 'Audio Editor' : effectiveRole === 'writer' ? 'Writer' : 'Artist',
                   notify,
                 })}><Share2 size={15} aria-hidden="true"/> Share my profile</button>}
                 {(!canAdmin || interactiveRoleTest) && <button type="button" className="primary-button" onClick={openMyRoles}><ShieldCheck size={16} /> My Roles · Apply or switch</button>}

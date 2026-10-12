@@ -12,6 +12,7 @@ export type LibraryProfile = {
   handle?: string | null;
   headline?: string | null;
   bio?: string | null;
+  nightjarTeam?: boolean;
   followerCount?: number;
   avatarUrl?: string | null;
   avatarInitials?: string | null;
@@ -98,17 +99,17 @@ function PersonCard({
     <div className="nj-pro-library-person-top"><div className="nj-pro-library-person-avatar">
       {person.avatarUrl ? <img src={person.avatarUrl} alt="" loading="lazy" decoding="async"/>
         : <span>{person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>}
-    </div><div className="nj-pro-library-person-title"><div className="nj-pro-library-person-role"><Icon size={13}/>{roleName[category]}</div>
+    </div><div className="nj-pro-library-person-title"><div className="nj-pro-library-person-role"><Icon size={13}/>{person.nightjarTeam ? 'Nightjar Team' : roleName[category]}</div>
       <h3>{person.name}</h3><small>{person.handle ? '@'+person.handle.replace(/^@/,'') : 'Nightjar member'}</small>
     </div></div>
     <strong className="nj-pro-library-headline">{roleHeadline}</strong>
     <p className="nj-pro-library-summary">{summary}</p>
     {!!tags.length&&<div className="nj-pro-library-tags">{tags.map(tag=><span key={tag}>{tag}</span>)}</div>}
-    {!!person.activityBadges?.length&&<div className="nj-pro-library-verification"><ShieldCheck size={12}/>{person.activityBadges[0].label}</div>}
+    {person.nightjarTeam ? <div className="nj-pro-library-verification"><ShieldCheck size={12}/>Official Nightjar Team</div> : !!person.activityBadges?.length&&<div className="nj-pro-library-verification"><ShieldCheck size={12}/>{person.activityBadges[0].label}</div>}
     <div className="nj-pro-library-meta"><span>{metric}</span><span>{available || 'View professional profile'}</span></div>
     <div className="nj-pro-library-actions">
       <button data-nj-preview-safe="true" className="primary-button" type="button" onClick={()=>onOpen(person.userId,category)}>
-        {audience==='listener' ? 'Explore their work' : 'View '+roleName[category]+' profile'} <ArrowRight size={14}/>
+        {person.nightjarTeam ? 'Meet the Nightjar team' : audience==='listener' ? 'Explore their work' : 'View '+roleName[category]+' profile'} <ArrowRight size={14}/>
       </button>
       {!readOnly&&<button className="secondary-button" type="button" aria-label={followingIds.includes(person.userId)?'Unfollow '+person.name:'Follow '+person.name}
         onClick={()=>void onFollow(person.userId)}><Heart size={15} fill={followingIds.includes(person.userId)?'currentColor':'none'}/>{audience==='listener'?followingIds.includes(person.userId)?' Following':' Follow':null}</button>}
@@ -123,6 +124,7 @@ export default function ProfessionalLibrary({
   profiles,filteredProfiles,category,onCategoryChange,onOpen,onFollow,followingIds,onRecommend,onMessage,canMessage,readOnly,audience='professional',onSupport,
 }:Props) {
   const uniqueProfessionals=new Set(profiles.filter(profile=>categories.some(({id})=>belongsToLibraryCategory(profile,id))).map(item=>item.userId)).size;
+  const teamProfiles=profiles.filter(profile=>profile.nightjarTeam===true).slice().sort((a,b)=>a.name.localeCompare(b.name));
   const displayedCategories=category==='all' ? categories.map(c=>c.id)
     : category==='listener' ? ['listener'] as ProfileRole[] : [category];
   const totalMatching=category==='all'
@@ -133,6 +135,11 @@ export default function ProfessionalLibrary({
       <h2>{audience==='listener'?'The Creator Collection':'The Professional Library'}</h2>
       <p>{audience==='listener' ? 'One community. Discover the voices, storytelling, sound and visual work you love. Follow for free, explore published work or choose to send Nightjars to show appreciation.' : 'One creative community, four distinct professions. Browse approved public profiles, portfolios and services—without losing the individuality of each creator.'}</p>
     </div><span className="nj-pro-library-total"><strong>{uniqueProfessionals}</strong><small>public professionals</small></span></div>
+
+    {category!=='listener'&&teamProfiles.length>0&&<section className="nj-pro-library-section nj-pro-library-team" aria-label="Meet the Nightjar team">
+      <div className="nj-pro-library-section-head"><span className="nj-pro-library-section-icon"><ShieldCheck size={21}/></span><div><span className="mini-label">OFFICIAL NIGHTJAR TEAM</span><h2>Meet the people behind Nightjar</h2><p>Our team is part of this community too. Explore our public profiles, follow along and see who's helping Nightjar grow.</p></div><span className="nj-pro-library-section-count">{teamProfiles.length} {teamProfiles.length===1?'member':'members'}</span></div>
+      <div className="nj-pro-library-grid">{teamProfiles.map(person=><PersonCard key={'team:'+person.userId} person={person} category="listener" readOnly={readOnly} followingIds={followingIds} canMessage={false} audience={audience} onOpen={onOpen} onFollow={onFollow} onRecommend={onRecommend} onMessage={onMessage}/>)}</div>
+    </section>}
 
     <div className="nj-pro-library-navigation" role="group" aria-label="Professional library categories">
       <button type="button" className={category==='all'?'nj-pro-library-nav-item active':'nj-pro-library-nav-item'}

@@ -1472,6 +1472,8 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     artistSoftware: cleanStringList(input.artistSoftware, 12),
     listenerCommunityStyle: cleanStringList(input.listenerCommunityStyle, 12),
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
+    // Separate explicit opt-in: historic admin profiles can never become public by accident.
+    adminCommunityVisible: identity.admin && input.adminCommunityVisible === true,
     onboardingComplete: input.onboardingComplete === true,
     ...(input.onboardingComplete === true ? { onboardingDeferred: false } : {}),
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
@@ -1646,7 +1648,8 @@ const publicProfilePayload = (
   accountData: Record<string, any>,
   data: Record<string, any> | undefined,
 ) => {
-  if (!data || data.publicProfile === false) return null;
+  const nightjarTeam = accountData.role === 'admin';
+  if (!data || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)) return null;
   const roles = professionalRolesForAccount(accountData);
   const activeRole = cleanText(accountData.role, 30);
   const publicRole = activeRole === 'listener' || roles.includes(activeRole as AccountRole)
@@ -1655,7 +1658,8 @@ const publicProfilePayload = (
   return {
     userId,
     role: publicRole,
-    roles: ['listener', ...roles],
+    roles: nightjarTeam ? ['listener'] : ['listener', ...roles],
+    nightjarTeam,
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
     handle: data.handle ?? null,
@@ -1818,11 +1822,12 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
 
   const allowedRoles = new Set(['creator','writer','editor','artist','listener']);
   const profiles = (await Promise.all(accounts.docs
-    .filter((doc) => doc.data().status === 'active' && (allowedRoles.has(String(doc.data().role ?? '')) || professionalRolesForAccount(doc.data() ?? {}).length > 0))
+    .filter((doc) => doc.data().status === 'active' && (doc.data().role === 'admin' || allowedRoles.has(String(doc.data().role ?? '')) || professionalRolesForAccount(doc.data() ?? {}).length > 0))
     .map(async (doc) => {
       const data = profileByUser.get(doc.id);
-      if (!data || data.publicProfile === false) return null;
       const accountData = doc.data() ?? {};
+      const nightjarTeam = accountData.role === 'admin';
+      if (!data || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)) return null;
       const professionalRoles = professionalRolesForAccount(accountData);
       const activeRole = cleanText(accountData.role, 30);
       const role = activeRole === 'listener' || professionalRoles.includes(activeRole as AccountRole)
@@ -1836,7 +1841,8 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
-        roles: ['listener', ...professionalRoles],
+        roles: nightjarTeam ? ['listener'] : ['listener', ...professionalRoles],
+        nightjarTeam,
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
         handle: data.handle ?? null,
@@ -1885,12 +1891,12 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
 
   const accountData = account.data();
   const data = profile.data();
+  const nightjarTeam = accountData?.role === 'admin';
   if (
     !account.exists
     || !data
     || accountData?.status !== 'active'
-    || accountData?.role === 'admin'
-    || data.publicProfile === false
+    || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)
   ) {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
@@ -2008,7 +2014,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     profile: {
       userId,
       role,
-      roles: ['listener', ...professionalRoles],
+      roles: nightjarTeam ? ['listener'] : ['listener', ...professionalRoles],
+      nightjarTeam,
       displayName: data.displayName ?? 'Nightjar member',
       name: data.displayName ?? 'Nightjar member',
       handle: data.handle ?? null,
@@ -2216,10 +2223,12 @@ export const setProfileFollow = onCall({ region: REGION }, async (request) => {
     accountRef(targetUserId).get(),
     profileRef(targetUserId).get(),
   ]);
-  if (!target.exists || target.data()?.status !== 'active' || target.data()?.role === 'admin') {
+  if (!target.exists || target.data()?.status !== 'active') {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
-  if (!profile.exists || profile.data()?.publicProfile === false) {
+  if (!profile.exists || (target.data()?.role === 'admin'
+    ? profile.data()?.adminCommunityVisible !== true
+    : profile.data()?.publicProfile === false)) {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
 
@@ -11190,4 +11199,126 @@ export const adminRetryEmailCampaign = onCall({
     recovered,
     stillFailed,
   };
+});
+
+
+// NIGHTJAR TEAM COMMUNITY — an editorial channel, not an admin-account data surface.
+// These endpoints return only explicitly published copy. Member feedback is a
+// separate, admin-only inbox; it is never included in public feed responses.
+const nightjarTeamUpdates = db.collection('nightjarTeamUpdates');
+const nightjarTeamFeedback = db.collection('nightjarTeamFeedback');
+type NightjarTeamTopic = 'news' | 'celebration' | 'you_said_we_did';
+const nightjarTeamTopics = new Set<NightjarTeamTopic>(['news','celebration','you_said_we_did']);
+const teamText = (value:unknown, maxLength:number) => {
+  const text = cleanText(value,maxLength + 1);
+  if(text.length>maxLength)throw new HttpsError('invalid-argument','Nightjar Team text exceeds the allowed length.');
+  return text;
+};
+const teamPostPublic = (id:string,record:Record<string,any>) => ({
+  id,
+  topic:nightjarTeamTopics.has(record.topic)?record.topic:'news',
+  title:cleanText(record.title,120),
+  body:cleanText(record.body,2400),
+  creatorName:cleanText(record.creatorName,100),
+  status:record.status==='published'?'published':record.status==='archived'?'archived':'draft',
+  publishedAt:record.publishedAt?.toDate?.()?.toISOString?.()??null,
+  updatedAt:record.updatedAt?.toDate?.()?.toISOString?.()??null,
+  revision:Math.max(0,Number(record.revision??0)),
+});
+export const listNightjarTeamUpdates = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const [published,adminPosts,feedback]=await Promise.all([
+    nightjarTeamUpdates.where('status','==','published').limit(100).get(),
+    identity.admin?nightjarTeamUpdates.limit(120).get():Promise.resolve(null),
+    identity.admin?nightjarTeamFeedback.limit(120).get():Promise.resolve(null),
+  ]);
+  const source=adminPosts??published;
+  const posts=source.docs.map(doc=>teamPostPublic(doc.id,doc.data()))
+    .filter(post=>identity.admin||post.status==='published')
+    .sort((a,b)=>String(b.publishedAt??b.updatedAt??'').localeCompare(String(a.publishedAt??a.updatedAt??'')))
+    .slice(0,40);
+  // No feedback fields are constructed or returned for non-administrators.
+  const inbox=identity.admin&&feedback?feedback.docs.map(doc=>{
+    const data=doc.data()??{};
+    return {
+      id:doc.id, topic:cleanText(data.topic,30), message:cleanText(data.message,1400),
+      status:data.status==='reviewed'?'reviewed':'new',
+      createdAt:data.createdAt?.toDate?.()?.toISOString?.()??null,
+      memberName:cleanText(data.memberName,80)||'Nightjar member',
+    };
+  }).sort((a,b)=>String(b.createdAt??'').localeCompare(String(a.createdAt??''))).slice(0,50):[];
+  return {posts,feedback:inbox};
+});
+export const saveNightjarTeamUpdate = onCall({region:REGION},async(request)=>{
+  const identity=requireAdminIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const id=cleanText(input.id,160);
+  if(id && !/^[A-Za-z0-9_-]{8,160}$/.test(id))throw new HttpsError('invalid-argument','Invalid team post ID.');
+  const topic=teamText(input.topic,32) as NightjarTeamTopic;
+  if(!nightjarTeamTopics.has(topic))throw new HttpsError('invalid-argument','Unknown team update category.');
+  const title=teamText(input.title,120);
+  const body=teamText(input.body,2400);
+  const creatorName=teamText(input.creatorName,100);
+  if(title.length<5||body.length<15)throw new HttpsError('invalid-argument','Add a title and a meaningful message.');
+  const status=teamText(input.status,24);
+  if(!['draft','published','archived'].includes(status))throw new HttpsError('invalid-argument','Invalid team post status.');
+  const expectedRevision=Number(input.expectedRevision??0);
+  if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)throw new HttpsError('invalid-argument','Invalid post revision.');
+  const ref=id?nightjarTeamUpdates.doc(id):nightjarTeamUpdates.doc();
+  const revision=await db.runTransaction(async(tx)=>{
+    const prior=await tx.get(ref);
+    if(id&&!prior.exists)throw new HttpsError('not-found','Team post no longer exists.');
+    const currentRevision=Number(prior.data()?.revision??0);
+    if(currentRevision!==expectedRevision)throw new HttpsError('aborted','This post changed on another device. Refresh before saving.');
+    const record={
+      topic,title,body,creatorName,status,revision:currentRevision+1,
+      updatedAt:FieldValue.serverTimestamp(),
+      updatedBy:identity.uid,
+      ...(!prior.exists?{createdAt:FieldValue.serverTimestamp(),createdBy:identity.uid}:{}),
+      ...(status==='published'&&!prior.data()?.publishedAt?{publishedAt:FieldValue.serverTimestamp()}:{}),
+    };
+    tx.set(ref,record,{merge:true});
+    return currentRevision+1;
+  });
+  return {id:ref.id,revision,status};
+});
+export const submitNightjarTeamFeedback = onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const topic=teamText(input.topic,24);
+  if(!['idea','appreciation','concern'].includes(topic))throw new HttpsError('invalid-argument','Choose a feedback category.');
+  const message=teamText(input.message,1400);
+  if(message.length<15)throw new HttpsError('invalid-argument','Please provide at least 15 characters of feedback.');
+  const member=await profileRef(identity.uid).get();
+  const displayName=cleanText(member.data()?.displayName,80)||'Nightjar member';
+  const throttle=accountRef(identity.uid).collection('rateLimits').doc('teamFeedback');
+  const feedbackRef=nightjarTeamFeedback.doc();
+  const now=Date.now();
+  const day=new Date(now).toISOString().slice(0,10);
+  await db.runTransaction(async(tx)=>{
+    const earlier=await tx.get(throttle);
+    const prior=earlier.data()??{};
+    if(now-Number(prior.lastAtMs??0)<10*60_000)throw new HttpsError('resource-exhausted','Please allow ten minutes between feedback submissions.');
+    const count=prior.day===day?Number(prior.count??0):0;
+    if(count>=10)throw new HttpsError('resource-exhausted','Your daily feedback limit has been reached.');
+    tx.set(throttle,{day,count:count+1,lastAtMs:now,updatedAt:FieldValue.serverTimestamp()});
+    tx.create(feedbackRef,{
+      topic,message,memberName:displayName,memberUserId:identity.uid,
+      status:'new',createdAt:FieldValue.serverTimestamp(),
+    });
+  });
+  return {received:true};
+});
+export const reviewNightjarTeamFeedback = onCall({region:REGION},async(request)=>{
+  const identity=requireAdminIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const id=cleanText(input.id,160);
+  if(!/^[A-Za-z0-9_-]{8,160}$/.test(id))throw new HttpsError('invalid-argument','Invalid feedback ID.');
+  const ref=nightjarTeamFeedback.doc(id);
+  const existing=await ref.get();
+  if(!existing.exists)throw new HttpsError('not-found','Feedback item no longer exists.');
+  await ref.update({status:'reviewed',reviewedAt:FieldValue.serverTimestamp(),reviewedBy:identity.uid});
+  return {reviewed:true};
 });
