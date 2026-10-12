@@ -5,6 +5,7 @@ import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 import { nightjarReferrals } from '../platform/firebase-referrals';
+import CollaborationHistoryButton from './CollaborationHistoryButton';
 
 type CreatorProfileData = {
   userId: string;
@@ -122,7 +123,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
           <div><span>Followers</span><strong>{profile.followers ?? 0}</strong></div>
           <div><span>Following</span><strong>{profile.followingCount ?? 0}</strong></div>
           <div><span>Released work</span><strong>{profile.releases?.length ?? 0}</strong></div>
-          <div><span>Collaborations</span><strong>{profile.completedCollaborations ?? 0}</strong></div>
+          <div><span>Collaborations</span><CollaborationHistoryButton userId={profile.userId} displayName={profile.name} count={profile.completedCollaborations ?? 0} demoMode={demoMode} compact /></div>
         </div>
         {!!profile.activityBadges?.length && <div className="profile-activity-badges public-profile-badges">{profile.activityBadges.map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}</div>}
         {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}{profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
@@ -138,7 +139,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
         </section>
         {(profile.portfolioNote || (profile.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
           {profile.portfolioNote && <p>{profile.portfolioNote}</p>}
-          {(profile.completedCollaborations ?? 0) > 0 && <span><Handshake size={14}/>{profile.completedCollaborations} completed Nightjar collaboration{profile.completedCollaborations === 1 ? '' : 's'}</span>}
+          {(profile.completedCollaborations ?? 0) > 0 && <CollaborationHistoryButton userId={profile.userId} displayName={profile.name} count={profile.completedCollaborations ?? 0} demoMode={demoMode} />}
         </section>}
         {!!profile.featuredReleases?.length && <section className="creator-featured-releases">
           <div className="section-head"><div><span className="mini-label">FEATURED BY CREATOR</span><h3>Start here</h3></div><Sparkles size={17}/></div>
