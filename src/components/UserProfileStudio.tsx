@@ -80,6 +80,8 @@ export default function UserProfileStudio({
     ...(profile.favouriteTropes ?? []),
   ].slice(0, 8);
 
+  const discoverable = role === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false;
+
   return <div className="premium-user-profile">
     <section className="premium-user-hero">
       <div className="premium-user-hero-glow" aria-hidden="true"/>
@@ -87,8 +89,8 @@ export default function UserProfileStudio({
         <span className="premium-user-avatar" data-tone={profile.avatarTone || 'plum'}>
           {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" loading="lazy" decoding="async"/> : initials}
         </span>
-        <span className={profile.publicProfile === false ? 'premium-profile-state private' : 'premium-profile-state'}>
-          {profile.publicProfile === false ? 'Private' : 'Discoverable'}
+        <span className={!discoverable ? 'premium-profile-state private' : 'premium-profile-state'}>
+          {discoverable ? 'Discoverable' : 'Private'}
         </span>
       </div>
 
@@ -161,7 +163,8 @@ export default function UserProfileStudio({
         <label>Profile headline<input maxLength={140} value={profile.headline ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,headline:event.target.value}))} placeholder="A short line that feels like you"/><small className="field-counter">{String(profile.headline ?? '').length}/140</small></label>
         <label>About you<textarea maxLength={1200} value={profile.bio ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,bio:event.target.value}))} placeholder="Your story, your way."/><small className="field-counter">{String(profile.bio ?? '').length}/1200</small></label>
         <label>Welcome note <span className="optional-label">optional</span><textarea maxLength={300} value={profile.welcomeMessage ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,welcomeMessage:event.target.value}))} placeholder="A small message for people visiting your profile."/><small className="field-counter">{String(profile.welcomeMessage ?? '').length}/300</small></label>
-        <label className="profile-toggle premium-profile-public-toggle"><input type="checkbox" checked={role === 'admin' ? false : profile.publicProfile !== false} disabled={role === 'admin'} onChange={(event)=>setProfile((current:any)=>({...current,publicProfile:event.target.checked}))}/>{role === 'admin' ? 'Administrator profiles stay private' : 'Allow Nightjar members to discover my profile'}</label>
+        <label className="profile-toggle premium-profile-public-toggle"><input type="checkbox" checked={discoverable} onChange={(event)=>setProfile((current:any)=>role === 'admin' ? {...current,adminCommunityVisible:event.target.checked} : {...current,publicProfile:event.target.checked})}/>{role === 'admin' ? 'Show my Nightjar Team profile to the community' : 'Allow Nightjar members to discover my profile'}</label>
+        {role === 'admin' && <p className="panel-note">Off by default. When enabled, only your chosen public profile details are visible to signed-in Nightjar members. Administrator permissions, security tools and account information remain private. Each administrator controls their own visibility.</p>}
       </article>
 
       <article className="panel premium-user-card discovery">
