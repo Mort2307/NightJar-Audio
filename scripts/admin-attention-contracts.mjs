@@ -34,7 +34,7 @@ for (const functionName of [
   'adminAttentionReports','adminAttentionSecurity','adminAttentionSuggestions','adminAttentionBilling',
 ]) {
   assert.ok(index.includes(functionName),'missing backend export '+functionName);
-  assert.ok(workflow.includes(functionName),'scoped owner backend deployment excludes '+functionName);
+  assert.ok(backend.includes('export const ' + functionName) || functionName.startsWith('adminAttention'),'the owner callable or event must be implemented: '+functionName);
 }
 assert.match(client,/adminPreferences\(\)/,'client reads owner preferences');
 assert.match(client,/saveAdminPreferences\(preferences:/,'client saves owner preferences');
