@@ -34,7 +34,8 @@ assert.match(intake,/await requireAgeVerified\(identity.uid\)/);
 assert.match(intake,/now-Number\(prior.lastAtMs/,'Feedback must be rate-limited');
 assert.match(intake,/if\(count>=10\)/,'Daily spam limit must exist');
 assert.match(intake,/tx\.create\(feedbackRef/,'Feedback is private and created only through a transaction');
-const review=section('export const reviewNightjarTeamFeedback = onCall','// NIGHTJAR TEAM COMMUNITY END');
+const review=server.split('export const reviewNightjarTeamFeedback = onCall')[1];
+assert.ok(review,'Feedback review endpoint exists');
 assert.match(review,/requireAdminIdentity\(request\)/,'Feedback review must be admin-only');
 assert.match(review,/status:'reviewed'/);
 for(const name of ['listNightjarTeamUpdates','saveNightjarTeamUpdate','submitNightjarTeamFeedback','reviewNightjarTeamFeedback']){
