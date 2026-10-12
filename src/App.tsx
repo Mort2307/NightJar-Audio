@@ -108,6 +108,7 @@ const CloudProfileDraft = lazy(() => import('./components/CloudProfileDraft'));
 const PublicProfile = lazy(() => import('./components/PublicProfile'));
 const CollaborationHub = lazy(() => import('./components/CollaborationHub'));
 const WriterRightsPanel = lazy(() => import('./components/WriterRightsPanel'));
+const WriterScriptArtwork = lazy(() => import('./components/WriterScriptArtwork'));
 const ListenerLibrary = lazy(() => import('./components/ListenerLibrary'));
 const ListenerCreatorDiscovery = lazy(() => import('./components/ListenerCreatorDiscovery'));
 const NightjarGiftPanel = lazy(() => import('./components/NightjarGiftPanel'));
@@ -661,6 +662,7 @@ function App() {
   const [profileSaveError, setProfileSaveError] = useState('');
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
+  const [writerNewArtworkFile, setWriterNewArtworkFile] = useState<File | null>(null);
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
   const [writerSelected, setWriterSelected] = useState<any | null>(null);
   const [editorQueue, setEditorQueue] = useState<any[]>([]);
@@ -3629,6 +3631,29 @@ function App() {
     }
   };
 
+  const attachNewWriterArtwork = async (script: any) => {
+    if (!writerNewArtworkFile || !script?.id) return script;
+    const file = writerNewArtworkFile;
+    setWriterNewArtworkFile(null);
+    if (simulationMode) {
+      return { ...script, pendingArtworkAssetId: 'demo-script-artwork-' + Date.now(), pendingArtworkStatus: 'pending' };
+    }
+    try {
+      const image = await nightjarMedia.submitImage({
+        kind: 'script_artwork',
+        targetId: script.id,
+        fileName: file.name,
+        contentType: file.type,
+        dataUrl: await readFileDataUrl(file),
+      });
+      notify('Optional script artwork sent to the administrator image queue.');
+      return { ...script, pendingArtworkAssetId: image.assetId, pendingArtworkStatus: 'pending' };
+    } catch (error) {
+      notify('Manuscript saved, but its optional artwork could not be uploaded: ' + (error instanceof Error ? error.message : 'Please retry from the artwork panel.'));
+      return script;
+    }
+  };
+
   const createWriterDraft = async () => {
     const title = writerDraftTitle.trim();
     if (!title) return notify('Give the script a working title first.');
@@ -3640,16 +3665,18 @@ function App() {
           rights:{ copyrightOwner:'Demo Writer', writerRetainsCopyright:true, licenceType:'none', licenceLength:'', adaptationApprovalRequired:true, significantEditsApprovalRequired:true, castingApprovalRequired:false, finalAudioApprovalRequired:false, aiTrainingAllowed:false, commercialUse:false, withdrawalTerms:'' },
           marketplace:{ visibility:'private', synopsis:'', genres:[], tropes:[], commissionPricePence:null, collaborationWanted:false, editorWanted:false },
         };
-        setWriterScripts((items) => { const updated = [next, ...items]; writeDemo('writerScripts', updated); return updated; });
-        setWriterSelected(next);
+        const withArtwork = await attachNewWriterArtwork(next);
+        setWriterScripts((items) => { const updated = [withArtwork, ...items]; writeDemo('writerScripts', updated); return updated; });
+        setWriterSelected(withArtwork);
         setWriterDraftTitle('');
         notify('Simulation: draft created locally.');
         return;
       }
       const data = await nightjarScripts.create(title, '');
+      const newScript = await attachNewWriterArtwork(data.script);
       setWriterDraftTitle('');
       await loadWriterScripts();
-      setWriterSelected(data.script ?? null);
+      setWriterSelected(newScript ?? null);
       if (data.script?.id) await loadWriterPermissions(data.script.id);
       notify('Draft created.');
     } catch {
@@ -3693,8 +3720,9 @@ function App() {
           rights:{ copyrightOwner:'Demo Writer', writerRetainsCopyright:true, licenceType:'none', licenceLength:'', adaptationApprovalRequired:true, significantEditsApprovalRequired:true, castingApprovalRequired:false, finalAudioApprovalRequired:false, aiTrainingAllowed:false, commercialUse:false, withdrawalTerms:'' },
           marketplace:{ visibility:'private', synopsis:'', genres:[], tropes:[], commissionPricePence:null, collaborationWanted:false, editorWanted:false },
         };
-        setWriterScripts((items) => { const updated = [next, ...items]; writeDemo('writerScripts', updated); return updated; });
-        setWriterSelected(next);
+        const withArtwork = await attachNewWriterArtwork(next);
+        setWriterScripts((items) => { const updated = [withArtwork, ...items]; writeDemo('writerScripts', updated); return updated; });
+        setWriterSelected(withArtwork);
         setWriterDraftTitle('');
         notify('Simulation: manuscript uploaded as a private draft.');
         return;
@@ -3707,9 +3735,10 @@ function App() {
         contentType:file.type,
         dataUrl,
       });
+      const newScript = await attachNewWriterArtwork(data.script);
       setWriterDraftTitle('');
       await loadWriterScripts();
-      setWriterSelected(data.script ?? null);
+      setWriterSelected(newScript ?? null);
       if (data.script?.id) await loadWriterPermissions(data.script.id);
       notify('Manuscript uploaded privately. Rights, sharing and editorial controls are ready.');
     } catch {
@@ -4970,9 +4999,24 @@ function App() {
                   </label>
                   <small>TXT · Markdown · RTF · Word · PDF · max 8 MB. Uploaded originals stay private and protected.</small>
                 </div>
+                <label className="writer-initial-artwork">Optional cover image for this new script
+                  <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" disabled={writerUploadBusy}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (file && (!['image/png','image/jpeg','image/webp'].includes(file.type) || !file.size || file.size > 5 * 1024 * 1024)) {
+                        notify('Script artwork must be a PNG, JPG or WebP image no larger than 5 MB.');
+                        event.currentTarget.value = '';
+                        setWriterNewArtworkFile(null);
+                        return;
+                      }
+                      setWriterNewArtworkFile(file);
+                    }}/>
+                  <small>{writerNewArtworkFile ? writerNewArtworkFile.name + ' · will be sent for separate admin approval' : 'Optional · add an image now, or any time after approval and publication.'}</small>
+                </label>
               </div>
             </div>
             <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div>{writerSelected.sourceFile&&<div className="writer-source-file"><div><Upload size={15}/><span><strong>{writerSelected.sourceFile.fileName}</strong><small>{Math.max(1,Math.round(Number(writerSelected.sourceFile.sizeBytes??0)/1024))} KB · protected source upload</small></span></div><span className="status-pill">PRIVATE SOURCE</span></div>}<textarea className="script-editor" value={writerSelected.content??''} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder={writerSelected.sourceFile?'Optional editable text copy. Your uploaded source manuscript remains the protected original.':'Begin writing…'}/><div className="editor-actions"><button className="secondary-button" onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" onClick={()=>void submitWriterScript()}>Submit to editorial</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
+            {writerSelected && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading manuscript artwork controls" />}><WriterScriptArtwork key={'writer-artwork-' + String(writerSelected.id)} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode}/></Suspense>}
             {writerSelected && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights controls" />}><WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} /></Suspense>}
             <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer collaborations" />}><CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>
           </section>
@@ -5313,7 +5357,7 @@ function App() {
       {tag.status !== 'promoted' && <button className="primary-button" onClick={()=>void setProfileTagStatus(tag,'promoted')}>Promote</button>}
     </div>
   </article>)}
-</div>}{adminPanel === 'images' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading image moderation queue…</div> : imageModeration.length === 0 ? <div className="people-empty"><ImagePlus size={18}/><strong>No images awaiting review</strong><span>Profile pictures, branding and release artwork will appear here before they can become public.</span></div> : imageModeration.map((asset:any)=><article className="image-moderation-row" key={asset.id}><div className="image-moderation-preview">{asset.previewUrl ? <button type="button" className="image-moderation-preview-button" onClick={()=>setModerationPreviewAsset(asset)} aria-label="View pending image full screen"><img src={asset.previewUrl} alt="Pending moderation" /><span className="image-preview-open-hint">Click to inspect full screen</span></button> : <div className="image-preview-unavailable"><ImagePlus size={24}/><span>{asset.previewError ?? 'Preview loading failed'}</span></div>}</div><div><strong>{asset.kind === 'profile_avatar' ? 'Profile picture' : asset.kind === 'brand_logo' ? 'Nightjar logo' : asset.kind === 'artist_portfolio' ? 'Artist portfolio artwork' : 'Release artwork'}</strong><span>{asset.ownerEmail ?? asset.ownerUserId ?? 'Unknown uploader'} · {asset.fileName ?? asset.contentType ?? 'image'}</span><small>This image is private while pending. Approve only after checking there is no nudity, explicit sexual imagery or other unsuitable imagery.</small></div><div className="admin-data-actions">{asset.previewUrl && <button className="secondary-button" onClick={()=>setModerationPreviewAsset(asset)}>View full image</button>}<button className="ghost-button" onClick={()=>void moderateImage(asset,'rejected')}>Reject</button><button className="primary-button" disabled={!asset.previewUrl} title={!asset.previewUrl ? 'Preview this image successfully before approval.' : undefined} onClick={()=>void moderateImage(asset,'approved')}>Approve image</button></div></article>)}</div>}{adminPanel === 'subscriptions' && <div>{adminPanelLoading ? <div className="people-empty">Loading subscription ledger…</div> : <>
+</div>}{adminPanel === 'images' && <div className="admin-data-list">{adminPanelLoading ? <div className="people-empty">Loading image moderation queue…</div> : imageModeration.length === 0 ? <div className="people-empty"><ImagePlus size={18}/><strong>No images awaiting review</strong><span>Profile pictures, script artwork, branding and release artwork appear here before becoming public.</span></div> : imageModeration.map((asset:any)=><article className="image-moderation-row" key={asset.id}><div className="image-moderation-preview">{asset.previewUrl ? <button type="button" className="image-moderation-preview-button" onClick={()=>setModerationPreviewAsset(asset)} aria-label="View pending image full screen"><img src={asset.previewUrl} alt="Pending moderation" /><span className="image-preview-open-hint">Click to inspect full screen</span></button> : <div className="image-preview-unavailable"><ImagePlus size={24}/><span>{asset.previewError ?? 'Preview loading failed'}</span></div>}</div><div><strong>{asset.kind === 'profile_avatar' ? 'Profile picture' : asset.kind === 'brand_logo' ? 'Nightjar logo' : asset.kind === 'artist_portfolio' ? 'Artist portfolio artwork' : asset.kind === 'script_artwork' ? 'Script artwork' : asset.kind === 'social_avatar' ? 'Social profile picture' : 'Release artwork'}</strong><span>{asset.ownerEmail ?? asset.ownerUserId ?? 'Unknown uploader'} · {asset.fileName ?? asset.contentType ?? 'image'}</span><small>This image is private while pending. Approve only after checking there is no nudity, explicit sexual imagery or other unsuitable imagery.</small></div><div className="admin-data-actions">{asset.previewUrl && <button className="secondary-button" onClick={()=>setModerationPreviewAsset(asset)}>View full image</button>}<button className="ghost-button" onClick={()=>void moderateImage(asset,'rejected')}>Reject</button><button className="primary-button" disabled={!asset.previewUrl} title={!asset.previewUrl ? 'Preview this image successfully before approval.' : undefined} onClick={()=>void moderateImage(asset,'approved')}>Approve image</button></div></article>)}</div>}{adminPanel === 'subscriptions' && <div>{adminPanelLoading ? <div className="people-empty">Loading subscription ledger…</div> : <>
   <div className="admin-modal-grid">
     <div className="admin-modal-stat"><span>Active</span><strong>{commercialOverview?.subscriptions.active ?? 0}</strong></div>
     <div className="admin-modal-stat"><span>Trial</span><strong>{commercialOverview?.subscriptions.trialing ?? 0}</strong></div>
