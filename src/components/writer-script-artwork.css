@@ -1,0 +1,23 @@
+.writer-script-artwork { margin-top: 1.2rem; }
+.writer-script-artwork-layout { display: grid; grid-template-columns: minmax(150px, 225px) minmax(0, 1fr); gap: 1.35rem; align-items: center; }
+.writer-script-artwork-preview { width: 100%; aspect-ratio: 4 / 5; overflow: hidden; border-radius: 18px; border: 1px solid var(--border, rgba(255,255,255,.14)); background: var(--surface-secondary, rgba(255,255,255,.035)); }
+.writer-script-artwork-preview > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.writer-script-artwork-placeholder { display: flex; flex-direction: column; gap: .7rem; height: 100%; justify-content: center; align-items: center; padding: 1rem; text-align: center; color: var(--text-secondary, #bcb7c6); }
+.writer-script-artwork-controls { display: flex; flex-direction: column; align-items: flex-start; gap: .8rem; min-width: 0; }
+.writer-script-artwork-controls small { max-width: 38rem; line-height: 1.5; opacity: .8; }
+.writer-script-artwork-status { display: inline-flex; align-items: center; gap: .45rem; line-height: 1.35; font-weight: 650; font-size: .89rem; }
+.writer-script-artwork-status.approved { color: var(--accent, #e0b977); }
+.writer-script-artwork-status.pending { color: var(--text-primary, inherit); }
+.writer-script-artwork-status.rejected, .writer-script-artwork-error { color: #ffb2ad; }
+.writer-script-artwork-error { margin: 0; }
+.writer-script-artwork-upload { position: relative; display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; max-width: 100%; }
+.writer-script-artwork-upload input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.writer-script-artwork-upload:focus-within { outline: 2px solid currentColor; outline-offset: 3px; }
+.writer-script-artwork-upload.disabled { opacity: .5; pointer-events: none; }
+.script-marketplace .marketplace-card .script-marketplace-cover { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; margin: .6rem 0 1rem; background: rgba(255,255,255,.04); }
+@media (max-width: 620px) {
+  .writer-script-artwork-layout { grid-template-columns: 1fr; }
+  .writer-script-artwork-preview { width: min(100%, 230px); }
+  .writer-script-artwork-controls { align-items: stretch; }
+  .writer-script-artwork-upload { justify-content: center; }
+}
