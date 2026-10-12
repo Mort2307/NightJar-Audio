@@ -6,6 +6,7 @@ import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDe
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 import { nightjarReferrals } from '../platform/firebase-referrals';
+import { publicProfileUrl, shareNightjarProfile, type ShareableProfileRole } from '../platform/public-profile-share';
 import NightjarGiftPanel from './NightjarGiftPanel';
 import PublicEditorShowcase from './PublicEditorShowcase';
 import PublicWriterPortfolio from './PublicWriterPortfolio';
@@ -136,22 +137,25 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   }, [userId, demoMode, retryKey]);
 
   const share = async () => {
-    if (!profile) return;
-    const text = `Discover ${profile.displayName} on Nightjar — ${roleLabel(profile.role)}.`;
-    let url = window.location.origin + '/people/' + encodeURIComponent(userId);
-    try {
-      if (profile.role === 'creator' && !demoMode) {
-        const recommendation = await nightjarReferrals.recommendCreator(userId);
-        url = window.location.origin + recommendation.path;
-      }
-      if (navigator.share) await navigator.share({ title: 'Nightjar · ' + profile.displayName, text, url });
-      else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(text + ' ' + url);
-        notify('Profile copied — ready to share.');
-      }
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) notify('Profile sharing could not be opened.');
+    if (!profile || readOnlyPreview) return;
+    if (demoMode) {
+      notify('Simulation profiles cannot be shared outside Nightjar.');
+      return;
     }
+    const role = profileRole as ShareableProfileRole;
+    let url = publicProfileUrl(window.location.origin, userId, role);
+    if (role === 'creator') {
+      try {
+        const recommendation = await nightjarReferrals.recommendCreator(userId);
+        if (typeof recommendation.path === 'string' && recommendation.path.startsWith('/') && !recommendation.path.startsWith('//')) {
+          url = window.location.origin + recommendation.path + '&role=creator';
+        }
+      } catch {
+        // Keep the public role-specific URL available if referral tracking fails.
+      }
+    }
+    await shareNightjarProfile({ url, name: String(profile.displayName || 'Nightjar creator'),
+      roleLabel: roleLabel(profileRole), notify });
   };
 
   const following = Boolean(profile?.userId && followingIds.includes(profile.userId));
