@@ -6,6 +6,7 @@ import AccountSecurityActivity from './AccountSecurityActivity';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import SocialLinksEditor from './SocialLinksEditor';
 import LegalAgreementPanel from './LegalAgreementPanel';
+import ProfileSectionBoundary from './ProfileSectionBoundary';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -183,10 +184,10 @@ export default function UserProfileStudio({
         </div>
       </article>
 
-      <SocialLinksEditor notify={notify} simulationMode={simulationMode} />
-      <AccessibilityPreferences />
-      <LegalAgreementPanel />
-      <AccountSecurityActivity />
+      <ProfileSectionBoundary title="Social links"><SocialLinksEditor notify={notify} simulationMode={simulationMode} /></ProfileSectionBoundary>
+      <ProfileSectionBoundary title="Accessibility preferences"><AccessibilityPreferences /></ProfileSectionBoundary>
+      <ProfileSectionBoundary title="Legal agreements"><LegalAgreementPanel /></ProfileSectionBoundary>
+      <ProfileSectionBoundary title="Sign-in activity"><AccountSecurityActivity /></ProfileSectionBoundary>
     </div>
 
     <div className="premium-profile-savebar">
