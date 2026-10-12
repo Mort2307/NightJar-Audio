@@ -69,6 +69,7 @@ import {
   Share2,
 } from 'lucide-react';
 import './components/live-listens.css';
+import './components/writer-script-artwork.css';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
