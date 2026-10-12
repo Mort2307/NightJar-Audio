@@ -721,6 +721,25 @@ function App() {
   }, [user?.userId]);
 
   const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
+  // Every recorded contributor gets the same readable credit treatment as the main creator.
+  // Deduplicate identical role/name pairs without dropping distinct roles held by one person.
+  const featuredCredits = useMemo(() => {
+    if (!featured) return [] as { role: string; name: string }[];
+    const credits = [
+      { role: 'Creator', name: featured.creator },
+      ...(featured.contributors ?? []),
+    ];
+    const seen = new Set<string>();
+    return credits.flatMap(({ role, name }) => {
+      const cleanName = String(name ?? '').trim();
+      const cleanRole = String(role ?? '').trim() || 'Contributor';
+      if (!cleanName) return [];
+      const key = cleanRole.toLocaleLowerCase() + ':' + cleanName.toLocaleLowerCase();
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{ role: cleanRole, name: cleanName }];
+    });
+  }, [featured]);
   const communityByRelease = useMemo(() => Object.fromEntries(tracks.map((track) => [track.id, {
     likes:Number(track.communityLikeCount ?? 0),
     loves:Number(track.communityLoveCount ?? 0),
@@ -4250,15 +4269,24 @@ function App() {
                 <div className="featured-card">
                   {featured ? <>
                     <div className="featured-top"><span className="mini-label">NIGHTJAR / FEATURED</span><span className="status-dot"><span /> LIVE RELEASE</span></div>
-                    <div className="cover-art release-cover">
+                    <div className="cover-art release-cover featured-release-cover">
                       <ReleaseCoverVisual artworkUrl={featured.artworkUrl} brandLogoUrl={logoUrl ?? '/brand-logo'} />
-                      <span>{featured.title.toUpperCase()}</span>
-                      <small>{featured.creator}</small>
+                      <h2 className="featured-cover-title">{featured.title.toUpperCase()}</h2>
                     </div>
                     <div className="feature-meta">
                       <div><span className="mini-label">{featured.category}</span><strong>{featured.title}</strong></div>
                       <button className="round-play" disabled={!featured.audioAvailable && !featured.audioUrl} onClick={() => togglePlayback(featured)} aria-label={playing === featured.id ? 'Pause release' : 'Play release'}>{playing === featured.id ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
                     </div>
+                    {featuredCredits.length > 0 && (
+                      <div className="featured-credit-list" aria-label="Release credits">
+                        {featuredCredits.map((credit) => (
+                          <div className="featured-credit-item" key={credit.role.toLocaleLowerCase() + ':' + credit.name.toLocaleLowerCase()}>
+                            <span className="featured-credit-role">{credit.role}</span>
+                            <strong className="featured-credit-name">{credit.name}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="player-meta"><span>{featured.duration}</span><span>{featured.audioAvailable || featured.audioUrl ? 'Private audio connected' : 'Audio not connected'}</span></div>
                   </> : <div className="empty-feature"><Moon size={40}/><strong>No featured release yet.</strong><span>Published catalogue records will appear here as creators release audio.</span></div>}
                 </div>
