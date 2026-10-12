@@ -6755,6 +6755,63 @@ export const adminListScripts = onCall({ region: REGION }, async (request) => {
   };
 });
 
+// Editorial review is optional production assistance, never a prerequisite for
+// making a writer-approved manuscript discoverable to Nightjar voice actors.
+// The Writer alone controls marketplace visibility and synopsis; admin approval
+// cannot change a private manuscript into a public listing.
+export const adminReviewWriterScript = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const decision = cleanText(input.decision, 30);
+  const note = cleanText(input.note, 2000);
+  if (!scriptId || !['approved','changes','rejected'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'Select a submitted manuscript and a valid moderation decision.');
+  }
+  if (decision !== 'approved' && !note) {
+    throw new HttpsError('invalid-argument', 'Explain the requested changes or rejection to the Writer.');
+  }
+  const ref = scriptRef(scriptId);
+  const result = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.data();
+    if (!data) throw new HttpsError('not-found', 'Manuscript not found.');
+    if (!['Submitted','Under review'].includes(String(data.status ?? ''))) {
+      throw new HttpsError('failed-precondition', 'Only submitted manuscripts awaiting a decision can be reviewed.');
+    }
+    const rights = normaliseScriptRights(data.rights);
+    if (decision === 'approved' && (rights.ownershipAttested !== true || rights.contributorPermissionsConfirmed !== true)) {
+      throw new HttpsError('failed-precondition', 'Writer rights and contributor permissions must be confirmed before approval.');
+    }
+    if (decision === 'approved' && !cleanText(data.content, 200000) && !cleanText(data.originalUpload?.storagePath, 500)) {
+      throw new HttpsError('failed-precondition', 'There is no protected manuscript to approve.');
+    }
+    const nextStatus = decision === 'approved' ? 'Approved' : decision === 'changes' ? 'Revision requested' : 'Rejected';
+    const listing = normaliseScriptMarketplace(data.marketplace);
+    const marketplaceVisible = decision === 'approved' && listing.visibility === 'marketplace' && Boolean(listing.synopsis.trim());
+    transaction.set(ref, {
+      status:nextStatus,
+      lastEditorialComment:note || null,
+      reviewedBy:admin.uid,
+      reviewedAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp(),
+    }, {merge:true});
+    return {writerUserId:String(data.writerUserId ?? ''),title:cleanText(data.title,180),nextStatus,marketplaceVisible};
+  });
+  if (result.writerUserId) {
+    await createNotification(result.writerUserId, {
+      type:'editorial', subtype:'script_review',
+      title:result.nextStatus === 'Approved' ? 'Your manuscript has been approved' : result.nextStatus === 'Revision requested' ? 'Nightjar has requested manuscript changes' : 'Nightjar manuscript review completed',
+      message:result.nextStatus === 'Approved'
+        ? result.marketplaceVisible ? 'Your manuscript synopsis is now listed in the Creator Script Marketplace. The full manuscript remains protected.' : 'Your manuscript is approved. Open Writer Studio to choose Marketplace visibility and add a synopsis when you want creators to discover it.'
+        : note,
+      scriptId,
+    }).catch((error)=>console.warn('Script review notification failed',error));
+  }
+  const saved = await ref.get();
+  return {script:scriptPayload(saved.data() ?? {},scriptId,false),marketplaceVisible:result.marketplaceVisible};
+});
+
 export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;

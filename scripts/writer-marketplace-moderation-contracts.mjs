@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const src=readFileSync('functions/src/index.ts','utf8');
+const moderation=src.slice(src.indexOf('export const adminReviewWriterScript ='),src.indexOf('export const adminAssignEditor ='));
+assert.match(moderation,/requireAdminIdentity\(request\)/);
+assert.match(moderation,/\['Submitted','Under review'\]/);
+assert.match(moderation,/rights\.ownershipAttested !== true \|\| rights\.contributorPermissionsConfirmed !== true/);
+assert.match(moderation,/listing\.visibility === 'marketplace' && Boolean\(listing\.synopsis\.trim\(\)\)/);
+assert.match(moderation,/status:nextStatus/);
+assert.doesNotMatch(moderation,/transaction\.set\(ref,\s*\{[^}]*marketplace:/);
+assert.match(moderation,/The full manuscript remains protected/);
+assert.match(src,/export const listScriptMarketplace =/);
+assert.match(src,/listing\.visibility === 'marketplace' && \['Approved','Published'\]/);
+console.log('Writer marketplace independent-admin approval backend contracts PASS');
