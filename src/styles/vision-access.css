@@ -1,0 +1,169 @@
+/* NIGHTJAR VISION ACCESS (device-local): additive to all six account themes.
+   Colours never communicate state alone; controls retain text, pressed state,
+   visible borders, keyboard focus and OS high-contrast compatibility. */
+
+:root[data-nightjar-vision="clarity"] {
+  color-scheme:dark;
+  --bg:#050505;--panel:#111111;--panel-soft:#181818;
+  --line:#dedede;--line-soft:#919191;--muted:#e5e5e5;--muted-2:#d1d1d1;
+  --ivory:#ffffff;--plum:#ffffff;--plum-soft:#ffffff;--wine:#505050;
+  --nj-surface-0:#050505;--nj-surface-1:#111111;--nj-surface-2:#181818;
+  --nj-surface-raised:#141414;--nj-line-subtle:#aaa;--nj-line-default:#dedede;--nj-line-strong:#ffffff;
+  --nj-text-primary:#fff;--nj-text-secondary:#e5e5e5;--nj-text-tertiary:#d1d1d1;
+  --nj-accent:#ffffff;--nj-accent-soft:#333333;--nj-vision-action:#ffffff;
+  --nj-vision-action-text:#050505;--nj-vision-focus:#ffffff;
+}
+:root[data-nightjar-vision="paper"] {
+  color-scheme:light;
+  --bg:#f3eedf;--panel:#fffdf6;--panel-soft:#ece6d6;
+  --line:#47433a;--line-soft:#777063;--muted:#2d2a25;--muted-2:#454036;
+  --ivory:#151515;--plum:#141414;--plum-soft:#25221d;--wine:#d7cfbd;
+  --nj-surface-0:#f3eedf;--nj-surface-1:#fffdf6;--nj-surface-2:#ece6d6;
+  --nj-surface-raised:#fffdf6;--nj-line-subtle:#777063;--nj-line-default:#47433a;--nj-line-strong:#151515;
+  --nj-text-primary:#151515;--nj-text-secondary:#2d2a25;--nj-text-tertiary:#454036;
+  --nj-accent:#151515;--nj-accent-soft:#dfd7c7;--nj-vision-action:#151515;
+  --nj-vision-action-text:#ffffff;--nj-vision-focus:#115184;
+}
+:root[data-nightjar-vision="focus"] {
+  color-scheme:dark;
+  --bg:#101820;--panel:#192633;--panel-soft:#203040;
+  --line:#cadfec;--line-soft:#93b5c8;--muted:#e1edf4;--muted-2:#c9dfed;
+  --ivory:#f2f6fa;--plum:#b8e9ff;--plum-soft:#b8e9ff;--wine:#25455a;
+  --nj-surface-0:#101820;--nj-surface-1:#192633;--nj-surface-2:#203040;
+  --nj-surface-raised:#192633;--nj-line-subtle:#93b5c8;--nj-line-default:#cadfec;--nj-line-strong:#e4f5ff;
+  --nj-text-primary:#f2f6fa;--nj-text-secondary:#e1edf4;--nj-text-tertiary:#c9dfed;
+  --nj-accent:#b8e9ff;--nj-accent-soft:#264b62;--nj-vision-action:#b8e9ff;
+  --nj-vision-action-text:#081017;--nj-vision-focus:#ffffff;
+}
+:root[data-nightjar-vision="soft"] {
+  color-scheme:dark;
+  --bg:#171717;--panel:#24221f;--panel-soft:#2c2924;
+  --line:#ddc9a4;--line-soft:#aa997b;--muted:#e7dcc7;--muted-2:#d5c8b0;
+  --ivory:#f6e5be;--plum:#f5cf81;--plum-soft:#f5cf81;--wine:#3e3326;
+  --nj-surface-0:#171717;--nj-surface-1:#24221f;--nj-surface-2:#2c2924;
+  --nj-surface-raised:#24221f;--nj-line-subtle:#aa997b;--nj-line-default:#ddc9a4;--nj-line-strong:#f6e5be;
+  --nj-text-primary:#f6e5be;--nj-text-secondary:#e7dcc7;--nj-text-tertiary:#d5c8b0;
+  --nj-accent:#f5cf81;--nj-accent-soft:#403527;--nj-vision-action:#f5cf81;
+  --nj-vision-action-text:#181818;--nj-vision-focus:#f6e5be;
+}
+
+/* Replace glossy app backgrounds with flat, distinguishable surfaces. */
+:root[data-nightjar-vision] body,
+:root[data-nightjar-vision] :where(.app-shell,.access-shell,.account-portal-shell,.nj-recovery-shell) {
+  background:var(--bg)!important;color:var(--ivory);
+}
+:root[data-nightjar-vision] :where(.panel,.access-card,.account-access-card,.nj-recovery-card,.track-card,.featured-card,.studio-dashboard,.studio-preview-card,.premium-user-card,.nj-settings-section,.nj-theme-choice,.nj-vision-dialog) {
+  background:var(--panel)!important;color:var(--ivory);border:1px solid var(--line)!important;
+  box-shadow:none!important;
+}
+:root[data-nightjar-vision] :where(.topbar,.player-dock,.site-footer,.account-portal-header,.onboarding-card,.modal-card,.notification-panel) {
+  background:var(--panel)!important;color:var(--ivory);border-color:var(--line)!important;
+}
+:root[data-nightjar-vision] :where(input,select,textarea) {
+  background:var(--panel-soft)!important;color:var(--ivory)!important;
+  border:2px solid var(--line)!important;
+}
+:root[data-nightjar-vision] :where(input,textarea)::placeholder {color:var(--muted-2)!important;opacity:1;}
+:root[data-nightjar-vision] :where(.primary-button,.nj-vision-done) {
+  background:var(--nj-vision-action)!important;color:var(--nj-vision-action-text)!important;
+  border:2px solid var(--nj-vision-action)!important;box-shadow:none!important;
+  text-shadow:none!important;font-weight:800!important;
+}
+:root[data-nightjar-vision] :where(.secondary-button,.ghost-button,.nj-settings-link,.nj-vision-reset) {
+  background:var(--panel-soft)!important;color:var(--ivory)!important;
+  border:2px solid var(--line)!important;text-shadow:none!important;
+}
+:root[data-nightjar-vision] :where(p,small,label,legend) {text-shadow:none;}
+:root[data-nightjar-vision] :where(button,a,input,textarea,select,[tabindex]):focus-visible {
+  outline:3px solid var(--nj-vision-focus)!important;outline-offset:3px!important;
+}
+:root[data-nightjar-vision] :where(button,input,select,textarea) {min-height:44px;}
+:root[data-nightjar-vision] :where(p,small,label,legend,.nj-vision-help) {line-height:1.6;}
+:root[data-nightjar-vision] :where(h1,h2,h3,h4,p,button,label) {overflow-wrap:anywhere;}
+
+/* CSS zoom changes physical text AND fixed-pixel controls that the legacy app
+   otherwise leaves unchanged; responsive layout must remain scrollable.
+   Browser zoom and screen magnification continue to work independently. */
+:root[data-nightjar-vision-scale="125"] body {zoom:1.25;min-width:0;}
+:root[data-nightjar-vision-scale="150"] body {zoom:1.5;min-width:0;}
+:root[data-nightjar-vision-scale="175"] body {zoom:1.75;min-width:0;}
+:root[data-nightjar-vision-scale="200"] body {zoom:2;min-width:0;}
+:root[data-nightjar-vision-scale]:not([data-nightjar-vision-scale="100"]) :where(.app-shell,.access-shell,.account-portal-shell,.nj-settings-page) {min-width:0;}
+:root[data-nightjar-vision-scale]:not([data-nightjar-vision-scale="100"]) :where(.nj-settings-grid,.nj-vision-mode-grid) {grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));}
+
+:root[data-nightjar-vision-quiet="true"] :where(.app-shell,.access-shell,.account-portal-shell,.nj-recovery-shell) {
+  background:var(--bg)!important;
+}
+:root[data-nightjar-vision-quiet="true"] :where(.access-glow,.premium-onboarding-aura,.hero-glow,.background-glow) {display:none!important;}
+:root[data-nightjar-vision-quiet="true"] *,
+:root[data-nightjar-vision-quiet="true"] *::before,
+:root[data-nightjar-vision-quiet="true"] *::after {
+  animation-duration:0.01ms!important;animation-iteration-count:1!important;
+  transition-duration:0.01ms!important;scroll-behavior:auto!important;
+}
+
+/* Visible before sign-in, throughout the app and on protected entry screens. */
+.nj-vision-launcher {
+  position:fixed;z-index:4000;left:14px;bottom:calc(18px + env(safe-area-inset-bottom));
+  display:inline-flex;align-items:center;gap:8px;min-height:48px;
+  padding:11px 14px;border:2px solid #fff;border-radius:999px;
+  font:700 14px/1.25 system-ui,sans-serif;letter-spacing:normal;
+  background:#0b0b0b;color:#fff;box-shadow:0 3px 20px #0009;
+  cursor:pointer;
+}
+.nj-vision-launcher:focus-visible,.nj-vision-close:focus-visible {
+  outline:3px solid #fff;outline-offset:3px;
+}
+.nj-vision-dialog {
+  position:fixed;inset:0;margin:auto;box-sizing:border-box;
+  width:min(740px,calc(100vw - 24px));max-height:min(88dvh,880px);
+  padding:clamp(16px,3vw,28px);overflow-y:auto;overscroll-behavior:contain;
+  background:#151515;color:#f5f5f5;border:2px solid #e9e9e9;border-radius:18px;
+  box-shadow:0 18px 65px #000c;font:16px/1.5 system-ui,sans-serif;
+}
+.nj-vision-dialog::backdrop {background:rgba(0,0,0,.84);}
+.nj-vision-dialog-head {display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;}
+.nj-vision-overline {display:flex;align-items:center;gap:7px;font-weight:800;font-size:12px;letter-spacing:.04em;}
+.nj-vision-dialog-head h2 {margin:6px 0 0;font:800 clamp(23px,4vw,34px)/1.2 system-ui,sans-serif;}
+.nj-vision-close {display:grid;place-items:center;flex:0 0 auto;min-width:48px;min-height:48px;background:#282828;color:#fff;border:2px solid #e5e5e5;border-radius:10px;}
+.nj-vision-controls {display:grid;gap:19px;max-width:100%;min-width:0;}
+.nj-vision-help {margin:0;color:inherit;line-height:1.65;font-size:16px;}
+.nj-vision-fieldset {min-width:0;margin:0;padding:0;border:0;}
+.nj-vision-fieldset legend {font-size:18px;font-weight:800;margin-bottom:10px;}
+.nj-vision-fieldset > p {margin:0 0 12px;font-size:15px;line-height:1.55;}
+.nj-vision-mode-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;}
+.nj-vision-mode {
+  display:grid;align-content:start;gap:7px;text-align:left;min-width:0;min-height:142px;
+  padding:12px;border:2px solid #969696;border-radius:12px;
+  color:inherit;background:transparent;font:inherit;cursor:pointer;
+}
+.nj-vision-mode strong {font-size:16px;font-weight:800;}
+.nj-vision-mode small {font-size:14px;line-height:1.45;color:inherit;}
+.nj-vision-mode.is-selected,.nj-vision-size.is-selected {border-width:3px;border-color:currentColor;box-shadow:inset 0 0 0 1px currentColor;}
+.nj-vision-swatches {height:34px;border-radius:7px;padding:6px;display:flex;align-items:center;gap:8px;}
+.nj-vision-swatches i {display:block;height:20px;width:20px;border-radius:5px;border:1px solid #666;}
+.nj-vision-size-grid {display:flex;flex-wrap:wrap;gap:9px;}
+.nj-vision-size {min-width:64px;min-height:48px;padding:9px 13px;border:2px solid #a2a2a2;border-radius:9px;color:inherit;background:transparent;font:700 16px/1.2 system-ui,sans-serif;}
+.nj-vision-quiet {display:flex;align-items:center;gap:12px;font-size:16px;cursor:pointer;}
+.nj-vision-quiet input {height:24px;width:24px;flex:0 0 auto;accent-color:currentColor;}
+.nj-vision-quiet span {display:grid;gap:4px;min-width:0;}
+.nj-vision-quiet small {font-size:14px;line-height:1.4;}
+.nj-vision-reset {justify-self:start;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 14px;border:2px solid #aaa;border-radius:9px;background:transparent;color:inherit;font:700 15px system-ui,sans-serif;}
+.nj-vision-footnote {margin:0;color:inherit;font-size:13px;line-height:1.5;}
+.nj-vision-done {width:100%;margin-top:18px;min-height:52px;border:2px solid #fff;border-radius:9px;background:#fff;color:#090909;font:800 17px system-ui,sans-serif;}
+/* In account settings, the user can also reach the same controls without opening the overlay. */
+.nj-settings-vision {max-width:900px;padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--panel);}
+.nj-settings-vision > h3 {font-size:clamp(20px,2.5vw,26px);margin:0 0 9px;}
+.nj-settings-vision > p {font-size:14px;line-height:1.6;margin:0 0 15px;}
+.nj-settings-vision .nj-vision-mode {min-height:145px;}
+.nj-settings-vision .nj-vision-mode-grid {grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));}
+@media(max-width:480px) {
+  .nj-vision-launcher {bottom:calc(82px + env(safe-area-inset-bottom));left:10px;padding:10px 12px;font-size:12px;}
+  .nj-vision-dialog {max-height:calc(100dvh - 16px);width:calc(100vw - 16px);padding:16px;border-radius:12px;}
+  .nj-vision-mode {min-height:120px;}
+  .nj-settings-vision {padding:14px;}
+}
+@media (forced-colors:active) {
+  .nj-vision-launcher,.nj-vision-mode,.nj-vision-size,.nj-vision-reset,.nj-vision-done,.nj-vision-close {forced-color-adjust:auto;border:2px solid ButtonText;}
+  .nj-vision-mode.is-selected,.nj-vision-size.is-selected {outline:3px solid Highlight;outline-offset:2px;}
+}
