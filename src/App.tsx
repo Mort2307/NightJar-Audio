@@ -69,6 +69,7 @@ import {
   Share2,
 } from 'lucide-react';
 import './components/live-listens.css';
+import './components/writer-marketplace-flow.css';
 import './components/writer-script-artwork.css';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
@@ -561,6 +562,8 @@ function App() {
   const [adminScripts, setAdminScripts] = useState<any[]>([]);
   const [adminScriptDecisionNote, setAdminScriptDecisionNote] = useState<Record<string,string>>({});
   const [adminScriptDecisionBusyId, setAdminScriptDecisionBusyId] = useState<string | null>(null);
+  const [adminScriptReviewPreview, setAdminScriptReviewPreview] = useState<{script:any;sourceFile?:{fileName:string;url:string;expiresAt:string}|null}|null>(null);
+  const [adminScriptPreviewBusyId, setAdminScriptPreviewBusyId] = useState<string|null>(null);
   const [adminEditors, setAdminEditors] = useState<any[]>([]);
   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
   const [imageModeration, setImageModeration] = useState<any[]>([]);
@@ -3274,6 +3277,7 @@ function App() {
 
   const loadAdminEditorial = async () => {
     if (!canAdmin) return;
+    setAdminScriptReviewPreview(null);
     setAdminPanelLoading(true);
     try {
       if (demoMode) {
@@ -3292,6 +3296,21 @@ function App() {
     } finally {
       setAdminPanelLoading(false);
     }
+  };
+
+  const previewAdminScript = async (script:any) => {
+    if (!canAdmin || !script?.id || adminScriptPreviewBusyId) return;
+    if (adminScriptReviewPreview?.script?.id === script.id) {setAdminScriptReviewPreview(null);return;}
+    setAdminScriptPreviewBusyId(script.id);
+    setAdminScriptReviewPreview(null);
+    try {
+      if (demoMode) {
+        setAdminScriptReviewPreview({script:{...script,content:script.content??'Demo manuscript preview. Private source file access requires a live admin account.'},sourceFile:null});
+      } else {
+        setAdminScriptReviewPreview(await nightjarScripts.adminPreviewScript(script.id));
+      }
+    } catch(error){notify(error instanceof Error ? error.message : 'Protected manuscript preview unavailable.');}
+    finally{setAdminScriptPreviewBusyId(null);}
   };
 
   const decideAdminScript = async (script:any, decision:'approved'|'changes'|'rejected') => {
@@ -5386,6 +5405,18 @@ function App() {
     return <article className="admin-data-row nj-manuscript-review-row" key={script.id}>
       <div><strong>{script.title}</strong><span>{script.status??'Draft'} · v{script.version??1}</span><small>{optedIn?'Writer chose Creator Marketplace · synopsis ready':script.marketplace?.visibility==='marketplace'?'Writer chose Marketplace but needs a public synopsis':'Private or invitation only — Writer has not opted in to the marketplace'}</small>{script.lastEditorialComment&&<small>Previous review: {script.lastEditorialComment}</small>}</div>
       {reviewing&&<div className="nj-admin-script-review-actions">
+        <button type="button" className="secondary-button" disabled={adminScriptPreviewBusyId===script.id} onClick={()=>void previewAdminScript(script)}>{adminScriptReviewPreview?.script?.id===script.id?'Close protected manuscript':adminScriptPreviewBusyId===script.id?'Opening manuscript…':'Review protected manuscript'}</button>
+        {adminScriptReviewPreview?.script?.id===script.id&&<section className="nj-admin-script-private-review" aria-label={'Protected review of '+script.title}>
+          <span className="mini-label">ADMIN ONLY · PROTECTED MANUSCRIPT · ACCESS AUDITED</span>
+          <h4>{script.title}</h4>
+          {String(adminScriptReviewPreview.script.content??'').trim()
+            ? <pre>{String(adminScriptReviewPreview.script.content)}</pre>
+            : <p>Manuscript text was not entered into Nightjar; review its original uploaded file below.</p>}
+          {adminScriptReviewPreview.sourceFile?.url
+            ? <a className="secondary-button" href={adminScriptReviewPreview.sourceFile.url} target="_blank" rel="noopener noreferrer">View uploaded {adminScriptReviewPreview.sourceFile.fileName} (10-minute access)</a>
+            : <small>No separate source file was attached.</small>}
+          <p className="nj-admin-script-private-hint">This review is restricted to Nightjar administrators. Do not share the protected source link with creators or listeners.</p>
+        </section>}
         <button type="button" className="primary-button" disabled={adminScriptDecisionBusyId===script.id} onClick={()=>void decideAdminScript(script,'approved')}>{optedIn?'Approve & list for creators':'Approve manuscript'}</button>
         <label>Reason for requested changes or rejection<textarea rows={2} maxLength={2000} value={adminScriptDecisionNote[script.id]??''} onChange={e=>setAdminScriptDecisionNote(current=>({...current,[script.id]:e.target.value}))} placeholder="Provide a clear explanation for the Writer…" /></label>
         <div className="admin-data-actions"><button type="button" className="secondary-button" disabled={adminScriptDecisionBusyId===script.id} onClick={()=>void decideAdminScript(script,'changes')}>Request changes</button><button type="button" className="ghost-button" disabled={adminScriptDecisionBusyId===script.id} onClick={()=>void decideAdminScript(script,'rejected')}>Reject</button></div>

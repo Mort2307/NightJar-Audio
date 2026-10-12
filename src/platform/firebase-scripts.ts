@@ -22,6 +22,7 @@ const editorAccountsCall = httpsCallable<void, { editors: any[] }>(functions, 'l
 const adminScriptsCall = httpsCallable<void, { scripts: any[] }>(functions, 'adminListScripts');
 const assignEditorCall = httpsCallable<{ scriptId: string; editorUserId: string }, { script: any }>(functions, 'adminAssignEditor');
 const adminReviewWriterCall = httpsCallable<{ scriptId: string; decision:'approved'|'changes'|'rejected'; note?:string }, {script:any; marketplaceVisible:boolean}>(functions,'adminReviewWriterScript');
+const adminScriptPreviewCall = httpsCallable<{scriptId:string}, {script:any;sourceFile:{fileName:string;url:string;expiresAt:string}|null}>(functions,'getAdminScriptReview');
 const protectedCatalogueCall = httpsCallable<void, { scripts: any[] }>(functions, 'listProtectedScripts');
 const openProtectedCall = httpsCallable<{ scriptId: string }, any>(functions, 'openProtectedScript');
 const permissionsCall = httpsCallable<{ scriptId: string }, { permissions: any[] }>(functions, 'listScriptPermissions');
@@ -80,6 +81,10 @@ export const nightjarScripts = {
 
   async adminReview(scriptId:string, decision:'approved'|'changes'|'rejected', note = '') {
     return (await adminReviewWriterCall({scriptId,decision,note})).data;
+  },
+
+  async adminPreviewScript(scriptId:string) {
+    return (await adminScriptPreviewCall({scriptId})).data;
   },
 
   async protectedCatalogue() {
