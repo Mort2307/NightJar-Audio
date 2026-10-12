@@ -70,7 +70,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   useEffect(() => {
     // Each screen starts where its heading and instructions can be read.
     // The scrollable modal, not the document behind it, owns touch scrolling.
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
     stepHeadingRef.current?.focus({ preventScroll: true });
   }, [stepIndex]);
 
