@@ -33,11 +33,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Warn if push is not configured for previews
+      - name: Verify Firebase Web Push build configuration
         shell: bash
         run: |
           if [[ ! "$VITE_FIREBASE_VAPID_KEY" =~ ^[A-Za-z0-9_-]{80,110}$ ]]; then
-            echo "::warning::VITE_FIREBASE_VAPID_KEY is missing or invalid. This preview will have web push disabled."
+            echo "::error::VITE_FIREBASE_VAPID_KEY is missing or invalid. Configure the PUBLIC VAPID key in GitHub Actions Variables before merging."
+            exit 1
           fi
 
       - name: Install and validate
