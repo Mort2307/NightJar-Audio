@@ -14,6 +14,7 @@ on:
           - auth-check
           - plan
           - functions:selected
+          - admin-attention
           - functions
           - firestore:rules
           - firestore:indexes
@@ -146,7 +147,7 @@ jobs:
         run: npm ci --no-fund && npm run validate
 
       - name: Install, check and build backend
-        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'all-backend' }}
+        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend' }}
         run: |
           npm --prefix functions ci --no-fund
           npm --prefix functions run check
@@ -175,6 +176,10 @@ jobs:
                 targets+=("functions:$name")
               done
               DEPLOY_SCOPE="$(IFS=,; echo "${targets[*]}")" ;;
+            admin-attention)
+              # Deliberately fixed set of owner-only callables and event listeners.
+              # Never deploy other backend functions from this release preset.
+              DEPLOY_SCOPE="functions:getAdminAttentionPreferences,functions:saveAdminAttentionPreferences,functions:adminAttentionProfessionalApplications,functions:adminAttentionReleases,functions:adminAttentionScripts,functions:adminAttentionImages,functions:adminAttentionReviews,functions:adminAttentionEditorPortfolio,functions:adminAttentionReports,functions:adminAttentionSecurity,functions:adminAttentionSuggestions,functions:adminAttentionBilling" ;;
             all-backend)
               DEPLOY_SCOPE="functions,firestore,storage" ;;
             *)
@@ -189,13 +194,13 @@ jobs:
       # Post-deploy verification is read-only. No webhooks, scheduled jobs,
       # auth callables, email sends, age checks, payments or write APIs are invoked.
       - name: Prepare Google Cloud CLI for function metadata checks
-        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'all-backend') }}
+        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend') }}
         uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: nightjar-audio
 
       - name: Verify live Cloud Functions and safe HTTP endpoints
-        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'all-backend') }}
+        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend') }}
         run: node scripts/firebase-backend-verify.mjs
 
       - name: Write sanitized release report
