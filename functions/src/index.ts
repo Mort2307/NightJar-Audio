@@ -4682,6 +4682,12 @@ const requireAccountRole = async (
   return { ...identity, role: allowedRole as AccountRole, activeRole: activeRole || 'listener', approvedProfessionalRoles, status };
 };
 
+// A creator's distribution claim is distinct from a Nightjar-produced Original.
+// A Nightjar-first premiere may later be distributed elsewhere; exclusive means
+// not available on another platform at the time of publication.
+const cleanReleaseDistribution = (value: unknown): 'standard' | 'nightjar_first' | 'nightjar_exclusive' =>
+  value === 'nightjar_first' || value === 'nightjar_exclusive' ? value : 'standard';
+
 const cleanReleaseTranscript = (value: unknown) =>
   String(value ?? '')
     .replace(/\u0000/g, '')
@@ -4725,6 +4731,7 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   seriesTitle: cleanText(data.seriesTitle, 160) || null,
   episodeNumber: typeof data.episodeNumber === 'number' ? Math.max(0, Math.round(data.episodeNumber)) : null,
   nightjarOriginal: data.nightjarOriginal === true,
+  releaseDistribution: data.releaseDistributionConfirmed === true ? cleanReleaseDistribution(data.releaseDistribution) : 'standard',
   productionNote: cleanText(data.productionNote, 1800) || null,
   transcriptAvailable: Boolean(cleanReleaseTranscript(data.transcriptText)),
   transcriptLanguage: cleanTranscriptLanguage(data.transcriptLanguage),
@@ -4786,6 +4793,8 @@ const scheduleReleaseInput = (atInput: unknown, zoneInput: unknown, localInput: 
 
 const releaseOwnerPayload = (data: Record<string, unknown>, id: string) => ({
   ...releasePayload(data, id),
+  releaseDistribution: cleanReleaseDistribution(data.releaseDistribution),
+  releaseDistributionConfirmed: data.releaseDistributionConfirmed === true,
   rightsConfirmed: data.rightsConfirmed === true,
   contributorPermissionsConfirmed: data.contributorPermissionsConfirmed === true,
   rightsAttestedAt: toIso(data.rightsAttestedAt),
@@ -4850,6 +4859,8 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     seriesTitle: cleanText(input.seriesTitle, 160) || null,
     episodeNumber: cleanEpisodeNumber(input.episodeNumber),
     nightjarOriginal: false,
+    releaseDistribution: cleanReleaseDistribution(input.releaseDistribution),
+    releaseDistributionConfirmed: cleanReleaseDistribution(input.releaseDistribution) !== 'standard' && input.releaseDistributionConfirmed === true,
     productionNote: cleanText(input.productionNote, 1800) || null,
     rightsConfirmed: input.rightsConfirmed === true,
     contributorPermissionsConfirmed: input.contributorPermissionsConfirmed === true,
@@ -4906,6 +4917,9 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     seriesTitle: typeof input.seriesTitle !== 'undefined' ? cleanText(input.seriesTitle, 160) || null : current.seriesTitle ?? null,
     episodeNumber: typeof input.episodeNumber !== 'undefined' ? cleanEpisodeNumber(input.episodeNumber) : cleanEpisodeNumber(current.episodeNumber),
     productionNote: typeof input.productionNote !== 'undefined' ? cleanText(input.productionNote, 1800) || null : current.productionNote ?? null,
+    releaseDistribution: typeof input.releaseDistribution !== 'undefined' ? cleanReleaseDistribution(input.releaseDistribution) : cleanReleaseDistribution(current.releaseDistribution),
+    releaseDistributionConfirmed: (typeof input.releaseDistribution !== 'undefined' ? cleanReleaseDistribution(input.releaseDistribution) : cleanReleaseDistribution(current.releaseDistribution)) !== 'standard'
+      && (typeof input.releaseDistributionConfirmed !== 'undefined' ? input.releaseDistributionConfirmed === true : current.releaseDistributionConfirmed === true),
     rightsConfirmed: typeof input.rightsConfirmed !== 'undefined' ? input.rightsConfirmed === true : current.rightsConfirmed === true,
     contributorPermissionsConfirmed: typeof input.contributorPermissionsConfirmed !== 'undefined' ? input.contributorPermissionsConfirmed === true : current.contributorPermissionsConfirmed === true,
     rightsAttestedAt: input.rightsConfirmed === true && input.contributorPermissionsConfirmed === true
@@ -5109,6 +5123,9 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
       'Confirm that you control the rights needed to publish this release and have permission from every relevant performer, writer, artist or other contributor.',
       { code:'content_rights_attestation_required' },
     );
+  }
+  if (cleanReleaseDistribution(data.releaseDistribution) !== 'standard' && data.releaseDistributionConfirmed !== true) {
+    throw new HttpsError('failed-precondition', 'Confirm the first-release or exclusivity statement, or select Standard release.', { code:'release_distribution_unconfirmed' });
   }
   // A transcript is encouraged, not a publishing prerequisite. When one is
   // supplied, require its creator to verify that it matches the finished audio.
