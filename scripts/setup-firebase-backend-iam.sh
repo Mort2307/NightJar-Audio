@@ -64,7 +64,7 @@ if gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
   fi
   ACTUAL_MAP="$(gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
     --workload-identity-pool="$POOL_ID" --location=global --project="$PROJECT_ID" \
-    --format='value(attributeMapping.attribute.repository_id)')"
+    --format=json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("attributeMapping", {}).get("attribute.repository_id", ""))')"
   if [[ "$ACTUAL_MAP" != "assertion.repository_id" ]]; then
     echo "STOP: Existing provider does not map immutable repository_id; review manually." >&2
     exit 1
