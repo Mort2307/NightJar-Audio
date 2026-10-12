@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Check, Sparkles, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
@@ -13,7 +13,7 @@ type Props = {
   initialProfile?: any;
   role: 'listener' | 'creator' | 'writer' | 'admin' | 'editor' | 'artist' | null;
   onComplete: (profile: any) => void;
-  onSkip: () => void;
+  onSkip: (draft: any, stepIndex: number) => Promise<void>;
   notify: (message: string) => void;
 };
 
@@ -41,21 +41,31 @@ const steps: { id: Step; label: string; title: string; description: string }[] =
 ];
 
 export default function NightjarOnboarding({ initialProfile, role, onComplete, onSkip, notify }: Props) {
-  const [stepIndex, setStepIndex] = useState(0);
+  const savedDraft = initialProfile?.onboardingDraft && typeof initialProfile.onboardingDraft === 'object'
+    ? initialProfile.onboardingDraft : null;
+  const [stepIndex, setStepIndex] = useState(() =>
+    Number.isInteger(savedDraft?.stepIndex) ? Math.max(0,Math.min(2,savedDraft.stepIndex)) : 0);
+  const cardRef = useRef<HTMLElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
   const [profile, setProfile] = useState<any>({
-    displayName: initialProfile?.displayName || '',
-    handle: initialProfile?.handle || '',
-    pronouns: initialProfile?.pronouns || '',
-    headline: initialProfile?.headline || '',
-    bio: initialProfile?.bio || '',
-    welcomeMessage: initialProfile?.welcomeMessage || '',
-    favouriteTags: initialProfile?.favouriteTags || [],
-    favouriteTropes: initialProfile?.favouriteTropes || [],
-    favouriteCategories: initialProfile?.favouriteCategories || [],
-    publicProfile: initialProfile?.publicProfile !== false,
+    displayName: savedDraft?.displayName ?? initialProfile?.displayName ?? '',
+    handle: savedDraft?.handle ?? initialProfile?.handle ?? '',
+    pronouns: savedDraft?.pronouns ?? initialProfile?.pronouns ?? '',
+    headline: savedDraft?.headline ?? initialProfile?.headline ?? '',
+    bio: savedDraft?.bio ?? initialProfile?.bio ?? '',
+    welcomeMessage: savedDraft?.welcomeMessage ?? initialProfile?.welcomeMessage ?? '',
+    favouriteTags: savedDraft?.favouriteTags ?? initialProfile?.favouriteTags ?? [],
+    favouriteTropes: savedDraft?.favouriteTropes ?? initialProfile?.favouriteTropes ?? [],
+    favouriteCategories: savedDraft?.favouriteCategories ?? initialProfile?.favouriteCategories ?? [],
+    publicProfile: savedDraft?.publicProfile ?? (initialProfile?.publicProfile !== false),
   });
+
+  // On step changes reset the INNER modal's scroll position, never the
+  // background page. The modal remains a touch-scrollable container on mobile.
+  useEffect(() => {
+    cardRef.current?.scrollTo({top:0,behavior:'instant'});
+  },[stepIndex]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +111,18 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Nightjar could not save your profile yet.';
       notify(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const finishLater = async () => {
+    if(saving) return;
+    setSaving(true);
+    try {
+      await onSkip(profile,stepIndex);
+    } catch(error) {
+      notify(error instanceof Error ? error.message : 'Could not pause your profile setup.');
     } finally {
       setSaving(false);
     }
@@ -152,7 +174,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   };
 
   return <div className="onboarding-backdrop premium-onboarding-backdrop" role="dialog" aria-modal="true" aria-labelledby="nightjar-onboarding-title">
-    <section className="onboarding-card premium-onboarding-card">
+    <section ref={cardRef} className="onboarding-card premium-onboarding-card" aria-describedby="nightjar-onboarding-scroll-hint">
       <div className="premium-onboarding-aura" aria-hidden="true"/>
       <header>
         <div>
@@ -161,9 +183,10 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
           <h2 id="nightjar-onboarding-title">You belong here.</h2>
           <p>Nightjar profiles are designed to feel considered and personal — not like a username attached to a database row.</p>
         </div>
-        <button className="icon-button" onClick={onSkip} aria-label="Close profile creation"><X size={18}/></button>
+        <button type="button" className="icon-button" disabled={saving} onClick={()=>void finishLater()} aria-label="Save progress and finish setup later"><X size={18}/></button>
       </header>
 
+      <p id="nightjar-onboarding-scroll-hint" className="nj-onboarding-mobile-hint">Scroll inside this form to see all fields. Your progress can be saved and finished later from My Profile.</p>
       <div className="premium-onboarding-stagebar">
         {steps.map((item,index)=><div className={index===stepIndex?'active':index<stepIndex?'complete':''} key={item.id}><span>{index<stepIndex?<Check size={11}/>:index+1}</span><small>{item.label}</small></div>)}
       </div>
@@ -182,7 +205,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
           {stepIndex < steps.length - 1
             ? <button className="primary-button" onClick={()=>setStepIndex((index)=>index+1)}>Continue <ArrowRight size={14}/></button>
             : <button className="primary-button" disabled={saving} onClick={()=>void finish()}><Check size={14}/>{saving?'Creating profile…':'Create my Nightjar profile'}</button>}
-          <button className="ghost-button" disabled={saving} onClick={onSkip}>Finish later</button>
+          <button type="button" className="ghost-button" disabled={saving} onClick={()=>void finishLater()}>Save &amp; finish later</button>
         </div>
       </div>
     </section>
