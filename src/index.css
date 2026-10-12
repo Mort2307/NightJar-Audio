@@ -5696,6 +5696,32 @@ select:disabled {
 }
 
 
+/* Profile onboarding is optional once a member has Listener access.
+   Keep resume discoverable without reopening an unscrollable modal on login. */
+.nj-onboarding-resume-prompt {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin:16px 0;
+  padding:18px 20px;
+  border:1px solid rgba(214,183,208,.22);
+  border-radius:16px;
+}
+.nj-onboarding-resume-prompt > div {flex:1;min-width:min(220px,100%);}
+.nj-onboarding-resume-prompt h2 {font:normal clamp(18px,3vw,24px) Georgia,serif;margin:9px 0;}
+.nj-onboarding-resume-prompt p {font-size:13px;line-height:1.6;color:var(--muted);margin:0;}
+.nj-onboarding-resume-prompt button {min-height:46px;}
+/* Allow long account-creation forms to scroll on smaller mobile screens.
+   Clipping decorative glows must not clip the member's registration controls. */
+@media (max-width:760px) {
+  .access-shell {overflow-x:clip;overflow-y:visible;min-height:100dvh;align-content:start;}
+  .nj-onboarding-resume-prompt button {width:100%;justify-content:center;}
+  .premium-onboarding-fields label {font-size:12px;}
+  .premium-onboarding-fields input,.premium-onboarding-fields textarea {font-size:16px;}
+}
+
 /* Premium directory cards */
 .premium-directory-card {
   position:relative;
