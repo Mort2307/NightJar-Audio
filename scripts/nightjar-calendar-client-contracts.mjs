@@ -15,6 +15,7 @@ assert.match(creator,/scheduledLocal/,'creator schedules using local date and ti
 assert.match(creator,/submittedOrPublished/,'submitted and scheduled releases remain locked');
 assert.match(moderation,/reviewNote\.trim\(\)/,'moderation includes written reasons');
 assert.match(moderation,/formattedScheduled/,'moderation shows scheduling details');
-assert.match(calendar,/getMyCalendar/,'calendar loads owner events');
+assert.match(calendar,/nightjarCalendar\.get\(\)/,'calendar loads owner events through authenticated API');
+assert.match(api,/getMyCalendar/,'calendar API maps to owner-scoped backend callable');
 assert.match(api,/httpsCallable/,'calendar uses authenticated callables');
 console.log('Nightjar scheduled audio and calendar client integration contracts passed.');
