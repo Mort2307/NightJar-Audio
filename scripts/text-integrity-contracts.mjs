@@ -14,7 +14,7 @@ const runPureModule = (file) => {
   return module.exports;
 };
 
-const { repairMojibakeText, repairMojibakeDisplayData } =
+const { repairMojibakeText, repairMojibakeDisplayData, restoreTranscriptApostrophes } =
   runPureModule('src/platform/text-integrity.ts');
 const { parseListingTags } = runPureModule('src/platform/listing-tags.ts');
 
@@ -58,6 +58,37 @@ assert.equal(repaired.profile.portfolioUrl, original.profile.portfolioUrl, 'URLs
 assert.equal(repaired.profile.body, original.profile.body, 'author text is not rewritten automatically');
 assert.equal(repaired.profile.content, original.profile.content, 'scripts are not rewritten');
 assert.equal(repaired.profile.about, original.profile.about, 'unrecognised fields are not mutated');
+
+// Production regression: a reviewed audio transcript displayed literal HTML
+// entities such as `you&#39;re` instead of the author's apostrophe.
+for (const [original, expected] of [
+  ['you&#39;re here', "you're here"],
+  ['It&#x27;s alright', "It's alright"],
+  ['we&apos;re safe', "we're safe"],
+  ['It&#8217;s late', 'It’s late'],
+  ['you&lsquo;re here', 'you‘re here'],
+]) {
+  assert.equal(restoreTranscriptApostrophes(original), expected, 'restore transcript punctuation: ' + original);
+}
+const escapedTranscript = {
+  releases: [{
+    id: 'release-1',
+    transcriptText: 'I wasn&#39;t sure, but you&#39;re here. <b>Keep as text</b> &lt;private&gt;',
+    description: 'Creator notes &#39; may intentionally be encoded',
+  }],
+  transcript: 'You&#39;ve heard the recording.',
+  body: 'Messages deliberately containing &#39; remain unchanged',
+  scriptText: 'Protected script &#39; remains unchanged',
+  url: 'https://example.com/&#39;',
+};
+const cleanedTranscript = repairMojibakeDisplayData(escapedTranscript);
+assert.equal(cleanedTranscript.releases[0].transcriptText, "I wasn't sure, but you're here. <b>Keep as text</b> &lt;private&gt;");
+assert.equal(cleanedTranscript.transcript, "You've heard the recording.");
+assert.equal(cleanedTranscript.releases[0].description, escapedTranscript.releases[0].description);
+assert.equal(cleanedTranscript.body, escapedTranscript.body);
+assert.equal(cleanedTranscript.scriptText, escapedTranscript.scriptText);
+assert.equal(cleanedTranscript.url, escapedTranscript.url);
+assert.equal(escapedTranscript.releases[0].transcriptText.includes('&#39;'), true, 'raw record must not change');
 
 assert.deepEqual(
   parseListingTags('Dark Romance, Enemies to Lovers, Second Chance Romance', 16),
