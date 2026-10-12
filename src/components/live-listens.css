@@ -1,0 +1,4 @@
+/* A compact factual metric, deliberately quieter than the Play control. */
+.track-verified-listens { display:inline-flex; align-items:center; gap:.35rem; margin:.25rem 0 .5rem; color:var(--muted,#aea6ad); font-size:.76rem; font-variant-numeric:tabular-nums; }
+.track-verified-listens svg { flex:0 0 auto; }
+.player-meta > span:has(svg) { display:inline-flex; align-items:center; gap:.3rem; }
