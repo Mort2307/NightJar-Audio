@@ -21,6 +21,9 @@ test('test push targets one short-ID device belonging to the authenticated accou
   assert.match(sender, /\^\[0-9a-f\]\{16\}\$/);
   assert.match(sender, /deliverPushNotification\(identity\.uid, payload, displayMode, ref\.id, targetDeviceId \|\| undefined\)/);
   assert.match(frontend, /testCall\(\{ deviceId \}\)/);
+  assert.match(backend, /targetedTestsSupported: true/);
+  assert.match(frontend, /capabilities\.data\.targetedTestsSupported !== true/);
+  assert.match(preferences, /!pushStatus\?\.targetedTestsSupported/);
   assert.match(frontend, /savedDevice\(\)/);
   assert.match(preferences, /Test this device only/);
 });
