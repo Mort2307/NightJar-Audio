@@ -3,6 +3,7 @@ import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory } from '../demo/nightjarDemo';
 import { FileText, Handshake, Heart, Search, Share2, ShieldCheck, X } from 'lucide-react';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
+import CollaborationHistoryButton from './CollaborationHistoryButton';
 
 type Writer = {
   userId: string;
@@ -172,7 +173,7 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
             <div><span>Following</span><strong>{selected.followingCount ?? 0}</strong></div>
             <div><span>Published scripts</span><strong>{selected.publishedWorkCount ?? 0}</strong></div>
             <div><span>Release credits</span><strong>{selected.creditedReleaseCount ?? 0}</strong></div>
-            <div><span>Collaborations</span><strong>{selected.completedCollaborations ?? 0}</strong></div>
+            <div><span>Collaborations</span><CollaborationHistoryButton userId={selected.userId} displayName={selected.name} count={selected.completedCollaborations ?? 0} demoMode={demoMode} compact /></div>
           </div>
           {!!selected.activityBadges?.length && <div className="profile-activity-badges public-profile-badges">{selected.activityBadges.map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}</div>}
           {!!selected.roleFocus?.length && <div className="creator-profile-tags">{selected.roleFocus.map((item) => <span key={item}>{item}</span>)}</div>}
@@ -188,7 +189,7 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
           </section>
           {(selected.portfolioNote || (selected.completedCollaborations ?? 0) > 0) && <section className="public-showcase-intro">
             {selected.portfolioNote && <p>{selected.portfolioNote}</p>}
-            {(selected.completedCollaborations ?? 0) > 0 && <span><Handshake size={14}/>{selected.completedCollaborations} completed Nightjar collaboration{selected.completedCollaborations === 1 ? '' : 's'}</span>}
+            {(selected.completedCollaborations ?? 0) > 0 && <CollaborationHistoryButton userId={selected.userId} displayName={selected.name} count={selected.completedCollaborations ?? 0} demoMode={demoMode} />}
           </section>}
           <div className="writer-public-note"><FileText size={16}/><div><strong>Public writing identity, protected manuscripts.</strong><p>Nightjar shows public profile metadata and credits without exposing private manuscript text, collaboration permissions, protected drafts or private deal terms.</p></div></div>
           <div className="creator-profile-releases">
