@@ -3,7 +3,7 @@ import { Ban, BellRing, Check, CheckCheck, CircleCheckBig, Clock3, Flag, Handsha
 import { nightjarMessaging } from '../platform/firebase-messaging';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 
-type Role='creator'|'writer'|'editor'|'artist';
+type Role='creator'|'writer'|'editor'|'artist'|'admin';
 
 type Props={
   role:Role;
@@ -21,7 +21,7 @@ type Props={
 
 type MessageTargetEvent=CustomEvent<{userId?:string;collaborationId?:string|null}>;
 
-const roleLabel=(role:string)=>role==='editor'?'Audio Editor':role==='writer'?'Writer':role==='artist'?'Artist':'VA Creator';
+const roleLabel=(role:string)=>role==='admin'?'Nightjar Admin':role==='editor'?'Audio Editor':role==='writer'?'Writer':role==='artist'?'Artist':'VA Creator';
 
 export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialConversationId,initialCollaborationId,onRecipientHandled,onUnreadChange,onStatusChange,notify,demoMode=false,simulationMode=false}:Props){
   const [conversations,setConversations]=useState<any[]>([]);

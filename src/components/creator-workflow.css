@@ -170,3 +170,34 @@
  .nj-submission-confirmation > button, .nj-work-removal > button, .nj-admin-recording-removal > button { width: 100%; justify-content: center; }
  .nj-submission-confirmation h3 { font-size: 1.65rem; }
 }
+
+/* A creator's planned release time is distinct from the moderation submission time. */
+.nj-release-schedule-panel,.nj-review-schedule-summary,.nj-admin-release-plan,.nj-admin-creator-contact {
+  display:grid;gap:10px;border:1px solid rgba(210,175,201,.22);border-radius:14px;
+  padding:16px;margin:18px 0;background:rgba(164,115,157,.065);
+}
+.nj-release-schedule-panel > div:first-child {display:grid;gap:4px;}
+.nj-release-schedule-panel strong,.nj-review-schedule-summary strong,.nj-admin-release-plan strong {font-size:14px;color:#f3e1ed;}
+.nj-release-schedule-panel small,.nj-review-schedule-summary small,.nj-admin-release-plan small {font-size:12px;color:#bbaebc;line-height:1.5;}
+.nj-release-schedule-panel > label {display:flex;align-items:center;gap:12px;font-size:13px;cursor:pointer;min-height:39px;}
+.nj-release-schedule-panel input[type=radio] {width:17px;height:17px;accent-color:#d8a5cb;flex-shrink:0;}
+.nj-scheduled-input {display:grid;gap:8px;padding:12px;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:10px;}
+.nj-scheduled-input label {font-size:12px;}
+.nj-scheduled-input input {color:#f1e4ec;background:#211923;min-height:46px;box-sizing:border-box;width:100%;border:1px solid var(--line,rgba(255,255,255,.15));border-radius:10px;padding:10px;font:inherit;color-scheme:dark;}
+.nj-review-schedule-summary span,.nj-admin-release-plan span {font-size:14px;color:#e2c7d8;}
+.nj-admin-creator-contact > p {font-size:13px;line-height:1.6;margin:0;color:var(--muted);}
+.nj-admin-creator-contact > button {justify-self:start;}
+@media(max-width:760px){.nj-admin-creator-contact>button{width:100%;justify-self:stretch;justify-content:center;}.nj-release-schedule-panel {padding:12px;}}
+
+.nj-admin-decision{display:grid;gap:13px;margin-top:16px;}
+.nj-admin-decision-editor{border:1px solid rgba(210,162,193,.3);border-radius:16px;background:linear-gradient(120deg,rgba(82,52,73,.28),rgba(24,20,29,.96));padding:18px;display:grid;gap:12px;}
+.nj-admin-decision-editor h4{font:normal 22px Georgia,serif;color:#f3e6ef;margin:0;}
+.nj-admin-decision-editor p{font-size:13px;color:#d0bfcf;line-height:1.6;margin:0;}
+.nj-admin-decision-editor label{display:grid;gap:7px;color:#e5d1e0;font-size:12px;}
+.nj-admin-decision-editor textarea{background:#1a151d;color:#f2e6f0;border:1px solid rgba(236,208,224,.22);border-radius:12px;padding:12px;box-sizing:border-box;width:100%;min-height:110px;font:inherit;resize:vertical;}
+.nj-admin-decision-editor > div:last-child{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+.nj-admin-decision-editor > div:last-child button{min-height:44px;}
+@media(max-width:700px){.nj-admin-decision-editor > div:last-child button{width:100%;justify-content:center;}}
+
+.nj-submission-confirmation .nj-creator-scheduled-confirmation,.nj-submission-confirmation .nj-creator-moderation-feedback{flex-basis:100%;font-size:13px;line-height:1.55;color:#ead6e4;}
+.nj-creator-moderation-feedback{border-top:1px solid var(--line,rgba(255,255,255,.12));padding-top:10px;white-space:pre-wrap;}
