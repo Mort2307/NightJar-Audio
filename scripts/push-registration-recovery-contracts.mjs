@@ -6,7 +6,7 @@ const push = fs.readFileSync('src/platform/firebase-push.ts', 'utf8');
 const preferences = fs.readFileSync('src/components/NotificationPreferences.tsx', 'utf8');
 const backend = fs.readFileSync('functions/src/index.ts', 'utf8');
 
-const status = push.slice(push.indexOf('  async status() {'), push.indexOf('  async test() {'));
+const status = push.slice(push.indexOf('  async status() {'), push.indexOf('  async repair() {'));
 assert.match(status, /statusCall\(\)/, 'passive push status reads backend registration');
 assert.doesNotMatch(status, /getToken\s*\(/, 'passive push status must never trigger FCM registration');
 assert.doesNotMatch(status, /registerCall\s*\(/, 'status should not change device registration');
@@ -38,5 +38,16 @@ assert.doesNotMatch(push.slice(push.indexOf('const pushSetupDiagnostics ='),push
 assert.match(preferences,/Diagnose notification setup/,'a useful diagnostic action is visible beside Enable');
 assert.match(preferences,/setPushError\(message\)/,'FCM enable error is retained for the user');
 assert.match(preferences,/nj-push-diagnostics/,'setup guidance is visible on screen');
+
+assert.match(status, /thisDeviceError: deviceId/, 'last FCM delivery error for current device must be surfaced');
+assert.match(preferences, /'messaging\/mismatched-credential'/, 'sender ID mismatch must be explained to the device owner');
+assert.match(preferences, /Repair this device/, 'affected owner has an explicit repair action');
+assert.match(preferences, /senderMismatch \|\| !pushStatus\?\.thisDeviceRegistered/, 'repeated test requests blocked until sender mismatch is repaired');
+const repair = push.slice(push.indexOf('  async repair() {'), push.indexOf('  async test() {'));
+assert.ok(repair.indexOf('await statusCall()') < repair.indexOf('await unregisterCall({ deviceId })'), 'repair must verify mismatch before revoking registration');
+assert.ok(repair.indexOf('await unregisterCall({ deviceId })') < repair.indexOf('await deleteToken(getMessaging(firebaseApp))'), 'repair must revoke current account device before deleting cached FCM token');
+assert.ok(repair.indexOf('await deleteToken(getMessaging(firebaseApp))') < repair.indexOf('return this.enable()'), 'repair must clear cached token before explicit re-enrolment');
+assert.doesNotMatch(status, /deleteToken|requestPermission|unregisterCall|registerCall|getToken/, 'passive status must not mutate device registration');
+
 
 console.log('Nightjar explicit opt-in FCM, 401 recovery and per-device revocation contracts passed.');

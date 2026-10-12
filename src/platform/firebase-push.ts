@@ -156,7 +156,12 @@ export const nightjarPush = {
       throw new Error('The Web Push public key is invalid. Update VITE_FIREBASE_VAPID_KEY and redeploy Nightjar Hosting.');
     }
     if (!(await this.supported())) throw new Error('Push notifications are not supported by this browser.');
-    const permission = await Notification.requestPermission();
+    // Repair performs a read and local token deletion before re-registration.
+    // Reuse an existing grant rather than showing a second browser permission
+    // prompt after the original click activation may have expired.
+    const permission = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
     if (permission !== 'granted') throw new Error(permission === 'denied'
       ? 'Push notifications are blocked in this browser or device settings.'
       : 'Push notification permission was not granted.');
@@ -211,10 +216,38 @@ export const nightjarPush = {
       activeDeviceCount: backend.data.activeDeviceCount,
       targetedTestsSupported: backend.data.targetedTestsSupported === true,
       thisDeviceRegistered,
-      thisDeviceError: null,
+      // This device can be registered yet undeliverable. Surface the server's
+      // last FCM error instead of claiming that permission === delivery.
+      thisDeviceError: deviceId
+        ? backend.data.devices.find(device => device.id === deviceId)?.lastError ?? null
+        : null,
       devices: backend.data.devices,
       standalone: standalone(),
     };
+  },
+
+  async repair() {
+    // Explicit user action only. Never reset FCM from passive status reads,
+    // diagnostics, application startup or sign-in.
+    const deviceId = savedDevice();
+    if (!deviceId || !/^[0-9a-f]{16}$/.test(deviceId)) {
+      throw new Error('No registered Nightjar device was found to repair. Use Enable on this device.');
+    }
+    const status = await statusCall();
+    const current = status.data.devices.find(device => device.id === deviceId);
+    if (current?.lastError !== 'messaging/mismatched-credential') {
+      throw new Error('This device does not have a confirmed sender mismatch. Refresh its status before attempting repair.');
+    }
+    // Revoke ONLY this account's local device registration. If token deletion
+    // fails, do not silently reuse the cached token that FCM rejected.
+    await unregisterCall({ deviceId });
+    rememberDevice(null);
+    try {
+      await deleteToken(getMessaging(firebaseApp));
+    } catch {
+      throw new Error('Nightjar revoked the old device registration, but could not clear its cached Firebase push token. Close and reopen the installed app before enabling push again.');
+    }
+    return this.enable();
   },
 
   async test() {

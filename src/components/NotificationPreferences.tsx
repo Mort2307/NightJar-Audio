@@ -85,13 +85,32 @@ export default function NotificationPreferences({ notify, simulationMode = false
     } finally { setPushBusy(false); }
   };
 
+  const repairPush = async () => {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      if (simulationMode) notify('Simulation: Firebase push registration was refreshed for this device.');
+      else {
+        await nightjarPush.repair();
+        notify('Nightjar requested a new Firebase push registration for this device. Send a test to verify delivery.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to repair push on this device.';
+      setPushError(message);
+      notify('Notification repair needs attention. See the message below.');
+    } finally {
+      await refreshPush();
+      setPushBusy(false);
+    }
+  };
+
   const testPush = async () => {
     setPushBusy(true);
     try {
       if (simulationMode) notify('Simulation: test push sent.');
       else {
         const result = await nightjarPush.test();
-        notify(result.sent ? 'Firebase accepted a test push for THIS device. Check its notifications to confirm it appeared.' : 'The test push was not accepted. Check this device’s delivery status below.');
+        notify(result.sent ? 'Firebase accepted a test push for THIS device. Check its notifications to confirm it appeared.' : 'Firebase did not accept this test. Refresh status to see the delivery error and repair this device if prompted.');
       }
       await refreshPush();
     } catch (error) {
@@ -117,6 +136,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
   };
 
   const toggle = (key: string) => setPreferences((value: any) => ({ ...value, [key]: !value[key] }));
+  const senderMismatch = pushStatus?.thisDeviceError === 'messaging/mismatched-credential';
 
   return <section className="research-panel notification-preferences">
     <div className="research-panel-head"><div><span className="mini-label">NOTIFICATION PRIVACY</span><h2>Choose how discreet Nightjar should be.</h2><p>Control notification wording and which updates you want to receive.</p></div><Bell size={21}/></div>
@@ -145,23 +165,27 @@ export default function NotificationPreferences({ notify, simulationMode = false
               : !pushStatus.configured ? 'Firebase Web Push still needs its VAPID public key configured.'
               : !pushStatus.supported ? 'This browser does not support Nightjar web push.'
               : pushStatus.browserPermission === 'denied' ? 'Notifications are blocked in this browser or device settings.'
-              : pushStatus.thisDeviceError ? 'This phone could not check its Firebase push token: ' + pushStatus.thisDeviceError
+              : senderMismatch ? 'Firebase rejected this device’s push token. Select Repair this device to replace its registration.'
+              : pushStatus.thisDeviceError ? 'Firebase reported a push delivery error: ' + pushStatus.thisDeviceError
               : pushStatus.thisDeviceRegistered ? 'Push is enabled on THIS device. ' + pushStatus.activeDeviceCount + ' total registered device(s).'
               : pushStatus.activeDeviceCount > 0 ? 'Other devices are registered, but THIS phone is not. Enable it here.'
               : 'This device is not registered for Nightjar push yet.'}
           </span>
         </div>
-        <span className={pushStatus?.thisDeviceRegistered ? 'status-pill' : 'status-pill muted'}>
-          {pushStatus?.thisDeviceRegistered ? 'THIS PHONE ON' : 'THIS PHONE OFF'}
+        <span className={senderMismatch ? 'status-pill warning' : pushStatus?.thisDeviceRegistered ? 'status-pill' : 'status-pill muted'}>
+          {senderMismatch ? 'REPAIR NEEDED' : pushStatus?.thisDeviceRegistered ? 'THIS PHONE ON' : 'THIS PHONE OFF'}
         </span>
       </div>
       <div className="push-device-actions">
         <button className="secondary-button" disabled={pushBusy || !pushStatus?.configured || !pushStatus?.supported} onClick={() => void enablePush()}>
           <Bell size={14}/> Enable on this device
         </button>
-        <button className="secondary-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered || !pushStatus?.targetedTestsSupported} onClick={() => void testPush()}>
+        <button className="secondary-button" disabled={pushBusy || senderMismatch || !pushStatus?.thisDeviceRegistered || !pushStatus?.targetedTestsSupported} onClick={() => void testPush()}>
           <Send size={14}/> Test this device only
         </button>
+        {senderMismatch && <button className="primary-button" disabled={pushBusy} onClick={() => void repairPush()}>
+          <RefreshCw size={14}/> {pushBusy ? 'Repairing…' : 'Repair this device'}
+        </button>}
         <button className="ghost-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered} onClick={() => void disablePush()}>
           Disable this device
         </button>
@@ -173,6 +197,10 @@ export default function NotificationPreferences({ notify, simulationMode = false
         </button>
       </div>
       {pushStatus?.thisDeviceRegistered && !pushStatus?.targetedTestsSupported && <p className="access-fine" role="status">A safe single-device test needs the latest Nightjar notification service. Push remains enabled; test sending will unlock after the backend update.</p>}
+      {senderMismatch && <div className="nj-push-diagnostic-error" role="status">
+        <strong>Firebase sender mismatch</strong>
+        <p>The device has notification permission, but its current Firebase token cannot receive Nightjar messages. Repair revokes only this device’s old token, requests a new one, and then you can retest. If the mismatch continues, the Firebase sender/project or Web Push configuration must be investigated; repeatedly tapping Test will not fix it.</p>
+      </div>}
       {pushError && <div className="nj-push-diagnostic-error" role="alert"><strong>Notification registration needs attention</strong><p>{pushError}</p><small>Push is optional; Nightjar and your in-app notifications remain available.</small></div>}
       {diagnostics && <section className="nj-push-diagnostics" aria-label="Nightjar push configuration diagnostics">
         <strong>Device and Firebase checks</strong>
