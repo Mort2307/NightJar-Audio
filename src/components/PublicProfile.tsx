@@ -148,7 +148,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       try {
         const recommendation = await nightjarReferrals.recommendCreator(userId);
         if (typeof recommendation.path === 'string' && recommendation.path.startsWith('/') && !recommendation.path.startsWith('//')) {
-          url = window.location.origin + recommendation.path + '&role=creator';
+          url = window.location.origin + recommendation.path + (recommendation.path.includes('?') ? '&' : '?') + 'role=creator';
         }
       } catch {
         // Keep the public role-specific URL available if referral tracking fails.
