@@ -40,8 +40,8 @@ jobs:
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          node scripts/firebase-backend-plan.mjs --base "$PR_BASE_SHA" \\
-            --output "$RUNNER_TEMP/nightjar-backend-plan.json" \\
+          node scripts/firebase-backend-plan.mjs --base "$PR_BASE_SHA" \
+            --output "$RUNNER_TEMP/nightjar-backend-plan.json" \
             --summary "$GITHUB_STEP_SUMMARY"
       - name: Test planner and report contracts
         run: node --test scripts/firebase-backend-tools.test.mjs
