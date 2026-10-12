@@ -26,8 +26,7 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Build Firebase frontend
-        run: npm run build:firebase
+      # build:firebase is an alias of build; do not compile the same frontend twice.
 
       - name: Install Functions dependencies
         working-directory: functions
