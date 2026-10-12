@@ -7975,10 +7975,11 @@ export const adminPreviewScriptMarketplace = onCall({ region: REGION }, async (r
     const data = doc.data() ?? {};
     const listing = normaliseScriptMarketplace(data.marketplace);
     const status = cleanText(data.status, 50) || 'Draft';
-    const visible = listing.visibility === 'marketplace' && ['Approved','Published'].includes(status);
+    const visible = listing.visibility === 'marketplace' && Boolean(listing.synopsis.trim()) && ['Approved','Published'].includes(status);
     const reasons = [
       ...(!['Approved','Published'].includes(status) ? ['Not approved or published'] : []),
       ...(listing.visibility !== 'marketplace' ? ['Not listed in the marketplace'] : []),
+      ...(listing.visibility === 'marketplace' && !listing.synopsis.trim() ? ['Public synopsis is missing'] : []),
     ];
     return {
       id: doc.id,
@@ -7993,7 +7994,7 @@ export const adminPreviewScriptMarketplace = onCall({ region: REGION }, async (r
     diagnostics,
     eligible: diagnostics.filter((entry) => entry.visibleToProfessionals).length,
     total: diagnostics.length,
-    rule: 'Approved or Published AND marketplace visibility. No protected script text is included.',
+    rule: 'Approved or Published AND Writer-selected marketplace visibility AND public synopsis. No protected script text is included.',
   };
 });
 
@@ -8004,7 +8005,7 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
   const scripts = (await Promise.all(snapshot.docs
     .filter((doc) => {
       const listing = normaliseScriptMarketplace(doc.data().marketplace);
-      return listing.visibility === 'marketplace' && ['Approved','Published'].includes(String(doc.data().status ?? ''));
+      return listing.visibility === 'marketplace' && Boolean(listing.synopsis.trim()) && ['Approved','Published'].includes(String(doc.data().status ?? ''));
     })
     .map(async (doc) => {
       const data = doc.data();

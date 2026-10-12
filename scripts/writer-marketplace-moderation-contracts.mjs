@@ -15,5 +15,6 @@ assert.match(preview,/script_moderation_preview/);
 assert.match(preview,/10\*60\*1000/);
 assert.match(preview,/scriptPayload\(data,scriptId,true\)/);
 assert.match(src,/export const listScriptMarketplace =/);
-assert.match(src,/listing\.visibility === 'marketplace' && \['Approved','Published'\]/);
+assert.match(src,/listing\.visibility === 'marketplace' && Boolean\(listing\.synopsis\.trim\(\)\) && \['Approved','Published'\]/);
+assert.match(src,/Public synopsis is missing/);
 console.log('Writer marketplace independent-admin approval backend contracts PASS');
