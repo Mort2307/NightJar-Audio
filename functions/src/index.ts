@@ -4956,15 +4956,20 @@ const deliverPushNotification = async (
   payload: Record<string, unknown>,
   displayMode: string,
   notificationId: string,
+  targetDeviceId?: string,
 ) => {
-  const devices = await accountRef(userId).collection('pushDevices').where('active', '==', true).limit(20).get();
-  if (devices.empty) return { attempted: 0, sent: 0, failed: 0 };
+  const devices = await accountRef(userId).collection('pushDevices').where('active', '==', true).limit(100).get();
+  // Normal notifications go to every active device. An explicit test can only
+  // target a short-id token already registered to the authenticated account.
+  const targetDocs = targetDeviceId
+    ? devices.docs.filter((doc) => doc.id.slice(0, 16) === targetDeviceId)
+    : devices.docs.slice(0, 20);
+  if (!targetDocs.length) return { attempted: 0, sent: 0, failed: 0 };
 
   const title = cleanText(payload.title, 120) || 'Nightjar update';
   const message = cleanText(payload.message, 240) || 'Open Nightjar to view this update.';
-  const tokens = devices.docs
-    .map((doc) => cleanText(doc.data()?.token, 4096))
-    .filter(Boolean);
+  const tokenDocs = targetDocs.filter((doc) => Boolean(cleanText(doc.data()?.token, 4096)));
+  const tokens = tokenDocs.map((doc) => cleanText(doc.data()?.token, 4096));
 
   if (!tokens.length) return { attempted: 0, sent: 0, failed: 0 };
 
@@ -4991,7 +4996,7 @@ const deliverPushNotification = async (
   const writes: Promise<unknown>[] = [];
 
   response.responses.forEach((item, index) => {
-    const doc = devices.docs.find((candidate) => cleanText(candidate.data()?.token, 4096) === tokens[index]);
+    const doc = tokenDocs[index];
     if (!doc) return;
     if (item.success) {
       writes.push(doc.ref.set({
@@ -5091,6 +5096,11 @@ export const myPushNotificationStatus = onCall({ region: REGION }, async (reques
 
 export const sendTestPushNotification = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const targetDeviceId = cleanText(input.deviceId, 40);
+  if (targetDeviceId && !/^[0-9a-f]{16}$/.test(targetDeviceId)) {
+    throw new HttpsError('invalid-argument', 'Invalid Nightjar push device identifier.');
+  }
   const account = await accountRef(identity.uid).get();
   const stored = account.data()?.notificationPreferences ?? {};
   const displayMode = ['full','discreet','minimal'].includes(String(stored.displayMode ?? ''))
@@ -5108,9 +5118,11 @@ export const sendTestPushNotification = onCall({ region: REGION }, async (reques
     createdAt:FieldValue.serverTimestamp(),
   });
 
-  const result = await deliverPushNotification(identity.uid, payload, displayMode, ref.id);
+  const result = await deliverPushNotification(identity.uid, payload, displayMode, ref.id, targetDeviceId || undefined);
   if (!result.attempted) {
-    throw new HttpsError('failed-precondition', 'No active Nightjar push device is registered for this account.', { code:'no_push_device' });
+    throw new HttpsError('failed-precondition', targetDeviceId
+      ? 'This device is no longer registered. Refresh your status and re-enable push on this device.'
+      : 'No active Nightjar push device is registered for this account.', { code:'no_push_device' });
   }
   return result;
 });
