@@ -37,8 +37,12 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   const [redirectGrace] = useState(() => Boolean(
     preference && nightjarQuickUnlock.unlockedRecently(preference.userId),
   ));
+  const [sessionGrace] = useState(() => Boolean(
+    preference && nightjarQuickUnlock.canRestoreSession(preference.userId),
+  ));
+  const canResume = redirectGrace || sessionGrace;
   const [locked, setLocked] = useState(() => Boolean(
-    preference && !allowedFlow && !redirectGrace,
+    preference && !allowedFlow && !canResume,
   ));
   const [authReady, setAuthReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -54,10 +58,10 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   const hiddenAt = useRef<number | null>(null);
   const supported = nightjarPasskeys.supported();
 
-  // Consume the one-page redirect allowance immediately. A subsequent app
-  // launch will require biometrics even if it occurs seconds after login.
+  // Consume one-page redirect grace without destroying the verified tab's
+  // refresh continuity. A cold launch after the idle lock still asks for WebAuthn.
   useEffect(() => {
-    if (redirectGrace) nightjarQuickUnlock.lock();
+    if (redirectGrace) nightjarQuickUnlock.consumeRedirect();
   }, [redirectGrace]);
 
   useEffect(() => {
@@ -66,10 +70,9 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       setAuthReady(true);
       return () => { alive.current = false; };
     }
-    // Do not begin a device prompt until Firebase has hydrated local session.
-    // On a fresh launch, revoke the persisted Firebase session before the
-    // passkey prompt: this makes the step a real sign-in, not a cosmetic overlay
-    // on top of an already authenticated 18+ account.
+    // Firebase must hydrate before any continuity can be trusted. A stored
+    // tab marker never grants access without matching current Firebase auth.
+    // A genuinely fresh locked launch still revokes persistence for WebAuthn.
     let initialIdentityChecked = false;
     const unsubscribe = nightjarAuth.observe(identity => {
       if (!alive.current || initialIdentityChecked) return;
@@ -81,11 +84,20 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
         setAuthReady(true);
         return;
       }
-      if (identity && !redirectGrace && !allowedFlow) {
+      if (identity && canResume) {
+        nightjarQuickUnlock.markForeground(identity.userId);
+        setLocked(false);
+        setAuthReady(true);
+        return;
+      }
+      if (identity) {
         void nightjarAuth.signOut().catch(() => { /* locked screen still protects entry */ })
           .finally(() => { if (alive.current) setAuthReady(true); });
         return;
       }
+      // The tab marker cannot resurrect an expired or signed-out Firebase
+      // session. Offer a genuine passkey sign-in rather than rendering the app.
+      if (canResume) setLocked(true);
       setAuthReady(true);
     });
     return () => {
@@ -93,7 +105,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       aborted.current?.abort();
       unsubscribe();
     };
-  }, [preference?.userId, allowedFlow, redirectGrace]);
+  }, [preference?.userId, allowedFlow, canResume]);
 
   const unlock = async (automatic = false) => {
     if (!preference || busy || !locked) return;
@@ -106,9 +118,9 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
     try {
       const identity = await nightjarPasskeys.signIn(preference.userId, controller.signal);
       if (!alive.current || controller.signal.aborted) return;
-      // Only a full-page account-to-workspace redirect needs a one-time pass.
-      // Main app unlocks never create a bypass for the next cold launch.
-      if (window.location.pathname.startsWith('/account')) nightjarQuickUnlock.markUnlocked(identity.userId);
+      // A successful server-verified passkey authorises this browser tab to
+      // survive refresh. Firebase identity/role/18+ checks still run normally.
+      nightjarQuickUnlock.markUnlocked(identity.userId);
       setLocked(false);
     } catch (error) {
       if (alive.current && !controller.signal.aborted) {
@@ -126,8 +138,12 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   // requires user activation, the prominent Unlock button remains available.
   useEffect(() => {
     if (!locked || !authReady || !supported || attemptedAutomatically.current) return;
-    attemptedAutomatically.current = true;
-    const timer = window.setTimeout(() => { void unlock(true); }, 80);
+    // Set the flag inside the timer: React StrictMode can cancel the first
+    // effect's timer during its dev-only setup/cleanup replay.
+    const timer = window.setTimeout(() => {
+      attemptedAutomatically.current = true;
+      void unlock(true);
+    }, 80);
     return () => window.clearTimeout(timer);
   }, [locked, authReady, supported]);
 
@@ -138,10 +154,14 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
     const visibility = () => {
       if (document.visibilityState === 'hidden') {
         hiddenAt.current = Date.now();
+        nightjarQuickUnlock.markBackground(preference.userId);
         return;
       }
       const elapsed = hiddenAt.current === null ? 0 : Date.now() - hiddenAt.current;
       hiddenAt.current = null;
+      if (elapsed < 2 * 60_000 && nightjarQuickUnlock.canRestoreSession(preference.userId)) {
+        nightjarQuickUnlock.markForeground(preference.userId);
+      }
       if (elapsed >= 2 * 60_000 && nightjarQuickUnlock.enabledFor(preference.userId)
         && (!nightjarAuth.current() || nightjarAuth.current()?.userId === preference.userId)) {
         nightjarQuickUnlock.lock();
@@ -172,7 +192,16 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
     window.location.replace('/account?entry=signin');
   };
 
-  if (!preference || !locked) return <>{children}</>;
+  if (!preference) return <>{children}</>;
+  // Never flash the sign-in or adult catalogue while Firebase validates a
+  // remembered identity on refresh. Only mount workspaces after hydration.
+  if (canResume && !authReady) return <main className="nj-launch-unlock nj-launch-unlock-auto" role="status" aria-live="polite">
+    <div className="nj-launch-unlock-card nj-launch-unlock-waiting">
+      <img src="/brand-logo" className="nj-launch-unlock-logo" alt="Nightjar logo"/>
+      <p>Restoring your secure Nightjar session…</p>
+    </div>
+  </main>;
+  if (!locked) return <>{children}</>;
 
   // This is the seamless path after the Android Nightjar splash: the browser's
   // genuine saved-passkey prompt appears over a simple branded background.
