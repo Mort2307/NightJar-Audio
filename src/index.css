@@ -10478,3 +10478,83 @@ textarea:focus-visible,
   background: linear-gradient(125deg,#e0b37b,#b88a52,#8c5d32);
   color: #120d08;
 }
+
+
+/* MOBILE ONBOARDING RECOVERY: the premium card had overflow:hidden, masking
+   its long form on touch screens even though desktop Tab could reach fields.
+   The whole dialog card is now the natural touch scroll area. */
+.onboarding-card.premium-onboarding-card {
+  max-height: min(92dvh, 920px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scroll-behavior: auto;
+  scroll-padding-block: 18px 100px;
+  min-height: 0;
+}
+.premium-onboarding-backdrop {
+  min-height: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.premium-onboarding-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: #19141b;
+  border-top-color: rgba(227, 196, 218, .22);
+  padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -12px 26px rgba(8, 5, 10, .65);
+}
+.premium-onboarding-fields input,
+.premium-onboarding-fields textarea,
+.premium-onboarding-fields select {
+  touch-action: auto;
+  font-size: 16px;
+}
+.premium-onboarding-group input,
+.premium-onboarding-group button,
+.premium-onboarding-group textarea,
+.premium-onboarding-group select {
+  scroll-margin-block: 20px 150px;
+}
+.nj-profile-setup-continue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+  padding: 18px 22px;
+  border-color: rgba(218, 177, 209, .34);
+}
+.nj-profile-setup-continue > div { flex: 1; min-width: min(100%, 260px); display: grid; gap: 7px; }
+.nj-profile-setup-continue strong { font: normal 21px Georgia, serif; }
+.nj-profile-setup-continue p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+.nj-profile-setup-continue button { min-height: 44px; }
+@media (max-width: 700px) {
+  .premium-onboarding-backdrop {
+    padding: max(8px, env(safe-area-inset-top, 0px)) 8px max(8px, env(safe-area-inset-bottom, 0px));
+  }
+  .onboarding-card.premium-onboarding-card {
+    width: 100%;
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    border-radius: 16px;
+  }
+  .premium-onboarding-card header { padding-top: 16px; padding-bottom: 12px; }
+  .premium-onboarding-card header h2 { font-size: clamp(26px, 7vw, 38px); }
+  .premium-onboarding-group { padding-top: 13px; padding-bottom: 15px; }
+  .premium-onboarding-group h3 { font-size: clamp(20px, 5.6vw, 26px); }
+  .premium-onboarding-stagebar { margin: 6px 0 9px; }
+  .premium-onboarding-footer { gap: 9px; padding-top: 10px; }
+  .premium-onboarding-footer > div { width: 100%; justify-content: flex-start; }
+  .premium-onboarding-footer button { min-height: 44px; }
+  .nj-profile-setup-continue button { width: 100%; justify-content: center; }
+}
+@media (max-width: 390px) {
+  .premium-onboarding-footer > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .premium-onboarding-footer .primary-button { grid-column: 1 / -1; }
+}
