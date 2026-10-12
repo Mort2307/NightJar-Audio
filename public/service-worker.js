@@ -1,6 +1,21 @@
+// Push routes are data supplied by notification senders. Restrict them to
+// same-origin app paths to prevent a tampered notification opening a third-party
+// destination or changing the registered PWA's browsing origin.
+const safePushRoute = (value) => {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/discover';
+  try {
+    const target = new URL(value, self.location.origin);
+    return target.origin === self.location.origin
+      ? target.pathname + target.search + target.hash
+      : '/discover';
+  } catch {
+    return '/discover';
+  }
+};
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const route = event.notification?.data?.route || '/discover';
+  const route = safePushRoute(event.notification?.data?.route);
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       const existing = clients.find((client) => 'focus' in client);

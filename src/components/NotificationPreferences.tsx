@@ -35,7 +35,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
 
   const refreshPush = async () => {
     if (simulationMode) {
-      setPushStatus({ configured:true, supported:true, browserPermission:'granted', activeDeviceCount:1, thisDeviceRegistered:true, devices:[], standalone:true });
+      setPushStatus({ configured:true, supported:true, browserPermission:'granted', activeDeviceCount:1, targetedTestsSupported:true, thisDeviceRegistered:true, devices:[], standalone:true });
       setPushError(null);
       return;
     }
@@ -43,7 +43,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
       setPushStatus(await nightjarPush.status());
     } catch (error) {
       setPushError(error instanceof Error ? error.message.slice(0, 200) : 'A Nightjar push service call failed.');
-      setPushStatus({ configured:nightjarPush.configured(), supported:await nightjarPush.supported().catch(()=>false), browserPermission:nightjarPush.permission(), activeDeviceCount:0, thisDeviceRegistered:false, devices:[] });
+      setPushStatus({ configured:nightjarPush.configured(), supported:await nightjarPush.supported().catch(()=>false), browserPermission:nightjarPush.permission(), activeDeviceCount:0, targetedTestsSupported:false, thisDeviceRegistered:false, devices:[] });
     }
   };
 
@@ -91,7 +91,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
       if (simulationMode) notify('Simulation: test push sent.');
       else {
         const result = await nightjarPush.test();
-        notify(result.sent ? 'Test push sent to your registered device.' : 'Test push was attempted but no device confirmed delivery.');
+        notify(result.sent ? 'Firebase accepted a test push for THIS device. Check its notifications to confirm it appeared.' : 'The test push was not accepted. Check this device’s delivery status below.');
       }
       await refreshPush();
     } catch (error) {
@@ -159,8 +159,8 @@ export default function NotificationPreferences({ notify, simulationMode = false
         <button className="secondary-button" disabled={pushBusy || !pushStatus?.configured || !pushStatus?.supported} onClick={() => void enablePush()}>
           <Bell size={14}/> Enable on this device
         </button>
-        <button className="secondary-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered} onClick={() => void testPush()}>
-          <Send size={14}/> Send test push
+        <button className="secondary-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered || !pushStatus?.targetedTestsSupported} onClick={() => void testPush()}>
+          <Send size={14}/> Test this device only
         </button>
         <button className="ghost-button" disabled={pushBusy || !pushStatus?.thisDeviceRegistered} onClick={() => void disablePush()}>
           Disable this device
@@ -172,6 +172,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
           <ShieldCheck size={14}/> {diagnosing ? 'Checking setup…' : 'Diagnose notification setup'}
         </button>
       </div>
+      {pushStatus?.thisDeviceRegistered && !pushStatus?.targetedTestsSupported && <p className="access-fine" role="status">A safe single-device test needs the latest Nightjar notification service. Push remains enabled; test sending will unlock after the backend update.</p>}
       {pushError && <div className="nj-push-diagnostic-error" role="alert"><strong>Notification registration needs attention</strong><p>{pushError}</p><small>Push is optional; Nightjar and your in-app notifications remain available.</small></div>}
       {diagnostics && <section className="nj-push-diagnostics" aria-label="Nightjar push configuration diagnostics">
         <strong>Device and Firebase checks</strong>
@@ -190,7 +191,7 @@ export default function NotificationPreferences({ notify, simulationMode = false
       </section>}
       {!pushStatus?.supported && /iphone|ipad|ipod/i.test(navigator.userAgent) &&
         <p className="access-fine">On iPhone, install Nightjar on your Home Screen from Safari, then open the installed app to enable notifications. iOS web push is available on supported iOS versions.</p>}
-      {pushStatus?.thisDeviceRegistered && <p className="access-fine">Keep Nightjar installed and allow notifications in your phone's system settings. A sent test is not proof of on-screen delivery until you see it on your device.</p>}
+      {pushStatus?.thisDeviceRegistered && <p className="access-fine">Tests are sent only to this signed-in device, not every device linked to your account. Firebase acceptance is not proof of on-screen delivery; confirm the notification appeared with the app in the background.</p>}
       {pushStatus?.devices?.length > 0 && <div className="push-device-list">
         {pushStatus.devices.map((device:any)=><div key={device.id}>
           <span><strong>{device.platform}</strong><small>{device.standalone ? 'Installed app' : 'Browser'} · {device.active ? 'Active' : 'Inactive'}</small></span>

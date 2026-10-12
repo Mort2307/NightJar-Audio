@@ -10538,3 +10538,32 @@ textarea:focus-visible,
     font-size: 16px;
   }
 }
+
+/* Professional multi-role application: explicit scroll target and touch-friendly
+   form continuation for small screens (previously discoverable only by Tab). */
+.professional-role-application-fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  scroll-margin-top: 20px;
+  scroll-margin-bottom: 120px;
+}
+.professional-role-application-fields > label {
+  min-width: 0;
+}
+.professional-role-scroll-to-application {
+  margin: 12px 0;
+  min-height: 44px;
+  white-space: normal;
+  text-align: left;
+}
+@media (max-width: 700px) {
+  .professional-role-application-fields {
+    scroll-margin-top: 16px;
+    scroll-margin-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+    touch-action: pan-y;
+  }
+  .professional-role-scroll-to-application {
+    width: 100%;
+  }
+}

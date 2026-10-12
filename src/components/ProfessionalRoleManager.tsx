@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Brush, FileText, Mic2, Scissors, ShieldCheck, X } from 'lucide-react';
 import { nightjarAccount, type NightjarProfessionalRole, type ProfessionalRoleState } from '../platform/firebase-account';
 import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
@@ -28,6 +28,7 @@ export default function ProfessionalRoleManager({
 }: Props) {
   const [state, setState] = useState<ProfessionalRoleState | null>(null);
   const [selected, setSelected] = useState<NightjarProfessionalRole[]>([]);
+  const applicationDetailsRef = useRef<HTMLDivElement | null>(null);
   const [statement, setStatement] = useState('');
   const [experience, setExperience] = useState('');
   const [portfolioUrl, setPortfolioUrl] = useState('');
@@ -263,7 +264,7 @@ export default function ProfessionalRoleManager({
           : <Brush size={17} />;
 
   const applicationFields = selected.length > 0 ? (
-    <>
+    <div ref={applicationDetailsRef} className="professional-role-application-fields" aria-label="Professional application details">
       <label>
         About your work
         <textarea
@@ -303,7 +304,7 @@ export default function ProfessionalRoleManager({
       >
         {busy ? 'Saving…' : 'Store application'}
       </button>
-    </>
+    </div>
   ) : null;
 
   const applicationPicker = (
@@ -324,6 +325,13 @@ export default function ProfessionalRoleManager({
           </button>
         ))}
       </div>
+      {selected.length > 0 && <button
+        type="button"
+        className="secondary-button professional-role-scroll-to-application"
+        onClick={() => applicationDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      >
+        Continue to application details for {selected.length} selected {selected.length === 1 ? 'role' : 'roles'}
+      </button>}
       {applicationFields}
     </>
   );

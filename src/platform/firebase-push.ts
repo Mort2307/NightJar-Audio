@@ -15,6 +15,7 @@ const registerCall = httpsCallable<{
 const unregisterCall = httpsCallable<{ token?: string; deviceId?: string }, { unregistered: boolean }>(functions, 'unregisterPushDevice');
 const statusCall = httpsCallable<void, {
   activeDeviceCount: number;
+  targetedTestsSupported?: boolean;
   devices: Array<{
     id: string;
     active: boolean;
@@ -26,7 +27,7 @@ const statusCall = httpsCallable<void, {
     lastError: string | null;
   }>;
 }>(functions, 'myPushNotificationStatus');
-const testCall = httpsCallable<void, { attempted: number; sent: number; failed: number }>(functions, 'sendTestPushNotification');
+const testCall = httpsCallable<{ deviceId: string }, { attempted: number; sent: number; failed: number }>(functions, 'sendTestPushNotification');
 
 const vapidKey = String(import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '').trim();
 
@@ -208,6 +209,7 @@ export const nightjarPush = {
       supported,
       browserPermission: permission,
       activeDeviceCount: backend.data.activeDeviceCount,
+      targetedTestsSupported: backend.data.targetedTestsSupported === true,
       thisDeviceRegistered,
       thisDeviceError: null,
       devices: backend.data.devices,
@@ -216,7 +218,17 @@ export const nightjarPush = {
   },
 
   async test() {
-    return (await testCall()).data;
+    const deviceId = savedDevice();
+    if (!deviceId || !/^[0-9a-f]{16}$/.test(deviceId)) {
+      throw new Error('Enable push on this device before requesting a test notification.');
+    }
+    // A previous backend version may broadcast tests despite deviceId.
+    // Fail closed until myPushNotificationStatus confirms the new API is live.
+    const capabilities = await statusCall();
+    if (capabilities.data.targetedTestsSupported !== true) {
+      throw new Error('Nightjar needs its targeted-test backend update before sending a test. Your other devices will not be contacted.');
+    }
+    return (await testCall({ deviceId })).data;
   },
 
   async listenForeground(callback: (payload: MessagePayload) => void) {
