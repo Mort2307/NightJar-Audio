@@ -923,6 +923,24 @@ export const getMyProfile = onCall({ region: REGION }, async (request) => {
   };
 });
 
+// "Finish later" is a durable account choice, not a session-only dismiss.
+// Keep the incomplete profile editable; never grant a professional role here.
+export const deferMyProfileOnboarding = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const ref = profileRef(identity.uid);
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (existing.data()?.onboardingComplete === true) return;
+    tx.set(ref, {
+      onboardingDeferred: true,
+      onboardingDeferredAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+  return { deferred: true };
+});
+
 export const profileTagCatalogue = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -1278,6 +1296,7 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     listenerCommunityStyle: cleanStringList(input.listenerCommunityStyle, 12),
     publicProfile: profileRole === 'admin' ? false : input.publicProfile !== false,
     onboardingComplete: input.onboardingComplete === true,
+    ...(input.onboardingComplete === true ? { onboardingDeferred: false } : {}),
     onboardingVersion: Math.max(0, Math.floor(Number(input.onboardingVersion ?? 1))),
     updatedAt: FieldValue.serverTimestamp(),
   };

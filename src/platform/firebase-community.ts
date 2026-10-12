@@ -8,6 +8,7 @@ type Profile = Record<string, any>;
 
 const getMyProfileCall = httpsCallable<void, { profile: Profile | null }>(functions, 'getMyProfile');
 const saveMyProfileCall = httpsCallable<Profile, { profile: Profile | null }>(functions, 'saveMyProfile');
+const deferMyProfileOnboardingCall = httpsCallable<void, { deferred: boolean }>(functions, 'deferMyProfileOnboarding');
 const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'listCreators');
 const listPublicProfilesCall = httpsCallable<void, { profiles: any[] }>(functions, 'listPublicProfiles');
 const getCreatorProfileCall = httpsCallable<{ userId: string }, { creator: any }>(functions, 'getCreatorProfile');
@@ -30,6 +31,10 @@ export const nightjarCommunity = {
 
   async saveMyProfile(profile: Profile, profileRole?: string) {
     return (await saveMyProfileCall({ ...profile, ...(profileRole ? { profileRole } : {}) })).data;
+  },
+
+  async deferMyProfileOnboarding() {
+    return (await deferMyProfileOnboardingCall()).data;
   },
 
   async listCreators() {
