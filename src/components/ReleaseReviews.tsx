@@ -28,7 +28,6 @@ export default function ReleaseReviews({
   onOpenProfile,
 }: Props) {
   const canCommunityInteract = viewerRole === 'listener';
-  const canComment = Boolean(currentUserId && ['listener','creator','writer','editor','artist','admin'].includes(String(viewerRole)));
   const creativeViewer = ['creator','writer','editor'].includes(String(viewerRole));
   const creditedViewer = Boolean(
     currentUserId
@@ -41,7 +40,11 @@ export default function ReleaseReviews({
   const dialogRef = useRef<HTMLElement | null>(null);
   const [tab, setTab] = useState<'comments' | 'reviews'>('comments');
   const [reviews, setReviews] = useState<any>({ reviews: [], averageRating: null, ratingCount: 0, myReview: null });
-  const [community, setCommunity] = useState<any>({ comments: [], reactions: { likes:0, loves:0, total:0, myReaction:null }, canInteract:canCommunityInteract });
+  const [community, setCommunity] = useState<any>({ comments: [], reactions: { likes:0, loves:0, total:0, myReaction:null }, canInteract:canCommunityInteract, commentReactionsEnabled:false });
+  // Support old deployed Functions safely: professional posting and emoji buttons
+  // appear only after the backend explicitly advertises those capabilities.
+  const canComment = Boolean(currentUserId && (canCommunityInteract || community.canInteract === true));
+  const commentReactionsEnabled = Boolean(demoMode || community.commentReactionsEnabled === true);
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState('');
   const [comment, setComment] = useState('');
@@ -76,7 +79,8 @@ export default function ReleaseReviews({
             { id:'demo-comment-2', userId:'demo-listener-lex', commenterName:'Lex', commenterHandle:'lexlistens', commenterRole:'listener', teamReply:false, parentCommentId:null, body:'Would absolutely listen to another episode in this series.', createdAt:new Date(Date.now()-1800000).toISOString() },
           ],
           reactions:{ likes:18, loves:37, total:55, myReaction:null },
-          canInteract:canCommunityInteract,
+          canInteract:true,
+          commentReactionsEnabled:true,
         });
         onCommunityChanged?.({ likes:18, loves:37, total:55, comments:3 });
       } else {
@@ -247,7 +251,7 @@ export default function ReleaseReviews({
   };
 
   const reactToComment = async (item:any, kind:'like'|'love') => {
-    if (!canComment) return notify('Sign in to react to comments.');
+    if (!canComment || !commentReactionsEnabled) return notify('Comment reactions are not ready on this version of Nightjar yet.');
     if (busyCommentId) return;
     if (demoMode && !simulationMode) return notify('Demo is read-only. Start Simulation to react.');
     setBusyCommentId(String(item.id));
@@ -278,7 +282,7 @@ export default function ReleaseReviews({
     }
   };
 
-  const commentReactionButtons = (item:any) => (
+  const commentReactionButtons = (item:any) => commentReactionsEnabled ? (
     <div className="release-comment-actions" aria-label="Comment reactions and moderation">
       <button type="button" className={item.myReaction === 'like' ? 'active' : ''} aria-label={'Like comment by ' + (item.commenterName ?? 'member')} aria-pressed={item.myReaction === 'like'} disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)} onClick={() => void reactToComment(item, 'like')}>
         <span aria-hidden="true">👍</span> <span>{Number(item.reactionLikeCount ?? 0)}</span>
@@ -292,7 +296,13 @@ export default function ReleaseReviews({
         </button>
       )}
     </div>
-  );
+  ) : (currentUserId && item.userId !== currentUserId ? (
+    <div className="release-comment-actions">
+      <button type="button" className="release-comment-flag" aria-label={'Flag comment by ' + (item.commenterName ?? 'member') + ' for admin review'} onClick={() => void reportComment(item)}>
+        <span aria-hidden="true">⛳️</span><span>Flag</span>
+      </button>
+    </div>
+  ) : null);
 
   const reportComment = async (item:any) => {
     const reason=window.prompt('Why are you reporting this comment?') ?? '';
