@@ -1287,7 +1287,7 @@ function App() {
       try {
         const result = await nightjarReferrals.recommendCreator(person.userId);
         if (typeof result.path === 'string' && result.path.startsWith('/') && !result.path.startsWith('//')) {
-          url = window.location.origin + result.path;
+          url = window.location.origin + result.path + (result.path.includes('?') ? '&' : '?') + 'role=creator';
         }
       } catch {
         // An unavailable recommendation service must not prevent direct sharing.
