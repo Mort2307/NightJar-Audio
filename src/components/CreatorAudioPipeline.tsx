@@ -7,6 +7,7 @@ import { BookOpenText, Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 
 import { nightjarAudioFileProblem } from '../platform/audio-upload';
 import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
+import ContextHelp from './ContextHelp';
 import './creator-workflow.css';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
@@ -683,7 +684,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </section>
 
           <section className="nj-release-distribution-panel" id="release-distribution" aria-label="Release debut and distribution">
-            <div className="release-transcript-head"><div><span className="mini-label">RELEASE IDENTITY · CREATOR DECLARED</span><strong>Where does this recording debut?</strong><p>Choose First on NightJar only if this is its first public release. You remain free to publish anywhere else. NightJar Original is reserved for productions commissioned and paid for by NightJar.</p></div></div>
+            <div className="release-transcript-head"><div><span className="mini-label">RELEASE IDENTITY · CREATOR DECLARED</span><strong className="nj-term-label">Where does this recording debut? <ContextHelp topic="first-on-nightjar"/></strong><p>Choose First on NightJar only if this is its first public release. You remain free to publish anywhere else. NightJar Original is reserved for productions commissioned and paid for by NightJar.</p></div></div>
             <div className="nj-release-distribution-options" role="radiogroup" aria-label="Release distribution label">
               {([
                 {value:'standard',label:'Standard release',help:'Available elsewhere already, or no special release label.'},
