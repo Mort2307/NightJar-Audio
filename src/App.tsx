@@ -75,6 +75,7 @@ import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
 import AppUpdateControl from './components/AppUpdateControl';
+// Community announcement integration: pending approved implementation.
 import { checkNightjarUpdate, applyNightjarSafeUpdate, type NightjarUpdateStatus } from './platform/pwa';
 import TransparencyPanel from './components/TransparencyPanel';
 import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
