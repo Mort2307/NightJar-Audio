@@ -1,5 +1,15 @@
 # Nightjar source-of-truth reconciliation — 13 October 2026
 
+## Final low-cost alignment (13 October 2026)
+
+- **Canonical development line:** `main`. Legacy PRs #7, #8, #9 and #14 were closed as deferred historical implementations; distinctive concepts remain explicitly parked in [issue #144](https://github.com/Mort2307/NightJar-Audio/issues/144) with all branches preserved.
+- **Writer workflow:** PR #143 merged as commit `53dfb10a192142279124150fef17effda54b586b`. Old PR #128 source-superseded/closed; rights-first direct Writer submission, protected admin review and optional post-approval marketplace listing now share the current Firebase workflow.
+- **Approval-email backend:** [selected deployment 38434354749](https://github.com/Mort2307/NightJar-Audio/actions/runs/38434354749) **success**; `sendProfessionalApprovalEmail` and `adminRetryProfessionalApprovalEmail` reported ACTIVE in `europe-west2`. The guarded backend-first [Hosting deployment 38434284451](https://github.com/Mort2307/NightJar-Audio/actions/runs/38434284451) succeeded and verified the matching deployed Hosting source commit. An actual Gmail inbox send/retry still requires test evidence.
+- **Cost constraint:** no Cloud Tasks, Pub/Sub, queues, extra cron/scheduled Functions or fan-out service redesign. Existing publication/follower notification fan-out is unchanged. Delivery can still incur per-publication Firestore and messaging usage; monitor this before growth.
+- **Release state:** closed beta, testing age assurance and admin-only Didit pilot kept intact. Paid processor approval, real handset/PWA sync, and production live Didit/legal acceptance **not** signed off.
+- **Visibility:** GitHub still reports the repository public. Change visibility using authorized GitHub repository Settings; this connector cannot modify repository visibility.
+- **Open PR inventory:** zero, by explicit reconciliations—not by force-merging older branches. Refer to the history table below as an historical snapshot of the earlier audit rather than a current-open-PR list.
+
 **Purpose:** Bring PR tracking, production source and operational release gates into alignment before building further features. This document is a source/release audit, **not** a claim that every feature is deployed or handset-verified.
 
 ## Canonical baseline
