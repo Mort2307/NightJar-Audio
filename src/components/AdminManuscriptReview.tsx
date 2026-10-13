@@ -48,19 +48,19 @@ export default function AdminManuscriptReview({
     setNote('');
   }, [selectedId]);
 
-  const openPreview = async () => {
-    if (!selected) return;
+  const openPreview = async (reviewScript: any = selected) => {
+    if (!reviewScript) return;
     setPreviewBusy(true);
     setError('');
     try {
       if (demoMode) {
-        setPreview(selected);
+        setPreview(reviewScript);
         setSourceFile(null);
-        setSourcePreview({ format: 'text', text: String(selected.content ?? '') });
+        setSourcePreview({ format: 'text', text: String(reviewScript.content ?? '') });
         setViewerOpen(true);
         return;
       }
-      const data = await nightjarScripts.adminScriptPreview(selected.id);
+      const data = await nightjarScripts.adminScriptPreview(reviewScript.id);
       setPreview(data.script ?? null);
       setSourceFile(data.sourceFile ?? null);
       setSourcePreview(data.sourcePreview ?? (data.script?.content ? { format: 'text', text: data.script.content } : { format: 'unavailable', message: 'In-app document preview unavailable.' }));
@@ -115,12 +115,12 @@ export default function AdminManuscriptReview({
         <article className={'manuscript-review-item' + (selectedId === item.id ? ' selected' : '')} key={item.id}>
           <div><strong>{item.title || 'Untitled manuscript'}</strong><span>{item.status} · version {item.version ?? 1} · {item.marketplace?.visibility === 'marketplace' ? 'Marketplace requested' : 'Private / other visibility'}</span>
           {item.lastEditorialComment && <small>Previous note: {item.lastEditorialComment}</small>}</div>
-          <button className="secondary-button" aria-expanded={selectedId === item.id} onClick={() => setSelectedId(selectedId === item.id ? null : item.id)}>{selectedId === item.id ? 'Close' : pendingStatus(item.status) ? 'Review manuscript' : 'View record'} <ArrowRight size={14}/></button>
+          <button className="secondary-button" aria-expanded={selectedId === item.id} onClick={() => { if (selectedId === item.id) { setSelectedId(null); setViewerOpen(false); } else { setSelectedId(item.id); void openPreview(item); } }}>{selectedId === item.id ? 'Close' : pendingStatus(item.status) ? 'Review manuscript' : 'View record'} <ArrowRight size={14}/></button>
         </article>)}</div>}
     {selected && <div className="manuscript-review-detail" aria-label="Selected manuscript review">
       <div className="manuscript-review-detail-head">
         <div><span className="mini-label">{isPending ? 'AWAITING A DECISION' : 'MANUSCRIPT RECORD'}</span><h3>{selected.title}</h3><p>{selected.status} · {marketplaceRequested ? 'Writer requested marketplace publication' : 'Writer has not selected marketplace visibility'}</p></div>
-        <button className="primary-button" disabled={previewBusy} onClick={() => preview ? setViewerOpen(true) : void openPreview()}><LockKeyhole size={15}/>{previewBusy ? 'Opening…' : 'Open read-only viewer'}</button>
+        <button className="primary-button" disabled={previewBusy} onClick={() => preview ? setViewerOpen(true) : void openPreview(selected)}><LockKeyhole size={15}/>{previewBusy ? 'Opening…' : 'Open read-only viewer'}</button>
       </div>
       <div className="manuscript-review-facts">
         <span><ShieldCheck size={15}/> Rights confirmations: <strong>{rightsReady ? 'Confirmed' : 'Incomplete'}</strong></span>
