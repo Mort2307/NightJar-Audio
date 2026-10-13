@@ -6049,7 +6049,7 @@ const adminActionNotifications = async () => {
     db.collection('imageAssets').where('status', '==', 'pending').count().get(),
     db.collection('releases').where('status', '==', 'pending_review').count().get(),
     db.collection('releaseReviews').where('status', '==', 'pending').count().get(),
-    db.collection('scripts').where('status', '==', 'Submitted').limit(250).get(),
+    db.collection('scripts').where('status', 'in', ['Submitted','Under review']).limit(250).get(),
     db.collection('editorPortfolio').where('status', '==', 'pending_review').count().get(),
     db.collection('communityReports').where('status', '==', 'open').count().get(),
     db.collection('securityAlerts').where('status', '==', 'open').count().get(),
@@ -6067,7 +6067,7 @@ const adminActionNotifications = async () => {
     { id:'admin_action_releases', subtype:'release_verification', count:releaseCount.data().count, label:'release awaiting moderation', route:'/admin?work=release-moderation' },
     { id:'admin_action_reviews', subtype:'review_verification', count:reviewCount.data().count, label:'review awaiting moderation', route:'/admin/reviews' },
     { id:'admin_action_editor_portfolio', subtype:'editor_portfolio', count:editorCount.data().count, label:'Editor showcase awaiting review', route:'/admin/editorial' },
-    { id:'admin_action_manuscripts', subtype:'script_submission', count:scriptQueue.docs.filter(d => !d.data().editorUserId).length, label:'manuscript awaiting assignment', route:'/admin/editorial' },
+    { id:'admin_action_manuscripts', subtype:'script_submission', count:scriptQueue.docs.length, label:'manuscript awaiting admin review', route:'/admin/editorial' },
     { id:'admin_action_reports', subtype:'report_review', count:reportCount.data().count, label:'report awaiting moderation', route:'/admin/reports' },
     { id:'admin_action_security', subtype:'security_alert', count:securityCount.data().count, label:'open security alert', route:'/admin/workspace/security' },
     { id:'admin_action_suggestions', subtype:'creator_suggestion', count:suggestionCount.data().count, label:'creator recommendation', route:'/admin/suggestions' },
@@ -6708,11 +6708,20 @@ export const reviewEditorScript = onCall({ region: REGION }, async (request) => 
   if (!data || data.editorUserId !== identity.uid) {
     throw new HttpsError('permission-denied', 'This manuscript is not assigned to this Audio Editor.');
   }
+  if (!['Submitted','Under review','Revision requested'].includes(String(data.status ?? ''))) {
+    throw new HttpsError('failed-precondition', 'This manuscript is no longer open for editorial review.');
+  }
 
   const comment = cleanText(input.comment, 4000);
+  // Audio Editors may recommend a marketplace manuscript, but only a
+  // NightJar administrator can make the final marketplace approval.
+  const awaitingAdminApproval = status === 'Approved'
+    && normaliseScriptMarketplace(data.marketplace).visibility === 'marketplace';
+  const nextStatus = awaitingAdminApproval ? 'Under review' : status;
   await ref.set({
-    status,
+    status: nextStatus,
     lastEditorialComment: comment || null,
+    editorRecommendation: awaitingAdminApproval ? 'approved' : null,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
@@ -6720,8 +6729,10 @@ export const reviewEditorScript = onCall({ region: REGION }, async (request) => 
     await createNotification(String(data.writerUserId), {
       type: 'editorial',
       subtype: 'script_review',
-      title: status === 'Approved' ? 'Your manuscript was approved' : status === 'Revision requested' ? 'Revision requested' : status === 'Rejected' ? 'Editorial review completed' : 'Your manuscript is under review',
-      message: comment || ('Editorial status changed to ' + status + '.'),
+      title: awaitingAdminApproval ? 'Editor review complete — awaiting NightJar approval' : status === 'Approved' ? 'Your manuscript was approved' : status === 'Revision requested' ? 'Revision requested' : status === 'Rejected' ? 'Editorial review completed' : 'Your manuscript is under review',
+      message: awaitingAdminApproval
+        ? 'An Audio Editor recommended approval. The final marketplace listing still requires a NightJar administrator review.'
+        : comment || ('Editorial status changed to ' + status + '.'),
       scriptId,
     });
   }

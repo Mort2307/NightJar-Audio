@@ -71,8 +71,10 @@ for (const [category, after] of cases) {
   checked(category + ' completed item does not create an alert', category, after,
     { ...after, status:'resolved' }, false);
 }
-checked('assigned editorial scripts no longer alert', 'scripts', undefined,
-  { status:'Submitted', editorUserId:'assigned-editor' }, false);
+checked('assigned scripts still need administrator review', 'scripts', undefined,
+  { status:'Submitted', editorUserId:'assigned-editor' }, true);
+checked('editor assignment preserves pending status without a duplicate alert', 'scripts',
+  { status:'Submitted' }, { status:'Under review', editorUserId:'assigned-editor' }, false);
 
 // The callable permission check is executed with mock credentials. This does
 // not substitute for a live permission-denied Firebase integration test.
