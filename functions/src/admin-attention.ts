@@ -18,7 +18,7 @@ const ADMIN_EMAILS = [
 const CATEGORIES = {
   professionalApplications: { title: 'Professional application awaiting approval', route: '/admin/approvals', subtype: 'professional_approval' },
   releases: { title: 'Recording awaiting moderation', route: '/admin?work=release-moderation', subtype: 'release_verification' },
-  scripts: { title: 'Manuscript awaiting editorial attention', route: '/admin/editorial', subtype: 'script_submission' },
+  scripts: { title: 'Manuscript awaiting NightJar approval', route: '/admin/editorial', subtype: 'script_submission' },
   images: { title: 'Image awaiting moderation', route: '/admin/images', subtype: 'image_verification' },
   reviews: { title: 'Review awaiting moderation', route: '/admin/reviews', subtype: 'review_verification' },
   editorPortfolio: { title: 'Editor showcase awaiting review', route: '/admin/editorial', subtype: 'editor_portfolio' },
@@ -72,7 +72,7 @@ const isPending = (category: Category, data: Record<string, any> | undefined) =>
         && Array.isArray(data.requestedRoles)
         && data.requestedRoles.some((role: unknown) => !Array.isArray(data.approvedRoles) || !data.approvedRoles.includes(role));
     case 'releases': case 'editorPortfolio': return status === 'pending_review';
-    case 'scripts': return status === 'Submitted' && !data.editorUserId;
+    case 'scripts': return ['Submitted','Under review'].includes(status);
     case 'images': case 'reviews': return status === 'pending';
     case 'reports': case 'security': return status === 'open';
     case 'suggestions': return status === 'new';
