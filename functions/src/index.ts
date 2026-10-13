@@ -6268,7 +6268,7 @@ export const adminListCommunityUpdates=onCall({region:REGION},async(request)=>{
 export const listNotifications = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, account] = await Promise.all([
-    accountRef(identity.uid).collection('notifications').limit(100).get(),
+    accountRef(identity.uid).collection('notifications').orderBy('createdAt','desc').limit(100).get(),
     accountRef(identity.uid).get(),
   ]);
   const stored = account.data()?.notificationPreferences ?? {};
