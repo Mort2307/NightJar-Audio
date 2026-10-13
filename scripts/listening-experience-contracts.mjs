@@ -45,7 +45,7 @@ assert.match(app,/initialSeekSeconds=\{/);
 assert.match(player,/saveMark\(track\.id, position, momentLabel/);
 assert.match(player,/initialSeekSeconds !== null/);
 assert.match(library,/Moment Marks/);
-assert.match(library,/deleteMomentMark/);
+assert.match(library,/nightjarExperience\.deleteMark\(markId\)/);
 assert.match(voices,/getVoiceCallingCard|voiceCard\(/);
 assert.match(voices,/status === 'released'/);
 assert.match(profile,/VoiceCallingCardPublic/);
