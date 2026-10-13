@@ -36,7 +36,7 @@ assert.match(client, /adminReviewWriterScript/);
 
 assert.match(queue, /Awaiting admin review/);
 assert.match(queue, /pendingStatus\(item\.status\)/);
-assert.match(queue, /Open protected manuscript/);
+assert.match(queue, /Open read-only viewer/);
 assert.match(queue, /window\.confirm\('No public synopsis is saved/);
 assert.match(queue, /Approve manuscript/);
 assert.match(queue, /Request changes/);
