@@ -31,6 +31,7 @@ const permissionsCall = httpsCallable<{ scriptId: string }, { permissions: any[]
 const setPermissionCall = httpsCallable<Record<string, unknown>, any>(functions, 'setScriptPermission');
 const rightsCall = httpsCallable<Record<string, unknown>, { script: any }>(functions, 'updateScriptRightsAndListing');
 const marketplaceCall = httpsCallable<void, { scripts: any[] }>(functions, 'listScriptMarketplace');
+const marketplaceSampleCall = httpsCallable<{scriptId:string},{scriptId:string;title:string;sample:string;writerUserId:string|null}>(functions,'getMarketplaceScriptSample');
 
 export const nightjarScripts = {
   async writerScripts() {
@@ -115,6 +116,10 @@ export const nightjarScripts = {
 
   async updateRights(scriptId: string, rights: Record<string, unknown>, marketplace: Record<string, unknown>) {
     return (await rightsCall({ scriptId, rights, marketplace })).data;
+  },
+
+  async marketplaceSample(scriptId:string) {
+    return (await marketplaceSampleCall({scriptId})).data;
   },
 
   async marketplace() {
