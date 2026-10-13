@@ -13,6 +13,7 @@ on:
         options:
           - auth-check
           - plan
+          - audio-eq-cors
           - functions:selected
           - admin-attention
           - functions
@@ -29,7 +30,7 @@ on:
         required: false
         type: string
       confirmation:
-        description: For writes type DEPLOY-NIGHTJAR; all-backend requires ALL-BACKEND-NIGHTJAR
+        description: Deploy DEPLOY-NIGHTJAR; EQ CORS ENABLE-NIGHTJAR-AUDIO-EQ; all-backend ALL-BACKEND-NIGHTJAR
         required: false
         type: string
 
@@ -60,6 +61,10 @@ jobs:
           set -euo pipefail
           if [[ "$REQUESTED_SCOPE" == "auth-check" || "$REQUESTED_SCOPE" == "plan" ]]; then
             echo "Read-only mode; no Firebase resources will be deployed."
+          elif [[ "$REQUESTED_SCOPE" == "audio-eq-cors" ]]; then
+            [[ "$RELEASE_CONFIRMATION" == "ENABLE-NIGHTJAR-AUDIO-EQ" ]] || {
+              echo "::error::Audio EQ CORS requires ENABLE-NIGHTJAR-AUDIO-EQ confirmation."; exit 1;
+            }
           elif [[ "$REQUESTED_SCOPE" == "all-backend" ]]; then
             [[ "$RELEASE_CONFIRMATION" == "ALL-BACKEND-NIGHTJAR" ]] || {
               echo "::error::All-backend deploy requires ALL-BACKEND-NIGHTJAR confirmation."; exit 1;
@@ -143,7 +148,7 @@ jobs:
             --output "$RUNNER_TEMP/nightjar-backend-plan.json" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Validate frontend and contracts
-        if: ${{ inputs.scope != 'auth-check' && inputs.scope != 'plan' }}
+        if: ${{ inputs.scope != 'auth-check' && inputs.scope != 'plan' && inputs.scope != 'audio-eq-cors' }}
         run: npm ci --no-fund && npm run validate
 
       - name: Install, check and build backend
@@ -155,7 +160,7 @@ jobs:
           npm --prefix functions run build
 
       - name: Deploy exact requested backend resources
-        if: ${{ inputs.scope != 'auth-check' && inputs.scope != 'plan' }}
+        if: ${{ inputs.scope != 'auth-check' && inputs.scope != 'plan' && inputs.scope != 'audio-eq-cors' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -190,6 +195,42 @@ jobs:
           trap 'date +%s > "$RUNNER_TEMP/nightjar-deploy-end"' EXIT
           firebase deploy --only "$DEPLOY_SCOPE" --project nightjar-audio --non-interactive 2>&1 \
             | tee "$RUNNER_TEMP/nightjar-deploy.log"
+
+      # Workload Identity Federation is deliberately restricted to THIS
+      # backend workflow's GitHub OIDC subject. The old standalone EQ workflow
+      # was rejected by the GCP provider attribute condition.
+      # Explicit scope and different confirmation protect this bucket update.
+      - name: Set up Google Cloud CLI for EQ CORS
+        if: ${{ inputs.scope == 'audio-eq-cors' }}
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: nightjar-audio
+
+      - name: Prepare and apply approved Nightjar audio EQ CORS
+        if: ${{ inputs.scope == 'audio-eq-cors' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUCKET="gs://nightjar-audio.firebasestorage.app"
+          [[ "$(gcloud config get-value project)" == "nightjar-audio" ]] || {
+            echo "::error::Incorrect GCP project for CORS update."; exit 1;
+          }
+          # Read existing CORS before writing: never replace upload policies.
+          gcloud storage buckets describe "$BUCKET" --format=json > "$RUNNER_TEMP/nightjar-audio-bucket.json"
+          node scripts/prepare-nightjar-audio-cors.mjs "$RUNNER_TEMP/nightjar-audio-bucket.json" "$RUNNER_TEMP/nightjar-audio-cors.json"
+          gcloud storage buckets update "$BUCKET" --cors-file="$RUNNER_TEMP/nightjar-audio-cors.json"
+          gcloud storage buckets describe "$BUCKET" --format=json > "$RUNNER_TEMP/nightjar-audio-verified.json"
+          node --input-type=module - "$RUNNER_TEMP/nightjar-audio-verified.json" <<'NODE'
+          import fs from 'node:fs';
+          const bucket=JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const origins=['https://nightjar-audio.web.app','https://nightjar-audio.firebaseapp.com'];
+          const rule=(bucket.cors??[]).find(r=>origins.every(o=>r.origin?.includes(o))&&r.method?.includes('GET'));
+          if (!rule) throw new Error('EQ CORS policy missing after update.');
+          console.log('Nightjar EQ CORS verified. Private Storage access rules remain unchanged.');
+          NODE
+          echo "### Nightjar EQ audio CORS" >> "$GITHUB_STEP_SUMMARY"
+          echo "Approved Hosting origins can request signed audio through browser CORS." >> "$GITHUB_STEP_SUMMARY"
+          echo "This does not grant public Storage access or change signed URL expiry." >> "$GITHUB_STEP_SUMMARY"
 
       # Post-deploy verification is read-only. No webhooks, scheduled jobs,
       # auth callables, email sends, age checks, payments or write APIs are invoked.
