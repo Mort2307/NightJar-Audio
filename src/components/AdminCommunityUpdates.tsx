@@ -24,6 +24,7 @@ export default function AdminCommunityUpdates(){
  const [title,setTitle]=useState(INITIAL_TITLE);
  const [body,setBody]=useState(INITIAL_BODY);
  const [tested,setTested]=useState(false);
+ const [privateTestId,setPrivateTestId]=useState<string|null>(null);
  const [confirm,setConfirm]=useState(false);
  const [busy,setBusy]=useState(false);
  const [result,setResult]=useState<{scope:'self'|'all';delivery:CommunityUpdateDelivery}|null>(null);
@@ -36,13 +37,14 @@ export default function AdminCommunityUpdates(){
   if(scope==='all'&&(!tested||!confirm))return;
   setBusy(true);setError('');setResult(null);
   try{
-   const delivery=await communityUpdates.publish({title:title.trim(),body:body.trim(),audience:scope,requestId:crypto.randomUUID(),testVerified:scope==='all'&&tested});
+   const delivery=await communityUpdates.publish({title:title.trim(),body:body.trim(),audience:scope,requestId:crypto.randomUUID(),testVerified:scope==='all'&&tested,verifiedTestId:scope==='all'?privateTestId??undefined:undefined});
    setResult({scope,delivery});void reload();
-   if(scope==='all'){setTested(false);setConfirm(false);}
+   if(scope==='self')setPrivateTestId(delivery.status==='completed'&&delivery.inboxCreated>0?delivery.id:null);
+   if(scope==='all'){setTested(false);setConfirm(false);setPrivateTestId(null);}
   }catch(e){setError(e instanceof Error?e.message:'Could not send the announcement.');}
   finally{setBusy(false);}
  };
- const changed=(setter:(v:string)=>void)=>(value:string)=>{setter(value);setTested(false);setConfirm(false);};
+ const changed=(setter:(v:string)=>void)=>(value:string)=>{setter(value);setTested(false);setConfirm(false);setPrivateTestId(null);};
  return <section className="nj-community-composer panel" aria-label="In-app community announcements">
   <div className="nj-community-composer-heading"><div>
    <span className="mini-label">COMMUNICATIONS · IN-APP & PUSH</span>
@@ -59,9 +61,9 @@ export default function AdminCommunityUpdates(){
    <strong>{result.scope==='self'?'Owner test':'Community send'}: {result.delivery.status}.</strong>
    {' '+result.delivery.inboxCreated+' inbox record(s) created, '+result.delivery.errors+' error(s). Check your device to confirm push delivery.'}
   </p>}
-  <label className="nj-community-confirm"><input type="checkbox" checked={tested} onChange={e=>setTested(e.target.checked)}/> I personally received and opened the private test successfully.</label>
+  <label className="nj-community-confirm"><input type="checkbox" checked={tested} disabled={!privateTestId} onChange={e=>setTested(e.target.checked)}/> I personally received and opened the private test successfully.</label>
   <label className="nj-community-confirm"><input type="checkbox" checked={confirm} onChange={e=>setConfirm(e.target.checked)}/> I approve sending this update to all active NightJar members who permit announcements.</label>
-  <button className="primary-button" type="button" disabled={busy||!tested||!confirm||!title.trim()||body.trim().length<40} onClick={()=>void send('all')}>
+  <button className="primary-button" type="button" disabled={busy||!privateTestId||!tested||!confirm||!title.trim()||body.trim().length<40} onClick={()=>void send('all')}>
    <ShieldCheck size={15}/> 2. Publish to community
   </button>
   {error&&<p role="alert">{error}</p>}
