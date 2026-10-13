@@ -52,23 +52,32 @@ export default function WriterRightsPanel({ script, onUpdated, notify, simulatio
     setTropesDraft((script?.marketplace?.tropes ?? []).join(', '));
   }, [script?.id, script?.rights, script?.marketplace]);
 
-  const save = async () => {
+  const save = async (listApproved = false) => {
     if (!script?.id) return;
+    if (listApproved && !['Approved','Published'].includes(String(script.status ?? ''))) {
+      notify('Nightjar must approve your manuscript before it can appear in the Creator Marketplace.');
+      return;
+    }
+    if (listApproved && (!marketplace.synopsis?.trim() || rights.ownershipAttested !== true || rights.contributorPermissionsConfirmed !== true)) {
+      notify('Add a public synopsis and confirm ownership and contributor permissions before listing for creators.');
+      return;
+    }
     setSaving(true);
     // Normalise only when saving, never while the user is editing.
     const nextMarketplace = {
       ...marketplace,
+      ...(listApproved ? {visibility:'marketplace'} : {}),
       genres: parseListingTags(genresDraft, 16),
       tropes: parseListingTags(tropesDraft, 24),
     };
     try {
       if (simulationMode) {
         onUpdated({ ...script, rights: { ...rights, aiTrainingAllowed: false }, marketplace: nextMarketplace });
-        notify('Simulation: rights and listing controls updated locally.');
+        notify(listApproved ? 'Simulation: this approved script is now listed for creators.' : 'Simulation: rights and listing controls updated locally.');
       } else {
         const data = await nightjarScripts.updateRights(script.id, { ...rights, aiTrainingAllowed: false }, nextMarketplace);
         onUpdated(data.script ?? script);
-        notify('Rights and listing controls saved.');
+        notify(listApproved ? 'Your approved script is now listed in the Creator Marketplace. Your full manuscript remains private.' : 'Rights and listing controls saved.');
       }
     } catch {
       notify('Rights and listing controls could not be saved.');
@@ -81,6 +90,16 @@ export default function WriterRightsPanel({ script, onUpdated, notify, simulatio
     <div className="research-panel-head">
       <div><span className="mini-label">RIGHTS & LICENSING</span><h2>Your work stays attributable to you.</h2><p>Record the terms that matter before a manuscript moves into production. Nightjar keeps AI-training permission off.</p></div>
       <FileKey2 size={22}/>
+    </div>
+
+    <div className="nj-writer-marketplace-journey" role="status">
+      <strong>Script to Creator Marketplace</strong>
+      <p>{['Approved','Published'].includes(String(script.status ?? ''))
+        ? marketplace.visibility === 'marketplace' && Boolean(String(marketplace.synopsis ?? '').trim()) ? 'Approved and listed for Creator discovery. Your synopsis is public; the full manuscript stays protected.' : 'Your manuscript is approved. Add a public synopsis and use the action below to release its listing to Voice Actors.'
+        : ['Submitted','Under review'].includes(String(script.status ?? '')) ? 'Your script is awaiting Nightjar approval. Assigning an Audio Editor is optional. You may set Marketplace visibility now and the synopsis will go live only after approval.'
+        : 'First save your manuscript, choose Marketplace visibility, confirm rights, then submit it for Nightjar approval. Audio Editor assignment is optional.'}</p>
+      {['Approved','Published'].includes(String(script.status ?? '')) && (marketplace.visibility !== 'marketplace' || !String(marketplace.synopsis ?? '').trim()) &&
+        <button className="primary-button" type="button" disabled={saving} onClick={()=>void save(true)}><Save size={14}/> {saving?'Listing…':'List approved script for creators'}</button>}
     </div>
 
     <div className="rights-grid">

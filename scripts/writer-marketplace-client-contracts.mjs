@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const app=readFileSync('src/App.tsx','utf8');
+const scripts=readFileSync('src/platform/firebase-scripts.ts','utf8');
+const panel=readFileSync('src/components/WriterRightsPanel.tsx','utf8');
+assert.match(scripts,/adminReviewWriterScript/);
+assert.match(app,/Manuscript decisions · no Audio Editor required/);
+assert.match(app,/Approve & list for creators/);
+assert.match(app,/Review protected manuscript/);
+assert.match(app,/ADMIN ONLY · PROTECTED MANUSCRIPT/);
+assert.match(scripts,/getAdminScriptReview/);
+assert.match(app,/Private or invitation only/);
+assert.match(app,/Optional Audio Editor assignment/);
+assert.match(app,/Script decision saved and Writer notified/);
+assert.match(panel,/List approved script for creators/);
+assert.match(panel,/marketplace\.visibility/);
+assert.match(panel,/full manuscript stays protected/);
+console.log('Writer to Creator Marketplace client flow contracts PASS');
