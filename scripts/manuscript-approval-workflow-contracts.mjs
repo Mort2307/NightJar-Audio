@@ -60,7 +60,14 @@ assert.match(queue, /setSelectedId\(null\)/);
 assert.match(queue, /getAdminScriptReview|adminScriptPreview/);
 assert.match(app, /AdminManuscriptReview scripts=\{adminScripts\}/);
 assert.match(app, /reviewAdminManuscript/);
-assert.match(app, /Submit for marketplace approval/);
+assert.match(app, /Review rights & submit/);
+const rightsPanel = readFileSync('src/components/WriterRightsPanel.tsx', 'utf8');
+assert.match(rightsPanel, /Confirm rights & submit for NightJar review/);
+assert.match(rightsPanel, /submitManuscript\(\)/);
+assert.match(rightsPanel, /nightjarScripts.updateRights\(script.id/);
+assert.match(rightsPanel, /List approved script for creators/);
+assert.match(app, /result.script\?\.status !== 'Submitted'/);
+assert.match(app, /submitManuscript=\{submitWriterScript\}/);
 assert.match(app, /Awaiting admin review/);
 assert.doesNotMatch(app, />Submit to editorial<\/button>/);
 
