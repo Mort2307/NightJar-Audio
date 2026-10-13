@@ -214,3 +214,22 @@
 .nj-admin-release-distribution{overflow-wrap:anywhere;line-height:1.5}
 .nj-admin-release-distribution small{display:block;opacity:.8;margin-top:5px}
 @media(max-width:720px){.nj-release-distribution-panel{padding:12px}.nj-release-distribution-option{font-size:14px;line-height:1.5}}
+
+/* Audio Creator Studio: compact optional transcripts and stable mobile flow. */
+.nj-optional-transcript > summary{cursor:pointer;list-style:none;min-width:0;gap:14px;}
+.nj-optional-transcript > summary::-webkit-details-marker{display:none;}
+.nj-optional-transcript > summary:focus-visible{outline:2px solid var(--accent,#d5b6d5);outline-offset:4px;}
+.nj-optional-transcript:not([open]) > :not(summary){display:none;}
+.nj-optional-transcript[open] > summary{margin-bottom:16px;}
+.nj-optional-transcript summary .status-pill{white-space:nowrap;}
+#release-transcript{scroll-margin-top:6rem;}
+@media(max-width:760px){
+  .creator-pipeline-card,.creator-pipeline-card .creator-pipeline-grid,.creator-pipeline-card .pipeline-editor{min-width:0;max-width:100%;}
+  .creator-pipeline-card .pipeline-editor{isolation:isolate;}
+  .creator-pipeline-card .nj-release-schedule-panel,.creator-pipeline-card .nj-scheduled-input,.creator-pipeline-card .pipeline-form-grid,.creator-pipeline-card .release-rights-attestation,.creator-pipeline-card .nj-release-distribution-panel,.creator-pipeline-card .release-transcript-editor,.creator-pipeline-card .release-credits-editor{min-width:0;max-width:100%;overflow-wrap:anywhere;}
+  .creator-pipeline-card .nj-scheduled-input > *,.creator-pipeline-card .pipeline-form-grid > *,.creator-pipeline-card .release-transcript-head > *{min-width:0;}
+  .creator-pipeline-card .nj-scheduled-input input,.creator-pipeline-card .pipeline-form-grid :is(input,select,textarea),.creator-pipeline-card .release-transcript-editor :is(input,textarea){font-size:16px;box-sizing:border-box;max-width:100%;min-width:0;}
+  .creator-pipeline-card .nj-release-schedule-panel :is(small,strong),.creator-pipeline-card .nj-scheduled-input :is(small,strong),.creator-pipeline-card .nj-workflow-section-heading :is(strong,small),.creator-pipeline-card .release-rights-attestation :is(strong,small,p),.creator-pipeline-card .release-transcript-editor :is(strong,small,p){overflow-wrap:anywhere;line-height:1.5;}
+  .creator-pipeline-card .nj-optional-transcript > summary{align-items:flex-start;}
+  .creator-pipeline-card .nj-optional-transcript summary .status-pill{white-space:normal;flex-shrink:0;}
+}
