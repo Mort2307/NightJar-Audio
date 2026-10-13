@@ -11,6 +11,11 @@ import { nightjarAdministration } from './platform/firebase-administration';
 import { classifyProfessionalApplications, filterProfessionalApplicationsByRole, pendingApplicationRoles, type ProfessionalApplicationBox } from './platform/professional-application-bank';
 import { nightjarCatalogue } from './platform/firebase-catalogue';
 import { nightjarListening } from './platform/firebase-listening';
+import { nightjarExperience, type ListeningBoundaries } from './platform/firebase-experience';
+import { DEFAULT_LISTENING_BOUNDARIES, hiddenByBoundaries, matchesListeningMood, type MoodFilter } from './platform/listening-discovery';
+import ListeningDiscoveryControls from './components/ListeningDiscoveryControls';
+import CreatorProductionTimeline from './components/CreatorProductionTimeline';
+import { VoiceCallingCardStudio } from './components/VoiceCallingCard';
 import { nightjarNotifications } from './platform/firebase-notifications';
 import { nightjarPush } from './platform/firebase-push';
 import AdminInstallBranding from './components/AdminInstallBranding';
@@ -288,6 +293,7 @@ type Track = {
   transcriptWordCount?: number;
   creatorUserId?: string;
   genre?: string;
+  mood?: string;
   tags?: string[];
   tropes?: string[];
   contributors?: { userId?: string | null; name: string; role: string }[];
@@ -628,6 +634,23 @@ function App() {
   const [catalogueQuery, setCatalogueQuery] = useState('');
   const [catalogueRating, setCatalogueRating] = useState('all');
   const [catalogueDuration, setCatalogueDuration] = useState('all');
+  const [selectedListeningMood, setSelectedListeningMood] = useState<MoodFilter>('all');
+  const [listeningBoundaries, setListeningBoundaries] = useState<ListeningBoundaries>(DEFAULT_LISTENING_BOUNDARIES);
+  const [momentSeek, setMomentSeek] = useState<{ releaseId: string; seconds: number; nonce: number } | null>(null);
+  // Apply private boundaries across app routes after a verified user session,
+  // not just when someone visits Discover. Reset immediately on account switch.
+  useEffect(() => {
+    setListeningBoundaries(DEFAULT_LISTENING_BOUNDARIES);
+    setSelectedListeningMood('all');
+    if (!user?.userId || !ageVerified || demoMode) return;
+    let cancelled = false;
+    void nightjarExperience.boundaries().then((value) => {
+      if (!cancelled) setListeningBoundaries(value);
+    }).catch(() => {
+      if (!cancelled) notify('Your listening preferences could not be loaded; check them under Discover.');
+    });
+    return () => { cancelled = true; };
+  }, [user?.userId, ageVerified, demoMode]);
   const [profileDirectory, setProfileDirectory] = useState<PublicDirectoryProfile[]>([]);
   const [directoryQuery, setDirectoryQuery] = useState('');
   const [supportTarget, setSupportTarget] = useState<{userId:string;name:string;role:'creator'|'writer'|'editor'|'artist';roles:string[]}|null>(null);
@@ -954,6 +977,7 @@ function App() {
   const filteredTracks = useMemo(() => {
     const query = catalogueQuery.trim().toLowerCase();
     return tracks.filter((track) => {
+      if (hiddenByBoundaries(track, listeningBoundaries) || !matchesListeningMood(track, selectedListeningMood)) return false;
       const haystack = [
         track.title, track.creator, track.category, track.genre, track.descriptor, track.seriesTitle,
         ...(track.tags ?? []), ...(track.tropes ?? []),
@@ -970,9 +994,9 @@ function App() {
       }
       return true;
     });
-  }, [tracks, catalogueQuery, catalogueRating, catalogueDuration]);
+  }, [tracks, catalogueQuery, catalogueRating, catalogueDuration, selectedListeningMood, listeningBoundaries]);
   const notificationReleaseCards = useMemo(() => {
-    const focused = focusedContentReleaseId ? tracks.find(item => item.id === focusedContentReleaseId) : null;
+    const focused = focusedContentReleaseId ? filteredTracks.find(item => item.id === focusedContentReleaseId) : null;
     return focused ? [focused, ...filteredTracks.filter(item => item.id !== focused.id)] : filteredTracks;
   }, [filteredTracks, focusedContentReleaseId, tracks]);
 
@@ -2370,6 +2394,11 @@ function App() {
 
   const togglePlayback = (track: Track) => {
     setTranscriptRequested(null);
+    setMomentSeek(null);
+    if (hiddenByBoundaries(track, listeningBoundaries)) {
+      notify('This recording matches your private listening boundaries. Change them under Discover → My Listening Boundaries to open it.');
+      return;
+    }
     if (!track.audioAvailable && !track.audioUrl) {
       notify('This release has no playable audio attached yet.');
       return;
@@ -4555,6 +4584,8 @@ function App() {
         onSubmitCapture={(event) => { if (liveRolePreview) { event.preventDefault(); event.stopPropagation(); } }}
         onDropCapture={(event) => { if (liveRolePreview) { event.preventDefault(); event.stopPropagation(); } }}
       >
+        {!liveRolePreview && !demoMode && Boolean(user) && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && ['creator','writer','editor','artist'].includes(view) &&
+          <div className="page-wrap"><CreatorProductionTimeline notify={notify}/></div>}
         {!canAdmin && !simulationMode && !liveRolePreview && ['creator', 'writer', 'editor', 'artist'].includes(String(effectiveRole)) && ['creator', 'writer', 'editor', 'artist'].includes(view) &&
           <div className="page-wrap nj-workspace-switcher-wrap">
             <WorkspaceSwitcher
@@ -4707,6 +4738,10 @@ function App() {
 
             <section id="catalogue" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
+              {effectiveRole === 'listener' && !liveRolePreview && <ListeningDiscoveryControls
+                mood={selectedListeningMood} onMoodChange={setSelectedListeningMood}
+                boundaries={listeningBoundaries} onBoundariesChange={setListeningBoundaries}
+                notify={notify} simulationMode={demoMode} />}
               <div className="catalogue-filter-bar">
                 <label className="catalogue-search"><Search size={15}/><input value={catalogueQuery} onChange={(event)=>setCatalogueQuery(event.target.value)} placeholder="Search title, VA, Writer, Audio Editor, Artist, trope or genre"/></label>
                 <select value={catalogueRating} onChange={(event)=>setCatalogueRating(event.target.value)} aria-label="Content level"><option value="all">All content levels</option><option value="sfw">SFW</option><option value="suggestive">Suggestive</option><option value="adult">Adult</option><option value="explicit">Explicit</option></select>
@@ -4900,6 +4935,9 @@ function App() {
             {!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading creator listening insights" />}>
               <CreatorListeningInsights releases={creatorDashboard.releases} verifiedMinutes={Number(creatorDashboard.metrics?.verifiedListeningMinutes ?? 0)} loading={creatorDashboardLoading} onRefresh={() => { void loadCreatorDashboard(); }} />
             </Suspense>}
+            {creatorOnly && Boolean(user?.userId) && !liveRolePreview && <VoiceCallingCardStudio
+              creatorUserId={String(user?.userId ?? '')} releases={creatorDashboard.releases}
+              notify={notify} simulationMode={simulationMode} />}
             {!liveRolePreview && <div id="creator-pipeline">
               {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} focusReleaseId={focusedReleaseId} onSubmitted={() => { void loadNotifications(productLoadEpoch.current); }} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); setReviewTrack((track) => track?.id === releaseId ? null : track); setFocusedReleaseId((id) => id === releaseId ? null : id); }} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
             </div>}
@@ -4936,6 +4974,13 @@ function App() {
               onDiscoverCreators={()=>{setDirectoryRoleFilter('all');navigate('creators');}}
               key={'listener-library-' + demoSessionKey}
               onPlayRelease={(release)=>{const track=releaseToTrack(release); setTracks((items)=>items.some((item)=>item.id===track.id)?items:[...items,track]); togglePlayback(track);}}
+              onPlayMoment={(release,seconds)=>{
+                const track=releaseToTrack(release);
+                if (hiddenByBoundaries(track,listeningBoundaries)) {notify('This saved moment matches a listening boundary. Adjust your preference in Discover before playing.');return;}
+                setTracks((items)=>items.some((item)=>item.id===track.id)?items:[...items,track]);
+                setMomentSeek({releaseId:track.id,seconds,nonce:Date.now()});
+                setPlaying(track.id);
+              }}
               notify={notify}
               demoMode={demoMode}
               simulationMode={simulationMode}
@@ -5794,7 +5839,7 @@ function App() {
         }}
       />}
       {playing && <NightjarPlayer
-        key={playing}
+        key={playing + (momentSeek?.releaseId === playing ? ':' + momentSeek.nonce : '')}
         track={tracks.find((track) => track.id === playing) ?? null}
         queue={tracks}
         onSelectTrack={(next) => togglePlayback(next as Track)}
@@ -5803,12 +5848,13 @@ function App() {
         notify={notify}
         simulationMode={demoMode}
         initialTranscriptOpen={transcriptRequested === playing}
+        initialSeekSeconds={momentSeek?.releaseId === playing ? momentSeek.seconds : null}
       />}
       {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onPlayRelease={liveRolePreview ? () => notify('Playback requires an authorised Listener account.') : playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       {supportTarget && !liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Opening Nightjars support" />}>
         <NightjarGiftPanel recipientUserId={supportTarget.userId} recipientName={supportTarget.name} recipientRole={supportTarget.role} recipientRoles={supportTarget.roles} onClose={()=>setSupportTarget(null)} notify={notify}/>
       </Suspense>}
-      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')+':'+(notificationArtworkFocusId??'none')} initialRole={publicProfileInitialRole??undefined} focusArtworkId={notificationArtworkFocusId} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
+      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')+':'+(notificationArtworkFocusId??'none')} initialRole={publicProfileInitialRole??undefined} focusArtworkId={notificationArtworkFocusId} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} readOnlyPreview={liveRolePreview} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onMessageCreator={(creatorId) => { setModerationOpen(false);setMessageRecipientUserId(creatorId);setMessageConversationId(null);setMessageCollaborationId(null);navigate('messages'); }} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} onOpenProfile={(userId, role) => { setReviewTrack(null); openPublicProfile(userId, role); }} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={(draft,stepIndex,revision)=>finishOnboardingLater(draft,stepIndex,revision)} notify={notify} /></Suspense>}
@@ -5839,6 +5885,7 @@ function releaseToTrack(release: any): Track {
     transcriptWordCount: Math.max(0, Number(release.transcriptWordCount ?? 0)),
     creatorUserId: release.creatorUserId,
     genre: release.genre ?? '',
+    mood: release.mood ?? '',
     tags: release.tags ?? [],
     tropes: release.tropes ?? [],
     contributors: release.contributors ?? [],

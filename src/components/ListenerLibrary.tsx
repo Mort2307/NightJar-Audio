@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bookmark, Clock3, Eye, EyeOff, Heart, ListMusic, Play, Plus, Trash2, X } from 'lucide-react';
+import { Bookmark, BookmarkPlus, Clock3, Eye, EyeOff, Heart, ListMusic, Play, Plus, Trash2, X } from 'lucide-react';
 import { nightjarLibrary } from '../platform/firebase-library';
+import { nightjarExperience, type MomentMark } from '../platform/firebase-experience';
 import { demoLibrary } from '../demo/nightjarDemo';
 import { readDemo, writeDemo } from '../demo/demoSession';
 
 type Props = {
   onPlayRelease: (release: any) => void;
+  onPlayMoment: (release: any, seconds: number) => void;
   notify: (message: string) => void;
   demoMode?: boolean;
   simulationMode?: boolean;
   onDiscoverCreators?: () => void;
 };
 
-export default function ListenerLibrary({ onPlayRelease, notify, demoMode = false, simulationMode = false, onDiscoverCreators }: Props) {
+export default function ListenerLibrary({ onPlayRelease, onPlayMoment, notify, demoMode = false, simulationMode = false, onDiscoverCreators }: Props) {
   const [library, setLibrary] = useState<any>({ history: [], continueListening: [], favourites: [], playlists: [] });
-  const [tab, setTab] = useState<'continue' | 'history' | 'favourites' | 'playlists'>('continue');
+  const [tab, setTab] = useState<'continue' | 'history' | 'favourites' | 'playlists' | 'marks'>('continue');
+  const [marks, setMarks] = useState<MomentMark[]>([]);
+  const [marksLoading, setMarksLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [playlistTitle, setPlaylistTitle] = useState('');
   const [selectedReleaseIds, setSelectedReleaseIds] = useState<string[]>([]);
@@ -37,6 +41,27 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
 
   useEffect(() => { void load(); }, [demoMode]);
   useEffect(() => { if (simulationMode && !loading) writeDemo('library', library); }, [library, loading, simulationMode]);
+
+  const loadMarks = async () => {
+    if (demoMode) return;
+    setMarksLoading(true);
+    try { setMarks(await nightjarExperience.marks()); }
+    catch { notify('Your Moment Marks could not be loaded.'); }
+    finally { setMarksLoading(false); }
+  };
+
+  useEffect(() => {
+    if (tab === 'marks') void loadMarks();
+  }, [tab, demoMode]);
+
+  const deleteMark = async (markId: string) => {
+    if (demoMode) return notify('Moment Marks are available on your real NightJar account.');
+    try {
+      await nightjarExperience.deleteMark(markId);
+      setMarks((current) => current.filter((item) => item.id !== markId));
+      notify('Moment removed.');
+    } catch { notify('Moment could not be removed.'); }
+  };
 
   const available = useMemo(() => {
     const map = new Map<string, any>();
@@ -170,10 +195,23 @@ export default function ListenerLibrary({ onPlayRelease, notify, demoMode = fals
       <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}><ListMusic size={14}/> History</button>
       <button className={tab === 'favourites' ? 'active' : ''} onClick={() => setTab('favourites')}><Heart size={14}/> Favourites</button>
       <button className={tab === 'playlists' ? 'active' : ''} onClick={() => setTab('playlists')}><Bookmark size={14}/> Playlists</button>
+      <button className={tab === 'marks' ? 'active' : ''} onClick={() => setTab('marks')}><BookmarkPlus size={14}/> Moment Marks</button>
       {tab === 'history' && (library.history ?? []).length > 0 && <button className="library-clear-history" onClick={() => void clearHistory()}><Trash2 size={13}/> Clear visible history</button>}
     </div>
 
-    {loading ? <div className="people-empty">Loading your library…</div> : tab !== 'playlists' ? <div className="library-list">
+    {loading ? <div className="people-empty">Loading your library…</div> : tab === 'marks' ? <div className="library-list" aria-label="Your private Moment Marks">
+      {marksLoading ? <div className="people-empty">Loading saved moments…</div>
+        : marks.length === 0 ? <div className="people-empty"><BookmarkPlus size={18}/><strong>No saved moments yet.</strong><span>Open a NightJar recording and tap Moment Mark at the exact point you want to revisit.</span></div>
+        : marks.map((mark) => <article className="library-row" key={mark.id}>
+          <button className="library-play" type="button" onClick={() => onPlayMoment(mark.release, mark.positionSeconds)}
+            aria-label={'Play ' + mark.release.title + ' from ' + Math.floor(mark.positionSeconds / 60) + ' minutes'}>
+            <Play size={15} fill="currentColor"/>
+          </button>
+          <div><strong>{mark.label || 'Saved moment'}</strong><span>{mark.release.title} · {Math.floor(mark.positionSeconds / 60)}:{String(Math.floor(mark.positionSeconds % 60)).padStart(2, '0')}</span><small>Private · saved on your account</small></div>
+          <button type="button" className="ghost-button" onClick={() => void deleteMark(mark.id)}><Trash2 size={14}/> Remove</button>
+        </article>)}
+      {!demoMode && <button className="ghost-button" type="button" onClick={() => void loadMarks()}>Refresh saved moments</button>}
+    </div> : tab !== 'playlists' ? <div className="library-list">
       {items.length === 0 ? <div className="people-empty"><ListMusic size={18}/><strong>Nothing here yet.</strong><span>Your library fills from real Nightjar listening and favourites.</span></div> : items.map((release: any) => <article className="library-row" key={release.id}>
         <button className="library-play" onClick={() => onPlayRelease(release)} aria-label={'Play ' + release.title}><Play size={15} fill="currentColor"/></button>
         <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'} · {release.category ?? 'Audio'}</span>{release.positionSeconds > 0 && <small>{Math.floor(release.positionSeconds / 60)} min listened</small>}</div>
