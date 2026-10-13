@@ -6876,7 +6876,10 @@ export const getAdminScriptReview = onCall({ region: REGION }, async (request) =
   });
   const sourcePath = cleanText(data.originalUpload?.storagePath,500);
   let sourceFile:null|{fileName:string;url:string;expiresAt:string} = null;
-  if (sourcePath) {
+  // Only PDF rendering needs a temporary signed document URL. Text,
+  // Markdown, RTF and DOCX previews are returned as read-only text by the
+  // authenticated callable. No direct source download link is issued for them.
+  if (sourcePath && writerUploadExtension(cleanText(data.originalUpload?.fileName,180)) === 'pdf') {
     const expiration = new Date(Date.now()+10*60*1000);
     const [url] = await getStorage().bucket().file(sourcePath).getSignedUrl({action:'read',expires:expiration});
     sourceFile={fileName:cleanText(data.originalUpload?.fileName,180)||'Uploaded manuscript',url,expiresAt:expiration.toISOString()};
