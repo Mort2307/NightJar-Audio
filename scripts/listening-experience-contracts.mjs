@@ -9,7 +9,7 @@ const library = readFileSync('src/components/ListenerLibrary.tsx','utf8');
 const app = readFileSync('src/App.tsx','utf8');
 const voices = readFileSync('src/components/VoiceCallingCard.tsx','utf8');
 const profile = readFileSync('src/components/PublicProfile.tsx','utf8');
-const creator = readFileSync('src/components/CreatorProfile.tsx');
+const creator = readFileSync('src/components/CreatorProfile.tsx','utf8');
 const timeline = readFileSync('src/components/CreatorProductionTimeline.tsx','utf8');
 
 for (const fn of [
