@@ -5643,7 +5643,11 @@ const createNotification = async (userId: string, payload: Record<string, unknow
       : type === 'comment' || subtype === 'comment' || subtype === 'release_comment' || subtype === 'release_reaction' ? 'comments'
         : type === 'collaboration' ? 'collaborations'
           : type === 'payment' || subtype === 'payment' ? 'payments'
-            : type === 'content' && subtype === 'release' ? 'newReleases'
+            : type === 'content' && subtype === 'new_audio' ? 'newReleases'
+              : type === 'content' && subtype === 'new_script' ? 'newScripts'
+              : type === 'content' && subtype === 'new_artwork' ? 'newArtwork'
+              : type === 'follow' && subtype === 'new_follower' ? 'newFollowers'
+              : type === 'content' && subtype === 'release' ? 'newReleases'
               : type === 'spotlight' || type === 'follow' || subtype === 'follow' ? 'followedProfiles'
                 : type === 'announcement' ? 'announcements'
                   : null;
