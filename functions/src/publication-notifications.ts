@@ -155,9 +155,13 @@ const publicNotificationTrigger=(kind:PublicationKind,collection:string)=>
     const previous=event.data?.before.data() as Record<string,any>|undefined;
     const current=event.data?.after.data() as Record<string,any>|undefined;
     if(!isPublished(kind,current)||isPublished(kind,previous))return;
+    // A moderation decision may be reversed before this asynchronous event runs.
+    // Only announce the latest currently-public state, never a withdrawn work.
+    const fresh=await db().collection(collection).doc(String(event.params.itemId)).get();
+    if(!isPublished(kind,fresh.data()))return;
     // Existing, already-public material should not receive a second broadcast
     // just because it is edited or re-approved.
-    await broadcastPublication(kind,String(event.params.itemId),current!);
+    await broadcastPublication(kind,String(event.params.itemId),fresh.data()!);
   });
 export const notifyPublishedAudio=publicNotificationTrigger('audio','releases');
 export const notifyPublishedScript=publicNotificationTrigger('script','scripts');
@@ -171,6 +175,8 @@ export const notifyNewFollower=onDocumentCreated({
   const followerId=String(event.params.followerId);
   const followedId=String(event.params.followedId);
   if(!followerId||!followedId||followerId===followedId)return;
+  // Ignore a follow that was immediately withdrawn before the trigger ran.
+  if(!(await db().collection('accounts').doc(followerId).collection('follows').doc(followedId).get()).exists)return;
   const [follower,account,profile]=await Promise.all([
     db().collection('accounts').doc(followerId).get(),
     db().collection('accounts').doc(followedId).get(),
