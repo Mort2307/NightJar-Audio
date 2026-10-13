@@ -338,7 +338,7 @@ export default function AccountAccess({
     <div className="account-access-field"><label htmlFor="nightjar-auth-email">Email address</label><input id="nightjar-auth-email" name="email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
     {mode !== 'reset' && <>
       <div className="account-access-field"><label htmlFor="nightjar-auth-password">Password</label><div className="account-password-input"><input id="nightjar-auth-password" name="password" required type={showPassword ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
-      {mode === 'signin' && <button type="button" className="ghost-button" disabled={busy} onClick={() => changeMode('reset')}>Forgotten your password? Reset it here.</button>
+      {mode === 'signin' && <button type="button" className="ghost-button" disabled={busy} onClick={() => changeMode('reset')}>Forgotten your password? Reset it here.</button>}
       {mode === 'register' && <>
         <div className="account-password-requirements" aria-live="polite">
           {(() => {
