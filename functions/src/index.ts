@@ -5445,6 +5445,8 @@ export const releaseModerationQueue = onCall({ region: REGION }, async (request)
 const notificationRouteFor = (payload: Record<string, unknown>) => {
   const type = cleanText(payload.type, 40);
   const subtype = cleanText(payload.subtype, 60);
+  const updateId = cleanText(payload.updateId, 64);
+  if (type === 'announcement' && /^[0-9a-f-]{36}$/i.test(updateId)) return '/discover?update=' + encodeURIComponent(updateId);
   if (type === 'admin_action' && subtype === 'release_submitted') return '/admin';
   if (type === 'message' || subtype === 'professional_message' || subtype === 'direct_message') return '/messages';
   if (type === 'collaboration') return '/messages';
