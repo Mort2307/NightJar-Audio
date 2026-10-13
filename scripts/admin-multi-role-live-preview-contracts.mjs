@@ -8,6 +8,7 @@ const client = read('src/platform/firebase-administration.ts');
 const member = read('src/components/AdminMemberRoleEditor.tsx');
 const live = read('src/components/AdminLiveMarketplacePreview.tsx');
 const marketplace = read('src/components/ScriptMarketplace.tsx');
+const marketplaceActions = read('src/components/MarketplaceScriptActions.tsx');
 const css = read('src/index.css');
 
 // One member can be approved for any combination of professions; Listener is
@@ -47,8 +48,9 @@ assert.match(live, /previewScriptMarketplace\(\)/, 'admin visibility diagnostic 
 assert.match(live, /<ScriptMarketplace/, 'actual VA marketplace component is reused');
 assert.match(live, /demoMode=\{false\}/, 'public marketplace fetch uses real records only');
 assert.match(live, /readOnlyPreview/, 'live preview cannot create interest\/collaboration');
-assert.match(marketplace, /if \(readOnlyPreview\)/, 'runtime checks forbid read-only preview writes');
-assert.match(marketplace, /Preview only — enquiry disabled/, 'interactions visibly disabled');
+assert.match(marketplace, /readOnlyPreview=\{readOnlyPreview\}/, 'read-only flag passed to all marketplace actions');
+assert.match(marketplaceActions, /if\(readOnlyPreview\|\|\(demoMode&&\!simulationMode\)\)/, 'runtime checks forbid read-only preview writes');
+assert.match(marketplaceActions, /Read-only live preview/, 'interactions visibly disabled');
 assert.match(backend, /export const adminPreviewScriptMarketplace = onCall/, 'admin-only availability diagnostic is implemented');
 assert.match(backend, /listing\.visibility === 'marketplace' && Boolean\(listing\.synopsis\.trim\(\)\) && \['Approved','Published'\]\.includes\(status\)/, 'diagnostic matches marketplace discoverability');
 assert.match(backend, /No protected script text is included/, 'privacy requirement documented in diagnostic');

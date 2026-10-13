@@ -4,6 +4,7 @@ import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
 import { createHash, randomUUID } from 'node:crypto';
+import { inflateRawSync } from 'node:zlib';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -6687,6 +6688,7 @@ export const listEditorQueue = onCall({ region: REGION }, async (request) => {
   const activeStatuses = new Set(['Submitted','Under review','Revision requested']);
   const queue = snapshot.docs
     .filter((doc) => activeStatuses.has(String(doc.data().status)))
+    .filter((doc) => normaliseScriptMarketplace(doc.data().marketplace).visibility !== 'marketplace')
     .filter((doc) => identity.role === 'admin' || doc.data().editorUserId === identity.uid)
     .map((doc) => scriptPayload(doc.data(), doc.id, false))
     .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
@@ -6712,9 +6714,11 @@ export const reviewEditorScript = onCall({ region: REGION }, async (request) => 
     throw new HttpsError('failed-precondition', 'This manuscript is no longer open for editorial review.');
   }
 
+  if (normaliseScriptMarketplace(data.marketplace).visibility === 'marketplace') {
+    throw new HttpsError('failed-precondition', 'Marketplace manuscript decisions belong to NightJar administrators.');
+  }
   const comment = cleanText(input.comment, 4000);
-  // Audio Editors may recommend a marketplace manuscript, but only a
-  // NightJar administrator can make the final marketplace approval.
+  // Production editorial reviews remain a separate feature and cannot approve marketplace submissions.
   const awaitingAdminApproval = status === 'Approved'
     && normaliseScriptMarketplace(data.marketplace).visibility === 'marketplace';
   const nextStatus = awaitingAdminApproval ? 'Under review' : status;
@@ -6766,6 +6770,96 @@ export const adminListScripts = onCall({ region: REGION }, async (request) => {
   };
 });
 
+
+// Read-only source previews for verified NightJar administrators. Never use these
+// extracted strings in script listings, emails, public endpoints or edit paths.
+const SCRIPT_REVIEW_PREVIEW_MAX_CHARS = 200000;
+const SCRIPT_REVIEW_MAX_EXPANDED_XML = 16 * 1024 * 1024;
+const decodeReviewXml = (value: string) => value.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos);/gi, (match, entity: string) => {
+  switch (entity.toLowerCase()) {
+    case 'amp': return '&';
+    case 'lt': return '<';
+    case 'gt': return '>';
+    case 'quot': return '"';
+    case 'apos': return "'";
+    default: {
+      const point = entity.startsWith('#x') ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10);
+      return Number.isInteger(point) && point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : match;
+    }
+  }
+});
+const extractDocxReviewText = (bytes: Buffer) => {
+  // Parse the ZIP central directory instead of searching compressed bytes for XML:
+  // DOCX files commonly use data descriptors and do not expose local file sizes.
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (bytes.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('Invalid DOCX archive.');
+  const entries = bytes.readUInt16LE(eocd + 10);
+  let offset = bytes.readUInt32LE(eocd + 16);
+  for (let i = 0; i < entries; i++) {
+    if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 0x02014b50) throw new Error('Invalid DOCX central directory.');
+    const flags = bytes.readUInt16LE(offset + 8);
+    const method = bytes.readUInt16LE(offset + 10);
+    const compressedSize = bytes.readUInt32LE(offset + 20);
+    const expandedSize = bytes.readUInt32LE(offset + 24);
+    const nameLength = bytes.readUInt16LE(offset + 28);
+    const extraLength = bytes.readUInt16LE(offset + 30);
+    const commentLength = bytes.readUInt16LE(offset + 32);
+    const localOffset = bytes.readUInt32LE(offset + 42);
+    const end = offset + 46 + nameLength + extraLength + commentLength;
+    if (end > bytes.length) throw new Error('Invalid DOCX archive entry.');
+    const name = bytes.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
+    if (name === 'word/document.xml') {
+      if ((flags & 1) !== 0 || ![0,8].includes(method) || expandedSize > SCRIPT_REVIEW_MAX_EXPANDED_XML)
+        throw new Error('Unsupported or oversized DOCX content.');
+      if (localOffset + 30 > bytes.length || bytes.readUInt32LE(localOffset) !== 0x04034b50)
+        throw new Error('Invalid DOCX document entry.');
+      const dataStart = localOffset + 30 + bytes.readUInt16LE(localOffset + 26) + bytes.readUInt16LE(localOffset + 28);
+      if (dataStart + compressedSize > bytes.length) throw new Error('Invalid DOCX compressed document.');
+      const packed = bytes.subarray(dataStart, dataStart + compressedSize);
+      const xmlBytes = method === 8 ? inflateRawSync(packed, { maxOutputLength: SCRIPT_REVIEW_MAX_EXPANDED_XML }) : packed;
+      if (xmlBytes.length > SCRIPT_REVIEW_MAX_EXPANDED_XML) throw new Error('DOCX document is too large to preview.');
+      const xml = xmlBytes.toString('utf8');
+      const main = xml.match(/<w:body\b[^>]*>([\s\S]*?)<\/w:body>/)?.[1] ?? xml;
+      const text = main.replace(/<w:tab\b[^>]*\/>/g, '\t')
+        .replace(/<w:br\b[^>]*\/>/g, '\n')
+        .replace(/<\/w:p>/g, '\n\n')
+        .replace(/<\/w:tr>/g, '\n')
+        .replace(/<\/w:tc>/g, '\t')
+        .replace(/<[^>]*>/g, '');
+      return decodeReviewXml(text).trim();
+    }
+    offset = end;
+  }
+  throw new Error('No document text was found in this DOCX.');
+};
+const adminSourcePreview = async (storagePath: string, fileName: string): Promise<{
+  format: 'text' | 'pdf' | 'unavailable'; text?: string; truncated?: boolean; message?: string;
+}> => {
+  const extension = writerUploadExtension(fileName);
+  if (extension === 'pdf') return { format:'pdf' };
+  if (extension === 'doc') return { format:'unavailable', message:'Legacy .doc files cannot be securely rendered inside NightJar. Request a PDF or DOCX from the Writer.' };
+  if (!['txt','md','markdown','rtf','docx'].includes(extension))
+    return { format:'unavailable', message:'This document format cannot be previewed securely.' };
+  try {
+    const [bytes] = await getStorage().bucket().file(storagePath).download();
+    let value = extension === 'docx' ? extractDocxReviewText(bytes) : bytes.toString('utf8');
+    if (extension === 'rtf') {
+      value = value.replace(/\\par[d]?(\s|$)/g, '\n')
+        .replace(/\\tab\b/g, '\t')
+        .replace(/\\'[0-9a-f]{2}/gi, ' ')
+        .replace(/\\[a-z]+-?\d*\s?/gi, '')
+        .replace(/[{}]/g, '').trim();
+    }
+    return { format:'text', text:value.slice(0,SCRIPT_REVIEW_PREVIEW_MAX_CHARS), truncated:value.length > SCRIPT_REVIEW_PREVIEW_MAX_CHARS };
+  } catch (error) {
+    console.warn('Nightjar administrator source preview failed', error instanceof Error ? error.message : 'Unknown preview error');
+    return { format:'unavailable', message:'This file could not be rendered securely in NightJar. Ask the Writer for a new PDF or DOCX.' };
+  }
+};
+
 // Administrators must be able to read an uploaded manuscript before approving it.
 // Never include protected contents in adminListScripts or the public marketplace.
 // These signed links expire quickly and every preview is audited.
@@ -6782,12 +6876,18 @@ export const getAdminScriptReview = onCall({ region: REGION }, async (request) =
   });
   const sourcePath = cleanText(data.originalUpload?.storagePath,500);
   let sourceFile:null|{fileName:string;url:string;expiresAt:string} = null;
-  if (sourcePath) {
+  // Only PDF rendering needs a temporary signed document URL. Text,
+  // Markdown, RTF and DOCX previews are returned as read-only text by the
+  // authenticated callable. No direct source download link is issued for them.
+  if (sourcePath && writerUploadExtension(cleanText(data.originalUpload?.fileName,180)) === 'pdf') {
     const expiration = new Date(Date.now()+10*60*1000);
     const [url] = await getStorage().bucket().file(sourcePath).getSignedUrl({action:'read',expires:expiration});
     sourceFile={fileName:cleanText(data.originalUpload?.fileName,180)||'Uploaded manuscript',url,expiresAt:expiration.toISOString()};
   }
-  return { script:scriptPayload(data,scriptId,true),sourceFile };
+  const sourcePreview = sourcePath
+    ? await adminSourcePreview(sourcePath, cleanText(data.originalUpload?.fileName,180))
+    : { format:'text' as const, text:cleanText(data.content,200000), truncated:false };
+  return { script:scriptPayload(data,scriptId,true),sourceFile,sourcePreview };
 });
 
 // Editorial review is optional production assistance, never a prerequisite for
@@ -6833,6 +6933,14 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
     }, {merge:true});
     return {writerUserId:String(data.writerUserId ?? ''),title:cleanText(data.title,180),nextStatus,marketplaceVisible};
   });
+  // Review decisions become durable, writer-visible events in the same thread
+  // as clarification messages; the decision is never lost in a free-text field.
+  await ref.collection('reviewThread').add({
+    kind:'decision', visibility:'writer', authorUserId:admin.uid, authorLabel:'NightJar Team',
+    body: decision === 'approved' ? (note || 'NightJar approved the submitted manuscript.')
+      : note || (decision === 'changes' ? 'NightJar requested changes.' : 'NightJar rejected this manuscript.'),
+    decision,createdAt:FieldValue.serverTimestamp(),
+  }).catch(error=>console.warn('Manuscript review timeline entry failed',error));
   if (result.writerUserId) {
     await createNotification(result.writerUserId, {
       type:'editorial', subtype:'script_review',
@@ -6847,6 +6955,85 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
   return {script:scriptPayload(saved.data() ?? {},scriptId,false),marketplaceVisible:result.marketplaceVisible};
 });
 
+
+// Manuscript-specific review correspondence. Private admin notes are never
+// returned to a Writer or the marketplace. Writer-visible entries form an
+// append-only, timestamped conversation attached to the protected script.
+const scriptReviewEntryPayload = (value: Record<string, any>, id: string) => ({
+  id,
+  kind: cleanText(value.kind, 20) || 'message',
+  visibility: value.visibility === 'internal' ? 'internal' : 'writer',
+  authorUserId: cleanText(value.authorUserId, 160) || null,
+  authorLabel: cleanText(value.authorLabel, 100) || 'NightJar Team',
+  body: cleanText(value.body, 2400),
+  createdAt: toIso(value.createdAt),
+});
+export const listManuscriptReviewThread = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer','admin']);
+  const scriptId = cleanText((request.data as {scriptId?: unknown}|undefined)?.scriptId, 160);
+  if (!scriptId) throw new HttpsError('invalid-argument','Select a manuscript.');
+  const script = await scriptRef(scriptId).get();
+  if (!script.exists) throw new HttpsError('not-found','Manuscript not found.');
+  if (identity.role !== 'admin' && script.data()?.writerUserId !== identity.uid) {
+    throw new HttpsError('permission-denied','Only the Writer and NightJar administrators can read this review conversation.');
+  }
+  const entries = await script.ref.collection('reviewThread').orderBy('createdAt', 'asc').limit(300).get();
+  return { entries: entries.docs.filter(doc => identity.role === 'admin' || doc.data().visibility !== 'internal')
+    .map(doc => scriptReviewEntryPayload(doc.data(), doc.id)), scriptId };
+});
+export const postManuscriptReviewEntry = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer','admin']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const body = cleanText(input.body, 2400);
+  const visibility = identity.role === 'admin' && input.visibility === 'internal' ? 'internal' : 'writer';
+  if (!scriptId || !body) throw new HttpsError('invalid-argument','Write a note or message first.');
+  const script = await scriptRef(scriptId).get();
+  const scriptData = script.data();
+  if (!scriptData) throw new HttpsError('not-found','Manuscript not found.');
+  if (identity.role !== 'admin' && scriptData.writerUserId !== identity.uid)
+    throw new HttpsError('permission-denied','You may only message NightJar about your own manuscript.');
+  if (identity.role !== 'admin' && !['Submitted','Under review','Revision requested','Rejected','Approved','Published'].includes(String(scriptData.status ?? '')))
+    throw new HttpsError('failed-precondition','Submit your manuscript before opening a review conversation.');
+  const thread = script.ref.collection('reviewThread');
+  // Prevent identical bursts without penalising normal ongoing discussions.
+  const recent = await thread.orderBy('createdAt', 'desc').limit(1).get();
+  const last = recent.docs[0]?.data();
+  if (last && last.authorUserId === identity.uid && last.body === body && last.visibility === visibility &&
+      Date.now() - (last.createdAt?.toMillis?.() ?? 0) < 15000)
+    throw new HttpsError('resource-exhausted','This message was already submitted.');
+  const ref = thread.doc();
+  const entry = {
+    kind: visibility === 'internal' ? 'note' : 'message', visibility,
+    body, authorUserId:identity.uid,
+    authorLabel: identity.role === 'admin' ? 'NightJar Team' : 'Writer',
+    createdAt:FieldValue.serverTimestamp(),
+  };
+  await ref.set(entry);
+  if (identity.role === 'admin' && visibility === 'writer' && scriptData.writerUserId) {
+    await createNotification(String(scriptData.writerUserId), {
+      type:'editorial',subtype:'script_review_message', title:'NightJar sent a message about your manuscript',
+      message:'A NightJar administrator has replied to ' + cleanText(scriptData.title,150) + '.',
+      scriptId,
+    }).catch(error=>console.warn('Writer script review message notification failed',error));
+  } else if (identity.role !== 'admin') {
+    // Only verified owner identities receive review correspondence alerts.
+    await Promise.all([...ADMIN_EMAILS].map(async email => {
+      try {
+        const owner = await getAuth().getUserByEmail(email);
+        if (owner.uid === identity.uid) return;
+        await createNotification(owner.uid,{
+          type:'admin_attention',subtype:'script_submission',title:'Writer replied to a manuscript review',
+          message:'A submitted manuscript has a new writer message in the admin review queue.',
+          scriptId, route:'/admin/editorial',
+        });
+      } catch(error) { console.warn('Admin manuscript review notification failed',error); }
+    }));
+  }
+  const saved = await ref.get();
+  return { entry:scriptReviewEntryPayload(saved.data() ?? entry,ref.id) };
+});
+
 export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -6859,6 +7046,9 @@ export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
     accountRef(editorUserId).get(),
   ]);
   if (!script.exists) throw new HttpsError('not-found', 'Script not found.');
+  if (normaliseScriptMarketplace(script.data()?.marketplace).visibility === 'marketplace') {
+    throw new HttpsError('failed-precondition', 'Marketplace manuscripts are reviewed directly by NightJar administrators, without editorial assignment.');
+  }
   if (!editor.exists || editor.data()?.role !== 'editor' || editor.data()?.status !== 'active') {
     throw new HttpsError('failed-precondition', 'The selected account is not an active Audio Editor.');
   }
@@ -7912,6 +8102,8 @@ const normaliseScriptMarketplace = (value: unknown) => {
   return {
     visibility: ['private','invitation','marketplace','unavailable','licensed'].includes(visibility) ? visibility : 'private',
     synopsis: cleanText(input.synopsis, 1800),
+    // Writer-selected sample: never derived from the protected manuscript automatically.
+    previewExcerpt: cleanText(input.previewExcerpt, 3200),
     genres: cleanStringList(input.genres, 16),
     tropes: cleanStringList(input.tropes, 24),
     commissionPricePence: typeof input.commissionPricePence === 'number'
@@ -8028,12 +8220,168 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
         writerName: writer.displayName,
         writerHandle: writer.handle,
         rights: normaliseScriptRights(data.rights),
-        marketplace: normaliseScriptMarketplace(data.marketplace),
+        marketplace: (() => { const { previewExcerpt, ...listing } = normaliseScriptMarketplace(data.marketplace); return { ...listing, sampleAvailable:Boolean(previewExcerpt.trim()) }; })(),
         artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
         updatedAt: toIso(data.updatedAt),
       };
     })));
   return { scripts };
+});
+
+
+// Only an explicitly writer-selected excerpt can be previewed by an authorised
+// VA. Neither protected script text nor private uploaded source files are returned.
+export const getMarketplaceScriptSample = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  await requireAgeVerified(identity.uid);
+  const scriptId = cleanText((request.data as {scriptId?:unknown}|undefined)?.scriptId, 160);
+  if (!scriptId) throw new HttpsError('invalid-argument','Select a marketplace script.');
+  const snapshot = await scriptRef(scriptId).get();
+  const data = snapshot.data();
+  if (!data) throw new HttpsError('not-found','Marketplace script not found.');
+  const listing = normaliseScriptMarketplace(data.marketplace);
+  if (listing.visibility !== 'marketplace' || !listing.synopsis.trim() || !['Approved','Published'].includes(String(data.status??''))) {
+    throw new HttpsError('failed-precondition','This script is not currently available in the marketplace.');
+  }
+  if (!listing.previewExcerpt.trim()) throw new HttpsError('failed-precondition','The Writer has not enabled a protected sample.');
+  await db.collection('protectionEvents').add({
+    userId:identity.uid, eventType:'script_sample_view', relatedType:'script', relatedId:scriptId,
+    summary:'A verified NightJar Creator opened the Writer-approved sample excerpt.',
+    createdAt:FieldValue.serverTimestamp(),
+  });
+  return { scriptId, title:cleanText(data.title,180),sample:listing.previewExcerpt,writerUserId:data.writerUserId??null };
+});
+
+
+// Rights negotiations are not sales. No money changes hands and no protected
+// manuscript/licence rights are granted until a compliant payment provider,
+// final signed terms and independent settlement verification are implemented.
+const licenceOfferPayload = (value: Record<string, any>, id: string) => ({
+  id,
+  scriptId: cleanText(value.scriptId,160),
+  scriptTitle: cleanText(value.scriptTitle,180),
+  writerUserId: cleanText(value.writerUserId,160),
+  creatorUserId: cleanText(value.creatorUserId,160),
+  amountPence: Math.max(0,Number(value.amountPence??0)),
+  currency:'GBP',
+  licenceType: value.licenceType === 'exclusive'?'exclusive':'non-exclusive',
+  termMonths: Math.max(1,Math.min(120,Number(value.termMonths??12))),
+  permittedUse: 'audio_adaptation',
+  usageDetails: cleanText(value.usageDetails,1200),
+  status: cleanText(value.status,50),
+  lastProposerUserId: cleanText(value.lastProposerUserId,160),
+  paymentStatus: 'not_collected',
+  licenceGranted: false,
+  revision: Math.max(1,Number(value.revision??1)),
+  createdAt:toIso(value.createdAt), updatedAt:toIso(value.updatedAt),
+});
+const sanitiseLicenceTerms = (value: Record<string,unknown>) => {
+  const amountPence = Number(value.amountPence);
+  const termMonths = Number(value.termMonths);
+  const licenceType = cleanText(value.licenceType,30);
+  const usageDetails = cleanText(value.usageDetails,1200);
+  if (!Number.isSafeInteger(amountPence) || amountPence < 100 || amountPence > 10000000)
+    throw new HttpsError('invalid-argument','Offer an amount between £1 and £100,000.');
+  if (!Number.isSafeInteger(termMonths) || termMonths < 1 || termMonths > 120)
+    throw new HttpsError('invalid-argument','Choose an agreement length of 1–120 months.');
+  if (!['non-exclusive','exclusive'].includes(licenceType))
+    throw new HttpsError('invalid-argument','Choose a non-exclusive or exclusive licence.');
+  if (!usageDetails) throw new HttpsError('invalid-argument','Describe the intended audio use of this script.');
+  return { amountPence, termMonths, licenceType, usageDetails };
+};
+export const createScriptLicenceOffer = onCall({region:REGION},async request => {
+  const identity = await requireAccountRole(request,['creator']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data??{}) as Record<string,unknown>;
+  const scriptId = cleanText(input.scriptId,160);
+  if (!scriptId) throw new HttpsError('invalid-argument','Select a script.');
+  const script = await scriptRef(scriptId).get();
+  const data = script.data();
+  if (!data) throw new HttpsError('not-found','Manuscript not found.');
+  const listing = normaliseScriptMarketplace(data.marketplace);
+  if (listing.visibility !== 'marketplace' || !listing.synopsis.trim() || !['Approved','Published'].includes(String(data.status??'')))
+    throw new HttpsError('failed-precondition','This manuscript is not available for licence enquiries.');
+  if (!data.writerUserId || data.writerUserId === identity.uid) throw new HttpsError('failed-precondition','Invalid licence counterpart.');
+  const terms = sanitiseLicenceTerms(input);
+  const offerId = createHash('sha256').update('script-license-offer\0'+scriptId+'\0'+identity.uid).digest('hex');
+  const ref = db.collection('scriptLicenceOffers').doc(offerId);
+  const value = await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const existing = snap.data();
+    if (existing && !['declined','withdrawn'].includes(String(existing.status??''))) {
+      throw new HttpsError('already-exists','This script already has your active licence offer. Open your rights negotiations to continue.');
+    }
+    const revision = existing ? Number(existing.revision??0)+1:1;
+    const record={
+      scriptId,scriptTitle:cleanText(data.title,180),writerUserId:data.writerUserId,creatorUserId:identity.uid,
+      ...terms,status:'proposed',lastProposerUserId:identity.uid,
+      paymentStatus:'not_collected',licenceGranted:false,revision,
+      createdAt:existing?.createdAt??FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    };
+    tx.set(ref,record,{merge:true});
+    tx.set(ref.collection('revisions').doc(String(revision)),{
+      revision,actorUserId:identity.uid,action:'propose',...terms,status:'proposed',
+      createdAt:FieldValue.serverTimestamp(),
+    });
+    return record;
+  });
+  await createNotification(String(data.writerUserId),{
+    type:'collaboration',subtype:'script_licence_offer',title:'New script licence offer',
+    message:'A VA has sent a rights proposal for '+cleanText(data.title,150)+'. No payment or licence transfer has occurred.',
+    scriptId,offerId,
+  }).catch(error=>console.warn('Licence offer notice failed',error));
+  return {offer:licenceOfferPayload(value,offerId)};
+});
+export const listMyScriptLicenceOffers = onCall({region:REGION},async request=>{
+  const identity=await requireAccountRole(request,['creator','writer','admin']);
+  const snapshot=await db.collection('scriptLicenceOffers').limit(1000).get();
+  return {offers:snapshot.docs
+    .filter(doc=>identity.role==='admin'||doc.data().writerUserId===identity.uid||doc.data().creatorUserId===identity.uid)
+    .map(doc=>licenceOfferPayload(doc.data(),doc.id))
+    .sort((a,b)=>String(b.updatedAt??'').localeCompare(String(a.updatedAt??'')))};
+});
+export const respondScriptLicenceOffer = onCall({region:REGION},async request=>{
+  const identity=await requireAccountRole(request,['creator','writer']);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const offerId=cleanText(input.offerId,160);
+  const action=cleanText(input.action,20);
+  if (!offerId||!['accept','counter','decline','withdraw'].includes(action))
+    throw new HttpsError('invalid-argument','Select a valid offer action.');
+  const terms=action==='counter'?sanitiseLicenceTerms(input):null;
+  const ref=db.collection('scriptLicenceOffers').doc(offerId);
+  const result=await db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    const data=snap.data();
+    if (!data)throw new HttpsError('not-found','Offer not found.');
+    if (![data.writerUserId,data.creatorUserId].includes(identity.uid))
+      throw new HttpsError('permission-denied','You do not participate in this negotiation.');
+    if (!['proposed','countered'].includes(String(data.status??'')))
+      throw new HttpsError('failed-precondition','This negotiation is no longer open.');
+    if (action==='withdraw' && data.creatorUserId!==identity.uid)
+      throw new HttpsError('permission-denied','Only the VA may withdraw their proposal.');
+    if (action!=='withdraw' && data.lastProposerUserId===identity.uid)
+      throw new HttpsError('failed-precondition','The other party needs to respond to your latest proposal.');
+    const nextStatus=action==='accept'?'terms_agreed_payment_pending':action==='counter'?'countered':action==='decline'?'declined':'withdrawn';
+    const revision=Number(data.revision??1)+1;
+    const update={
+      ...(terms??{}),status:nextStatus,revision,lastProposerUserId:action==='counter'?identity.uid:data.lastProposerUserId,
+      paymentStatus:'not_collected',licenceGranted:false,updatedAt:FieldValue.serverTimestamp(),
+    };
+    tx.set(ref,update,{merge:true});
+    tx.set(ref.collection('revisions').doc(String(revision)),{
+      revision,actorUserId:identity.uid,action, ...terms,status:nextStatus,
+      createdAt:FieldValue.serverTimestamp(),
+    });
+    return {toUserId:data.writerUserId===identity.uid?data.creatorUserId:data.writerUserId,scriptId:data.scriptId,
+      title:data.scriptTitle,nextStatus};
+  });
+  await createNotification(String(result.toUserId),{
+    type:'collaboration',subtype:'script_licence_offer',title:'Script rights offer updated',
+    message:'Rights negotiation for '+cleanText(result.title,120)+' is '+result.nextStatus.replaceAll('_',' ')+'. No payment or licence transfer has occurred.',
+    scriptId:result.scriptId,offerId,
+  }).catch(error=>console.warn('Rights negotiation notification failed',error));
+  const saved=await ref.get();
+  return {offer:licenceOfferPayload(saved.data()??{},offerId)};
 });
 
 export const collaborationDirectory = onCall({ region: REGION }, async (request) => {

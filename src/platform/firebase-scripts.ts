@@ -20,7 +20,9 @@ const editorQueueCall = httpsCallable<void, { queue: any[] }>(functions, 'listEd
 const reviewCall = httpsCallable<{ scriptId: string; status: string; comment?: string }, { script: any }>(functions, 'reviewEditorScript');
 const editorAccountsCall = httpsCallable<void, { editors: any[] }>(functions, 'listEditorAccounts');
 const adminScriptsCall = httpsCallable<void, { scripts: any[] }>(functions, 'adminListScripts');
-const adminScriptPreviewCall = httpsCallable<{ scriptId: string }, { script: any; sourceFile: { fileName: string; url: string; expiresAt: string } | null }>(functions, 'getAdminScriptReview');
+const adminScriptPreviewCall = httpsCallable<{ scriptId: string }, { script: any; sourceFile: { fileName: string; url: string; expiresAt: string } | null; sourcePreview: {format:'text'|'pdf'|'unavailable'; text?:string; truncated?:boolean; message?:string} }>(functions, 'getAdminScriptReview');
+const reviewThreadCall = httpsCallable<{ scriptId: string }, { entries: any[]; scriptId: string }>(functions, 'listManuscriptReviewThread');
+const postReviewEntryCall = httpsCallable<{ scriptId: string; body: string; visibility: 'internal'|'writer' }, { entry: any }>(functions, 'postManuscriptReviewEntry');
 const adminReviewScriptCall = httpsCallable<{ scriptId: string; decision: 'approved' | 'changes' | 'rejected'; note: string }, { script: any; marketplaceVisible: boolean }>(functions, 'adminReviewWriterScript');
 const assignEditorCall = httpsCallable<{ scriptId: string; editorUserId: string }, { script: any }>(functions, 'adminAssignEditor');
 const protectedCatalogueCall = httpsCallable<void, { scripts: any[] }>(functions, 'listProtectedScripts');
@@ -29,6 +31,7 @@ const permissionsCall = httpsCallable<{ scriptId: string }, { permissions: any[]
 const setPermissionCall = httpsCallable<Record<string, unknown>, any>(functions, 'setScriptPermission');
 const rightsCall = httpsCallable<Record<string, unknown>, { script: any }>(functions, 'updateScriptRightsAndListing');
 const marketplaceCall = httpsCallable<void, { scripts: any[] }>(functions, 'listScriptMarketplace');
+const marketplaceSampleCall = httpsCallable<{scriptId:string},{scriptId:string;title:string;sample:string;writerUserId:string|null}>(functions,'getMarketplaceScriptSample');
 
 export const nightjarScripts = {
   async writerScripts() {
@@ -75,6 +78,14 @@ export const nightjarScripts = {
     return repairMojibakeDisplayData((await adminScriptsCall()).data);
   },
 
+  async manuscriptReviewThread(scriptId: string) {
+    return (await reviewThreadCall({ scriptId })).data;
+  },
+
+  async postManuscriptReviewEntry(scriptId: string, body: string, visibility: 'internal'|'writer') {
+    return (await postReviewEntryCall({ scriptId, body, visibility })).data;
+  },
+
   async adminScriptPreview(scriptId: string) {
     return repairMojibakeDisplayData((await adminScriptPreviewCall({ scriptId })).data);
   },
@@ -105,6 +116,10 @@ export const nightjarScripts = {
 
   async updateRights(scriptId: string, rights: Record<string, unknown>, marketplace: Record<string, unknown>) {
     return (await rightsCall({ scriptId, rights, marketplace })).data;
+  },
+
+  async marketplaceSample(scriptId:string) {
+    return (await marketplaceSampleCall({scriptId})).data;
   },
 
   async marketplace() {
