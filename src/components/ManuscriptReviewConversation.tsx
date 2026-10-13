@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LockKeyhole, MessageCircle, RefreshCw, Send, ShieldCheck } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
+import ContextHelp from './ContextHelp';
 import './manuscript-review-conversation.css';
 
 type Entry = {
@@ -69,7 +70,7 @@ export default function ManuscriptReviewConversation({ scriptId, audience, notif
   return <section className="manuscript-review-thread" aria-label={audience==='admin'?'Manuscript notes and writer conversation':'NightJar manuscript review messages'}>
     <header className="manuscript-review-thread-head">
       <div><span className="mini-label">{audience==='admin'?'ADMIN NOTES & WRITER MESSAGES':'NIGHTJAR REVIEW CONVERSATION'}</span>
-        <h3>{audience==='admin'?'Keep each decision in context.':'Discuss your manuscript with NightJar.'}</h3>
+        <h3>{audience==='admin'?'Keep each decision in context.':'Discuss your manuscript with NightJar.'} <ContextHelp topic={audience==='admin'?'admin-notes':'writer-review'}/></h3>
         <p>{audience==='admin'?'Private team notes stay hidden from the writer. Replies marked “Message Writer” are visible to the writer.':'Ask questions, reply to requested changes and keep everything attached to this manuscript.'}</p></div>
       <button type="button" className="secondary-button" disabled={loading} onClick={() => void refresh()}><RefreshCw size={14}/>{loading?'Loading…':'Refresh'}</button>
     </header>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Handshake, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { RefreshCw, ShieldCheck, X } from 'lucide-react';
+import ContextHelp from './ContextHelp';
 import { nightjarCollaboration, type VerifiedCollaborationHistory } from '../platform/firebase-collaboration';
 import './collaboration-history.css';
 
@@ -39,21 +40,24 @@ export default function CollaborationHistoryButton({ userId, count, displayName 
 
   const close = () => setOpen(false);
   return <>
-    <button type="button"
-      className={compact ? 'nj-handshake-button compact collaborator-directory-reputation' : 'nj-handshake-button'}
-      onClick={(event) => { event.stopPropagation(); setOpen(true); }}
-      aria-label={'View ' + displayName + ' verified collaborations: ' + count}
-      title="Open verified collaborations and public work">
-      <Handshake size={compact ? 13 : 15} aria-hidden="true"/>
-      {compact ? count : count + ' verified collaboration' + (count === 1 ? '' : 's')}
-    </button>
+    <span className="nj-handshake-inline">
+      <button type="button"
+        className={compact ? 'nj-handshake-button compact collaborator-directory-reputation' : 'nj-handshake-button'}
+        onClick={(event) => { event.stopPropagation(); setOpen(true); }}
+        aria-label={'View ' + displayName + ' verified collaborations: ' + count}
+        title="View verified collaboration history">
+        <span aria-hidden="true">🤝</span>
+        <span>{count}</span>
+      </button>
+      <ContextHelp topic="collaboration-count" placement="end"/>
+    </span>
     {open && <div className="nj-handshake-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <section className="nj-handshake-dialog" role="dialog" aria-modal="true" aria-label={displayName + ' collaboration history'}>
         <header className="nj-handshake-header">
           <div><span className="mini-label"><ShieldCheck size={13}/> NIGHTJAR VERIFIED WORK</span><h2>{displayName}'s collaborations</h2><p>Published releases and completed Nightjar workflows, not manually claimed handshake totals.</p></div>
           <button type="button" className="icon-button" onClick={close} aria-label="Close collaboration history"><X size={19}/></button>
         </header>
-        <div className="nj-handshake-summary"><Handshake size={19}/><strong>{data?.count ?? count}</strong><span>verified collaboration{(data?.count ?? count) === 1 ? '' : 's'}</span><button type="button" className="ghost-button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={13}/> Refresh</button></div>
+        <div className="nj-handshake-summary"><span aria-hidden="true">🤝</span><strong>{data?.count ?? count}</strong><span>verified collaboration{(data?.count ?? count) === 1 ? '' : 's'}</span><button type="button" className="ghost-button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={13}/> Refresh</button></div>
         {loading && <p role="status">Checking verified Nightjar credits…</p>}
         {error && <p role="alert">{error}</p>}
         {!loading && !error && data && <>

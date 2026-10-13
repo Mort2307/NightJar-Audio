@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, CheckCircle2, Clock3, LockKeyhole, MessageCircle, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import ManuscriptReviewConversation from './ManuscriptReviewConversation';
+import ContextHelp from './ContextHelp';
 import './admin-manuscript-review.css';
 
 type Decision = 'approved' | 'changes' | 'rejected';
@@ -106,7 +107,7 @@ export default function AdminManuscriptReview({
 
   return <section className="admin-manuscript-review" aria-label="Manuscript administration">
     <div className="manuscript-review-summary">
-      <div><span className="mini-label">MANUSCRIPT VERIFICATION</span><h3>Scripts awaiting your decision</h3><p>A Writer's marketplace submission goes directly to this admin queue. No editorial handoff or Audio Editor assignment is part of marketplace approval. Full scripts remain protected.</p></div>
+      <div><span className="mini-label">MANUSCRIPT VERIFICATION</span><h3>Scripts awaiting your decision <ContextHelp topic="writer-review"/></h3><p>A Writer's marketplace submission goes directly to this admin queue. No editorial handoff or Audio Editor assignment is part of marketplace approval. Full scripts remain protected.</p></div>
       <button className="secondary-button" disabled={loading} onClick={() => void onRefresh()}><RefreshCw size={15}/>{loading ? 'Loading…' : 'Refresh queue'}</button>
     </div>
     <div className="manuscript-review-tabs" role="group" aria-label="Manuscript queue filter">
@@ -127,8 +128,8 @@ export default function AdminManuscriptReview({
         <div className="manuscript-review-heading-actions"><button className="primary-button" disabled={previewBusy} onClick={() => preview ? setViewerOpen(true) : void openPreview(selected)}><LockKeyhole size={15}/>{previewBusy ? 'Opening…' : 'Open read-only viewer'}</button>{selected.writerUserId&&onMessageWriter&&<button className="secondary-button" onClick={()=>onMessageWriter(String(selected.writerUserId))}><MessageCircle size={15}/> Direct message Writer</button>}</div>
       </div>
       <div className="manuscript-review-facts">
-        <span><ShieldCheck size={15}/> Rights confirmations: <strong>{rightsReady ? 'Confirmed' : 'Incomplete'}</strong></span>
-        <span><BookOpen size={15}/> Marketplace synopsis: <strong>{hasSynopsis ? 'Provided' : 'Missing'}</strong></span>
+        <span><ShieldCheck size={15}/> Rights confirmations: <ContextHelp topic="rights-confirmation"/> <strong>{rightsReady ? 'Confirmed' : 'Incomplete'}</strong></span>
+        <span><BookOpen size={15}/> Marketplace synopsis: <ContextHelp topic="public-synopsis"/> <strong>{hasSynopsis ? 'Provided' : 'Missing'}</strong></span>
       </div>
       {marketplaceRequested && hasSynopsis && <p className="manuscript-review-synopsis"><strong>Public synopsis</strong>{selected.marketplace.synopsis}</p>}
       {!rightsReady && <p className="manuscript-review-caution">The Writer must confirm ownership and contributor permissions before approval.</p>}

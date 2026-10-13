@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight, FileKey2, LockKeyhole, MessageCircle, ShieldCheck, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import ContextHelp from './ContextHelp';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { nightjarMessaging } from '../platform/firebase-messaging';
@@ -68,7 +69,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
       {sample&&<div className="marketplace-modal-overlay" role="presentation" onClick={e=>{if(e.target===e.currentTarget)setSample(null);}}>
         <section className="marketplace-modal marketplace-sample-modal" role="dialog" aria-modal="true" aria-label={'Protected sample: '+sample.title}
           onCopy={e=>e.preventDefault()} onCut={e=>e.preventDefault()} onContextMenu={e=>e.preventDefault()} onDragStart={e=>e.preventDefault()}>
-          <header><div><span className="mini-label">NIGHTJAR · WRITER-AUTHORISED SAMPLE</span><h3>{sample.title}</h3><p><ShieldCheck size={14}/> Protected read-only excerpt · access recorded</p></div><button className="secondary-button" onClick={()=>setSample(null)}><X size={14}/> Close</button></header>
+          <header><div><span className="mini-label">NIGHTJAR · WRITER-AUTHORISED SAMPLE</span><h3>{sample.title}</h3><p><ShieldCheck size={14}/> Protected read-only excerpt · access recorded <ContextHelp topic="protected-reader" placement="end"/></p></div><button className="secondary-button" onClick={()=>setSample(null)}><X size={14}/> Close</button></header>
           <div className="marketplace-modal-body marketplace-sample-text"><p className="marketplace-excerpt-watermark" aria-hidden="true">NIGHTJAR · SAMPLE ONLY · {sample.scriptId.slice(-10)}</p>{sample.sample}</div>
           <footer>Copyright remains with the Writer. Previewing does not grant reproduction, performance or licensing rights.</footer>
         </section>
@@ -79,13 +80,13 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
           <div className="marketplace-modal-body marketplace-offer-form">
             <div className="marketplace-offer-modes"><button className={mode==='question'?'primary-button':'secondary-button'} onClick={()=>setMode('question')}>Ask a question</button><button className={mode==='licence'?'primary-button':'secondary-button'} onClick={()=>setMode('licence')}>Offer to licence</button></div>
             {mode==='licence'&&<div className="marketplace-offer-terms">
-              <label>Offer price (£)<input type="number" value={price} min="1" max="100000" step=".01" onChange={e=>setPrice(e.target.value)}/></label>
-              <label>Rights<select value={licenceType} onChange={e=>setLicenceType(e.target.value as 'non-exclusive'|'exclusive')}><option value="non-exclusive">Non-exclusive</option><option value="exclusive">Exclusive</option></select></label>
-              <label>Duration in months<input type="number" value={months} min="1" max="120" onChange={e=>setMonths(Number(e.target.value))}/></label>
-              <label className="marketplace-offer-span">Intended audio use<textarea maxLength={1200} rows={3} value={usage} onChange={e=>setUsage(e.target.value)}/></label>
+              <label><span className="nj-term-label">Offer price (£) <ContextHelp topic="licence-price"/></span><input type="number" value={price} min="1" max="100000" step=".01" onChange={e=>setPrice(e.target.value)}/></label>
+              <label><span className="nj-term-label">Rights <ContextHelp topic="licence-choice"/></span><select value={licenceType} onChange={e=>setLicenceType(e.target.value as 'non-exclusive'|'exclusive')}><option value="non-exclusive">Non-exclusive</option><option value="exclusive">Exclusive</option></select></label>
+              <label><span className="nj-term-label">Duration in months <ContextHelp topic="licence-term"/></span><input type="number" value={months} min="1" max="120" onChange={e=>setMonths(Number(e.target.value))}/></label>
+              <label className="marketplace-offer-span"><span className="nj-term-label">Intended audio use <ContextHelp topic="usage-rights"/></span><textarea maxLength={1200} rows={3} value={usage} onChange={e=>setUsage(e.target.value)}/></label>
             </div>}
             <label>Your message to the Writer<textarea value={body} maxLength={1600} rows={4} onChange={e=>setBody(e.target.value)} placeholder="Introduce yourself, ask about the script or explain your licensing proposal…"/></label>
-            {mode==='licence'&&<p className="marketplace-offer-warning"><ShieldCheck size={15}/> This records an offer and starts a conversation, not a purchase. No charge or licence transfer can occur until compliant payment and final contract verification are enabled.</p>}
+            {mode==='licence'&&<p className="marketplace-offer-warning"><ShieldCheck size={15}/> <ContextHelp topic="licence-status"/> This records an offer and starts a conversation, not a purchase. No charge or licence transfer can occur until compliant payment and final contract verification are enabled.</p>}
             {error&&<p className="manuscript-review-error" role="alert">{error}</p>}
           </div>
           <footer><button className="primary-button" disabled={busy||!body.trim()} onClick={()=>void send()}>{busy?'Sending…':mode==='licence'?'Send rights offer & message':'Send enquiry & message'} <ArrowRight size={14}/></button></footer>
@@ -94,7 +95,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
     </>
   );
   return <div className="marketplace-script-actions">
-    {script.marketplace?.sampleAvailable&&<button type="button" className="secondary-button" disabled={sampleBusy||readOnlyPreview} onClick={()=>void openSample()}><LockKeyhole size={14}/>{sampleBusy?'Opening…':'Read protected sample'}</button>}
+    {script.marketplace?.sampleAvailable&&<span className="nj-term-label"><button type="button" className="secondary-button" disabled={sampleBusy||readOnlyPreview} onClick={()=>void openSample()}><LockKeyhole size={14}/>{sampleBusy?'Opening…':'Read protected sample'}</button><ContextHelp topic="protected-sample"/></span>}
     {readOnlyPreview?<span className="status-pill muted">Read-only live preview</span>:<>
       <button className="secondary-button" onClick={()=>openContact('question')}><MessageCircle size={14}/> Ask Writer</button>
       <button className="primary-button" onClick={()=>openContact('licence')}><FileKey2 size={14}/> Make rights offer</button>
