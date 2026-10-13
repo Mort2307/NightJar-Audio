@@ -6170,6 +6170,99 @@ export const deleteMyCalendarEvent = onCall({ region: REGION }, async (request) 
   return { deleted: true };
 });
 
+// Administrators author updates through Nightjar itself, never direct client
+// Firestore writes. Test delivery is owner-only; fanout respects opt-outs.
+// This beta callable has a hard 500-account ceiling to avoid silent truncation.
+export const adminPublishCommunityUpdate = onCall({
+  region:REGION,timeoutSeconds:540,memory:'512MiB',
+},async(request)=>{
+  const admin=requireAdminIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const id=cleanText(input.requestId,64);
+  const title=cleanText(input.title,120);
+  const body=cleanText(input.body,4000);
+  const audience=input.audience==='self'?'self':input.audience==='all'?'all':null;
+  if(!/^[0-9a-f-]{36}$/i.test(id)||!title||body.length<40||!audience)
+    throw new HttpsError('invalid-argument','Invalid update title, text, recipient group or request ID.');
+  if(audience==='all'&&input.testVerified!==true)
+    throw new HttpsError('failed-precondition','Confirm a successful private test before the community send.');
+  const ref=db.collection('communityUpdates').doc(id);
+  const digest=createHash('sha256').update(JSON.stringify({title,body,audience,authorUid:admin.uid})).digest('hex');
+  const existing=await ref.get();
+  if(existing.exists){
+    if(existing.data()?.digest!==digest)throw new HttpsError('already-exists','Request ID already used for another announcement.');
+    return {id,duplicate:true,...(existing.data()?.outcome??{status:'processing',eligible:0,inboxCreated:0,errors:0,optedOut:0})};
+  }
+  const accounts=audience==='self'
+    ? [await accountRef(admin.uid).get()]
+    : (await db.collection('accounts').orderBy('__name__').limit(501).get()).docs;
+  if(audience==='all'&&accounts.length>500)
+    throw new HttpsError('resource-exhausted','Too many accounts for direct beta fanout; queued delivery is required.');
+  if(audience==='self'&&accounts[0].data()?.notificationPreferences?.announcements===false)
+    throw new HttpsError('failed-precondition','Enable Nightjar announcements in your notification preferences to run a test.');
+  try{
+    await ref.create({title,body,audience,digest,authorUid:admin.uid,
+      status:'processing',createdAt:FieldValue.serverTimestamp()});
+  }catch(error:any){
+    if(error?.code===6||error?.code==='already-exists')
+      return {id,duplicate:true,status:'processing',eligible:0,inboxCreated:0,errors:0,optedOut:0};
+    throw error;
+  }
+  let eligible=0,inboxCreated=0,errors=0,optedOut=0;
+  for(let i=0;i<accounts.length;i+=20){
+    const outcomes=await Promise.allSettled(accounts.slice(i,i+20).map(async(account)=>{
+      const data=account.data()??{};
+      if(audience==='all'&&(data.status!=='active'||data.disabled===true))
+        return 'ineligible';
+      if(data.notificationPreferences?.announcements===false)return 'optedOut';
+      const uid=account.id;
+      const dedupeKey='community-update:'+id;
+      const notificationId=createHash('sha256').update(dedupeKey).digest('hex').slice(0,40);
+      const notification=accountRef(uid).collection('notifications').doc(notificationId);
+      if((await notification.get()).exists)return 'duplicate';
+      await createNotification(uid,{
+        type:'announcement',subtype:'community_update',updateId:id,
+        title,message:body.slice(0,200),route:'/discover?update='+encodeURIComponent(id),dedupeKey,
+      });
+      return (await notification.get()).exists?'created':'ineligible';
+    }));
+    for(const outcome of outcomes){
+      if(outcome.status==='rejected'){errors++;continue;}
+      if(outcome.value==='optedOut'){optedOut++;continue;}
+      if(outcome.value==='created'){inboxCreated++;eligible++;}
+      if(outcome.value==='duplicate')eligible++;
+    }
+  }
+  const outcome={status:errors?'partial_failure':'completed',eligible,inboxCreated,errors,optedOut};
+  await ref.set({status:outcome.status,outcome,finishedAt:FieldValue.serverTimestamp()},{merge:true});
+  console.info('NightJar community announcement result',{id,audience,...outcome});
+  return {id,duplicate:false,...outcome};
+});
+
+export const getCommunityUpdate=onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  const id=cleanText((request.data as Record<string,unknown>|undefined)?.id,64);
+  if(!/^[0-9a-f-]{36}$/i.test(id))throw new HttpsError('invalid-argument','Invalid update identifier.');
+  const snapshot=await db.collection('communityUpdates').doc(id).get();
+  if(!snapshot.exists)throw new HttpsError('not-found','This NightJar update is unavailable.');
+  const item=snapshot.data()??{};
+  if(item.audience==='self'&&(!identity.admin||item.authorUid!==identity.uid))
+    throw new HttpsError('permission-denied','Private admin test only.');
+  return {id,title:String(item.title??''),body:String(item.body??''),
+    createdAt:toIso(item.createdAt),test:item.audience==='self'};
+});
+
+export const adminListCommunityUpdates=onCall({region:REGION},async(request)=>{
+  requireAdminIdentity(request);
+  const page=await db.collection('communityUpdates').orderBy('createdAt','desc').limit(12).get();
+  return {updates:page.docs.map(item=>({
+    id:item.id,title:item.data().title,audience:item.data().audience,
+    createdAt:toIso(item.data().createdAt),status:item.data().status,
+    outcome:item.data().outcome??null,
+  }))};
+});
+
+
 export const listNotifications = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, account] = await Promise.all([
