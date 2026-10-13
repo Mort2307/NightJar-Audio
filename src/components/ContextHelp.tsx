@@ -191,7 +191,7 @@ export default function ContextHelp({ topic, className = '', placement = 'auto' 
       <span aria-hidden="true">ℹ️</span>
     </button>
     {open && typeof document !== 'undefined' && createPortal(
-      <span ref={panel} id={id} className="nj-context-help-panel" role="dialog"
+      <span ref={panel} id={id} className="nj-context-help-panel" role="dialog" aria-modal="false"
         aria-label={'Explanation: ' + entry.title} style={{ left: position.left, top: position.top }}>
         <span className="nj-context-help-top"><strong>{entry.title}</strong><button type="button" className="nj-context-help-close" aria-label="Close explanation"
           onClick={(event) => { event.stopPropagation(); setOpen(false); root.current?.querySelector<HTMLButtonElement>('.nj-context-help-trigger')?.focus(); }}>
