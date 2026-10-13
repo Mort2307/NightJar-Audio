@@ -21,6 +21,8 @@ const reviewCall = httpsCallable<{ scriptId: string; status: string; comment?: s
 const editorAccountsCall = httpsCallable<void, { editors: any[] }>(functions, 'listEditorAccounts');
 const adminScriptsCall = httpsCallable<void, { scripts: any[] }>(functions, 'adminListScripts');
 const adminScriptPreviewCall = httpsCallable<{ scriptId: string }, { script: any; sourceFile: { fileName: string; url: string; expiresAt: string } | null; sourcePreview: {format:'text'|'pdf'|'unavailable'; text?:string; truncated?:boolean; message?:string} }>(functions, 'getAdminScriptReview');
+const reviewThreadCall = httpsCallable<{ scriptId: string }, { entries: any[]; scriptId: string }>(functions, 'listManuscriptReviewThread');
+const postReviewEntryCall = httpsCallable<{ scriptId: string; body: string; visibility: 'internal'|'writer' }, { entry: any }>(functions, 'postManuscriptReviewEntry');
 const adminReviewScriptCall = httpsCallable<{ scriptId: string; decision: 'approved' | 'changes' | 'rejected'; note: string }, { script: any; marketplaceVisible: boolean }>(functions, 'adminReviewWriterScript');
 const assignEditorCall = httpsCallable<{ scriptId: string; editorUserId: string }, { script: any }>(functions, 'adminAssignEditor');
 const protectedCatalogueCall = httpsCallable<void, { scripts: any[] }>(functions, 'listProtectedScripts');
@@ -73,6 +75,14 @@ export const nightjarScripts = {
 
   async adminScripts() {
     return repairMojibakeDisplayData((await adminScriptsCall()).data);
+  },
+
+  async manuscriptReviewThread(scriptId: string) {
+    return (await reviewThreadCall({ scriptId })).data;
+  },
+
+  async postManuscriptReviewEntry(scriptId: string, body: string, visibility: 'internal'|'writer') {
+    return (await postReviewEntryCall({ scriptId, body, visibility })).data;
   },
 
   async adminScriptPreview(scriptId: string) {
