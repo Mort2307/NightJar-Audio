@@ -30,29 +30,33 @@ const request = async (url, options = {}) => {
   }
   return data;
 };
-const checks = await request(urlBase + '/iam/testPermissions?permissions=storage.buckets.get&permissions=storage.buckets.update');
-const hasUpdate = (checks.permissions || []).includes('storage.buckets.update');
-if (!hasUpdate) {
-  throw new Error(
-    'Missing IAM permission: storage.buckets.update on bucket nightjar-audio.firebasestorage.app for '
-    + 'nightjar-backend-deploy@nightjar-audio.iam.gserviceaccount.com. '
-    + 'The service account can read the bucket but cannot change CORS. '
-    + 'Ask a Google Cloud IAM administrator to grant a narrowly scoped custom role containing '
-    + 'storage.buckets.get and storage.buckets.update on this bucket, or apply the exact reviewed '
-    + 'CORS config from an owner-authenticated Cloud Shell. Do not grant public object access.'
-  );
-}
-console.log('PASS: verified storage.buckets.update permission on Nightjar audio bucket.');
-
+// An owner may have already activated this restricted CORS rule from Cloud
+// Shell. Read/verify first, without demanding the backend deploy service
+// account receive a permanent bucket metadata write role.
 const now = await request(urlBase + '?fields=name,metageneration,cors');
 assert.equal(now.name, bucket.name, 'Storage bucket changed');
 const nowCors = Array.isArray(now.cors) ? now.cors : [];
-assert.ok(nowCors.every(rule => cors.some(candidate => JSON.stringify(candidate) === JSON.stringify(rule))), 'CORS was modified by another process; refusing to overwrite.');
 const active = nowCors.some(rule => permitted.every(origin => rule.origin?.includes(origin))
-  && rule.method?.includes('GET'));
+  && rule.method?.includes('GET')
+  && ['Content-Type','Content-Length','Content-Range','Accept-Ranges'].every(header =>
+    rule.responseHeader?.some(value => value.toLowerCase() === header.toLowerCase())));
 if (active) {
-  console.log('PASS: Nightjar CORS was already activated; no write necessary.');
+  console.log('PASS: Nightjar EQ CORS already active; no update permission or write required.');
 } else {
+  assert.ok(nowCors.every(rule => cors.some(candidate => JSON.stringify(candidate) === JSON.stringify(rule))),
+    'CORS was modified by another process; refusing to overwrite.');
+  const checks = await request(urlBase + '/iam/testPermissions?permissions=storage.buckets.get&permissions=storage.buckets.update');
+  const hasUpdate = (checks.permissions || []).includes('storage.buckets.update');
+  if (!hasUpdate) {
+    throw new Error(
+      'Missing IAM permission: storage.buckets.update on bucket nightjar-audio.firebasestorage.app for '
+      + 'nightjar-backend-deploy@nightjar-audio.iam.gserviceaccount.com. '
+      + 'The service account can read the bucket but cannot change CORS. '
+      + 'Apply the reviewed rule once from an authorised Google Cloud Shell account; '
+      + 'then rerun this scope to verify without expanding GitHub deploy permissions.'
+    );
+  }
+  console.log('PASS: verified storage.buckets.update permission on Nightjar audio bucket.');
   // PATCH only the CORS property. ifMetagenerationMatch protects concurrent
   // changes, including those to unrelated bucket metadata.
   const url = urlBase + '?fields=name,cors&ifMetagenerationMatch=' + encodeURIComponent(String(now.metageneration));
