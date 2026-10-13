@@ -12305,7 +12305,7 @@ export const getVoiceCallingCard = onCall({ region: REGION }, async (request) =>
   if (!creatorId) throw new HttpsError('invalid-argument','Creator required.');
   const [account, profile] = await Promise.all([accountRef(creatorId).get(), profileRef(creatorId).get()]);
   if (account.data()?.status !== 'active' || !professionalRolesForAccount(account.data() ?? {}).includes('creator')
-    || !profile.exists || profile.data()?.publicProfile === false) return { release: null, releaseId: null };
+    || !profile.exists || (profile.data()?.publicProfile === false && identity.uid !== creatorId)) return { release: null, releaseId: null };
   const releaseId = cleanText(profile.data()?.voiceCallingCardReleaseId, 160);
   if (!releaseId) return { release: null, releaseId: null };
   const doc = await releaseRef(releaseId).get();
