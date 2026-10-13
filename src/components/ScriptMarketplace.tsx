@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, Filter, Search } from 'lucide-react';
 import MarketplaceScriptActions from './MarketplaceScriptActions';
+import ContextHelp from './ContextHelp';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import { demoMarketplaceScripts } from '../demo/nightjarDemo';
 
@@ -63,16 +64,16 @@ export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser,
     loadError ? <div className="marketplace-empty-state" role="alert"><BookOpen size={21}/><div><strong>Marketplace unavailable</strong><p>Live scripts could not be loaded. This is not evidence that the marketplace is empty.</p></div><button className="secondary-button" type="button" data-nj-preview-safe={readOnlyPreview ? "true" : undefined} onClick={() => void load()}>Try again</button></div>
     : <div className="marketplace-grid">
       {filtered.map((script) => <article className="marketplace-card" key={script.id}>
-        <div className="marketplace-card-head"><span>{script.rights?.licenceType && script.rights.licenceType !== 'none' ? script.rights.licenceType : 'Licence to discuss'}</span><Filter size={15}/></div>
+        <div className="marketplace-card-head"><span className="nj-term-label">{script.rights?.licenceType && script.rights.licenceType !== 'none' ? script.rights.licenceType : 'Licence to discuss'} <ContextHelp topic={script.rights?.licenceType==='exclusive'?'exclusive-licence':script.rights?.licenceType==='non-exclusive'?'non-exclusive-licence':'licence-choice'}/></span><Filter size={15}/></div>
         {script.artworkUrl && <img className="script-marketplace-cover" src={script.artworkUrl} alt={'Approved cover artwork for ' + script.title} loading="lazy" decoding="async"/>}
         <h3>{script.title}</h3>
         {onOpenWriter ? <button className="marketplace-writer" type="button" data-nj-preview-safe={readOnlyPreview ? "true" : undefined} disabled={!script.writerUserId} onClick={()=>script.writerUserId && onOpenWriter(script.writerUserId)}>{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</button> : <span className="marketplace-writer">{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</span>}
         <p>{script.marketplace?.synopsis || 'Writer has not added a public synopsis yet.'}</p>
         <div className="marketplace-tags">{[...(script.marketplace?.genres ?? []), ...(script.marketplace?.tropes ?? [])].slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div>
         <dl className="marketplace-rights">
-          <div><dt>Copyright</dt><dd>{script.rights?.writerRetainsCopyright !== false ? 'Writer retained' : 'See agreement'}</dd></div>
+          <div><dt className="nj-term-label">Copyright <ContextHelp topic="copyright"/></dt><dd>{script.rights?.writerRetainsCopyright !== false ? 'Writer retained' : 'See agreement'}</dd></div>
           <div><dt>AI training</dt><dd>Not permitted</dd></div>
-          <div><dt>Indicative fee</dt><dd>{script.marketplace?.commissionPricePence == null ? 'Discuss' : new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(script.marketplace.commissionPricePence/100)}</dd></div>
+          <div><dt className="nj-term-label">Indicative fee <ContextHelp topic="licence-price"/></dt><dd>{script.marketplace?.commissionPricePence == null ? 'Discuss' : new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(script.marketplace.commissionPricePence/100)}</dd></div>
         </dl>
         <MarketplaceScriptActions key={'script-action-'+script.id} script={script} notify={notify} onMessageUser={onMessageUser} readOnlyPreview={readOnlyPreview} demoMode={demoMode} simulationMode={simulationMode}/>
       </article>)}
