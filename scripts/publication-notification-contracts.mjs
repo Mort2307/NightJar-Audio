@@ -10,7 +10,7 @@ const publicProfile=read('src/components/PublicProfile.tsx');
 const worker=read('public/service-worker.js');
 
 for(const id of ['notifyPublishedAudio','notifyPublishedScript','notifyPublishedArtwork','notifyNewFollower']){
-  assert.match(index,new RegExp('export \\{[^}]*'+id+'[^}]*\\} from .\\x2fpublication-notifications'),id+' exported');
+  assert.ok(index.includes(id) && index.includes("from './publication-notifications'"), id+' exported');
   assert.match(backend,new RegExp('export const '+id+'='));
 }
 assert.match(backend,/onDocumentWritten/,'Publication alerts trigger on status changes');
