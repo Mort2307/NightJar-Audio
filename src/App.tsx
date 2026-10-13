@@ -11,7 +11,7 @@ import { nightjarAdministration } from './platform/firebase-administration';
 import { classifyProfessionalApplications, filterProfessionalApplicationsByRole, pendingApplicationRoles, type ProfessionalApplicationBox } from './platform/professional-application-bank';
 import { nightjarCatalogue } from './platform/firebase-catalogue';
 import { nightjarListening } from './platform/firebase-listening';
-import { type ListeningBoundaries } from './platform/firebase-experience';
+import { nightjarExperience, type ListeningBoundaries } from './platform/firebase-experience';
 import { DEFAULT_LISTENING_BOUNDARIES, hiddenByBoundaries, matchesListeningMood, type MoodFilter } from './platform/listening-discovery';
 import ListeningDiscoveryControls from './components/ListeningDiscoveryControls';
 import CreatorProductionTimeline from './components/CreatorProductionTimeline';
@@ -637,6 +637,20 @@ function App() {
   const [selectedListeningMood, setSelectedListeningMood] = useState<MoodFilter>('all');
   const [listeningBoundaries, setListeningBoundaries] = useState<ListeningBoundaries>(DEFAULT_LISTENING_BOUNDARIES);
   const [momentSeek, setMomentSeek] = useState<{ releaseId: string; seconds: number; nonce: number } | null>(null);
+  // Apply private boundaries across app routes after a verified user session,
+  // not just when someone visits Discover. Reset immediately on account switch.
+  useEffect(() => {
+    setListeningBoundaries(DEFAULT_LISTENING_BOUNDARIES);
+    setSelectedListeningMood('all');
+    if (!user?.userId || !ageVerified || demoMode) return;
+    let cancelled = false;
+    void nightjarExperience.boundaries().then((value) => {
+      if (!cancelled) setListeningBoundaries(value);
+    }).catch(() => {
+      if (!cancelled) notify('Your listening preferences could not be loaded; check them under Discover.');
+    });
+    return () => { cancelled = true; };
+  }, [user?.userId, ageVerified, demoMode]);
   const [profileDirectory, setProfileDirectory] = useState<PublicDirectoryProfile[]>([]);
   const [directoryQuery, setDirectoryQuery] = useState('');
   const [supportTarget, setSupportTarget] = useState<{userId:string;name:string;role:'creator'|'writer'|'editor'|'artist';roles:string[]}|null>(null);
