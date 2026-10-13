@@ -1,0 +1,19 @@
+.nj-community-composer{display:grid;gap:1rem;margin-bottom:1.75rem}
+.nj-community-composer-heading{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}
+.nj-community-composer h2{margin:.4rem 0}
+.nj-community-composer label:not(.nj-community-confirm){display:grid;gap:.5rem}
+.nj-community-composer input:not([type=checkbox]),.nj-community-composer textarea{box-sizing:border-box;width:100%;font:inherit;color:inherit;background:var(--surface,rgba(16,14,20,.5));border:1px solid var(--border,rgba(190,170,180,.4));border-radius:.7rem;padding:.8rem}
+.nj-community-composer textarea{resize:vertical;min-height:12rem;line-height:1.6}
+.nj-community-confirm{display:flex;align-items:flex-start;gap:.7rem}
+.nj-community-confirm input{margin-top:.3rem;flex-shrink:0}
+.nj-community-composer small{opacity:.8}
+.nj-community-result{padding:1rem;border:1px solid currentColor;border-radius:.7rem}
+.nj-community-history{padding:.75rem 0}
+.nj-community-history article{padding:.5rem 0;border-top:1px solid rgba(180,180,180,.25);display:grid;gap:.25rem}
+.nj-community-reader-scrim{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:.65rem;background:rgba(5,4,10,.85)}
+.nj-community-reader{position:relative;box-sizing:border-box;width:min(100%,740px);max-height:94dvh;overflow:auto;border:1px solid var(--border,rgba(180,160,140,.45));border-radius:1rem;padding:clamp(1.2rem,5vw,2.6rem);background:var(--surface,#17141b);color:var(--text,#f7eff1);box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.nj-community-reader-close{position:absolute;right:1rem;top:1rem;cursor:pointer;padding:.5rem;color:inherit;background:transparent;border:0}
+.nj-community-reader-label{display:flex;align-items:center;gap:.6rem;margin-right:2rem;font-size:.85rem;font-weight:700;letter-spacing:.12em}
+.nj-community-reader h2{margin:1.2rem 0 .6rem;font-size:clamp(1.5rem,4vw,2.1rem)}
+.nj-community-reader time{opacity:.8;font-size:.9rem}
+.nj-community-reader-body{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;margin:1.5rem 0 2rem}

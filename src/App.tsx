@@ -75,6 +75,7 @@ import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
 import AppUpdateControl from './components/AppUpdateControl';
+import CommunityUpdateReader from './components/CommunityUpdateReader';
 import { checkNightjarUpdate, applyNightjarSafeUpdate, type NightjarUpdateStatus } from './platform/pwa';
 import TransparencyPanel from './components/TransparencyPanel';
 import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
@@ -469,6 +470,10 @@ function App() {
   const [focusedContentReleaseId, setFocusedContentReleaseId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('release'));
   const [focusedContentScriptId, setFocusedContentScriptId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('script'));
   const [notificationArtworkFocusId, setNotificationArtworkFocusId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('artwork'));
+  const [communityUpdateId, setCommunityUpdateId] = useState<string | null>(() => {
+    const id = new URLSearchParams(window.location.search).get('update');
+    return id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+  });
   const openedContentReleaseRef = useRef<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1376,6 +1381,13 @@ function App() {
         const releaseId = target.searchParams.get('release');
         const scriptId = target.searchParams.get('script');
         const valid = (id: string | null) => id && /^[a-zA-Z0-9_-]{1,160}$/.test(id) ? id : null;
+        const updateId = target.searchParams.get('update');
+        if (updateId && /^[0-9a-f-]{36}$/i.test(updateId)) {
+          navigate('discover');
+          setCommunityUpdateId(updateId);
+          window.history.replaceState({}, '', target.pathname + target.search);
+          return;
+        }
         if (!valid(releaseId) && !valid(scriptId)) return;
         setFocusedContentReleaseId(valid(releaseId));
         setFocusedContentScriptId(valid(scriptId));
@@ -1724,6 +1736,11 @@ function App() {
 
     if ((item.type === 'content' && ['new_audio','new_script','new_artwork'].includes(String(item.subtype))) || (item.type === 'follow' && item.subtype === 'new_follower')) {
       openPublicationNotificationRoute(String(item.route ?? ''));
+      return;
+    }
+
+    if (item.type === 'announcement' && item.updateId) {
+      openPublicationNotificationRoute(String(item.route ?? '/discover?update=' + encodeURIComponent(item.updateId)));
       return;
     }
 
@@ -5757,6 +5774,17 @@ function App() {
       <GlobalCommandPalette open={commandOpen && !liveRolePreview} onClose={() => setCommandOpen(false)} commands={commandItems} />
 
       {protectedReaderOpen && protectedReaderScript && <ProtectedReader data={protectedReaderScript} close={() => setProtectedReaderOpen(false)} record={(eventType, context) => void recordProtectionEvent(eventType, protectedReaderScript.script?.id, context)} notify={notify} />}
+      {communityUpdateId && user && ageVerified && !demoMode && <CommunityUpdateReader
+        id={communityUpdateId}
+        onClose={() => {
+          setCommunityUpdateId(null);
+          const target = new URL(window.location.href);
+          if (target.searchParams.has('update')) {
+            target.searchParams.delete('update');
+            window.history.replaceState({}, '', target.pathname + target.search);
+          }
+        }}
+      />}
       {playing && <NightjarPlayer
         key={playing}
         track={tracks.find((track) => track.id === playing) ?? null}
