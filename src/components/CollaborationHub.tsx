@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Check, FileText, Handshake, MessageCircle, Search, ShieldCheck, X } from 'lucide-react';
 import { nightjarCollaboration, type CollaborationStatus } from '../platform/firebase-collaboration';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
+import ContextHelp from './ContextHelp';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import { demoCollaborations, demoDirectory, demoWriterScripts } from '../demo/nightjarDemo';
 import { readDemo, writeDemo } from '../demo/demoSession';
@@ -191,8 +192,8 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
       <label>Manuscript<select value={scriptId} onChange={(event) => setScriptId(event.target.value)}><option value="">Choose a manuscript</option>{scripts.map((script) => <option key={script.id} value={script.id}>{script.title}</option>)}</select></label>
       <label>Selected collaborator<select value={recipientUserId} onChange={(event) => setRecipientUserId(event.target.value)}><option value="">Choose a Creator or Audio Editor</option>{directory.filter((person) => person.role === 'creator' || person.role === 'editor').map((person) => <option key={person.userId} value={person.userId}>{person.name} · {person.role === 'editor' ? 'Audio Editor' : 'Creator'} · {person.completedCollaborations ?? 0} completed</option>)}</select></label>
       <label className="research-span-two">Proposal message<textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Why you think this script and collaborator fit together."/></label>
-      <label>Payment proposal<input value={paymentProposal} onChange={(event) => setPaymentProposal(event.target.value)} placeholder="e.g. £150 flat fee / discuss"/></label>
-      <label>Licence summary<input value={licenceSummary} onChange={(event) => setLicenceSummary(event.target.value)} placeholder="e.g. 12-month non-exclusive licence"/></label>
+      <label><span className="nj-term-label">Payment proposal <ContextHelp topic="licence-price"/></span><input value={paymentProposal} onChange={(event) => setPaymentProposal(event.target.value)} placeholder="e.g. £150 flat fee / discuss"/></label>
+      <label><span className="nj-term-label">Licence summary <ContextHelp topic="licence-choice"/></span><input value={licenceSummary} onChange={(event) => setLicenceSummary(event.target.value)} placeholder="e.g. 12-month non-exclusive licence"/></label>
       <button className="primary-button research-span-two" disabled={sending || !scriptId || !recipientUserId} onClick={() => void send()}>Send proposal <ArrowRight size={14}/></button>
     </div>}
 
@@ -201,13 +202,13 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
         const incoming = role !== 'writer' && proposal.recipientUserId;
         return <article className="collaboration-card" key={proposal.id}>
           <div className="collaboration-card-top">
-            <div><span>{statusLabel(proposal.status)}</span><h3>{proposal.scriptTitle}</h3><p>{incoming ? 'From ' + proposal.writerName : 'To ' + proposal.recipientName}</p></div>
+            <div><span className="nj-term-label">{statusLabel(proposal.status)} <ContextHelp topic="collaboration-status"/></span><h3>{proposal.scriptTitle}</h3><p>{incoming ? 'From ' + proposal.writerName : 'To ' + proposal.recipientName}</p></div>
             <FileText size={18}/>
           </div>
           {proposal.message && <p className="collaboration-message">{proposal.message}</p>}
           <dl className="collaboration-meta">
             <div><dt>Payment</dt><dd>{proposal.paymentProposal || 'Not specified'}</dd></div>
-            <div><dt>Licence</dt><dd>{proposal.licenceSummary || 'Not specified'}</dd></div>
+            <div><dt className="nj-term-label">Licence <ContextHelp topic="licence-choice"/></dt><dd>{proposal.licenceSummary || 'Not specified'}</dd></div>
           </dl>
           {proposal.responseNote && <p className="collaboration-response"><strong>Response:</strong> {proposal.responseNote}</p>}
           <div className="collaboration-actions">
