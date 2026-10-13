@@ -168,3 +168,4 @@ export default function AdminManuscriptReview({
       {!isPending && <p className="manuscript-review-complete">No approval is needed here. This manuscript is {selected.status.toLowerCase()}.</p>}
     </div>}
   </section>;
+}
