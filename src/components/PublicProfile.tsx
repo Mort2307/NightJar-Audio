@@ -29,6 +29,7 @@ type Props = {
   demoMode?: boolean;
   initialRole?: string;
   readOnlyPreview?: boolean;
+  focusArtworkId?: string | null;
 };
 
 const roleLabel = (role: string | null | undefined) => {
@@ -39,7 +40,7 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = '', readOnlyPreview = false }: Props) {
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = '', readOnlyPreview = false, focusArtworkId:focusArtworkIdProp=null }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +48,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const [retryKey, setRetryKey] = useState(0);
   const [giftOpen, setGiftOpen] = useState(false);
   const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(initialRole);
-  const focusArtworkId = new URLSearchParams(window.location.search).get('artwork');
+  const focusArtworkId = focusArtworkIdProp ?? new URLSearchParams(window.location.search).get('artwork');
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
