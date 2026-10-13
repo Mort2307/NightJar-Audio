@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BookOpen, CheckCircle2, Clock3, FileText, LockKeyhole, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, Clock3, LockKeyhole, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import './admin-manuscript-review.css';
 
