@@ -7,7 +7,7 @@ export type CommunityUpdateDelivery = { id:string; status:string; duplicate?:boo
 export type CommunityUpdateSummary = { id:string; title:string; audience:'self'|'all'; status:string; createdAt:string|null; outcome?:CommunityUpdateDelivery };
 
 const publishCall=httpsCallable<{
- title:string;body:string;audience:'self'|'all';requestId:string;testVerified:boolean;
+ title:string;body:string;audience:'self'|'all';requestId:string;testVerified:boolean;verifiedTestId?:string;
 },CommunityUpdateDelivery>(functions,'adminPublishCommunityUpdate');
 const getCall=httpsCallable<{id:string},CommunityUpdate>(functions,'getCommunityUpdate');
 const listCall=httpsCallable<void,{updates:CommunityUpdateSummary[]}>(functions,'adminListCommunityUpdates');
