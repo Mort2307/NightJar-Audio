@@ -465,6 +465,9 @@ function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','calendar','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
   const [playing, setPlaying] = useState<string | null>(null);
+  const [focusedContentReleaseId, setFocusedContentReleaseId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('release'));
+  const [focusedContentScriptId, setFocusedContentScriptId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('script'));
+  const openedContentReleaseRef = useRef<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [liveRoleMenuOpen, setLiveRoleMenuOpen] = useState(false);
@@ -893,6 +896,11 @@ function App() {
       return true;
     });
   }, [tracks, catalogueQuery, catalogueRating, catalogueDuration]);
+  const notificationReleaseCards = useMemo(() => {
+    const focused = focusedContentReleaseId ? tracks.find(item => item.id === focusedContentReleaseId) : null;
+    return focused ? [focused, ...filteredTracks.filter(item => item.id !== focused.id)] : filteredTracks;
+  }, [filteredTracks, focusedContentReleaseId, tracks]);
+
   const studioMetrics = [
     ['Published releases', String(creatorDashboard.metrics?.released ?? 0)],
     ['Draft releases', String(creatorDashboard.metrics?.drafts ?? 0)],
@@ -1240,6 +1248,10 @@ function App() {
     const onWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'NIGHTJAR_PUSH_OPEN') return;
       const url = String(event.data.route ?? '/discover');
+      if ((url.startsWith('/discover?') || /^\/people\/[a-zA-Z0-9_-]+/.test(url))) {
+        openPublicationNotificationRoute(url);
+        return;
+      }
       if (url.startsWith('/admin') && canAdmin) {
         navigate('admin');
         if (url.includes('release-moderation')) setModerationOpen(true);
@@ -1280,6 +1292,34 @@ function App() {
     setPublicProfileInitialRole(requestedRole);
     setPublicProfileUserId(userId);
     scrollNightjarToTop();
+  };
+
+  // The same exact-content route is used by push taps and in-app inbox taps.
+  // Untrusted routes cannot leave this origin or open an unapproved screen.
+  const openPublicationNotificationRoute = (rawRoute: string) => {
+    try {
+      const target = new URL(rawRoute, window.location.origin);
+      if (target.origin !== window.location.origin) return;
+      if (target.pathname === '/discover') {
+        const releaseId = target.searchParams.get('release');
+        const scriptId = target.searchParams.get('script');
+        const valid = (id: string | null) => id && /^[a-zA-Z0-9_-]{1,160}$/.test(id) ? id : null;
+        if (!valid(releaseId) && !valid(scriptId)) return;
+        setFocusedContentReleaseId(valid(releaseId));
+        setFocusedContentScriptId(valid(scriptId));
+        if (valid(releaseId)) openedContentReleaseRef.current = null;
+        navigate('discover');
+        window.history.replaceState({}, '', target.pathname + target.search);
+        void loadLiveProductData();
+        return;
+      }
+      const person = target.pathname.match(/^\/people\/([a-zA-Z0-9_-]{1,160})$/);
+      if (person) {
+        const role = target.searchParams.get('role');
+        openPublicProfile(person[1], role && ['creator','writer','artist','editor','listener'].includes(role) ? role : undefined);
+        window.history.replaceState(window.history.state, '', target.pathname + target.search);
+      }
+    } catch { /* malformed notification route cannot leave NightJar */ }
   };
 
   const closePublicProfile = () => {
@@ -1608,6 +1648,11 @@ function App() {
     }
     await markNotificationRead(item);
     setNotificationsOpen(false);
+
+    if ((item.type === 'content' && ['new_audio','new_script','new_artwork'].includes(String(item.subtype))) || (item.type === 'follow' && item.subtype === 'new_follower')) {
+      openPublicationNotificationRoute(String(item.route ?? ''));
+      return;
+    }
 
     if (item.type === 'release_submission' && item.releaseId) {
       const releaseId = String(item.releaseId);
@@ -2250,6 +2295,23 @@ function App() {
     }
     setPlaying(playing === track.id ? null : track.id);
   };
+
+  // A public audio notification selects the exact published card and opens
+  // NightJar's player. Entitlement and age checks remain enforced by playback.
+  useEffect(() => {
+    if (view !== 'discover' || !focusedContentReleaseId) return;
+    const track = tracks.find(item => item.id === focusedContentReleaseId);
+    if (!track || openedContentReleaseRef.current === focusedContentReleaseId) return;
+    openedContentReleaseRef.current = focusedContentReleaseId;
+    setCatalogueQuery('');
+    setCatalogueRating('all');
+    setCatalogueDuration('all');
+    setPlaying(track.id);
+    const timer = window.setTimeout(() => {
+      document.getElementById('nightjar-release-' + track.id)?.scrollIntoView({ block:'center', behavior:'smooth' });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [view, focusedContentReleaseId, tracks]);
 
   const openTranscript = (track: Track) => {
     if (!track.transcriptAvailable && !demoMode) {
@@ -4509,9 +4571,25 @@ function App() {
                 <select value={catalogueDuration} onChange={(event)=>setCatalogueDuration(event.target.value)} aria-label="Audio duration"><option value="all">Any length</option><option value="short">Under 10 min</option><option value="medium">10–24 min</option><option value="full">25–44 min</option><option value="long">45+ min</option></select>
               </div>
               <div className="track-grid">
-                {filteredTracks.slice(0, 24).map((track) => <LiveTrackCard key={track.id} brandLogoUrl={logoUrl ?? '/brand-logo'} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />)}
-                {!filteredTracks.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
+                {notificationReleaseCards.slice(0, 24).map((track) => <LiveTrackCard highlighted={focusedContentReleaseId === track.id} key={track.id} brandLogoUrl={logoUrl ?? '/brand-logo'} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />)}
+                {!notificationReleaseCards.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
               </div>
+            </section>
+
+            <section id="nightjar-public-script-marketplace" className="section-wrap" aria-label="Published Writer scripts">
+              <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading approved Writer scripts" />}>
+                <ScriptMarketplace key={'discover-marketplace-' + demoSessionKey}
+                  focusScriptId={focusedContentScriptId}
+                  notify={notify} demoMode={demoMode} simulationMode={simulationMode}
+                  onOpenWriter={openPublicProfile}
+                  readOnlyPreview={effectiveRole !== 'creator' || liveRolePreview}
+                  onMessageUser={effectiveRole === 'creator' && !liveRolePreview ? (userId,collaborationId) => {
+                    setMessageRecipientUserId(userId);
+                    setMessageCollaborationId(collaborationId??null);
+                    navigate('messages');
+                  } : undefined}
+                />
+              </Suspense>
             </section>
 
             <section id="for-you" className="section-wrap">
@@ -5630,8 +5708,8 @@ function ReleaseCoverVisual({ artworkUrl, brandLogoUrl }: { artworkUrl?: string 
   );
 }
 
-function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, onRead, onFavourite, onReaction, onCommunity, reason, brandLogoUrl }: { track: Track; playing: boolean; favourite: boolean; reaction: ReleaseReaction; canReact: boolean; onPlay: (track: Track) => void; onRead: (track: Track) => void; onFavourite: () => void; onReaction: (reaction: Exclude<ReleaseReaction,null>) => void; onCommunity: () => void; reason?: string; brandLogoUrl: string }) {
-  return <article className="track-card">
+function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, onRead, onFavourite, onReaction, onCommunity, reason, brandLogoUrl, highlighted = false }: { highlighted?: boolean; track: Track; playing: boolean; favourite: boolean; reaction: ReleaseReaction; canReact: boolean; onPlay: (track: Track) => void; onRead: (track: Track) => void; onFavourite: () => void; onReaction: (reaction: Exclude<ReleaseReaction,null>) => void; onCommunity: () => void; reason?: string; brandLogoUrl: string }) {
+  return <article id={"nightjar-release-" + track.id} className={highlighted ? "track-card nightjar-notification-target" : "track-card"}>
     <div className="track-cover release-cover">
       <ReleaseCoverVisual artworkUrl={track.artworkUrl} brandLogoUrl={brandLogoUrl} />
       <span className="track-index">{track.category}</span>
