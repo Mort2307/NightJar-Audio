@@ -35,6 +35,22 @@ else pass('Mobile navigation mounted.');
 if (!app.includes('RoleDashboard')) fail('Role command-centre dashboard is missing.');
 else pass('Role dashboards mounted.');
 
+const listenerHome = app.indexOf("{view === 'discover' && (");
+const listenerHero = app.indexOf('<section className="hero-section">', listenerHome);
+if (listenerHome < 0 || listenerHero < listenerHome || app.slice(listenerHome, listenerHero).includes('<RoleDashboard')) {
+  fail('Listener Home must open with the premium audio hero, not account statistics.');
+} else pass('Listener Home puts listening discovery before account statistics.');
+
+const listenerProfile = app.indexOf("{view === 'profile' && !profileRolesPage && (");
+const listenerProfileEnd = app.indexOf("{view === 'profile' && profileRolesPage && (", listenerProfile);
+if (listenerProfile < 0 || listenerProfileEnd < listenerProfile ||
+    !app.slice(listenerProfile, listenerProfileEnd).includes('title="Your Nightjar at a glance."') ||
+    !app.slice(listenerProfile, listenerProfileEnd).includes("label:'Favourites'") ||
+    !app.slice(listenerProfile, listenerProfileEnd).includes("label:'Following'") ||
+    !app.slice(listenerProfile, listenerProfileEnd).includes("label:'Updates'")) {
+  fail('Listener account statistics must remain accessible from Profile.');
+} else pass('Listener account statistics are available on Profile.');
+
 if (!system.includes('prefers-reduced-motion')) fail('Reduced-motion accessibility contract is missing.');
 else pass('Reduced-motion support present.');
 
