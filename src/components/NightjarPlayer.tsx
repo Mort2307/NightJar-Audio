@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import { nightjarListening } from '../platform/firebase-listening';
+import { nightjarExperience } from '../platform/firebase-experience';
 import {
   DEFAULT_ACCESSIBILITY_PREFERENCES,
   nightjarAccessibility,
   type AccessibilityPreferences,
 } from '../platform/firebase-accessibility';
-import { AudioLines, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, Clock3, Headphones, Pause, Play, Settings2, Volume2, X } from 'lucide-react';
+import { AudioLines, BookmarkPlus, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, Clock3, Headphones, Pause, Play, Settings2, Volume2, X } from 'lucide-react';
 import { useNightjarEqualizer } from '../hooks/useNightjarEqualizer';
 import { useNightjarMediaSession } from '../hooks/useNightjarMediaSession';
 import './nightjar-player-premium.css';
@@ -40,6 +41,7 @@ type Props = {
   notify: (message: string) => void;
   simulationMode?: boolean;
   initialTranscriptOpen?: boolean;
+  initialSeekSeconds?: number | null;
 };
 
 type TranscriptCue = {
@@ -101,7 +103,7 @@ const parseTranscript = (transcript: string): TranscriptCue[] => {
   return cues;
 };
 
-export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify, simulationMode = false, initialTranscriptOpen = false }: Props) {
+export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify, simulationMode = false, initialTranscriptOpen = false, initialSeekSeconds = null }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastProgressEvent = useRef(0);
   const listeningSessionId = useRef(crypto.randomUUID());
@@ -109,6 +111,9 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const transcriptCueRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const transcriptRequestRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [momentOpen, setMomentOpen] = useState(false);
+  const [momentLabel, setMomentLabel] = useState('');
+  const [momentSaving, setMomentSaving] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(1);
   const [volume, setVolume] = useState(1);
@@ -321,7 +326,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   useEffect(() => {
     if (simulationMode) return;
     const node = audioRef.current;
-    if (!node || !rememberedPosition) return;
+    if (!node || !rememberedPosition || initialSeekSeconds !== null) return;
     const apply = () => {
       if (node.duration && rememberedPosition < node.duration) {
         node.currentTime = rememberedPosition;
@@ -331,7 +336,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     if (node.readyState >= 1) apply();
     else node.addEventListener('loadedmetadata', apply, { once: true });
     return () => node.removeEventListener('loadedmetadata', apply);
-  }, [rememberedPosition, track?.id, simulationMode]);
+  }, [rememberedPosition, track?.id, simulationMode, initialSeekSeconds]);
 
   useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
 
@@ -415,7 +420,14 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         ref={audioRef}
         src={playbackUrl ?? undefined}
         preload="metadata"
-        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 1)}
+        onLoadedMetadata={(event) => {
+          setDuration(event.currentTarget.duration || 1);
+          if (initialSeekSeconds !== null && Number.isFinite(initialSeekSeconds) && initialSeekSeconds >= 0) {
+            const target = Math.min(Math.max(0, initialSeekSeconds), Math.max(0, (event.currentTarget.duration || 1) - 0.1));
+            event.currentTarget.currentTime = target;
+            setPosition(target);
+          }
+        }}
         onPlay={(event) => {
           setIsPlaying(true);
           equalizer.resumeProcessing();
@@ -464,8 +476,28 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
       <div className="nj-up-tools">
         <label className="nj-up-volume"><Volume2 size={18} aria-hidden="true"/><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume"/></label>
         <button className={showEq ? 'nj-up-tool active' : 'nj-up-tool'} type="button" onClick={() => setShowEq((v) => !v)} aria-expanded={showEq} aria-controls="nj-up-eq"><AudioLines size={17}/> EQ</button>
+        <button type="button" className="nj-up-tool" onClick={() => setMomentOpen((open) => !open)}
+          aria-expanded={momentOpen} aria-controls="nightjar-moment-mark"><BookmarkPlus size={17}/> Moment Mark</button>
         <label className="nj-up-sleep"><Clock3 size={17}/><select value={sleepTimer} onChange={(event) => setSleepTimer(event.target.value as typeof sleepTimer)} aria-label="Sleep timer"><option value="off">Sleep off</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="end">End of audio</option></select><ChevronDown size={14}/></label>
       </div>
+      {momentOpen && <form id="nightjar-moment-mark" className="nj-moment-editor" onSubmit={(event) => {
+        event.preventDefault();
+        if (!track || momentSaving) return;
+        if (simulationMode) { notify('Simulation: moment saved in preview only.'); setMomentOpen(false); return; }
+        setMomentSaving(true);
+        void nightjarExperience.saveMark(track.id, position, momentLabel.trim() || 'Saved moment').then(() => {
+          notify('Moment saved privately. Find it under Library → Moment Marks.');
+          setMomentLabel('');
+          setMomentOpen(false);
+        }).catch((error) => {
+          notify(error instanceof Error ? error.message : 'Moment could not be saved.');
+        }).finally(() => setMomentSaving(false));
+      }}>
+        <strong>Save this exact moment · {formatTime(position)}</strong>
+        <label>Private label <input value={momentLabel} maxLength={80} onChange={(event) => setMomentLabel(event.target.value)}
+          placeholder="A scene to revisit" /></label>
+        <button className="primary-button" type="submit" disabled={momentSaving}>{momentSaving ? 'Saving…' : 'Save Moment Mark'}</button>
+      </form>}
       {showEq && <div id="nj-up-eq" className="nj-up-eq">
         <div className="nj-up-eq-head"><div><strong>Audio equalizer</strong><small>Choose a preset to turn EQ on automatically.</small></div>
           <button type="button" className={equalizer.enabled ? 'nj-up-eq-enable on' : 'nj-up-eq-enable'} onClick={() => void equalizer.toggle()} aria-pressed={equalizer.enabled} disabled={equalizer.busy || simulationMode} aria-busy={equalizer.busy}>{simulationMode ? 'Live only' : equalizer.busy ? 'Connecting…' : equalizer.enabled ? 'EQ ACTIVE · On' : 'EQ Off · Enable'}</button>
