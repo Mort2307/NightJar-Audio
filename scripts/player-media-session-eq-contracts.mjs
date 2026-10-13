@@ -7,6 +7,7 @@ const eq = read('src/hooks/useNightjarEqualizer.ts');
 const cors = read('scripts/prepare-nightjar-audio-cors.mjs');
 const workflow = read('.github/workflows/firebase-backend-deploy.yml');
 const corsApply = read('scripts/apply-nightjar-audio-cors.mjs');
+const cloudShellSetup = read('scripts/configure-nightjar-eq-cors-cloud-shell.py');
 assert.match(player, /useNightjarMediaSession\(/, 'lock-screen integration is mounted');
 assert.match(player, /playableQueue = queue\.filter/, 'next/previous skip inaccessible recordings');
 assert.match(media, /navigator\.mediaSession/, 'uses the official Media Session API');
@@ -26,6 +27,13 @@ assert.match(workflow, /ENABLE-NIGHTJAR-AUDIO-EQ/, 'storage write needs explicit
 assert.match(workflow, /production-backend/, 'storage update uses protected production environment');
 assert.match(workflow, /node scripts\/apply-nightjar-audio-cors\.mjs/, 'CORS change requires precise permission-checked script');
 assert.match(corsApply, /storage\.buckets\.update/, 'script validates exact bucket update permission');
+assert.ok(corsApply.indexOf("if (active)") < corsApply.indexOf("const checks = await request("),
+  'already configured bucket can be verified without permanent GitHub update permission');
+assert.match(cloudShellSetup, /ifMetagenerationMatch/, 'Cloud Shell CORS change is guarded against concurrent bucket metadata writes');
+assert.match(cloudShellSetup, /type ENABLE-NIGHTJAR-AUDIO-EQ/i, 'one-time owner CORS update requires explicit confirmation');
+assert.match(cloudShellSetup, /Original CORS rules|previous CORS rules|existing CORS rule/i, 'one-time owner CORS retains prior rules');
+assert.match(cloudShellSetup, /method="PATCH"/, 'one-time owner setup patches only CORS field');
+assert.doesNotMatch(cloudShellSetup, /add-iam-policy-binding|setIamPolicy/, 'one-time setup never grants bucket permissions');
 assert.match(corsApply, /\/iam\/testPermissions/, 'script uses read-only IAM permission preflight');
 assert.match(corsApply, /method: 'PATCH'/, 'script patches only bucket CORS');
 assert.match(corsApply, /ifMetagenerationMatch/, 'script prevents overwriting concurrent changes');
