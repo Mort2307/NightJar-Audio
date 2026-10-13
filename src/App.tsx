@@ -752,6 +752,7 @@ function App() {
   const [activeFeaturedId, setActiveFeaturedId] = useState<string | null>(null);
   const [featuredCarouselVisible, setFeaturedCarouselVisible] = useState(false);
   const [featuredCarouselPaused, setFeaturedCarouselPaused] = useState(false);
+  const [featuredCarouselReducedMotion, setFeaturedCarouselReducedMotion] = useState(false);
   const [featuredCarouselHovered, setFeaturedCarouselHovered] = useState(false);
   const [featuredCarouselAnnouncement, setFeaturedCarouselAnnouncement] = useState('');
   const featuredCarouselRef = useRef<HTMLDivElement | null>(null);
@@ -769,6 +770,15 @@ function App() {
       carouselTracks[nextIndex].title + ', ' + (nextIndex + 1) + ' of ' + carouselTracks.length + ' released audios.'
     );
   };
+
+  // Respect OS reduced-motion preferences, including live accessibility changes.
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setFeaturedCarouselReducedMotion(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
 
   // Only rotate the visible card. Preserve manual swiping and keyboard access,
   // pause on desktop hover, while examining comments, and for reduced motion.
@@ -793,7 +803,7 @@ function App() {
 
   useEffect(() => {
     if (view !== 'discover' || carouselTracks.length < 2 || !featuredCarouselVisible
-      || featuredCarouselPaused || featuredCarouselHovered || reviewTrack !== null) return;
+      || featuredCarouselPaused || featuredCarouselReducedMotion || featuredCarouselHovered || reviewTrack !== null) return;
     const interval = window.setInterval(() => {
       if (document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches
         || featuredCarouselRef.current?.querySelector(':focus-visible')) return;
@@ -804,7 +814,7 @@ function App() {
       });
     }, 4000);
     return () => window.clearInterval(interval);
-  }, [view, carouselTracks, activeFeaturedId, featuredCarouselVisible, featuredCarouselPaused, featuredCarouselHovered, reviewTrack]);
+  }, [view, carouselTracks, activeFeaturedId, featuredCarouselVisible, featuredCarouselPaused, featuredCarouselReducedMotion, featuredCarouselHovered, reviewTrack]);
 
   // Only link people to a verified account ID from the release credit or a unique
   // exact-name, matching-role public directory entry. Never guess an identity from a name.
@@ -4623,16 +4633,18 @@ function App() {
                           onClick={() => changeFeatured(-1)} aria-label="Previous released audio">
                           <ArrowLeft size={18} aria-hidden="true" />
                         </button>
-                        <div className="featured-carousel-position" aria-live="polite" aria-atomic="true">
+                        <div className="featured-carousel-position">
                           <strong>{featuredIndex + 1} / {carouselTracks.length}</strong>
                           <small>4 SEC · SWIPE TO EXPLORE</small>
-                          <button type="button" className="featured-carousel-autoplay" data-nj-preview-safe="true"
-                            onClick={() => setFeaturedCarouselPaused((paused) => !paused)}
-                            aria-label={featuredCarouselPaused ? 'Resume automatic audio carousel' : 'Pause automatic audio carousel'}
-                            aria-pressed={featuredCarouselPaused}>
-                            {featuredCarouselPaused ? <Play size={12} aria-hidden="true" /> : <Pause size={12} aria-hidden="true" />}
-                            {featuredCarouselPaused ? 'Auto play' : 'Pause rotation'}
-                          </button>
+                          {featuredCarouselReducedMotion
+                            ? <span className="featured-carousel-motion-note">Auto rotation off for reduced motion</span>
+                            : <button type="button" className="featured-carousel-autoplay" data-nj-preview-safe="true"
+                              onClick={() => setFeaturedCarouselPaused((paused) => !paused)}
+                              aria-label={featuredCarouselPaused ? 'Resume automatic audio carousel' : 'Pause automatic audio carousel'}
+                              aria-pressed={featuredCarouselPaused}>
+                              {featuredCarouselPaused ? <Play size={12} aria-hidden="true" /> : <Pause size={12} aria-hidden="true" />}
+                              {featuredCarouselPaused ? 'Resume rotation' : 'Pause rotation'}
+                            </button>}
                         </div>
                         <button type="button" className="featured-carousel-arrow" data-nj-preview-safe="true"
                           onClick={() => changeFeatured(1)} aria-label="Next released audio">
