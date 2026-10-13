@@ -2300,8 +2300,8 @@ function App() {
     setPlaying(playing === track.id ? null : track.id);
   };
 
-  // A public audio notification selects the exact published card and opens
-  // NightJar's player. Entitlement and age checks remain enforced by playback.
+  // Public audio notifications highlight the exact published release. Playback
+  // always remains behind the existing user-initiated age and entitlement gates.
   useEffect(() => {
     if (view !== 'discover' || !focusedContentReleaseId) return;
     const track = tracks.find(item => item.id === focusedContentReleaseId);
@@ -2310,7 +2310,6 @@ function App() {
     setCatalogueQuery('');
     setCatalogueRating('all');
     setCatalogueDuration('all');
-    setPlaying(track.id);
     const timer = window.setTimeout(() => {
       document.getElementById('nightjar-release-' + track.id)?.scrollIntoView({ block:'center', behavior:'smooth' });
     }, 250);
