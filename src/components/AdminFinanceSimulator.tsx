@@ -48,6 +48,8 @@ const pct = (value: number) => (Number.isFinite(value) ? value : 0).toFixed(2) +
 const clamp = (value: number, min = 0, max = Number.POSITIVE_INFINITY) =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : 0));
 
+const NIGHTJAR_DEFAULT_MONTHLY_PRICE = 6.99;
+
 const defaultRoles = (): Record<RoleKey, RoleScenario> => ({
   creator: { label: 'VA Creators', allocationPercent: 70, eligiblePeople: 5, monthlyCap: 3000 },
   writer: { label: 'Writers', allocationPercent: 12, eligiblePeople: 5, monthlyCap: 750 },
@@ -58,7 +60,7 @@ const defaultRoles = (): Record<RoleKey, RoleScenario> => ({
 export default function AdminFinanceSimulator({ settings, currentPaidSubscribers = 0, currentUsers = 0 }: Props) {
   const [totalUsers, setTotalUsers] = useState(25000);
   const [paidSubscribers, setPaidSubscribers] = useState(10000);
-  const [subscriptionPrice, setSubscriptionPrice] = useState(5);
+  const [subscriptionPrice, setSubscriptionPrice] = useState(NIGHTJAR_DEFAULT_MONTHLY_PRICE);
   const [vatRate, setVatRate] = useState(20);
   const [priceIncludesVat, setPriceIncludesVat] = useState(true);
   const [processorPercent, setProcessorPercent] = useState(2.9);
@@ -138,7 +140,7 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
   const resetNightjarScenario = () => {
     setTotalUsers(25000);
     setPaidSubscribers(10000);
-    setSubscriptionPrice(5);
+    setSubscriptionPrice(NIGHTJAR_DEFAULT_MONTHLY_PRICE);
     setVatRate(20);
     setPriceIncludesVat(true);
     setProcessorPercent(2.9);
@@ -326,7 +328,7 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
         <button className="secondary-button" onClick={loadCommercialAssumptions}><WalletCards size={14}/> Load current Nightjar assumptions</button>
         <button className="secondary-button" onClick={saveSandboxScenario}>Save sandbox scenario</button>
         {hasSavedScenario && <button className="ghost-button" onClick={loadSavedScenario}>Load saved scenario</button>}
-        <button className="ghost-button" onClick={resetNightjarScenario}><RefreshCw size={14}/> Reset 10k / £5 scenario</button>
+        <button className="ghost-button" onClick={resetNightjarScenario}><RefreshCw size={14}/> Reset 10k / £6.99 scenario</button>
       </div>
     </div>
 
