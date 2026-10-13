@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AdminCommunityUpdates from './AdminCommunityUpdates';
 import { AlertTriangle, CheckCircle2, ExternalLink, Link2, Mail, RefreshCw, Send, ShieldCheck, Unplug, Users } from 'lucide-react';
 import { applyNightjarUpdate, checkNightjarUpdate, type NightjarUpdateStatus } from '../platform/pwa';
 import {
@@ -423,6 +424,7 @@ export default function AdminCommunications() {
 
   return (
     <section className="admin-communications">
+      <AdminCommunityUpdates />
       <div className="admin-communications-head">
         <div>
           <span className="mini-label">COMMUNICATIONS · PRIVATE DELIVERY</span>
