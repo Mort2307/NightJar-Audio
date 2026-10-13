@@ -6186,8 +6186,19 @@ export const adminPublishCommunityUpdate = onCall({
   const audience=input.audience==='self'?'self':input.audience==='all'?'all':null;
   if(!/^[0-9a-f-]{36}$/i.test(id)||!title||body.length<40||!audience)
     throw new HttpsError('invalid-argument','Invalid update title, text, recipient group or request ID.');
-  if(audience==='all'&&input.testVerified!==true)
-    throw new HttpsError('failed-precondition','Confirm a successful private test before the community send.');
+  const contentHash=createHash('sha256').update(JSON.stringify({title,body})).digest('hex');
+  if(audience==='all'){
+    const privateTestId=cleanText(input.verifiedTestId,64);
+    if(input.testVerified!==true||!/^[0-9a-f-]{36}$/i.test(privateTestId))
+      throw new HttpsError('failed-precondition','First verify a private announcement test.');
+    const privateTest=await db.collection('communityUpdates').doc(privateTestId).get();
+    const test=privateTest.data();
+    if(!test||test.audience!=='self'||test.authorUid!==admin.uid||
+        test.contentHash!==contentHash||test.status!=='completed'||
+        Number(test.outcome?.inboxCreated??0)<1||
+        Date.now()-Number(test.createdAt?.toMillis?.()??0)>86400000)
+      throw new HttpsError('failed-precondition','A completed private test of this exact update from the last 24 hours is required.');
+  }
   const ref=db.collection('communityUpdates').doc(id);
   const digest=createHash('sha256').update(JSON.stringify({title,body,audience,authorUid:admin.uid})).digest('hex');
   const existing=await ref.get();
@@ -6203,7 +6214,7 @@ export const adminPublishCommunityUpdate = onCall({
   if(audience==='self'&&accounts[0].data()?.notificationPreferences?.announcements===false)
     throw new HttpsError('failed-precondition','Enable Nightjar announcements in your notification preferences to run a test.');
   try{
-    await ref.create({title,body,audience,digest,authorUid:admin.uid,
+    await ref.create({title,body,audience,digest,contentHash,authorUid:admin.uid,
       status:'processing',createdAt:FieldValue.serverTimestamp()});
   }catch(error:any){
     if(error?.code===6||error?.code==='already-exists')
