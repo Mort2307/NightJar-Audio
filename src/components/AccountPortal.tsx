@@ -20,6 +20,7 @@ const accountDestination = (account: NightjarAccountIdentity) => {
 export default function AccountPortal() {
   const [explicitSignIn] = useState(() => new URLSearchParams(window.location.search).get('entry') === 'signin');
   const [identity, setIdentity] = useState<NightjarIdentity | null>(() => nightjarAuth.current());
+  const [authReady, setAuthReady] = useState(false);
   const [account, setAccount] = useState<NightjarAccountIdentity | null>(null);
   const [loadingAccount, setLoadingAccount] = useState(false);
   const [message, setMessage] = useState('');
@@ -67,7 +68,7 @@ export default function AccountPortal() {
         ? 'You are offline. Nightjar account state is never cached for offline access; reconnect and try again.'
         : detail.includes('Verify your email')
           ? 'Your email is verified in the browser, but Firebase had not refreshed the backend identity token yet. Refresh this page once; Nightjar now forces a fresh token before retrying.'
-          : 'Nightjar could not reach the protected account service. Try again; if it persists, the Functions deployment or Firebase connection needs checking.');
+          : 'You are signed in, but Nightjar could not finish loading your account. Retry below; there is no need to change your password.');
     } finally {
       setLoadingAccount(false);
     }
@@ -91,6 +92,7 @@ export default function AccountPortal() {
 
     refreshBranding();
     const unsubscribe = nightjarAuth.observe((next) => {
+      setAuthReady(true);
       setIdentity(next);
       void loadAccount(next, Boolean(next?.emailVerified) && !explicitSignIn);
     });
@@ -133,7 +135,9 @@ export default function AccountPortal() {
       <div className="account-portal-header-tools"><span>Secure account access</span><AppUpdateControl compact /></div>
     </header>
 
-    {!identity?.emailVerified && <AccountAccess
+    {!authReady && <section className="account-backend-card" role="status" aria-live="polite"><p>Checking for your saved Nightjar session…</p></section>}
+
+    {authReady && !identity?.emailVerified && <AccountAccess
       key={(identity?.userId ?? 'guest') + ':' + String(identity?.emailVerified ?? false)}
       identity={identity}
       onAuthenticated={(next) => {
@@ -146,7 +150,7 @@ export default function AccountPortal() {
       }}
     />}
 
-    {identity?.emailVerified && <section className="account-backend-card">
+    {authReady && identity?.emailVerified && <section className="account-backend-card">
       <div className="account-testing-notice"><ShieldCheck size={14}/><span><strong>TESTING BUILD</strong> Age assurance is temporarily disabled for controlled QA. Email verification and protected backend permissions remain active.</span></div>
       <div className="account-backend-heading">
         <ShieldCheck size={19} />
@@ -182,7 +186,8 @@ export default function AccountPortal() {
       </div>}
 
       {loadingAccount && <p>Checking protected account state…</p>}
-      {message && <p className="account-access-message">{message}</p>}
+      {message && <p className="account-access-message" role="status">{message}</p>}
+      {message && !loadingAccount && !explicitSignIn && <button type="button" className="secondary-button" onClick={() => void loadAccount(identity, true)}>Retry opening my account</button>}
 
       {account && <>
         <dl className="account-identity-grid">

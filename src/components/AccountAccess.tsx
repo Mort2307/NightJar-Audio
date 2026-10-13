@@ -25,7 +25,7 @@ const friendlyError = (error: unknown) => {
 
   if (/passkey|device verification|webauthn/i.test(value) && !code) return value;
   if (detail.includes('email-already-in-use')) return 'That email already has a Nightjar account. Try signing in instead.';
-  if (detail.includes('invalid-credential')) return 'The email or password is incorrect.';
+  if (['auth/invalid-credential', 'auth/invalid-login-credentials', 'auth/wrong-password', 'auth/user-not-found'].some((code) => detail.includes(code))) return 'The email or password does not match. Check your details or use Forgot password? to reset it.';
   if (detail.includes('weak-password') || detail.includes('password-does-not-meet-requirements')) return 'Firebase rejected that password under the project password policy. Try a longer password with upper-case, lower-case, a number and a symbol.';
   if (detail.includes('too-many-requests')) return 'Too many attempts. Please wait before trying again.';
   if (detail.includes('invalid-email')) return 'Enter a valid email address.';
@@ -33,7 +33,8 @@ const friendlyError = (error: unknown) => {
   if (detail.includes('operation-not-allowed')) return 'Firebase is returning auth/operation-not-allowed: Email/Password is disabled for the Firebase project NightJar is actually connected to.';
   if (detail.includes('configuration-not-found')) return 'Firebase is returning auth/configuration-not-found: the Authentication configuration for the Firebase project NightJar is connected to cannot be found.';
   if (detail.includes('admin-restricted-operation')) return 'Firebase is currently configured to block end-user account creation. Enable user sign-up in Authentication settings.';
-  if (detail.includes('network-request-failed')) return 'Nightjar could not reach Firebase. Check your connection and try again.';
+  if (detail.includes('network-request-failed')) return 'Nightjar could not connect. Check your internet connection and try again. Your password was not changed.';
+  if (detail.includes('unavailable') || detail.includes('deadline-exceeded') || detail.includes('internal-error')) return 'Nightjar sign-in is temporarily unavailable. Please try again shortly; you do not need to reset your password.';
   if (detail.includes('user-disabled')) return 'This Nightjar account has been disabled. Contact an administrator for review.';
   if (detail.includes('app-not-authorized') || detail.includes('unauthorized-domain')) return 'This Nightjar domain is not authorised for Firebase Authentication yet.';
   if (detail.includes('invalid-api-key')) return 'Nightjar is using an invalid Firebase web API key. Check the Firebase web app configuration.';
@@ -52,6 +53,13 @@ const passwordChecks = (value: string) => ({
 const validPassword = (value: string) => {
   const checks = passwordChecks(value);
   return checks.length && checks.lower && checks.upper && checks.number;
+};
+
+// Save an email address only when the member explicitly opts in. Never save passwords.
+const rememberedEmailKey = 'nightjar.auth.remembered-email.v1';
+const readRememberedEmail = (): string => {
+  try { return window.localStorage.getItem(rememberedEmailKey) ?? ''; }
+  catch { return ''; }
 };
 
 export default function AccountAccess({
@@ -77,7 +85,8 @@ export default function AccountAccess({
   })();
   const [mode, setMode] = useState<Mode>(identity && !identity.emailVerified ? 'verify' : requestedEntry === 'register' ? 'register' : 'signin');
   const [registrationRoles, setRegistrationRoles] = useState<RegistrationRole[]>(initialRegistrationRoles);
-  const [email, setEmail] = useState(identity?.email ?? '');
+  const [email, setEmail] = useState(identity?.email ?? readRememberedEmail());
+  const [rememberEmail, setRememberEmail] = useState(() => Boolean(readRememberedEmail()));
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -115,6 +124,20 @@ export default function AccountAccess({
     try { await operation(); }
     catch (error) { setMessage(friendlyError(error)); }
     finally { setBusy(false); }
+  };
+
+  const changeMode = (next: Mode) => {
+    setMode(next);
+    setMessage('');
+    setPassword('');
+    setConfirm('');
+    setShowPassword(false);
+  };
+  const saveEmailPreference = () => {
+    try {
+      if (rememberEmail) window.localStorage.setItem(rememberedEmailKey, email.trim());
+      else window.localStorage.removeItem(rememberedEmailKey);
+    } catch { /* optional convenience must not block authentication */ }
   };
 
   const submit = () => {
@@ -167,6 +190,8 @@ export default function AccountAccess({
           registrationRoles.includes('creator') ? referralCode ?? '' : '',
           currentLegalAcceptancePayload(registrationRoles.length > 0),
         );
+        saveEmailPreference();
+        setPassword(''); setConfirm('');
         onAuthenticated(result.identity);
         setMode('verify');
         setMessage(result.verificationSent
@@ -190,7 +215,7 @@ export default function AccountAccess({
           next = await nightjarAuth.signIn(email, password);
         } catch (error) {
           const code = firebaseErrorCode(error) || 'auth/unknown';
-          if (['auth/invalid-credential','auth/too-many-requests','auth/user-disabled','auth/invalid-email'].includes(code)) {
+          if (['auth/invalid-credential','auth/invalid-login-credentials','auth/wrong-password','auth/user-not-found','auth/too-many-requests','auth/user-disabled','auth/invalid-email'].includes(code)) {
             void nightjarAuthSecurity.recordFailure({
               email,
               eventType:'signin_failed',
@@ -199,6 +224,8 @@ export default function AccountAccess({
           }
           throw error;
         }
+        saveEmailPreference();
+        setPassword('');
         onAuthenticated(next);
         setMode(next.emailVerified ? 'signin' : 'verify');
         if (next.emailVerified) {
@@ -208,8 +235,14 @@ export default function AccountAccess({
         return;
       }
       if (mode === 'reset') {
-        await nightjarAuth.resetPassword(email);
-        setMessage('If that address belongs to a Nightjar account, a password reset email has been sent.');
+        try {
+          await nightjarAuth.resetPassword(email);
+        } catch (error) {
+          // Older Firebase projects can still return user-not-found.
+          // Do not reveal which addresses belong to Nightjar members.
+          if (firebaseErrorCode(error) !== 'auth/user-not-found') throw error;
+        }
+        setMessage('If this email has a Nightjar account, a reset link will arrive shortly. Check your inbox, then spam or junk. Open the newest reset email and return here to sign in.');
       }
     });
   };
@@ -232,6 +265,11 @@ export default function AccountAccess({
           await nightjarAuth.resendVerification();
           setMessage('A new verification email has been sent. If it does not appear in your inbox, check your spam or junk folder.');
         })}>Resend email</button>
+        <button type="button" className="ghost-button" disabled={busy} onClick={() => void run(async () => {
+          await nightjarAuth.signOut();
+          onSignedOut?.();
+          changeMode('signin');
+        })}>Use a different email address</button>
       </div>
     </section>;
   }
@@ -257,20 +295,21 @@ export default function AccountAccess({
     </section>;
   }
 
-  return <section className="account-access-card">
+  return <form className="account-access-card" onSubmit={(event) => { event.preventDefault(); if (!busy) submit(); }}>
     <div className="account-access-mark"><LockKeyhole size={22} /></div>
     <span className="mini-label">NIGHTJAR ACCOUNT</span>
     <h2>{mode === 'register' ? 'Choose your Nightjar roles.' : mode === 'reset' ? 'Reset your password' : 'Enter Nightjar'}</h2>
     <p>{mode === 'register' ? 'Listener access is included with every account. Select any professional roles you want to apply for now — one account can combine VA Creator, Writer, Audio Editor and Artist access after approval.' : mode === 'reset' ? 'We will send a secure reset link to your account email.' : 'Sign in with your protected Nightjar account.'}</p>
     {mode === 'register' && <div className="demo-warning"><ShieldCheck size={17}/><div><strong>PRIVATE TESTING</strong><span>Account creation is restricted to email addresses approved by a Nightjar administrator. Approved testers still verify their email normally before access is granted.</span></div></div>}
-    {mode === 'signin' && <div className="account-workspace-overview" aria-label="Nightjar account workspaces">
+    {mode === 'signin' && <details className="account-workspace-overview" aria-label="Nightjar account workspaces">
+      <summary>Explore Nightjar account workspaces</summary>
       <span><Headphones size={14}/><strong>Listener</strong><small>Discovery, subscription, comments, Like/Love and private library.</small></span>
       <span><Mic2 size={14}/><strong>Creator</strong><small>Publishing, credits, professional messaging and Creator Studio.</small></span>
       <span><FileText size={14}/><strong>Writer</strong><small>Protected scripts, rights, collaboration and Writer Studio.</small></span>
       <span><AudioLines size={14}/><strong>Audio Editor</strong><small>Assigned work, production credits, messaging and Editor Studio.</small></span>
       <span><Brush size={14}/><strong>Artist</strong><small>Portfolio, commissions, visual collaboration and artwork credits.</small></span>
       <em>Your account can hold multiple approved professional roles. Switch workspaces from your profile whenever you need to.</em>
-    </div>}
+    </details>}
     {mode === 'register' && <div className="account-role-cards" aria-label="Choose Nightjar professional roles">
       <div className="account-role-card selected account-role-card-included" aria-label="Listener access included">
         <span><Headphones size={19}/></span><div><strong>Listener · included</strong><small>Subscribe, listen, comment, follow profiles and build your private library. This access does not need professional approval.</small></div>
@@ -296,9 +335,10 @@ export default function AccountAccess({
         ? <>You are applying for <strong>{registrationRoles.map((role)=>role === 'creator' ? 'VA Creator' : role === 'editor' ? 'Audio Editor' : role === 'artist' ? 'Artist' : 'Writer').join(' + ')}</strong>. These roles stay banked until Mike or Megs approves them for an intake wave.</>
         : <>You are creating a <strong>Listener</strong> account only. You can apply for professional roles later from your profile.</>}</p>
     </div>}
-    <div className="account-access-field"><label>Email</label><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+    <div className="account-access-field"><label htmlFor="nightjar-auth-email">Email address</label><input id="nightjar-auth-email" name="email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
     {mode !== 'reset' && <>
-      <div className="account-access-field"><label>Password</label><div className="account-password-input"><input type={showPassword ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
+      <div className="account-access-field"><label htmlFor="nightjar-auth-password">Password</label><div className="account-password-input"><input id="nightjar-auth-password" name="password" required type={showPassword ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
+      {mode === 'signin' && <button type="button" className="ghost-button" disabled={busy} onClick={() => changeMode('reset')}>Forgotten your password? Reset it here.</button>}
       {mode === 'register' && <>
         <div className="account-password-requirements" aria-live="polite">
           {(() => {
@@ -312,9 +352,11 @@ export default function AccountAccess({
             </>;
           })()}
         </div>
-        <div className="account-access-field"><label>Confirm password</label><input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /><small>{confirm ? (password === confirm ? '✓ Passwords match' : 'Passwords do not match yet') : 'Re-enter your password'}</small></div>
+        <div className="account-access-field"><label htmlFor="nightjar-auth-confirm">Confirm password</label><input id="nightjar-auth-confirm" name="confirmPassword" type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /><small>{confirm ? (password === confirm ? '✓ Passwords match' : 'Passwords do not match yet') : 'Re-enter your password'}</small></div>
       </>}
     </>}
+    {mode === 'signin' && <><label className="rights-check account-remember-email"><input type="checkbox" checked={rememberEmail} onChange={(event) => { setRememberEmail(event.target.checked); if (!event.target.checked) { try { window.localStorage.removeItem(rememberedEmailKey); } catch { /* storage may be restricted */ } } }}/><span>Remember my email on this device (not my password)</span></label><small className="account-access-help">Your browser or phone can safely autofill a saved password. Nightjar never stores it on this device.</small></>}
+    {mode === 'reset' && <small className="account-access-help">Use the same email you registered with. If you requested several links, open the newest one. Check spam or junk before trying again.</small>}
     {mode === 'register' && <div className="account-legal-consent">
       <div className="account-legal-consent-head"><ShieldCheck size={15}/><div><strong>Terms, privacy & professional permissions</strong><span>Nightjar records the exact version you accept. Marketing and device push are separate choices and are not bundled into these terms.</span></div></div>
       <label className="rights-check">
@@ -331,7 +373,7 @@ export default function AccountAccess({
       </label>}
     </div>}
     {message && <p className="account-access-message" role="status" aria-live="polite">{message}</p>}
-    <button type="button" className="primary-button account-access-submit" disabled={busy || (mode === 'register' && (!termsAccepted || !privacyRead || (registrationRoles.length > 0 && !professionalTermsAccepted)))} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
+    <button type="submit" className="primary-button account-access-submit" disabled={busy || (mode === 'register' && (!termsAccepted || !privacyRead || (registrationRoles.length > 0 && !professionalTermsAccepted)))}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
     {mode === 'signin' && nightjarPasskeys.supported() && <button type="button" className="secondary-button account-access-submit" disabled={busy} onClick={() => void run(async () => {
       const next = await nightjarPasskeys.signIn();
       onAuthenticated(next);
@@ -339,9 +381,9 @@ export default function AccountAccess({
       setMessage('Passkey verified. Opening Nightjar…');
     })}><Fingerprint size={17}/> Sign in with Face ID, fingerprint or passkey</button>}
     <div className="account-access-switches">
-      {mode !== 'signin' && <button onClick={() => { setMode('signin'); setMessage(''); }}>Already have an account?</button>}
-      {mode !== 'register' && <button onClick={() => { setMode('register'); setMessage(''); }}>Create account</button>}
-      {mode !== 'reset' && <button onClick={() => { setMode('reset'); setMessage(''); }}>Forgot password?</button>}
+      {mode !== 'signin' && <button type="button" onClick={() => changeMode('signin')}>Already have an account? Sign in</button>}
+      {mode !== 'register' && <button type="button" onClick={() => changeMode('register')}>Create account</button>}
+      {mode !== 'reset' && mode !== 'signin' && <button type="button" onClick={() => changeMode('reset')}>Forgot password?</button>}
     </div>
-  </section>;
+  </form>;
 }
