@@ -44,6 +44,7 @@ export default function WriterRightsPanel({ script, onUpdated, notify, simulatio
   const [genresDraft, setGenresDraft] = useState('');
   const [tropesDraft, setTropesDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     setRights({ ...defaultRights, ...(script?.rights ?? {}), aiTrainingAllowed: false });
@@ -86,6 +87,44 @@ export default function WriterRightsPanel({ script, onUpdated, notify, simulatio
     }
   };
 
+  const submitForNightjarReview = async () => {
+    if (!script?.id || submitting || saving) return;
+    if (!['Draft','Revision requested','Rejected'].includes(String(script.status ?? 'Draft'))) {
+      notify('This manuscript is already submitted or approved. No second submission is needed.');
+      return;
+    }
+    if (!rights.ownershipAttested || !rights.contributorPermissionsConfirmed) {
+      notify('Please confirm manuscript ownership and contributor permissions before submission.');
+      document.getElementById('writer-rights-attest')?.scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+    if (!String(script.content ?? '').trim() && !script.sourceFile?.fileName) {
+      notify('Write or upload your manuscript before submitting.');
+      return;
+    }
+    const nextMarketplace = {...marketplace, genres:parseListingTags(genresDraft,16), tropes:parseListingTags(tropesDraft,24)};
+    setSubmitting(true);
+    try {
+      if (simulationMode) {
+        onUpdated({...script,status:'Submitted',rights:{...rights,aiTrainingAllowed:false},marketplace:nextMarketplace});
+        notify('Simulation: manuscript submitted for NightJar approval, without an editor assignment.');
+      } else {
+        // Save both the current manuscript and these rights values, then ask the
+        // server to confirm that the workflow actually changed to Submitted.
+        await nightjarScripts.update(script.id, {title:script.title, content:script.content ?? ''});
+        await nightjarScripts.updateRights(script.id, {...rights,aiTrainingAllowed:false}, nextMarketplace);
+        const result = await nightjarScripts.submit(script.id);
+        if (result.script?.status !== 'Submitted') throw new Error('The server did not confirm submission. Check your script status before retrying.');
+        onUpdated(result.script);
+        notify('Submitted for NightJar approval. Your full manuscript is still private. An Audio Editor is not required.');
+      }
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Submission could not be confirmed. Your manuscript is still saved privately.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return <section className="research-panel writer-rights-panel">
     <div className="research-panel-head">
       <div><span className="mini-label">RIGHTS & LICENSING</span><h2>Your work stays attributable to you.</h2><p>Record the terms that matter before a manuscript moves into production. Nightjar keeps AI-training permission off.</p></div>
@@ -97,7 +136,15 @@ export default function WriterRightsPanel({ script, onUpdated, notify, simulatio
       <p>{['Approved','Published'].includes(String(script.status ?? ''))
         ? marketplace.visibility === 'marketplace' && Boolean(String(marketplace.synopsis ?? '').trim()) ? 'Approved and listed for Creator discovery. Your synopsis is public; the full manuscript stays protected.' : 'Your manuscript is approved. Add a public synopsis and use the action below to release its listing to Voice Actors.'
         : ['Submitted','Under review'].includes(String(script.status ?? '')) ? 'Your script is awaiting Nightjar approval. Assigning an Audio Editor is optional. You may set Marketplace visibility now and the synopsis will go live only after approval.'
-        : 'First save your manuscript, choose Marketplace visibility, confirm rights, then submit it for Nightjar approval. Audio Editor assignment is optional.'}</p>
+        : 'Your uploaded manuscript is a private draft, not a submission. Confirm the two permissions below, then choose Submit for NightJar review. Marketplace visibility and Audio Editor assignment are both optional.'}</p>
+      {['Draft','Revision requested','Rejected'].includes(String(script.status ?? 'Draft')) && <>
+        <div className="nj-writer-rights-quick" id="writer-rights-attest">
+          <label className="rights-check"><input type="checkbox" checked={rights.ownershipAttested === true} onChange={e=>setRights(current=>({...current,ownershipAttested:e.target.checked}))}/><span>I own/control the manuscript rights needed for this submission.</span></label>
+          <label className="rights-check"><input type="checkbox" checked={rights.contributorPermissionsConfirmed === true} onChange={e=>setRights(current=>({...current,contributorPermissionsConfirmed:e.target.checked}))}/><span>I have permission for any protected contributions by others.</span></label>
+        </div>
+        <button className="primary-button nj-writer-submit-button" type="button" disabled={submitting || saving} onClick={()=>void submitForNightjarReview()}><Save size={14}/>{submitting?'Submitting securely…':'Submit for NightJar review'}</button>
+        <small>This sends the protected manuscript to administrators. Saving a draft or uploading a file does not submit it. Audio Editors are optional.</small>
+      </>}
       {['Approved','Published'].includes(String(script.status ?? '')) && (marketplace.visibility !== 'marketplace' || !String(marketplace.synopsis ?? '').trim()) &&
         <button className="primary-button" type="button" disabled={saving} onClick={()=>void save(true)}><Save size={14}/> {saving?'Listing…':'List approved script for creators'}</button>}
     </div>
@@ -117,8 +164,6 @@ export default function WriterRightsPanel({ script, onUpdated, notify, simulatio
       <label className="rights-check"><input type="checkbox" checked={rights.castingApprovalRequired} onChange={(e) => setRights((r) => ({ ...r, castingApprovalRequired: e.target.checked }))}/> Casting approval required</label>
       <label className="rights-check"><input type="checkbox" checked={rights.finalAudioApprovalRequired} onChange={(e) => setRights((r) => ({ ...r, finalAudioApprovalRequired: e.target.checked }))}/> Final audio approval required</label>
       <label className="rights-check"><input type="checkbox" checked={rights.commercialUse} onChange={(e) => setRights((r) => ({ ...r, commercialUse: e.target.checked }))}/> Commercial use included in licence</label>
-      <label className="rights-check research-span-two"><input type="checkbox" checked={rights.ownershipAttested === true} onChange={(e) => setRights((r) => ({ ...r, ownershipAttested: e.target.checked }))}/><span><strong>Ownership / authority confirmed</strong> — I wrote this manuscript or otherwise control the rights needed to submit and license it through the selected Nightjar workflow.</span></label>
-      <label className="rights-check research-span-two"><input type="checkbox" checked={rights.contributorPermissionsConfirmed === true} onChange={(e) => setRights((r) => ({ ...r, contributorPermissionsConfirmed: e.target.checked }))}/><span><strong>Contributor permissions confirmed</strong> — where another person’s protected contribution appears, I have the permission required for the use I am proposing.</span></label>
       <label className="rights-check"><input type="checkbox" checked={marketplace.collaborationWanted} onChange={(e) => setMarketplace((m: any) => ({ ...m, collaborationWanted: e.target.checked }))}/> Open to creator collaboration</label>
       <label className="rights-check"><input type="checkbox" checked={marketplace.editorWanted} onChange={(e) => setMarketplace((m: any) => ({ ...m, editorWanted: e.target.checked }))}/> Looking for Audio Editor</label>
       <label className="research-span-two">Withdrawal terms<textarea value={rights.withdrawalTerms ?? ''} onChange={(e) => setRights((r) => ({ ...r, withdrawalTerms: e.target.value }))} placeholder="Agreed conditions under which the licence may be withdrawn."/></label>
