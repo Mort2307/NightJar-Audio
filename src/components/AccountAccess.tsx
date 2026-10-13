@@ -352,7 +352,7 @@ export default function AccountAccess({
             </>;
           })()}
         </div>
-        <div className="account-access-field"><label>Confirm password</label><input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /><small>{confirm ? (password === confirm ? '✓ Passwords match' : 'Passwords do not match yet') : 'Re-enter your password'}</small></div>
+        <div className="account-access-field"><label htmlFor="nightjar-auth-confirm">Confirm password</label><input id="nightjar-auth-confirm" name="confirmPassword" type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /><small>{confirm ? (password === confirm ? '✓ Passwords match' : 'Passwords do not match yet') : 'Re-enter your password'}</small></div>
       </>}
     </>}
     {mode === 'signin' && <><label className="rights-check account-remember-email"><input type="checkbox" checked={rememberEmail} onChange={(event) => setRememberEmail(event.target.checked)}/><span>Remember my email on this device (not my password)</span></label><small className="account-access-help">Your browser or phone can safely autofill a saved password. Nightjar never stores it on this device.</small></>}
@@ -373,7 +373,7 @@ export default function AccountAccess({
       </label>}
     </div>}
     {message && <p className="account-access-message" role="status" aria-live="polite">{message}</p>}
-    <button type="submit" className="primary-button account-access-submit" disabled={busy || (mode === 'register' && (!termsAccepted || !privacyRead || (registrationRoles.length > 0 && !professionalTermsAccepted)))} onClick={submit}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
+    <button type="submit" className="primary-button account-access-submit" disabled={busy || (mode === 'register' && (!termsAccepted || !privacyRead || (registrationRoles.length > 0 && !professionalTermsAccepted)))}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
     {mode === 'signin' && nightjarPasskeys.supported() && <button type="button" className="secondary-button account-access-submit" disabled={busy} onClick={() => void run(async () => {
       const next = await nightjarPasskeys.signIn();
       onAuthenticated(next);
