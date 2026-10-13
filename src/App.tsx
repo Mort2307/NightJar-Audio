@@ -812,7 +812,7 @@ function App() {
         const safeIndex = selectedIndex < 0 ? 0 : selectedIndex;
         return carouselTracks[(safeIndex + 1) % carouselTracks.length].id;
       });
-    }, 4000);
+    }, 3000);
     return () => window.clearInterval(interval);
   }, [view, carouselTracks, activeFeaturedId, featuredCarouselVisible, featuredCarouselPaused, featuredCarouselReducedMotion, featuredCarouselHovered, reviewTrack]);
 
@@ -4635,7 +4635,7 @@ function App() {
                         </button>
                         <div className="featured-carousel-position">
                           <strong>{featuredIndex + 1} / {carouselTracks.length}</strong>
-                          <small>4 SEC · SWIPE TO EXPLORE</small>
+                          <small>3 SEC · SWIPE TO EXPLORE</small>
                           {featuredCarouselReducedMotion
                             ? <span className="featured-carousel-motion-note">Auto rotation off for reduced motion</span>
                             : <button type="button" className="featured-carousel-autoplay" data-nj-preview-safe="true"
