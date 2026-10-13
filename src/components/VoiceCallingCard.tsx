@@ -58,9 +58,10 @@ type PublicProps = {
   creatorUserId: string;
   onPlayRelease?: (release: any) => void;
   demoMode?: boolean;
+  readOnly?: boolean;
 };
 
-export function VoiceCallingCardPublic({ creatorUserId, onPlayRelease, demoMode = false }: PublicProps) {
+export function VoiceCallingCardPublic({ creatorUserId, onPlayRelease, demoMode = false, readOnly = false }: PublicProps) {
   const [release, setRelease] = useState<any | null>(null);
   useEffect(() => {
     if (!creatorUserId || demoMode) return;
@@ -75,7 +76,8 @@ export function VoiceCallingCardPublic({ creatorUserId, onPlayRelease, demoMode 
   return <aside className="nj-voice-card-public">
     <div className="nj-experience-heading"><Headphones size={20}/><div><strong>Hear this Creator</strong><small>Featured, moderated NightJar recording · listening access required</small></div></div>
     <p>{release.title || 'A featured performance'}</p>
-    <button type="button" className="secondary-button" onClick={() => {
+    <button type="button" className="secondary-button" disabled={readOnly} onClick={() => {
+      if (readOnly) return;
       if (onPlayRelease) onPlayRelease(release);
       else window.location.assign('/discover?release=' + encodeURIComponent(String(release.id)));
     }}><Play size={15}/> Open featured recording</button>
