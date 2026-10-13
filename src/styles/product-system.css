@@ -2141,6 +2141,29 @@ textarea {
   gap:6px;
   margin:15px 0 18px;
 }
+.account-workspace-overview:not([open]) { display: block; }
+.account-workspace-overview > summary {
+  grid-column: 1 / -1;
+  padding: 11px 12px;
+  border: 1px solid var(--nj-line-subtle);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--nj-text-primary);
+  font-size: .9rem;
+  font-weight: 600;
+}
+.account-workspace-overview > summary:focus-visible {
+  outline: 2px solid var(--nj-accent);
+  outline-offset: 3px;
+}
+.account-access-help {
+  display: block;
+  margin: 10px 0;
+  color: var(--nj-text-tertiary);
+  font-size: .84rem;
+  line-height: 1.55;
+}
+.account-remember-email { margin-top: 14px; font-size: .9rem; }
 .account-workspace-overview > span {
   min-width:0;
   display:grid;
@@ -2163,19 +2186,19 @@ textarea {
 }
 .account-workspace-overview strong {
   color:var(--nj-text-primary);
-  font-size:8px;
+  font-size:.87rem;
 }
 .account-workspace-overview small {
   margin-top:2px;
   color:var(--nj-text-tertiary);
-  font-size:6.8px;
+  font-size:.78rem;
   line-height:1.45;
 }
 .account-workspace-overview > em {
   grid-column:1 / -1;
   padding:5px 2px 0;
   color:var(--nj-text-tertiary);
-  font-size:7px;
+  font-size:.78rem;
   font-style:normal;
   line-height:1.45;
 }
