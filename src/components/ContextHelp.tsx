@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Info, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import './context-help.css';
 
 /** Central glossary. Use the same precise explanation across all NightJar roles. */
@@ -168,7 +168,7 @@ export default function ContextHelp({ topic, className = '', placement = 'auto' 
     <button type="button" className="nj-context-help-trigger" aria-label={'What does ' + entry.title + ' mean?'}
       aria-expanded={open} aria-controls={open ? id : undefined} title={'Explain: ' + entry.title}
       onClick={(event) => { event.stopPropagation(); setOpen(v => !v); }}>
-      <Info size={16} aria-hidden="true"/>
+      <span aria-hidden="true">ℹ️</span>
     </button>
     {open && <span id={id} className="nj-context-help-panel" role="note">
       <span className="nj-context-help-top"><strong>{entry.title}</strong><button type="button" className="nj-context-help-close" aria-label="Close explanation" onClick={(event) => { event.stopPropagation(); setOpen(false); }}><X size={16}/></button></span>
