@@ -59,6 +59,11 @@ export default function ReleaseReviews({
   const [commentError, setCommentError] = useState('');
   const [reacting, setReacting] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
+  const [reportTarget, setReportTarget] = useState<{ id:string; name:string } | null>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportSending, setReportSending] = useState(false);
+  const [reportedCommentIds, setReportedCommentIds] = useState<string[]>([]);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
@@ -111,7 +116,13 @@ export default function ReleaseReviews({
     }
   };
 
-  useEffect(() => { void load(); }, [release.id, demoMode]);
+  useEffect(() => {
+    setReportTarget(null);
+    setReportReason('');
+    setReportDetails('');
+    setReportedCommentIds([]);
+    void load();
+  }, [release.id, demoMode]);
 
   const submitReview = async () => {
     if (!canCommunityInteract) return notify('Listener accounts can submit public reviews.');
@@ -294,38 +305,115 @@ export default function ReleaseReviews({
     }
   };
 
-  const commentReactionButtons = (item:any) => commentReactionsEnabled ? (
-    <div className="release-comment-actions" aria-label="Comment reactions and moderation">
-      <button type="button" className={item.myReaction === 'like' ? 'active' : ''} aria-label={'Like comment by ' + (item.commenterName ?? 'member')} aria-pressed={item.myReaction === 'like'} disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)} onClick={() => void reactToComment(item, 'like')}>
-        <span aria-hidden="true">👍</span> <span>{Number(item.reactionLikeCount ?? 0)}</span>
-      </button>
-      <button type="button" className={item.myReaction === 'love' ? 'active' : ''} aria-label={'Love comment by ' + (item.commenterName ?? 'member')} aria-pressed={item.myReaction === 'love'} disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)} onClick={() => void reactToComment(item, 'love')}>
-        <span aria-hidden="true">❤️</span> Love <span>{Number(item.reactionLoveCount ?? 0)}</span>
-      </button>
-      {currentUserId && item.userId !== currentUserId && (
-        <button type="button" className="release-comment-flag" aria-label={'Flag comment by ' + (item.commenterName ?? 'member') + ' for admin review'} onClick={() => void reportComment(item)}>
-          <span aria-hidden="true">⛳️</span> <span>Flag</span>
-        </button>
-      )}
-    </div>
-  ) : (currentUserId && item.userId !== currentUserId ? (
-    <div className="release-comment-actions">
-      <button type="button" className="release-comment-flag" aria-label={'Flag comment by ' + (item.commenterName ?? 'member') + ' for admin review'} onClick={() => void reportComment(item)}>
-        <span aria-hidden="true">⛳️</span><span>Flag</span>
-      </button>
-    </div>
-  ) : null);
+  // Reports belong to one specific comment or work-team reply, never the
+  // release as a whole. The backend performs auth, age checks and deduplication.
+  const openCommentReport = (item:any) => {
+    if (!currentUserId) return notify('Sign in to flag a comment for review.');
+    if (String(item.userId) === currentUserId) return notify('You can delete your own comment instead.');
+    if (demoMode && !simulationMode) return notify('Demo data is read-only. Start Simulation to test reporting.');
+    setReportTarget((selected) => selected?.id === String(item.id)
+      ? null : { id:String(item.id), name:String(item.commenterName ?? 'Nightjar member') });
+    setReportReason('');
+    setReportDetails('');
+  };
 
-  const reportComment = async (item:any) => {
-    const reason=window.prompt('Why are you reporting this comment?') ?? '';
-    if (!reason.trim()) return;
+  const submitCommentReport = async () => {
+    if (!reportTarget || !reportReason || reportSending) return;
+    const reason = (reportReason + (reportDetails.trim() ? ': ' + reportDetails.trim() : '')).slice(0,600);
+    setReportSending(true);
     try {
-      if (!simulationMode) await nightjarEngagement.reportComment(item.id,reason);
-      notify('Comment reported for administrator review.');
-    } catch {
-      notify('Comment could not be reported.');
+      if (!simulationMode) await nightjarEngagement.reportComment(reportTarget.id,reason);
+      setReportedCommentIds((ids) => [...new Set([...ids,reportTarget.id])]);
+      setReportTarget(null);
+      setReportReason('');
+      setReportDetails('');
+      notify(simulationMode
+        ? 'Simulation: comment report recorded locally.'
+        : 'Comment flagged. Nightjar administrators will review it.');
+    } catch (error) {
+      const code = String((error as { code?:string })?.code ?? '');
+      notify(code.includes('unauthenticated') || code.includes('permission-denied')
+        ? 'Please sign in and complete account verification to report a comment.'
+        : 'Comment report could not be sent. Please try again.');
+    } finally {
+      setReportSending(false);
     }
   };
+
+  const jumpToCommentFlag = () => {
+    const button = dialogRef.current?.querySelector<HTMLButtonElement>('.release-comment-flag:not(:disabled)');
+    if (!button) {
+      notify((community.comments ?? []).length
+        ? 'No eligible comments to report. You can delete your own comments.'
+        : 'There are no comments to flag yet. Flag buttons appear beneath published comments.');
+      return;
+    }
+    button.scrollIntoView({ behavior:'smooth', block:'center' });
+    button.focus({ preventScroll:true });
+  };
+
+  const commentFlagButton = (item:any) => currentUserId && item.userId !== currentUserId ? (
+    <button type="button" className="release-comment-flag"
+      aria-label={'Flag comment by ' + (item.commenterName ?? 'member') + ' for administrator review'}
+      aria-expanded={reportTarget?.id === String(item.id)}
+      disabled={reportSending || reportedCommentIds.includes(String(item.id)) || (demoMode && !simulationMode)}
+      onClick={() => openCommentReport(item)}>
+      <span aria-hidden="true">⛳️</span>
+      <span>{reportedCommentIds.includes(String(item.id)) ? 'Reported' : 'Flag'}</span>
+    </button>
+  ) : null;
+
+  const commentReportForm = (item:any) => reportTarget?.id === String(item.id) ? (
+    <div className="release-comment-report-form" role="group" aria-label={'Report comment by ' + reportTarget.name}>
+      <strong>⛳️ Report this comment</strong>
+      <p>Tell Nightjar why this comment needs a review. Reports go privately to the administration team.</p>
+      <label htmlFor="release-comment-report-reason">Reason for reporting</label>
+      <select id="release-comment-report-reason" value={reportReason}
+        onChange={(event) => setReportReason(event.target.value)} disabled={reportSending}>
+        <option value="">Choose a reason…</option>
+        <option value="Offensive or abusive language">Offensive or abusive language</option>
+        <option value="Harassment or bullying">Harassment or bullying</option>
+        <option value="Hate speech or discrimination">Hate speech or discrimination</option>
+        <option value="Spam, scams or misleading content">Spam, scams or misleading content</option>
+        <option value="Threats or unsafe content">Threats or unsafe content</option>
+        <option value="Other concern">Other concern</option>
+      </select>
+      <label htmlFor="release-comment-report-details">Additional details (optional)</label>
+      <textarea id="release-comment-report-details" value={reportDetails} maxLength={400} rows={2}
+        placeholder="What should our moderators know?"
+        onChange={(event) => setReportDetails(event.target.value)} disabled={reportSending} />
+      <div className="release-comment-report-actions">
+        <button type="button" className="secondary-button"
+          onClick={() => setReportTarget(null)} disabled={reportSending}>Cancel</button>
+        <button type="button" className="primary-button"
+          onClick={() => void submitCommentReport()} disabled={reportSending || !reportReason}>
+          {reportSending ? 'Sending report…' : 'Submit report'}
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  const commentReactionButtons = (item:any) => (
+    <div className="release-comment-actions" aria-label="Comment reactions and moderation">
+      {commentReactionsEnabled && <>
+        <button type="button" className={item.myReaction === 'like' ? 'active' : ''}
+          aria-label={'Like comment by ' + (item.commenterName ?? 'member')}
+          aria-pressed={item.myReaction === 'like'}
+          disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)}
+          onClick={() => void reactToComment(item, 'like')}>
+          <span aria-hidden="true">👍</span> <span>{Number(item.reactionLikeCount ?? 0)}</span>
+        </button>
+        <button type="button" className={item.myReaction === 'love' ? 'active' : ''}
+          aria-label={'Love comment by ' + (item.commenterName ?? 'member')}
+          aria-pressed={item.myReaction === 'love'}
+          disabled={!canComment || busyCommentId !== null || (demoMode && !simulationMode)}
+          onClick={() => void reactToComment(item, 'love')}>
+          <span aria-hidden="true">❤️</span> Love <span>{Number(item.reactionLoveCount ?? 0)}</span>
+        </button>
+      </>}
+      {commentFlagButton(item)}
+    </div>
+  );
 
   const topLevelComments = useMemo(
     () => (community.comments ?? []).filter((item:any) => !item.parentCommentId),
@@ -363,7 +451,7 @@ export default function ReleaseReviews({
       {tab==='comments' && <>
         <article className="research-panel release-comment-compose" aria-label="Write a release comment">
           <label className="mini-label" htmlFor="release-community-new-comment">WRITE A COMMENT</label>
-          <p>Comments are published immediately, without admin approval. Use ⛳️ Flag if anything needs review.</p>
+          <p>Comments are published immediately, without admin approval. Use <button type="button" className="release-comment-flag-help" onClick={jumpToCommentFlag}><span aria-hidden="true">⛳️</span> Flag a comment</button> if anything needs review.</p>
           <textarea
             id="release-community-new-comment"
             value={comment}
@@ -390,12 +478,14 @@ export default function ReleaseReviews({
                 <div className="release-comment-head"><div>{item.userId && onOpenProfile ? <button type="button" className="release-comment-author" onClick={()=>onOpenProfile(String(item.userId),String(item.commenterRole ?? 'listener'))}>{item.commenterName ?? 'Nightjar member'}</button> : <strong>{item.commenterName ?? 'Nightjar member'}</strong>}<span>{item.commenterHandle ? '@'+String(item.commenterHandle).replace(/^@/,'') : 'Listener'}{item.createdAt ? ' · '+new Date(item.createdAt).toLocaleString('en-GB') : ''}</span></div><div>{currentUserId && item.userId===currentUserId ? <button className="icon-button" onClick={()=>void deleteComment(item)} aria-label="Delete your comment"><Trash2 size={13}/></button> : null}</div></div>
                 <p>{item.body}</p>
                 {commentReactionButtons(item)}
+                {commentReportForm(item)}
                 {canTeamReply && <button className="text-button release-team-reply-button" onClick={()=>{setReplyTargetId(replyTargetId===item.id?null:item.id);setReplyBody('');}}><Reply size={12}/>{replyTargetId===item.id?'Cancel reply':'Reply as work team'}</button>}
               </div>
               {!!replies.length && <div className="release-comment-replies">{replies.map((reply:any)=><article className="release-comment-card team-reply" key={reply.id}>
                 <div className="release-comment-head"><div><strong>{reply.userId && onOpenProfile ? <button type="button" className="release-comment-author" onClick={()=>onOpenProfile(String(reply.userId),String(reply.commenterRole ?? 'creator'))}>{reply.commenterName ?? 'Nightjar work team'}</button> : (reply.commenterName ?? 'Nightjar work team')} <span className="work-team-badge"><ShieldCheck size={10}/> Work team · {reply.commenterRole === 'editor' ? 'Audio Editor' : reply.commenterRole === 'writer' ? 'Writer' : 'Creator'}</span></strong><span>{reply.commenterHandle ? '@'+String(reply.commenterHandle).replace(/^@/,'') : 'Nightjar professional'}{reply.createdAt ? ' · '+new Date(reply.createdAt).toLocaleString('en-GB') : ''}</span></div><div>{currentUserId && reply.userId===currentUserId ? <button className="icon-button" onClick={()=>void deleteComment(reply)} aria-label="Delete your reply"><Trash2 size={13}/></button> : null}</div></div>
                 <p>{reply.body}</p>
                 {commentReactionButtons(reply)}
+                {commentReportForm(reply)}
               </article>)}</div>}
               {replyTargetId===item.id && <div className="release-team-reply-compose">
                 <div><ShieldCheck size={14}/><span>Your reply will be labelled as coming from the credited work team.</span></div>

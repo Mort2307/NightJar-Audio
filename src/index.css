@@ -10931,3 +10931,85 @@ textarea:focus-visible,
 /* Arrival target for publication / follower notifications. Reuses the chosen NightJar theme. */
 .nightjar-notification-target{outline:2px solid var(--accent,var(--plum-soft,#d1bed0));outline-offset:3px;box-shadow:0 0 0 6px color-mix(in srgb,var(--accent,var(--plum-soft,#d1bed0)) 12%,transparent);scroll-margin-top:calc(70px + env(safe-area-inset-top,0px));border-radius:14px}
 @media(prefers-reduced-motion:reduce){.nightjar-notification-target{scroll-behavior:auto}}
+
+
+/* Clear, actionable comment reports — desktop, touch and accessible themes. */
+.release-comment-compose .release-comment-flag-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 40px;
+  margin: 1px 3px;
+  padding: 6px 10px;
+  vertical-align: middle;
+  border: 1px solid var(--plum-soft, #cbb5cc);
+  border-radius: 10px;
+  background: rgba(203, 181, 204, .11);
+  color: var(--ivory, #f5efe9);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+.release-comment-compose .release-comment-flag-help:focus-visible,
+.release-comment-actions .release-comment-flag:focus-visible,
+.release-comment-report-form :is(select, textarea, button):focus-visible {
+  outline: 2px solid var(--plum-soft, #cbb5cc);
+  outline-offset: 3px;
+}
+.release-comment-actions .release-comment-flag {
+  min-height: 44px;
+  border-color: rgba(223, 189, 151, .45);
+  background: rgba(223, 189, 151, .09);
+  font-weight: 750;
+}
+.release-comment-report-form {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid rgba(223, 189, 151, .46);
+  border-radius: 12px;
+  background: var(--panel, #141216);
+}
+.release-comment-report-form > strong {
+  color: var(--ivory, #f5efe9);
+  font-size: 14px;
+}
+.release-comment-card .release-comment-report-form p {
+  color: var(--muted, #b8aebb);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.release-comment-report-form > label {
+  color: var(--ivory, #f5efe9);
+  font-size: 12px;
+  font-weight: 700;
+}
+.release-comment-report-form :is(select, textarea) {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, rgba(239,231,223,.22));
+  border-radius: 10px;
+  background: var(--panel-soft, #18151b);
+  color: var(--ivory, #f5efe9);
+  font: inherit;
+  font-size: 13px;
+}
+.release-comment-report-form textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+.release-comment-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.release-comment-report-actions button { min-height: 44px; }
+@media (max-width: 440px) {
+  .release-comment-report-actions button { flex: 1 1 120px; }
+  .release-comment-report-form { padding: 12px; }
+}
