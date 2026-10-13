@@ -48,6 +48,27 @@
   font-weight: 750;
   letter-spacing: .09em;
 }
+.featured-carousel-autoplay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  margin: 3px 0 0;
+  padding: 6px 9px;
+  border: 1px solid var(--line, rgba(239, 231, 223, .18));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ivory, #f2e7ef);
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.featured-carousel-autoplay:hover,
+.featured-carousel-autoplay:focus-visible {
+  border-color: var(--plum-soft, #cbb5cc);
+  background: rgba(203, 181, 204, .12);
+}
 .featured-release-cover { animation: nightjar-featured-reveal .21s ease-out both; }
 @keyframes nightjar-featured-reveal {
   from { opacity: .62; transform: translateX(9px); }
