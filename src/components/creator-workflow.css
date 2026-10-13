@@ -233,3 +233,12 @@
   .creator-pipeline-card .nj-optional-transcript > summary{align-items:flex-start;}
   .creator-pipeline-card .nj-optional-transcript summary .status-pill{white-space:normal;flex-shrink:0;}
 }
+
+/* One canonical manuscript submission path, with no extra infrastructure. */
+#writer-rights-review{scroll-margin-top:7rem;}
+.nj-writer-review-journey{display:grid;gap:.7rem;min-width:0;padding:clamp(1rem,2.8vw,1.4rem);margin:1rem 0 1.4rem;border:1px solid var(--line,rgba(255,255,255,.18));border-radius:14px;background:var(--surface,rgba(255,255,255,.04));}
+.nj-writer-review-journey :is(strong,p,small){overflow-wrap:anywhere;line-height:1.5;}
+.nj-writer-review-journey p{margin:0;}
+.nj-writer-review-journey > .primary-button{justify-self:start;white-space:normal;text-align:center;min-height:44px;}
+#writer-rights-attest{scroll-margin-top:7rem;}
+@media(max-width:720px){.nj-writer-review-journey > .primary-button{width:100%;justify-content:center;}}
