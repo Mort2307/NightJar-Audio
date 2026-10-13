@@ -8094,6 +8094,8 @@ const normaliseScriptMarketplace = (value: unknown) => {
   return {
     visibility: ['private','invitation','marketplace','unavailable','licensed'].includes(visibility) ? visibility : 'private',
     synopsis: cleanText(input.synopsis, 1800),
+    // Writer-selected sample: never derived from the protected manuscript automatically.
+    previewExcerpt: cleanText(input.previewExcerpt, 3200),
     genres: cleanStringList(input.genres, 16),
     tropes: cleanStringList(input.tropes, 24),
     commissionPricePence: typeof input.commissionPricePence === 'number'
@@ -8210,12 +8212,36 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
         writerName: writer.displayName,
         writerHandle: writer.handle,
         rights: normaliseScriptRights(data.rights),
-        marketplace: normaliseScriptMarketplace(data.marketplace),
+        marketplace: (() => { const { previewExcerpt, ...listing } = normaliseScriptMarketplace(data.marketplace); return { ...listing, sampleAvailable:Boolean(previewExcerpt.trim()) }; })(),
         artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
         updatedAt: toIso(data.updatedAt),
       };
     })));
   return { scripts };
+});
+
+
+// Only an explicitly writer-selected excerpt can be previewed by an authorised
+// VA. Neither protected script text nor private uploaded source files are returned.
+export const getMarketplaceScriptSample = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  await requireAgeVerified(identity.uid);
+  const scriptId = cleanText((request.data as {scriptId?:unknown}|undefined)?.scriptId, 160);
+  if (!scriptId) throw new HttpsError('invalid-argument','Select a marketplace script.');
+  const snapshot = await scriptRef(scriptId).get();
+  const data = snapshot.data();
+  if (!data) throw new HttpsError('not-found','Marketplace script not found.');
+  const listing = normaliseScriptMarketplace(data.marketplace);
+  if (listing.visibility !== 'marketplace' || !listing.synopsis.trim() || !['Approved','Published'].includes(String(data.status??''))) {
+    throw new HttpsError('failed-precondition','This script is not currently available in the marketplace.');
+  }
+  if (!listing.previewExcerpt.trim()) throw new HttpsError('failed-precondition','The Writer has not enabled a protected sample.');
+  await db.collection('protectionEvents').add({
+    userId:identity.uid, eventType:'script_sample_view', relatedType:'script', relatedId:scriptId,
+    summary:'A verified NightJar Creator opened the Writer-approved sample excerpt.',
+    createdAt:FieldValue.serverTimestamp(),
+  });
+  return { scriptId, title:cleanText(data.title,180),sample:listing.previewExcerpt,writerUserId:data.writerUserId??null };
 });
 
 export const collaborationDirectory = onCall({ region: REGION }, async (request) => {
