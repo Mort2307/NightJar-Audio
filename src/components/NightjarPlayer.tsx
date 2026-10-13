@@ -21,6 +21,8 @@ export type NightjarPlayerTrack = {
   audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
+  nightjarOriginal?: boolean;
+  releaseDistribution?: 'standard' | 'nightjar_first';
   contributors?: Array<{ name?: string; role?: string; userId?: string | null }>;
   transcriptAvailable?: boolean;
   transcriptLanguage?: string;
@@ -401,6 +403,10 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
           <span className="nj-up-kicker">{track.category || 'Audio'}</span>
           <h2>{track.title}</h2>
           <p>{track.creator}</p>
+          {(track.nightjarOriginal || track.releaseDistribution === 'nightjar_first') && <div className="nj-up-release-badges" aria-label="Recording release distinctions">
+            {track.nightjarOriginal && <span className="nj-up-release-badge">Nightjar Original</span>}
+            {track.releaseDistribution === 'nightjar_first' && <span className="nj-up-release-badge">First on Nightjar</span>}
+          </div>}
           {writerCredit && <small>Written by {writerCredit}</small>}
         </div>
         <button className="nj-up-close" type="button" onClick={onClose} aria-label="Close audio player"><X size={21}/></button>
