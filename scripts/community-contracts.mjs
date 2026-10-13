@@ -49,6 +49,13 @@ requireText(community,'WRITE A COMMENT','Comment composer is not clearly discove
 requireText(community,'release-community-new-comment','Accessible comment field is missing');
 requireText(community,'Posting is not permitted for this account yet.','Denied comments must return clear feedback without losing drafts');
 requireText(community,'⛳️','Comment flag emoji missing');
+requireText(community,'onClick={jumpToCommentFlag}','Flag help must be a real button, not static guidance');
+requireText(community,'const commentFlagButton = (item:any)','Individual comments must expose an actionable report button');
+requireText(community,'commentReportForm(item)','Top-level comments must support inline reporting');
+requireText(community,'commentReportForm(reply)','Work-team replies must support inline reporting');
+requireText(community,'nightjarEngagement.reportComment(reportTarget.id,reason)','Comment reports must reach the admin reporting backend');
+requireText(community,'setReportedCommentIds','Reported comments must provide completion feedback');
+if (community.includes("window.prompt('Why are you reporting this comment?')")) failures.push('Native prompt must not replace the accessible in-app report form');
 requireText(app,'featured-discussion-button','Featured audio missing visible comment entry');
 requireText(app,'featured-credit-link','Featured release credits no longer open public profiles');
 requireText(functions,"requireAccountRole(request, ['creator','writer','editor','artist'])",'Professional-message role gate is missing');
