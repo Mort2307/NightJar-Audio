@@ -218,16 +218,11 @@ jobs:
           # Read existing CORS before writing: never replace upload policies.
           gcloud storage buckets describe "$BUCKET" --format=json > "$RUNNER_TEMP/nightjar-audio-bucket.json"
           node scripts/prepare-nightjar-audio-cors.mjs "$RUNNER_TEMP/nightjar-audio-bucket.json" "$RUNNER_TEMP/nightjar-audio-cors.json"
-          gcloud storage buckets update "$BUCKET" --cors-file="$RUNNER_TEMP/nightjar-audio-cors.json"
-          gcloud storage buckets describe "$BUCKET" --format=json > "$RUNNER_TEMP/nightjar-audio-verified.json"
-          node --input-type=module - "$RUNNER_TEMP/nightjar-audio-verified.json" <<'NODE'
-          import fs from 'node:fs';
-          const bucket=JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          const origins=['https://nightjar-audio.web.app','https://nightjar-audio.firebaseapp.com'];
-          const rule=(bucket.cors??[]).find(r=>origins.every(o=>r.origin?.includes(o))&&r.method?.includes('GET'));
-          if (!rule) throw new Error('EQ CORS policy missing after update.');
-          console.log('Nightjar EQ CORS verified. Private Storage access rules remain unchanged.');
-          NODE
+          # GCS CLI previously returned GcsApiError('') on update, masking
+          # whether bucket-level IAM or the API request itself was at fault.
+          # Explicitly check storage.buckets.update, then PATCH *only* cors
+          # with a metageneration precondition and verify with a fresh read.
+          node scripts/apply-nightjar-audio-cors.mjs "$RUNNER_TEMP/nightjar-audio-bucket.json" "$RUNNER_TEMP/nightjar-audio-cors.json"
           echo "### Nightjar EQ audio CORS" >> "$GITHUB_STEP_SUMMARY"
           echo "Approved Hosting origins can request signed audio through browser CORS." >> "$GITHUB_STEP_SUMMARY"
           echo "This does not grant public Storage access or change signed URL expiry." >> "$GITHUB_STEP_SUMMARY"
