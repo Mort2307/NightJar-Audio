@@ -82,7 +82,13 @@ try {
   const openPulls = await ghRequest('/pulls?state=open&per_page=100');
   const known = new Set(inventory.items.map((item) => Number(item.number)));
   for (const pr of openPulls) {
-    if (!known.has(pr.number)) blockers.push('Untracked OPEN PR #' + pr.number + ': ' + pr.title);
+    // The PR proposing this exact reconciliation candidate is expected to be
+    // absent from the committed inventory until GitHub assigns its number.
+    // Do not excuse unrelated PRs: both the source head and main target must match.
+    const isCurrentCandidatePR =
+      pr.head?.ref === inventory.candidateBranch && pr.base?.ref === 'main';
+    if (!known.has(pr.number) && !isCurrentCandidatePR)
+      blockers.push('Untracked OPEN PR #' + pr.number + ': ' + pr.title);
   }
   const knownOpen = new Set(openPulls.map((pr) => pr.number));
   console.log('\nLive open pull requests: ' + openPulls.length);
