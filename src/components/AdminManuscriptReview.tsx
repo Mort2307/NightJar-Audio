@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, CheckCircle2, Clock3, LockKeyhole, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
+import ManuscriptReviewConversation from './ManuscriptReviewConversation';
 import './admin-manuscript-review.css';
 
 type Decision = 'approved' | 'changes' | 'rejected';
@@ -10,6 +11,8 @@ type Props = {
   demoMode: boolean;
   onRefresh: () => Promise<void>;
   onReview: (script: any, decision: Decision, note: string) => Promise<void>;
+  notify: (message: string) => void;
+  simulationMode?: boolean;
 };
 
 const pendingStatus = (status: unknown) => ['Submitted', 'Under review'].includes(String(status ?? ''));
@@ -17,7 +20,7 @@ const readableError = (error: unknown) =>
   error instanceof Error ? error.message : 'Could not complete this request. Please retry.';
 
 export default function AdminManuscriptReview({
-  scripts, loading, demoMode, onRefresh, onReview,
+  scripts, loading, demoMode, onRefresh, onReview, notify, simulationMode=false,
 }: Props) {
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -140,6 +143,7 @@ export default function AdminManuscriptReview({
       </div>}
       {error && <p className="manuscript-review-error" role="alert">{error}</p>}
       {!isPending && <p className="manuscript-review-complete">No approval is needed here. This manuscript is {selected.status.toLowerCase()}.</p>}
+      <ManuscriptReviewConversation key={'review-thread-'+selected.id} scriptId={selected.id} audience="admin" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/>
     </div>}
     {viewerOpen && preview && <div className="manuscript-admin-reader-overlay" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setViewerOpen(false); }}>
       <section className="manuscript-admin-reader copy-locked" role="dialog" aria-modal="true" aria-label={'Read-only manuscript review: ' + String(preview.title ?? 'Manuscript')}
