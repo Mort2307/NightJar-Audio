@@ -12232,7 +12232,7 @@ export const listMomentMarks = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
   const snapshot = await momentMarksFor(identity.uid).limit(60).get();
-  const marks = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
+  const marks = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Array<{ id: string; releaseId?: string; label?: string; positionSeconds?: number; createdAt?: unknown }>;
   // A saved moment must never expose artwork, titles or a playback URL for
   // a release that is no longer published.
   const releaseIds = [...new Set(marks.map((m) => cleanText(m.releaseId, 160)).filter(Boolean))];
