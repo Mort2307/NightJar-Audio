@@ -124,3 +124,8 @@
  .nj-up-transport{gap:14px}
 }
 @media(prefers-reduced-motion:reduce){.nj-up-root *{scroll-behavior:auto!important;transition:none!important}}
+
+/* Release distinction: creator-declared debut is separate from Nightjar-funded Original. */
+.nj-up-release-badges{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:7px 0;min-width:0;}
+.nj-up-release-badge{display:inline-flex;max-width:100%;min-width:0;overflow-wrap:anywhere;padding:3px 7px;border:1px solid color-mix(in srgb,var(--up-accent) 48%,transparent);border-radius:999px;background:color-mix(in srgb,var(--up-accent) 10%,transparent);color:var(--up-text);font-size:10px;font-weight:650;line-height:1.35;letter-spacing:.035em;}
+@media(max-width:550px){.nj-up-release-badges{gap:4px;margin:4px 0}.nj-up-release-badge{font-size:9px;padding:2px 6px}}
