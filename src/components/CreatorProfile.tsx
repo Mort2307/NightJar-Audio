@@ -6,6 +6,7 @@ import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 import { nightjarReferrals } from '../platform/firebase-referrals';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
+import { VoiceCallingCardPublic } from './VoiceCallingCard';
 
 type CreatorProfileData = {
   userId: string;
@@ -127,6 +128,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
         </div>
         {!!profile.activityBadges?.length && <div className="profile-activity-badges public-profile-badges">{profile.activityBadges.map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}</div>}
         {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}{profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
+        <VoiceCallingCardPublic creatorUserId={profile.userId} onPlayRelease={onPlayRelease} demoMode={demoMode} />
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
         <section className="public-role-profile">
           <div className="public-role-profile-head"><div><span className="mini-label">CREATOR IDENTITY</span><h3>{ROLE_PROFILE_CONFIG.creator.title}</h3></div>{profile.roleAvailability && <strong>{profile.roleAvailability}</strong>}</div>
