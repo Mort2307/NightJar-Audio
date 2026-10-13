@@ -4,6 +4,7 @@ import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
 import { createHash, randomUUID } from 'node:crypto';
+import { inflateRawSync } from 'node:zlib';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -6687,6 +6688,7 @@ export const listEditorQueue = onCall({ region: REGION }, async (request) => {
   const activeStatuses = new Set(['Submitted','Under review','Revision requested']);
   const queue = snapshot.docs
     .filter((doc) => activeStatuses.has(String(doc.data().status)))
+    .filter((doc) => normaliseScriptMarketplace(doc.data().marketplace).visibility !== 'marketplace')
     .filter((doc) => identity.role === 'admin' || doc.data().editorUserId === identity.uid)
     .map((doc) => scriptPayload(doc.data(), doc.id, false))
     .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
@@ -6712,9 +6714,11 @@ export const reviewEditorScript = onCall({ region: REGION }, async (request) => 
     throw new HttpsError('failed-precondition', 'This manuscript is no longer open for editorial review.');
   }
 
+  if (normaliseScriptMarketplace(data.marketplace).visibility === 'marketplace') {
+    throw new HttpsError('failed-precondition', 'Marketplace manuscript decisions belong to NightJar administrators.');
+  }
   const comment = cleanText(input.comment, 4000);
-  // Audio Editors may recommend a marketplace manuscript, but only a
-  // NightJar administrator can make the final marketplace approval.
+  // Production editorial reviews remain a separate feature and cannot approve marketplace submissions.
   const awaitingAdminApproval = status === 'Approved'
     && normaliseScriptMarketplace(data.marketplace).visibility === 'marketplace';
   const nextStatus = awaitingAdminApproval ? 'Under review' : status;
@@ -6766,6 +6770,96 @@ export const adminListScripts = onCall({ region: REGION }, async (request) => {
   };
 });
 
+
+// Read-only source previews for verified NightJar administrators. Never use these
+// extracted strings in script listings, emails, public endpoints or edit paths.
+const SCRIPT_REVIEW_PREVIEW_MAX_CHARS = 200000;
+const SCRIPT_REVIEW_MAX_EXPANDED_XML = 16 * 1024 * 1024;
+const decodeReviewXml = (value: string) => value.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos);/gi, (match, entity: string) => {
+  switch (entity.toLowerCase()) {
+    case 'amp': return '&';
+    case 'lt': return '<';
+    case 'gt': return '>';
+    case 'quot': return '"';
+    case 'apos': return "'";
+    default: {
+      const point = entity.startsWith('#x') ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10);
+      return Number.isInteger(point) && point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : match;
+    }
+  }
+});
+const extractDocxReviewText = (bytes: Buffer) => {
+  // Parse the ZIP central directory instead of searching compressed bytes for XML:
+  // DOCX files commonly use data descriptors and do not expose local file sizes.
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (bytes.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('Invalid DOCX archive.');
+  const entries = bytes.readUInt16LE(eocd + 10);
+  let offset = bytes.readUInt32LE(eocd + 16);
+  for (let i = 0; i < entries; i++) {
+    if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 0x02014b50) throw new Error('Invalid DOCX central directory.');
+    const flags = bytes.readUInt16LE(offset + 8);
+    const method = bytes.readUInt16LE(offset + 10);
+    const compressedSize = bytes.readUInt32LE(offset + 20);
+    const expandedSize = bytes.readUInt32LE(offset + 24);
+    const nameLength = bytes.readUInt16LE(offset + 28);
+    const extraLength = bytes.readUInt16LE(offset + 30);
+    const commentLength = bytes.readUInt16LE(offset + 32);
+    const localOffset = bytes.readUInt32LE(offset + 42);
+    const end = offset + 46 + nameLength + extraLength + commentLength;
+    if (end > bytes.length) throw new Error('Invalid DOCX archive entry.');
+    const name = bytes.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
+    if (name === 'word/document.xml') {
+      if ((flags & 1) !== 0 || ![0,8].includes(method) || expandedSize > SCRIPT_REVIEW_MAX_EXPANDED_XML)
+        throw new Error('Unsupported or oversized DOCX content.');
+      if (localOffset + 30 > bytes.length || bytes.readUInt32LE(localOffset) !== 0x04034b50)
+        throw new Error('Invalid DOCX document entry.');
+      const dataStart = localOffset + 30 + bytes.readUInt16LE(localOffset + 26) + bytes.readUInt16LE(localOffset + 28);
+      if (dataStart + compressedSize > bytes.length) throw new Error('Invalid DOCX compressed document.');
+      const packed = bytes.subarray(dataStart, dataStart + compressedSize);
+      const xmlBytes = method === 8 ? inflateRawSync(packed, { maxOutputLength: SCRIPT_REVIEW_MAX_EXPANDED_XML }) : packed;
+      if (xmlBytes.length > SCRIPT_REVIEW_MAX_EXPANDED_XML) throw new Error('DOCX document is too large to preview.');
+      const xml = xmlBytes.toString('utf8');
+      const main = xml.match(/<w:body\b[^>]*>([\s\S]*?)<\/w:body>/)?.[1] ?? xml;
+      const text = main.replace(/<w:tab\b[^>]*\/>/g, '\t')
+        .replace(/<w:br\b[^>]*\/>/g, '\n')
+        .replace(/<\/w:p>/g, '\n\n')
+        .replace(/<\/w:tr>/g, '\n')
+        .replace(/<\/w:tc>/g, '\t')
+        .replace(/<[^>]*>/g, '');
+      return decodeReviewXml(text).trim();
+    }
+    offset = end;
+  }
+  throw new Error('No document text was found in this DOCX.');
+};
+const adminSourcePreview = async (storagePath: string, fileName: string): Promise<{
+  format: 'text' | 'pdf' | 'unavailable'; text?: string; truncated?: boolean; message?: string;
+}> => {
+  const extension = writerUploadExtension(fileName);
+  if (extension === 'pdf') return { format:'pdf' };
+  if (extension === 'doc') return { format:'unavailable', message:'Legacy .doc files cannot be securely rendered inside NightJar. Request a PDF or DOCX from the Writer.' };
+  if (!['txt','md','markdown','rtf','docx'].includes(extension))
+    return { format:'unavailable', message:'This document format cannot be previewed securely.' };
+  try {
+    const [bytes] = await getStorage().bucket().file(storagePath).download();
+    let value = extension === 'docx' ? extractDocxReviewText(bytes) : bytes.toString('utf8');
+    if (extension === 'rtf') {
+      value = value.replace(/\\par[d]?(\s|$)/g, '\n')
+        .replace(/\\tab\b/g, '\t')
+        .replace(/\\'[0-9a-f]{2}/gi, ' ')
+        .replace(/\\[a-z]+-?\d*\s?/gi, '')
+        .replace(/[{}]/g, '').trim();
+    }
+    return { format:'text', text:value.slice(0,SCRIPT_REVIEW_PREVIEW_MAX_CHARS), truncated:value.length > SCRIPT_REVIEW_PREVIEW_MAX_CHARS };
+  } catch (error) {
+    console.warn('Nightjar administrator source preview failed', error instanceof Error ? error.message : 'Unknown preview error');
+    return { format:'unavailable', message:'This file could not be rendered securely in NightJar. Ask the Writer for a new PDF or DOCX.' };
+  }
+};
+
 // Administrators must be able to read an uploaded manuscript before approving it.
 // Never include protected contents in adminListScripts or the public marketplace.
 // These signed links expire quickly and every preview is audited.
@@ -6787,7 +6881,10 @@ export const getAdminScriptReview = onCall({ region: REGION }, async (request) =
     const [url] = await getStorage().bucket().file(sourcePath).getSignedUrl({action:'read',expires:expiration});
     sourceFile={fileName:cleanText(data.originalUpload?.fileName,180)||'Uploaded manuscript',url,expiresAt:expiration.toISOString()};
   }
-  return { script:scriptPayload(data,scriptId,true),sourceFile };
+  const sourcePreview = sourcePath
+    ? await adminSourcePreview(sourcePath, cleanText(data.originalUpload?.fileName,180))
+    : { format:'text' as const, text:cleanText(data.content,200000), truncated:false };
+  return { script:scriptPayload(data,scriptId,true),sourceFile,sourcePreview };
 });
 
 // Editorial review is optional production assistance, never a prerequisite for
@@ -6859,6 +6956,9 @@ export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
     accountRef(editorUserId).get(),
   ]);
   if (!script.exists) throw new HttpsError('not-found', 'Script not found.');
+  if (normaliseScriptMarketplace(script.data()?.marketplace).visibility === 'marketplace') {
+    throw new HttpsError('failed-precondition', 'Marketplace manuscripts are reviewed directly by NightJar administrators, without editorial assignment.');
+  }
   if (!editor.exists || editor.data()?.role !== 'editor' || editor.data()?.status !== 'active') {
     throw new HttpsError('failed-precondition', 'The selected account is not an active Audio Editor.');
   }
