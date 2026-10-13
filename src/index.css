@@ -10927,3 +10927,7 @@ textarea:focus-visible,
 
 .nj-onboarding-cloud-status {display:inline-flex;align-items:center;gap:6px;margin-top:10px;color:#d8bfd0;font-size:11px;line-height:1.55;}
 .nj-account-draft-status {padding:10px 12px;border:1px solid rgba(218,178,208,.18);background:rgba(106,73,101,.13);border-radius:11px;font-size:12px;color:#d8c2d0;line-height:1.5;margin:12px 0;}
+
+/* Arrival target for publication / follower notifications. Reuses the chosen NightJar theme. */
+.nightjar-notification-target{outline:2px solid var(--accent,var(--plum-soft,#d1bed0));outline-offset:3px;box-shadow:0 0 0 6px color-mix(in srgb,var(--accent,var(--plum-soft,#d1bed0)) 12%,transparent);scroll-margin-top:calc(70px + env(safe-area-inset-top,0px));border-radius:14px}
+@media(prefers-reduced-motion:reduce){.nightjar-notification-target{scroll-behavior:auto}}
