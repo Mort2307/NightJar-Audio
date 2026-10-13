@@ -13,7 +13,7 @@ const getCall=httpsCallable<{id:string},CommunityUpdate>(functions,'getCommunity
 const listCall=httpsCallable<void,{updates:CommunityUpdateSummary[]}>(functions,'adminListCommunityUpdates');
 
 export const communityUpdates={
- async publish(input:{title:string;body:string;audience:'self'|'all';requestId:string;testVerified:boolean}){
+ async publish(input:{title:string;body:string;audience:'self'|'all';requestId:string;testVerified:boolean;verifiedTestId?:string}){
   return (await publishCall(input)).data;
  },
  async get(id:string){return (await getCall({id})).data;},
