@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, Filter, Search } from 'lucide-react';
+import MarketplaceScriptActions from './MarketplaceScriptActions';
 import { nightjarScripts } from '../platform/firebase-scripts';
-import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { demoMarketplaceScripts } from '../demo/nightjarDemo';
 
 type Props = {
@@ -11,9 +11,10 @@ type Props = {
   simulationMode?: boolean;
   readOnlyPreview?: boolean;
   onAdminAudit?: () => void;
+  onMessageUser?: (userId:string,collaborationId?:string|null) => void;
 };
 
-export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = false, simulationMode = false, readOnlyPreview = false, onAdminAudit }: Props) {
+export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser, demoMode = false, simulationMode = false, readOnlyPreview = false, onAdminAudit }: Props) {
   const [scripts, setScripts] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -52,25 +53,6 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
     ].filter(Boolean).join(' ').toLowerCase().includes(value));
   }, [scripts, query]);
 
-  const expressInterest = async (script: any) => {
-    const message = window.prompt('Optional message to the Writer about why this script interests you.') ?? '';
-    try {
-      if (readOnlyPreview) { notify('Live preview is read-only. Sign in as an authorised professional to submit a real enquiry.'); return; }
-      if (demoMode && !simulationMode) {
-        notify('Demo data is read-only. Start Creator Simulation to express interest.');
-        return;
-      }
-      if (simulationMode) {
-        notify('Simulation: interest recorded locally for this demo session.');
-        return;
-      }
-      await nightjarCollaboration.expressInterest(script.id, message);
-      notify('Interest sent to the Writer. The proposal is now visible in your Collaboration Workspace.');
-    } catch {
-      notify('Interest could not be sent.');
-    }
-  };
-
   return <section className="research-panel script-marketplace">
     <div className="research-panel-head">
       <div><span className="mini-label">{readOnlyPreview ? 'LIVE SCRIPT MARKETPLACE · ADMIN READ-ONLY' : 'SCRIPT MARKETPLACE'}</span><h2>Find the story before it becomes an audio.</h2><p>Only approved scripts intentionally listed by their Writer appear here. Full manuscripts remain protected.</p></div>
@@ -92,7 +74,7 @@ export default function ScriptMarketplace({ notify, onOpenWriter, demoMode = fal
           <div><dt>AI training</dt><dd>Not permitted</dd></div>
           <div><dt>Indicative fee</dt><dd>{script.marketplace?.commissionPricePence == null ? 'Discuss' : new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(script.marketplace.commissionPricePence/100)}</dd></div>
         </dl>
-        {readOnlyPreview ? <span className="status-pill muted">Preview only — enquiry disabled</span> : <button className="primary-button" type="button" onClick={()=>void expressInterest(script)}>I’m interested <ArrowRight size={14}/></button>}
+        <MarketplaceScriptActions key={'script-action-'+script.id} script={script} notify={notify} onMessageUser={onMessageUser} readOnlyPreview={readOnlyPreview} demoMode={demoMode} simulationMode={simulationMode}/>
       </article>)}
       {!filtered.length && <div className="marketplace-empty-state"><BookOpen size={24}/><div>
         <strong>{scripts.length > 0 ? 'No scripts match this search.' : 'No Writer scripts are publicly listed yet.'}</strong>
