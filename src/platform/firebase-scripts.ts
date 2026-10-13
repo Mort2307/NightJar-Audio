@@ -20,6 +20,8 @@ const editorQueueCall = httpsCallable<void, { queue: any[] }>(functions, 'listEd
 const reviewCall = httpsCallable<{ scriptId: string; status: string; comment?: string }, { script: any }>(functions, 'reviewEditorScript');
 const editorAccountsCall = httpsCallable<void, { editors: any[] }>(functions, 'listEditorAccounts');
 const adminScriptsCall = httpsCallable<void, { scripts: any[] }>(functions, 'adminListScripts');
+const adminScriptPreviewCall = httpsCallable<{ scriptId: string }, { script: any; sourceFile: { fileName: string; url: string; expiresAt: string } | null }>(functions, 'getAdminScriptReview');
+const adminReviewScriptCall = httpsCallable<{ scriptId: string; decision: 'approved' | 'changes' | 'rejected'; note: string }, { script: any; marketplaceVisible: boolean }>(functions, 'adminReviewWriterScript');
 const assignEditorCall = httpsCallable<{ scriptId: string; editorUserId: string }, { script: any }>(functions, 'adminAssignEditor');
 const protectedCatalogueCall = httpsCallable<void, { scripts: any[] }>(functions, 'listProtectedScripts');
 const openProtectedCall = httpsCallable<{ scriptId: string }, any>(functions, 'openProtectedScript');
@@ -71,6 +73,14 @@ export const nightjarScripts = {
 
   async adminScripts() {
     return repairMojibakeDisplayData((await adminScriptsCall()).data);
+  },
+
+  async adminScriptPreview(scriptId: string) {
+    return repairMojibakeDisplayData((await adminScriptPreviewCall({ scriptId })).data);
+  },
+
+  async adminReviewScript(scriptId: string, decision: 'approved' | 'changes' | 'rejected', note = '') {
+    return (await adminReviewScriptCall({ scriptId, decision, note })).data;
   },
 
   async assignEditor(scriptId: string, editorUserId: string) {
