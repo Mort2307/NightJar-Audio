@@ -1,8 +1,8 @@
 {
   "repository": "Mort2307/NightJar-Audio",
   "auditedOn": "2026-10-13",
-  "candidateBranch": "chore/reconcile-pr-inventory-finance-20261013",
-  "notice": "Source-of-truth inventory of unresolved open Nightjar PRs as of 13 October 2026, with historical/superseded PR dispositions retained in docs/RECONCILIATION_2026-10-13.md. Open deferred branches are NOT merged or declared fully feature-equivalent. Source/CI checks do not certify live provider, Firebase revision or mobile acceptance; public launch remains closed-beta gated.",
+  "candidateBranch": "main",
+  "notice": "Authoritative unresolved open PR decisions for the Nightjar main branch as of 13 October 2026. Prior superseded/merged PR outcomes are recorded in docs/RECONCILIATION_2026-10-13.md. Deferred branches remain available for explicit Firebase-native parity assessment; never auto-merge older security/Didit/payment code. Static CI does not certify live backend revisions or adult-provider/handset compliance.",
   "items": [
     {
       "number": 128,
