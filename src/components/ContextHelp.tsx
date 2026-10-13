@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import './context-help.css';
 
@@ -141,14 +142,29 @@ export type HelpTopic = keyof typeof NIGHTJAR_HELP;
 type Props = { topic: HelpTopic; className?: string; placement?: 'auto' | 'end' };
 export default function ContextHelp({ topic, className = '', placement = 'auto' }: Props) {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 12, top: 70 });
   const root = useRef<HTMLSpanElement>(null);
+  const panel = useRef<HTMLSpanElement>(null);
   const id = useId();
   const entry = NIGHTJAR_HELP[topic];
 
   useEffect(() => {
     if (!open) return;
+    const update = () => {
+      const rect = root.current?.getBoundingClientRect();
+      if (!rect) return;
+      const wide = window.innerWidth > 680;
+      const width = Math.min(340, window.innerWidth - 32);
+      const left = placement === 'end' ? rect.right - width : rect.left;
+      setPosition({
+        left: wide ? Math.max(12, Math.min(left, window.innerWidth - width - 12)) : 12,
+        top: rect.bottom + 6,
+      });
+    };
+    update();
     const onPointer = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      const node = event.target as Node;
+      if (!root.current?.contains(node) && !panel.current?.contains(node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -158,22 +174,31 @@ export default function ContextHelp({ topic, className = '', placement = 'auto' 
     };
     document.addEventListener('pointerdown', onPointer);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
     return () => {
       document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
     };
-  }, [open]);
+  }, [open, placement]);
 
-  return <span ref={root} className={'nj-context-help ' + (placement === 'end' ? 'nj-context-help-end ' : '') + className}>
+  return <span ref={root} className={'nj-context-help ' + className}>
     <button type="button" className="nj-context-help-trigger" aria-label={'What does ' + entry.title + ' mean?'}
       aria-expanded={open} aria-controls={open ? id : undefined} title={'Explain: ' + entry.title}
       onClick={(event) => { event.stopPropagation(); setOpen(v => !v); }}>
       <span aria-hidden="true">ℹ️</span>
     </button>
-    {open && <span id={id} className="nj-context-help-panel" role="note">
-      <span className="nj-context-help-top"><strong>{entry.title}</strong><button type="button" className="nj-context-help-close" aria-label="Close explanation" onClick={(event) => { event.stopPropagation(); setOpen(false); }}><X size={16}/></button></span>
-      <span className="nj-context-help-body">{entry.description}</span>
-      <span className="nj-context-help-detail">{entry.detail}</span>
-    </span>}
+    {open && typeof document !== 'undefined' && createPortal(
+      <span ref={panel} id={id} className="nj-context-help-panel" role="dialog"
+        aria-label={'Explanation: ' + entry.title} style={{ left: position.left, top: position.top }}>
+        <span className="nj-context-help-top"><strong>{entry.title}</strong><button type="button" className="nj-context-help-close" aria-label="Close explanation"
+          onClick={(event) => { event.stopPropagation(); setOpen(false); root.current?.querySelector<HTMLButtonElement>('.nj-context-help-trigger')?.focus(); }}>
+          <X size={16}/>
+        </button></span>
+        <span className="nj-context-help-body">{entry.description}</span>
+        <span className="nj-context-help-detail">{entry.detail}</span>
+      </span>, document.body)}
   </span>;
 }
