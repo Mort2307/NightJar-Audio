@@ -12342,5 +12342,4 @@ export const myProductionTimeline = onCall({ region: REGION }, async (request) =
       title: cleanText(doc.data().title, 160), status: cleanText(doc.data().status, 60),
       updatedAt: toIso(doc.data().updatedAt), createdAt: toIso(doc.data().createdAt) })),
   ].sort((a,b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')));
-  return { entries: entries.slice(0,200) };
-};
+  return { entries: entries.slice(0,200) };});
