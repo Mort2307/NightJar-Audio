@@ -293,6 +293,7 @@ type Track = {
   transcriptWordCount?: number;
   creatorUserId?: string;
   genre?: string;
+  mood?: string;
   tags?: string[];
   tropes?: string[];
   contributors?: { userId?: string | null; name: string; role: string }[];
@@ -5870,6 +5871,7 @@ function releaseToTrack(release: any): Track {
     transcriptWordCount: Math.max(0, Number(release.transcriptWordCount ?? 0)),
     creatorUserId: release.creatorUserId,
     genre: release.genre ?? '',
+    mood: release.mood ?? '',
     tags: release.tags ?? [],
     tropes: release.tropes ?? [],
     contributors: release.contributors ?? [],
