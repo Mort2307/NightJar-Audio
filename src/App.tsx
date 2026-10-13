@@ -467,6 +467,7 @@ function App() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [focusedContentReleaseId, setFocusedContentReleaseId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('release'));
   const [focusedContentScriptId, setFocusedContentScriptId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('script'));
+  const [notificationArtworkFocusId, setNotificationArtworkFocusId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('artwork'));
   const openedContentReleaseRef = useRef<string | null>(null);
   const [transcriptRequested, setTranscriptRequested] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -915,6 +916,7 @@ function App() {
       if (profileMatch) {
         const profileRole = new URLSearchParams(window.location.search).get('role');
         setPublicProfileInitialRole(['listener','creator','writer','editor','artist'].includes(String(profileRole)) ? profileRole : null);
+        setNotificationArtworkFocusId(new URLSearchParams(window.location.search).get('artwork'));
         setPublicProfileUserId(decodeURIComponent(profileMatch[1]));
         return;
       }
@@ -1290,6 +1292,7 @@ function App() {
     const route = '/people/' + encodeURIComponent(userId) + (requestedRole ? '?role=' + encodeURIComponent(requestedRole) : '');
     window.history.pushState({ nightjarOverlay:'public-profile', returnPath }, '', route);
     setPublicProfileInitialRole(requestedRole);
+    setNotificationArtworkFocusId(null);
     setPublicProfileUserId(userId);
     scrollNightjarToTop();
   };
@@ -1317,6 +1320,7 @@ function App() {
       if (person) {
         const role = target.searchParams.get('role');
         openPublicProfile(person[1], role && ['creator','writer','artist','editor','listener'].includes(role) ? role : undefined);
+        setNotificationArtworkFocusId(target.searchParams.get('artwork'));
         window.history.replaceState(window.history.state, '', target.pathname + target.search);
       }
     } catch { /* malformed notification route cannot leave NightJar */ }
@@ -5641,7 +5645,7 @@ function App() {
       {supportTarget && !liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Opening Nightjars support" />}>
         <NightjarGiftPanel recipientUserId={supportTarget.userId} recipientName={supportTarget.name} recipientRole={supportTarget.role} recipientRoles={supportTarget.roles} onClose={()=>setSupportTarget(null)} notify={notify}/>
       </Suspense>}
-      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')} initialRole={publicProfileInitialRole??undefined} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
+      {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')+':'+(notificationArtworkFocusId??'none')} initialRole={publicProfileInitialRole??undefined} focusArtworkId={notificationArtworkFocusId} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onMessageCreator={(creatorId) => { setModerationOpen(false);setMessageRecipientUserId(creatorId);setMessageConversationId(null);setMessageCollaborationId(null);navigate('messages'); }} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} onOpenProfile={(userId, role) => { setReviewTrack(null); openPublicProfile(userId, role); }} /></Suspense>}
       {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={(draft,stepIndex,revision)=>finishOnboardingLater(draft,stepIndex,revision)} notify={notify} /></Suspense>}
