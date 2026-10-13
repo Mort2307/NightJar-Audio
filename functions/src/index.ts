@@ -6947,6 +6947,85 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
   return {script:scriptPayload(saved.data() ?? {},scriptId,false),marketplaceVisible:result.marketplaceVisible};
 });
 
+
+// Manuscript-specific review correspondence. Private admin notes are never
+// returned to a Writer or the marketplace. Writer-visible entries form an
+// append-only, timestamped conversation attached to the protected script.
+const scriptReviewEntryPayload = (value: Record<string, any>, id: string) => ({
+  id,
+  kind: cleanText(value.kind, 20) || 'message',
+  visibility: value.visibility === 'internal' ? 'internal' : 'writer',
+  authorUserId: cleanText(value.authorUserId, 160) || null,
+  authorLabel: cleanText(value.authorLabel, 100) || 'NightJar Team',
+  body: cleanText(value.body, 2400),
+  createdAt: toIso(value.createdAt),
+});
+export const listManuscriptReviewThread = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer','admin']);
+  const scriptId = cleanText((request.data as {scriptId?: unknown}|undefined)?.scriptId, 160);
+  if (!scriptId) throw new HttpsError('invalid-argument','Select a manuscript.');
+  const script = await scriptRef(scriptId).get();
+  if (!script.exists) throw new HttpsError('not-found','Manuscript not found.');
+  if (identity.role !== 'admin' && script.data()?.writerUserId !== identity.uid) {
+    throw new HttpsError('permission-denied','Only the Writer and NightJar administrators can read this review conversation.');
+  }
+  const entries = await script.ref.collection('reviewThread').orderBy('createdAt', 'asc').limit(300).get();
+  return { entries: entries.docs.filter(doc => identity.role === 'admin' || doc.data().visibility !== 'internal')
+    .map(doc => scriptReviewEntryPayload(doc.data(), doc.id)), scriptId };
+});
+export const postManuscriptReviewEntry = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['writer','admin']);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const scriptId = cleanText(input.scriptId, 160);
+  const body = cleanText(input.body, 2400);
+  const visibility = identity.role === 'admin' && input.visibility === 'internal' ? 'internal' : 'writer';
+  if (!scriptId || !body) throw new HttpsError('invalid-argument','Write a note or message first.');
+  const script = await scriptRef(scriptId).get();
+  const scriptData = script.data();
+  if (!scriptData) throw new HttpsError('not-found','Manuscript not found.');
+  if (identity.role !== 'admin' && scriptData.writerUserId !== identity.uid)
+    throw new HttpsError('permission-denied','You may only message NightJar about your own manuscript.');
+  if (identity.role !== 'admin' && !['Submitted','Under review','Revision requested','Rejected','Approved','Published'].includes(String(scriptData.status ?? '')))
+    throw new HttpsError('failed-precondition','Submit your manuscript before opening a review conversation.');
+  const thread = script.ref.collection('reviewThread');
+  // Prevent identical bursts without penalising normal ongoing discussions.
+  const recent = await thread.orderBy('createdAt', 'desc').limit(1).get();
+  const last = recent.docs[0]?.data();
+  if (last && last.authorUserId === identity.uid && last.body === body && last.visibility === visibility &&
+      Date.now() - (last.createdAt?.toMillis?.() ?? 0) < 15000)
+    throw new HttpsError('resource-exhausted','This message was already submitted.');
+  const ref = thread.doc();
+  const entry = {
+    kind: visibility === 'internal' ? 'note' : 'message', visibility,
+    body, authorUserId:identity.uid,
+    authorLabel: identity.role === 'admin' ? 'NightJar Team' : 'Writer',
+    createdAt:FieldValue.serverTimestamp(),
+  };
+  await ref.set(entry);
+  if (identity.role === 'admin' && visibility === 'writer' && scriptData.writerUserId) {
+    await createNotification(String(scriptData.writerUserId), {
+      type:'editorial',subtype:'script_review_message', title:'NightJar sent a message about your manuscript',
+      message:'A NightJar administrator has replied to ' + cleanText(scriptData.title,150) + '.',
+      scriptId,
+    }).catch(error=>console.warn('Writer script review message notification failed',error));
+  } else if (identity.role !== 'admin') {
+    // Only verified owner identities receive review correspondence alerts.
+    await Promise.all([...ADMIN_EMAILS].map(async email => {
+      try {
+        const owner = await getAuth().getUserByEmail(email);
+        if (owner.uid === identity.uid) return;
+        await createNotification(owner.uid,{
+          type:'admin_attention',subtype:'script_submission',title:'Writer replied to a manuscript review',
+          message:'A submitted manuscript has a new writer message in the admin review queue.',
+          scriptId, route:'/admin/editorial',
+        });
+      } catch(error) { console.warn('Admin manuscript review notification failed',error); }
+    }));
+  }
+  const saved = await ref.get();
+  return { entry:scriptReviewEntryPayload(saved.data() ?? entry,ref.id) };
+});
+
 export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
