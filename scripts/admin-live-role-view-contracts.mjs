@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const app = fs.readFileSync('src/App.tsx', 'utf8');
 const css = fs.readFileSync('src/index.css', 'utf8');
 const market = fs.readFileSync('src/components/ScriptMarketplace.tsx', 'utf8');
+const actions = fs.readFileSync('src/components/MarketplaceScriptActions.tsx', 'utf8');
 
 assert.match(app, /type TestingMode = 'off' \| 'demo' \| 'simulation' \| 'live'/, 'session supports a separate live role view');
 assert.match(app, /mode === 'live' \? 'live'|parsed\?\.mode === 'live' \? 'live'/, 'live mode persists across refresh');
@@ -36,7 +37,8 @@ assert.match(app, /data-nj-preview-safe="true"/, 'public browsing remains usable
 assert.match(app, /onKeyDownCapture=\{\(event\) => \{[\s\S]*?if \(!liveRolePreview \|\| event\.key === 'Tab'\) return;/, 'keyboard mutation paths are blocked');
 assert.match(app, /onSubmitCapture=\{\(event\) => \{ if \(liveRolePreview/, 'form submissions are blocked');
 assert.match(app, /readOnlyPreview=\{canAdmin && !demoMode\}/, 'Script Marketplace uses read-only public listings');
-assert.match(market, /if \(readOnlyPreview\)/, 'interest cannot be submitted from admin perspective');
+assert.match(market, /readOnlyPreview=\{readOnlyPreview\}/, 'marketplace passes admin preview guard to every card');
+assert.match(actions, /if\(readOnlyPreview\|\|\(demoMode&&\!simulationMode\)\)/, 'contact cannot be submitted from admin perspective');
 assert.match(market, /data-nj-preview-safe=\{readOnlyPreview \? "true"/, 'public Writer profiles remain navigable from the marketplace');
 assert.match(app, /<AdminLiveMarketplacePreview/, 'actual script-visibility audit remains available');
 assert.match(css, /\.nightjar-live-role-banner/, 'obvious live status marker is styled');
