@@ -83,6 +83,40 @@ jobs:
           gh run watch "$BACKEND_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status --interval 15
           echo "Protected backend deployment succeeded. Hosting may now release."
 
+      # One-time backend-first announcement release, never a message send.
+      - name: Release community update callables before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-community-update-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f src/components/AdminCommunityUpdates.tsx
+          test -f src/components/CommunityUpdateReader.tsx
+          test -f src/platform/firebase-community-updates.ts
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=adminPublishCommunityUpdate,getCommunityUpdate,adminListCommunityUpdates' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          echo "Waiting for the guarded backend release before Hosting."
+          BACKEND_RUN_ID=""
+          for attempt in $(seq 1 48); do
+            BACKEND_RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "$GITHUB_SHA" --arg start "$START_TIME" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$BACKEND_RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$BACKEND_RUN_ID" ]]; then
+            echo "::error::Community backend release not confirmed; Hosting remains unchanged."
+            exit 1
+          fi
+          echo "Backend run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${BACKEND_RUN_ID}"
+          gh run watch "$BACKEND_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status --interval 15
+          echo "Community update backend deployed. Hosting can now release."
+
       - name: Deploy Hosting live
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
