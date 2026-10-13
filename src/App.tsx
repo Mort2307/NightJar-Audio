@@ -4576,7 +4576,7 @@ function App() {
               </div>
             </section>
 
-            <section id="nightjar-public-script-marketplace" className="section-wrap" aria-label="Published Writer scripts">
+            {focusedContentScriptId && <section id="nightjar-public-script-marketplace" className="section-wrap" aria-label="Published Writer scripts">
               <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading approved Writer scripts" />}>
                 <ScriptMarketplace key={'discover-marketplace-' + demoSessionKey}
                   focusScriptId={focusedContentScriptId}
@@ -4590,7 +4590,7 @@ function App() {
                   } : undefined}
                 />
               </Suspense>
-            </section>
+            </section>}
 
             <section id="for-you" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><div className="nj-intent-control" aria-label="Current listening intent">{[
