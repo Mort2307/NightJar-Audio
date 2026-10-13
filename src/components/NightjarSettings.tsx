@@ -1,5 +1,6 @@
 import { Accessibility, ArrowRight, Bell, BookOpenText, CalendarDays, CreditCard, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
 import AccessibilityPreferences from './AccessibilityPreferences';
+import HelpGlossary from './HelpGlossary';
 import { VisionAccessControls } from './VisionAccess';
 import AppUpdateControl from './AppUpdateControl';
 import NotificationPreferences from './NotificationPreferences';
@@ -29,6 +30,7 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <p>Personal preferences and account controls in one place, regardless of which Nightjar workspace you're using.</p>
       </div>
 
+      <HelpGlossary/>
       <div className="nj-settings-grid">
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-account">
           <div className="nj-settings-section-head"><UserCircle2 size={19} /><div><span className="mini-label">PERSONAL</span><h2 id="nj-settings-account">Account and profile</h2></div></div>
