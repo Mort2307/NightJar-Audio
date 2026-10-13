@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BookOpen, CheckCircle2, Clock3, LockKeyhole, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, Clock3, LockKeyhole, MessageCircle, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import ManuscriptReviewConversation from './ManuscriptReviewConversation';
 import './admin-manuscript-review.css';
@@ -13,6 +13,7 @@ type Props = {
   onReview: (script: any, decision: Decision, note: string) => Promise<void>;
   notify: (message: string) => void;
   simulationMode?: boolean;
+  onMessageWriter?: (userId:string)=>void;
 };
 
 const pendingStatus = (status: unknown) => ['Submitted', 'Under review'].includes(String(status ?? ''));
@@ -20,7 +21,7 @@ const readableError = (error: unknown) =>
   error instanceof Error ? error.message : 'Could not complete this request. Please retry.';
 
 export default function AdminManuscriptReview({
-  scripts, loading, demoMode, onRefresh, onReview, notify, simulationMode=false,
+  scripts, loading, demoMode, onRefresh, onReview, notify, simulationMode=false, onMessageWriter,
 }: Props) {
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -123,7 +124,7 @@ export default function AdminManuscriptReview({
     {selected && <div className="manuscript-review-detail" aria-label="Selected manuscript review">
       <div className="manuscript-review-detail-head">
         <div><span className="mini-label">{isPending ? 'AWAITING A DECISION' : 'MANUSCRIPT RECORD'}</span><h3>{selected.title}</h3><p>{selected.status} · {marketplaceRequested ? 'Writer requested marketplace publication' : 'Writer has not selected marketplace visibility'}</p></div>
-        <button className="primary-button" disabled={previewBusy} onClick={() => preview ? setViewerOpen(true) : void openPreview(selected)}><LockKeyhole size={15}/>{previewBusy ? 'Opening…' : 'Open read-only viewer'}</button>
+        <div className="manuscript-review-heading-actions"><button className="primary-button" disabled={previewBusy} onClick={() => preview ? setViewerOpen(true) : void openPreview(selected)}><LockKeyhole size={15}/>{previewBusy ? 'Opening…' : 'Open read-only viewer'}</button>{selected.writerUserId&&onMessageWriter&&<button className="secondary-button" onClick={()=>onMessageWriter(String(selected.writerUserId))}><MessageCircle size={15}/> Direct message Writer</button>}</div>
       </div>
       <div className="manuscript-review-facts">
         <span><ShieldCheck size={15}/> Rights confirmations: <strong>{rightsReady ? 'Confirmed' : 'Incomplete'}</strong></span>
