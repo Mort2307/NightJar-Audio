@@ -12,6 +12,7 @@ import PublicEditorShowcase from './PublicEditorShowcase';
 import PublicWriterPortfolio from './PublicWriterPortfolio';
 import { SocialLinksDisplay } from './SocialLinksEditor';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
+import { VoiceCallingCardPublic } from './VoiceCallingCard';
 
 type Props = {
   userId: string;
@@ -279,6 +280,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {(roleDetails.roleDetailOne || roleDetails.roleDetailTwo) && <div className="public-role-copy">{roleDetails.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{roleDetails.roleDetailOne}</p></div>}{roleDetails.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{roleDetails.roleDetailTwo}</p></div>}</div>}
         </section>
 
+        {profileRole === 'creator' && <VoiceCallingCardPublic creatorUserId={userId} demoMode={demoMode || readOnlyPreview} />}
         {profileRole === 'creator' && <section className="role-public-professional creator-public-professional">
           <div className="role-public-professional-head"><div><span className="mini-label">VA CREATOR PROFILE</span><h3>Performance & recording craft</h3><p>A working snapshot for listeners and collaborators — voice identity, direction style and delivery without exposing private production files or contact details.</p></div><Mic2 size={19}/></div>
           <div className="role-public-fact-grid">
