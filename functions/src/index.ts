@@ -13,6 +13,7 @@ import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo,
 import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession } from './didit';
 import { hasPaidEntitlement } from './entitlements';
 export { diditWebhook, processDiditWebhook } from './didit';
+export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
 export {
   getAdminAttentionPreferences, saveAdminAttentionPreferences,
@@ -6175,6 +6176,9 @@ export const listNotifications = onCall({ region: REGION }, async (request) => {
   const preferences = {
     displayMode: ['full','discreet','minimal'].includes(String(stored.displayMode ?? '')) ? String(stored.displayMode) : 'discreet',
     newReleases: stored.newReleases !== false,
+    newScripts: stored.newScripts !== false,
+    newArtwork: stored.newArtwork !== false,
+    newFollowers: stored.newFollowers !== false,
     followedProfiles: stored.followedProfiles !== false,
     collaborations: stored.collaborations !== false,
     payments: stored.payments !== false,
@@ -6186,6 +6190,10 @@ export const listNotifications = onCall({ region: REGION }, async (request) => {
   const enabled = (item: Record<string, any>) => {
     const type = String(item.type ?? '');
     const subtype = String(item.subtype ?? '');
+    if (type === 'content' && subtype === 'new_audio') return preferences.newReleases;
+    if (type === 'content' && subtype === 'new_script') return preferences.newScripts;
+    if (type === 'content' && subtype === 'new_artwork') return preferences.newArtwork;
+    if (type === 'follow' && subtype === 'new_follower') return preferences.newFollowers;
     if (type === 'collaboration') return preferences.collaborations;
     if (type === 'payment' || subtype === 'payment') return preferences.payments;
     if (type === 'comment' || subtype === 'comment' || subtype === 'release_comment' || subtype === 'release_reaction') return preferences.comments;
@@ -8703,6 +8711,9 @@ export const saveNotificationPreferences = onCall({ region: REGION }, async (req
   const preferences = {
     displayMode: ['full','discreet','minimal'].includes(displayMode) ? displayMode : 'discreet',
     newReleases: input.newReleases !== false,
+    newScripts: input.newScripts !== false,
+    newArtwork: input.newArtwork !== false,
+    newFollowers: input.newFollowers !== false,
     followedProfiles: input.followedProfiles !== false,
     collaborations: input.collaborations !== false,
     payments: input.payments !== false,
