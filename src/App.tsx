@@ -69,6 +69,7 @@ import {
   Share2,
 } from 'lucide-react';
 import './components/live-listens.css';
+import './components/featured-release-carousel.css';
 import './components/writer-script-artwork.css';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
@@ -746,7 +747,20 @@ function App() {
     }
   }, [user?.userId]);
 
-  const featured = useMemo(() => tracks.find((track) => track.featured) ?? tracks[0] ?? null, [tracks]);
+  // listCatalogue only supplies released entries; don't expose private drafts here.
+  // Keep featured first, then browse all playable public releases without autoplay.
+  const [activeFeaturedId, setActiveFeaturedId] = useState<string | null>(null);
+  const featuredTouchStart = useRef<{ x: number; y: number } | null>(null);
+  const carouselTracks = useMemo(() => [...tracks]
+    .filter((track) => track.audioAvailable === true || Boolean(track.audioUrl))
+    .sort((left, right) => Number(right.featured === true) - Number(left.featured === true)), [tracks]);
+  const featuredIndex = Math.max(0, carouselTracks.findIndex((track) => track.id === activeFeaturedId));
+  const featured = carouselTracks[featuredIndex] ?? null;
+  const changeFeatured = (offset: number) => {
+    if (carouselTracks.length < 2) return;
+    const nextIndex = (featuredIndex + offset + carouselTracks.length) % carouselTracks.length;
+    setActiveFeaturedId(carouselTracks[nextIndex].id);
+  };
   // Only link people to a verified account ID from the release credit or a unique
   // exact-name, matching-role public directory entry. Never guess an identity from a name.
   const featuredCredits = useMemo(() => {
@@ -4512,12 +4526,42 @@ function App() {
                   <span><ShieldCheck size={15} /> 18+ access</span>
                 </div>
               </div>
-              <div className="hero-art" aria-label="Nightjar featured release">
+              <div className="hero-art" aria-label="Browse Nightjar released audio">
                 <div className="orbit orbit-a" /><div className="orbit orbit-b" />
-                <div className="featured-card">
+                <div
+                  className="featured-card"
+                  role="region"
+                  aria-roledescription="carousel"
+                  aria-label="Released audio carousel"
+                  tabIndex={carouselTracks.length > 1 ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                      event.preventDefault();
+                      changeFeatured(event.key === 'ArrowRight' ? 1 : -1);
+                    }
+                  }}
+                  onTouchStart={(event) => {
+                    const touch = event.touches[0];
+                    featuredTouchStart.current = touch && event.touches.length === 1
+                      ? { x: touch.clientX, y: touch.clientY } : null;
+                  }}
+                  onTouchEnd={(event) => {
+                    const start = featuredTouchStart.current;
+                    featuredTouchStart.current = null;
+                    const touch = event.changedTouches[0];
+                    if (!start || !touch) return;
+                    const deltaX = touch.clientX - start.x;
+                    const deltaY = touch.clientY - start.y;
+                    if (Math.abs(deltaX) >= 55 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+                      changeFeatured(deltaX < 0 ? 1 : -1);
+                    }
+                  }}
+                  onTouchCancel={() => { featuredTouchStart.current = null; }}
+                >
                   {featured ? <>
-                    <div className="featured-top"><span className="mini-label">NIGHTJAR / FEATURED</span><span className="status-dot"><span /> LIVE RELEASE</span></div>
-                    <div className="cover-art release-cover featured-release-cover">
+                    <div className="featured-top"><span className="mini-label">NIGHTJAR / RELEASES</span><span className="status-dot"><span /> LIVE RELEASE</span></div>
+                    <div key={featured.id} className="cover-art release-cover featured-release-cover">
                       <ReleaseCoverVisual artworkUrl={featured.artworkUrl} brandLogoUrl={logoUrl ?? '/brand-logo'} />
                       <h2 className="featured-cover-title">{featured.title.toUpperCase()}</h2>
                     </div>
@@ -4525,6 +4569,22 @@ function App() {
                       <div><span className="mini-label">{featured.category}</span><strong>{featured.title}</strong></div>
                       <button className="round-play" disabled={!featured.audioAvailable && !featured.audioUrl} onClick={() => togglePlayback(featured)} aria-label={playing === featured.id ? 'Pause release' : 'Play release'}>{playing === featured.id ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
                     </div>
+                    {carouselTracks.length > 1 && (
+                      <nav className="featured-carousel-controls" aria-label="Browse published audio">
+                        <button type="button" className="featured-carousel-arrow" data-nj-preview-safe="true"
+                          onClick={() => changeFeatured(-1)} aria-label="Previous released audio">
+                          <ArrowLeft size={18} aria-hidden="true" />
+                        </button>
+                        <div className="featured-carousel-position" aria-live="polite" aria-atomic="true">
+                          <strong>{featuredIndex + 1} / {carouselTracks.length}</strong>
+                          <small>SWIPE TO EXPLORE</small>
+                        </div>
+                        <button type="button" className="featured-carousel-arrow" data-nj-preview-safe="true"
+                          onClick={() => changeFeatured(1)} aria-label="Next released audio">
+                          <ArrowRight size={18} aria-hidden="true" />
+                        </button>
+                      </nav>
+                    )}
                     {featuredCredits.length > 0 && (
                       <div className="featured-credit-list" aria-label="Release credits">
                         {featuredCredits.map((credit) => (
