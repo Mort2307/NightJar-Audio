@@ -6933,6 +6933,14 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
     }, {merge:true});
     return {writerUserId:String(data.writerUserId ?? ''),title:cleanText(data.title,180),nextStatus,marketplaceVisible};
   });
+  // Review decisions become durable, writer-visible events in the same thread
+  // as clarification messages; the decision is never lost in a free-text field.
+  await ref.collection('reviewThread').add({
+    kind:'decision', visibility:'writer', authorUserId:admin.uid, authorLabel:'NightJar Team',
+    body: decision === 'approved' ? (note || 'NightJar approved the submitted manuscript.')
+      : note || (decision === 'changes' ? 'NightJar requested changes.' : 'NightJar rejected this manuscript.'),
+    decision,createdAt:FieldValue.serverTimestamp(),
+  }).catch(error=>console.warn('Manuscript review timeline entry failed',error));
   if (result.writerUserId) {
     await createNotification(result.writerUserId, {
       type:'editorial', subtype:'script_review',
