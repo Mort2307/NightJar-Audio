@@ -29,6 +29,7 @@ const defaultRights = {
 const defaultMarketplace = {
   visibility: 'private',
   synopsis: '',
+  previewExcerpt: '',
   genres: [],
   tropes: [],
   commissionPricePence: null,
@@ -89,6 +90,7 @@ export default function WriterRightsPanel({ script, onUpdated, notify, simulatio
       <label>Licence length<input value={rights.licenceLength ?? ''} onChange={(e) => setRights((r) => ({ ...r, licenceLength: e.target.value }))} placeholder="e.g. 12 months"/></label>
       <label>Marketplace visibility<select value={marketplace.visibility} onChange={(e) => setMarketplace((m: any) => ({ ...m, visibility: e.target.value }))}><option value="private">Private</option><option value="invitation">Invitation only</option><option value="marketplace">Marketplace</option><option value="unavailable">Unavailable</option><option value="licensed">Licensed</option></select></label>
       <label className="research-span-two">Public synopsis<textarea value={marketplace.synopsis ?? ''} onChange={(e) => setMarketplace((m: any) => ({ ...m, synopsis: e.target.value }))} placeholder="A protected public summary; never the full manuscript."/></label>
+      <label className="research-span-two">Optional protected VA sample<textarea value={marketplace.previewExcerpt ?? ''} maxLength={3200} onChange={(e)=>setMarketplace((m:any)=>({...m,previewExcerpt:e.target.value}))} placeholder="Paste only the extract you expressly authorise VAs to preview. The entire original manuscript stays private."/><small>Writer-selected extract · shown only inside the protected VA sample viewer · up to 3,200 characters. Leave blank to disable samples.</small></label>
       <label>Genres<input value={genresDraft} onChange={(event) => setGenresDraft(event.target.value)} placeholder="Dark romance, Romantic fantasy" aria-describedby="nightjar-genres-help"/><small id="nightjar-genres-help">Separate genres with commas. Spaces inside each genre are supported.</small></label>
       <label>Tropes<input value={tropesDraft} onChange={(event) => setTropesDraft(event.target.value)} placeholder="Enemies to lovers, Found family" aria-describedby="nightjar-tropes-help"/><small id="nightjar-tropes-help">Separate tropes with commas. Multi-word phrases are preserved.</small></label>
       <label>Indicative commission price (£)<input type="number" min="0" step="0.01" value={marketplace.commissionPricePence == null ? '' : marketplace.commissionPricePence / 100} onChange={(e) => setMarketplace((m: any) => ({ ...m, commissionPricePence: e.target.value === '' ? null : Math.round(Number(e.target.value) * 100) }))}/></label>
