@@ -8244,6 +8244,138 @@ export const getMarketplaceScriptSample = onCall({ region: REGION }, async (requ
   return { scriptId, title:cleanText(data.title,180),sample:listing.previewExcerpt,writerUserId:data.writerUserId??null };
 });
 
+
+// Rights negotiations are not sales. No money changes hands and no protected
+// manuscript/licence rights are granted until a compliant payment provider,
+// final signed terms and independent settlement verification are implemented.
+const licenceOfferPayload = (value: Record<string, any>, id: string) => ({
+  id,
+  scriptId: cleanText(value.scriptId,160),
+  scriptTitle: cleanText(value.scriptTitle,180),
+  writerUserId: cleanText(value.writerUserId,160),
+  creatorUserId: cleanText(value.creatorUserId,160),
+  amountPence: Math.max(0,Number(value.amountPence??0)),
+  currency:'GBP',
+  licenceType: value.licenceType === 'exclusive'?'exclusive':'non-exclusive',
+  termMonths: Math.max(1,Math.min(120,Number(value.termMonths??12))),
+  permittedUse: 'audio_adaptation',
+  usageDetails: cleanText(value.usageDetails,1200),
+  status: cleanText(value.status,50),
+  lastProposerUserId: cleanText(value.lastProposerUserId,160),
+  paymentStatus: 'not_collected',
+  licenceGranted: false,
+  revision: Math.max(1,Number(value.revision??1)),
+  createdAt:toIso(value.createdAt), updatedAt:toIso(value.updatedAt),
+});
+const sanitiseLicenceTerms = (value: Record<string,unknown>) => {
+  const amountPence = Number(value.amountPence);
+  const termMonths = Number(value.termMonths);
+  const licenceType = cleanText(value.licenceType,30);
+  const usageDetails = cleanText(value.usageDetails,1200);
+  if (!Number.isSafeInteger(amountPence) || amountPence < 100 || amountPence > 10000000)
+    throw new HttpsError('invalid-argument','Offer an amount between £1 and £100,000.');
+  if (!Number.isSafeInteger(termMonths) || termMonths < 1 || termMonths > 120)
+    throw new HttpsError('invalid-argument','Choose an agreement length of 1–120 months.');
+  if (!['non-exclusive','exclusive'].includes(licenceType))
+    throw new HttpsError('invalid-argument','Choose a non-exclusive or exclusive licence.');
+  if (!usageDetails) throw new HttpsError('invalid-argument','Describe the intended audio use of this script.');
+  return { amountPence, termMonths, licenceType, usageDetails };
+};
+export const createScriptLicenceOffer = onCall({region:REGION},async request => {
+  const identity = await requireAccountRole(request,['creator']);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data??{}) as Record<string,unknown>;
+  const scriptId = cleanText(input.scriptId,160);
+  if (!scriptId) throw new HttpsError('invalid-argument','Select a script.');
+  const script = await scriptRef(scriptId).get();
+  const data = script.data();
+  if (!data) throw new HttpsError('not-found','Manuscript not found.');
+  const listing = normaliseScriptMarketplace(data.marketplace);
+  if (listing.visibility !== 'marketplace' || !listing.synopsis.trim() || !['Approved','Published'].includes(String(data.status??'')))
+    throw new HttpsError('failed-precondition','This manuscript is not available for licence enquiries.');
+  if (!data.writerUserId || data.writerUserId === identity.uid) throw new HttpsError('failed-precondition','Invalid licence counterpart.');
+  const terms = sanitiseLicenceTerms(input);
+  const offerId = createHash('sha256').update('script-license-offer\0'+scriptId+'\0'+identity.uid).digest('hex');
+  const ref = db.collection('scriptLicenceOffers').doc(offerId);
+  const value = await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const existing = snap.data();
+    if (existing && !['declined','withdrawn'].includes(String(existing.status??''))) {
+      throw new HttpsError('already-exists','This script already has your active licence offer. Open your rights negotiations to continue.');
+    }
+    const revision = existing ? Number(existing.revision??0)+1:1;
+    const record={
+      scriptId,scriptTitle:cleanText(data.title,180),writerUserId:data.writerUserId,creatorUserId:identity.uid,
+      ...terms,status:'proposed',lastProposerUserId:identity.uid,
+      paymentStatus:'not_collected',licenceGranted:false,revision,
+      createdAt:existing?.createdAt??FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    };
+    tx.set(ref,record,{merge:true});
+    tx.set(ref.collection('revisions').doc(String(revision)),{
+      revision,actorUserId:identity.uid,action:'propose',...terms,status:'proposed',
+      createdAt:FieldValue.serverTimestamp(),
+    });
+    return record;
+  });
+  await createNotification(String(data.writerUserId),{
+    type:'collaboration',subtype:'script_licence_offer',title:'New script licence offer',
+    message:'A VA has sent a rights proposal for '+cleanText(data.title,150)+'. No payment or licence transfer has occurred.',
+    scriptId,offerId,
+  }).catch(error=>console.warn('Licence offer notice failed',error));
+  return {offer:licenceOfferPayload(value,offerId)};
+});
+export const listMyScriptLicenceOffers = onCall({region:REGION},async request=>{
+  const identity=await requireAccountRole(request,['creator','writer','admin']);
+  const snapshot=await db.collection('scriptLicenceOffers').limit(1000).get();
+  return {offers:snapshot.docs
+    .filter(doc=>identity.role==='admin'||doc.data().writerUserId===identity.uid||doc.data().creatorUserId===identity.uid)
+    .map(doc=>licenceOfferPayload(doc.data(),doc.id))
+    .sort((a,b)=>String(b.updatedAt??'').localeCompare(String(a.updatedAt??'')))};
+});
+export const respondScriptLicenceOffer = onCall({region:REGION},async request=>{
+  const identity=await requireAccountRole(request,['creator','writer']);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const offerId=cleanText(input.offerId,160);
+  const action=cleanText(input.action,20);
+  if (!offerId||!['accept','counter','decline','withdraw'].includes(action))
+    throw new HttpsError('invalid-argument','Select a valid offer action.');
+  const terms=action==='counter'?sanitiseLicenceTerms(input):null;
+  const ref=db.collection('scriptLicenceOffers').doc(offerId);
+  const result=await db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    const data=snap.data();
+    if (!data)throw new HttpsError('not-found','Offer not found.');
+    if (![data.writerUserId,data.creatorUserId].includes(identity.uid))
+      throw new HttpsError('permission-denied','You do not participate in this negotiation.');
+    if (!['proposed','countered'].includes(String(data.status??'')))
+      throw new HttpsError('failed-precondition','This negotiation is no longer open.');
+    if (action==='withdraw' && data.creatorUserId!==identity.uid)
+      throw new HttpsError('permission-denied','Only the VA may withdraw their proposal.');
+    if (action!=='withdraw' && data.lastProposerUserId===identity.uid)
+      throw new HttpsError('failed-precondition','The other party needs to respond to your latest proposal.');
+    const nextStatus=action==='accept'?'terms_agreed_payment_pending':action==='counter'?'countered':action==='decline'?'declined':'withdrawn';
+    const revision=Number(data.revision??1)+1;
+    const update={
+      ...(terms??{}),status:nextStatus,revision,lastProposerUserId:action==='counter'?identity.uid:data.lastProposerUserId,
+      paymentStatus:'not_collected',licenceGranted:false,updatedAt:FieldValue.serverTimestamp(),
+    };
+    tx.set(ref,update,{merge:true});
+    tx.set(ref.collection('revisions').doc(String(revision)),{
+      revision,actorUserId:identity.uid,action, ...terms,status:nextStatus,
+      createdAt:FieldValue.serverTimestamp(),
+    });
+    return {toUserId:data.writerUserId===identity.uid?data.creatorUserId:data.writerUserId,scriptId:data.scriptId,
+      title:data.scriptTitle,nextStatus};
+  });
+  await createNotification(String(result.toUserId),{
+    type:'collaboration',subtype:'script_licence_offer',title:'Script rights offer updated',
+    message:'Rights negotiation for '+cleanText(result.title,120)+' is '+result.nextStatus.replaceAll('_',' ')+'. No payment or licence transfer has occurred.',
+    scriptId:result.scriptId,offerId,
+  }).catch(error=>console.warn('Rights negotiation notification failed',error));
+  const saved=await ref.get();
+  return {offer:licenceOfferPayload(saved.data()??{},offerId)};
+});
+
 export const collaborationDirectory = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
