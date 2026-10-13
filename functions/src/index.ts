@@ -12201,3 +12201,146 @@ export const reviewNightjarTeamFeedback = onCall({region:REGION},async(request)=
   await ref.update({status:'reviewed',reviewedAt:FieldValue.serverTimestamp(),reviewedBy:identity.uid});
   return {reviewed:true};
 });
+
+// Low-cost listener experience additions. Reads are on demand; no scheduled
+// fan-out, external API, or extra queue infrastructure is involved.
+const momentMarksFor = (uid: string) => accountRef(uid).collection('momentMarks');
+const safeListeningBoundaries = (input: Record<string, unknown>) => ({
+  excludedRatings: cleanStringList(input.excludedRatings, 4).filter((value) =>
+    ['sfw','suggestive','adult','explicit'].includes(value)),
+  hiddenTerms: cleanStringList(input.hiddenTerms, 12).map((term) => term.toLowerCase()),
+});
+
+export const getMyListeningBoundaries = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const doc = await accountRef(identity.uid).collection('privateSettings').doc('listening').get();
+  return { preferences: safeListeningBoundaries(doc.data() ?? {}) };
+});
+
+export const saveMyListeningBoundaries = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const preferences = safeListeningBoundaries((request.data ?? {}) as Record<string, unknown>);
+  await accountRef(identity.uid).collection('privateSettings').doc('listening').set({
+    ...preferences, updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { preferences };
+});
+
+export const listMomentMarks = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await momentMarksFor(identity.uid).limit(60).get();
+  const marks = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  // A saved moment must never expose artwork, titles or a playback URL for
+  // a release that is no longer published.
+  const releaseIds = [...new Set(marks.map((m) => cleanText(m.releaseId, 160)).filter(Boolean))];
+  const releaseSnapshots = releaseIds.length ? await db.getAll(...releaseIds.map((id) => releaseRef(id))) : [];
+  const released = new Map(releaseSnapshots.filter((doc) => doc.data()?.status === 'released')
+    .map((doc) => [doc.id, releasePayload(doc.data() ?? {}, doc.id)]));
+  return { marks: marks.filter((m) => released.has(String(m.releaseId))).map((m) => ({
+    id: m.id, releaseId: m.releaseId, label: cleanText(m.label, 80),
+    positionSeconds: Math.max(0, Number(m.positionSeconds ?? 0)),
+    createdAt: toIso(m.createdAt), release: released.get(String(m.releaseId)),
+  })).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))) };
+});
+
+export const saveMomentMark = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const seconds = Number(input.positionSeconds);
+  if (!releaseId || !Number.isFinite(seconds) || seconds < 0 || seconds > 24 * 60 * 60) {
+    throw new HttpsError('invalid-argument','Choose a valid playback moment.');
+  }
+  const release = await releaseRef(releaseId).get();
+  if (!release.exists || release.data()?.status !== 'released') {
+    throw new HttpsError('not-found','This release is no longer available.');
+  }
+  const collection = momentMarksFor(identity.uid);
+  const existing = await collection.limit(60).get();
+  if (existing.size >= 60) throw new HttpsError('resource-exhausted','You can save up to 60 moments. Remove one to add another.');
+  const doc = collection.doc();
+  await doc.set({
+    releaseId, positionSeconds: Math.round(seconds * 10) / 10,
+    label: cleanText(input.label, 80) || 'Saved moment',
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { saved: true, markId: doc.id };
+});
+
+export const deleteMomentMark = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const markId = cleanText((request.data as { markId?: unknown } | undefined)?.markId, 160);
+  if (!markId || markId.includes('/')) throw new HttpsError('invalid-argument','Moment identifier is required.');
+  await momentMarksFor(identity.uid).doc(markId).delete();
+  return { deleted: true };
+});
+
+// VA Calling Cards deliberately feature an already moderated and published
+// recording. New unmoderated audio-upload paths are not added.
+export const saveVoiceCallingCard = onCall({ region: REGION }, async (request) => {
+  const identity = await requireAccountRole(request, ['creator']);
+  await requireAgeVerified(identity.uid);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) {
+    await profileRef(identity.uid).set({ voiceCallingCardReleaseId: null }, { merge: true });
+    return { releaseId: null };
+  }
+  const release = await releaseRef(releaseId).get();
+  if (!release.exists || release.data()?.creatorUserId !== identity.uid || release.data()?.status !== 'released') {
+    throw new HttpsError('failed-precondition','Choose one of your published, moderated recordings.');
+  }
+  await profileRef(identity.uid).set({ voiceCallingCardReleaseId: releaseId }, { merge: true });
+  return { releaseId };
+});
+
+export const getVoiceCallingCard = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const creatorId = cleanText((request.data as { creatorUserId?: unknown } | undefined)?.creatorUserId, 160);
+  if (!creatorId) throw new HttpsError('invalid-argument','Creator required.');
+  const [account, profile] = await Promise.all([accountRef(creatorId).get(), profileRef(creatorId).get()]);
+  if (account.data()?.status !== 'active' || !professionalRolesForAccount(account.data() ?? {}).includes('creator')
+    || !profile.exists || profile.data()?.publicProfile === false) return { release: null, releaseId: null };
+  const releaseId = cleanText(profile.data()?.voiceCallingCardReleaseId, 160);
+  if (!releaseId) return { release: null, releaseId: null };
+  const doc = await releaseRef(releaseId).get();
+  if (!doc.exists || doc.data()?.creatorUserId !== creatorId || doc.data()?.status !== 'released') {
+    return { release: null, releaseId: null };
+  }
+  const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  return { releaseId, release: decorateReleaseAccess(doc.data() ?? {}, releaseId, identity.uid, {
+    admin: identity.admin, subscription,
+  }) };
+});
+
+export const myProductionTimeline = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const uid = identity.uid;
+  const [releases, scripts, editors, artworks] = await Promise.all([
+    db.collection('releases').where('creatorUserId','==',uid).limit(100).get(),
+    db.collection('scripts').where('writerUserId','==',uid).limit(100).get(),
+    db.collection('editorPortfolio').where('ownerUserId','==',uid).limit(80).get(),
+    db.collection('artistPortfolio').where('ownerUserId','==',uid).limit(80).get(),
+  ]);
+  const entries = [
+    ...releases.docs.map((doc) => ({ id: doc.id, role:'creator', kind:'audio',
+      title: cleanText(doc.data().title, 160), status: cleanText(doc.data().status, 60),
+      updatedAt: toIso(doc.data().updatedAt), createdAt: toIso(doc.data().createdAt) })),
+    ...scripts.docs.map((doc) => ({ id: doc.id, role:'writer', kind:'script',
+      title: cleanText(doc.data().title, 160), status: cleanText(doc.data().status, 60),
+      updatedAt: toIso(doc.data().updatedAt), createdAt: toIso(doc.data().createdAt) })),
+    ...editors.docs.map((doc) => ({ id: doc.id, role:'editor', kind:'showcase',
+      title: cleanText(doc.data().title, 160), status: cleanText(doc.data().status, 60),
+      updatedAt: toIso(doc.data().updatedAt), createdAt: toIso(doc.data().createdAt) })),
+    ...artworks.docs.map((doc) => ({ id: doc.id, role:'artist', kind:'artwork',
+      title: cleanText(doc.data().title, 160), status: cleanText(doc.data().status, 60),
+      updatedAt: toIso(doc.data().updatedAt), createdAt: toIso(doc.data().createdAt) })),
+  ].sort((a,b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')));
+  return { entries: entries.slice(0,200) };
+};
