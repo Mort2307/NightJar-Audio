@@ -1,0 +1,39 @@
+/* Listener and professional experiences share NightJar theme variables. */
+.nj-listening-experience,.nj-production-timeline,.nj-voice-card-editor,.nj-voice-card-public{
+  display:grid;gap:1rem;margin:1rem 0;padding:clamp(1rem,2vw,1.35rem);
+  border:1px solid var(--border,rgba(210,188,215,.25));border-radius:16px;
+  background:var(--surface,rgba(180,155,180,.06));min-width:0;
+}
+.nj-experience-heading{display:flex;gap:.8rem;align-items:start;min-width:0}
+.nj-experience-heading>svg{flex-shrink:0;margin-top:.15rem}
+.nj-experience-heading>div{display:grid;gap:.2rem;min-width:0}
+.nj-experience-heading strong{font-size:1.05rem}
+.nj-experience-heading small,.nj-listening-boundaries-head small{display:block;color:var(--muted,#bbb);line-height:1.5}
+.nj-mood-options{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center}
+.nj-mood-options button{min-height:42px;white-space:normal}
+.nj-mood-options button.active{border-color:var(--accent,#c59abf);box-shadow:inset 0 0 0 1px var(--accent,#c59abf)}
+.nj-listening-boundaries-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.8rem;border-top:1px solid var(--border,rgba(180,180,180,.18));padding-top:1rem}
+.nj-listening-boundaries-head>div{display:flex;gap:.65rem;align-items:center}
+.nj-listening-boundaries-form{display:grid;gap:.8rem}
+.nj-listening-boundaries-form p,.nj-production-timeline p,.nj-voice-card-editor p,.nj-voice-card-public p{margin:0;line-height:1.5;overflow-wrap:anywhere}
+.nj-boundary-ratings{display:flex;flex-wrap:wrap;gap:.7rem 1.1rem}
+.nj-boundary-ratings label{display:flex;gap:.35rem;align-items:center;cursor:pointer}
+.nj-boundary-terms,.nj-voice-card-editor label{display:grid;gap:.3rem}
+.nj-boundary-terms input,.nj-voice-card-editor select,.nj-moment-editor input{width:100%;max-width:100%;min-width:0;box-sizing:border-box;font-size:16px}
+.nj-listening-boundaries-form>.primary-button,.nj-voice-card-editor>.secondary-button{justify-self:start;min-height:44px}
+.nj-timeline-actions{display:flex;flex-wrap:wrap;gap:.55rem}
+.nj-timeline-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr));gap:.7rem}
+.nj-timeline-stage{border:1px solid var(--border,rgba(180,180,180,.18));border-radius:12px;padding:.8rem;display:grid;align-content:start;gap:.6rem;min-width:0}
+.nj-timeline-stage h3{font-size:.95rem;display:flex;gap:.5rem;justify-content:space-between;margin:0}
+.nj-timeline-stage h3 span{opacity:.6}
+.nj-timeline-stage article{padding:.7rem;border-radius:9px;background:rgba(128,128,128,.085);display:grid;gap:.3rem;min-width:0}
+.nj-timeline-stage article :is(strong,small){overflow-wrap:anywhere}
+.nj-timeline-stage article small,.nj-experience-empty{opacity:.8}
+.nj-voice-card-public{margin:1rem 0}
+.nj-moment-editor{display:grid;gap:.65rem;padding:1rem;border:1px solid var(--border,rgba(180,180,180,.18));border-radius:12px}
+.nj-moment-editor label{display:grid;gap:.3rem}
+.nj-moment-editor>.primary-button{justify-self:start}
+@media(max-width:620px){
+  .nj-listening-boundaries-form>.primary-button,.nj-voice-card-editor>.secondary-button,.nj-moment-editor>.primary-button{width:100%;justify-content:center}
+  .nj-mood-options button{flex:1 1 auto}
+}
