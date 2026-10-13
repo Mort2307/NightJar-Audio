@@ -29,6 +29,7 @@ type Props = {
   demoMode?: boolean;
   initialRole?: string;
   readOnlyPreview?: boolean;
+  focusArtworkId?: string | null;
 };
 
 const roleLabel = (role: string | null | undefined) => {
@@ -39,7 +40,7 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = '', readOnlyPreview = false }: Props) {
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = '', readOnlyPreview = false, focusArtworkId:focusArtworkIdProp=null }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +48,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const [retryKey, setRetryKey] = useState(0);
   const [giftOpen, setGiftOpen] = useState(false);
   const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(initialRole);
+  const focusArtworkId = focusArtworkIdProp ?? new URLSearchParams(window.location.search).get('artwork');
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
 
@@ -136,6 +138,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     });
     return () => { cancelled = true; };
   }, [userId, demoMode, retryKey]);
+
+  useEffect(() => {
+    if (!focusArtworkId || !profile?.artistPortfolio?.some((item: any) => String(item.id) === focusArtworkId)) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById('nightjar-artwork-' + focusArtworkId)?.scrollIntoView({ behavior:'smooth', block:'center' });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [profile, selectedProfileRole, focusArtworkId]);
 
   const share = async () => {
     if (!profile || readOnlyPreview) return;
@@ -422,7 +432,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         {profileRole === 'artist' && <section className="public-artist-portfolio">
           <div className="section-head"><div><span className="mini-label">ARTIST PORTFOLIO</span><h3>Approved visual work</h3></div></div>
           {!!profile.artistPortfolio?.length ? <div className="public-artist-grid">
-            {profile.artistPortfolio.map((item:any)=><article key={item.id}>
+            {profile.artistPortfolio.map((item:any)=><article key={item.id} id={'nightjar-artwork-' + item.id} className={focusArtworkId === item.id ? 'nightjar-notification-target' : undefined}>
               {item.imageUrl && <button type="button" className="public-artist-image" onClick={()=>window.open(item.imageUrl,'_blank','noopener,noreferrer')} aria-label={'Open '+item.title+' full size'}><img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/></button>}
               <div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}{item.description&&<p>{item.description}</p>}{!!item.tags?.length&&<div className="creator-profile-tags">{item.tags.map((tag:string)=><span key={tag}>{tag}</span>)}</div>}</div>
             </article>)}

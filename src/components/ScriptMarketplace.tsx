@@ -13,9 +13,10 @@ type Props = {
   readOnlyPreview?: boolean;
   onAdminAudit?: () => void;
   onMessageUser?: (userId:string,collaborationId?:string|null) => void;
+  focusScriptId?: string | null;
 };
 
-export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser, demoMode = false, simulationMode = false, readOnlyPreview = false, onAdminAudit }: Props) {
+export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser, demoMode = false, simulationMode = false, readOnlyPreview = false, onAdminAudit, focusScriptId = null }: Props) {
   const [scripts, setScripts] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,16 @@ export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser,
 
   useEffect(() => { void load(); }, [demoMode]);
 
+  useEffect(() => {
+    if (loading || !focusScriptId) return;
+    if (!scripts.some(script => script.id === focusScriptId)) return;
+    setQuery('');
+    const timer = window.setTimeout(() => {
+      document.getElementById('nightjar-marketplace-script-' + focusScriptId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [loading, scripts, focusScriptId]);
+
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
     if (!value) return scripts;
@@ -56,14 +67,14 @@ export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser,
 
   return <section className="research-panel script-marketplace">
     <div className="research-panel-head">
-      <div><span className="mini-label">{readOnlyPreview ? 'LIVE SCRIPT MARKETPLACE · ADMIN READ-ONLY' : 'SCRIPT MARKETPLACE'}</span><h2>Find the story before it becomes an audio.</h2><p>Only approved scripts intentionally listed by their Writer appear here. Full manuscripts remain protected.</p></div>
+      <div><span className="mini-label">{readOnlyPreview ? 'LIVE SCRIPT MARKETPLACE · READ-ONLY BROWSING' : 'SCRIPT MARKETPLACE'}</span><h2>Find the story before it becomes an audio.</h2><p>Only approved scripts intentionally listed by their Writer appear here. Full manuscripts remain protected.</p></div>
       <BookOpen size={22}/>
     </div>
     <label className="marketplace-search"><Search size={15}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search Writer, title, genre or trope"/></label>
     {loading ? <div className="people-empty">Loading approved real scripts…</div> :
     loadError ? <div className="marketplace-empty-state" role="alert"><BookOpen size={21}/><div><strong>Marketplace unavailable</strong><p>Live scripts could not be loaded. This is not evidence that the marketplace is empty.</p></div><button className="secondary-button" type="button" data-nj-preview-safe={readOnlyPreview ? "true" : undefined} onClick={() => void load()}>Try again</button></div>
     : <div className="marketplace-grid">
-      {filtered.map((script) => <article className="marketplace-card" key={script.id}>
+      {filtered.map((script) => <article className={focusScriptId === script.id ? "marketplace-card nightjar-notification-target" : "marketplace-card"} key={script.id} id={"nightjar-marketplace-script-" + script.id}>
         <div className="marketplace-card-head"><span className="nj-term-label">{script.rights?.licenceType && script.rights.licenceType !== 'none' ? script.rights.licenceType : 'Licence to discuss'} <ContextHelp topic={script.rights?.licenceType==='exclusive'?'exclusive-licence':script.rights?.licenceType==='non-exclusive'?'non-exclusive-licence':'licence-choice'}/></span><Filter size={15}/></div>
         {script.artworkUrl && <img className="script-marketplace-cover" src={script.artworkUrl} alt={'Approved cover artwork for ' + script.title} loading="lazy" decoding="async"/>}
         <h3>{script.title}</h3>

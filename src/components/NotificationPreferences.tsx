@@ -9,6 +9,9 @@ type Props = { notify: (message: string) => void; simulationMode?: boolean; isAd
 const defaults = {
   displayMode: 'discreet',
   newReleases: true,
+  newScripts: true,
+  newArtwork: true,
+  newFollowers: true,
   followedProfiles: true,
   collaborations: true,
   payments: true,
@@ -155,12 +158,15 @@ export default function NotificationPreferences({ notify, simulationMode = false
   const senderMismatch = pushStatus?.thisDeviceError === 'messaging/mismatched-credential';
 
   return <section className="research-panel notification-preferences">
-    <div className="research-panel-head"><div><span className="mini-label">NOTIFICATION PRIVACY</span><h2>Choose how discreet Nightjar should be.</h2><p>Control notification wording and which updates you want to receive.</p></div><Bell size={21}/></div>
+    <div className="research-panel-head"><div><span className="mini-label">NOTIFICATION PRIVACY</span><h2>Choose how discreet Nightjar should be.</h2><p>Get notified when approved audio, scripts and artwork go live, when someone follows you, and when people you follow publish something. Choose which alerts reach you.</p></div><Bell size={21}/></div>
     <label>Notification wording<select value={preferences.displayMode} onChange={(e) => setPreferences((value: any) => ({ ...value, displayMode: e.target.value }))}><option value="full">Full — show useful release/context detail</option><option value="discreet">Discreet — Nightjar wording without explicit detail</option><option value="minimal">Minimal — generic Nightjar notification only</option></select></label>
     <div className="notification-pref-grid">
       {[
-        ['newReleases','New releases'],
-        ['followedProfiles','People I follow'],
+        ['newReleases','New audio releases'],
+        ['newScripts','New marketplace scripts'],
+        ['newArtwork','New published artwork'],
+        ['newFollowers','Someone follows me'],
+        ['followedProfiles','People I follow / spotlights'],
         ['collaborations','Collaboration updates'],
         ['payments','Payment updates'],
         ['comments','Comments / community'],
