@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Headphones, ShieldCheck, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { nightjarExperience, type ListeningBoundaries } from '../platform/firebase-experience';
-import { DEFAULT_LISTENING_BOUNDARIES, MOOD_FILTERS, type MoodFilter } from '../platform/listening-discovery';
+import { MOOD_FILTERS, type MoodFilter } from '../platform/listening-discovery';
 import './listening-experience.css';
 
 type Props = {
