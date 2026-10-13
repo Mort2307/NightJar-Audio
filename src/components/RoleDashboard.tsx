@@ -16,7 +16,7 @@ type Props = {
   title: string;
   description: string;
   metrics: Metric[];
-  actions: RoleDashboardAction[];
+  actions?: RoleDashboardAction[];
   loading?: boolean;
 };
 
@@ -38,13 +38,13 @@ export default function RoleDashboard({ eyebrow, title, description, metrics, ac
           : <div key={metric.label}>{content}</div>;
       })}
     </div>
-    <div className="nj-next-actions">
+    {actions && <div className="nj-next-actions">
       <div className="nj-next-actions-head"><div><span className="mini-label">NEXT ACTIONS</span><strong>Useful things to do next</strong></div><Bell size={15}/></div>
       {actions.length ? actions.slice(0,4).map((action) => <button className={action.priority === 'high' ? 'nj-next-action high' : 'nj-next-action'} key={action.id} onClick={action.onClick}>
         <span className="nj-next-action-icon">{action.priority === 'high' ? <CircleAlert size={15}/> : <CheckCircle2 size={15}/>}</span>
         <span><strong>{action.title}</strong><small>{action.reason}</small></span>
         <em>{action.label}</em><ArrowRight size={14}/>
       </button>) : <div className="nj-next-actions-clear"><CheckCircle2 size={17}/><span><strong>You’re caught up.</strong><small>Nightjar has no urgent account actions to suggest right now.</small></span></div>}
-    </div>
+    </div>}
   </section>;
 }

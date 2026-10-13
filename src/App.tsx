@@ -4412,11 +4412,6 @@ function App() {
     ...(messageAwaitingReplyCount > 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'awaiting-reply', title:`${messageAwaitingReplyCount} conversation${messageAwaitingReplyCount === 1 ? '' : 's'} awaiting a reply`, reason:'Your most recent message in these threads has been unanswered for at least 48 hours. A single follow-up reminder can be sent from the Inbox; Nightjar never sends repeated reminders automatically.', label:'Review threads', onClick:()=>navigate('messages') }] : []),
     ...(notificationUnreadCount > 0 ? [{ id:'notifications', title:`Review ${notificationUnreadCount} unread update${notificationUnreadCount === 1 ? '' : 's'}`, reason:'These are recent account or community changes you have not reviewed yet.', label:'Open updates', onClick:()=>setNotificationsOpen(true) }] : []),
   ];
-  const listenerActions: RoleDashboardAction[] = [
-    ...baseActions,
-    ...(!currentIntent ? [{ id:'intent', title:'Tell Nightjar what fits tonight', reason:'Session intent changes recommendations for this session without redefining your long-term taste.', label:'Choose intent', onClick:()=>document.getElementById('for-you')?.scrollIntoView({behavior:'smooth',block:'start'}) }] : []),
-    ...(!favouriteReleaseIds.length ? [{ id:'save-first', title:'Save a first favourite', reason:'Favourites give your library useful anchors while your recommendation graph develops.', label:'Browse releases', onClick:()=>document.getElementById('catalogue')?.scrollIntoView({behavior:'smooth'}) }] : []),
-  ];
   const creatorActions: RoleDashboardAction[] = [
     ...baseActions,
     ...(creatorDashboard.releases.length === 0 ? [{ id:'publish', title:'Create your first release', reason:'Your public catalogue is empty, so Listener discovery has nothing to surface yet.', label:'Start release', priority:'high' as const, onClick:()=>document.querySelector('.creator-audio-pipeline')?.scrollIntoView({behavior:'smooth'}) }] : []),
@@ -4578,18 +4573,6 @@ function App() {
           </div>}
         {view === 'discover' && (
           <section className="page-wrap nj-animate">
-            {effectiveRole === 'listener' && !liveRolePreview && <RoleDashboard
-              eyebrow="LISTENER HOME"
-              title="Your Nightjar, right now."
-              description="Useful account and discovery actions based on what you have explicitly saved, followed or left unfinished."
-              metrics={[
-                {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness',destination:'your profile',onClick:openProfileEditor},
-                {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases',destination:'your library',onClick:()=>navigate('library')},
-                {label:'Following',value:followingProfileIds.length,detail:'Public profiles',destination:'the professional directory',onClick:()=>navigate('creators')},
-                {label:'Updates',value:notificationUnreadCount,detail:'Unread activity',destination:'notifications',onClick:()=>{setNotificationsOpen(true);window.scrollTo({top:0,behavior:'smooth'});}},
-              ]}
-              actions={listenerActions}
-            />}
             <section className="hero-section">
               <div className="hero-copy">
                 <div className="hero-kicker">
@@ -5007,6 +4990,20 @@ function App() {
                 {(!canAdmin || interactiveRoleTest) && <button type="button" className="primary-button" onClick={openMyRoles}><ShieldCheck size={16} /> My Roles · Apply or switch</button>}
               </div>
             </div>
+
+            {effectiveRole === 'listener' && !liveRolePreview && (
+              <RoleDashboard
+                eyebrow="LISTENER ACCOUNT"
+                title="Your Nightjar at a glance."
+                description="Your profile, saved releases, followed profiles and latest account activity in one place."
+                metrics={[
+                  {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness',destination:'your profile',onClick:()=>document.querySelector('.premium-user-profile')?.scrollIntoView({behavior:'smooth',block:'start'})},
+                  {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases',destination:'your library',onClick:()=>navigate('library')},
+                  {label:'Following',value:followingProfileIds.length,detail:'Public profiles',destination:'the professional directory',onClick:()=>navigate('creators')},
+                  {label:'Updates',value:notificationUnreadCount,detail:'Unread activity',destination:'notifications',onClick:()=>{setNotificationsOpen(true);window.scrollTo({top:0,behavior:'smooth'});}},
+                ]}
+              />
+            )}
 
             {agePilotEligible && effectiveRole !== 'admin' && <section className="nj-didit-member-pilot" aria-label="Voluntary identity verification pilot">
               <div className="nj-didit-member-pilot-heading">
