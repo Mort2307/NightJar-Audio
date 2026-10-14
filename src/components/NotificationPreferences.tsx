@@ -168,7 +168,6 @@ export default function NotificationPreferences({ notify, simulationMode = false
         ['newFollowers','Someone follows me'],
         ['followedProfiles','People I follow / spotlights'],
         ['collaborations','Collaboration updates'],
-        ['payments','Payment updates'],
         ['comments','Comments / community'],
         ['messages','Private messages'],
         ['announcements','Nightjar announcements'],
