@@ -26,8 +26,7 @@ initializeApp();
 
 const db = getFirestore();
 const REGION = 'europe-west2';
-const DIDIT_LIVE_PILOT_ADMINS_ONLY = true; // Closed beta: billable age sessions are admin-only.
-const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
+// Didit 18+ approval is required for all accounts, including invited testers and owners.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
 const NIGHTJAR_GMAIL_CLIENT_ID = defineSecret('NIGHTJAR_GMAIL_CLIENT_ID');
@@ -4523,42 +4522,10 @@ export const adminSetTestAccess = onCall({ region: REGION }, async (request) => 
   return { userId, testAccess: enabled };
 });
 
-// Closed-beta Didit cohort: only explicitly selected existing tester accounts can
-// start a provider verification. This does NOT revoke their normal beta bypass,
-// start a billable session, or confer a verified identity.
-export const adminSetDiditPilotAccess = onCall({ region: REGION }, async (request) => {
-  const admin = requireAdminIdentity(request);
-  const input = (request.data ?? {}) as Record<string, unknown>;
-  const email = cleanEmail(input.email);
-  const enabled = input.enabled === true;
-  if (!validEmailAddress(email) || typeof input.enabled !== 'boolean') {
-    throw new HttpsError('invalid-argument', 'Provide one valid beta tester email and an explicit enabled setting.');
-  }
-  if (ADMIN_EMAILS.has(email)) {
-    throw new HttpsError('failed-precondition', 'Administrators already have their own separate Didit pilot.');
-  }
-  const matching = await db.collection('accounts').where('email', '==', email).limit(3).get();
-  if (matching.empty) throw new HttpsError('not-found', 'Ask this tester to register and verify their email first.');
-  if (matching.size !== 1) throw new HttpsError('failed-precondition', 'Multiple records matched this email. Resolve the duplicate identity first.');
-  const account = matching.docs[0];
-  const data = account.data() ?? {};
-  if (data.status === 'suspended') {
-    throw new HttpsError('failed-precondition', 'Suspended accounts cannot participate in identity verification pilots.');
-  }
-  if (enabled && (data.emailVerified !== true ||
-    !(data.testAccess === true || await testerAccessForEmail(email)))) {
-    throw new HttpsError('failed-precondition', 'Only registered, email-verified, allowlisted beta testers can join the Didit pilot.');
-  }
-  if (data.diditPilotEnabled === enabled) {
-    return { email, enabled, unchanged: true };
-  }
-  await account.ref.set({
-    diditPilotEnabled: enabled,
-    diditPilotUpdatedBy: admin.uid,
-    diditPilotUpdatedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { email, enabled, unchanged: false };
+// Legacy beta-pilot permission is retired. All invited testers use the same live Didit gate.
+export const adminSetDiditPilotAccess = onCall({ region: REGION }, async request => {
+  requireAdminIdentity(request);
+  throw new HttpsError('failed-precondition', 'Individual Didit enrolment is no longer needed: verification is required for every Nightjar account.');
 });
 
 export const adminSetAccountRole = onCall({ region: REGION }, async (request) => {
@@ -5294,39 +5261,11 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
   };
 });
 
-const temporaryAgeBypassFor = async (uid: string) => {
-  if (!TESTING_AGE_ASSURANCE_BYPASS) {
-    return { allowed: false, reason: null as string | null };
-  }
-  const snapshot = await accountRef(uid).get();
-  const data = snapshot.data() ?? {};
-  const email = cleanEmail(data.email);
-  if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' };
-  if (data.testAccess === true || await testerAccessForEmail(email)) {
-    return { allowed: true, reason: 'approved-tester' };
-  }
-  return { allowed: false, reason: null as string | null };
-};
-
 const requireAgeVerified = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
-  const persistentVerified = diditPass(data);
-  if (persistentVerified) return data;
-
-  const bypass = await temporaryAgeBypassFor(uid);
-  if (bypass.allowed) {
-    return {
-      verified: true,
-      status: 'COMPLETE',
-      provider: 'temporary-test-access',
-      environment: 'development',
-      temporaryBypass: true,
-      temporaryBypassReason: bypass.reason,
-    };
-  }
-
-  throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
+  if (diditPass(data)) return data;
+  throw new HttpsError('permission-denied', 'A completed live Didit 18+ verification is required for Nightjar adult content.');
 };
 
 export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) => {
@@ -6365,73 +6304,47 @@ export const ageStatus = onCall({
 }, async request => {
   const identity = await requireActiveIdentity(request);
   const data = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
-  const persistentlyVerified = diditPass(data);
-  const bypass = persistentlyVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
-  const pilotAccess = identity.admin || (await accountRef(identity.uid).get()).data()?.diditPilotEnabled === true;
+  const verified = diditPass(data);
   return {
-    verified: persistentlyVerified || bypass.allowed,
-    diditPilotEligible: pilotAccess,
-    status: persistentlyVerified || bypass.allowed ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
-    // The actual provider decision is separate from temporary test access.
-    providerVerified: persistentlyVerified,
+    verified,
+    providerVerified: verified,
+    status: verified ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
     providerStatus: String(data.status ?? 'NOT_STARTED'),
-    livePilotAvailable: pilotAccess && diditConfigured() && diditMode() === 'live',
+    diditPilotEligible: false,
+    livePilotAvailable: diditConfigured() && diditMode() === 'live',
     ageThreshold: 18,
-    configured: diditConfigured(),
-    provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
-    environment: diditMode(), // Report ACTUAL configured provider mode even when tester bypass is active. Prevents chargeable live sessions being mislabelled as sandbox.
-    verifiedAt: persistentlyVerified ? toIso(data.verifiedAt) : null,
+    configured: diditConfigured() && diditMode() === 'live',
+    provider: 'didit',
+    environment: diditMode(),
+    verifiedAt: verified ? toIso(data.verifiedAt) : null,
     reverifyRequired: data.reverifyRequired === true,
-    sessionActive: ['PENDING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.status ?? '')),
-    temporaryBypass: bypass.allowed,
-    temporaryBypassReason: bypass.reason,
-    testAvailable: identity.admin || bypass.allowed,
+    sessionActive: ['PENDING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED','AWAITING_USER'].includes(String(data.status ?? '')),
+    temporaryBypass: false,
+    temporaryBypassReason: null,
+    testAvailable: false,
   };
 });
 
+// Never create a paid session on login or account creation. Only this explicit
+// user action can initiate a check, and Didit handles it once per account.
 export const startAgeAssurance = onCall({
   region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
 }, async request => {
   const identity = await requireActiveIdentity(request);
   const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
   if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
-  if (diditConfigured()) {
-    const individuallyApprovedPilot = !identity.admin &&
-      (await accountRef(identity.uid).get()).data()?.diditPilotEnabled === true;
-    if (DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity.admin && !individuallyApprovedPilot) {
-      // Regular beta testers keep their bypass and never start billable sessions.
-      const bypass = await temporaryAgeBypassFor(identity.uid);
-      if (bypass.allowed) return {
-        verified: true, status: 'COMPLETE', configured: true,
-        provider: 'temporary-test-access', environment: 'development',
-        temporaryBypass: true, temporaryBypassReason: bypass.reason,
-      };
-      throw new HttpsError('permission-denied', 'Live Didit verification is limited to administrators and explicitly enrolled pilot testers.');
-    }
-    return startDiditSession(identity.uid);
+  if (!diditConfigured() || diditMode() !== 'live') {
+    throw new HttpsError('failed-precondition',
+      'Live 18+ verification is not available yet. Nightjar cannot grant adult access until Didit is ready.');
   }
-  const bypass = await temporaryAgeBypassFor(identity.uid);
-  if (bypass.allowed) return {
-    verified: true, status: 'COMPLETE', configured: false,
-    provider: 'temporary-test-access', environment: 'development',
-    temporaryBypass: true, temporaryBypassReason: bypass.reason,
-  };
-  throw new HttpsError('failed-precondition', 'Didit verification is not configured.');
+  return startDiditSession(identity.uid);
 });
 
-export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
-  const identity = requireAdminIdentity(request);
-  await db.collection('ageAssurance').doc(identity.uid).set({
-    verified: true,
-    status: 'COMPLETE',
-    ageThreshold: 18,
-    provider: 'admin-test',
-    environment: 'development',
-    testMode: true,
-    verifiedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { verified: true, status: 'COMPLETE', provider: 'admin-test' };
+// Retained as a fail-closed compatibility endpoint for outdated clients.
+// No simulated administrator approval is valid for access to adult content.
+export const adminAgeTestPass = onCall({ region: REGION }, async request => {
+  requireAdminIdentity(request);
+  throw new HttpsError('failed-precondition', 'Test approvals cannot replace live Didit age verification.');
 });
 
 export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (request) => {
