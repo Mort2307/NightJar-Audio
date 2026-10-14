@@ -22,11 +22,23 @@ export type AgeStatus = {
   temporaryBypassReason?: string | null;
 };
 
+export type DiditAdminDashboard = {
+  counts: { total:number; approved:number; pending:number; review:number; failed:number };
+  recent: Array<{ account:string; status:string; environment:string; verified:boolean; sessionId:string|null; verifiedAt:string|null; updatedAt:string|null; reverifyRequired:boolean }>;
+  truncated:boolean;
+  providerConsole:string;
+  retentionWindowConfirmed:boolean;
+  note:string;
+};
+
+const diditDashboardCall = httpsCallable<void, DiditAdminDashboard>(functions, 'adminDiditDashboard');
+
 const statusCall = httpsCallable<void, AgeStatus>(functions, 'ageStatus');
 const startCall = httpsCallable<void, Record<string, unknown>>(functions, 'startAgeAssurance');
 const testPassCall = httpsCallable<void, { verified: boolean; status: string; provider: string }>(functions, 'adminAgeTestPass');
 
 export const nightjarAge = {
+  async adminDashboard() { return (await diditDashboardCall()).data; },
   async status() {
     return (await statusCall()).data;
   },
