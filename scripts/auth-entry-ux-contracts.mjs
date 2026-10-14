@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const access = fs.readFileSync('src/components/AccountAccess.tsx', 'utf8');
 const portal = fs.readFileSync('src/components/AccountPortal.tsx', 'utf8');
 const auth = fs.readFileSync('src/platform/firebase-auth.ts', 'utf8');
+const styles = fs.readFileSync('src/index.css', 'utf8');
 
 assert.match(access, /<form className="account-access-card" onSubmit=/, 'login must submit via Enter as well as tapping the action');
 assert.match(access, /type="submit" className="primary-button account-access-submit"/, 'primary auth action must be a genuine submit');
@@ -21,5 +22,10 @@ assert.match(portal, /setAuthReady\(true\)/, 'wait for persisted Firebase authen
 assert.match(portal, /authReady && !identity\?\.emailVerified/, 'avoid showing a false logged-out state');
 assert.match(portal, /Retry opening my account/, 'backend hiccups must be recoverable without changing password');
 assert.match(auth, /browserLocalPersistence/, 'keep users signed in across reloads where supported');
+assert.match(access, /Signing in securely…/, 'password authentication must acknowledge a tap immediately');
+assert.match(access, /account-access-passkey/, 'the dedicated passkey action must retain its gold backing');
+assert.match(styles, /nj-auth-inline-spinner/, 'password sign-in must expose visible progress');
+assert.match(portal, /activeAccountLoadRef/, 'auth observation and form callbacks must share one account lookup');
+assert.doesNotMatch(portal, /await nightjarAuth\.idToken\(true\)/, 'a valid sign-in must not force a redundant token refresh');
 
 console.log('Nightjar authentication, recovery and session UX contracts passed.');
