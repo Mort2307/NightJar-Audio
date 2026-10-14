@@ -1,6 +1,6 @@
 # Nightjar — Didit six-month verification-evidence retention
 
-**Owner selection:** 14 October 2026. The owner selected **6 months** in Didit **App Settings → Data retention**. The screenshot shows that option checked. **Persistence has not been independently verified**: close the menu, allow any Save/Apply action, revisit the setting and confirm the selected value stays at **6 months** for the **Nightjar live application**.
+**Owner-confirmed configuration (14 October 2026):** Nightjar's operator selected and subsequently confirmed **6 months** was saved in Didit **App Settings → Data retention**, and reported that Didit's in-app documents were signed. The confirmation is an owner attestation, **not** an independent API inspection or evidence that the Nightjar Firebase integration is working.
 
 ## Scope, purpose and limits
 
@@ -24,8 +24,9 @@
 ## Evidence status
 
 - **Selected in the Didit console:** six months (owner-provided screenshot on 14 October 2026).
-- **Saved/persisted on the live application:** pending confirmation by re-opening the setting.
-- **Organisation-wide model-improvement opt-out:** pending confirmation.
+- **Saved/persisted on the Didit application:** confirmed by the Nightjar operator on 14 October 2026; not independently API-verifiable through the current GitHub integration.
+- **Didit in-app agreement documents:** signed and completed, as reported by the Nightjar operator on 14 October 2026.
+- **Organisation-wide model-improvement opt-out:** pending separate confirmation; signed documents do not establish this opt-out.
 - **Separate provider audit / template retention:** pending compliance review.
 - **Live production 18+ workflow and webhook readiness:** must be tested before enforcing the gate.
 
