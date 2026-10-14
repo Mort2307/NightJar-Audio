@@ -17,7 +17,8 @@ assert.match(start, /if \(diditPass\(record\)\) return \{ verified: true/, 'appr
 assert.match(start, /diditMode\(\) !== 'live'/, 'only the live provider can grant access');
 assert.match(start, /return startDiditSession\(identity.uid\)/, 'explicit check is bound to authenticated account');
 assert.doesNotMatch(start, /DIDIT_LIVE_PILOT_ADMINS_ONLY|diditPilotEnabled|temporaryAgeBypassFor/, 'no pilot restriction or tester bypass');
-assert.match(protectedGate, /if \(diditPass\(data\)\) return data/, 'adult content must require live saved approval');
+assert.match(protectedGate, /if \(diditPass\(data\)\) \{[\s\S]*?return data;/, 'adult content must require live saved approval and acknowledgement');
+assert.match(protectedGate, /requireAgeNoticeAcknowledgement\(uid\)/, 'verified users must acknowledge current Didit notice without repeating ID check');
 assert.doesNotMatch(protectedGate, /testAccess|temporaryAgeBypassFor/, 'testing must not bypass adult content checks');
 assert.match(gift, /if \(!diditPass\(age.data\(\)\)\)/, 'Nightjar gift endpoints must use the same gate');
 assert.doesNotMatch(gift, /TESTING_AGE_ASSURANCE_BYPASS|temporaryTestAccess/, 'gifting has no remaining QA bypass');
