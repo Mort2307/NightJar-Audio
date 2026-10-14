@@ -149,11 +149,13 @@ export const nightjarPasskeys = {
     catch (error) { throw passkeyFailure('REGISTER_VERIFY', error); }
   },
 
-  async signIn(expectedUserId?: string, signal?: AbortSignal): Promise<NightjarIdentity> {
+  async signIn(expectedUserId?: string, signal?: AbortSignal, onProgress?: (step: NightjarPasskeyStep) => void): Promise<NightjarIdentity> {
     if (!this.supported()) throw new NightjarPasskeyError('LOGIN_DEVICE', 'UNSUPPORTED', 'Passkey sign-in is unavailable on this device. Use your email and password.');
+    onProgress?.('LOGIN_START');
     let data: Challenge;
     try { data = (await beginSignIn(expectedUserId ? { expectedUserId } : {})).data; }
     catch (error) { throw passkeyFailure('LOGIN_START', error); }
+    onProgress?.('LOGIN_DEVICE');
     let credential: Credential | null;
     try {
       const o = data.options;
@@ -167,10 +169,12 @@ export const nightjarPasskeys = {
     if (!credential || credential.type !== 'public-key' || signal?.aborted) {
       throw new NightjarPasskeyError('LOGIN_DEVICE', 'CANCELLED', 'Passkey sign-in was cancelled.');
     }
+    onProgress?.('LOGIN_VERIFY');
     let reply: { token: string };
     try { reply = (await finishSignIn({ challengeId: data.challengeId, response: serialize(credential as PublicKeyCredential, false) })).data; }
     catch (error) { throw passkeyFailure('LOGIN_VERIFY', error); }
     if (signal?.aborted) throw new NightjarPasskeyError('LOGIN_DEVICE', 'CANCELLED', 'Passkey sign-in was cancelled.');
+    onProgress?.('LOGIN_SESSION');
     let result;
     try { result = await signInWithCustomToken(firebaseAuth, reply.token); }
     catch (error) { throw passkeyFailure('LOGIN_SESSION', error); }
