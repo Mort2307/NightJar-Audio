@@ -511,6 +511,7 @@ function App() {
   const [ageProviderVerified, setAgeProviderVerified] = useState(false);
   const [ageProviderStatus, setAgeProviderStatus] = useState('NOT_STARTED');
   const [ageLivePilotAvailable, setAgeLivePilotAvailable] = useState(false);
+  const [ageAdminTestClaimed, setAgeAdminTestClaimed] = useState(false);
   const [agePilotEligible, setAgePilotEligible] = useState(false);
   const [agePilotConsent, setAgePilotConsent] = useState(false);
   const [diditPilotEmail, setDiditPilotEmail] = useState('');
@@ -2039,6 +2040,7 @@ function App() {
       if (data.providerVerified === true) setAgeLaunchUrl(null);
       setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
       setAgeLivePilotAvailable(data.livePilotAvailable === true);
+      setAgeAdminTestClaimed(data.controlledAdminTestClaimed === true);
       setAgePilotEligible(data.diditPilotEligible === true);
       setAgeVerifiedAt(data.verifiedAt ?? null);
       setAgeReverifyRequired(data.reverifyRequired === true);
@@ -2129,6 +2131,7 @@ function App() {
         if (alreadyVerified) { notify('Test access or permanent verification is already active. No paid Didit check was created.'); return; }
       }
       const data = await nightjarAge.start(adminPilot && DIDIT_VERIFICATION_PAUSED);
+      if (adminPilot && DIDIT_VERIFICATION_PAUSED) setAgeAdminTestClaimed(true);
       setAgeConfigured(Boolean(data.configured));
       setAgeProvider(String(data.provider ?? 'didit'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
@@ -5543,7 +5546,7 @@ function App() {
               <p>All public and member Didit checks remain offline. Only an authenticated Nightjar administrator can intentionally claim the single live diagnostic attempt for the entire maintenance period. If it fails, do not retry: review the server logs and Didit audit entry.</p>
               <div className="demo-state-line">
                 <span className="status-pill warning">PUBLIC VERIFICATION OFFLINE</span>
-                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'ALREADY VERIFIED' : ageProviderStatus.replaceAll('_', ' ')}</span>
+                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'ALREADY VERIFIED' : ageAdminTestClaimed ? 'TEST CLAIMED' : ageProviderStatus.replaceAll('_', ' ')}</span>
                 <span className={ageEnvironment === 'live' ? 'status-pill' : 'status-pill muted'}>{ageEnvironment === 'live' ? 'LIVE PROVIDER' : 'NOT LIVE'}</span>
               </div>
               <a className="nj-didit-notice-link" href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Read Nightjar's Age Verification &amp; Didit Privacy Notice <ArrowRight size={14}/></a>
@@ -5556,8 +5559,8 @@ function App() {
                 <span>I explicitly choose to start the one permitted live Didit identity check on my own account. I understand this may incur a charge, uses my government ID and facial/liveness evidence, and cannot be automatically retried.</span>
               </label>}
               <div className="admin-member-multi-role-actions">
-                <button type="button" className="primary-button" disabled={ageLoading || !ageConfigured || ageEnvironment !== 'live' || ageProviderVerified || !ageDiditPermission || (!ageNoticeAccepted && !ageNoticeAcknowledged) || simulationMode || demoMode}
-                  onClick={() => void openAgeCheck(true)}>{ageLoading ? 'Starting controlled test…' : ageProviderVerified ? 'Verified · do not repeat' : 'Start one live admin test'}</button>
+                <button type="button" className="primary-button" disabled={ageLoading || ageAdminTestClaimed || !ageConfigured || ageEnvironment !== 'live' || ageProviderVerified || !ageDiditPermission || (!ageNoticeAccepted && !ageNoticeAcknowledged) || simulationMode || demoMode}
+                  onClick={() => void openAgeCheck(true)}>{ageLoading ? 'Starting controlled test…' : ageProviderVerified ? 'Verified · do not repeat' : ageAdminTestClaimed ? 'Test already claimed · no retries' : 'Start one live admin test'}</button>
                 <button type="button" className="secondary-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}>Refresh status (no paid check)</button>
                 {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open created Didit session <ArrowRight size={15}/></a>}
               </div>
