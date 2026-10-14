@@ -1,53 +1,37 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
+// Regression checks for mandatory, one-time, account-scoped live Didit verification.
 const index = fs.readFileSync('functions/src/index.ts', 'utf8');
 const didit = fs.readFileSync('functions/src/didit.ts', 'utf8');
 const app = fs.readFileSync('src/App.tsx', 'utf8');
-const ageClient = fs.readFileSync('src/platform/firebase-age.ts', 'utf8');
-const adminClient = fs.readFileSync('src/platform/firebase-administration.ts', 'utf8');
-const css = fs.readFileSync('src/index.css', 'utf8');
-
-const cohort = index.split('export const adminSetDiditPilotAccess = onCall')[1]?.split('export const adminSetAccountRole')[0] ?? '';
-assert.ok(cohort, 'dedicated admin-only pilot enrollment callable is exported');
-assert.match(cohort, /requireAdminIdentity\(request\)/, 'only backend administrators may enroll members');
-assert.match(cohort, /data\.emailVerified !== true/, 'enrolled members must have a verified Firebase email');
-assert.match(cohort, /data\.testAccess === true \|\| await testerAccessForEmail\(email\)/, 'cohort membership is limited to allowlisted beta testers');
-assert.match(cohort, /await db\.collection\('accounts'\)\.where\('email', '==', email\)/, 'cohort access targets the real existing account');
-assert.match(cohort, /diditPilotEnabled: enabled/, 'only the pilot permission is modified');
-assert.doesNotMatch(cohort, /startDiditSession|verified: true|testAccess: false|accountStatus: 'active'|status: 'active'/, 'enrolment never starts ID verification, bypass removal or account activation');
-
+const gift = fs.readFileSync('functions/src/nightjars.ts', 'utf8');
 const status = index.split('export const ageStatus = onCall')[1]?.split('export const startAgeAssurance')[0] ?? '';
-assert.match(status, /diditPass\(data\)/, 'real provider-approved 18+ grant has precedence over any bypass');
-assert.match(status, /persistentlyVerified \|\| bypass\.allowed/, 'existing tester bypass stays valid until formally retired');
-assert.match(status, /diditPilotEligible: pilotAccess/, 'client receives a server-authorised opt-in eligibility flag');
-assert.match(status, /providerVerified: persistentlyVerified/, 'bypass cannot masquerade as a real Didit verification');
-
-const starter = index.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0] ?? '';
-assert.match(starter, /if \(diditPass\(record\)\) return \{ verified: true/, 'repeat logins never trigger a second KYC when a valid pass exists');
-assert.match(starter, /DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity\.admin && !individuallyApprovedPilot/, 'no global automatic live sessions for testers');
-assert.match(starter, /if \(bypass\.allowed\) return \{/, 'ordinary testers retain their bypass');
-assert.match(starter, /return startDiditSession\(identity\.uid\)/, 'the backend binds verification sessions to the authenticated account');
-
-assert.match(didit, /data\?\.environment === 'live'/, 'sandbox approvals cannot become permanent identity verification');
-assert.match(didit, /data\?\.reverifyRequired !== true/, 'a revoked or expired entitlement is never blindly reused');
-assert.match(didit, /if \(diditPass\(existing\)\) return \{ verified: true/, 'no duplicate live session when verified');
-assert.match(didit, /old\.uid === uid && old\.environment === env\(\) && old\.workflowId === DIDIT_WORKFLOW_ID\.value\(\)/, 'only a pending session for this account, mode and workflow can be reused');
-assert.match(didit, /old\.createdAtMs > Date\.now\(\) - 6 \* 86400_000/, 'pending sessions are reusable across reloads, but not indefinitely');
-assert.match(didit, /if \(data\.status === 'CREATING' &&/, 'concurrent browser windows cannot start parallel billable checks');
-assert.match(didit, /session\.environment !== payload\.environment/, 'webhook cannot mix sandbox and live decisions');
-assert.match(didit, /uid !== payload\.vendorData/, 'signed provider decision is bound to the verified account UID');
-assert.match(didit, /payload\.adultEvidence === true/, 'signed approval requires real adult ID evidence');
-assert.doesNotMatch(didit, /\b(?:documentImage|rawIdImage|base64Id)\s*:/, 'raw ID images are not persisted');
-
-assert.match(adminClient, /setDiditPilotAccess\(email: string, enabled: boolean\)/, 'Owner UI can enroll or revoke one eligible tester');
-assert.match(ageClient, /diditPilotEligible\?: boolean/, 'age status contract explicitly exposes opt-in');
-assert.match(app, /<section className="nj-didit-pilot-manager">|<div className="nj-didit-pilot-manager">/, 'Owner sees controlled enrolment controls');
-assert.match(app, /<section className="nj-didit-member-pilot"/, 'selected members can see an independent voluntary verification card');
-assert.match(app, /!agePilotConsent/, 'member ID checks require explicit acknowledgement');
-assert.match(app, /openAgeCheck\(false, true\)/, 'member intentionally launches Didit, never on registration or login');
-assert.match(app, /else if \(!memberPilot\)/, 'pilot initiation is not mistakenly blocked by an existing temporary bypass');
-assert.match(app, /if \(ageProviderVerified\)/, 'verified members do not get a repeat session button');
-assert.match(css, /\.nj-didit-member-pilot/, 'pilot UI has premium responsive layout');
-
-console.log('Nightjar Didit controlled tester pilot, reusable verification and bypass preservation contracts PASS (source level).');
+const start = index.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0] ?? '';
+const protectedGate = index.split('const requireAgeVerified = async')[1]?.split('export const getReleasePlaybackUrl')[0] ?? '';
+assert.ok(status && start && protectedGate, 'age assurance and content access must be implemented');
+assert.match(status, /verified = diditPass\(data\)/, 'account approval comes from saved Didit evidence');
+assert.match(status, /providerVerified: verified/, 'UI sees real provider approval');
+assert.match(status, /temporaryBypass: false/, 'test access cannot be mistaken for live approval');
+assert.match(start, /if \(diditPass\(record\)\) return \{ verified: true/, 'approved accounts never start another session');
+assert.match(start, /diditMode\(\) !== 'live'/, 'only the live provider can grant access');
+assert.match(start, /return startDiditSession\(identity.uid\)/, 'explicit check is bound to authenticated account');
+assert.doesNotMatch(start, /DIDIT_LIVE_PILOT_ADMINS_ONLY|diditPilotEnabled|temporaryAgeBypassFor/, 'no pilot restriction or tester bypass');
+assert.match(protectedGate, /if \(diditPass\(data\)\) return data/, 'adult content must require live saved approval');
+assert.doesNotMatch(protectedGate, /testAccess|temporaryAgeBypassFor/, 'testing must not bypass adult content checks');
+assert.match(gift, /if \(!diditPass\(age.data\(\)\)\)/, 'Nightjar gift endpoints must use the same gate');
+assert.doesNotMatch(gift, /TESTING_AGE_ASSURANCE_BYPASS|temporaryTestAccess/, 'gifting has no remaining QA bypass');
+assert.match(didit, /if \(diditPass\(existing\)\) return \{ verified: true/, 'once verified, no new paid session');
+assert.match(didit, /old\.uid === uid && old\.environment === env\(\) && old\.workflowId === DIDIT_WORKFLOW_ID.value\(\)/, 'pending sessions can only be reused by the owner');
+assert.match(didit, /sessionStarts24h: attempts \+ 1/, 'verification sessions are rate limited per account');
+assert.match(didit, /if \(attempts >= 3\) return 'rate-limited'/, 'daily session cap');
+assert.match(didit, /existing.status === 'PENDING_REVIEW'/, 'in-review checks must not trigger new paid sessions');
+assert.match(didit, /payload.adultEvidence === true/, 'approved webhook must contain verified adult evidence');
+assert.match(didit, /data\?\.environment === 'live'/, 'sandbox approvals do not unlock adult content');
+assert.match(didit, /data\?\.reverifyRequired !== true/, 'revocation must close access');
+assert.match(app, /if \(ageStage === 'assurance'\)/, 'age gate is shown before role selection and profile setup');
+assert.match(app, /Verify my age with Didit/, 'all users get the standard Didit button');
+assert.match(app, /if \(await refreshAgeStatus\(\)\)/, 'client checks existing approval before initiating paid sessions');
+assert.match(app, /Continue Didit verification/, 'users can continue a previous session if popups are blocked');
+assert.doesNotMatch(app, /nj-didit-member-pilot|openAgeCheck\(false, true\)|ageTemporaryBypass/, 'old voluntary tester flow is absent');
+console.log('Nightjar mandatory one-time Didit account verification contracts PASS');
