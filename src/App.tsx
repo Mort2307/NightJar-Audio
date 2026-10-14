@@ -1021,7 +1021,7 @@ function App() {
         const peopleFromPath = value.match(/^admin\/people\/(listener|creator|writer|editor|artist|admin)$/)?.[1];
         setAdminPanel((panelFromPath ?? null) as typeof adminPanel);
         setAdminPeopleRole((peopleFromPath ?? null) as typeof adminPeopleRole);
-        const workspaceFromPath = value.match(/^admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)$/)?.[1];
+        const workspaceFromPath = value.match(/^admin\/workspace\/(overview|people|content|launch|didit|finance|security|assistance|tools)$/)?.[1];
         setAdminWorkspace((workspaceFromPath ?? 'overview') as AdminWorkspace);
       } else {
         setAdminPanel(null);
@@ -5295,7 +5295,7 @@ function App() {
           <section className={adminPanel || adminPeopleRole ? 'page-wrap admin-page admin-detail-active' : 'page-wrap admin-page'}>
             <div className="page-heading admin-owner-heading">
               <div><p className="eyebrow"><Settings2 size={14} /> ADMINISTRATOR WORKSPACE</p>
-              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', finance:'Finance & subscriptions', security:'Safety & security', assistance:'Admin assistance', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
+              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', didit:'Didit verification', finance:'Finance & subscriptions', security:'Safety & security', assistance:'Admin assistance', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
               <p>{adminWorkspace === 'overview' ? 'Daily priorities, pending decisions and the right tools — without endless scrolling.' : 'A focused Nightjar workpage. Choose another section above to move between administrative tasks.'}</p></div>
               <button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh</button>
             </div>
