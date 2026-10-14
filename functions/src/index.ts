@@ -5360,6 +5360,7 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
 
   if (data.status === 'released' && !identity.admin) {
     const subscription = await activeListeningSubscriptionFor(identity.uid);
+    const betaAccess = await betaListeningAccessFor(identity.uid, identity.email);
     const access = playbackAccessFor(data, identity.uid, { subscription, betaAccess });
     if (!access.allowed) {
       throw new HttpsError(
