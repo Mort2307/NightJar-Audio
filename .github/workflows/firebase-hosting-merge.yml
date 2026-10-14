@@ -286,6 +286,41 @@ jobs:
           gh run watch "$BACKEND_RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Writer asking-price API is live; internal financial projections remain admin-only."
 
+      # One-time release of the current versioned Didit agreement endpoints.
+      # Never start an age-verification session, change the existing beta bypass,
+      # or deploy the compulsory age gate in PR #154 as part of this release.
+      - name: Release Didit age-notice agreement endpoints before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-didit-age-legal-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f src/legal/nightjarLegal.ts
+          test -f src/platform/firebase-legal.ts
+          node scripts/didit-pilot-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=getLegalAgreementStatus,acceptLegalAgreements' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          BACKEND_RUN_ID=""
+          for attempt in $(seq 1 48); do
+            BACKEND_RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$BACKEND_RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$BACKEND_RUN_ID" ]]; then
+            echo "::error::Could not confirm scoped Didit legal backend release. Hosting remains unchanged."
+            exit 1
+          fi
+          echo "Age-notice agreement functions deployment: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${BACKEND_RUN_ID}"
+          gh run watch "$BACKEND_RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Didit notice acknowledgement API deployed. Mandatory age gate remains separate."
+
       - name: Deploy Hosting live
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
