@@ -47,7 +47,7 @@ const listing = index.split('export const listCatalogue = onCall')[1]?.split('ex
 const dashboard = index.split('export const adminDiditDashboard = onCall')[1]?.split('export const getAdminReleasePreviewUrl')[0] ?? '';
 assert.match(legalNotice, /NIGHTJAR_AGE_NOTICE_VERSION/, 'age notice is independently versioned');
 assert.match(legalNotice, /configured a six-month retention period/, 'The notice reflects the six-month retention confirmed by the Nightjar operator');
-assert.match(runbook, /not an independent API inspection/, 'Owner confirmation must remain distinct from independent API verification');
+assert.match(runbook, /owner attestation, \*\*not\*\* an independent API inspection/, 'Owner confirmation must remain distinct from independent API verification');
 assert.match(runbook, /six months/, 'Didit six-month retention target clearly documented');
 assert.match(runbook, /model.*training|model.*improve/i, 'organisational model-training opt-out documented');
 assert.match(start, /requireAgeNoticeAcknowledgement\(identity.uid\)/, 'legal acknowledgement is required before starting a provider check');
