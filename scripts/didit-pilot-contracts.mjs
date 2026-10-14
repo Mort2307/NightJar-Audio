@@ -47,7 +47,7 @@ const listing = index.split('export const listCatalogue = onCall')[1]?.split('ex
 const dashboard = index.split('export const adminDiditDashboard = onCall')[1]?.split('export const getAdminReleasePreviewUrl')[0] ?? '';
 assert.match(legalNotice, /NIGHTJAR_AGE_NOTICE_VERSION/, 'age notice is independently versioned');
 assert.match(legalNotice, /chosen six months as the retention period/, 'Didit six-month choice is disclosed without falsely asserting external save confirmation');
-assert.match(runbook, /NOT CONFIRMED IN DIDIT/, 'runbook must not misstate live provider configuration');
+assert.match(runbook, /Persistence has not been independently verified/, 'runbook must not misstate saved live provider configuration');
 assert.match(runbook, /six months/, 'Didit six-month retention target clearly documented');
 assert.match(runbook, /model.*training|model.*improve/i, 'organisational model-training opt-out documented');
 assert.match(start, /requireAgeNoticeAcknowledgement\(identity.uid\)/, 'legal acknowledgement is required before starting a provider check');
