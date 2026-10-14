@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Fingerprint, KeyRound, ShieldCheck } from 'lucide-react';
 import { nightjarAuth } from '../platform/firebase-auth';
-import { nightjarPasskeys, NightjarPasskeyError, passkeyDiagnostic } from '../platform/firebase-passkeys';
+import { nightjarPasskeys, NightjarPasskeyError, passkeyDiagnostic, type NightjarPasskeyStep } from '../platform/firebase-passkeys';
 import { nightjarQuickUnlock } from '../platform/nightjar-quick-unlock';
 
 const passwordFlowKey = 'nightjar.passkeys.password-fallback.v1';
@@ -32,6 +32,16 @@ const isPasswordFlow = () => {
     return window.location.pathname.startsWith('/account')
       && Number(sessionStorage.getItem(passwordFlowKey)) > Date.now();
   } catch { return false; }
+};
+
+const unlockStatus = (step: NightjarPasskeyStep | null) => {
+  switch (step) {
+    case 'LOGIN_START': return 'Connecting securely to Nightjar…';
+    case 'LOGIN_DEVICE': return 'Confirm your saved passkey on your device…';
+    case 'LOGIN_VERIFY': return 'Verifying your passkey with Nightjar…';
+    case 'LOGIN_SESSION': return 'Opening your secure Nightjar session…';
+    default: return 'Preparing secure passkey sign-in…';
+  }
 };
 
 const unlockError = (error: unknown) => {
@@ -65,6 +75,9 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   ));
   const [authReady, setAuthReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState<NightjarPasskeyStep | null>(null);
+  const [takingLonger, setTakingLonger] = useState(false);
+  const [passwordRedirecting, setPasswordRedirecting] = useState(false);
   const [message, setMessage] = useState('');
   const [diagnostic, setDiagnostic] = useState('');
   // No redundant Nightjar sign-in step: show the actual device passkey
@@ -76,6 +89,17 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   const attemptedAutomatically = useRef(false);
   const hiddenAt = useRef<number | null>(null);
   const supported = nightjarPasskeys.supported();
+
+  // A slow network must never look like a frozen login. This is informational:
+  // the native device prompt and server-side verification are never bypassed.
+  useEffect(() => {
+    if (!busy || !locked) {
+      setTakingLonger(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setTakingLonger(true), 5500);
+    return () => window.clearTimeout(timer);
+  }, [busy, locked]);
 
   // Refreshing the document reuses Firebase's persisted session. Only a fresh
   // launch/foreground timeout requires the passkey unlock.
@@ -125,11 +149,15 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
     const controller = new AbortController();
     aborted.current = controller;
     setBusy(true);
+    setStep('LOGIN_START');
+    setTakingLonger(false);
     setMessage('');
     setDiagnostic('');
     if (automatic) setManualUnlockVisible(false);
     try {
-      const identity = await nightjarPasskeys.signIn(preference.userId, controller.signal);
+      const identity = await nightjarPasskeys.signIn(preference.userId, controller.signal, (nextStep) => {
+        if (alive.current && !controller.signal.aborted) setStep(nextStep);
+      });
       if (!alive.current || controller.signal.aborted) return;
       // Only a full-page account-to-workspace redirect needs a one-time pass.
       // Main app unlocks never create a bypass for the next cold launch.
@@ -146,7 +174,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
         setManualUnlockVisible(true);
       }
     } finally {
-      if (alive.current) setBusy(false);
+      if (alive.current) { setBusy(false); setStep(null); }
       if (aborted.current === controller) aborted.current = null;
     }
   };
@@ -185,6 +213,8 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
         setLocked(true);
         setMessage('');
         setDiagnostic('');
+        setStep(null);
+        setTakingLonger(false);
         setManualUnlockVisible(!supported);
         // Protect the existing authenticated session behind the lock screen.
         // Do not sign out on backgrounding or force a second login afterward.
@@ -196,7 +226,8 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   }, [preference?.userId, allowedFlow]);
 
   const usePassword = async () => {
-    if (!preference) return;
+    if (!preference || passwordRedirecting) return;
+    setPasswordRedirecting(true);
     aborted.current?.abort();
     // The fallback bypass is scoped to the account route and expires quickly.
     // Password sign-in will establish a fresh Firebase session as usual.
@@ -215,11 +246,14 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
     return <main className="nj-launch-unlock nj-launch-unlock-auto" role="main" aria-label="Nightjar secure passkey sign-in">
       <div className="nj-launch-unlock-card nj-launch-unlock-waiting" role="status" aria-live="polite">
         <img src="/brand-logo" className="nj-launch-unlock-logo" alt="Nightjar logo"/>
+        <div className="nj-launch-unlock-biometric-emblem" aria-hidden="true"><Fingerprint size={25}/></div>
         <span className="mini-label">NIGHTJAR · SECURE SIGN-IN</span>
-        <p>{busy ? 'Confirm your saved passkey on your device…' : 'Opening your saved passkey…'}</p>
+        <p>{busy ? unlockStatus(step) : 'Preparing your saved passkey…'}</p>
+        <div className="nj-launch-unlock-progress" aria-hidden="true"><span /></div>
+        {takingLonger && <small className="nj-launch-unlock-long-wait">Still checking securely. A slower connection can take a little longer.</small>}
         <button type="button" className="ghost-button nj-launch-unlock-fallback"
-          onClick={() => void usePassword()}>
-          <KeyRound size={16} aria-hidden="true"/> Use email and password
+          disabled={passwordRedirecting} onClick={() => void usePassword()}>
+          <KeyRound size={16} aria-hidden="true"/> {passwordRedirecting ? 'Opening email sign-in…' : 'Use email and password'}
         </button>
       </div>
     </main>;
@@ -230,14 +264,16 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       <img src="/brand-logo" className="nj-launch-unlock-logo" alt="Nightjar logo"/>
       <span className="mini-label">NIGHTJAR · PRIVATE ACCESS</span>
       <h1 id="nj-launch-unlock-title">Welcome back.</h1>
-      <p>Unlock Nightjar with your device's fingerprint, Face ID or passkey.</p>
+      <p aria-live="polite">{busy ? unlockStatus(step) : "Unlock Nightjar with your device's fingerprint, Face ID or passkey."}</p>
+      {takingLonger && <small className="nj-launch-unlock-long-wait">Still checking securely. Your device or connection may be taking longer than usual.</small>}
       <button type="button" className="primary-button nj-launch-unlock-action"
         onClick={() => void unlock()} disabled={!authReady || busy || !supported}>
         <Fingerprint size={20} aria-hidden="true"/>
-        {busy ? 'Waiting for your device…' : !supported ? 'Biometrics unavailable on this device' : 'Unlock with biometrics'}
+        {busy ? 'Verifying securely…' : !supported ? 'Biometrics unavailable on this device' : 'Unlock with biometrics'}
       </button>
-      <button type="button" className="ghost-button nj-launch-unlock-fallback" onClick={() => void usePassword()}>
-        <KeyRound size={16} aria-hidden="true"/> Use email and password
+      <button type="button" className="ghost-button nj-launch-unlock-fallback"
+        disabled={passwordRedirecting} onClick={() => void usePassword()}>
+        <KeyRound size={16} aria-hidden="true"/> {passwordRedirecting ? 'Opening email sign-in…' : 'Use email and password'}
       </button>
       {message && <div className="nj-launch-unlock-message" role="status" aria-live="polite">
         <p>{message}</p>

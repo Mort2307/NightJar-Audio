@@ -373,9 +373,17 @@ export default function AccountAccess({
       </label>}
     </div>}
     {message && <p className="account-access-message" role="status" aria-live="polite">{message}</p>}
-    <button type="submit" className="primary-button account-access-submit" disabled={busy || (mode === 'register' && (!termsAccepted || !privacyRead || (registrationRoles.length > 0 && !professionalTermsAccepted)))}>{busy ? 'Working…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</button>
-    {mode === 'signin' && nightjarPasskeys.supported() && <button type="button" className="secondary-button account-access-submit" disabled={busy} onClick={() => void run(async () => {
-      const next = await nightjarPasskeys.signIn();
+    <button type="submit" className="primary-button account-access-submit" disabled={busy || (mode === 'register' && (!termsAccepted || !privacyRead || (registrationRoles.length > 0 && !professionalTermsAccepted)))}>
+      {busy && <span className="nj-auth-inline-spinner" aria-hidden="true"/>}
+      {busy ? mode === 'signin' ? 'Signing in securely…' : 'Processing securely…' : mode === 'register' ? 'Create approved tester account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}
+    </button>
+    {mode === 'signin' && nightjarPasskeys.supported() && <button type="button" className="secondary-button account-access-submit account-access-passkey" disabled={busy} onClick={() => void run(async () => {
+      const next = await nightjarPasskeys.signIn(undefined, undefined, (step) => {
+        setMessage(step === 'LOGIN_START' ? 'Connecting to Nightjar…'
+          : step === 'LOGIN_DEVICE' ? 'Confirm the passkey on your device…'
+          : step === 'LOGIN_VERIFY' ? 'Verifying your passkey securely…'
+          : 'Opening your Nightjar session…');
+      });
       onAuthenticated(next);
       if (next.emailVerified) void nightjarAuthSecurity.recordSuccess().catch(() => { /* analytics cannot block login */ });
       setMessage('Passkey verified. Opening Nightjar…');
