@@ -5,6 +5,8 @@ import { nightjarPasskeys, NightjarPasskeyError, passkeyDiagnostic } from '../pl
 import { nightjarQuickUnlock } from '../platform/nightjar-quick-unlock';
 
 const passwordFlowKey = 'nightjar.passkeys.password-fallback.v1';
+const lockedSessionKey = 'nightjar.passkeys.locked-workspace.v1';
+const rememberLock = (userId: string | null) => { try { if (userId) sessionStorage.setItem(lockedSessionKey,userId); else sessionStorage.removeItem(lockedSessionKey); } catch { /* optional */ } };
 /**
  * Refreshing or applying an in-app update must never act like leaving the app.
  * A fresh PWA navigation still requests the saved passkey. Web browsers cannot
@@ -18,7 +20,11 @@ const isPageRefresh = () => {
     sessionStorage.removeItem('nightjar.navigation-reload.v1');
     approvedUpdate = marker > 0 && Date.now() - marker < 90_000;
   } catch { /* browser session storage may be disabled */ }
-  return type === 'reload' || approvedUpdate;
+  // If Nightjar already locked itself after being backgrounded, pressing
+  // Refresh must never defeat that lock screen.
+  let workspaceLocked = false;
+  try { workspaceLocked = sessionStorage.getItem(lockedSessionKey) === nightjarQuickUnlock.preference()?.userId; } catch { /* optional */ }
+  return !workspaceLocked && (type === 'reload' || approvedUpdate);
 };
 
 const isPasswordFlow = () => {
@@ -77,6 +83,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
   // launch will require biometrics even if it occurs seconds after login.
   useEffect(() => {
     if (redirectGrace) nightjarQuickUnlock.lock();
+    if (locked && preference) rememberLock(preference.userId);
   }, [redirectGrace]);
 
   useEffect(() => {
@@ -96,6 +103,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       if (identity && identity.userId !== preference.userId) {
         // Another account is signed in on this device. A stale preference for
         // the previous account must not hijack or sign out the current member.
+        rememberLock(null);
         setLocked(false);
         setAuthReady(true);
         return;
@@ -129,6 +137,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       // redundant password screen. Preserve the authenticated Firebase user
       // and grant the one-page redirect allowance only on /account.
       if (window.location.pathname.startsWith('/account')) nightjarQuickUnlock.markUnlocked(identity.userId);
+      rememberLock(null);
       setLocked(false);
     } catch (error) {
       if (alive.current && !controller.signal.aborted) {
@@ -169,6 +178,7 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
       if (elapsed >= 2 * 60_000 && nightjarQuickUnlock.enabledFor(preference.userId)
         && (!nightjarAuth.current() || nightjarAuth.current()?.userId === preference.userId)) {
         nightjarQuickUnlock.lock();
+        rememberLock(preference.userId);
         aborted.current?.abort();
         attemptedAutomatically.current = false;
         setAuthReady(false);
@@ -243,5 +253,6 @@ export default function NightjarLaunchUnlock({ children }: { children: ReactNode
 /** A password login is just as valid as a biometric unlock for route redirects. */
 export const markPasswordAuthenticated = (uid: string) => {
   nightjarQuickUnlock.markUnlocked(uid);
+  rememberLock(null);
   try { sessionStorage.removeItem(passwordFlowKey); } catch { /* optional */ }
 };
