@@ -220,6 +220,40 @@ jobs:
           gh run watch "$BACKEND_RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Native Spotlight schedule deployed. Hosting may release."
 
+      # One-time member-finance embargo: protect callable responses in production
+      # BEFORE publishing the UI that removes paid/member-facing finance screens.
+      - name: Restrict beta finance callables before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-finance-embargo-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f scripts/member-finance-embargo-contracts.mjs
+          node scripts/member-finance-embargo-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=transparencySnapshot,myListeningAccess,listScriptMarketplace' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          echo "Deploying the 3 beta confidentiality callables before Hosting."
+          BACKEND_RUN_ID=""
+          for attempt in $(seq 1 48); do
+            BACKEND_RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$BACKEND_RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$BACKEND_RUN_ID" ]]; then
+            echo "::error::Finance embargo backend deployment not confirmed; Hosting remains unchanged."
+            exit 1
+          fi
+          echo "Beta finance backend: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${BACKEND_RUN_ID}"
+          gh run watch "$BACKEND_RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Member-facing financial details are now restricted by Firebase functions."
+
       - name: Deploy Hosting live
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
