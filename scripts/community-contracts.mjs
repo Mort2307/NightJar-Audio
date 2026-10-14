@@ -271,7 +271,7 @@ requireText(listenerDiscovery,'publicCreativeCredits', 'Discovery must link actu
 requireText(listenerDiscovery,'belongsToLibraryCategory(person,role)', 'Only eligible public professionals may be linked from release credits');
 requireText(listenerDiscovery,'onClick={()=>void onFollow(person.userId)}', 'Listener following must be an explicit user action');
 requireText(listenerLibrary,'onDiscoverCreators', 'Listener personal library must link to the Creator Collection');
-requireText(mobileNav,"label: 'Creators', accessibleLabel:'Discover creators and their work'", 'Listener mobile nav must surface Creators, not a hiring directory');
+requireText(mobileNav,"view:'creators', label:'Explore', icon:Search, accessibleLabel:'Discover creators and their work'", 'Listener Explore must lead to genuine Creator and professional discovery');
 
 if (failures.length) {
   console.error('COMMUNITY CONTRACT FAILURES');

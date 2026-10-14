@@ -89,6 +89,7 @@ import { nightjarReferrals } from './platform/firebase-referrals';
 import { publicProfileUrl, shareNightjarProfile, type ShareableProfileRole } from './platform/public-profile-share';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
 import MobileNavigation from './components/MobileNavigation';
+import { PersonalisedHome, HomeSection, WorkspaceSection } from './components/NightjarHomeLayout';
 import NightjarSettings from './components/NightjarSettings';
 import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
@@ -489,6 +490,7 @@ function App() {
   // Never show account entry or an adult workspace while Firebase and the
   // backend are restoring this session on refresh.
   const [sessionHydrating, setSessionHydrating] = useState(true);
+  const [sessionRestoreError, setSessionRestoreError] = useState(false);
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
@@ -1049,6 +1051,7 @@ function App() {
     const unsubscribe = nightjarAuth.observe((identity) => {
       if (cancelled) return;
       setSessionHydrating(true);
+      setSessionRestoreError(false);
       if (!identity) {
         setDemoMode(false);
         setSimulationMode(false);
@@ -1085,6 +1088,7 @@ function App() {
           // route available; all privileged actions remain server-checked.
           if (!cancelled && nightjarAuth.current()?.userId === identity.userId) {
             console.warn('Nightjar session restore failed', error);
+            setSessionRestoreError(true);
             setAgeStage('gate');
           }
         } finally {
@@ -1975,7 +1979,8 @@ function App() {
         setRole('admin');
         setAccountStatus('active');
         setRolePicker(false);
-        navigate('admin');
+        if (!window.location.pathname.startsWith('/admin')) navigate('admin');
+        else setView('admin');
         void loadAdminOverview();
         void loadSecurityAlerts();
         return;
@@ -1990,7 +1995,10 @@ function App() {
           setView('profile');
           setProfileRolesPage(true);
         } else {
-          navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'artist' : 'discover');
+          const requested = window.location.pathname.split('/')[1] as View;
+          const safeViews: View[] = data.role === 'listener' ? ['discover','library','creators','profile','settings','calendar','protection'] : ['discover','library','creators','profile','settings','calendar','protection','messages',data.role];
+          if (safeViews.includes(requested)) setView(requested);
+          else navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'artist' : 'discover');
         }
       } else {
         setRole(null);
@@ -4168,9 +4176,11 @@ function App() {
             <div><ShieldCheck size={18} /><div><strong>Adults only</strong><span>Nightjar remains an 18+ product. Approved QA accounts can use restricted temporary test access until the production age-assurance provider is live.</span></div></div>
             <div><Headphones size={18} /><div><strong>Audio first</strong><span>Built around voice, atmosphere and headphone immersion.</span></div></div>
           </div>
+          {sessionRestoreError && user && <div className="access-note" role="alert">Your Nightjar session is still saved, but we could not reconnect securely. Check your connection and retry without entering your password again.</div>}
+          {sessionRestoreError && user ? <button type="button" className="primary-button wide-button" disabled={accountLoading} onClick={() => { setSessionHydrating(true); setSessionRestoreError(false); void (async()=>{try { await loadAccount(); const verified=await refreshAgeStatus(); if(!verified)setAgeStage('assurance'); } catch {setSessionRestoreError(true);} finally {setSessionHydrating(false);} })(); }}>Retry session <RefreshCw size={17}/></button> :
           <button className="primary-button wide-button" disabled={accountLoading} onClick={() => void signIn()}>
             {accountLoading ? 'Opening secure sign-in…' : 'Sign in to Nightjar'} <ArrowRight size={17} />
-          </button>
+          </button>}
           <p className="access-fine">Testing build: age assurance is not globally bypassed. Only owner accounts and explicitly approved testers can use temporary QA access.</p>
         </section>
       </main>
@@ -4603,7 +4613,8 @@ function App() {
             />
           </div>}
         {view === 'discover' && (
-          <section className="page-wrap nj-animate">
+          <PersonalisedHome userId={user?.userId ?? "guest"} editable={!liveRolePreview && !simulationMode} onNavigate={navigate}>
+            <HomeSection id="featured" title="Featured audio">
             <section className="hero-section">
               <div className="hero-copy">
                 <div className="hero-kicker">
@@ -4614,7 +4625,7 @@ function App() {
                 <h1>Premium immersive<span> audio for adults.</span></h1>
                 <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
                 <div className="hero-actions">
-                  <button data-nj-preview-safe="true" className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
+                  <button data-nj-preview-safe="true" className="primary-button" onClick={() => { window.dispatchEvent(new CustomEvent('nightjar:open-home-section',{detail:'catalogue'})); window.setTimeout(()=>document.getElementById('nightjar-home-catalogue')?.scrollIntoView({behavior:'smooth'}),50); }}>Enter the listening room <ArrowRight size={16} /></button>
                   <button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
                 </div>
                 <div className="hero-signals">
@@ -4719,8 +4730,9 @@ function App() {
               </div>
             </section>
 
-            <section className="editorial-strip"><span>VOICE</span><span>STORY</span><span>ATMOSPHERE</span><span>CHARACTER</span><span>SOUND DESIGN</span><span>AFTER DARK</span></section>
+            </HomeSection>
 
+            <HomeSection id="spotlights" title="Community spotlights">
             <SpotlightExperience
               spotlightMeta={spotlightMeta}
               spotlights={[creatorSpotlight, writerSpotlight, editorSpotlight, artistSpotlight, listenerSpotlight].filter((person): person is Spotlight => person !== null)}
@@ -4733,11 +4745,13 @@ function App() {
               onShare={shareSpotlight}
               onListen={(releaseId) => { const track = tracks.find((item)=>item.id===releaseId); if (track) togglePlayback(track); }}
             />
+            </HomeSection>
 
-            <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} />
+            <HomeSection id="writers" title="Discover writers"><WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} /></HomeSection>
 
+            <HomeSection id="catalogue" title="Published audio">
             <section id="catalogue" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
+              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => { window.dispatchEvent(new CustomEvent('nightjar:open-home-section',{detail:'recommended'})); window.setTimeout(()=>document.getElementById('nightjar-home-recommended')?.scrollIntoView({behavior:'smooth'}),50); }}>Personalise <Sparkles size={14}/></button></div>
               {effectiveRole === 'listener' && !liveRolePreview && <ListeningDiscoveryControls
                 mood={selectedListeningMood} onMoodChange={setSelectedListeningMood}
                 boundaries={listeningBoundaries} onBoundariesChange={setListeningBoundaries}
@@ -4752,6 +4766,7 @@ function App() {
                 {!notificationReleaseCards.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
               </div>
             </section>
+            </HomeSection>
 
             {focusedContentScriptId && <section id="nightjar-public-script-marketplace" className="section-wrap" aria-label="Published Writer scripts">
               <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading approved Writer scripts" />}>
@@ -4769,6 +4784,7 @@ function App() {
               </Suspense>
             </section>}
 
+            <HomeSection id="recommended" title="For you">
             <section id="for-you" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><div className="nj-intent-control" aria-label="Current listening intent">{[
   ['','Open'],
@@ -4785,6 +4801,8 @@ function App() {
               </div>
             </section>
 
+            </HomeSection>
+            <HomeSection id="trending" title="Trending now">
             <section className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
               <div className="track-grid">
@@ -4793,19 +4811,24 @@ function App() {
               </div>
             </section>
 
-            <TransparencyPanel demoMode={demoMode} />
+            </HomeSection>
+            <div className="nj-home-transparency"><TransparencyPanel demoMode={demoMode} /></div>
 
+            <HomeSection id="creators" title="Voices worth following">
             <section className="creator-band section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
               <div className="creator-grid">{profileDirectory.filter((person) => person.role === 'creator').slice(0, 5).map((creator) => <button data-nj-preview-safe="true" className="creator-card" key={creator.userId} onClick={() => openPublicProfile(creator.userId)}><span className="avatar-large">{creator.avatarUrl ? <img className="avatar-approved-image" src={creator.avatarUrl} alt="" loading="lazy" decoding="async" /> : creator.avatarInitials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.headline || creator.bio || 'Nightjar creator profile.'}</em><small>{creator.releaseCount ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
               {!profileDirectory.some((person) => person.role === 'creator') && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
             </section>
 
+            </HomeSection>
+            <HomeSection id="studio" title="Creator opportunities">
             <section className="studio-feature section-wrap">
               <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>Clear work. Clear rates. Real analytics.</h2><p>Nightjar separates the equal capped standard creator rate from listening analytics. Commercial records stay grounded in confirmed billing rather than fabricated earnings.</p><button data-nj-preview-safe="true" className="primary-button" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
               {!liveRolePreview && <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>PAID SUBSCRIPTIONS</span><ChevronRight size={12}/><span>PUBLISHED RATE BAND</span><ChevronRight size={12}/><span>CAPPED EQUAL RATE</span></div></div>}
             </section>
-          </section>
+            </HomeSection>
+          </PersonalisedHome>
         )}
 
         {view === 'creators' && (
@@ -4919,7 +4942,7 @@ function App() {
               description="Publishing, profile and community actions surfaced from your current Nightjar state."
               metrics={[
                 {label:'Releases',value:creatorDashboard.releases.length,detail:'Current catalogue records',destination:'the release pipeline',onClick:()=>document.getElementById('creator-pipeline')?.scrollIntoView({behavior:'smooth',block:'start'})},
-                {label:'Qualified listens',value:creatorDashboard.metrics?.qualifiedListens ?? 0,detail:'Verified audience plays',destination:'listening insights',onClick:()=>document.querySelector('.nj-listening-insights')?.scrollIntoView({behavior:'smooth',block:'start'})},
+                {label:'Qualified listens',value:creatorDashboard.metrics?.qualifiedListens ?? 0,detail:'Verified audience plays',destination:'listening insights',onClick:()=>{window.dispatchEvent(new CustomEvent('nightjar:open-workspace-section',{detail:'creator-listening-insights'}));window.setTimeout(()=>document.querySelector('.nj-listening-insights')?.scrollIntoView({behavior:'smooth',block:'start'}),60);}},
                 {label:'Featured',value:(profile.featuredPortfolioIds ?? []).length,detail:'Profile showcase',destination:'your profile',onClick:openProfileEditor},
                 {label:'Collaborations',value:profileCompletedCollaborations,detail:'Completed on Nightjar',destination:'the collaboration workspace',onClick:()=>{const target=document.querySelector('.collaboration-hub');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});else navigate('profile');}},
                 {label:'Messages',value:messageUnreadCount,detail:messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : 'Unread private threads',destination:'messages',onClick:()=>navigate('messages')},
@@ -4932,23 +4955,23 @@ function App() {
             {!liveRolePreview && <div className="dashboard-metric-grid">
               {studioMetrics.map(([label, value]) => <div className="dashboard-metric" key={label}><span>{label}</span><strong>{creatorDashboardLoading ? '…' : value}</strong><em>Live record</em></div>)}
             </div>}
-            {!liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading creator listening insights" />}>
+            {!liveRolePreview && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-listening-insights" title="Listening insights" summary="Audience numbers and listening performance"><Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading creator listening insights" />}>
               <CreatorListeningInsights releases={creatorDashboard.releases} verifiedMinutes={Number(creatorDashboard.metrics?.verifiedListeningMinutes ?? 0)} loading={creatorDashboardLoading} onRefresh={() => { void loadCreatorDashboard(); }} />
-            </Suspense>}
+            </Suspense></WorkspaceSection>}
             {creatorOnly && Boolean(user?.userId) && !liveRolePreview && <VoiceCallingCardStudio
               creatorUserId={String(user?.userId ?? '')} releases={creatorDashboard.releases}
               notify={notify} simulationMode={simulationMode} />}
-            {!liveRolePreview && <div id="creator-pipeline">
+            {!liveRolePreview && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-release-pipeline" title="My audio releases" summary="Upload, manage drafts, submit and publish" defaultOpen><div id="creator-pipeline">
               {creatorOnly ? <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading Creator release tools" />}><CreatorAudioPipeline key={'creator-pipeline-' + demoSessionKey} releases={creatorDashboard.releases} accountStatus={accountStatus} canPublish={creatorOnly && accountStatus !== 'pending_review'} onRefresh={loadCreatorDashboard} notify={notify} simulationMode={simulationMode} onSimulationChange={updateSimulatedRelease} focusReleaseId={focusedReleaseId} onSubmitted={() => { void loadNotifications(productLoadEpoch.current); }} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); setReviewTrack((track) => track?.id === releaseId ? null : track); setFocusedReleaseId((id) => id === releaseId ? null : id); }} /></Suspense> : <div className="admin-note"><Mic2 size={17}/><div><strong>CREATOR STUDIO PREVIEW</strong><span>Administrator preview can inspect the interface; only an active Creator can upload, submit or publish real releases.</span></div></div>}
-            </div>}
-            {(creatorOnly || (canAdmin && !demoMode)) && <div className={liveRolePreview ? 'nj-creator-preview-marketplace' : undefined}>
+            </div></WorkspaceSection>}
+            {(creatorOnly || (canAdmin && !demoMode)) && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-script-marketplace" title="Script marketplace" summary="Browse available scripts and connect with writers"><div className={liveRolePreview ? 'nj-creator-preview-marketplace' : undefined}>
               <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading live script marketplace" />}>
                 <ScriptMarketplace key={'marketplace-' + demoSessionKey} notify={notify} onOpenWriter={openPublicProfile} onMessageUser={(userId,collaborationId)=>{setMessageRecipientUserId(userId);setMessageCollaborationId(collaborationId??null);navigate('messages');}} demoMode={demoMode} simulationMode={simulationMode} readOnlyPreview={canAdmin && !demoMode} onAdminAudit={liveRolePreview ? () => openAdminPanel('live-preview') : undefined} />
               </Suspense>
-            </div>}
+            </div></WorkspaceSection>}
             {canAdmin && !demoMode && !liveRolePreview && <div className="admin-note"><ShieldCheck size={18}/><div><strong>REAL CREATOR MARKETPLACE · READ ONLY</strong><span>These are actual approved scripts with Marketplace visibility. No fictional entries are shown, and you cannot send interest as another user. For unpublished tester uploads, use Admin → Live Role Preview to see why they are hidden.</span></div></div>}
-            {creatorOnly && accountStatus !== 'pending_review' && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading script rights offers" />}><ScriptLicenceWorkspace role="creator" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense>}
-            {creatorOnly && accountStatus !== 'pending_review' && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>}
+            {creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-licences" title="Licensing and rights" summary="Offers, agreements and protected rights"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading script rights offers" />}><ScriptLicenceWorkspace role="creator" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense></WorkspaceSection>}
+            {creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-collaborations" title="Collaborations" summary="Active projects, invitations and handoffs"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense></WorkspaceSection>}
             {canAdmin && !liveRolePreview && <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS · ADMIN PREVIEW</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Administrator planning preview only. This compensation model is not shown on member or professional profiles and should not be treated as a contractual earnings promise.</p></article>}
           </section>
         )}
@@ -5296,12 +5319,12 @@ function App() {
                 </label>
               </div>
             </div>
-            <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} readOnly={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div>{writerSelected.sourceFile&&<div className="writer-source-file"><div><Upload size={15}/><span><strong>{writerSelected.sourceFile.fileName}</strong><small>{Math.max(1,Math.round(Number(writerSelected.sourceFile.sizeBytes??0)/1024))} KB · protected source upload</small></span></div><span className="status-pill">PRIVATE SOURCE</span></div>}<textarea className="script-editor" value={writerSelected.content??''} readOnly={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder={writerSelected.sourceFile?'Optional editable text copy. Your uploaded source manuscript remains the protected original.':'Begin writing…'}/>{['Submitted','Under review'].includes(String(writerSelected.status)) && <p className="writer-submission-status"><ShieldCheck size={16}/> Submitted to NightJar for admin review. Your manuscript is protected while you wait; no Audio Editor assignment is required.</p>}{['Revision requested','Rejected'].includes(String(writerSelected.status)) && writerSelected.lastEditorialComment && <p className="writer-submission-status"><FileText size={16}/> Review feedback: {writerSelected.lastEditorialComment}</p>}<div className="editor-actions"><button className="secondary-button" disabled={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" disabled={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>document.getElementById('writer-rights-review')?.scrollIntoView({behavior:'smooth',block:'start'})}>{['Submitted','Under review'].includes(String(writerSelected.status)) ? 'Awaiting admin review' : ['Approved','Published'].includes(String(writerSelected.status)) ? 'Approved by NightJar' : 'Review rights & submit'}</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
-            {writerSelected && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading manuscript artwork controls" />}><WriterScriptArtwork key={'writer-artwork-' + String(writerSelected.id)} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode}/></Suspense>}
-            {writerSelected && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights controls" />}><WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} submitManuscript={submitWriterScript} /></Suspense>}
-            {writerSelected && String(writerSelected.status)!=='Draft' && <Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading NightJar review conversation" />}><ManuscriptReviewConversation key={'writer-review-thread-'+String(writerSelected.id)} scriptId={String(writerSelected.id)} audience="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense>}
-            <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights negotiations" />}><ScriptLicenceWorkspace role="writer" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense>
-            <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer collaborations" />}><CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense>
+            <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} readOnly={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div>{writerSelected.sourceFile&&<div className="writer-source-file"><div><Upload size={15}/><span><strong>{writerSelected.sourceFile.fileName}</strong><small>{Math.max(1,Math.round(Number(writerSelected.sourceFile.sizeBytes??0)/1024))} KB · protected source upload</small></span></div><span className="status-pill">PRIVATE SOURCE</span></div>}<textarea className="script-editor" value={writerSelected.content??''} readOnly={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder={writerSelected.sourceFile?'Optional editable text copy. Your uploaded source manuscript remains the protected original.':'Begin writing…'}/>{['Submitted','Under review'].includes(String(writerSelected.status)) && <p className="writer-submission-status"><ShieldCheck size={16}/> Submitted to NightJar for admin review. Your manuscript is protected while you wait; no Audio Editor assignment is required.</p>}{['Revision requested','Rejected'].includes(String(writerSelected.status)) && writerSelected.lastEditorialComment && <p className="writer-submission-status"><FileText size={16}/> Review feedback: {writerSelected.lastEditorialComment}</p>}<div className="editor-actions"><button className="secondary-button" disabled={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>void saveWriterScript()}>Save</button><button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button><button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button><button className="primary-button" disabled={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>{window.dispatchEvent(new CustomEvent('nightjar:open-workspace-section',{detail:'writer-rights'}));window.setTimeout(()=>document.getElementById('writer-rights-review')?.scrollIntoView({behavior:'smooth',block:'start'}),50);}}>{['Submitted','Under review'].includes(String(writerSelected.status)) ? 'Awaiting admin review' : ['Approved','Published'].includes(String(writerSelected.status)) ? 'Approved by NightJar' : 'Review rights & submit'}</button><button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>{['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}</div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
+            {writerSelected && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-artwork" title="Manuscript artwork" summary="Optional cover art and approvals"><Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading manuscript artwork controls" />}><WriterScriptArtwork key={'writer-artwork-' + String(writerSelected.id)} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
+            {writerSelected && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-rights" title="Script rights and submission" summary="Licence terms and review" defaultOpen><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights controls" />}><WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} submitManuscript={submitWriterScript} /></Suspense></WorkspaceSection>}
+            {writerSelected && String(writerSelected.status)!=='Draft' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-review" title="Review conversation" summary="Comments and manuscript feedback" defaultOpen><Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading NightJar review conversation" />}><ManuscriptReviewConversation key={'writer-review-thread-'+String(writerSelected.id)} scriptId={String(writerSelected.id)} audience="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
+            <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-negotiations" title="Rights negotiations" summary="Offers and agreements"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights negotiations" />}><ScriptLicenceWorkspace role="writer" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense></WorkspaceSection>
+            <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-collaborations" title="Collaborations" summary="Projects and creative partnerships"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer collaborations" />}><CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense></WorkspaceSection>
           </section>
         )}
 
@@ -5805,7 +5828,7 @@ function App() {
           </button>
         </div>
       )}
-      {user && ageVerified && !liveRolePreview && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} messageUnreadCount={messageUnreadCount} messageNeedsReplyCount={messageNeedsReplyCount} />}
+      {user && ageVerified && !liveRolePreview && <MobileNavigation view={view} role={effectiveRole} onNavigate={navigate} onSearch={() => setCommandOpen(true)} onActivity={() => { setNotificationsOpen(true); window.scrollTo({top:0,behavior:"smooth"}); }} activityUnreadCount={notificationUnreadCount} messageUnreadCount={messageUnreadCount} messageNeedsReplyCount={messageNeedsReplyCount} />}
 
       <footer className="site-footer"><div className="footer-brand">{logoUrl ? <img className="brand-logo footer-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo footer-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<strong>NIGHTJAR</strong></div><span>Premium immersive audio for adults.</span><nav className="footer-legal-links" aria-label="Legal"><a href="/legal">T&Cs Centre</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/professional">Professional terms</a></nav><span>{user ? accountLabel + ' account' : 'Adult access required'}</span></footer>
 

@@ -7,7 +7,7 @@ import {
   nightjarAccessibility,
   type AccessibilityPreferences,
 } from '../platform/firebase-accessibility';
-import { AudioLines, BookmarkPlus, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, Clock3, Headphones, Pause, Play, Settings2, Volume2, X } from 'lucide-react';
+import { AudioLines, BookmarkPlus, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, Clock3, Headphones, Minimize2, Maximize2, Pause, Play, Settings2, Volume2, X } from 'lucide-react';
 import { useNightjarEqualizer } from '../hooks/useNightjarEqualizer';
 import { useNightjarMediaSession } from '../hooks/useNightjarMediaSession';
 import './nightjar-player-premium.css';
@@ -105,12 +105,15 @@ const parseTranscript = (transcript: string): TranscriptCue[] => {
 
 export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify, simulationMode = false, initialTranscriptOpen = false, initialSeekSeconds = null }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const miniPlayerButtonRef = useRef<HTMLButtonElement | null>(null);
   const lastProgressEvent = useRef(0);
   const listeningSessionId = useRef(crypto.randomUUID());
   const startedListeningSession = useRef('');
   const transcriptCueRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const transcriptRequestRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [minimised, setMinimised] = useState(false);
+  useEffect(() => { if (minimised) miniPlayerButtonRef.current?.focus(); }, [minimised]);
   const [momentOpen, setMomentOpen] = useState(false);
   const [momentLabel, setMomentLabel] = useState('');
   const [momentSaving, setMomentSaving] = useState(false);
@@ -141,18 +144,21 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const artwork = track?.artworkUrl && !artworkFailed ? track.artworkUrl : '/nightjar-home-512.png';
 
   useEffect(() => {
-    // Player acts as a contained modal; don't scroll the page beneath it.
+    // Full player acts as a modal; mini-player leaves the page scrollable.
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (!minimised) document.body.style.overflow = 'hidden';
     const dismiss = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        if (!minimised) setMinimised(true);
+        else onClose();
+      }
     };
     document.addEventListener('keydown', dismiss);
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', dismiss);
     };
-  }, [onClose]);
+  }, [onClose, minimised]);
 
   // Hardware Previous/Next should never route a subscriber to a release they
   // cannot play or to an audio card with no uploaded media.
@@ -398,9 +404,22 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     if (next) void loadTranscript();
   };
 
-  return <div className="nj-up-root">
+  return <div className={minimised ? 'nj-up-root is-minimised' : 'nj-up-root'}>
     <div className="nj-up-scrim" aria-hidden="true" />
-    <section className="nj-up-sheet" role="region" aria-label={'Nightjar player: ' + track.title}>
+    {minimised && <section className="nj-mini-player" role="region" aria-label="Nightjar mini-player">
+      <img src={artwork} alt="" onError={()=>setArtworkFailed(true)} />
+      <div className="nj-mini-player-info"><strong>{track.title}</strong><small>{track.creator} · {formatTime(position)}</small></div>
+      <button type="button" ref={miniPlayerButtonRef} className="nj-mini-play" onClick={()=>{
+        if (simulationMode) {setIsPlaying(v=>!v);return;}
+        const node=audioRef.current;if(!node)return;
+        if(node.paused) void node.play().catch(()=>notify('Playback could not start.'));
+        else node.pause();
+      }} aria-label={isPlaying?'Pause audio':'Resume audio'}>{isPlaying?<Pause size={19} fill="currentColor"/>:<Play size={19} fill="currentColor"/>}</button>
+      <button type="button" onClick={()=>setMinimised(false)} aria-label="Expand audio player"><Maximize2 size={19}/></button>
+      <button type="button" onClick={onClose} aria-label="Stop and close audio"><X size={19}/></button>
+      <div className="nj-mini-progress" role="progressbar" aria-label="Listening progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(100 * position / Math.max(duration,1))}><span style={{width:Math.min(100,100*position/Math.max(duration,1))+'%'}}/></div>
+    </section>}
+    <section className="nj-up-sheet" role="region" aria-hidden={minimised} aria-label={'Nightjar player: ' + track.title}>
       <div className="nj-up-grip" aria-hidden="true"/>
       <div className="nj-up-header">
         <div className="nj-up-cover"><img src={artwork} alt={track.artworkUrl && !artworkFailed ? 'Release cover artwork' : 'Nightjar default cover artwork'} onError={() => setArtworkFailed(true)} /></div>
@@ -414,7 +433,10 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
           </div>}
           {writerCredit && <small>Written by {writerCredit}</small>}
         </div>
-        <button className="nj-up-close" type="button" onClick={onClose} aria-label="Close audio player"><X size={21}/></button>
+        <div className="nj-up-header-actions">
+          <button className="nj-up-close" type="button" onClick={()=>setMinimised(true)} aria-label="Minimise player and keep listening"><Minimize2 size={20}/></button>
+          <button className="nj-up-close" type="button" onClick={onClose} aria-label="Stop and close audio player"><X size={20}/></button>
+        </div>
       </div>
       {!simulationMode && <audio
         ref={audioRef}

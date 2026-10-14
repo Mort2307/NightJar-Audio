@@ -13,7 +13,7 @@ assert.match(app, /<CreatorLivePreviewOverview/, 'the Creator live overview is r
 assert.match(app, /publicReleases=\{tracks\}/, 'published releases use the existing live catalogue');
 assert.match(app, /publicProfiles=\{profileDirectory\}/, 'professional network uses the real public directory');
 assert.match(app, /onOpenScriptAudit=\{\(\) => openAdminPanel\('live-preview'\)\}/, 'Owner can inspect actual script visibility');
-assert.match(app, /\{!liveRolePreview && <div id="creator-pipeline">/, 'private release editor is not rendered under impersonation');
+assert.match(app, /\{!liveRolePreview && <WorkspaceSection[^>]*><div id="creator-pipeline">/, 'private release editor is not rendered under impersonation');
 assert.match(app, /\{canAdmin && !demoMode && !liveRolePreview && <div className="admin-note">/, 'old redundant preview warnings are removed from the live perspective');
 assert.match(creator, /nightjarAdministration\.previewScriptMarketplace\(\)/, 'manuscript counts and visibility come from backend');
 assert.match(creator, /auditStatus === 'unavailable'/, 'backend failure does not masquerade as zero records');

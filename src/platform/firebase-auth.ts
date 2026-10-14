@@ -27,7 +27,9 @@ const firebaseConfig = {
 
 export const firebaseApp = getApps()[0] ?? initializeApp(firebaseConfig);
 export const firebaseAuth = getAuth(firebaseApp);
-void setPersistence(firebaseAuth, browserLocalPersistence);
+const persistenceReady = setPersistence(firebaseAuth, browserLocalPersistence).catch(error => {
+  console.warn('Nightjar could not initialise persistent Firebase authentication', error);
+});
 
 export type NightjarIdentity = {
   userId: string;
@@ -53,6 +55,7 @@ export const nightjarAuth = {
   },
 
   async register(email: string, password: string) {
+    await persistenceReady;
     const credential = await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
     let verificationSent = true;
     try {
@@ -64,6 +67,7 @@ export const nightjarAuth = {
   },
 
   async signIn(email: string, password: string) {
+    await persistenceReady;
     const credential = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
     return mapUser(credential.user);
   },

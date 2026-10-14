@@ -71,6 +71,7 @@ export const checkNightjarUpdate = async (): Promise<NightjarUpdateStatus> => {
 export const applyNightjarUpdate = async () => {
   try {
     try {
+      window.sessionStorage.setItem('nightjar.navigation-reload.v1', String(Date.now()));
       window.sessionStorage.setItem('nightjar.update-applied.v1', new Date().toISOString());
     } catch {
       // Update still proceeds if session storage is unavailable.
@@ -112,7 +113,7 @@ export const applyNightjarSafeUpdate = async () => {
     const keys = await caches.keys();
     await Promise.all(keys.filter(key => key.startsWith('nightjar-')).map(key => caches.delete(key)));
   }
-  try { window.sessionStorage.setItem('nightjar.update-applied.v1', new Date().toISOString()); } catch { /* optional */ }
+  try { window.sessionStorage.setItem('nightjar.navigation-reload.v1', String(Date.now())); window.sessionStorage.setItem('nightjar.update-applied.v1', new Date().toISOString()); } catch { /* optional */ }
   const url = new URL(window.location.href);
   url.searchParams.set('nightjar-refresh', String(Date.now()));
   window.location.replace(url.toString());
