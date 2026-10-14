@@ -35,4 +35,32 @@ assert.match(app, /Verify my age with Didit/, 'all users get the standard Didit 
 assert.match(app, /if \(await refreshAgeStatus\(\)\)/, 'client checks existing approval before initiating paid sessions');
 assert.match(app, /Continue Didit verification/, 'users can continue a previous session if popups are blocked');
 assert.doesNotMatch(app, /nj-didit-member-pilot|openAgeCheck\(false, true\)|ageTemporaryBypass/, 'old voluntary tester flow is absent');
+// Billing and legal boundaries must not be conflated: one live adult check,
+// one separately acknowledged notice, and one revocable £0 beta-listening grant.
+const legalNotice = fs.readFileSync('src/legal/nightjarLegal.ts','utf8');
+const runbook = fs.readFileSync('docs/didit-90-day-retention-runbook.md','utf8');
+const listening = index.split('const betaListeningAccessFor = async')[1]?.split('const activeListeningSubscriptionFor')[0] ?? '';
+const access = index.split('const playbackAccessFor = (')[1]?.split('const decorateReleaseAccess')[0] ?? '';
+const playback = index.split('export const getReleasePlaybackUrl = onCall')[1]?.split('export const getReleaseTranscript')[0] ?? '';
+const transcript = index.split('export const getReleaseTranscript = onCall')[1]?.split('// Owner-only attached-audio audit')[0] ?? '';
+const listing = index.split('export const listCatalogue = onCall')[1]?.split('export const createRelease')[0] ?? '';
+const dashboard = index.split('export const adminDiditDashboard = onCall')[1]?.split('export const getAdminReleasePreviewUrl')[0] ?? '';
+assert.match(legalNotice, /NIGHTJAR_AGE_NOTICE_VERSION/, 'age notice is independently versioned');
+assert.match(legalNotice, /90-day Didit evidence-retention window/, 'Didit retention is proposed, not falsely asserted');
+assert.match(runbook, /NOT CONFIRMED IN DIDIT/, 'runbook must not misstate live provider configuration');
+assert.match(runbook, /90 days/, '90-day target clearly documented');
+assert.match(runbook, /model.*training|model.*improve/i, 'organisational model-training opt-out documented');
+assert.match(start, /requireAgeNoticeAcknowledgement\(identity.uid\)/, 'legal acknowledgement is required before starting a provider check');
+assert.match(listening, /!CLOSED_BETA/, 'beta listening cannot silently grant a permanent free account');
+assert.match(listening, /account.emailVerified !== true/, 'beta accounts require verified email');
+assert.match(listening, /testerAccessForEmail\(verifiedEmail\)/, 'beta access comes from owner-managed allowlist');
+assert.match(access, /if \(options.betaAccess\) return \{ allowed:true, reason:'beta_test'/, 'beta work can be played without a subscription');
+assert.match(playback, /await requireAgeVerified\(identity.uid\)/, 'beta playback still requires live age verification');
+assert.match(playback, /betaListeningAccessFor\(identity.uid, identity.email\)/, 'playback uses the server-side allowlist');
+assert.match(transcript, /betaListeningAccessFor\(identity.uid, identity.email\)/, 'released transcripts use the same listening grant');
+assert.match(listing, /betaListeningAccessFor\(identity.uid, identity.email\)/, 'catalogue badges agree with playable access');
+assert.match(index, /subscribed: identity.admin \|\| Boolean\(subscription\)/, 'beta access never masquerades as a paid subscription');
+assert.match(dashboard, /requireAdminIdentity\(request\)/, 'provider status dashboard requires a real administrator');
+assert.doesNotMatch(dashboard, /date_of_birth|selfie|document_image|id_verifications/, 'Didit owner overview must not expose raw identity evidence');
+
 console.log('Nightjar mandatory one-time Didit account verification contracts PASS');
