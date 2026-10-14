@@ -6378,6 +6378,9 @@ export const ageStatus = onCall({
   const persistentlyVerified = diditPass(data);
   const bypass = persistentlyVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
   const pilotAccess = identity.admin || (await accountRef(identity.uid).get()).data()?.diditPilotEnabled === true;
+  const controlledAdminTestClaimed = DIDIT_VERIFICATION_PAUSED && identity.admin
+    ? (await db.collection('operationalControls').doc('didit-maintenance-one-shot-2026-10-14').get()).exists
+    : false;
   return {
     verified: persistentlyVerified || bypass.allowed,
     diditPilotEligible: pilotAccess,
@@ -6387,6 +6390,7 @@ export const ageStatus = onCall({
     providerStatus: String(data.status ?? 'NOT_STARTED'),
     livePilotAvailable: !DIDIT_VERIFICATION_PAUSED && pilotAccess && diditConfigured() && diditMode() === 'live',
     verificationPaused: DIDIT_VERIFICATION_PAUSED,
+    controlledAdminTestClaimed,
     ageThreshold: 18,
     configured: diditConfigured(),
     provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
