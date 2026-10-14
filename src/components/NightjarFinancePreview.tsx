@@ -10,7 +10,7 @@ const descriptions:Record<Kind,{eyebrow:string;title:string;detail:string;status
     eyebrow:'YOUR NIGHTJAR · MEMBERSHIP',
     title:'A membership that puts listening first.',
     detail:`Nightjar listener membership is ${LISTENER_SUBSCRIPTION_PRICE_GBP}. Membership features are being prepared; no subscription purchase is available here during testing.`,
-    status:'The listener price is transparent. Creator compensation, payout caps and internal revenue arrangements are not included in this price.',
+    status:'This is the listener subscription price. Creative work has its own independent pricing and licensing arrangements.',
   },
   wallet:{
     eyebrow:'YOUR NIGHTJAR · SUPPORT',
