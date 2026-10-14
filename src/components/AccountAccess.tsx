@@ -252,7 +252,7 @@ export default function AccountAccess({
       <div className="account-access-mark"><Mail size={22} /></div>
       <span className="mini-label">ACCOUNT SECURITY</span>
       <h2>Verify your email</h2>
-      <p>Nightjar needs a verified email before subscriptions, professional permissions or protected content can be attached to this account. We have sent a verification link to your email; if it is not in your inbox, check your spam or junk folder.</p>
+      <p>Nightjar needs a verified email before protected content and professional permissions can be attached to this account. We have sent a verification link to your email; if it is not in your inbox, check your spam or junk folder.</p>
       <strong>{identity.email}</strong>
       {message && <p className="account-access-message">{message}</p>}
       <div className="account-access-actions">
@@ -303,7 +303,7 @@ export default function AccountAccess({
     {mode === 'register' && <div className="demo-warning"><ShieldCheck size={17}/><div><strong>PRIVATE TESTING</strong><span>Account creation is restricted to email addresses approved by a Nightjar administrator. Approved testers still verify their email normally before access is granted.</span></div></div>}
     {mode === 'signin' && <details className="account-workspace-overview" aria-label="Nightjar account workspaces">
       <summary>Explore Nightjar account workspaces</summary>
-      <span><Headphones size={14}/><strong>Listener</strong><small>Discovery, subscription, comments, Like/Love and private library.</small></span>
+      <span><Headphones size={14}/><strong>Listener</strong><small>Discovery, comments, Like/Love and your private listening library.</small></span>
       <span><Mic2 size={14}/><strong>Creator</strong><small>Publishing, credits, professional messaging and Creator Studio.</small></span>
       <span><FileText size={14}/><strong>Writer</strong><small>Protected scripts, rights, collaboration and Writer Studio.</small></span>
       <span><AudioLines size={14}/><strong>Audio Editor</strong><small>Assigned work, production credits, messaging and Editor Studio.</small></span>
