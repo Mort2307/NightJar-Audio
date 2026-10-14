@@ -10546,6 +10546,89 @@ textarea:focus-visible,
 }
 .nj-launch-unlock-diagnostic { display: block; font-size: 11px; margin-top: 9px; color: #e4afac; }
 
+/* The automatic WebAuthn screen previously hid the metallic biometric action.
+ * Give it an unmistakable Nightjar-bronze fingerprint emblem while the real
+ * OS-owned authenticator and Firebase checks complete. */
+.nj-launch-unlock-biometric-emblem {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  color: #110e0c;
+  border: 1px solid rgba(245,209,153,.84);
+  border-radius: 18px;
+  background: linear-gradient(140deg, #f3d2a0, #c1925d 54%, #825936);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 0 0 7px rgba(184,132,74,.08), 0 14px 32px rgba(112,65,28,.28);
+}
+.nj-launch-unlock-progress {
+  width: min(230px, 90%);
+  height: 3px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(221,185,141,.14);
+}
+.nj-launch-unlock-progress > span {
+  display: block;
+  width: 36%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #91633e, #edcb97);
+  animation: nj-unlock-progress 1.3s ease-in-out infinite alternate;
+}
+@keyframes nj-unlock-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(290%); }
+}
+.nj-launch-unlock-long-wait {
+  display: block;
+  max-width: 310px;
+  color: #d9c9b5;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.nj-launch-unlock-action {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.37), 0 12px 30px rgba(134,91,46,.25);
+}
+.nj-launch-unlock-action:not(:disabled):hover {
+  background: linear-gradient(130deg, #ebc593, #aa794c);
+}
+.nj-launch-unlock-action:focus-visible,
+.account-access-passkey:focus-visible { outline: 3px solid #f4d4a5; outline-offset: 3px; }
+
+/* Password entry and passkey entry are equal first-class actions. Restore the
+ * gold/bronze backing to the latter rather than inheriting a flat grey button. */
+.account-access-card .account-access-passkey {
+  border: 1px solid rgba(239,192,125,.8);
+  border-radius: 13px;
+  background: linear-gradient(125deg, #efd0a1, #c3945c 66%, #9a6c43);
+  color: #120f0d;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.38), 0 8px 22px rgba(109,71,33,.21);
+}
+.account-access-card .account-access-passkey:not(:disabled):hover {
+  background: linear-gradient(125deg, #f8ddaf, #d5a46d 66%, #aa774a);
+  color: #0e0b09;
+}
+.account-access-card .account-access-passkey:disabled { opacity: .65; }
+.nj-auth-inline-spinner {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  margin-right: 9px;
+  vertical-align: -2px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: nj-auth-spin .8s linear infinite;
+}
+@keyframes nj-auth-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .nj-launch-unlock-progress > span, .nj-auth-inline-spinner { animation: none; }
+  .nj-launch-unlock-progress > span { width: 100%; opacity: .8; }
+}
+
+
 
 /* BRONZE NOIR — near-black and graphite first, with restrained metallic bronze.
    Scoped to the explicit member theme; other Nightjar palettes stay untouched. */
@@ -10651,6 +10734,15 @@ textarea:focus-visible,
 :root[data-nightjar-theme="bronze"] .nj-launch-unlock-action {
   border-color: #b78b59;
   background: linear-gradient(125deg, #dfb985, #b78b59, #997244);
+  color: #0b0c0e;
+}
+:root[data-nightjar-theme="bronze"] .account-access-card .account-access-passkey {
+  border-color: #d7a86e;
+  background: linear-gradient(125deg, #dfb985, #b78b59 72%, #997244);
+  color: #0b0c0e;
+}
+:root[data-nightjar-theme="bronze"] .account-access-card .account-access-passkey:not(:disabled):hover {
+  background: linear-gradient(125deg, #ebc99a, #c79c68 72%, #a98050);
   color: #0b0c0e;
 }
 
