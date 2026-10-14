@@ -89,6 +89,7 @@ import { nightjarReferrals } from './platform/firebase-referrals';
 import { publicProfileUrl, shareNightjarProfile, type ShareableProfileRole } from './platform/public-profile-share';
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
 import MobileNavigation from './components/MobileNavigation';
+import { PersonalisedHome, HomeSection, WorkspaceSection } from './components/NightjarHomeLayout';
 import NightjarSettings from './components/NightjarSettings';
 import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
@@ -489,6 +490,7 @@ function App() {
   // Never show account entry or an adult workspace while Firebase and the
   // backend are restoring this session on refresh.
   const [sessionHydrating, setSessionHydrating] = useState(true);
+  const [sessionRestoreError, setSessionRestoreError] = useState(false);
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
@@ -1049,6 +1051,7 @@ function App() {
     const unsubscribe = nightjarAuth.observe((identity) => {
       if (cancelled) return;
       setSessionHydrating(true);
+      setSessionRestoreError(false);
       if (!identity) {
         setDemoMode(false);
         setSimulationMode(false);
@@ -1085,6 +1088,7 @@ function App() {
           // route available; all privileged actions remain server-checked.
           if (!cancelled && nightjarAuth.current()?.userId === identity.userId) {
             console.warn('Nightjar session restore failed', error);
+            setSessionRestoreError(true);
             setAgeStage('gate');
           }
         } finally {
@@ -1975,7 +1979,8 @@ function App() {
         setRole('admin');
         setAccountStatus('active');
         setRolePicker(false);
-        navigate('admin');
+        if (!window.location.pathname.startsWith('/admin')) navigate('admin');
+        else setView('admin');
         void loadAdminOverview();
         void loadSecurityAlerts();
         return;
@@ -1990,7 +1995,10 @@ function App() {
           setView('profile');
           setProfileRolesPage(true);
         } else {
-          navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'artist' : 'discover');
+          const requested = window.location.pathname.split('/')[1] as View;
+          const safeViews: View[] = data.role === 'listener' ? ['discover','library','creators','profile','settings','calendar','protection'] : ['discover','library','creators','profile','settings','calendar','protection','messages',data.role];
+          if (safeViews.includes(requested)) setView(requested);
+          else navigate(data.role === 'creator' ? 'creator' : data.role === 'writer' ? 'writer' : data.role === 'editor' ? 'editor' : data.role === 'artist' ? 'artist' : 'discover');
         }
       } else {
         setRole(null);
@@ -4168,9 +4176,11 @@ function App() {
             <div><ShieldCheck size={18} /><div><strong>Adults only</strong><span>Nightjar remains an 18+ product. Approved QA accounts can use restricted temporary test access until the production age-assurance provider is live.</span></div></div>
             <div><Headphones size={18} /><div><strong>Audio first</strong><span>Built around voice, atmosphere and headphone immersion.</span></div></div>
           </div>
+          {sessionRestoreError && user && <div className="access-note" role="alert">Your Nightjar session is still saved, but we could not reconnect securely. Check your connection and retry without entering your password again.</div>}
+          {sessionRestoreError && user ? <button type="button" className="primary-button wide-button" disabled={accountLoading} onClick={() => { setSessionHydrating(true); setSessionRestoreError(false); void (async()=>{try { await loadAccount(); const verified=await refreshAgeStatus(); if(!verified)setAgeStage('assurance'); } catch {setSessionRestoreError(true);} finally {setSessionHydrating(false);} })(); }}>Retry session <RefreshCw size={17}/></button> :
           <button className="primary-button wide-button" disabled={accountLoading} onClick={() => void signIn()}>
             {accountLoading ? 'Opening secure sign-in…' : 'Sign in to Nightjar'} <ArrowRight size={17} />
-          </button>
+          </button>}
           <p className="access-fine">Testing build: age assurance is not globally bypassed. Only owner accounts and explicitly approved testers can use temporary QA access.</p>
         </section>
       </main>
@@ -4603,7 +4613,8 @@ function App() {
             />
           </div>}
         {view === 'discover' && (
-          <section className="page-wrap nj-animate">
+          <PersonalisedHome userId={user?.userId ?? "guest"} editable={!liveRolePreview && !simulationMode} onNavigate={navigate}>
+            <HomeSection id="featured" title="Featured audio">
             <section className="hero-section">
               <div className="hero-copy">
                 <div className="hero-kicker">
@@ -4614,7 +4625,7 @@ function App() {
                 <h1>Premium immersive<span> audio for adults.</span></h1>
                 <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
                 <div className="hero-actions">
-                  <button data-nj-preview-safe="true" className="primary-button" onClick={() => document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth' })}>Enter the listening room <ArrowRight size={16} /></button>
+                  <button data-nj-preview-safe="true" className="primary-button" onClick={() => { window.dispatchEvent(new CustomEvent('nightjar:open-home-section',{detail:'catalogue'})); window.setTimeout(()=>document.getElementById('nightjar-home-catalogue')?.scrollIntoView({behavior:'smooth'}),50); }}>Enter the listening room <ArrowRight size={16} /></button>
                   <button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
                 </div>
                 <div className="hero-signals">
@@ -4719,8 +4730,9 @@ function App() {
               </div>
             </section>
 
-            <section className="editorial-strip"><span>VOICE</span><span>STORY</span><span>ATMOSPHERE</span><span>CHARACTER</span><span>SOUND DESIGN</span><span>AFTER DARK</span></section>
+            </HomeSection>
 
+            <HomeSection id="spotlights" title="Community spotlights">
             <SpotlightExperience
               spotlightMeta={spotlightMeta}
               spotlights={[creatorSpotlight, writerSpotlight, editorSpotlight, artistSpotlight, listenerSpotlight].filter((person): person is Spotlight => person !== null)}
@@ -4733,11 +4745,13 @@ function App() {
               onShare={shareSpotlight}
               onListen={(releaseId) => { const track = tracks.find((item)=>item.id===releaseId); if (track) togglePlayback(track); }}
             />
+            </HomeSection>
 
-            <WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} />
+            <HomeSection id="writers" title="Discover writers"><WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} /></HomeSection>
 
+            <HomeSection id="catalogue" title="Published audio">
             <section id="catalogue" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => document.getElementById('for-you')?.scrollIntoView({behavior:'smooth'})}>Personalise <Sparkles size={14}/></button></div>
+              <div className="section-head"><div><p className="eyebrow">THE LISTENING ROOM</p><h2>Published releases.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => { window.dispatchEvent(new CustomEvent('nightjar:open-home-section',{detail:'recommended'})); window.setTimeout(()=>document.getElementById('nightjar-home-recommended')?.scrollIntoView({behavior:'smooth'}),50); }}>Personalise <Sparkles size={14}/></button></div>
               {effectiveRole === 'listener' && !liveRolePreview && <ListeningDiscoveryControls
                 mood={selectedListeningMood} onMoodChange={setSelectedListeningMood}
                 boundaries={listeningBoundaries} onBoundariesChange={setListeningBoundaries}
@@ -4752,6 +4766,7 @@ function App() {
                 {!notificationReleaseCards.length && <div className="people-empty"><Headphones size={18}/><strong>No matching releases.</strong><span>{tracks.length ? 'Try another creator, writer, trope, genre or filter.' : 'The listening room will populate from real creator releases once audio is published.'}</span></div>}
               </div>
             </section>
+            </HomeSection>
 
             {focusedContentScriptId && <section id="nightjar-public-script-marketplace" className="section-wrap" aria-label="Published Writer scripts">
               <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading approved Writer scripts" />}>
@@ -4769,6 +4784,7 @@ function App() {
               </Suspense>
             </section>}
 
+            <HomeSection id="recommended" title="For you">
             <section id="for-you" className="section-wrap">
               <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><div className="nj-intent-control" aria-label="Current listening intent">{[
   ['','Open'],
@@ -4785,6 +4801,8 @@ function App() {
               </div>
             </section>
 
+            </HomeSection>
+            <HomeSection id="trending" title="Trending now">
             <section className="section-wrap">
               <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
               <div className="track-grid">
@@ -4793,19 +4811,24 @@ function App() {
               </div>
             </section>
 
-            <TransparencyPanel demoMode={demoMode} />
+            </HomeSection>
+            <div className="nj-home-transparency"><TransparencyPanel demoMode={demoMode} /></div>
 
+            <HomeSection id="creators" title="Voices worth following">
             <section className="creator-band section-wrap">
               <div className="section-head"><div><p className="eyebrow">THE CREATOR NETWORK</p><h2>Voices worth following.</h2></div><button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => navigate('creators')}>Meet the creators <ArrowRight size={15} /></button></div>
               <div className="creator-grid">{profileDirectory.filter((person) => person.role === 'creator').slice(0, 5).map((creator) => <button data-nj-preview-safe="true" className="creator-card" key={creator.userId} onClick={() => openPublicProfile(creator.userId)}><span className="avatar-large">{creator.avatarUrl ? <img className="avatar-approved-image" src={creator.avatarUrl} alt="" loading="lazy" decoding="async" /> : creator.avatarInitials || creator.name.slice(0,2).toUpperCase()}</span><span className="creator-card-copy"><strong>{creator.name}</strong><span>{creator.handle ? '@' + creator.handle.replace(/^@/,'') : 'Handle not set'}</span><em>{creator.headline || creator.bio || 'Nightjar creator profile.'}</em><small>{creator.releaseCount ?? 0} published releases</small></span><ChevronRight size={17} /></button>)}</div>
               {!profileDirectory.some((person) => person.role === 'creator') && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
             </section>
 
+            </HomeSection>
+            <HomeSection id="studio" title="Creator opportunities">
             <section className="studio-feature section-wrap">
               <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>Clear work. Clear rates. Real analytics.</h2><p>Nightjar separates the equal capped standard creator rate from listening analytics. Commercial records stay grounded in confirmed billing rather than fabricated earnings.</p><button data-nj-preview-safe="true" className="primary-button" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
               {!liveRolePreview && <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>PAID SUBSCRIPTIONS</span><ChevronRight size={12}/><span>PUBLISHED RATE BAND</span><ChevronRight size={12}/><span>CAPPED EQUAL RATE</span></div></div>}
             </section>
-          </section>
+            </HomeSection>
+          </PersonalisedHome>
         )}
 
         {view === 'creators' && (
