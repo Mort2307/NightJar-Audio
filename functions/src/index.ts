@@ -2019,6 +2019,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     return {id:link.id,url:link.url,platform:link.platform,photoUrl:link.photoUrl};
   });
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const viewerBetaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
   let releaseCount = 0;
@@ -2030,7 +2031,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
     creatorReleases = releases.docs
       .filter((doc) => doc.data().status === 'released')
-      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaAccess:viewerBetaAccess }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
     releaseCount = creatorReleases.length;
   }
@@ -2043,7 +2044,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     creditedReleases = releases.docs
       .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
-      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaAccess:viewerBetaAccess }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
@@ -2063,7 +2064,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
         const releaseDocs = await Promise.all(releaseIds.slice(0, 12).map((releaseId) => releaseRef(releaseId).get()));
         const releases = releaseDocs
           .filter((release) => release.exists && release.data()?.status === 'released')
-          .map((release) => decorateReleaseAccess(release.data() ?? {}, release.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }));
+          .map((release) => decorateReleaseAccess(release.data() ?? {}, release.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaAccess:viewerBetaAccess }));
         return {
           id: playlist.id,
           title: cleanText(playlist.data()?.title, 100) || 'Untitled playlist',
@@ -2189,11 +2190,12 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
   const data = profile.data();
   if (!data || data.publicProfile === false) throw new HttpsError('not-found', 'Creator profile not found.');
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const viewerBetaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
 
   const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', creatorUserId).limit(500).get();
   const releases = releasesSnapshot.docs
     .filter((doc) => doc.data().status === 'released')
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaAccess:viewerBetaAccess }))
     .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
   const completedCollaborations = await completedCollaborationCountFor(creatorUserId);
@@ -4645,6 +4647,17 @@ const releaseWorkAccess = (data: Record<string, any>, userId: string) => {
   return normaliseReleaseContributors(data.contributors).some((credit) => credit.userId === userId);
 };
 
+// Beta listening is a separate, revocable, no-charge entitlement. It never
+// creates or impersonates a paid subscription, and always follows age checks.
+const betaListeningAccessFor = async (uid: string, verifiedEmail: string) => {
+  if (!CLOSED_BETA || !validEmailAddress(verifiedEmail)) return false;
+  const snapshot = await accountRef(uid).get();
+  const account = snapshot.data() ?? {};
+  if (!snapshot.exists || account.status === 'suspended' ||
+      account.emailVerified !== true || cleanEmail(account.email) !== cleanEmail(verifiedEmail)) return false;
+  return account.testAccess === true || Boolean(await testerAccessForEmail(verifiedEmail));
+};
+
 const activeListeningSubscriptionFor = async (userId: string) => {
   const snapshot = await db.collection('subscriptions').where('userId', '==', userId).limit(20).get();
   // Never unlock paid audio from a planning row, unverified trial or a
@@ -4657,10 +4670,11 @@ const activeListeningSubscriptionFor = async (userId: string) => {
 const playbackAccessFor = (
   data: Record<string, any>,
   userId: string,
-  options: { admin?: boolean; subscription?: { id: string; status: string } | null } = {},
+  options: { admin?: boolean; betaAccess?: boolean; subscription?: { id: string; status: string } | null } = {},
 ) => {
   if (options.admin) return { allowed:true, reason:'admin' as const };
   if (releaseWorkAccess(data, userId)) return { allowed:true, reason:'credited_work' as const };
+  if (options.betaAccess) return { allowed:true, reason:'beta_test' as const };
   if (options.subscription) return { allowed:true, reason:'subscription' as const };
   return { allowed:false, reason:'subscription_required' as const };
 };
@@ -4669,7 +4683,7 @@ const decorateReleaseAccess = (
   data: Record<string, any>,
   id: string,
   userId: string,
-  options: { admin?: boolean; subscription?: { id: string; status: string } | null } = {},
+  options: { admin?: boolean; betaAccess?: boolean; subscription?: { id: string; status: string } | null } = {},
 ) => {
   const access = playbackAccessFor(data, userId, options);
   return {
@@ -4724,10 +4738,14 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
 
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const role = identity.admin ? 'admin' : cleanText(account.data()?.role, 40) || null;
   return {
     role,
     subscribed: identity.admin || Boolean(subscription),
+    canListen: identity.admin || Boolean(subscription) || betaAccess,
+    betaAccess,
+    accessKind: identity.admin ? 'admin' : subscription ? 'subscription' : betaAccess ? 'beta_test' : 'none',
     subscriptionStatus: identity.admin ? 'admin' : subscription?.status ?? null,
     planningMonthlyPricePence: identity.admin ? settings?.planningMonthlyPricePence ?? null : null,
     subscriptionUrl: identity.admin ? settings?.listenerSubscriptionUrl ?? null : null,
@@ -4912,10 +4930,11 @@ export const listCatalogue = onCall({ region: REGION }, async (request) => {
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const catalogue = snapshot.docs
     .filter((doc) => !category || cleanText(doc.data().category, 80).toLowerCase() === category)
     .filter((doc) => !query || releaseSearchText(doc.data()).includes(query))
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }));
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription, betaAccess }));
 
   return { catalogue };
 });
@@ -5291,7 +5310,8 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
   if (!data || data.status !== 'released' || !data.audioStoragePath) throw new HttpsError('not-found', 'Playable release not found.');
 
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
-  const access = playbackAccessFor(data, identity.uid, { admin:identity.admin, subscription });
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
+  const access = playbackAccessFor(data, identity.uid, { admin:identity.admin, subscription, betaAccess });
   if (!access.allowed) {
     throw new HttpsError(
       'failed-precondition',
@@ -5334,13 +5354,13 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
     throw new HttpsError('not-found', 'Release transcript not found.');
   }
 
-  let accessReason: 'admin' | 'credited_work' | 'subscription' = identity.admin
+  let accessReason: 'admin' | 'credited_work' | 'subscription' | 'beta_test' = identity.admin
     ? 'admin'
     : 'credited_work';
 
   if (data.status === 'released' && !identity.admin) {
     const subscription = await activeListeningSubscriptionFor(identity.uid);
-    const access = playbackAccessFor(data, identity.uid, { subscription });
+    const access = playbackAccessFor(data, identity.uid, { subscription, betaAccess });
     if (!access.allowed) {
       throw new HttpsError(
         'failed-precondition',
@@ -5348,7 +5368,7 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
         { code:'subscription_required', releaseId },
       );
     }
-    accessReason = access.reason as 'credited_work' | 'subscription';
+    accessReason = access.reason as 'credited_work' | 'subscription' | 'beta_test';
   }
 
   return {
@@ -5960,6 +5980,7 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
   }
 
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const following = new Set(followsSnapshot.docs.map((doc) => doc.id));
   const items = releasesSnapshot.docs.map((doc) => {
     const data = doc.data();
@@ -5974,7 +5995,7 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
     if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
     const matches = values.filter((value) => (liked.get(value.toLowerCase()) ?? 0) > 0).slice(0, 3);
     return {
-      ...decorateReleaseAccess(data, doc.id, identity.uid, { admin:identity.admin, subscription }),
+      ...decorateReleaseAccess(data, doc.id, identity.uid, { admin:identity.admin, subscription, betaAccess }),
       score,
       reason: matches.length
         ? 'Because you chose ' + matches.join(', ') + '.'
@@ -5996,8 +6017,9 @@ export const trendingReleases = onCall({ region: REGION }, async (request) => {
   ]);
   // Trending and creator statistics must use the same qualified-listen
   // definition. Raw progress telemetry must not make a release "popular".
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const trending = releasesSnapshot.docs
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }))
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription, betaAccess }))
     .sort((a, b) => (b.listenCount - a.listenCount)
       || String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')))
     .slice(0, 24);
@@ -12244,6 +12266,7 @@ export const getVoiceCallingCard = onCall({ region: REGION }, async (request) =>
     return { release: null, releaseId: null };
   }
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   return { releaseId, release: decorateReleaseAccess(doc.data() ?? {}, releaseId, identity.uid, {
     admin: identity.admin, subscription,
   }) };
