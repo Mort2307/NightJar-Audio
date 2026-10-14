@@ -6378,6 +6378,9 @@ export const ageStatus = onCall({
   const persistentlyVerified = diditPass(data);
   const bypass = persistentlyVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
   const pilotAccess = identity.admin || (await accountRef(identity.uid).get()).data()?.diditPilotEnabled === true;
+  const controlledAdminTestClaimed = DIDIT_VERIFICATION_PAUSED && identity.admin
+    ? (await db.collection('operationalControls').doc('didit-maintenance-one-shot-2026-10-14').get()).exists
+    : false;
   return {
     verified: persistentlyVerified || bypass.allowed,
     diditPilotEligible: pilotAccess,
@@ -6387,6 +6390,7 @@ export const ageStatus = onCall({
     providerStatus: String(data.status ?? 'NOT_STARTED'),
     livePilotAvailable: !DIDIT_VERIFICATION_PAUSED && pilotAccess && diditConfigured() && diditMode() === 'live',
     verificationPaused: DIDIT_VERIFICATION_PAUSED,
+    controlledAdminTestClaimed,
     ageThreshold: 18,
     configured: diditConfigured(),
     provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
@@ -6404,8 +6408,12 @@ export const startAgeAssurance = onCall({
   region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
 }, async request => {
   const identity = await requireActiveIdentity(request);
-  // Fail closed for old cached clients as well. No chargeable session is created.
-  if (DIDIT_VERIFICATION_PAUSED) throw new HttpsError('failed-precondition',
+  // The public shutdown stays ON. During maintenance, only an authenticated
+  // administrator explicitly requesting the one-shot test may proceed.
+  // Old clients, ordinary members, and tester-pilot accounts all fail closed.
+  const requestedControlledAdminTest = (request.data as { controlledAdminTest?: unknown } | undefined)?.controlledAdminTest === true;
+  const controlledAdminTest = DIDIT_VERIFICATION_PAUSED && identity.admin && requestedControlledAdminTest;
+  if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest) throw new HttpsError('failed-precondition',
     'Didit age verification is temporarily unavailable while Nightjar resolves a technical issue. Please do not retry. No new check was started.');
   const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
   if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
@@ -6413,6 +6421,23 @@ export const startAgeAssurance = onCall({
     // A versioned, account-owned notice acknowledgement is required even for
     // owner-led live pilots. Do not allow a deployed old starter to skip it.
     await requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice');
+    if (controlledAdminTest) {
+      // A single, account-bound live test for the entire outage. Claim the
+      // attempt BEFORE provider contact to avoid repeat billable sessions from
+      // retries, cached clients, other admins, or multiple browser tabs.
+      if (diditMode() !== 'live') throw new HttpsError('failed-precondition', 'Controlled Didit test requires a live provider configuration.');
+      const testGuard = db.collection('operationalControls').doc('didit-maintenance-one-shot-2026-10-14');
+      await db.runTransaction(async transaction => {
+        const existingTest = await transaction.get(testGuard);
+        if (existingTest.exists) throw new HttpsError('resource-exhausted',
+          'The one-time Didit maintenance test has already been claimed. Contact Nightjar support before another attempt.');
+        transaction.create(testGuard, {
+          initiatedByUid: identity.uid,
+          scope: 'admin-live-didit-single-attempt',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      });
+    }
     const individuallyApprovedPilot = !identity.admin &&
       (await accountRef(identity.uid).get()).data()?.diditPilotEnabled === true;
     if (DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity.admin && !individuallyApprovedPilot) {

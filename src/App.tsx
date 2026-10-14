@@ -511,6 +511,7 @@ function App() {
   const [ageProviderVerified, setAgeProviderVerified] = useState(false);
   const [ageProviderStatus, setAgeProviderStatus] = useState('NOT_STARTED');
   const [ageLivePilotAvailable, setAgeLivePilotAvailable] = useState(false);
+  const [ageAdminTestClaimed, setAgeAdminTestClaimed] = useState(false);
   const [agePilotEligible, setAgePilotEligible] = useState(false);
   const [agePilotConsent, setAgePilotConsent] = useState(false);
   const [diditPilotEmail, setDiditPilotEmail] = useState('');
@@ -2039,6 +2040,7 @@ function App() {
       if (data.providerVerified === true) setAgeLaunchUrl(null);
       setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
       setAgeLivePilotAvailable(data.livePilotAvailable === true);
+      setAgeAdminTestClaimed(data.controlledAdminTestClaimed === true);
       setAgePilotEligible(data.diditPilotEligible === true);
       setAgeVerifiedAt(data.verifiedAt ?? null);
       setAgeReverifyRequired(data.reverifyRequired === true);
@@ -2067,7 +2069,7 @@ function App() {
   };
 
   const openAgeCheck = async (adminPilot = false, memberPilot = false, acknowledgedOnGate = false) => {
-    if (DIDIT_VERIFICATION_PAUSED) {
+    if (DIDIT_VERIFICATION_PAUSED && !(adminPilot && role === 'admin')) {
       setAgeStatusError('Age verification is temporarily offline while Nightjar repairs the connection. Please do not retry.');
       return;
     }
@@ -2078,7 +2080,26 @@ function App() {
         return;
       }
       setAgeStatusError('');
-      if (!ageNoticeAccepted && !acknowledgedOnGate) {
+      // Maintenance mode permits one explicitly initiated administrator test,
+      // never a background, public, or old-client verification attempt.
+      if (DIDIT_VERIFICATION_PAUSED && adminPilot && role === 'admin') {
+        if (!ageDiditPermission) {
+          setAgeStatusError('Explicit permission is required before starting the single live Didit test.');
+          return;
+        }
+        if (!ageNoticeAccepted) {
+          if (!ageNoticeAcknowledged) {
+            setAgeStatusError('Read and acknowledge the current Nightjar Age Verification & Didit Privacy Notice.');
+            return;
+          }
+          await nightjarLegal.accept([{
+            id: 'age_assurance_notice', version: NIGHTJAR_AGE_NOTICE_VERSION, accepted: true,
+          }], 'didit-maintenance-one-shot-admin');
+          setAgeNoticeAccepted(true);
+        }
+      }
+      if (!ageNoticeAccepted && !acknowledgedOnGate &&
+          !(DIDIT_VERIFICATION_PAUSED && adminPilot && ageNoticeAcknowledged)) {
         setAgeStatusError('Read and acknowledge the Nightjar Age Verification & Didit Privacy Notice before starting Didit.');
         setAgeStage('assurance');
         return;
@@ -2109,7 +2130,8 @@ function App() {
         const alreadyVerified = await refreshAgeStatus();
         if (alreadyVerified) { notify('Test access or permanent verification is already active. No paid Didit check was created.'); return; }
       }
-      const data = await nightjarAge.start();
+      const data = await nightjarAge.start(adminPilot && DIDIT_VERIFICATION_PAUSED);
+      if (adminPilot && DIDIT_VERIFICATION_PAUSED) setAgeAdminTestClaimed(true);
       setAgeConfigured(Boolean(data.configured));
       setAgeProvider(String(data.provider ?? 'didit'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
@@ -5518,7 +5540,33 @@ function App() {
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
               <AdminLegalReadiness />
             </Suspense>
-            {DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Didit verification paused"><span className="mini-label">AGE ASSURANCE · TEMPORARILY PAUSED</span><h2>Didit verification is offline</h2><p>New identity checks and tester enrolment are paused while Nightjar fixes the 503 error. Previous results are preserved. Please do not ask members to retry.</p><button type="button" className="secondary-button" onClick={() => void refreshAgeStatus()}>Refresh status (no ID check)</button></section>}
+            {DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Didit admin-only controlled maintenance test">
+              <span className="mini-label">AGE ASSURANCE · PUBLIC VERIFICATION PAUSED</span>
+              <h2>One controlled administrator test</h2>
+              <p>All public and member Didit checks remain offline. Only an authenticated Nightjar administrator can intentionally claim the single live diagnostic attempt for the entire maintenance period. If it fails, do not retry: review the server logs and Didit audit entry.</p>
+              <div className="demo-state-line">
+                <span className="status-pill warning">PUBLIC VERIFICATION OFFLINE</span>
+                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'ALREADY VERIFIED' : ageAdminTestClaimed ? 'TEST CLAIMED' : ageProviderStatus.replaceAll('_', ' ')}</span>
+                <span className={ageEnvironment === 'live' ? 'status-pill' : 'status-pill muted'}>{ageEnvironment === 'live' ? 'LIVE PROVIDER' : 'NOT LIVE'}</span>
+              </div>
+              <a className="nj-didit-notice-link" href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Read Nightjar's Age Verification &amp; Didit Privacy Notice <ArrowRight size={14}/></a>
+              {!ageNoticeAccepted ? <label className="nj-didit-member-consent">
+                <input type="checkbox" checked={ageNoticeAcknowledged} onChange={event => setAgeNoticeAcknowledged(event.target.checked)}/>
+                <span>I have read the current Nightjar Age Verification &amp; Didit Privacy Notice (version {NIGHTJAR_AGE_NOTICE_VERSION}) and acknowledge it for my account.</span>
+              </label> : <p className="nj-didit-notice-saved"><Check size={16}/> Privacy notice already acknowledged for this account.</p>}
+              {!ageProviderVerified && <label className="nj-didit-member-consent">
+                <input type="checkbox" checked={ageDiditPermission} onChange={event => setAgeDiditPermission(event.target.checked)}/>
+                <span>I explicitly choose to start the one permitted live Didit identity check on my own account. I understand this may incur a charge, uses my government ID and facial/liveness evidence, and cannot be automatically retried.</span>
+              </label>}
+              <div className="admin-member-multi-role-actions">
+                <button type="button" className="primary-button" disabled={ageLoading || ageAdminTestClaimed || !ageConfigured || ageEnvironment !== 'live' || ageProviderVerified || !ageDiditPermission || (!ageNoticeAccepted && !ageNoticeAcknowledged) || simulationMode || demoMode}
+                  onClick={() => void openAgeCheck(true)}>{ageLoading ? 'Starting controlled test…' : ageProviderVerified ? 'Verified · do not repeat' : ageAdminTestClaimed ? 'Test already claimed · no retries' : 'Start one live admin test'}</button>
+                <button type="button" className="secondary-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}>Refresh status (no paid check)</button>
+                {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open created Didit session <ArrowRight size={15}/></a>}
+              </div>
+              {ageStatusError && <p className="nj-didit-pilot-feedback" role="alert">{ageStatusError}</p>}
+              <small>One attempt globally, including all administrators. Not a public reopening. Every new member session remains blocked by the backend.</small>
+            </section>}
             {!DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Administrator Didit verification pilot">
               <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
               <h2>Didit Age Verification</h2>

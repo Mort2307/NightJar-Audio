@@ -66,12 +66,19 @@ assert.match(legalPage, /age_assurance_notice/, 'legal document shows correct ag
 
 const pauseStarter = index.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0] ?? '';
 assert.match(index, /const DIDIT_VERIFICATION_PAUSED = true/, 'live start kill switch is enabled');
-assert.match(pauseStarter, /if \(DIDIT_VERIFICATION_PAUSED\) throw new HttpsError\('failed-precondition'/, 'backend rejects new sessions from cached clients');
-assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED)') < pauseStarter.indexOf('return startDiditSession'), 'pause check precedes provider creation');
+assert.match(pauseStarter, /if \(DIDIT_VERIFICATION_PAUSED && !controlledAdminTest\) throw new HttpsError\('failed-precondition'/, 'backend rejects all ordinary and cached clients during pause');
+assert.match(pauseStarter, /DIDIT_VERIFICATION_PAUSED && identity.admin && requestedControlledAdminTest/, 'maintenance exception is restricted to explicit server-authenticated administrator test');
+assert.match(pauseStarter, /transaction.create\(testGuard,/, 'maintenance test claim is transactional and one-use globally');
+assert.match(pauseStarter, /await requireCurrentLegalAcceptance\(identity.uid, 'age_assurance_notice'\)/, 'live admin test requires persisted privacy notice acknowledgement');
+assert.match(app, /nightjarAge.start\(adminPilot && DIDIT_VERIFICATION_PAUSED\)/, 'public and cached app clients never signal test bypass');
+assert.match(app, /!ageDiditPermission \|\| \(!ageNoticeAccepted && !ageNoticeAcknowledged\)/, 'admin test requires explicit consent and acknowledgement');
+assert.match(ageClient, /controlledAdminTest \? \{ controlledAdminTest: true \} : \{\}/, 'admin test flag is opt-in, never default');
+assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest)') >= 0 && pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest)') < pauseStarter.indexOf('return startDiditSession'), 'pause check precedes provider creation');
 assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client can read pause status');
 assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'app visibly pauses verification');
 assert.match(app, /Age verification temporarily unavailable/, 'age gate explains outage');
 assert.match(app, /!DIDIT_VERIFICATION_PAUSED && agePilotEligible/, 'member pilot suppressed');
-assert.match(app, /!DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot"/, 'admin pilot suppressed');
+assert.match(app, /DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot"/, 'only one-shot admin maintenance controls replace regular pilot');
+assert.match(app, /!DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot"/, 'regular admin/member pilots remain hidden while maintenance switch is active');
 
-console.log('Nightjar Didit emergency pause and existing pilot contracts PASS (source level).');
+console.log('Nightjar Didit public pause, single controlled administrator test and existing pilot contracts PASS (source level).');

@@ -53,6 +53,7 @@ export const startDiditSession = async (uid: string) => {
   if (claimed === 'busy') throw new HttpsError('aborted', 'A verification session is starting. Try again shortly.');
   let failurePhase: 'provider-request' | 'provider-http' | 'provider-json' | 'provider-response' | 'account-binding' = 'provider-request';
   let providerHttpStatus: number | null = null;
+  let providerErrorCategory: 'credits' | 'workflow' | 'request-validation' | 'rate-limit' | 'authentication' | 'other' = 'other';
   try {
     const result = await fetch('https://verification.didit.me/v3/session/', {
       method: 'POST',
@@ -68,7 +69,24 @@ export const startDiditSession = async (uid: string) => {
     });
     providerHttpStatus = result.status;
     failurePhase = 'provider-http';
-    if (!result.ok) throw new Error('Didit session request was not accepted');
+    if (!result.ok) {
+      // Interpret only a small set of non-sensitive error categories.
+      // Never log raw provider bodies/messages: these might contain account
+      // identifiers or other private verification details.
+      if (result.status === 429) providerErrorCategory = 'rate-limit';
+      else if ([401,403].includes(result.status)) providerErrorCategory = 'authentication';
+      try {
+        const payload = await result.json() as Record<string, any>;
+        const descriptor = [payload?.code, payload?.message, payload?.detail,
+          payload?.error?.code, payload?.error?.message, payload?.error_description]
+          .filter((value): value is string => typeof value === 'string')
+          .join(' ').toLowerCase().slice(0, 600);
+        if (/credit|balance|insufficient|funds/.test(descriptor)) providerErrorCategory = 'credits';
+        else if (/workflow|unpublished|archived/.test(descriptor)) providerErrorCategory = 'workflow';
+        else if (/invalid|missing|required|validation|parameter|field/.test(descriptor)) providerErrorCategory = 'request-validation';
+      } catch { /* No parseable error response; retain HTTP category only. */ }
+      throw new Error('Didit session request was not accepted');
+    }
     failurePhase = 'provider-json';
     const session = await result.json() as Record<string, unknown>;
     failurePhase = 'provider-response';
@@ -124,7 +142,7 @@ export const startDiditSession = async (uid: string) => {
     // Safe diagnostics only: never log provider response bodies, keys, IDs,
     // session URLs, identity details, or biometric/document data.
     console.error('Didit session creation failed', {
-      phase: failurePhase, providerHttpStatus,
+      phase: failurePhase, providerHttpStatus, providerErrorCategory,
       category: error instanceof Error ? error.name : 'unknown',
     });
     throw new HttpsError('unavailable',
