@@ -50,4 +50,17 @@ assert.match(app, /else if \(!memberPilot\)/, 'pilot initiation is not mistakenl
 assert.match(app, /if \(ageProviderVerified\)/, 'verified members do not get a repeat session button');
 assert.match(css, /\.nj-didit-member-pilot/, 'pilot UI has premium responsive layout');
 
-console.log('Nightjar Didit controlled tester pilot, reusable verification and bypass preservation contracts PASS (source level).');
+
+const legalNotice = fs.readFileSync('src/legal/nightjarLegal.ts', 'utf8');
+const legalPage = fs.readFileSync('src/components/LegalDocumentPage.tsx', 'utf8');
+assert.match(legalNotice, /NIGHTJAR_AGE_NOTICE_VERSION = '2026-10-14\.3'/, 'age notice keeps consistent server version');
+assert.match(legalNotice, /age_assurance_notice: \{/, 'Didit privacy notice is published as a readable legal document');
+assert.match(index, /age_assurance_notice: \{[\s\S]*?version: '2026-10-14\.3'/, 'backend agreement endpoint can record versioned age-notice acknowledgement');
+assert.match(app, /nightjarLegal\.accept\(\[\{/, 'age gate saves affirmative acknowledgement server-side before starting Didit');
+assert.match(app, /ageDiditPermission/, 'live identity-check permission is separately requested');
+assert.match(app, /!ageNoticeAccepted && !ageNoticeAcknowledged/, 'missing age notice acknowledgement disables start action');
+assert.match(app, /!ageProviderVerified && !ageDiditPermission/, 'missing ID-check permission disables start action');
+assert.match(app, /Read Nightjar's Age Verification/, 'user can read the actual notice from the gate');
+assert.match(legalPage, /age_assurance_notice/, 'legal document shows correct age notice effective date');
+
+console.log('Nightjar Didit controlled tester pilot, reusable verification, notice acknowledgement and bypass preservation contracts PASS (source level).');
