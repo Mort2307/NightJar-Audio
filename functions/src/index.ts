@@ -6386,6 +6386,50 @@ export const adminAgeTestPass = onCall({ region: REGION }, async request => {
   throw new HttpsError('failed-precondition', 'Test approvals cannot replace live Didit age verification.');
 });
 
+// Owner-only operational view. Never export identity images, DOB, biometrics,
+// full webhook decisions, or provider API credentials to the app.
+export const adminDiditDashboard = onCall({ region: REGION }, async request => {
+  const identity = requireAdminIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('ageAssurance').limit(500).get();
+  const rows = snapshot.docs
+    .filter(doc => doc.data().provider === 'didit')
+    .map(doc => {
+      const data = doc.data();
+      return {
+        uid:doc.id,
+        status:cleanText(data.status, 40) || 'NOT_STARTED',
+        environment:cleanText(data.environment, 20) || 'unknown',
+        verified:diditPass(data),
+        sessionId:cleanText(data.sessionId, 140) || null,
+        verifiedAt:toIso(data.verifiedAt),
+        updatedAt:toIso(data.updatedAt),
+        reverifyRequired:data.reverifyRequired === true,
+      };
+    })
+    .sort((a,b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  const counts = {
+    total: rows.length,
+    approved:rows.filter(x => x.verified).length,
+    pending:rows.filter(x => ['PENDING','IN_PROGRESS','CREATING','RESUBMITTED','AWAITING_USER','NOT_STARTED'].includes(x.status)).length,
+    review:rows.filter(x => x.status === 'PENDING_REVIEW' || x.reverifyRequired).length,
+    failed:rows.filter(x => ['FAIL','EXPIRED','ABANDONED','BLOCKED'].includes(x.status)).length,
+  };
+  const recent = await Promise.all(rows.slice(0,25).map(async item => {
+    const account = await accountRef(item.uid).get();
+    return {
+      status:item.status, environment:item.environment, verified:item.verified,
+      sessionId:item.sessionId, verifiedAt:item.verifiedAt, updatedAt:item.updatedAt,
+      reverifyRequired:item.reverifyRequired,
+      account:maskSecurityEmail(account.data()?.email),
+    };
+  }));
+  return { counts, recent, truncated:snapshot.size >= 500,
+    providerConsole:'https://business.didit.me/',
+    retentionWindowConfirmed:false,
+    note:'Open the restricted Didit Business Console for documentary evidence. Confirm retention settings before publishing an exact storage period.' };
+});
+
 export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
@@ -12268,7 +12312,7 @@ export const getVoiceCallingCard = onCall({ region: REGION }, async (request) =>
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   return { releaseId, release: decorateReleaseAccess(doc.data() ?? {}, releaseId, identity.uid, {
-    admin: identity.admin, subscription,
+    admin: identity.admin, subscription, betaAccess,
   }) };
 });
 
