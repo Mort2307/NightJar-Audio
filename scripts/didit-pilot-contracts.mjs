@@ -73,7 +73,7 @@ assert.match(pauseStarter, /await requireCurrentLegalAcceptance\(identity.uid, '
 assert.match(app, /nightjarAge.start\(adminPilot && DIDIT_VERIFICATION_PAUSED\)/, 'public and cached app clients never signal test bypass');
 assert.match(app, /!ageDiditPermission \|\| \(!ageNoticeAccepted && !ageNoticeAcknowledged\)/, 'admin test requires explicit consent and acknowledgement');
 assert.match(ageClient, /controlledAdminTest \? \{ controlledAdminTest: true \} : \{\}/, 'admin test flag is opt-in, never default');
-assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED)') < pauseStarter.indexOf('return startDiditSession'), 'pause check precedes provider creation');
+assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest)') >= 0 && pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest)') < pauseStarter.indexOf('return startDiditSession'), 'pause check precedes provider creation');
 assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client can read pause status');
 assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'app visibly pauses verification');
 assert.match(app, /Age verification temporarily unavailable/, 'age gate explains outage');
