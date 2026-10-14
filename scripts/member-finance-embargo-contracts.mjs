@@ -15,7 +15,10 @@ const notifications=read('src/components/NotificationPreferences.tsx');
 const glossary=read('src/components/HelpGlossary.tsx');
 const backend=read('functions/src/index.ts');
 
-assert.match(visibility,/MEMBER_PAYMENT_FEATURES_ENABLED = false/, 'beta payment controls remain embargoed');
+assert.match(visibility,/MEMBER_PAYMENT_FEATURES_ENABLED = false/, 'platform wallet, gifting and billing controls remain embargoed');
+assert.match(visibility,/WRITER_PRICE_NEGOTIATION_ENABLED = true/, 'own-work script pricing and negotiation remain enabled');
+assert.match(visibility,/LISTENER_SUBSCRIPTION_PRICE_GBP = '£6\.99\/month'/, 'public listener subscription price is transparent');
+assert.match(preview,/LISTENER_SUBSCRIPTION_PRICE_GBP/, 'subscription preview uses advertised public price');
 assert.doesNotMatch(app,/<TransparencyPanel|nj-home-transparency|studio-feature-copy|CAPPED EQUAL RATE/, 'home hides financial model and old promotional material');
 assert.match(app, /<HomeSection id="studio" title="Creative opportunities">/, 'creative opportunities are visible again as compact section');
 assert.match(preview, /No payment or transfer will take place/, 'support preview is explicitly non-transactional');
@@ -31,17 +34,19 @@ assert.match(profile, /!readOnlyPreview && \(profile.roles[^\n]*Support creator/
 assert.match(profile, /MEMBER_PAYMENT_FEATURES_ENABLED \? <NightjarGiftPanel/, 'actual gift dialog stays behind launch gate');
 assert.match(profile,/<NightjarFinancePreview kind="support"/, 'public profile opens safe preview');
 assert.match(app, /creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection[^\n]*creator-licences/, 'creator rights area is visible again');
-assert.match(app, /MEMBER_PAYMENT_FEATURES_ENABLED \? <Suspense[^\n]*Loading script rights offers/, 'actual paid creator offers remain gated');
+assert.match(app, /<ScriptLicenceWorkspace role="creator"/, 'creator licence terms work without a payment transaction');
 assert.match(app, /<WorkspaceSection[^\n]*writer-negotiations/, 'writer rights discussions are visible again');
-assert.match(app, /MEMBER_PAYMENT_FEATURES_ENABLED \? <Suspense[^\n]*Loading Writer rights negotiations/, 'actual paid writer negotiations remain gated');
+assert.match(app, /<ScriptLicenceWorkspace role="writer"/, 'writer owns script pricing and may negotiate terms');
 assert.match(settings,/<NightjarFinancePreview kind="membership"/, 'membership plans are discoverable without prices');
-assert.doesNotMatch(script,/Indicative fee|commissionPricePence/, 'marketplace has no public fee');
-assert.doesNotMatch(rights,/Indicative commission price \(£\)/, 'writer studio has no price setting');
-assert.match(actions,/MEMBER_PAYMENT_FEATURES_ENABLED&&<button[^\n]*Make rights offer/, 'payment offer button stays gated');
+assert.match(script,/commissionPricePence/, 'writer-selected price is visible on approved marketplace listings');
+assert.match(script,/Writer asking price/, 'listing distinguishes author price from Nightjar rates');
+assert.match(rights,/Your script asking price \(£, optional\)/, 'writer can choose an optional asking price');
+assert.match(rights,/commissionPricePence: askingPrice/, 'writer price is saved in listing data');
+assert.match(actions,/WRITER_PRICE_NEGOTIATION_ENABLED&&<button[^\n]*Make rights offer/, 'VA can submit an author-directed nonbinding price offer');
 assert.match(actions,/openContact\('rights'\)/,'VA can discuss rights without monetary offer');
-assert.match(actions,/next==='licence'&&!MEMBER_PAYMENT_FEATURES_ENABLED/, 'paid offer mode cannot be opened by a member');
+assert.match(actions,/next==='licence'&&!WRITER_PRICE_NEGOTIATION_ENABLED/, 'offer mode has its own switch independent of payments');
 assert.doesNotMatch(notifications, /\['payments','Payment updates'\]/, 'payment notices are not advertised before launch');
-assert.match(glossary,/!\['licence-price','counteroffer'\]\.includes\(id\)/, 'fee and counteroffer terms are hidden in member glossary');
+assert.doesNotMatch(glossary,/!\['licence-price','counteroffer'\]\.includes\(id\)/, 'writer pricing and counteroffer help is visible');
 assert.doesNotMatch(app,/notifyWithAction\(message, 'Subscribe'/, 'paywall does not advertise checkout');
 const snapshot=backend.slice(backend.indexOf('export const transparencySnapshot'),backend.indexOf('const CREATIVE_MESSAGE_ROLES',backend.indexOf('export const transparencySnapshot')));
 assert.match(snapshot,/requireAccountRole\(request, \['admin'\]\)/,'commercial snapshot requires administrator');
@@ -50,7 +55,8 @@ assert.match(access,/identity\.admin \? readCommercialSettings\(\) : Promise\.re
 assert.match(access,/planningMonthlyPricePence: identity\.admin \?/, 'price redacted for non-admin');
 assert.match(access,/subscriptionUrl: identity\.admin \?/, 'checkout URL redacted for non-admin');
 const market=backend.slice(backend.indexOf('export const listScriptMarketplace'),backend.indexOf('export const getMarketplaceScriptSample'));
-assert.match(market,/commissionPricePence: _hiddenIndicativePrice/,'backend omits indicative script fee from member discovery');
+assert.match(market,/const \{ previewExcerpt, \.\.\.listing \} = normaliseScriptMarketplace/,'backend sends only writer-selected listing, with protected sample excluded');
+assert.doesNotMatch(market,/_hiddenIndicativePrice/,'writer asking price must not be stripped from an approved listing');
 const giftApi=read('functions/src/nightjars.ts');
 for(const fn of ['nightjarGiftConfig','myNightjarWallet','sendNightjars','myNightjarEarnings','myNightjarGiftHistory']) {
   const start=giftApi.indexOf('export const '+fn+' = onCall');
