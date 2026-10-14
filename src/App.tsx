@@ -622,15 +622,6 @@ function App() {
   });
   const [commercialSaving, setCommercialSaving] = useState(false);
   const [creatorSlotBusyUserId, setCreatorSlotBusyUserId] = useState<string | null>(null);
-  const [listeningAccess, setListeningAccess] = useState<{
-    role:string|null;
-    subscribed:boolean;
-    subscriptionStatus:string|null;
-    planningMonthlyPricePence:number|null;
-    subscriptionUrl:string|null;
-    creditedWorkIncluded:true;
-    rule:string;
-  } | null>(null);
   const [reviewTrack, setReviewTrack] = useState<Track | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [catalogueQuery, setCatalogueQuery] = useState('');
@@ -1611,12 +1602,11 @@ function App() {
       });
       await loadNotifications(epoch);
       if (user) {
-        const [recommendationsResponse, trendingResponse, communityState, reactionState, listeningAccessResponse] = await Promise.all([
+        const [recommendationsResponse, trendingResponse, communityState, reactionState] = await Promise.all([
           nightjarCatalogue.recommendations(currentIntent),
           nightjarCatalogue.trending(),
           nightjarCommunity.state(),
           nightjarEngagement.state(),
-          nightjarCommercial.listeningAccess(),
         ]);
         if (epoch !== productLoadEpoch.current) return;
         setLiveRecommendations(recommendationsResponse.recommendations ?? []);
@@ -1624,7 +1614,6 @@ function App() {
         setFavouriteReleaseIds((communityState.favourites ?? []).map((item: any) => String(item.releaseId)));
         setFollowingProfileIds((communityState.follows ?? []).map((item: any) => String(item.targetUserId ?? item.creatorUserId)).filter(Boolean));
         setReleaseReactions(Object.fromEntries((reactionState.reactions ?? []).map((item) => [String(item.releaseId), item.reaction])) as Record<string, Exclude<ReleaseReaction,null>>);
-        setListeningAccess(listeningAccessResponse);
       }
     } catch {
       if (epoch !== productLoadEpoch.current) return;
@@ -1641,7 +1630,6 @@ function App() {
       setNotificationsOpen(false);
       setLiveRecommendations([]);
       setLiveTrending([]);
-      setListeningAccess(null);
     }
   };
 
