@@ -46,6 +46,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
   // onChange discarded trailing spaces and prevented multi-word genres/tropes.
   const [genresDraft, setGenresDraft] = useState('');
   const [tropesDraft, setTropesDraft] = useState('');
+  const [askingPriceDraft, setAskingPriceDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,10 +55,21 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
     setMarketplace({ ...defaultMarketplace, ...(script?.marketplace ?? {}) });
     setGenresDraft((script?.marketplace?.genres ?? []).join(', '));
     setTropesDraft((script?.marketplace?.tropes ?? []).join(', '));
+    const storedPrice = script?.marketplace?.commissionPricePence;
+    setAskingPriceDraft(typeof storedPrice === 'number' && storedPrice > 0 ? (storedPrice / 100).toFixed(2) : '');
   }, [script?.id, script?.rights, script?.marketplace]);
 
+  const parseWriterPrice = (): number | null | undefined => {
+    const value = askingPriceDraft.trim();
+    if (!value) return null; // Writers may choose "contact for pricing".
+    if (!/^(?:0|[1-9]\\d{0,5})(?:\\.\\d{1,2})?$/.test(value)) return undefined;
+    const pence = Math.round(Number(value) * 100);
+    return Number.isSafeInteger(pence) && pence >= 100 && pence <= 10000000 ? pence : undefined;
+  };
   const save = async (listApproved = false) => {
     if (!script?.id || saving || submitting) return;
+    const askingPrice = parseWriterPrice();
+    if (askingPrice === undefined) { notify('Enter a valid asking price between £1 and £100,000, or leave the field blank.'); return; }
     if (listApproved && !['Approved','Published'].includes(String(script.status ?? ''))) {
       notify('NightJar must approve your manuscript before you list it for creators.');
       return;
@@ -73,6 +85,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       ...(listApproved ? { visibility: 'marketplace' } : {}),
       genres: parseListingTags(genresDraft, 16),
       tropes: parseListingTags(tropesDraft, 24),
+      commissionPricePence: askingPrice,
     };
     try {
       if (simulationMode) {
@@ -92,6 +105,8 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
 
   const submitForNightJarReview = async () => {
     if (!script?.id || saving || submitting) return;
+    const askingPrice = parseWriterPrice();
+    if (askingPrice === undefined) { notify('Enter a valid asking price between £1 and £100,000, or leave the field blank.'); return; }
     if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) {
       notify('This manuscript is already submitted or approved.');
       return;
@@ -109,6 +124,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
     try {
       const listing = {
         ...marketplace,
+        commissionPricePence: askingPrice,
         genres: parseListingTags(genresDraft, 16),
         tropes: parseListingTags(tropesDraft, 24),
       };
@@ -162,6 +178,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       <label><span className="nj-term-label">Licence type <ContextHelp topic="licence-choice"/></span><select value={rights.licenceType} onChange={(e) => setRights((r) => ({ ...r, licenceType: e.target.value }))}><option value="none">No licence agreed</option><option value="non-exclusive">Non-exclusive</option><option value="exclusive">Exclusive</option></select></label>
       <label><span className="nj-term-label">Licence length <ContextHelp topic="licence-term"/></span><input value={rights.licenceLength ?? ''} onChange={(e) => setRights((r) => ({ ...r, licenceLength: e.target.value }))} placeholder="e.g. 12 months"/></label>
       <label><span className="nj-term-label">Marketplace visibility <ContextHelp topic="marketplace-visibility"/></span><select value={marketplace.visibility} onChange={(e) => setMarketplace((m: any) => ({ ...m, visibility: e.target.value }))}><option value="private">Private</option><option value="invitation">Invitation only</option><option value="marketplace">Marketplace</option><option value="unavailable">Unavailable</option><option value="licensed">Licensed</option></select></label>
+      <label><span className="nj-term-label">Your script asking price (£, optional) <ContextHelp topic="licence-price"/></span><input type="number" min="1" max="100000" step=".01" inputMode="decimal" value={askingPriceDraft} onChange={(e)=>setAskingPriceDraft(e.target.value)} placeholder="Contact for price" /><small>Your own asking price, shown on approved marketplace listings. You control this amount; it is negotiable and separate from Nightjar's internal finances.</small></label>
       <label className="research-span-two"><span className="nj-term-label">Public synopsis <ContextHelp topic="public-synopsis"/></span><textarea value={marketplace.synopsis ?? ''} onChange={(e) => setMarketplace((m: any) => ({ ...m, synopsis: e.target.value }))} placeholder="A protected public summary; never the full manuscript."/></label>
       <label className="research-span-two"><span className="nj-term-label">Optional protected VA sample <ContextHelp topic="protected-sample"/></span><textarea value={marketplace.previewExcerpt ?? ''} maxLength={3200} onChange={(e)=>setMarketplace((m:any)=>({...m,previewExcerpt:e.target.value}))} placeholder="Paste only the extract you expressly authorise VAs to preview. The entire original manuscript stays private."/><small>Writer-selected extract · shown only inside the protected VA sample viewer · up to 3,200 characters. Leave blank to disable samples.</small></label>
       <label>Genres<input value={genresDraft} onChange={(event) => setGenresDraft(event.target.value)} placeholder="Dark romance, Romantic fantasy" aria-describedby="nightjar-genres-help"/><small id="nightjar-genres-help">Separate genres with commas. Spaces inside each genre are supported.</small></label>
