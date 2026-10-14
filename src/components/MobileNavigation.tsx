@@ -35,7 +35,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, onA
   const items: Item[] = role === 'listener'
     ? [
         { view: 'discover', label: 'Home', icon: Home },
-        { label:'Explore', icon:Search, search:true, accessibleLabel:'Explore Nightjar releases and creators' },
+        { view:'creators', label:'Explore', icon:Search, accessibleLabel:'Discover creators and their work' },
         { view: 'library', label: 'Library', icon: Library },
         { label:'Activity', icon:Bell, activity:true, accessibleLabel:'Activity and notifications' },
         settings,
