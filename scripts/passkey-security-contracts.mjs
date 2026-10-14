@@ -41,7 +41,7 @@ assert.match(signin, /nightjarPasskeys.signIn\(/, 'sign-in screen exposes real p
 assert.ok(packageJson.dependencies['@simplewebauthn/server'], 'a maintained WebAuthn verification library is installed');
 // Launch-biometric regression checks: render before account or role workspaces.
 assert.match(main, /<NightjarLaunchUnlock>\{isAccountPortal \? <AccountPortal \/> : <App \/>\}<\/NightjarLaunchUnlock>/, 'biometric screen wraps every interactive Nightjar route');
-assert.match(launch, /nightjarPasskeys.signIn\(preference.userId, controller.signal\)/, 'launch verifies the actual enrolled Nightjar account');
+assert.match(launch, /nightjarPasskeys.signIn\(preference.userId, controller.signal,/, 'launch verifies the actual enrolled Nightjar account');
 assert.match(launch, /nightjarQuickUnlock.markUnlocked\(identity.userId\)/, 'only a verified assertion unlocks the session');
 assert.match(client, /expectedUserId && result.user.uid !== expectedUserId/, 'the other account passkey must not open this member\'s session');
 assert.match(client, /signOut\(firebaseAuth\)/, 'mismatched or cancelled sign-in must revoke the browser session');
@@ -64,5 +64,12 @@ assert.match(launch, /manualUnlockVisible && supported/, 'normal launch does not
 assert.match(launch, /void unlock\(true\)/, 'saved Android passkeys open immediately without another tap');
 assert.match(launch, /setManualUnlockVisible\(true\)/, 'failed prompts expose manual retry and password recovery');
 assert.match(launch, /Use email and password/, 'password fallback always remains available');
+assert.match(client, /onProgress\?\.\('LOGIN_START'\)/, 'launch progress starts with an actual server challenge');
+assert.match(client, /onProgress\?\.\('LOGIN_DEVICE'\)/, 'device stage comes from the WebAuthn client');
+assert.match(client, /onProgress\?\.\('LOGIN_VERIFY'\)/, 'verification stage follows the device assertion');
+assert.match(client, /onProgress\?\.\('LOGIN_SESSION'\)/, 'session progress waits for signed Firebase token exchange');
+assert.match(launch, /nj-launch-unlock-biometric-emblem/, 'automatic passkey screen shows its restored bronze biometric emblem');
+assert.match(launch, /setTakingLonger\(true\)/, 'slow sign-ins explain the ongoing check');
+assert.match(css, /\.account-access-card \.account-access-passkey/, 'biometric sign-in action has dedicated metallic styling');
 
 console.log('Nightjar WebAuthn passkey security contracts passed (source checks only).');
