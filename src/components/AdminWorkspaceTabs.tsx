@@ -1,6 +1,6 @@
-import { ArrowRight, BarChart3, CheckCircle2, Headphones, LayoutDashboard, Rocket, ShieldCheck, Users, Wrench, LifeBuoy, type LucideIcon } from 'lucide-react';
+import { ArrowRight, BarChart3, CheckCircle2, Headphones, LayoutDashboard, Rocket, ShieldCheck, Users, Wrench, LifeBuoy, ScanFace, type LucideIcon } from 'lucide-react';
 
-export type AdminWorkspace = 'overview' | 'people' | 'content' | 'launch' | 'finance' | 'security' | 'assistance' | 'tools';
+export type AdminWorkspace = 'overview' | 'people' | 'content' | 'launch' | 'didit' | 'finance' | 'security' | 'assistance' | 'tools';
 
 type Props = {
   active: AdminWorkspace;
@@ -14,7 +14,8 @@ const sections: { id: AdminWorkspace; label: string; detail: string; icon: Lucid
   { id: 'overview', label: 'Overview', detail: 'What needs attention', icon: LayoutDashboard },
   { id: 'people', label: 'People', detail: 'Accounts and testers', icon: Users },
   { id: 'content', label: 'Content', detail: 'Approvals and moderation', icon: Headphones },
-  { id: 'launch', label: 'Launch', detail: 'Didit and release readiness', icon: Rocket },
+  { id: 'launch', label: 'Launch', detail: 'Release readiness', icon: Rocket },
+  { id: 'didit', label: 'Didit', detail: 'Verification and reviews', icon: ScanFace },
   { id: 'finance', label: 'Finance', detail: 'Revenue and payouts', icon: BarChart3 },
   { id: 'security', label: 'Safety', detail: 'Alerts and activity', icon: ShieldCheck },
   { id: 'assistance', label: 'Assistance', detail: 'Accounts and recovery', icon: LifeBuoy },

@@ -53,5 +53,5 @@ assert.match(creator,/VoiceCallingCardPublic/);
 assert.match(timeline,/nightjarExperience\.timeline\(\)/);
 assert.doesNotMatch(backend.slice(backend.indexOf('// Low-cost listener experience additions.')),/onSchedule\(|onDocumentWritten\(|getMessaging\(/);
 assert.match(backend,/const CLOSED_BETA = true/);
-assert.match(backend,/const TESTING_AGE_ASSURANCE_BYPASS = true/);
+assert.doesNotMatch(backend,/TESTING_AGE_ASSURANCE_BYPASS/, 'Listener catalogue requires real Didit approval even in beta');
 console.log('Listening Moments, mood, private boundaries, curated VA cards and production timeline contracts PASS');

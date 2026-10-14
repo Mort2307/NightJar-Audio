@@ -21,20 +21,14 @@ for (const section of ['platform_terms','privacy_notice','professional_terms']) 
 }
 assert.match(documentPage, /legalDocumentForPath/, 'Full legal documents must be readable individually');
 assert.ok(!hub.includes('docs/legal/'), 'Unapproved commercial drafts must never appear as accepted beta terms');
-assert.ok(backend.includes('const TESTING_AGE_ASSURANCE_BYPASS = true;'),
-  'Approved private-beta tester bypass must remain enabled');
-assert.ok(backend.includes('const CLOSED_BETA = true;'),
-  'Private beta must remain closed to unapproved public signups');
-assert.ok(backend.includes('DIDIT_LIVE_PILOT_ADMINS_ONLY = true'),
-  'Live Didit pilot must be restricted to administrators');
-assert.match(backend, /DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity\.admin/,
-  'Non-admins must not start live provider sessions');
-assert.ok(app.includes('Start my live Didit test') && app.includes('ageProviderVerified'),
-  'Admin must have a clearly labelled real-provider pilot and distinct verification indicator');
-assert.ok(age.includes('providerVerified?: boolean') && age.includes('livePilotAvailable?: boolean'),
-  'Didit status distinguishes permanent provider evidence from temporary beta access');
+assert.ok(!backend.includes('TESTING_AGE_ASSURANCE_BYPASS'), 'Tester bypass is retired');
+assert.ok(backend.includes('const CLOSED_BETA = true;'), 'Private beta remains invite-only');
+assert.ok(!backend.includes('DIDIT_LIVE_PILOT_ADMINS_ONLY'), 'Every invited tester must have access to the live Didit check');
+assert.ok(app.includes('Verify my age with Didit') && app.includes('ageProviderVerified'),
+  'All accounts have the same mandatory provider check and saved approval');
+assert.ok(age.includes('providerVerified?: boolean'), 'Didit approval is shown distinctly from account access');
 assert.ok(!app.includes('Yoti'), 'Old Yoti UI must not be shown once Didit integration is deployed');
 assert.ok(!backend.includes('AGE_ASSURANCE_CONFIGURED'), 'Legacy age flag must not overwrite Didit setup');
 assert.ok(hosting.hosting.rewrites.some(x=>x.source==='/api/webhooks/didit'&&x.function?.functionId==='diditWebhook'),
   'Didit webhook route must precede hosting fallback');
-console.log('Nightjar T&Cs reading centre, versioned beta terms and Didit bypass contracts PASS');
+console.log('Nightjar T&Cs reading centre, versioned beta terms and mandatory Didit contracts PASS');

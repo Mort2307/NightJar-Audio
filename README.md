@@ -63,21 +63,21 @@ The Taste Engine separates identity from taste. Explicit preferences seed recomm
 Age-assurance callback/cancel URLs must resolve to the Firebase/custom-domain deployment. Production configuration should use `https://nightjar.audio/` once that domain is verified.
 
 
-## Age assurance
+## Age assurance — mandatory for all accounts
 
-Nightjar uses **account-level 18+ age assurance**. A successful provider result is stored against the authenticated Nightjar account and reused on later logins and devices. A new provider session is created only when the account has no verified result or an explicit re-verification requirement is recorded.
+Nightjar requires a **live Didit 18+ verification once per authenticated Firebase account**, including existing closed-beta testers, administrators and professional contributors. Closed-beta allowlisting controls who may register but NEVER substitutes for age verification. No bypass or fake admin approval unlocks adult content.
 
-The backend is provider-ready for Yoti sandbox and production:
+- Sign in and verify the email, then complete one Didit check **before** accessing the catalogue or continuing role/profile onboarding.
+- The user expressly presses **Verify my age with Didit**. Sign-ins, background refresh and account creation never start a billable session.
+- The backend saves an approved **live** Didit decision only where an ID-verification check confirms the user was at least 18; a generic `Approved` identity result or sandbox result cannot unlock adult content.
+- The verified status is persisted in Firestore under `ageAssurance/<uid>` and reused on future logins and devices. It remains valid until explicit provider revocation or a justified safeguarding/security review.
+- Sessions still pending are reused instead of being duplicated. A provider-review status blocks a second paid check, and new sessions have a cap of three starts per account per 24-hour window.
+- Signature-verified, replay-protected Didit V3 webhooks update verification records asynchronously. Raw ID images and biometrics are not saved in Nightjar.
+- Protected audio, transcripts, scripts and Nightjars gifting require this server-side live approval.
 
-- `NIGHTJAR_AGE_ENV=sandbox` (default) uses Yoti's sandbox API and `YOTI_ACCESS_TOKEN`.
-- `NIGHTJAR_AGE_ENV=production` uses Yoti's production Age API and `YOTI_API_KEY`.
-- Both environments require `YOTI_SDK_ID`.
-- `NIGHTJAR_APP_URL` controls the post-verification callback/cancel URL.
+**Required Firebase Secret Manager values**: `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID`, `DIDIT_WEBHOOK_SECRET`, `DIDIT_ENVIRONMENT=live`. The workflow must require real documentary adult evidence with a verified date of birth; a facial-estimation-only adaptive path cannot grant access until a separately reviewed evidence adapter is added. Configure the V3 webhook destination to `https://nightjar.audio/api/webhooks/didit` with `status.updated`, `data.updated`, and `user.status.updated`. Confirm the final callback hostname maps to the deployed Firebase function.
 
-Nightjar stores verification state and an opaque provider reference. Raw identity documents are not stored in the Nightjar content database.
-
-The adult catalogue, recommendations, trending releases and protected manuscript access are also checked server-side against the stored verified state, so the client cannot bypass the age gate.
-
+Use `npm run setup:didit:live` from an authenticated Cloud Shell terminal to configure **secrets without exposing them in code or chat**. This setup does not deploy or certify the integration. Run the standard repo validation, deploy Functions and Hosting, then perform a supervised successful 18+ approval and under-18/decline test before accepting real testers. Until then the new gate intentionally fails closed. A sandbox approval is not a live 18+ verification.
 
 ## Inclusive spotlights
 

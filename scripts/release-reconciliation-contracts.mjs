@@ -41,6 +41,6 @@ assert.ok(entry.includes('isLegalCentre ? <LegalCentrePage />'), 'public legal h
 assert.ok(read('src/components/LegalCentrePage.tsx').includes('NIGHTJAR_LEGAL_DOCUMENTS'), 'legal hub uses versioned beta documents');
 assert.ok(hosting.hosting.rewrites[0]?.source === '/api/webhooks/didit', 'Didit webhook must precede SPA rewrite');
 assert.ok(storage.includes('ownsEditableRelease(releaseId);'), 'published audio must not be deleted through client Storage SDK');
-assert.ok(app.includes('openAgeCheck(true)'), 'Didit pilot is separately confirmed by Administrator');
-assert.ok(app.includes('ageProviderVerified'), 'provider-backed verification must remain distinct from tester access');
+assert.ok(app.includes('onClick={() => void openAgeCheck()}'), 'Didit verification starts explicitly for the signed-in account');
+assert.ok(app.includes('ageProviderVerified'), 'provider-backed verification is persisted separately from login');
 console.log('Nightjar release reconciliation contracts PASS (source checks only).');

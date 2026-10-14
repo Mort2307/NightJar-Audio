@@ -27,8 +27,12 @@ export const startDiditSession = async (uid: string) => {
   if (!diditConfigured()) throw new HttpsError('failed-precondition', 'Didit verification is not configured.');
   const existing = (await ageRef(uid).get()).data() ?? {};
   if (diditPass(existing)) return { verified: true, status: 'COMPLETE', provider: 'didit', environment: 'live', configured: true };
+  // A provider review must complete before further paid checks can be opened.
+  if (existing.status === 'PENDING_REVIEW') {
+    throw new HttpsError('failed-precondition', 'Your existing Didit check is under review. Please contact Nightjar support rather than starting another paid check.');
+  }
   const oldId = text(existing.sessionId);
-  if (oldId && ['PENDING', 'IN_PROGRESS', 'NOT_STARTED'].includes(String(existing.status))) {
+  if (oldId && ['PENDING', 'IN_PROGRESS', 'NOT_STARTED', 'RESUBMITTED', 'AWAITING_USER'].includes(String(existing.status))) {
     const old = (await sessionRef(oldId).get()).data() ?? {};
     if (old.uid === uid && old.environment === env() && old.workflowId === DIDIT_WORKFLOW_ID.value() &&
         old.createdAtMs > Date.now() - 6 * 86400_000 && text(old.url, 2048)) {
@@ -42,7 +46,14 @@ export const startDiditSession = async (uid: string) => {
     const data = snap.data() ?? {};
     if (diditPass(data)) return 'verified';
     if (data.status === 'CREATING' && Number(data.creatingSinceMs ?? 0) > Date.now() - 45000) return 'busy';
+    const now = Date.now();
+    const windowStart = Number(data.sessionStartWindowMs ?? 0);
+    const inWindow = windowStart > now - 86400_000 && windowStart <= now;
+    const attempts = inWindow ? Number(data.sessionStarts24h ?? 0) : 0;
+    if (attempts >= 3) return 'rate-limited';
     tx.set(ref, {
+      sessionStartWindowMs: inWindow ? windowStart : now,
+      sessionStarts24h: attempts + 1,
       provider: 'didit', status: 'CREATING', environment: env(), verified: false,
       reverifyRequired: true, testMode: env() !== 'live',
       creatingSinceMs: Date.now(), updatedAt: FieldValue.serverTimestamp(),
@@ -51,6 +62,8 @@ export const startDiditSession = async (uid: string) => {
   });
   if (claimed === 'verified') return { verified: true, status: 'COMPLETE', provider: 'didit', environment: 'live', configured: true };
   if (claimed === 'busy') throw new HttpsError('aborted', 'A verification session is starting. Try again shortly.');
+  if (claimed === 'rate-limited') throw new HttpsError('resource-exhausted',
+    'Too many verification attempts in the last 24 hours. Contact Nightjar support if you need help.');
   try {
     const result = await fetch('https://verification.didit.me/v3/session/', {
       method: 'POST',

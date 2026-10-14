@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, FileText, ShieldCheck, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FileText, ShieldCheck, Users, LockKeyhole } from 'lucide-react';
 import { NIGHTJAR_LEGAL_DOCUMENTS, NIGHTJAR_LEGAL_VERSION } from '../legal/nightjarLegal';
 
 /**
@@ -10,6 +10,7 @@ export default function LegalCentrePage() {
   const documents = [
     { id:'platform_terms' as const, icon:FileText, name:'Terms & Conditions', audience:'All Nightjar members' },
     { id:'privacy_notice' as const, icon:ShieldCheck, name:'Privacy Notice', audience:'All Nightjar members' },
+    { id:'age_assurance_notice' as const, icon:LockKeyhole, name:'Age Verification & Didit', audience:'All members and invited testers · before 18+ access' },
     { id:'professional_terms' as const, icon:Users, name:'Professional & Contributor Terms', audience:'VA Creators · Writers · Audio Editors · Artists' },
   ];
 

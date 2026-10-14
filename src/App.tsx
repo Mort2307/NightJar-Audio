@@ -23,6 +23,8 @@ import ProfessionalLibrary from './components/ProfessionalLibrary';
 import SpotlightExperience from './components/SpotlightExperience';
 import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { nightjarAge } from './platform/firebase-age';
+import { nightjarLegal } from './platform/firebase-legal';
+import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarAuthSecurity, type AuthenticationSecurityEvent } from './platform/firebase-auth-security';
@@ -106,6 +108,7 @@ import type { ProfileDraftController } from './components/CloudProfileDraft';
 import ProfileSectionBoundary from './components/ProfileSectionBoundary';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
+const AdminDiditDashboard = lazy(() => import('./components/AdminDiditDashboard'));
 const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
 const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipeline'));
 const CreatorListeningInsights = lazy(() => import('./components/CreatorListeningInsights'));
@@ -311,7 +314,7 @@ type Track = {
   communityCommentCount?: number;
   listenCount?: number;
   playbackAllowed?: boolean;
-  playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'subscription_required' | null;
+  playbackAccessReason?: 'admin' | 'credited_work' | 'beta_test' | 'subscription' | 'subscription_required' | null;
 };
 
 type PublicDirectoryProfile = {
@@ -493,6 +496,8 @@ function App() {
   const [sessionHydrating, setSessionHydrating] = useState(true);
   const [sessionRestoreError, setSessionRestoreError] = useState(false);
   const [ageVerified, setAgeVerified] = useState(false);
+  const [ageNoticeAccepted, setAgeNoticeAccepted] = useState(false);
+  const [ageNoticeAcknowledged, setAgeNoticeAcknowledged] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
   const [ageProvider, setAgeProvider] = useState('didit');
@@ -503,15 +508,8 @@ function App() {
   const [ageProviderVerified, setAgeProviderVerified] = useState(false);
   const [ageProviderStatus, setAgeProviderStatus] = useState('NOT_STARTED');
   const [ageLivePilotAvailable, setAgeLivePilotAvailable] = useState(false);
-  const [agePilotEligible, setAgePilotEligible] = useState(false);
-  const [agePilotConsent, setAgePilotConsent] = useState(false);
-  const [diditPilotEmail, setDiditPilotEmail] = useState('');
-  const [diditPilotBusy, setDiditPilotBusy] = useState(false);
-  const [diditPilotFeedback, setDiditPilotFeedback] = useState('');
   const [ageLaunchUrl, setAgeLaunchUrl] = useState<string | null>(null);
   const [ageLoading, setAgeLoading] = useState(false);
-  const [ageTemporaryBypass, setAgeTemporaryBypass] = useState(false);
-  const [ageTemporaryBypassReason, setAgeTemporaryBypassReason] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [toastAction, setToastAction] = useState<{ label: string; run: () => void | Promise<void> } | null>(null);
   const toastTimer = useRef<number | null>(null);
@@ -571,7 +569,7 @@ function App() {
   });
   const [adminProfileViewerUserId, setAdminProfileViewerUserId] = useState<string | null>(null);
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>(() => {
-    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)\/?$/);
+    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|didit|finance|security|assistance|tools)\/?$/);
     return (match?.[1] ?? 'overview') as AdminWorkspace;
   });
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
@@ -1023,7 +1021,7 @@ function App() {
         const peopleFromPath = value.match(/^admin\/people\/(listener|creator|writer|editor|artist|admin)$/)?.[1];
         setAdminPanel((panelFromPath ?? null) as typeof adminPanel);
         setAdminPeopleRole((peopleFromPath ?? null) as typeof adminPeopleRole);
-        const workspaceFromPath = value.match(/^admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)$/)?.[1];
+        const workspaceFromPath = value.match(/^admin\/workspace\/(overview|people|content|launch|didit|finance|security|assistance|tools)$/)?.[1];
         setAdminWorkspace((workspaceFromPath ?? 'overview') as AdminWorkspace);
       } else {
         setAdminPanel(null);
@@ -1051,6 +1049,8 @@ function App() {
         setUser(null);
         setRole(null);
         setAgeVerified(false);
+        setAgeNoticeAccepted(false);
+        setAgeNoticeAcknowledged(false);
         setAgeStage('gate');
         setSessionHydrating(false);
         return;
@@ -2003,9 +2003,12 @@ function App() {
   const refreshAgeStatus = async () => {
     if (!nightjarAuth.current()) return false;
     try {
-      const data = await nightjarAge.status();
+      const [data, legal] = await Promise.all([nightjarAge.status(), nightjarLegal.status()]);
       const verified = data.verified === true;
+      const noticeAccepted = legal.documents.some(document => document.id === 'age_assurance_notice' &&
+        document.version === NIGHTJAR_AGE_NOTICE_VERSION && document.accepted === true);
       setAgeVerified(verified);
+      setAgeNoticeAccepted(noticeAccepted);
       setAgeConfigured(data.configured === true);
       setAgeProvider(String(data.provider ?? 'didit'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
@@ -2013,72 +2016,56 @@ function App() {
       if (data.providerVerified === true) setAgeLaunchUrl(null);
       setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
       setAgeLivePilotAvailable(data.livePilotAvailable === true);
-      setAgePilotEligible(data.diditPilotEligible === true);
       setAgeVerifiedAt(data.verifiedAt ?? null);
       setAgeReverifyRequired(data.reverifyRequired === true);
-      setAgeTemporaryBypass(data.temporaryBypass === true);
-      setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(data.sessionActive === true);
       const diditPending = ['PENDING','PROCESSING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.providerStatus ?? data.status));
-      setAgeStatus(data.providerVerified === true ? 'COMPLETE'
-        : diditPending && data.diditPilotEligible === true ? 'PENDING'
-        : verified ? 'COMPLETE'
-        : diditPending ? 'PENDING'
+      setAgeStatus(verified ? 'COMPLETE' : diditPending ? 'PENDING'
         : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
-      if (verified) setAgeStage('app');
-      return verified;
+      if (verified && noticeAccepted) setAgeStage('app');
+      else setAgeStage('assurance');
+      return verified && noticeAccepted;
     } catch { return false; }
   };
 
-  const openAgeCheck = async (adminPilot = false, memberPilot = false) => {
+  const openAgeCheck = async () => {
     setAgeLoading(true);
     try {
       if (!nightjarAuth.current()) { window.location.assign('/account'); return; }
-      if (memberPilot) {
-        if (!agePilotEligible || role === 'admin' || !ageConfigured || simulationMode || demoMode) {
-          notify('Didit is only available to testers explicitly enrolled by a Nightjar administrator.'); return;
+      if (!ageNoticeAccepted) {
+        if (!ageNoticeAcknowledged) {
+          notify('Please read and acknowledge the Didit privacy notice before proceeding.');
+          return;
         }
-        if (ageProviderVerified) { notify('Your Nightjar account is already verified by Didit. No further identity check is required.'); return; }
-        if (!agePilotConsent) { notify('Please acknowledge the live ID verification notice first.'); return; }
-        if (!window.confirm(
-          ageEnvironment === 'live'
-            ? 'Start the REAL Didit 18+ ID check for this test account? You may need to show a government ID. A charge may apply to Nightjar. Your existing beta access will remain available.'
-            : 'Start the Didit SANDBOX check? This does not count as verified age and your existing beta access remains available.'
-        )) return;
+        await nightjarLegal.accept([{
+          id:'age_assurance_notice', version:NIGHTJAR_AGE_NOTICE_VERSION, accepted:true,
+        }], 'age-verification-screen');
+        setAgeNoticeAccepted(true);
       }
-      if (adminPilot) {
-        if (role !== 'admin' || simulationMode || !ageConfigured) {
-          notify('Only approved administrators can start the Didit pilot.'); return;
-        }
-        if (ageProviderVerified) { notify('Didit already verified this administrator.'); return; }
-        if (!window.confirm(
-          ageEnvironment === 'live'
-            ? 'Start a REAL Didit verification for your administrator account? Provider charges may apply. Existing testers keep their bypass.'
-            : 'Start a Didit sandbox pilot check? This should be unbilled ONLY if the configured Didit key and workflow are genuinely sandbox. Existing testers keep their bypass.'
-        )) return;
-      } else if (!memberPilot) {
-        const alreadyVerified = await refreshAgeStatus();
-        if (alreadyVerified) { notify('Test access or permanent verification is already active. No paid Didit check was created.'); return; }
+      // Previously approved accounts with a newly accepted notice enter normally:
+      // acknowledgement never initiates a second billable provider session.
+      if (await refreshAgeStatus()) {
+        notify('Your existing 18+ approval is saved. No further ID check is needed.');
+        return;
+      }
+      if (!ageConfigured || ageEnvironment !== 'live') {
+        notify('Live Didit verification is not ready. Contact Nightjar support.');
+        return;
       }
       const data = await nightjarAge.start();
       setAgeConfigured(Boolean(data.configured));
       setAgeProvider(String(data.provider ?? 'didit'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
-      setAgeTemporaryBypass(data.temporaryBypass === true);
-      setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(Boolean(data.sessionId && !data.verified));
       if (data.verified === true && data.provider === 'didit') {
         await refreshAgeStatus();
-        notify('Didit confirmed your existing adult verification.');
-      } else if (data.temporaryBypass === true) {
-        await refreshAgeStatus();
-        notify('Private test access remains active. No verification session was created.');
+        notify('Your existing Didit 18+ verification is valid.');
       } else if (data.launchUrl) {
         setAgeLaunchUrl(String(data.launchUrl));
         setAgeStatus('PENDING');
         const popup = window.open(String(data.launchUrl), '_blank', 'noopener,noreferrer');
         notify(popup ? 'Didit opened. Complete the check, then return to Nightjar.' :
-          'Open your Didit session using the button on this page; popups are blocked.');
+          'Use Continue Didit verification below if your browser blocked the pop-up.');
       }
     } catch (error) {
       notify(error instanceof Error ? 'Didit could not start: ' + error.message : 'Didit could not start verification.');
@@ -2090,30 +2077,6 @@ function App() {
     const timer = window.setInterval(() => { void refreshAgeStatus(); }, 5000);
     return () => window.clearInterval(timer);
   }, [ageStatus, user]);
-
-  const updateDiditPilotAccess = async (enabled: boolean) => {
-    if (!canAdmin || simulationMode || demoMode) return;
-    const email = diditPilotEmail.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setDiditPilotFeedback('Enter the email address of one registered, verified beta tester.');
-      return;
-    }
-    if (enabled && !window.confirm(
-      'Permit ' + email + ' to start a Didit ID-verification pilot voluntarily? This does not remove their beta bypass or start a paid session. The tester must explicitly consent and press Start themselves.'
-    )) return;
-    setDiditPilotBusy(true);
-    setDiditPilotFeedback('');
-    try {
-      const result = await nightjarAdministration.setDiditPilotAccess(email, enabled);
-      setDiditPilotFeedback(result.enabled
-        ? 'This registered test account can now start Didit voluntarily. Ask them to refresh Nightjar and open Profile → Account & Support.'
-        : 'Didit pilot access disabled for this account. Their existing beta-test access is unchanged.');
-    } catch (error) {
-      setDiditPilotFeedback(error instanceof Error ? error.message : 'Could not change Didit pilot enrolment.');
-    } finally {
-      setDiditPilotBusy(false);
-    }
-  };
 
   const signIn = async () => {
     window.location.assign('/account?entry=signin');
@@ -2133,6 +2096,8 @@ function App() {
     setUser(null);
     setRole(null);
     setAgeVerified(false);
+    setAgeNoticeAccepted(false);
+    setAgeNoticeAcknowledged(false);
     setAgeStatus('NOT_STARTED');
     setAgeConfigured(false);
     setAgeProvider('didit');
@@ -4154,7 +4119,7 @@ function App() {
             character work and immersive soundscapes.
           </p>
           <div className="access-points">
-            <div><ShieldCheck size={18} /><div><strong>Adults only</strong><span>Nightjar remains an 18+ product. Approved QA accounts can use restricted temporary test access until the production age-assurance provider is live.</span></div></div>
+            <div><ShieldCheck size={18} /><div><strong>Adults only</strong><span>Every Nightjar account, including invited beta testers, must pass one live Didit 18+ check before adult access.</span></div></div>
             <div><Headphones size={18} /><div><strong>Audio first</strong><span>Built around voice, atmosphere and headphone immersion.</span></div></div>
           </div>
           {sessionRestoreError && user && <div className="access-note" role="alert">Your Nightjar session is still saved, but we could not reconnect securely. Check your connection and retry without entering your password again.</div>}
@@ -4162,13 +4127,13 @@ function App() {
           <button className="primary-button wide-button" disabled={accountLoading} onClick={() => void signIn()}>
             {accountLoading ? 'Opening secure sign-in…' : 'Sign in to Nightjar'} <ArrowRight size={17} />
           </button>}
-          <p className="access-fine">Testing build: age assurance is not globally bypassed. Only owner accounts and explicitly approved testers can use temporary QA access.</p>
+          <p className="access-fine">Private beta is invite-only; age verification is mandatory for everyone.</p>
         </section>
       </main>
     );
   }
 
-  if (ageStage === 'assurance' && !rolePicker) {
+  if (ageStage === 'assurance') {
     return (
       <main className="access-shell">
         <div className="access-card assurance-card">
@@ -4182,33 +4147,47 @@ function App() {
           <div className="verification-panel">
             <div className="verification-icon"><ShieldCheck size={23} /></div>
             <div>
-              <strong>{ageTemporaryBypass ? 'Nightjar Private Test Access' : 'Didit Age Verification'}</strong>
-              <span>
-                {ageTemporaryBypass
-                  ? `Approved QA account · temporary age-assurance bypass active${ageTemporaryBypassReason === 'administrator' ? ' for an administrator' : ''}. This is not a completed Didit verification and automatically stops working when test bypass mode is disabled.`
-                  : ageVerified
-                    ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins use this stored verification state.`
-                    : ageSessionActive
-                      ? 'A verification session is in progress. Finish it and return to Nightjar; the account state will update automatically.'
-                      : ageConfigured
-                        ? `Secure ${ageEnvironment} provider connected and ready for a verification session.`
-                        : 'Verification integration is ready; provider credentials still need to be added.'}
-              </span>
+              <strong>Didit 18+ Age Verification</strong>
+              <span>{ageVerified
+                ? `Verified on this Nightjar account${ageVerifiedAt ? ' · ' + new Date(ageVerifiedAt).toLocaleDateString('en-GB') : ''}. Future logins and devices reuse this approval.`
+                : ageSessionActive ? 'A verification session already exists. Continue that check rather than starting again.'
+                : ageConfigured ? 'Live verification is ready. Nightjar will save an approved result to your account.'
+                : 'Live Didit verification is not configured yet. Adult content remains locked.'}</span>
             </div>
-            <span className="status-pill">{ageTemporaryBypass ? 'TEST ACCESS' : ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
+            <span className="status-pill">{ageVerified ? 'VERIFIED 18+' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
           </div>
           <div className="verification-list">
-            {ageTemporaryBypass
-              ? <div><ShieldCheck size={16} /><span>This email is on Nightjar's private tester allowlist; temporary QA access is separate from production age verification.</span></div>
-              : <div><Check size={16} /><span>Adult access is checked before the catalogue is released.</span></div>}
-            <div><Check size={16} /><span>{ageTemporaryBypass ? 'No raw identity documents or fake verification result are created for this bypass.' : 'Verification is stored against your Nightjar account, not repeated on each login or device.'}</span></div>
-            <div><Check size={16} /><span>{ageTemporaryBypass ? 'Removing this email from the tester allowlist revokes the bypass immediately.' : 'Nightjar stores verification state and an opaque reference rather than raw identity documents.'}</span></div>
-            {ageReverifyRequired && !ageTemporaryBypass && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
+            <div><Check size={16}/><span>All users, including testers and administrators, verify once.</span></div>
+            <div><Check size={16}/><span>Nightjar stores your verified adult status and provider reference, not raw identity images.</span></div>
+            <div><Check size={16}/><span>A new check is only necessary after a genuine revocation or security/compliance review.</span></div>
+            {ageReverifyRequired && <div><ShieldCheck size={16}/><span>Your previous approval needs review before adult access resumes.</span></div>}
           </div>
-          <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
-            {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
+          <section className="nj-didit-privacy-check" aria-label="Age-verification privacy and permission">
+            <h2>Before you verify</h2>
+            <p>We use Didit to check that every Nightjar member is 18+. Didit may request photo identification and a selfie or liveness check. Didit handles that evidence; Nightjar stores an account-level approval and minimal audit information, not your ID images.</p>
+            <p>Nightjar has confirmed a six-month retention setting for Didit verification-session evidence. Didit may retain separate audit and security records for longer. Nightjar saves your approved 18+ status so you do not have to repeat the ID check just because the original documents are deleted.</p>
+            <p><a href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Read the Age Verification & Didit Privacy Notice <ArrowRight size={13}/></a></p>
+            {!ageNoticeAccepted
+              ? <label className="nj-didit-member-consent">
+                  <input type="checkbox" checked={ageNoticeAcknowledged} onChange={event => setAgeNoticeAcknowledged(event.target.checked)}/>
+                  <span>I have read the Didit age-verification notice. I understand the check is required for 18+ access, what Didit may collect and how to contact Nightjar about my data.</span>
+                </label>
+              : <p className="access-fine"><Check size={15}/> Privacy notice already acknowledged on this account.</p>}
+          </section>
+          <button className="primary-button wide-button"
+            disabled={ageLoading || (ageVerified && ageNoticeAccepted) ||
+              (!ageNoticeAccepted && !ageNoticeAcknowledged) ||
+              (!ageVerified && (!ageConfigured || ageProviderStatus === 'PENDING_REVIEW'))}
+            onClick={() => void openAgeCheck()}>
+            {ageLoading ? 'Opening secure check…' :
+              ageVerified && !ageNoticeAccepted ? 'Acknowledge notice and continue' :
+              ageVerified ? 'Already verified' :
+              ageSessionActive ? 'Continue existing verification' : 'Verify my age with Didit'}
+            <LockKeyhole size={16}/>
           </button>
-          <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
+          {ageLaunchUrl && !ageVerified && <a className="secondary-button wide-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Continue Didit verification <ArrowRight size={16}/></a>}
+          {ageProviderStatus === 'PENDING_REVIEW' && <p className="access-fine">Your previous verification is under review. Contact Nightjar support instead of paying for another check.</p>}
+          <p className="access-fine">No successful live check means no access to adult material. Verification never starts automatically during login.</p>
         </div>
       </main>
     );
@@ -5055,35 +5034,6 @@ function App() {
               />
             )}
 
-            {agePilotEligible && effectiveRole !== 'admin' && <section className="nj-didit-member-pilot" aria-label="Voluntary identity verification pilot">
-              <div className="nj-didit-member-pilot-heading">
-                <ShieldCheck size={22} aria-hidden="true"/>
-                <div><span className="mini-label">AGE ASSURANCE · AUTHORISED TEST ACCOUNT</span>
-                  <h2>Didit ID verification</h2>
-                  <p>{ageProviderVerified
-                    ? 'Your account has a completed, provider-confirmed 18+ check. The result is saved securely by Nightjar and reused when you sign in on another device.'
-                    : 'Nightjar has invited this account to test ID verification. Your existing private-beta access remains active while you test. Verification is optional during this pilot.'}</p>
-                </div>
-                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'VERIFIED 18+' : ageEnvironment === 'live' ? 'LIVE PILOT' : 'SANDBOX'}</span>
-              </div>
-              {!ageProviderVerified && <>
-                <label className="nj-didit-member-consent"><input type="checkbox" checked={agePilotConsent} onChange={(event) => setAgePilotConsent(event.target.checked)} />
-                  <span>I understand that Didit may request identification, that live checks may incur a charge to Nightjar, and that I can retain my current tester access without starting this check.</span>
-                </label>
-                <div className="nj-didit-member-actions">
-                  <button type="button" className="primary-button" disabled={!ageConfigured || !agePilotConsent || ageLoading} onClick={() => void openAgeCheck(false, true)}>
-                    <LockKeyhole size={15} aria-hidden="true"/>{ageLoading ? 'Opening Didit…' : ageSessionActive ? 'Continue existing Didit check' : ageEnvironment === 'live' ? 'Start my Didit ID check' : 'Start sandbox check'}
-                  </button>
-                  <button type="button" className="secondary-button" onClick={() => void refreshAgeStatus()} disabled={ageLoading}><RefreshCw size={15}/> Refresh status</button>
-                  {ageLaunchUrl && <a href={ageLaunchUrl} className="secondary-button" target="_blank" rel="noopener noreferrer">Open verification session <ArrowRight size={15}/></a>}
-                </div>
-                {!ageConfigured && <p className="nj-didit-member-notice">Didit has not yet been configured for this Firebase environment. No verification can start.</p>}
-                {ageEnvironment !== 'live' && <p className="nj-didit-member-notice">Sandbox tests do not grant permanent 18+ verification. Live approval must be confirmed by Didit.</p>}
-                {ageStatus === 'PENDING' && <p className="nj-didit-member-notice">Your verification is in progress. Nightjar will check the provider result and update this account automatically.</p>}
-              </>}
-              <p className="nj-didit-member-footnote">Nightjar keeps only the server-verified age-assurance result and provider reference—not your raw identity images or a reusable login token stored in your browser. A new ID check is requested only if verification is revoked or a valid recheck is required.</p>
-            </section>}
-
             {effectiveRole !== 'admin' && profile?.onboardingComplete !== true && !demoMode && (
               <section className="panel nj-profile-setup-resume" aria-label="Finish your personal Nightjar profile">
                 <div>
@@ -5345,7 +5295,7 @@ function App() {
           <section className={adminPanel || adminPeopleRole ? 'page-wrap admin-page admin-detail-active' : 'page-wrap admin-page'}>
             <div className="page-heading admin-owner-heading">
               <div><p className="eyebrow"><Settings2 size={14} /> ADMINISTRATOR WORKSPACE</p>
-              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', finance:'Finance & subscriptions', security:'Safety & security', assistance:'Admin assistance', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
+              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', didit:'Didit verification', finance:'Finance & subscriptions', security:'Safety & security', assistance:'Admin assistance', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
               <p>{adminWorkspace === 'overview' ? 'Daily priorities, pending decisions and the right tools — without endless scrolling.' : 'A focused Nightjar workpage. Choose another section above to move between administrative tasks.'}</p></div>
               <button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh</button>
             </div>
@@ -5356,6 +5306,7 @@ function App() {
               pendingImages={imageModeration.length}
               openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
             />
+            {adminWorkspace === 'didit' && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading age verification audit"/>}><AdminDiditDashboard /></Suspense>}
             {adminWorkspace === 'assistance' && <AdminAssistance initialEmail={assistancePrefillEmail} onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
             {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
@@ -5391,37 +5342,22 @@ function App() {
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
               <AdminLegalReadiness />
             </Suspense>
-            <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Administrator Didit verification pilot">
-              <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
+            <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Didit verification operations">
+              <span className="mini-label">AGE ASSURANCE · ALL ACCOUNTS</span>
               <h2>Didit Age Verification</h2>
-              <p>Test Didit as an administrator, or invite one registered beta tester to initiate their own voluntary check. Live verification can incur provider charges; other testers keep their normal bypass.</p>
+              <p>All users, testers and administrators must complete live 18+ verification once. Approved status is stored securely on the account, so ordinary logins never start another check.</p>
               <div className="demo-state-line">
-                <span className={ageConfigured ? 'status-pill' : 'status-pill muted'}>{ageLivePilotAvailable ? 'LIVE PILOT ENABLED' : ageConfigured ? 'DIDIT CONNECTED' : 'DIDIT SETUP REQUIRED'}</span>
-                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'VERIFIED 18+' : ageProviderStatus.replaceAll('_', ' ')}</span>
-                <span className={ageEnvironment === 'live' ? 'status-pill warning' : 'status-pill'}>{ageEnvironment === 'live' ? 'LIVE · MAY INCUR FEES' : 'SANDBOX / UNCONFIGURED'}</span>
+                <span className={ageLivePilotAvailable ? 'status-pill' : 'status-pill muted'}>{ageLivePilotAvailable ? 'LIVE DIDIT CONNECTED' : 'LIVE DIDIT SETUP REQUIRED'}</span>
+                <span className={ageProviderVerified ? 'status-pill' : 'status-pill muted'}>{ageProviderVerified ? 'MY ACCOUNT · VERIFIED 18+' : ageProviderStatus.replaceAll('_', ' ')}</span>
+                <span className="status-pill muted">ONE-TIME VERIFIED ACCESS</span>
               </div>
               <div className="admin-member-multi-role-actions">
                 <button type="button" className="primary-button" disabled={ageLoading || !ageConfigured || ageProviderVerified}
-                  onClick={() => void openAgeCheck(true)}>{ageLoading ? 'Opening Didit…' : ageProviderVerified ? 'Verified · no repeat needed' : ageEnvironment === 'live' ? 'Start my live Didit test' : 'Start sandbox Didit test'}</button>
+                  onClick={() => void openAgeCheck()}>{ageLoading ? 'Opening Didit…' : ageProviderVerified ? 'Verified · no repeat needed' : 'Verify my account with Didit'}</button>
                 <button type="button" className="secondary-button" onClick={() => void refreshAgeStatus()}>Refresh Didit status</button>
-                {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open existing Didit session</a>}
+                {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Continue existing Didit session</a>}
               </div>
-              <small>Sandbox checks never count as production adult verification. All approved private-beta testers retain their separate temporary test-access status.</small>
-              <div className="nj-didit-pilot-manager">
-                <div><span className="mini-label">CONTROLLED TEST COHORT · ONE ACCOUNT AT A TIME</span><strong>Invite one tester to verify with Didit</strong>
-                <p>A voluntary test invitation does not remove that tester's existing bypass, start a chargeable session, or affect any other member. Only registered, email-verified and allowlisted test accounts can join.</p></div>
-                <div className="nj-didit-pilot-manager-controls">
-                  <label htmlFor="nj-didit-pilot-email">Registered tester email</label>
-                  <input id="nj-didit-pilot-email" type="email" autoComplete="off" placeholder="tester@example.com"
-                    value={diditPilotEmail} onChange={(event) => { setDiditPilotEmail(event.target.value); setDiditPilotFeedback(''); }}
-                    disabled={diditPilotBusy} />
-                  <div className="nj-didit-pilot-manager-actions">
-                    <button type="button" className="primary-button" disabled={diditPilotBusy} onClick={() => void updateDiditPilotAccess(true)}>Enable Didit pilot</button>
-                    <button type="button" className="secondary-button" disabled={diditPilotBusy} onClick={() => void updateDiditPilotAccess(false)}>Disable pilot</button>
-                  </div>
-                  {diditPilotFeedback && <p className="nj-didit-pilot-feedback" role="status">{diditPilotFeedback}</p>}
-                </div>
-              </div>
+              <small>Valid approvals and ongoing sessions are reused. Rate limiting stops excessive new verification attempts. Sandbox approvals are never accepted as a live adult pass.</small>
             </section>
             </>}
             {adminWorkspace === 'tools' && <Suspense fallback={<NightjarSkeleton variant="cards" count={1} label="Loading Audio Upload Test" />}>

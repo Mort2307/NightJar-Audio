@@ -26,8 +26,7 @@ initializeApp();
 
 const db = getFirestore();
 const REGION = 'europe-west2';
-const DIDIT_LIVE_PILOT_ADMINS_ONLY = true; // Closed beta: billable age sessions are admin-only.
-const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
+// Didit 18+ approval is required for all accounts, including invited testers and owners.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
 const NIGHTJAR_GMAIL_CLIENT_ID = defineSecret('NIGHTJAR_GMAIL_CLIENT_ID');
@@ -74,6 +73,14 @@ const CURRENT_LEGAL_DOCUMENTS = {
     requiredForAccount: true,
     requiredForProfessional: true,
   },
+  age_assurance_notice: {
+    id: 'age_assurance_notice',
+    version: '2026-10-14.3',
+    title: 'Nightjar Age Verification & Didit Privacy Notice',
+    path: '/legal/age-verification',
+    requiredForAccount: false,
+    requiredForProfessional: false,
+  },
   professional_terms: {
     id: 'professional_terms',
     version: '2026-10-09.1',
@@ -112,6 +119,9 @@ const requireCurrentLegalAcceptance = async (uid: string, documentId: LegalDocum
   }
   return status;
 };
+
+const requireAgeNoticeAcknowledgement = async (uid: string) =>
+  requireCurrentLegalAcceptance(uid, 'age_assurance_notice');
 
 const requireProfessionalLegalTerms = async (uid: string) => {
   await Promise.all([
@@ -323,7 +333,7 @@ export const closedBetaRegistrationStatus = onCall({ region: REGION }, async (re
   return {
     closedBeta: CLOSED_BETA,
     allowed: access.allowed,
-    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS,
+    temporaryAgeBypass: false,
   };
 });
 
@@ -2009,6 +2019,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     return {id:link.id,url:link.url,platform:link.platform,photoUrl:link.photoUrl};
   });
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const viewerBetaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
   let releaseCount = 0;
@@ -2020,7 +2031,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
     creatorReleases = releases.docs
       .filter((doc) => doc.data().status === 'released')
-      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaAccess:viewerBetaAccess }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
     releaseCount = creatorReleases.length;
   }
@@ -2033,7 +2044,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
     creditedReleases = releases.docs
       .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
-      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaAccess:viewerBetaAccess }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
@@ -2053,7 +2064,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
         const releaseDocs = await Promise.all(releaseIds.slice(0, 12).map((releaseId) => releaseRef(releaseId).get()));
         const releases = releaseDocs
           .filter((release) => release.exists && release.data()?.status === 'released')
-          .map((release) => decorateReleaseAccess(release.data() ?? {}, release.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }));
+          .map((release) => decorateReleaseAccess(release.data() ?? {}, release.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaAccess:viewerBetaAccess }));
         return {
           id: playlist.id,
           title: cleanText(playlist.data()?.title, 100) || 'Untitled playlist',
@@ -2179,11 +2190,12 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
   const data = profile.data();
   if (!data || data.publicProfile === false) throw new HttpsError('not-found', 'Creator profile not found.');
   const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const viewerBetaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
 
   const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', creatorUserId).limit(500).get();
   const releases = releasesSnapshot.docs
     .filter((doc) => doc.data().status === 'released')
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaAccess:viewerBetaAccess }))
     .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
   const completedCollaborations = await completedCollaborationCountFor(creatorUserId);
@@ -4446,7 +4458,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
     testing: {
       closedBeta: CLOSED_BETA,
       ageAssuranceConfigured: false /* Query protected ageStatus callable for actual provider configuration */,
-      temporaryAgeBypassEnabled: TESTING_AGE_ASSURANCE_BYPASS,
+      temporaryAgeBypassEnabled: false,
       approvedTesters,
       approvedTesterCount: approvedTesters.length,
     },
@@ -4523,42 +4535,10 @@ export const adminSetTestAccess = onCall({ region: REGION }, async (request) => 
   return { userId, testAccess: enabled };
 });
 
-// Closed-beta Didit cohort: only explicitly selected existing tester accounts can
-// start a provider verification. This does NOT revoke their normal beta bypass,
-// start a billable session, or confer a verified identity.
-export const adminSetDiditPilotAccess = onCall({ region: REGION }, async (request) => {
-  const admin = requireAdminIdentity(request);
-  const input = (request.data ?? {}) as Record<string, unknown>;
-  const email = cleanEmail(input.email);
-  const enabled = input.enabled === true;
-  if (!validEmailAddress(email) || typeof input.enabled !== 'boolean') {
-    throw new HttpsError('invalid-argument', 'Provide one valid beta tester email and an explicit enabled setting.');
-  }
-  if (ADMIN_EMAILS.has(email)) {
-    throw new HttpsError('failed-precondition', 'Administrators already have their own separate Didit pilot.');
-  }
-  const matching = await db.collection('accounts').where('email', '==', email).limit(3).get();
-  if (matching.empty) throw new HttpsError('not-found', 'Ask this tester to register and verify their email first.');
-  if (matching.size !== 1) throw new HttpsError('failed-precondition', 'Multiple records matched this email. Resolve the duplicate identity first.');
-  const account = matching.docs[0];
-  const data = account.data() ?? {};
-  if (data.status === 'suspended') {
-    throw new HttpsError('failed-precondition', 'Suspended accounts cannot participate in identity verification pilots.');
-  }
-  if (enabled && (data.emailVerified !== true ||
-    !(data.testAccess === true || await testerAccessForEmail(email)))) {
-    throw new HttpsError('failed-precondition', 'Only registered, email-verified, allowlisted beta testers can join the Didit pilot.');
-  }
-  if (data.diditPilotEnabled === enabled) {
-    return { email, enabled, unchanged: true };
-  }
-  await account.ref.set({
-    diditPilotEnabled: enabled,
-    diditPilotUpdatedBy: admin.uid,
-    diditPilotUpdatedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { email, enabled, unchanged: false };
+// Legacy beta-pilot permission is retired. All invited testers use the same live Didit gate.
+export const adminSetDiditPilotAccess = onCall({ region: REGION }, async request => {
+  requireAdminIdentity(request);
+  throw new HttpsError('failed-precondition', 'Individual Didit enrolment is no longer needed: verification is required for every Nightjar account.');
 });
 
 export const adminSetAccountRole = onCall({ region: REGION }, async (request) => {
@@ -4667,6 +4647,17 @@ const releaseWorkAccess = (data: Record<string, any>, userId: string) => {
   return normaliseReleaseContributors(data.contributors).some((credit) => credit.userId === userId);
 };
 
+// Beta listening is a separate, revocable, no-charge entitlement. It never
+// creates or impersonates a paid subscription, and always follows age checks.
+const betaListeningAccessFor = async (uid: string, verifiedEmail: string) => {
+  if (!CLOSED_BETA || !validEmailAddress(verifiedEmail)) return false;
+  const snapshot = await accountRef(uid).get();
+  const account = snapshot.data() ?? {};
+  if (!snapshot.exists || account.status === 'suspended' ||
+      account.emailVerified !== true || cleanEmail(account.email) !== cleanEmail(verifiedEmail)) return false;
+  return account.testAccess === true || Boolean(await testerAccessForEmail(verifiedEmail));
+};
+
 const activeListeningSubscriptionFor = async (userId: string) => {
   const snapshot = await db.collection('subscriptions').where('userId', '==', userId).limit(20).get();
   // Never unlock paid audio from a planning row, unverified trial or a
@@ -4679,10 +4670,11 @@ const activeListeningSubscriptionFor = async (userId: string) => {
 const playbackAccessFor = (
   data: Record<string, any>,
   userId: string,
-  options: { admin?: boolean; subscription?: { id: string; status: string } | null } = {},
+  options: { admin?: boolean; betaAccess?: boolean; subscription?: { id: string; status: string } | null } = {},
 ) => {
   if (options.admin) return { allowed:true, reason:'admin' as const };
   if (releaseWorkAccess(data, userId)) return { allowed:true, reason:'credited_work' as const };
+  if (options.betaAccess) return { allowed:true, reason:'beta_test' as const };
   if (options.subscription) return { allowed:true, reason:'subscription' as const };
   return { allowed:false, reason:'subscription_required' as const };
 };
@@ -4691,7 +4683,7 @@ const decorateReleaseAccess = (
   data: Record<string, any>,
   id: string,
   userId: string,
-  options: { admin?: boolean; subscription?: { id: string; status: string } | null } = {},
+  options: { admin?: boolean; betaAccess?: boolean; subscription?: { id: string; status: string } | null } = {},
 ) => {
   const access = playbackAccessFor(data, userId, options);
   return {
@@ -4746,10 +4738,14 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
 
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const role = identity.admin ? 'admin' : cleanText(account.data()?.role, 40) || null;
   return {
     role,
     subscribed: identity.admin || Boolean(subscription),
+    canListen: identity.admin || Boolean(subscription) || betaAccess,
+    betaAccess,
+    accessKind: identity.admin ? 'admin' : subscription ? 'subscription' : betaAccess ? 'beta_test' : 'none',
     subscriptionStatus: identity.admin ? 'admin' : subscription?.status ?? null,
     planningMonthlyPricePence: identity.admin ? settings?.planningMonthlyPricePence ?? null : null,
     subscriptionUrl: identity.admin ? settings?.listenerSubscriptionUrl ?? null : null,
@@ -4934,10 +4930,11 @@ export const listCatalogue = onCall({ region: REGION }, async (request) => {
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const catalogue = snapshot.docs
     .filter((doc) => !category || cleanText(doc.data().category, 80).toLowerCase() === category)
     .filter((doc) => !query || releaseSearchText(doc.data()).includes(query))
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }));
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription, betaAccess }));
 
   return { catalogue };
 });
@@ -5294,39 +5291,14 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
   };
 });
 
-const temporaryAgeBypassFor = async (uid: string) => {
-  if (!TESTING_AGE_ASSURANCE_BYPASS) {
-    return { allowed: false, reason: null as string | null };
-  }
-  const snapshot = await accountRef(uid).get();
-  const data = snapshot.data() ?? {};
-  const email = cleanEmail(data.email);
-  if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' };
-  if (data.testAccess === true || await testerAccessForEmail(email)) {
-    return { allowed: true, reason: 'approved-tester' };
-  }
-  return { allowed: false, reason: null as string | null };
-};
-
 const requireAgeVerified = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
-  const persistentVerified = diditPass(data);
-  if (persistentVerified) return data;
-
-  const bypass = await temporaryAgeBypassFor(uid);
-  if (bypass.allowed) {
-    return {
-      verified: true,
-      status: 'COMPLETE',
-      provider: 'temporary-test-access',
-      environment: 'development',
-      temporaryBypass: true,
-      temporaryBypassReason: bypass.reason,
-    };
+  if (diditPass(data)) {
+    await requireAgeNoticeAcknowledgement(uid);
+    return data;
   }
-
-  throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
+  throw new HttpsError('permission-denied', 'A completed live Didit 18+ verification is required for Nightjar adult content.');
 };
 
 export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) => {
@@ -5338,7 +5310,8 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
   if (!data || data.status !== 'released' || !data.audioStoragePath) throw new HttpsError('not-found', 'Playable release not found.');
 
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
-  const access = playbackAccessFor(data, identity.uid, { admin:identity.admin, subscription });
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
+  const access = playbackAccessFor(data, identity.uid, { admin:identity.admin, subscription, betaAccess });
   if (!access.allowed) {
     throw new HttpsError(
       'failed-precondition',
@@ -5381,13 +5354,14 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
     throw new HttpsError('not-found', 'Release transcript not found.');
   }
 
-  let accessReason: 'admin' | 'credited_work' | 'subscription' = identity.admin
+  let accessReason: 'admin' | 'credited_work' | 'subscription' | 'beta_test' = identity.admin
     ? 'admin'
     : 'credited_work';
 
   if (data.status === 'released' && !identity.admin) {
     const subscription = await activeListeningSubscriptionFor(identity.uid);
-    const access = playbackAccessFor(data, identity.uid, { subscription });
+    const betaAccess = await betaListeningAccessFor(identity.uid, identity.email);
+    const access = playbackAccessFor(data, identity.uid, { subscription, betaAccess });
     if (!access.allowed) {
       throw new HttpsError(
         'failed-precondition',
@@ -5395,7 +5369,7 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
         { code:'subscription_required', releaseId },
       );
     }
-    accessReason = access.reason as 'credited_work' | 'subscription';
+    accessReason = access.reason as 'credited_work' | 'subscription' | 'beta_test';
   }
 
   return {
@@ -6007,6 +5981,7 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
   }
 
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const following = new Set(followsSnapshot.docs.map((doc) => doc.id));
   const items = releasesSnapshot.docs.map((doc) => {
     const data = doc.data();
@@ -6021,7 +5996,7 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
     if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
     const matches = values.filter((value) => (liked.get(value.toLowerCase()) ?? 0) > 0).slice(0, 3);
     return {
-      ...decorateReleaseAccess(data, doc.id, identity.uid, { admin:identity.admin, subscription }),
+      ...decorateReleaseAccess(data, doc.id, identity.uid, { admin:identity.admin, subscription, betaAccess }),
       score,
       reason: matches.length
         ? 'Because you chose ' + matches.join(', ') + '.'
@@ -6043,8 +6018,9 @@ export const trendingReleases = onCall({ region: REGION }, async (request) => {
   ]);
   // Trending and creator statistics must use the same qualified-listen
   // definition. Raw progress telemetry must not make a release "popular".
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   const trending = releasesSnapshot.docs
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }))
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription, betaAccess }))
     .sort((a, b) => (b.listenCount - a.listenCount)
       || String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')))
     .slice(0, 24);
@@ -6365,73 +6341,96 @@ export const ageStatus = onCall({
 }, async request => {
   const identity = await requireActiveIdentity(request);
   const data = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
-  const persistentlyVerified = diditPass(data);
-  const bypass = persistentlyVerified ? { allowed: false, reason: null as string | null } : await temporaryAgeBypassFor(identity.uid);
-  const pilotAccess = identity.admin || (await accountRef(identity.uid).get()).data()?.diditPilotEnabled === true;
+  const verified = diditPass(data);
   return {
-    verified: persistentlyVerified || bypass.allowed,
-    diditPilotEligible: pilotAccess,
-    status: persistentlyVerified || bypass.allowed ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
-    // The actual provider decision is separate from temporary test access.
-    providerVerified: persistentlyVerified,
+    verified,
+    providerVerified: verified,
+    status: verified ? 'COMPLETE' : String(data.status ?? 'NOT_STARTED'),
     providerStatus: String(data.status ?? 'NOT_STARTED'),
-    livePilotAvailable: pilotAccess && diditConfigured() && diditMode() === 'live',
+    diditPilotEligible: false,
+    livePilotAvailable: diditConfigured() && diditMode() === 'live',
     ageThreshold: 18,
-    configured: diditConfigured(),
-    provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
-    environment: diditMode(), // Report ACTUAL configured provider mode even when tester bypass is active. Prevents chargeable live sessions being mislabelled as sandbox.
-    verifiedAt: persistentlyVerified ? toIso(data.verifiedAt) : null,
+    configured: diditConfigured() && diditMode() === 'live',
+    provider: 'didit',
+    environment: diditMode(),
+    verifiedAt: verified ? toIso(data.verifiedAt) : null,
     reverifyRequired: data.reverifyRequired === true,
-    sessionActive: ['PENDING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.status ?? '')),
-    temporaryBypass: bypass.allowed,
-    temporaryBypassReason: bypass.reason,
-    testAvailable: identity.admin || bypass.allowed,
+    sessionActive: ['PENDING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED','AWAITING_USER'].includes(String(data.status ?? '')),
+    temporaryBypass: false,
+    temporaryBypassReason: null,
+    testAvailable: false,
   };
 });
 
+// Never create a paid session on login or account creation. Only this explicit
+// user action can initiate a check, and Didit handles it once per account.
 export const startAgeAssurance = onCall({
   region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
 }, async request => {
   const identity = await requireActiveIdentity(request);
   const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
   if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
-  if (diditConfigured()) {
-    const individuallyApprovedPilot = !identity.admin &&
-      (await accountRef(identity.uid).get()).data()?.diditPilotEnabled === true;
-    if (DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity.admin && !individuallyApprovedPilot) {
-      // Regular beta testers keep their bypass and never start billable sessions.
-      const bypass = await temporaryAgeBypassFor(identity.uid);
-      if (bypass.allowed) return {
-        verified: true, status: 'COMPLETE', configured: true,
-        provider: 'temporary-test-access', environment: 'development',
-        temporaryBypass: true, temporaryBypassReason: bypass.reason,
-      };
-      throw new HttpsError('permission-denied', 'Live Didit verification is limited to administrators and explicitly enrolled pilot testers.');
-    }
-    return startDiditSession(identity.uid);
+  // Required for first-time verification only. Existing passes remain valid when
+  // accepting a revised notice; agreeing must never create another paid session.
+  await requireAgeNoticeAcknowledgement(identity.uid);
+  if (!diditConfigured() || diditMode() !== 'live') {
+    throw new HttpsError('failed-precondition',
+      'Live 18+ verification is not available yet. Nightjar cannot grant adult access until Didit is ready.');
   }
-  const bypass = await temporaryAgeBypassFor(identity.uid);
-  if (bypass.allowed) return {
-    verified: true, status: 'COMPLETE', configured: false,
-    provider: 'temporary-test-access', environment: 'development',
-    temporaryBypass: true, temporaryBypassReason: bypass.reason,
-  };
-  throw new HttpsError('failed-precondition', 'Didit verification is not configured.');
+  return startDiditSession(identity.uid);
 });
 
-export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
+// Retained as a fail-closed compatibility endpoint for outdated clients.
+// No simulated administrator approval is valid for access to adult content.
+export const adminAgeTestPass = onCall({ region: REGION }, async request => {
+  requireAdminIdentity(request);
+  throw new HttpsError('failed-precondition', 'Test approvals cannot replace live Didit age verification.');
+});
+
+// Owner-only operational view. Never export identity images, DOB, biometrics,
+// full webhook decisions, or provider API credentials to the app.
+export const adminDiditDashboard = onCall({ region: REGION }, async request => {
   const identity = requireAdminIdentity(request);
-  await db.collection('ageAssurance').doc(identity.uid).set({
-    verified: true,
-    status: 'COMPLETE',
-    ageThreshold: 18,
-    provider: 'admin-test',
-    environment: 'development',
-    testMode: true,
-    verifiedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { verified: true, status: 'COMPLETE', provider: 'admin-test' };
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('ageAssurance').limit(500).get();
+  const rows = snapshot.docs
+    .filter(doc => doc.data().provider === 'didit')
+    .map(doc => {
+      const data = doc.data();
+      return {
+        uid:doc.id,
+        status:cleanText(data.status, 40) || 'NOT_STARTED',
+        environment:cleanText(data.environment, 20) || 'unknown',
+        verified:diditPass(data),
+        sessionId:cleanText(data.sessionId, 140) || null,
+        verifiedAt:toIso(data.verifiedAt),
+        updatedAt:toIso(data.updatedAt),
+        reverifyRequired:data.reverifyRequired === true,
+      };
+    })
+    .sort((a,b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  const counts = {
+    total: rows.length,
+    approved:rows.filter(x => x.verified).length,
+    pending:rows.filter(x => ['PENDING','IN_PROGRESS','CREATING','RESUBMITTED','AWAITING_USER','NOT_STARTED'].includes(x.status)).length,
+    review:rows.filter(x => x.status === 'PENDING_REVIEW' || x.reverifyRequired).length,
+    failed:rows.filter(x => ['FAIL','EXPIRED','ABANDONED','BLOCKED'].includes(x.status)).length,
+  };
+  const recent = await Promise.all(rows.slice(0,25).map(async item => {
+    const account = await accountRef(item.uid).get();
+    return {
+      status:item.status, environment:item.environment, verified:item.verified,
+      sessionId:item.sessionId, verifiedAt:item.verifiedAt, updatedAt:item.updatedAt,
+      reverifyRequired:item.reverifyRequired,
+      account:maskSecurityEmail(account.data()?.email),
+    };
+  }));
+  return { counts, recent, truncated:snapshot.size >= 500,
+    providerConsole:'https://business.didit.me/',
+    retentionWindowConfirmed:false,
+    retentionOwnerAttested:true,
+    retentionSelectedMonths:6,
+    note:'Nightjar owner confirmed the saved six-month Didit setting on 14 October 2026. This is not live API evidence; inspect Didit Business Console for independent review.' };
 });
 
 export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (request) => {
@@ -10385,7 +10384,7 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
         (b.data().createdAt?.toMillis?.() ?? 0) - (a.data().createdAt?.toMillis?.() ?? 0))[0];
       historicalApprovedEmailEventId = latest?.id ?? null;
     }
-    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && accountData.testAccess === true;
+    const temporaryTestAccess = false;
     return {
       id: doc.id,
       userId: doc.id,
@@ -12314,8 +12313,9 @@ export const getVoiceCallingCard = onCall({ region: REGION }, async (request) =>
     return { release: null, releaseId: null };
   }
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const betaAccess = identity.admin ? false : await betaListeningAccessFor(identity.uid, identity.email);
   return { releaseId, release: decorateReleaseAccess(doc.data() ?? {}, releaseId, identity.uid, {
-    admin: identity.admin, subscription,
+    admin: identity.admin, subscription, betaAccess,
   }) };
 });
 

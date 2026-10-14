@@ -25,7 +25,7 @@ const transcriptCall = httpsCallable<{ releaseId: string }, {
   language: string;
   wordCount: number;
   accessibilityReviewed: boolean;
-  accessReason: 'admin' | 'credited_work' | 'subscription';
+  accessReason: 'admin' | 'credited_work' | 'beta_test' | 'subscription';
 }>(functions, 'getReleaseTranscript');
 const moderationQueueCall = httpsCallable<void, { releases: any[] }>(functions, 'releaseModerationQueue');
 const audioLibraryCall = httpsCallable<void, { releases: any[]; totalInspected: number; truncated: boolean }>(functions, 'adminReleaseAudioLibrary');

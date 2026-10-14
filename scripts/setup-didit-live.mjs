@@ -89,7 +89,7 @@ function writeFirebaseSecret(name, value) {
 }
 
 async function main() {
-  log('\nNIGHTJAR — REAL DIDIT / ADMIN-ONLY PILOT',
+  log('\nNIGHTJAR — LIVE DIDIT 18+ ACCOUNT VERIFICATION',
     'Sets up the existing live Nightjar app. Does NOT deploy or start any paid checks.\n');
   const projectList = JSON.parse(firebase(['projects:list', '--json']));
   if (!Array.isArray(projectList.result) ||
@@ -155,7 +155,7 @@ async function main() {
   writeFirebaseSecret('DIDIT_ENVIRONMENT', 'live');
   log('\nDONE: Four live values saved to Firebase Secret Manager.',
     'No live verification was started and nothing was deployed.',
-    'Next: validate/build, deploy reviewed app + webhook, then test as Nightjar ADMIN only.');
+    'Next: validate/build, deploy reviewed backend + webhook, then conduct controlled 18+ and underage tests before enabling the mandatory gate for invited testers.');
 }
 if (process.argv.includes('--help')) {
   log('Run npm run setup:didit:live for an interactive, production-project-scoped setup. No deploy.');
