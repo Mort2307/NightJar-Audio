@@ -322,7 +322,7 @@ export const closedBetaRegistrationStatus = onCall({ region: REGION }, async (re
   return {
     closedBeta: CLOSED_BETA,
     allowed: access.allowed,
-    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS,
+    temporaryAgeBypass: false,
   };
 });
 
@@ -4445,7 +4445,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
     testing: {
       closedBeta: CLOSED_BETA,
       ageAssuranceConfigured: false /* Query protected ageStatus callable for actual provider configuration */,
-      temporaryAgeBypassEnabled: TESTING_AGE_ASSURANCE_BYPASS,
+      temporaryAgeBypassEnabled: false,
       approvedTesters,
       approvedTesterCount: approvedTesters.length,
     },
@@ -10298,7 +10298,7 @@ export const listProfessionalApplicationBank = onCall({ region: REGION }, async 
         (b.data().createdAt?.toMillis?.() ?? 0) - (a.data().createdAt?.toMillis?.() ?? 0))[0];
       historicalApprovedEmailEventId = latest?.id ?? null;
     }
-    const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && accountData.testAccess === true;
+    const temporaryTestAccess = false;
     return {
       id: doc.id,
       userId: doc.id,
