@@ -26,7 +26,10 @@ for (const [marker,label] of [
   ["sandbox_scenario: 'approve'", 'Sandbox-only Didit scenario forces failure on a live application key'],
   ["session.session_kind !== 'user'", 'Reject non-user Didit sessions'],
   ["request.get('X-Didit-Test-Webhook')", 'Signed Didit test deliveries cannot change a real account'],
-  ["text(session.vendor_data) !== uid", 'Didit session must echo authenticated Firebase UID'],
+  ["(hasVendorEcho && text(session.vendor_data) !== uid)", 'If Didit echoes vendor_data, it must match the Firebase UID'],
+  ["(hasWorkflowEcho && text(session.workflow_id) !== DIDIT_WORKFLOW_ID.value())", 'If Didit echoes workflow_id, it must match the configured workflow'],
+  ["sessionRef(sessionId)", 'Account-owned session binding is persisted'],
+  ["failurePhase", 'Didit failure diagnostics identify the stage without exposing data'],
   ['session.workflowId !== payload.workflowId', 'Workflow scope check'],
   ["session.environment !== payload.environment", 'Environment scope check'],
   ["data?.environment === 'live'", 'Sandbox and live pass isolation'],
@@ -34,6 +37,7 @@ for (const [marker,label] of [
 ]) requireMarker(didit, marker, label);
 requireMarker(backend, 'diditPass(data)', 'Protected audio checks Didit status');
 requireMarker(backend, 'startDiditSession(identity.uid)', 'Didit session callable');
+requireMarker(backend, "requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice')", 'The server must require recorded notice acknowledgement before beginning Didit');
 requireMarker(backend, 'DIDIT_LIVE_PILOT_ADMINS_ONLY = true', 'Live Didit remains restricted to approved pilot accounts');
 requireMarker(backend, "DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity.admin && !individuallyApprovedPilot", 'Only admins or explicitly enrolled pilot members can launch Didit');
 requireMarker(backend, "export const adminSetDiditPilotAccess", 'Authenticated administrator controls Didit pilot cohort');
