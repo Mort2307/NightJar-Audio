@@ -22,7 +22,7 @@ assert.match(install, /INSTALL_DISMISS_DAYS = 7/, 'dismissal does not permanentl
 assert.match(install, /aria-label="Remind me about installing Nightjar later"/, 'dismissal is accessible');
 assert.match(install, /showManualSteps/, 'browser-menu install help available without native prompt');
 assert.match(install, /Add to Home Screen/, 'manual installation for unsupported browsers');
-assert.match(install, />Install Nightjar</, 'direct install CTA is always available when not installed');
+assert.match(install, /installing \? 'Opening installer…' : 'Install Nightjar'/, 'direct install CTA is always available when not installed');
 assert.match(install, /nightjarInstaller\.prompt\(\)/, 'installer uses cached native prompt');
 assert.match(main, /import '\.\/platform\/nightjar-install'/, 'install event is captured at bootstrap');
 assert.match(portal, /<ProductExperience allowInstall \/>/, 'installer is also available to signed-out visitors');
