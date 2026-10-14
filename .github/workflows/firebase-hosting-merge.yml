@@ -235,7 +235,7 @@ jobs:
           gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
             -f ref=main \
             -f 'inputs[scope]=functions:selected' \
-            -f 'inputs[function_names]=transparencySnapshot,myListeningAccess,listScriptMarketplace' \
+            -f 'inputs[function_names]=transparencySnapshot,myListeningAccess,listScriptMarketplace,nightjarGiftConfig,myNightjarWallet,sendNightjars,myNightjarEarnings,myNightjarGiftHistory' \
             -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
           echo "Deploying the 3 beta confidentiality callables before Hosting."
           BACKEND_RUN_ID=""
