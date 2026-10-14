@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import AccountAccess from './AccountAccess';
 import ProductExperience from './ProductExperience';
@@ -27,22 +27,40 @@ export default function AccountPortal() {
   const [message, setMessage] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
+  const activeAccountLoadRef = useRef<{ userId: string; enterApp: boolean } | null>(null);
+  const [accountProgress, setAccountProgress] = useState('Checking your Nightjar account…');
+
   const loadAccount = async (nextIdentity: NightjarIdentity | null, enterApp = false) => {
     if (!nextIdentity?.emailVerified) {
       setAccount(null);
       return;
     }
+    // Firebase auth observation and the form's success callback can fire
+    // for the same sign-in. Coalesce them into a single backend account lookup,
+    // retaining the stronger request to continue into the app.
+    if (activeAccountLoadRef.current?.userId === nextIdentity.userId) {
+      if (enterApp) activeAccountLoadRef.current.enterApp = true;
+      return;
+    }
+    const request = { userId: nextIdentity.userId, enterApp };
+    activeAccountLoadRef.current = request;
     setLoadingAccount(true);
+    setAccountProgress('Checking your account permissions…');
     setMessage('');
     try {
-      await nightjarAuth.idToken(true);
+      // Callable functions fetch a valid Firebase token automatically.
+      // Forcing a fresh network token on every login added an avoidable round trip.
+      // Email verification already refreshes the token when it changes.
       let nextAccount = await nightjarAccount.identity();
+      if (nightjarAuth.current()?.userId !== request.userId) return;
       const pendingRole = sessionStorage.getItem('nightjar.registrationRole') as 'listener' | 'creator' | 'writer' | 'editor' | 'artist' | null;
       const referralCode = sessionStorage.getItem('nightjar.creatorReferralCode') ?? '';
       if (!nextAccount.admin && !nextAccount.role && pendingRole && ['listener','creator','writer','editor','artist'].includes(pendingRole)) {
+        setAccountProgress('Preparing your Nightjar workspace…');
         await nightjarAccount.chooseRole(pendingRole, referralCode);
         nextAccount = await nightjarAccount.identity();
       }
+      if (nightjarAuth.current()?.userId !== request.userId) return;
       if (nextAccount.role) {
         sessionStorage.removeItem('nightjar.registrationRole');
         sessionStorage.removeItem('nightjar.creatorReferralCode');
@@ -54,15 +72,17 @@ export default function AccountPortal() {
         return;
       }
 
-      if (enterApp) {
+      if (request.enterApp) {
         const destination = accountDestination(nextAccount);
         if (destination) {
+          setAccountProgress('Opening your Nightjar workspace…');
           markPasswordAuthenticated(nextIdentity.userId);
           window.location.replace(destination);
           return;
         }
       }
     } catch (error) {
+      if (nightjarAuth.current()?.userId !== request.userId) return;
       setAccount(null);
       const detail = error instanceof Error ? error.message : String(error ?? '');
       setMessage(!navigator.onLine
@@ -71,7 +91,10 @@ export default function AccountPortal() {
           ? 'Your email is verified in the browser, but Firebase had not refreshed the backend identity token yet. Refresh this page once; Nightjar now forces a fresh token before retrying.'
           : 'You are signed in, but Nightjar could not finish loading your account. Retry below; there is no need to change your password.');
     } finally {
-      setLoadingAccount(false);
+      if (activeAccountLoadRef.current === request) {
+        activeAccountLoadRef.current = null;
+        setLoadingAccount(false);
+      }
     }
   };
 
@@ -187,7 +210,7 @@ export default function AccountPortal() {
         <button className="ghost-button" onClick={() => void nightjarAuth.signOut().then(() => { setIdentity(null); setAccount(null); setMessage(''); })}>Sign out</button>
       </div>}
 
-      {loadingAccount && <p>Checking protected account state…</p>}
+      {loadingAccount && <p role="status" aria-live="polite">{accountProgress}</p>}
       {message && <p className="account-access-message" role="status">{message}</p>}
       {message && !loadingAccount && !explicitSignIn && <button type="button" className="secondary-button" onClick={() => void loadAccount(identity, true)}>Retry opening my account</button>}
 
