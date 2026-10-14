@@ -8,6 +8,7 @@ import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 import { nightjarReferrals } from '../platform/firebase-referrals';
 import { publicProfileUrl, shareNightjarProfile, type ShareableProfileRole } from '../platform/public-profile-share';
 import NightjarGiftPanel from './NightjarGiftPanel';
+import NightjarFinancePreview from './NightjarFinancePreview';
 import { MEMBER_PAYMENT_FEATURES_ENABLED } from '../platform/nightjar-financial-visibility';
 import PublicEditorShowcase from './PublicEditorShowcase';
 import PublicWriterPortfolio from './PublicWriterPortfolio';
@@ -251,7 +252,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           <div className="writer-discovery-actions">
             {!readOnlyPreview && <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>}
             {canMessage && onMessage && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
-            {MEMBER_PAYMENT_FEATURES_ENABLED && !readOnlyPreview && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Send Nightjars</button>}
+            {!readOnlyPreview && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Support creator</button>}
             {!readOnlyPreview && <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>}
           </div>
         </div>
@@ -495,6 +496,6 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         </div>
       </div>}
     </section>
-    {MEMBER_PAYMENT_FEATURES_ENABLED && giftOpen && profile && <NightjarGiftPanel recipientUserId={profile.userId} recipientName={profile.displayName} recipientRole={String(profileRole)} recipientRoles={Array.isArray(profile.roles)?profile.roles:[]} notify={notify} onClose={() => setGiftOpen(false)} />}
+    {giftOpen && profile && (MEMBER_PAYMENT_FEATURES_ENABLED ? <NightjarGiftPanel recipientUserId={profile.userId} recipientName={profile.displayName} recipientRole={String(profileRole)} recipientRoles={Array.isArray(profile.roles)?profile.roles:[]} notify={notify} onClose={() => setGiftOpen(false)} /> : <NightjarFinancePreview kind="support" recipientName={profile.displayName} onClose={() => setGiftOpen(false)} />)}
   </div>;
 }

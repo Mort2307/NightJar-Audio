@@ -14,7 +14,7 @@ const pounds=(pence:number)=>new Intl.NumberFormat('en-GB',{style:'currency',cur
 export default function MarketplaceScriptActions({script,readOnlyPreview,demoMode,simulationMode,notify,onMessageUser}:Props){
   const [sample,setSample]=useState<{scriptId:string;title:string;sample:string}|null>(null);
   const [sampleBusy,setSampleBusy]=useState(false);
-  const [mode,setMode]=useState<'question'|'licence'|null>(null);
+  const [mode,setMode]=useState<'question'|'rights'|'licence'|null>(null);
   const [body,setBody]=useState('');
   const [price,setPrice]=useState(script.marketplace?.commissionPricePence?(script.marketplace.commissionPricePence/100).toFixed(2):'');
   const [licenceType,setLicenceType]=useState<'non-exclusive'|'exclusive'>('non-exclusive');
@@ -29,7 +29,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
     catch(cause){notify(cause instanceof Error?cause.message:'The Writer has not authorised a preview.');}
     finally{setSampleBusy(false);}
   };
-  const openContact=(next:'question'|'licence')=>{
+  const openContact=(next:'question'|'rights'|'licence')=>{
     if(readOnlyPreview||(demoMode&&!simulationMode))return notify('This action requires an authorised VA account.');
     if(next==='licence'&&!MEMBER_PAYMENT_FEATURES_ENABLED)return notify('Paid offers are not enabled during testing. You can still contact the Writer.');
     setMode(next);setError('');setBody('');
@@ -80,14 +80,15 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
         <section className="marketplace-modal" role="dialog" aria-modal="true" aria-label="Contact the Writer">
           <header><div><span className="mini-label">WRITER CONTACT</span><h3>{script.title}</h3><p>Writer: {script.writerName}</p></div><button className="secondary-button" disabled={busy} onClick={()=>setMode(null)}><X size={14}/> Close</button></header>
           <div className="marketplace-modal-body marketplace-offer-form">
-            <div className="marketplace-offer-modes"><button className={mode==='question'?'primary-button':'secondary-button'} onClick={()=>setMode('question')}>Ask a question</button>{MEMBER_PAYMENT_FEATURES_ENABLED&&<button className={mode==='licence'?'primary-button':'secondary-button'} onClick={()=>setMode('licence')}>Offer to licence</button>}</div>
+            <div className="marketplace-offer-modes"><button className={mode==='question'?'primary-button':'secondary-button'} onClick={()=>setMode('question')}>Ask a question</button><button className={mode==='rights'?'primary-button':'secondary-button'} onClick={()=>setMode('rights')}>Discuss licensing</button>{MEMBER_PAYMENT_FEATURES_ENABLED&&<button className={mode==='licence'?'primary-button':'secondary-button'} onClick={()=>setMode('licence')}>Offer to licence</button>}</div>
+            {mode==='rights' && <p className="marketplace-offer-warning"><ShieldCheck size={15}/> This opens a conversation with the Writer. No price, paid offer or licence agreement is being proposed.</p>}
             {MEMBER_PAYMENT_FEATURES_ENABLED && mode==='licence'&&<div className="marketplace-offer-terms">
               <label><span className="nj-term-label">Offer price (£) <ContextHelp topic="licence-price"/></span><input type="number" value={price} min="1" max="100000" step=".01" onChange={e=>setPrice(e.target.value)}/></label>
               <label><span className="nj-term-label">Rights <ContextHelp topic="licence-choice"/></span><select value={licenceType} onChange={e=>setLicenceType(e.target.value as 'non-exclusive'|'exclusive')}><option value="non-exclusive">Non-exclusive</option><option value="exclusive">Exclusive</option></select></label>
               <label><span className="nj-term-label">Duration in months <ContextHelp topic="licence-term"/></span><input type="number" value={months} min="1" max="120" onChange={e=>setMonths(Number(e.target.value))}/></label>
               <label className="marketplace-offer-span"><span className="nj-term-label">Intended audio use <ContextHelp topic="usage-rights"/></span><textarea maxLength={1200} rows={3} value={usage} onChange={e=>setUsage(e.target.value)}/></label>
             </div>}
-            <label>Your message to the Writer<textarea value={body} maxLength={1600} rows={4} onChange={e=>setBody(e.target.value)} placeholder="Introduce yourself, ask about the script or discuss a collaboration…"/></label>
+            <label>Your message to the Writer<textarea value={body} maxLength={1600} rows={4} onChange={e=>setBody(e.target.value)} placeholder={mode==='rights'?'Introduce yourself and discuss possible script use, without proposing financial terms…':'Introduce yourself, ask about the script or discuss a collaboration…'}/></label>
             {MEMBER_PAYMENT_FEATURES_ENABLED && mode==='licence'&&<p className="marketplace-offer-warning"><ShieldCheck size={15}/> <ContextHelp topic="licence-status"/> This records an offer and starts a conversation, not a purchase. No charge or licence transfer can occur until compliant payment and final contract verification are enabled.</p>}
             {error&&<p className="manuscript-review-error" role="alert">{error}</p>}
           </div>
@@ -100,6 +101,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
     {script.marketplace?.sampleAvailable&&<span className="nj-term-label"><button type="button" className="secondary-button" disabled={sampleBusy||readOnlyPreview} onClick={()=>void openSample()}><LockKeyhole size={14}/>{sampleBusy?'Opening…':'Read protected sample'}</button><ContextHelp topic="protected-sample"/></span>}
     {readOnlyPreview?<span className="status-pill muted">Read-only live preview</span>:<>
       <button className="secondary-button" onClick={()=>openContact('question')}><MessageCircle size={14}/> Ask Writer</button>
+      <button className="secondary-button" onClick={()=>openContact('rights')}><FileKey2 size={14}/> Discuss licensing</button>
       {MEMBER_PAYMENT_FEATURES_ENABLED&&<button className="primary-button" onClick={()=>openContact('licence')}><FileKey2 size={14}/> Make rights offer</button>}
     </>}
     {modal?createPortal(modal,document.body):null}

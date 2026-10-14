@@ -3827,3 +3827,19 @@ textarea {
   .nj-home-layout-row > span { min-width:100%; }
 }
 @media(prefers-reduced-motion:reduce) { .nj-personal-home * { scroll-behavior:auto; } }
+
+
+/* Beta feature previews: keep financial figures and purchase controls out of member UI. */
+.nj-finance-preview-card,.nj-finance-preview-dialog { position:relative; min-width:0; padding:20px; }
+.nj-finance-preview-content { display:grid; gap:10px; }
+.nj-finance-preview-content > .mini-label { display:flex; align-items:center; gap:8px; }
+.nj-finance-preview-content h3 { margin:0; font-size:clamp(18px,2vw,23px); }
+.nj-finance-preview-content p { margin:0; line-height:1.55; color:var(--nj-text-secondary,inherit); }
+.nj-finance-preview-status { display:flex; align-items:flex-start; gap:8px; padding:11px 12px; border:1px solid var(--nj-line-default,rgba(255,255,255,.18)); border-radius:12px; font-size:13px; }
+.nj-finance-preview-status svg { flex-shrink:0; }
+.nj-finance-preview-backdrop { position:fixed; inset:0; z-index:2400; display:grid; place-items:center; background:rgba(0,0,0,.78); padding:16px; }
+.nj-finance-preview-dialog { width:min(510px,100%); max-height:calc(100dvh - 40px); overflow-y:auto; display:grid; gap:18px; background:var(--nj-surface-raised,var(--nj-bg,#18141b)); }
+.nj-finance-preview-close { position:absolute; right:10px; top:10px; }
+.nj-finance-preview-dialog .nj-finance-preview-content { padding-right:32px; }
+.nj-finance-preview-dialog > .secondary-button { justify-self:start; min-height:44px; }
+@media(max-width:600px){ .nj-finance-preview-card,.nj-finance-preview-dialog { padding:15px; } }
