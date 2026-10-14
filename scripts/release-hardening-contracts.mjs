@@ -13,6 +13,7 @@ const roleProfile=read('src/components/RoleProfileExtension.tsx');
 const updater=read('src/platform/pwa.ts');
 const updateUi=read('src/components/AppUpdateControl.tsx');
 const productExperience=read('src/components/ProductExperience.tsx');
+const installer=read('src/platform/nightjar-install.ts');
 const mobileNav=read('src/components/MobileNavigation.tsx');
 const css=read('src/index.css');
 const firestore=read('firestore.rules');
@@ -70,7 +71,7 @@ requireText(productExperience,'applyNightjarUpdate','Automatic update banner mus
 requireText(app,'allowInstall={Boolean(user && ageVerified)}','All signed-in, age-cleared members must have access to Nightjar installation.');
 requireText(productExperience,'nightjar.install-dismiss-until.v1','Install invitation must remain dismissible across sessions.');
 requireText(productExperience,'display-mode: standalone','Installed PWA must not keep showing the installation invitation.');
-requireText(productExperience,'beforeinstallprompt','Native install must be gated by browser support.');
+requireText(installer,'beforeinstallprompt','Native install must be gated by browser support.');
 if (app.includes('allowInstall={canAdmin && !simulationMode}')) failures.push('Obsolete admin-only Nightjar installation restriction is still present.');
 requireText(mobileNav,'Editor Studio','Mobile Editor navigation must not regress to legacy Editorial label.');
 
