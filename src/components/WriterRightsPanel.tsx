@@ -62,7 +62,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
   const parseWriterPrice = (): number | null | undefined => {
     const value = askingPriceDraft.trim();
     if (!value) return null; // Writers may choose "contact for pricing".
-    if (!/^(?:0|[1-9]\\d{0,5})(?:\\.\\d{1,2})?$/.test(value)) return undefined;
+    if (!/^(?:0|[1-9]\d{0,5})(?:\.\d{1,2})?$/.test(value)) return undefined;
     const pence = Math.round(Number(value) * 100);
     return Number.isSafeInteger(pence) && pence >= 100 && pence <= 10000000 ? pence : undefined;
   };
