@@ -1,6 +1,7 @@
-export type NightjarLegalDocumentId = 'platform_terms' | 'privacy_notice' | 'professional_terms';
+export type NightjarLegalDocumentId = 'platform_terms' | 'privacy_notice' | 'professional_terms' | 'age_assurance_notice';
 
 export const NIGHTJAR_LEGAL_VERSION = '2026-10-09.1';
+export const NIGHTJAR_AGE_NOTICE_VERSION = '2026-10-14.3';
 
 export type NightjarLegalDocument = {
   id: NightjarLegalDocumentId;
@@ -88,6 +89,40 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
       ]},
       { heading:'7. Beta legal status', paragraphs:[
         'This is the private-beta Privacy Notice framework. The final public version must identify the legal operator and contact details, applicable lawful bases, processor categories, retention periods and international-transfer arrangements following professional legal/data-protection review.'
+      ]},
+    ],
+  },
+
+  age_assurance_notice: {
+    id:'age_assurance_notice',
+    title:'Nightjar Age Verification & Didit Privacy Notice',
+    shortTitle:'Age Verification',
+    version:NIGHTJAR_AGE_NOTICE_VERSION,
+    path:'/legal/age-verification',
+    summary:'Why everyone must verify as 18+, what Didit handles, what Nightjar retains, and how to request help.',
+    sections:[
+      { heading:'1. Why Nightjar checks your age', paragraphs:[
+        'Nightjar is an adults-only audio service. Every account, including existing creators and invited testers, must complete highly effective age assurance before accessing adult material. This helps prevent access by people under 18 and supports Nightjar’s duties under the UK Online Safety Act and other applicable laws.',
+        'The check is separate from signing in, accepting platform terms, any creator approval and any subscription. Once your live 18+ result is valid on your account, routine visits, updates and device changes do not require another ID check.'
+      ]},
+      { heading:'2. Who processes identity evidence', paragraphs:[
+        'Nightjar requests the check and acts as the data controller. Didit is the verification provider and acts as a data processor on Nightjar’s instructions. You complete the identity check on Didit’s secure hosted service.',
+        'Depending on the selected Didit workflow, Didit may request a government-issued photo ID, an image or video selfie, liveness/face-matching checks and details on the ID such as your name and date of birth. Didit processes and holds this verification evidence. Nightjar does not receive or save copies of the ID images, selfie recordings or extracted date of birth in its application database.',
+        'Nightjar’s authorised administrators may need to use the restricted Didit Business Console to review an unsuccessful verification, investigate misuse, handle requests, or supply legally required evidence. This is controlled access, not unrestricted visibility of your identity data.'
+      ]},
+      { heading:'3. What Nightjar retains and why', paragraphs:[
+        'Nightjar receives and stores a minimum account-linked verification record: provider name, session reference, whether the adult check passed, verification status and timestamps, and any revocation/review indicator. It uses this record to allow or prevent adult access, troubleshoot verification, avoid charging for repeat sessions, and maintain a security/compliance audit trail.',
+        'The approved age status is retained while the account and its verification remain valid. On account closure, Nightjar reviews what limited records must be deleted and what evidence must temporarily be retained for legal obligations, disputes or safety; longer statutory or dispute holds take precedence where genuinely applicable.',
+        'Nightjar has configured a six-month retention period for identity-verification session evidence in its Didit application, confirmed by its administrator on 14 October 2026. This applies to existing and new verification sessions for that application. Some categories of data have different retention arrangements: Didit states its API audit logs may be retained for 365 days, and separate security records or legally required holds may last longer. Nightjar retains a minimal verified-adult status tied to your account so that deleting verification images after six months does not require you to pay for or complete another identity check.'
+      ]},
+      { heading:'4. Security, sharing and your choices', paragraphs:[
+        'Didit states that verification evidence is encrypted in transit and at rest, processed in the EU by default and restricted to authorised personnel. Nightjar retains only the result needed for its gate and does not use the ID images for advertising or public profiles.',
+        'You can read this notice before choosing to begin. If you do not wish to provide age evidence, you can decline, but Nightjar cannot provide access to adult material without a valid check. Acknowledging this notice records that it was presented to you; it is not blanket consent for unrelated data uses or a substitute for the provider’s own capture notices.',
+        'Where processing involves biometric information, applicable legal grounds and additional safeguards must be reviewed separately. The underlying legal basis for necessary safety checks is not assumed to be user consent merely because this acknowledgement checkbox exists.'
+      ]},
+      { heading:'5. Privacy requests, corrections and disputes', paragraphs:[
+        'Contact Nightjar through its published support/privacy route to request access, correction, restriction or deletion of information, or to challenge a verification result. Nightjar, as controller, is responsible for coordinating requests with Didit where relevant. Deletion and disclosure requests are assessed against applicable legal requirements.',
+        'If your check is declined or under review, ask Nightjar support for a review rather than starting repeated paid checks. Nightjar may require a new check only following genuine revocation, an unresolved fraudulent use concern or a justified legal or safety review.'
       ]},
     ],
   },
