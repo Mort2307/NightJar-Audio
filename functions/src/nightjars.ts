@@ -5,7 +5,6 @@ import { diditPass } from './didit';
 
 const db = () => getFirestore();
 const REGION = 'europe-west2';
-const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 const GIFT_CLEARANCE_DAYS = 7;
 const ELIGIBLE_RECIPIENT_ROLES = new Set(['creator', 'writer', 'editor', 'artist']);
 const professionalRolesFor = (data: Record<string, any>) => {
@@ -34,8 +33,7 @@ const requireIdentity = async (request: { auth?: { uid: string; token: Record<st
   const data = account.data() ?? {};
   if (data.status === 'suspended') throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
   const age = await db().collection('ageAssurance').doc(uid).get();
-  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && (data.testAccess === true || data.role === 'admin');
-  if (!diditPass(age.data()) && !temporaryTestAccess) {
+  if (!diditPass(age.data())) {
     throw new HttpsError('permission-denied', 'Age assurance is required before using Nightjar gifts.');
   }
   return { uid, account: data };
