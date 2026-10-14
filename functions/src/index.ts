@@ -8338,7 +8338,7 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
         writerName: writer.displayName,
         writerHandle: writer.handle,
         rights: normaliseScriptRights(data.rights),
-        marketplace: (() => { const { previewExcerpt, commissionPricePence: _hiddenIndicativePrice, ...listing } = normaliseScriptMarketplace(data.marketplace); return { ...listing, sampleAvailable:Boolean(previewExcerpt.trim()) }; })(),
+        marketplace: (() => { const { previewExcerpt, ...listing } = normaliseScriptMarketplace(data.marketplace); return { ...listing, sampleAvailable:Boolean(previewExcerpt.trim()) }; })(),
         artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
         updatedAt: toIso(data.updatedAt),
       };
