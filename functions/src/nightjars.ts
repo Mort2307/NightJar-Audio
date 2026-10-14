@@ -51,7 +51,9 @@ const walletRef = (uid: string) => db().collection('nightjarWallets').doc(uid);
 const earningsRef = (uid: string) => db().collection('nightjarCreatorEarnings').doc(uid);
 const giftLedger = () => db().collection('nightjarGiftLedger');
 
-export const nightjarGiftConfig = onCall({ region: REGION }, async () => ({
+export const nightjarGiftConfig = onCall({ region: REGION }, async (request) => {
+  await requireAdmin(request); // Beta embargo: never reveal future gift-pack prices to members.
+  return {
   unitCreatorValuePence: NIGHTJAR_VALUE_PENCE,
   checkoutConfigured: false,
   packs: NIGHTJAR_PACKS.map((pack) => ({ ...pack })),
@@ -63,10 +65,11 @@ export const nightjarGiftConfig = onCall({ region: REGION }, async () => ({
     redeemableByPurchaser: false,
     expires: false,
   },
-}));
+  };
+});
 
 export const myNightjarWallet = onCall({ region: REGION }, async (request) => {
-  const identity = await requireIdentity(request);
+  const identity = await requireAdmin(request); // Beta embargo: administrator-only until payment launch.
   const snapshot = await walletRef(identity.uid).get();
   const data = snapshot.data() ?? {};
   return {
@@ -79,7 +82,7 @@ export const myNightjarWallet = onCall({ region: REGION }, async (request) => {
 });
 
 export const sendNightjars = onCall({ region: REGION }, async (request) => {
-  const sender = await requireIdentity(request);
+  const sender = await requireAdmin(request); // Beta embargo: administrator-only until payment launch.
   const input = (request.data ?? {}) as Record<string, unknown>;
   const recipientUserId = cleanText(input.recipientUserId);
   const requestedRecipientRole = cleanText(input.recipientRole, 30);
@@ -213,7 +216,7 @@ export const sendNightjars = onCall({ region: REGION }, async (request) => {
 });
 
 export const myNightjarEarnings = onCall({ region: REGION }, async (request) => {
-  const identity = await requireIdentity(request);
+  const identity = await requireAdmin(request); // Beta embargo: administrator-only until payment launch.
   const snapshot = await earningsRef(identity.uid).get();
   const data = snapshot.data() ?? {};
   return {
@@ -228,7 +231,7 @@ export const myNightjarEarnings = onCall({ region: REGION }, async (request) => 
 });
 
 export const myNightjarGiftHistory = onCall({ region: REGION }, async (request) => {
-  const identity = await requireIdentity(request);
+  const identity = await requireAdmin(request); // Beta embargo: administrator-only until payment launch.
   const [sentSnapshot, receivedSnapshot] = await Promise.all([
     giftLedger().where('senderUserId', '==', identity.uid).limit(250).get(),
     giftLedger().where('recipientUserId', '==', identity.uid).limit(250).get(),
