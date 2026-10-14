@@ -1,10 +1,11 @@
 /**
- * Nightjar is in testing. Do not show pricing, billing, wallet purchases,
- * creator payout projections, Nightjar gift values or paid licence offers to
- * public, listener or professional workspaces before approved launch.
- *
- * Owner-only finance tools remain available through the separately
- * authenticated administrator workspace. A future public release requires a
- * deliberate product and payment-compliance review, not just a theme change.
+ * Separate unrelated parts of Nightjar's economy.
+ * Internal platform economics (revenue shares, caps, payout projections,
+ * cashflow and payment processing) remain admin-only until approved.
+ * Writers may set their OWN asking price and negotiate an audio adaptation
+ * licence with a VA. Offers do not collect payment or grant rights.
+ * Listener subscription pricing is published separately and may be displayed.
  */
 export const MEMBER_PAYMENT_FEATURES_ENABLED = false;
+export const WRITER_PRICE_NEGOTIATION_ENABLED = true;
+export const LISTENER_SUBSCRIPTION_PRICE_GBP = '£6.99/month';

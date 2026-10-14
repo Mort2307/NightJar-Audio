@@ -80,6 +80,7 @@ export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser,
         <h3>{script.title}</h3>
         {onOpenWriter ? <button className="marketplace-writer" type="button" data-nj-preview-safe={readOnlyPreview ? "true" : undefined} disabled={!script.writerUserId} onClick={()=>script.writerUserId && onOpenWriter(script.writerUserId)}>{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</button> : <span className="marketplace-writer">{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</span>}
         <p>{script.marketplace?.synopsis || 'Writer has not added a public synopsis yet.'}</p>
+        <p className="nj-term-label">Writer asking price: <strong>{typeof script.marketplace?.commissionPricePence === 'number' && script.marketplace.commissionPricePence > 0 ? new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(script.marketplace.commissionPricePence/100) : 'Contact for pricing'}</strong> <ContextHelp topic="licence-price"/></p>
         <div className="marketplace-tags">{[...(script.marketplace?.genres ?? []), ...(script.marketplace?.tropes ?? [])].slice(0,8).map((item:string)=><span key={item}>{item}</span>)}</div>
         <dl className="marketplace-rights">
           <div><dt className="nj-term-label">Copyright <ContextHelp topic="copyright"/></dt><dd>{script.rights?.writerRetainsCopyright !== false ? 'Writer retained' : 'See agreement'}</dd></div>

@@ -1,5 +1,6 @@
 import { CreditCard, Gift, Handshake, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { LISTENER_SUBSCRIPTION_PRICE_GBP } from '../platform/nightjar-financial-visibility';
 
 type Kind = 'membership' | 'wallet' | 'support' | 'licensing';
 type Props = { kind:Kind; recipientName?:string; onClose?:()=>void };
@@ -8,8 +9,8 @@ const descriptions:Record<Kind,{eyebrow:string;title:string;detail:string;status
   membership:{
     eyebrow:'YOUR NIGHTJAR · MEMBERSHIP',
     title:'A membership that puts listening first.',
-    detail:'Membership options and access arrangements are being prepared. You can keep using your existing testing access; no subscription purchase is available here yet.',
-    status:'Membership details will be published once Nightjar has finalised its plans.',
+    detail:`Nightjar listener membership is ${LISTENER_SUBSCRIPTION_PRICE_GBP}. Membership features are being prepared; no subscription purchase is available here during testing.`,
+    status:'This is the listener subscription price. Creative work has its own independent pricing and licensing arrangements.',
   },
   wallet:{
     eyebrow:'YOUR NIGHTJAR · SUPPORT',
