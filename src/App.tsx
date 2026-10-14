@@ -5566,7 +5566,7 @@ function App() {
               </div>
               {ageStatusError && <p className="nj-didit-pilot-feedback" role="alert">{ageStatusError}</p>}
               <small>One attempt globally, including all administrators. Not a public reopening. Every new member session remains blocked by the backend.</small>
-            </section>
+            </section>}
             {!DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Administrator Didit verification pilot">
               <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
               <h2>Didit Age Verification</h2>
