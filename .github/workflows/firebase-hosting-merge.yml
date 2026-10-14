@@ -185,6 +185,41 @@ jobs:
           gh run watch "$BACKEND_RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Selected experience backend deployed. Hosting may release."
 
+      # Replace the retired appdeploy.ai cron (HTTP 403) with NightJar's
+      # existing UK-time, idempotent Firebase scheduled function.
+      # This runs only for the explicitly tagged squash merge below.
+      - name: Release native Spotlight schedule before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-native-spotlight-schedule-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test ! -f .github/workflows/spotlight-scheduler.yml
+          grep -q "export const notifyDailySpotlights = onSchedule" functions/src/index.ts
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=notifyDailySpotlights' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          echo "Native 09:00 UK-time Spotlight schedule requested; awaiting protected backend deploy."
+          BACKEND_RUN_ID=""
+          for attempt in $(seq 1 48); do
+            BACKEND_RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "$START_TIME" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$BACKEND_RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$BACKEND_RUN_ID" ]]; then
+            echo "::error::Native Spotlight scheduler backend deployment was not confirmed; Hosting remains unchanged."
+            exit 1
+          fi
+          echo "Spotlight scheduler backend: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${BACKEND_RUN_ID}"
+          gh run watch "$BACKEND_RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Native Spotlight schedule deployed. Hosting may release."
+
       - name: Deploy Hosting live
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
