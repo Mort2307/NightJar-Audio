@@ -84,7 +84,6 @@ export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser,
         <dl className="marketplace-rights">
           <div><dt className="nj-term-label">Copyright <ContextHelp topic="copyright"/></dt><dd>{script.rights?.writerRetainsCopyright !== false ? 'Writer retained' : 'See agreement'}</dd></div>
           <div><dt>AI training</dt><dd>Not permitted</dd></div>
-          <div><dt className="nj-term-label">Indicative fee <ContextHelp topic="licence-price"/></dt><dd>{script.marketplace?.commissionPricePence == null ? 'Discuss' : new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(script.marketplace.commissionPricePence/100)}</dd></div>
         </dl>
         <MarketplaceScriptActions key={'script-action-'+script.id} script={script} notify={notify} onMessageUser={onMessageUser} readOnlyPreview={readOnlyPreview} demoMode={demoMode} simulationMode={simulationMode}/>
       </article>)}

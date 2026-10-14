@@ -1,4 +1,4 @@
-import { Accessibility, ArrowRight, Bell, BookOpenText, CalendarDays, CreditCard, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Accessibility, ArrowRight, Bell, BookOpenText, CalendarDays, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import HelpGlossary from './HelpGlossary';
 import { VisionAccessControls } from './VisionAccess';
@@ -56,10 +56,6 @@ export default function NightjarSettings({ email, administrator, simulationMode,
           <div className="nj-settings-info"><BookOpenText size={17}/><span>Audio transcript defaults, text size and playback-following preferences can be configured under Accessibility below.</span></div>
         </section>
 
-        <section className="panel nj-settings-section" aria-labelledby="nj-settings-billing">
-          <div className="nj-settings-section-head"><CreditCard size={19} /><div><span className="mini-label">MEMBERSHIP</span><h2 id="nj-settings-billing">Subscription and billing</h2></div></div>
-          <p className="nj-settings-explanation">Subscription management will appear here once live payment processing is enabled. No charges or billing controls are implied by the testing interface.</p>
-        </section>
       </div>
 
       {administrator && !simulationMode && <div className="nj-settings-tools"><details className="nj-settings-collapsible"><summary>Administrator audio upload testing</summary><AdminAudioUploadTest/></details></div>}

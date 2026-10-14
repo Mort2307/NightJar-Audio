@@ -27,7 +27,7 @@ assert.match(app,/NIGHTJAR ADMIN MESSAGING/);
 assert.match(app,/navigate\('messages'\)/);
 assert.match(api,/previewExcerpt: cleanText\(input\.previewExcerpt, 3200\)/);
 assert.match(rights,/Optional protected VA sample/);
-assert.match(listing,/const \{ previewExcerpt, \.\.\.listing \} = normaliseScriptMarketplace/);
+assert.match(listing,/const \{ previewExcerpt, commissionPricePence: _hiddenIndicativePrice, \.\.\.listing \} = normaliseScriptMarketplace/, 'public sample and price are both removed from marketplace payload');
 assert.match(sample,/requireAccountRole\(request, \['creator'\]\)/);
 assert.match(sample,/await requireAgeVerified\(identity\.uid\)/);
 assert.match(sample,/script_sample_view/);

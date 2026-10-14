@@ -1,19 +1,19 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, LayoutGrid, RotateCcw, Settings2 } from 'lucide-react';
 
-type SectionId = 'featured' | 'catalogue' | 'recommended' | 'spotlights' | 'writers' | 'trending' | 'creators' | 'studio';
+type SectionId = 'featured' | 'catalogue' | 'recommended' | 'spotlights' | 'writers' | 'trending' | 'creators';
 type Layout = { order: SectionId[]; hidden: SectionId[]; collapsed: SectionId[] };
 type Preset = 'balanced' | 'discovery' | 'minimal';
 const sectionLabels: Record<SectionId, string> = {
   featured: 'Featured listening', catalogue: 'Published audio', recommended: 'For you',
   spotlights: 'Community spotlight', writers: 'Discover writers', trending: 'Trending now',
-  creators: 'Creators to follow', studio: 'Creator opportunities',
+  creators: 'Creators to follow',
 };
-const allSections: SectionId[] = ['featured','catalogue','recommended','spotlights','writers','trending','creators','studio'];
+const allSections: SectionId[] = ['featured','catalogue','recommended','spotlights','writers','trending','creators'];
 const presets: Record<Preset, Layout> = {
-  balanced: { order:['featured','catalogue','recommended','spotlights','creators','writers','trending','studio'], hidden:[], collapsed:['spotlights','writers','trending','studio'] },
-  discovery: { order:['recommended','featured','trending','creators','catalogue','spotlights','writers','studio'], hidden:[], collapsed:['studio','writers'] },
-  minimal: { order:['featured','catalogue','recommended','spotlights','creators','writers','trending','studio'], hidden:['spotlights','writers','trending','studio'], collapsed:['recommended'] },
+  balanced: { order:['featured','catalogue','recommended','spotlights','creators','writers','trending'], hidden:[], collapsed:['spotlights','writers','trending'] },
+  discovery: { order:['recommended','featured','trending','creators','catalogue','spotlights','writers'], hidden:[], collapsed:['writers'] },
+  minimal: { order:['featured','catalogue','recommended','spotlights','creators','writers','trending'], hidden:['spotlights','writers','trending'], collapsed:['recommended'] },
 };
 const copyLayout = (v: Layout): Layout => ({order:[...v.order],hidden:[...v.hidden],collapsed:[...v.collapsed]});
 const readLayout = (key: string): Layout => {

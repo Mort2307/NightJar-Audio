@@ -82,7 +82,6 @@ import NotificationPreferences from './components/NotificationPreferences';
 import AppUpdateControl from './components/AppUpdateControl';
 import CommunityUpdateReader from './components/CommunityUpdateReader';
 import { checkNightjarUpdate, applyNightjarSafeUpdate, type NightjarUpdateStatus } from './platform/pwa';
-import TransparencyPanel from './components/TransparencyPanel';
 import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
 import { installNativeProtectionBridge } from './platform/native-protection';
 import { nightjarReferrals } from './platform/firebase-referrals';
@@ -90,6 +89,7 @@ import { publicProfileUrl, shareNightjarProfile, type ShareableProfileRole } fro
 import GlobalCommandPalette, { type NightjarCommand } from './components/GlobalCommandPalette';
 import MobileNavigation from './components/MobileNavigation';
 import { PersonalisedHome, HomeSection, WorkspaceSection } from './components/NightjarHomeLayout';
+import { MEMBER_PAYMENT_FEATURES_ENABLED } from './platform/nightjar-financial-visibility';
 import NightjarSettings from './components/NightjarSettings';
 import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
@@ -622,15 +622,6 @@ function App() {
   });
   const [commercialSaving, setCommercialSaving] = useState(false);
   const [creatorSlotBusyUserId, setCreatorSlotBusyUserId] = useState<string | null>(null);
-  const [listeningAccess, setListeningAccess] = useState<{
-    role:string|null;
-    subscribed:boolean;
-    subscriptionStatus:string|null;
-    planningMonthlyPricePence:number|null;
-    subscriptionUrl:string|null;
-    creditedWorkIncluded:true;
-    rule:string;
-  } | null>(null);
   const [reviewTrack, setReviewTrack] = useState<Track | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [catalogueQuery, setCatalogueQuery] = useState('');
@@ -1611,12 +1602,11 @@ function App() {
       });
       await loadNotifications(epoch);
       if (user) {
-        const [recommendationsResponse, trendingResponse, communityState, reactionState, listeningAccessResponse] = await Promise.all([
+        const [recommendationsResponse, trendingResponse, communityState, reactionState] = await Promise.all([
           nightjarCatalogue.recommendations(currentIntent),
           nightjarCatalogue.trending(),
           nightjarCommunity.state(),
           nightjarEngagement.state(),
-          nightjarCommercial.listeningAccess(),
         ]);
         if (epoch !== productLoadEpoch.current) return;
         setLiveRecommendations(recommendationsResponse.recommendations ?? []);
@@ -1624,7 +1614,6 @@ function App() {
         setFavouriteReleaseIds((communityState.favourites ?? []).map((item: any) => String(item.releaseId)));
         setFollowingProfileIds((communityState.follows ?? []).map((item: any) => String(item.targetUserId ?? item.creatorUserId)).filter(Boolean));
         setReleaseReactions(Object.fromEntries((reactionState.reactions ?? []).map((item) => [String(item.releaseId), item.reaction])) as Record<string, Exclude<ReleaseReaction,null>>);
-        setListeningAccess(listeningAccessResponse);
       }
     } catch {
       if (epoch !== productLoadEpoch.current) return;
@@ -1641,7 +1630,6 @@ function App() {
       setNotificationsOpen(false);
       setLiveRecommendations([]);
       setLiveTrending([]);
-      setListeningAccess(null);
     }
   };
 
@@ -2412,12 +2400,8 @@ function App() {
       return;
     }
     if (track.playbackAllowed === false || track.playbackAccessReason === 'subscription_required') {
-      const message = 'A Nightjar subscription is required for work you are not credited on. Your own credited releases remain included for you.';
-      if (listeningAccess?.subscriptionUrl) {
-        notifyWithAction(message, 'Subscribe', () => { window.location.href = listeningAccess.subscriptionUrl!; });
-      } else {
-        notify(message + ' Subscription checkout is not connected yet.');
-      }
+      // Access remains restricted while the beta payment launch is withheld.
+      notify('This release is not available to your account during testing.');
       return;
     }
     setPlaying(playing === track.id ? null : track.id);
@@ -2445,12 +2429,8 @@ function App() {
       return;
     }
     if (track.playbackAllowed === false || track.playbackAccessReason === 'subscription_required') {
-      const message = 'A Nightjar subscription is required for work you are not credited on. Your own credited releases remain included for you.';
-      if (listeningAccess?.subscriptionUrl) {
-        notifyWithAction(message, 'Subscribe', () => { window.location.href = listeningAccess.subscriptionUrl!; });
-      } else {
-        notify(message + ' Subscription checkout is not connected yet.');
-      }
+      // Access remains restricted while the beta payment launch is withheld.
+      notify('This release is not available to your account during testing.');
       return;
     }
     setTranscriptRequested(track.id);
@@ -4812,7 +4792,6 @@ function App() {
             </section>
 
             </HomeSection>
-            <div className="nj-home-transparency"><TransparencyPanel demoMode={demoMode} /></div>
 
             <HomeSection id="creators" title="Voices worth following">
             <section className="creator-band section-wrap">
@@ -4821,12 +4800,6 @@ function App() {
               {!profileDirectory.some((person) => person.role === 'creator') && <div className="people-empty"><Users size={18}/><strong>No approved creator profiles yet.</strong><span>Creator discovery will populate from approved public accounts.</span></div>}
             </section>
 
-            </HomeSection>
-            <HomeSection id="studio" title="Creator opportunities">
-            <section className="studio-feature section-wrap">
-              <div className="studio-feature-copy"><p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p><h2>Clear work. Clear rates. Real analytics.</h2><p>Nightjar separates the equal capped standard creator rate from listening analytics. Commercial records stay grounded in confirmed billing rather than fabricated earnings.</p><button data-nj-preview-safe="true" className="primary-button" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Apply as a Creator to access Creator Studio.')}>Open Creator Studio <ArrowRight size={16} /></button></div>
-              {!liveRolePreview && <div className="studio-preview-card"><div className="studio-card-head"><div><span className="mini-label">LIVE CREATOR DATA</span><strong>{creatorOnly ? 'Your account' : 'Connected data'}</strong></div><span className="studio-period">{creatorDashboardLoading ? 'LOADING' : 'LIVE RECORDS'}</span></div><div className="studio-metrics">{studioMetrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="formula-line"><span>PAID SUBSCRIPTIONS</span><ChevronRight size={12}/><span>PUBLISHED RATE BAND</span><ChevronRight size={12}/><span>CAPPED EQUAL RATE</span></div></div>}
-            </section>
             </HomeSection>
           </PersonalisedHome>
         )}
@@ -4889,11 +4862,11 @@ function App() {
 
             <ProfessionalLibrary
               audience={effectiveRole==='listener'?'listener':'professional'}
-              onSupport={(person,role)=>{
+              onSupport={MEMBER_PAYMENT_FEATURES_ENABLED ? (person,role)=>{
                 if(demoMode||liveRolePreview){notify('Nightjars can only be gifted from an active member account.');return;}
                 if(person.userId===user?.userId){notify('You cannot gift Nightjars to your own account.');return;}
                 setSupportTarget({userId:person.userId,name:person.name,role,roles:person.roles??[person.role]});
-              }}
+              } : undefined}
               profiles={profileDirectory}
               filteredProfiles={filteredDirectoryProfiles}
               category={directoryRoleFilter}
@@ -4970,7 +4943,7 @@ function App() {
               </Suspense>
             </div></WorkspaceSection>}
             {canAdmin && !demoMode && !liveRolePreview && <div className="admin-note"><ShieldCheck size={18}/><div><strong>REAL CREATOR MARKETPLACE · READ ONLY</strong><span>These are actual approved scripts with Marketplace visibility. No fictional entries are shown, and you cannot send interest as another user. For unpublished tester uploads, use Admin → Live Role Preview to see why they are hidden.</span></div></div>}
-            {creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-licences" title="Licensing and rights" summary="Offers, agreements and protected rights"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading script rights offers" />}><ScriptLicenceWorkspace role="creator" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense></WorkspaceSection>}
+            {MEMBER_PAYMENT_FEATURES_ENABLED && creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-licences" title="Licensing and rights" summary="Offers, agreements and protected rights"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading script rights offers" />}><ScriptLicenceWorkspace role="creator" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense></WorkspaceSection>}
             {creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-collaborations" title="Collaborations" summary="Active projects, invitations and handoffs"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense></WorkspaceSection>}
             {canAdmin && !liveRolePreview && <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS · ADMIN PREVIEW</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Administrator planning preview only. This compensation model is not shown on member or professional profiles and should not be treated as a contractual earnings promise.</p></article>}
           </section>
@@ -5198,7 +5171,7 @@ function App() {
                   <button type="button" className="secondary-button" onClick={openMyRoles}>Open My Roles <ArrowRight size={15}/></button>
                 </article> : <article className="panel profile-account-tool-card"><div className="profile-account-tool-head"><div><span className="mini-label">ADMINISTRATOR</span><h3>Professional roles are member-facing</h3></div><ShieldCheck size={17}/></div><p>Administrator identity stays separate from Listener and professional role applications.</p></article>}
               </div>
-              {effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={hasProfessionalProfileRole} demoMode={demoMode} /></Suspense>}
+              {MEMBER_PAYMENT_FEATURES_ENABLED && effectiveRole !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading Nightjar wallet" />}><NightjarWalletPanel compact notify={notify} professional={hasProfessionalProfileRole} demoMode={demoMode} /></Suspense>}
             </section>
 
             <div className="premium-profile-account-grid">
@@ -5323,7 +5296,7 @@ function App() {
             {writerSelected && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-artwork" title="Manuscript artwork" summary="Optional cover art and approvals"><Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading manuscript artwork controls" />}><WriterScriptArtwork key={'writer-artwork-' + String(writerSelected.id)} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
             {writerSelected && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-rights" title="Script rights and submission" summary="Licence terms and review" defaultOpen><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights controls" />}><WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} submitManuscript={submitWriterScript} /></Suspense></WorkspaceSection>}
             {writerSelected && String(writerSelected.status)!=='Draft' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-review" title="Review conversation" summary="Comments and manuscript feedback" defaultOpen><Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading NightJar review conversation" />}><ManuscriptReviewConversation key={'writer-review-thread-'+String(writerSelected.id)} scriptId={String(writerSelected.id)} audience="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
-            <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-negotiations" title="Rights negotiations" summary="Offers and agreements"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights negotiations" />}><ScriptLicenceWorkspace role="writer" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense></WorkspaceSection>
+            {MEMBER_PAYMENT_FEATURES_ENABLED && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-negotiations" title="Rights negotiations" summary="Offers and agreements"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights negotiations" />}><ScriptLicenceWorkspace role="writer" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense></WorkspaceSection>}
             <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-collaborations" title="Collaborations" summary="Projects and creative partnerships"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer collaborations" />}><CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense></WorkspaceSection>
           </section>
         )}
@@ -5874,7 +5847,7 @@ function App() {
         initialSeekSeconds={momentSeek?.releaseId === playing ? momentSeek.seconds : null}
       />}
       {creatorProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading Creator profile" />}><CreatorProfile creatorUserId={creatorProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} onPlayRelease={liveRolePreview ? () => notify('Playback requires an authorised Listener account.') : playReleaseFromCreatorProfile} onClose={() => setCreatorProfileUserId(null)} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && creatorProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ setCreatorProfileUserId(null); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } setCreatorProfileUserId(null); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}
-      {supportTarget && !liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Opening Nightjars support" />}>
+      {MEMBER_PAYMENT_FEATURES_ENABLED && supportTarget && !liveRolePreview && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Opening Nightjars support" />}>
         <NightjarGiftPanel recipientUserId={supportTarget.userId} recipientName={supportTarget.name} recipientRole={supportTarget.role} recipientRoles={supportTarget.roles} onClose={()=>setSupportTarget(null)} notify={notify}/>
       </Suspense>}
       {publicProfileUserId && <Suspense fallback={<NightjarSkeleton variant="profile" count={2} label="Loading public profile" />}><PublicProfile key={publicProfileUserId+':'+(publicProfileInitialRole??'default')+':'+(notificationArtworkFocusId??'none')} initialRole={publicProfileInitialRole??undefined} focusArtworkId={notificationArtworkFocusId} userId={publicProfileUserId} followingIds={followingProfileIds} onToggleFollow={liveRolePreview ? async () => { notify('Read-only preview: follow actions are disabled.'); } : toggleProfileFollow} readOnlyPreview={liveRolePreview} onClose={closePublicProfile} notify={notify} canMessage={!liveRolePreview && ['creator','writer','editor','artist'].includes(String(effectiveRole)) && publicProfileUserId !== user?.userId} onMessage={(targetUserId)=>{ closePublicProfile(); setMessageRecipientUserId(targetUserId); setMessageCollaborationId(null); navigate('messages'); }} onCommunityRelease={(release)=>{ if (liveRolePreview) { notify('Read-only preview: community interactions are disabled.'); return; } closePublicProfile(); setReviewTrack(releaseToTrack(release)); }} canReact={effectiveRole==='listener' && !liveRolePreview} reactionByRelease={releaseReactions} onReaction={(releaseId,reaction)=>void toggleReleaseReaction(releaseId,reaction)} communityByRelease={communityByRelease} demoMode={demoMode} /></Suspense>}

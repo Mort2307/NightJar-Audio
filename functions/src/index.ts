@@ -4742,7 +4742,7 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   await requireAgeVerified(identity.uid);
   const [account, settings, subscription] = await Promise.all([
     accountRef(identity.uid).get(),
-    readCommercialSettings(),
+    identity.admin ? readCommercialSettings() : Promise.resolve(null),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
 
@@ -4751,10 +4751,10 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
     role,
     subscribed: identity.admin || Boolean(subscription),
     subscriptionStatus: identity.admin ? 'admin' : subscription?.status ?? null,
-    planningMonthlyPricePence: settings.planningMonthlyPricePence,
-    subscriptionUrl: settings.listenerSubscriptionUrl,
+    planningMonthlyPricePence: identity.admin ? settings?.planningMonthlyPricePence ?? null : null,
+    subscriptionUrl: identity.admin ? settings?.listenerSubscriptionUrl ?? null : null,
     creditedWorkIncluded: true,
-    rule: 'Work credited to your Nightjar account is included for you. Listening to unrelated paid catalogue work requires a currently active subscription verified by the payment provider.',
+    rule: identity.admin ? 'Owner subscription access diagnostics.' : 'Some releases are restricted during testing. Access is checked by Nightjar.',
   };
 });
 
@@ -8338,7 +8338,7 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
         writerName: writer.displayName,
         writerHandle: writer.handle,
         rights: normaliseScriptRights(data.rights),
-        marketplace: (() => { const { previewExcerpt, ...listing } = normaliseScriptMarketplace(data.marketplace); return { ...listing, sampleAvailable:Boolean(previewExcerpt.trim()) }; })(),
+        marketplace: (() => { const { previewExcerpt, commissionPricePence: _hiddenIndicativePrice, ...listing } = normaliseScriptMarketplace(data.marketplace); return { ...listing, sampleAvailable:Boolean(previewExcerpt.trim()) }; })(),
         artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
         updatedAt: toIso(data.updatedAt),
       };
@@ -9029,7 +9029,8 @@ export const deletePlaylist = onCall({ region: REGION }, async (request) => {
 });
 
 export const transparencySnapshot = onCall({ region: REGION }, async (request) => {
-  const identity = await requireActiveIdentity(request);
+  // Commercial assumptions and payout projections are not public beta data.
+  const identity = await requireAccountRole(request, ['admin']);
   await requireAgeVerified(identity.uid);
   const [settings, accounts] = await Promise.all([
     readCommercialSettings(),
