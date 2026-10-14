@@ -74,6 +74,14 @@ const CURRENT_LEGAL_DOCUMENTS = {
     requiredForAccount: true,
     requiredForProfessional: true,
   },
+  age_assurance_notice: {
+    id: 'age_assurance_notice',
+    version: '2026-10-14.3',
+    title: 'Nightjar Age Verification & Didit Privacy Notice',
+    path: '/legal/age-verification',
+    requiredForAccount: false,
+    requiredForProfessional: false,
+  },
   professional_terms: {
     id: 'professional_terms',
     version: '2026-10-09.1',

@@ -10107,6 +10107,24 @@ textarea:focus-visible,
 .nj-didit-member-pilot-heading h2 { color: #faf0f7; margin: 0; font: normal clamp(24px, 2.5vw, 32px)/1.15 Georgia, serif; }
 .nj-didit-member-pilot-heading p { max-width: 760px; margin: 0; color: #d2c3d0; font-size: 12px; line-height: 1.65; }
 .nj-didit-member-pilot-heading .status-pill { flex: 0 0 auto; }
+
+/* Age gate: versioned Didit notice and explicit user initiation, readable on mobile. */
+.nj-didit-privacy-check {
+  display: grid;
+  gap: 13px;
+  margin: 18px 0;
+  padding: clamp(16px, 3vw, 24px);
+  border: 1px solid rgba(235, 211, 226, .26);
+  border-radius: 16px;
+  background: rgba(120, 75, 118, .09);
+}
+.nj-didit-privacy-check h2 { margin: 0; font-size: clamp(18px, 2vw, 22px); }
+.nj-didit-privacy-check p { margin: 0; font-size: 13px; line-height: 1.65; }
+.nj-didit-privacy-check .nj-didit-member-consent { font-size: 13px; text-align: left; }
+.nj-didit-notice-link { display: inline-flex; align-items: center; gap: 6px; width: fit-content; line-height: 1.5; font-size: 13px; text-decoration: underline; }
+.nj-didit-notice-saved { display: flex; align-items: flex-start; gap: 9px; }
+.nj-didit-notice-saved svg { flex-shrink: 0; }
+
 .nj-didit-member-consent {
   display: flex;
   align-items: flex-start;

@@ -23,6 +23,8 @@ import ProfessionalLibrary from './components/ProfessionalLibrary';
 import SpotlightExperience from './components/SpotlightExperience';
 import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { nightjarAge } from './platform/firebase-age';
+import { nightjarLegal } from './platform/firebase-legal';
+import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarAuthSecurity, type AuthenticationSecurityEvent } from './platform/firebase-auth-security';
@@ -493,6 +495,9 @@ function App() {
   const [sessionHydrating, setSessionHydrating] = useState(true);
   const [sessionRestoreError, setSessionRestoreError] = useState(false);
   const [ageVerified, setAgeVerified] = useState(false);
+  const [ageNoticeAccepted, setAgeNoticeAccepted] = useState(false);
+  const [ageNoticeAcknowledged, setAgeNoticeAcknowledged] = useState(false);
+  const [ageDiditPermission, setAgeDiditPermission] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
   const [ageStatusError, setAgeStatusError] = useState('');
@@ -1052,6 +1057,9 @@ function App() {
         setUser(null);
         setRole(null);
         setAgeVerified(false);
+        setAgeNoticeAccepted(false);
+        setAgeNoticeAcknowledged(false);
+        setAgeDiditPermission(false);
         setAgeStage('gate');
         setSessionHydrating(false);
         return;
@@ -2009,6 +2017,17 @@ function App() {
     try {
       const data = await nightjarAge.status();
       setAgeStatusError('');
+      let noticeAccepted = false;
+      try {
+        const legal = await nightjarLegal.status();
+        noticeAccepted = legal.documents.some(document => document.id === 'age_assurance_notice' &&
+          document.version === NIGHTJAR_AGE_NOTICE_VERSION && document.accepted === true);
+        setAgeNoticeAccepted(noticeAccepted);
+      } catch (error) {
+        console.warn('Nightjar age-notice acceptance check failed', error);
+        setAgeNoticeAccepted(false);
+        setAgeStatusError('Nightjar could not load the age-verification permissions. Please retry before starting a check.');
+      }
       const verified = data.verified === true;
       setAgeVerified(verified);
       setAgeConfigured(data.configured === true);
@@ -2030,8 +2049,13 @@ function App() {
         : verified ? 'COMPLETE'
         : diditPending ? 'PENDING'
         : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
-      if (verified) setAgeStage('app');
-      return verified;
+      // Existing temporary private-beta access remains valid until the separate mandatory
+      // age-gate rollout. A REAL provider-approved account must first acknowledge the
+      // current notice; no new paid check is needed merely to acknowledge an update.
+      const mayEnter = verified && (data.temporaryBypass === true || data.providerVerified !== true || noticeAccepted);
+      if (mayEnter) setAgeStage('app');
+      else if (verified && data.providerVerified === true) setAgeStage('assurance');
+      return mayEnter;
     } catch (error) {
       console.warn('Nightjar could not refresh the age-verification status', error);
       setAgeVerified(false);
@@ -2040,7 +2064,7 @@ function App() {
     }
   };
 
-  const openAgeCheck = async (adminPilot = false, memberPilot = false) => {
+  const openAgeCheck = async (adminPilot = false, memberPilot = false, acknowledgedOnGate = false) => {
     setAgeLoading(true);
     try {
       if (!nightjarAuth.current()) {
@@ -2048,12 +2072,17 @@ function App() {
         return;
       }
       setAgeStatusError('');
+      if (!ageNoticeAccepted && !acknowledgedOnGate) {
+        setAgeStatusError('Read and acknowledge the Nightjar Age Verification & Didit Privacy Notice before starting Didit.');
+        setAgeStage('assurance');
+        return;
+      }
       if (memberPilot) {
         if (!agePilotEligible || role === 'admin' || !ageConfigured || simulationMode || demoMode) {
           notify('Didit is only available to testers explicitly enrolled by a Nightjar administrator.'); return;
         }
         if (ageProviderVerified) { notify('Your Nightjar account is already verified by Didit. No further identity check is required.'); return; }
-        if (!agePilotConsent) { notify('Please acknowledge the live ID verification notice first.'); return; }
+        if (!agePilotConsent && !acknowledgedOnGate) { notify('Please acknowledge the live ID verification notice first.'); return; }
         if (!window.confirm(
           ageEnvironment === 'live'
             ? 'Start the REAL Didit 18+ ID check for this test account? You may need to show a government ID. A charge may apply to Nightjar. Your existing beta access will remain available.'
@@ -2099,6 +2128,49 @@ function App() {
       setAgeStatusError('Didit could not start: ' + message);
       notify('Didit could not start: ' + message);
     } finally { setAgeLoading(false); }
+  };
+
+  const beginAgeVerificationFromGate = async () => {
+    if (ageLoading) return;
+    setAgeLoading(true);
+    setAgeStatusError('');
+    let proceed = false;
+    try {
+      if (!nightjarAuth.current()) {
+        setAgeStatusError('Sign in to Nightjar before accepting the age-verification notice.');
+        return;
+      }
+      if (!ageNoticeAccepted) {
+        if (!ageNoticeAcknowledged) {
+          setAgeStatusError('Please read and acknowledge the Age Verification & Didit Privacy Notice.');
+          return;
+        }
+        await nightjarLegal.accept([{
+          id: 'age_assurance_notice', version: NIGHTJAR_AGE_NOTICE_VERSION, accepted: true,
+        }], 'age-gate-explicit-acknowledgement');
+        setAgeNoticeAccepted(true);
+      }
+      if (ageProviderVerified && !ageReverifyRequired) {
+        await refreshAgeStatus();
+        return;
+      }
+      if (!ageDiditPermission) {
+        setAgeStatusError('Confirm that you choose to start Didit identity verification before proceeding.');
+        return;
+      }
+      // The provider session remains user-initiated and subject to the existing
+      // explicit live-check confirmation. No age bypass or automatic payment.
+      proceed = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nightjar could not save the notice acknowledgement.';
+      setAgeStatusError('Could not save your age-verification acknowledgement: ' + message);
+      return;
+    } finally {
+      setAgeLoading(false);
+    }
+    // Backend acceptance is durable before the signed-in account is allowed
+    // to initiate a provider session. Avoid stale React state after acceptance.
+    if (proceed) await openAgeCheck(role === 'admin', role !== 'admin' && agePilotEligible, true);
   };
 
   useEffect(() => {
@@ -4221,11 +4293,32 @@ function App() {
             <div><Check size={16} /><span>{ageTemporaryBypass ? 'Removing this email from the tester allowlist revokes the bypass immediately.' : 'Nightjar stores verification state and an opaque reference rather than raw identity documents.'}</span></div>
             {ageReverifyRequired && !ageTemporaryBypass && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
           </div>
+          <section className="nj-didit-privacy-check" aria-label="Age-verification privacy and permission">
+            <h2>Before you verify</h2>
+            <p>Nightjar uses Didit to verify that members are 18 or older. Didit may ask for government-issued photo ID and a selfie or liveness check. Nightjar stores your account-linked verification result rather than the original ID or selfie images.</p>
+            <p>Our Didit verification-evidence retention setting is six months. Some audit and security records may be retained longer. Nightjar retains your valid verified-adult status to avoid unnecessary repeat identity checks.</p>
+            <a className="nj-didit-notice-link" href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Read Nightjar's Age Verification &amp; Didit Privacy Notice <ArrowRight size={14} /></a>
+            {!ageNoticeAccepted ? <label className="nj-didit-member-consent">
+              <input type="checkbox" checked={ageNoticeAcknowledged} onChange={event => setAgeNoticeAcknowledged(event.target.checked)} />
+              <span><strong>Privacy notice acknowledgement.</strong> I have read the Nightjar Age Verification &amp; Didit Privacy Notice (version {NIGHTJAR_AGE_NOTICE_VERSION}) and understand why the age check is required, what information Didit may process, and how long relevant records may be kept.</span>
+            </label> : <p className="nj-didit-notice-saved"><Check size={16} /> Age-verification privacy notice acknowledged on this Nightjar account.</p>}
+            {(!ageProviderVerified || ageReverifyRequired) && <label className="nj-didit-member-consent">
+              <input type="checkbox" checked={ageDiditPermission} onChange={event => setAgeDiditPermission(event.target.checked)} />
+              <span><strong>Permission to start this check.</strong> I understand that Didit may request ID, facial matching and liveness evidence, and I choose to begin the verification now. A live check may incur a cost to Nightjar. This does not give consent for unrelated processing.</span>
+            </label>}
+          </section>
           {ageStatusError && <div className="access-note" role="alert">{ageStatusError}</div>}
-          <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck(role === 'admin')}>
-            {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : role === 'admin' ? 'Start my live Didit admin pilot' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
+          <button className="primary-button wide-button" disabled={ageLoading ||
+            (!ageNoticeAccepted && !ageNoticeAcknowledged) ||
+            (!ageProviderVerified && !ageDiditPermission) ||
+            (ageProviderStatus === 'PENDING_REVIEW')} onClick={() => void beginAgeVerificationFromGate()}>
+            {ageLoading ? 'Saving your preferences…' : ageProviderVerified && !ageReverifyRequired ? 'Acknowledge notice and continue' :
+              ageSessionActive ? 'Continue existing Didit verification' :
+              role === 'admin' ? 'Accept and start my live Didit admin pilot' : 'Accept and start secure age check'} <LockKeyhole size={16} />
           </button>
+          {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button wide-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Continue existing Didit session <ArrowRight size={16} /></a>}
           <button type="button" className="secondary-button wide-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}><RefreshCw size={16} /> Refresh verification status</button>
+          {ageProviderStatus === 'PENDING_REVIEW' && <p className="access-fine">Your previous check is under review. Contact Nightjar support instead of starting another paid verification.</p>}
           <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
         </div>
       </main>
