@@ -495,6 +495,7 @@ function App() {
   const [ageVerified, setAgeVerified] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
+  const [ageStatusError, setAgeStatusError] = useState('');
   const [ageProvider, setAgeProvider] = useState('didit');
   const [ageEnvironment, setAgeEnvironment] = useState<'sandbox' | 'live'>('sandbox');
   const [ageVerifiedAt, setAgeVerifiedAt] = useState<string | null>(null);
@@ -2001,9 +2002,13 @@ function App() {
   };
 
   const refreshAgeStatus = async () => {
-    if (!nightjarAuth.current()) return false;
+    if (!nightjarAuth.current()) {
+      setAgeStatusError('Your Nightjar sign-in has not been restored. Sign in again to reconnect your account.');
+      return false;
+    }
     try {
       const data = await nightjarAge.status();
+      setAgeStatusError('');
       const verified = data.verified === true;
       setAgeVerified(verified);
       setAgeConfigured(data.configured === true);
@@ -2027,13 +2032,22 @@ function App() {
         : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
       if (verified) setAgeStage('app');
       return verified;
-    } catch { return false; }
+    } catch (error) {
+      console.warn('Nightjar could not refresh the age-verification status', error);
+      setAgeVerified(false);
+      setAgeStatusError('Nightjar could not confirm your verification status. Please retry instead of repeating an ID check.');
+      return false;
+    }
   };
 
   const openAgeCheck = async (adminPilot = false, memberPilot = false) => {
     setAgeLoading(true);
     try {
-      if (!nightjarAuth.current()) { window.location.assign('/account'); return; }
+      if (!nightjarAuth.current()) {
+        setAgeStatusError('Your Nightjar sign-in has not been restored. Use Sign in to Nightjar to reconnect your account.');
+        return;
+      }
+      setAgeStatusError('');
       if (memberPilot) {
         if (!agePilotEligible || role === 'admin' || !ageConfigured || simulationMode || demoMode) {
           notify('Didit is only available to testers explicitly enrolled by a Nightjar administrator.'); return;
@@ -2081,7 +2095,9 @@ function App() {
           'Open your Didit session using the button on this page; popups are blocked.');
       }
     } catch (error) {
-      notify(error instanceof Error ? 'Didit could not start: ' + error.message : 'Didit could not start verification.');
+      const message = error instanceof Error ? error.message : 'Verification is currently unavailable.';
+      setAgeStatusError('Didit could not start: ' + message);
+      notify('Didit could not start: ' + message);
     } finally { setAgeLoading(false); }
   };
 
@@ -4195,7 +4211,7 @@ function App() {
                         : 'Verification integration is ready; provider credentials still need to be added.'}
               </span>
             </div>
-            <span className="status-pill">{ageTemporaryBypass ? 'TEST ACCESS' : ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'READY' : 'SETUP REQUIRED'}</span>
+            <span className="status-pill">{ageTemporaryBypass ? 'TEST ACCESS' : ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'PROVIDER READY' : 'SETUP REQUIRED'}</span>
           </div>
           <div className="verification-list">
             {ageTemporaryBypass
@@ -4205,9 +4221,11 @@ function App() {
             <div><Check size={16} /><span>{ageTemporaryBypass ? 'Removing this email from the tester allowlist revokes the bypass immediately.' : 'Nightjar stores verification state and an opaque reference rather than raw identity documents.'}</span></div>
             {ageReverifyRequired && !ageTemporaryBypass && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
           </div>
-          <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck()}>
-            {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
+          {ageStatusError && <div className="access-note" role="alert">{ageStatusError}</div>}
+          <button className="primary-button wide-button" disabled={ageLoading || (ageVerified && !ageReverifyRequired)} onClick={() => void openAgeCheck(role === 'admin')}>
+            {ageLoading ? 'Opening secure check…' : ageTemporaryBypass ? 'Private test access active' : ageVerified && !ageReverifyRequired ? 'Age verified — continue' : role === 'admin' ? 'Start my live Didit admin pilot' : ageReverifyRequired ? 'Repeat age verification' : 'Open secure age check'} <LockKeyhole size={16} />
           </button>
+          <button type="button" className="secondary-button wide-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}><RefreshCw size={16} /> Refresh verification status</button>
           <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
         </div>
       </main>
