@@ -105,6 +105,7 @@ const parseTranscript = (transcript: string): TranscriptCue[] => {
 
 export default function NightjarPlayer({ track, queue = [], intent = '', onSelectTrack, onClose, notify, simulationMode = false, initialTranscriptOpen = false, initialSeekSeconds = null }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const miniPlayerButtonRef = useRef<HTMLButtonElement | null>(null);
   const lastProgressEvent = useRef(0);
   const listeningSessionId = useRef(crypto.randomUUID());
   const startedListeningSession = useRef('');
@@ -112,6 +113,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const transcriptRequestRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [minimised, setMinimised] = useState(false);
+  useEffect(() => { if (minimised) miniPlayerButtonRef.current?.focus(); }, [minimised]);
   const [momentOpen, setMomentOpen] = useState(false);
   const [momentLabel, setMomentLabel] = useState('');
   const [momentSaving, setMomentSaving] = useState(false);
@@ -407,7 +409,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     {minimised && <section className="nj-mini-player" role="region" aria-label="Nightjar mini-player">
       <img src={artwork} alt="" onError={()=>setArtworkFailed(true)} />
       <div className="nj-mini-player-info"><strong>{track.title}</strong><small>{track.creator} · {formatTime(position)}</small></div>
-      <button type="button" className="nj-mini-play" onClick={()=>{
+      <button type="button" ref={miniPlayerButtonRef} className="nj-mini-play" onClick={()=>{
         if (simulationMode) {setIsPlaying(v=>!v);return;}
         const node=audioRef.current;if(!node)return;
         if(node.paused) void node.play().catch(()=>notify('Playback could not start.'));
