@@ -1,7 +1,7 @@
 export type NightjarLegalDocumentId = 'platform_terms' | 'privacy_notice' | 'professional_terms' | 'age_assurance_notice';
 
 export const NIGHTJAR_LEGAL_VERSION = '2026-10-09.1';
-export const NIGHTJAR_AGE_NOTICE_VERSION = '2026-10-14.1';
+export const NIGHTJAR_AGE_NOTICE_VERSION = '2026-10-14.2';
 
 export type NightjarLegalDocument = {
   id: NightjarLegalDocumentId;
@@ -113,7 +113,7 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
       { heading:'3. What Nightjar retains and why', paragraphs:[
         'Nightjar receives and stores a minimum account-linked verification record: provider name, session reference, whether the adult check passed, verification status and timestamps, and any revocation/review indicator. It uses this record to allow or prevent adult access, troubleshoot verification, avoid charging for repeat sessions, and maintain a security/compliance audit trail.',
         'The approved age status is retained while the account and its verification remain valid. On account closure, Nightjar reviews what limited records must be deleted and what evidence must temporarily be retained for legal obligations, disputes or safety; longer statutory or dispute holds take precedence where genuinely applicable.',
-        'Nightjar proposes configuring a 90-day Didit evidence-retention window (three months), subject to confirming the live Business Console setting and legal record-keeping requirements. This is a proposed setting, not a guarantee that Didit has already been configured. The live service must not claim a final retention period until Nightjar has confirmed that configuration and documented its separate record-retention schedule.'
+        'Nightjar has chosen six months as the retention period for verification-session evidence held by Didit for this application, subject to confirming that the setting is saved in the live Business Console before inviting users to verify. It covers Didit verification sessions, including existing sessions; separate security or API audit logs may be retained longer (Didit currently states 365 days), and other authorised records may have different periods. Nightjar keeps the minimal verified-adult account status separately to prevent routine repeat checks. A valid approval does not expire simply because Didit later deletes the verification images.'
       ]},
       { heading:'4. Security, sharing and your choices', paragraphs:[
         'Didit states that verification evidence is encrypted in transit and at rest, processed in the EU by default and restricted to authorised personnel. Nightjar retains only the result needed for its gate and does not use the ID images for advertising or public profiles.',
