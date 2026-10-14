@@ -3781,3 +3781,49 @@ textarea {
   .nj-audio-review-tabs>button {width:100%;justify-content:center;}
 }
 @media(prefers-reduced-motion:reduce){.nj-audio-upload-progress>span {transition:none;}}
+
+
+/* Personal Nightjar: compact, rearrangeable, accessible and theme-neutral. */
+.nj-personal-home { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.nj-personal-home-toolbar { order:-20; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; padding:12px 16px; border:1px solid var(--nj-line-default,rgba(255,255,255,.14)); border-radius:16px; }
+.nj-personal-home-toolbar > div { display:grid; gap:3px; }
+.nj-personal-home-toolbar strong { font-size:17px; }
+.nj-personal-home-toolbar small { color:var(--nj-text-secondary,#b7adb8); }
+.nj-home-shortcuts { order:-19; display:flex; flex-wrap:wrap; gap:8px; }
+.nj-home-shortcuts button,.nj-home-layout-presets button,.nj-home-layout-row button { border:1px solid var(--nj-line-default,rgba(255,255,255,.18)); color:var(--nj-text-primary,#fff); background:var(--nj-surface-raised,rgba(255,255,255,.04)); border-radius:11px; padding:9px 13px; min-height:44px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+.nj-home-shortcuts button:hover,.nj-home-layout-presets button:hover,.nj-home-layout-row button:hover { border-color:currentColor; }
+.nj-home-shortcuts button:focus-visible,.nj-home-layout-editor button:focus-visible,.nj-home-section-toggle:focus-visible,.nj-workspace-fold-trigger:focus-visible { outline:3px solid var(--nj-text-primary,#fff); outline-offset:3px; }
+.nj-home-layout-editor { order:-18; border:1px solid var(--nj-line-default,rgba(255,255,255,.17)); padding:16px; border-radius:16px; background:var(--nj-surface-raised,rgba(255,255,255,.06)); }
+.nj-home-layout-editor p { margin:0 0 12px; font-size:13px; color:var(--nj-text-secondary,#bcb2bc); }
+.nj-home-layout-presets { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
+.nj-home-layout-rows { display:grid; gap:7px; margin-bottom:12px; }
+.nj-home-layout-row { display:flex; align-items:center; gap:7px; border:1px solid var(--nj-line-default,rgba(255,255,255,.12)); padding:8px; border-radius:10px; }
+.nj-home-layout-row > span { flex:1; font-weight:600; font-size:13px; }
+.nj-home-layout-row button { min-width:44px; padding:7px; }
+.nj-home-layout-row button:disabled { opacity:.35; cursor:not-allowed; }
+.nj-home-section { min-width:0; scroll-margin-top:100px; border:1px solid var(--nj-line-default,rgba(255,255,255,.14)); border-radius:15px; }
+.nj-home-section-toggle,.nj-workspace-fold-trigger { width:100%; color:var(--nj-text-primary,#fff); background:transparent; border:0; border-radius:14px; text-align:left; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; cursor:pointer; }
+.nj-home-section-toggle > span,.nj-workspace-fold-trigger > span { display:grid; gap:3px; }
+.nj-home-section-toggle strong,.nj-workspace-fold-trigger strong { font-size:16px; }
+.nj-home-section-toggle small,.nj-workspace-fold-trigger small { font-size:12px; color:var(--nj-text-secondary,#c3b9c3); }
+.nj-home-section-body,.nj-workspace-fold-body { padding:0 10px 10px; min-width:0; }
+.nj-home-section-body > .section-wrap,.nj-home-section-body > .hero-section { margin-top:0; }
+.nj-home-restore { order:90; min-height:44px; align-self:flex-start; border:0; background:transparent; color:inherit; text-decoration:underline; cursor:pointer; }
+.nj-home-transparency { order:89; }
+.nj-workspace-fold { margin:12px 0; border:1px solid var(--nj-line-default,rgba(255,255,255,.14)); border-radius:16px; min-width:0; }
+.nj-workspace-fold-body { padding:8px 14px 14px; }
+.nj-workspace-fold-body .section-wrap { margin-top:0; }
+.nj-install-hint { align-self:center; font-size:12px; color:var(--nj-text-secondary,#c3b9c3); }
+.nj-install-feedback { padding-top:8px; }
+.nj-settings-collapsible { border:1px solid var(--nj-line-default,rgba(255,255,255,.14)); border-radius:12px; margin:10px 0; padding:10px 12px; }
+.nj-settings-collapsible summary { cursor:pointer; font-weight:600; min-height:42px; display:flex; align-items:center; }
+@media(max-width:700px) {
+  .nj-personal-home { gap:12px; }
+  .nj-personal-home-toolbar { padding:12px; }
+  .nj-personal-home-toolbar > .secondary-button { width:100%; justify-content:center; }
+  .nj-home-shortcuts button { flex:1 1 30%; min-width:95px; font-size:12px; padding:8px; }
+  .nj-home-section-body { padding:0 6px 6px; }
+  .nj-home-layout-row { flex-wrap:wrap; }
+  .nj-home-layout-row > span { min-width:100%; }
+}
+@media(prefers-reduced-motion:reduce) { .nj-personal-home * { scroll-behavior:auto; } }
