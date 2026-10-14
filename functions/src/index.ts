@@ -6404,6 +6404,9 @@ export const startAgeAssurance = onCall({
   const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
   if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
   if (diditConfigured()) {
+    // A versioned, account-owned notice acknowledgement is required even for
+    // owner-led live pilots. Do not allow a deployed old starter to skip it.
+    await requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice');
     const individuallyApprovedPilot = !identity.admin &&
       (await accountRef(identity.uid).get()).data()?.diditPilotEnabled === true;
     if (DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity.admin && !individuallyApprovedPilot) {
