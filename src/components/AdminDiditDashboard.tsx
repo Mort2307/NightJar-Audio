@@ -58,9 +58,9 @@ export default function AdminDiditDashboard() {
       <p className="access-fine">These counts cover up to 500 account records, not an unlimited full-ledger export. Only 25 recent outcomes are shown here. No verification result is editable from this dashboard.</p>
       <div className="legal-beta-warning compact"><ShieldCheck size={15}/><div>
         <strong>Didit live-app privacy configuration: owner action required</strong>
-        <span>The proposed exact 90-day evidence-retention window is NOT confirmed. Open Didit → select the Nightjar LIVE application → App Settings → Data retention → choose 90 days where supported → save and verify. If only “3 months” is offered, confirm the exact day-count with Didit before representing it as 90 days.</span>
+        <span>Owner has selected the available 6 months retention option in Didit App Settings (14 October 2026). Confirm it was saved by closing and reopening the Nightjar LIVE application → App Settings → Data retention. This remains unverified from Nightjar's code; do not label it confirmed until the persisted live setting has been checked.</span>
         <span>Separately, Didit says model training is enabled by default. To prevent this additional use, open Settings → Account → Privacy and data use, turn OFF “Allow Didit to use my organization's verification data to improve models” and confirm “Opted out”.</span>
-        <span>Check that any optional retained biometric templates are disabled, or have a finite expiry consistent with the documented policy. Provider API audit logs may have separate retention periods. Keep evidence of these checks with Nightjar’s compliance records; changing a local badge alone cannot configure Didit.</span>
+        <span>Check whether the live workflow keeps optional biometric templates or duplicate-face data separately from session evidence. Didit states API activity audit logs are retained for 365 days, independently of the six-month verification-session setting. Record these exceptions and the confirmed app setting in Nightjar's restricted compliance notes; a local label does not alter Didit's retention.</span>
         <a href="https://help.didit.me/data-privacy/delete-verification-data" target="_blank" rel="noopener noreferrer">Didit retention guidance <ArrowUpRight size={13}/></a>
       </div></div>
       <div style={{overflowX:'auto'}}>
