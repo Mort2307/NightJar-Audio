@@ -24,7 +24,7 @@ export type AgeStatus = {
 };
 
 const statusCall = httpsCallable<void, AgeStatus>(functions, 'ageStatus');
-const startCall = httpsCallable<void, Record<string, unknown>>(functions, 'startAgeAssurance');
+const startCall = httpsCallable<{ controlledAdminTest?: boolean }, Record<string, unknown>>(functions, 'startAgeAssurance');
 const testPassCall = httpsCallable<void, { verified: boolean; status: string; provider: string }>(functions, 'adminAgeTestPass');
 
 export const nightjarAge = {
@@ -32,8 +32,8 @@ export const nightjarAge = {
     return (await statusCall()).data;
   },
 
-  async start() {
-    return (await startCall()).data;
+  async start(controlledAdminTest = false) {
+    return (await startCall(controlledAdminTest ? { controlledAdminTest: true } : {})).data;
   },
 
   async adminTestPass() {
