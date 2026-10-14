@@ -57,8 +57,11 @@ export default function AdminDiditDashboard() {
       </div>
       <p className="access-fine">These counts cover up to 500 account records, not an unlimited full-ledger export. Only 25 recent outcomes are shown here. No verification result is editable from this dashboard.</p>
       <div className="legal-beta-warning compact"><ShieldCheck size={15}/><div>
-        <strong>Retention requires configuration review</strong>
-        <span>A proposed 90-day Didit evidence window is not yet confirmed. Verify App Settings → Data retention, provider training preferences, and any lawful evidence holds before finalising user-facing promises.</span>
+        <strong>Didit live-app privacy configuration: owner action required</strong>
+        <span>The proposed exact 90-day evidence-retention window is NOT confirmed. Open Didit → select the Nightjar LIVE application → App Settings → Data retention → choose 90 days where supported → save and verify. If only “3 months” is offered, confirm the exact day-count with Didit before representing it as 90 days.</span>
+        <span>Separately, Didit says model training is enabled by default. To prevent this additional use, open Settings → Account → Privacy and data use, turn OFF “Allow Didit to use my organization's verification data to improve models” and confirm “Opted out”.</span>
+        <span>Check that any optional retained biometric templates are disabled, or have a finite expiry consistent with the documented policy. Provider API audit logs may have separate retention periods. Keep evidence of these checks with Nightjar’s compliance records; changing a local badge alone cannot configure Didit.</span>
+        <a href="https://help.didit.me/data-privacy/delete-verification-data" target="_blank" rel="noopener noreferrer">Didit retention guidance <ArrowUpRight size={13}/></a>
       </div></div>
       <div style={{overflowX:'auto'}}>
         <table style={{width:'100%',minWidth:640,textAlign:'left',borderCollapse:'separate',borderSpacing:'0 10px'}}>
