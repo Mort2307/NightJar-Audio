@@ -23,6 +23,8 @@ import ProfessionalLibrary from './components/ProfessionalLibrary';
 import SpotlightExperience from './components/SpotlightExperience';
 import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { nightjarAge } from './platform/firebase-age';
+import { nightjarLegal } from './platform/firebase-legal';
+import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarAuthSecurity, type AuthenticationSecurityEvent } from './platform/firebase-auth-security';
@@ -106,6 +108,7 @@ import type { ProfileDraftController } from './components/CloudProfileDraft';
 import ProfileSectionBoundary from './components/ProfileSectionBoundary';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
+const AdminDiditDashboard = lazy(() => import('./components/AdminDiditDashboard'));
 const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
 const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipeline'));
 const CreatorListeningInsights = lazy(() => import('./components/CreatorListeningInsights'));
@@ -311,7 +314,7 @@ type Track = {
   communityCommentCount?: number;
   listenCount?: number;
   playbackAllowed?: boolean;
-  playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'subscription_required' | null;
+  playbackAccessReason?: 'admin' | 'credited_work' | 'beta_test' | 'subscription' | 'subscription_required' | null;
 };
 
 type PublicDirectoryProfile = {
@@ -493,6 +496,8 @@ function App() {
   const [sessionHydrating, setSessionHydrating] = useState(true);
   const [sessionRestoreError, setSessionRestoreError] = useState(false);
   const [ageVerified, setAgeVerified] = useState(false);
+  const [ageNoticeAccepted, setAgeNoticeAccepted] = useState(false);
+  const [ageNoticeAcknowledged, setAgeNoticeAcknowledged] = useState(false);
   const [ageStatus, setAgeStatus] = useState<'NOT_STARTED' | 'PENDING' | 'COMPLETE' | 'FAIL'>('NOT_STARTED');
   const [ageConfigured, setAgeConfigured] = useState(false);
   const [ageProvider, setAgeProvider] = useState('didit');
@@ -564,7 +569,7 @@ function App() {
   });
   const [adminProfileViewerUserId, setAdminProfileViewerUserId] = useState<string | null>(null);
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>(() => {
-    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)\/?$/);
+    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|didit|finance|security|assistance|tools)\/?$/);
     return (match?.[1] ?? 'overview') as AdminWorkspace;
   });
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
@@ -1044,6 +1049,8 @@ function App() {
         setUser(null);
         setRole(null);
         setAgeVerified(false);
+        setAgeNoticeAccepted(false);
+        setAgeNoticeAcknowledged(false);
         setAgeStage('gate');
         setSessionHydrating(false);
         return;
@@ -1996,9 +2003,12 @@ function App() {
   const refreshAgeStatus = async () => {
     if (!nightjarAuth.current()) return false;
     try {
-      const data = await nightjarAge.status();
+      const [data, legal] = await Promise.all([nightjarAge.status(), nightjarLegal.status()]);
       const verified = data.verified === true;
+      const noticeAccepted = legal.documents.some(document => document.id === 'age_assurance_notice' &&
+        document.version === NIGHTJAR_AGE_NOTICE_VERSION && document.accepted === true);
       setAgeVerified(verified);
+      setAgeNoticeAccepted(noticeAccepted);
       setAgeConfigured(data.configured === true);
       setAgeProvider(String(data.provider ?? 'didit'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
@@ -2012,8 +2022,9 @@ function App() {
       const diditPending = ['PENDING','PROCESSING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.providerStatus ?? data.status));
       setAgeStatus(verified ? 'COMPLETE' : diditPending ? 'PENDING'
         : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
-      if (verified) setAgeStage('app');
-      return verified;
+      if (verified && noticeAccepted) setAgeStage('app');
+      else setAgeStage('assurance');
+      return verified && noticeAccepted;
     } catch { return false; }
   };
 
@@ -2021,9 +2032,20 @@ function App() {
     setAgeLoading(true);
     try {
       if (!nightjarAuth.current()) { window.location.assign('/account'); return; }
-      // Always reuse valid server-side approval before creating a potentially billable check.
+      if (!ageNoticeAccepted) {
+        if (!ageNoticeAcknowledged) {
+          notify('Please read and acknowledge the Didit privacy notice before proceeding.');
+          return;
+        }
+        await nightjarLegal.accept([{
+          id:'age_assurance_notice', version:NIGHTJAR_AGE_NOTICE_VERSION, accepted:true,
+        }], 'age-verification-screen');
+        setAgeNoticeAccepted(true);
+      }
+      // Previously approved accounts with a newly accepted notice enter normally:
+      // acknowledgement never initiates a second billable provider session.
       if (await refreshAgeStatus()) {
-        notify('Already verified 18+. No further ID check or fee is needed.');
+        notify('Your existing 18+ approval is saved. No further ID check is needed.');
         return;
       }
       if (!ageConfigured || ageEnvironment !== 'live') {
@@ -2074,6 +2096,8 @@ function App() {
     setUser(null);
     setRole(null);
     setAgeVerified(false);
+    setAgeNoticeAccepted(false);
+    setAgeNoticeAcknowledged(false);
     setAgeStatus('NOT_STARTED');
     setAgeConfigured(false);
     setAgeProvider('didit');
@@ -4138,10 +4162,27 @@ function App() {
             <div><Check size={16}/><span>A new check is only necessary after a genuine revocation or security/compliance review.</span></div>
             {ageReverifyRequired && <div><ShieldCheck size={16}/><span>Your previous approval needs review before adult access resumes.</span></div>}
           </div>
+          <section className="nj-didit-privacy-check" aria-label="Age-verification privacy and permission">
+            <h2>Before you verify</h2>
+            <p>We use Didit to check that every Nightjar member is 18+. Didit may request photo identification and a selfie or liveness check. Didit handles that evidence; Nightjar stores an account-level approval and minimal audit information, not your ID images.</p>
+            <p>Nightjar is responsible for your privacy requests. A 90-day Didit evidence-retention window is proposed and must be confirmed before it can be promised as live policy.</p>
+            <p><a href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Read the Age Verification & Didit Privacy Notice <ArrowRight size={13}/></a></p>
+            {!ageNoticeAccepted
+              ? <label className="nj-didit-member-consent">
+                  <input type="checkbox" checked={ageNoticeAcknowledged} onChange={event => setAgeNoticeAcknowledged(event.target.checked)}/>
+                  <span>I have read the Didit age-verification notice. I understand the check is required for 18+ access, what Didit may collect and how to contact Nightjar about my data.</span>
+                </label>
+              : <p className="access-fine"><Check size={15}/> Privacy notice already acknowledged on this account.</p>}
+          </section>
           <button className="primary-button wide-button"
-            disabled={ageLoading || !ageConfigured || ageVerified || ageProviderStatus === 'PENDING_REVIEW'}
+            disabled={ageLoading || (ageVerified && ageNoticeAccepted) ||
+              (!ageNoticeAccepted && !ageNoticeAcknowledged) ||
+              (!ageVerified && (!ageConfigured || ageProviderStatus === 'PENDING_REVIEW'))}
             onClick={() => void openAgeCheck()}>
-            {ageLoading ? 'Opening secure check…' : ageVerified ? 'Already verified' : ageSessionActive ? 'Continue existing verification' : 'Verify my age with Didit'}
+            {ageLoading ? 'Opening secure check…' :
+              ageVerified && !ageNoticeAccepted ? 'Acknowledge notice and continue' :
+              ageVerified ? 'Already verified' :
+              ageSessionActive ? 'Continue existing verification' : 'Verify my age with Didit'}
             <LockKeyhole size={16}/>
           </button>
           {ageLaunchUrl && !ageVerified && <a className="secondary-button wide-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Continue Didit verification <ArrowRight size={16}/></a>}
@@ -5265,6 +5306,7 @@ function App() {
               pendingImages={imageModeration.length}
               openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
             />
+            {adminWorkspace === 'didit' && <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Loading age verification audit"/>}><AdminDiditDashboard /></Suspense>}
             {adminWorkspace === 'assistance' && <AdminAssistance initialEmail={assistancePrefillEmail} onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
             {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
