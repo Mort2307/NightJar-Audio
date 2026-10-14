@@ -26,6 +26,8 @@ initializeApp();
 
 const db = getFirestore();
 const REGION = 'europe-west2';
+// Emergency reversible stop: no new Didit sessions until live-session creation is repaired.
+const DIDIT_VERIFICATION_PAUSED = true;
 const DIDIT_LIVE_PILOT_ADMINS_ONLY = true; // Closed beta: billable age sessions are admin-only.
 const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
@@ -6383,7 +6385,8 @@ export const ageStatus = onCall({
     // The actual provider decision is separate from temporary test access.
     providerVerified: persistentlyVerified,
     providerStatus: String(data.status ?? 'NOT_STARTED'),
-    livePilotAvailable: pilotAccess && diditConfigured() && diditMode() === 'live',
+    livePilotAvailable: !DIDIT_VERIFICATION_PAUSED && pilotAccess && diditConfigured() && diditMode() === 'live',
+    verificationPaused: DIDIT_VERIFICATION_PAUSED,
     ageThreshold: 18,
     configured: diditConfigured(),
     provider: persistentlyVerified ? 'didit' : bypass.allowed ? 'temporary-test-access' : 'didit',
@@ -6401,6 +6404,9 @@ export const startAgeAssurance = onCall({
   region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
 }, async request => {
   const identity = await requireActiveIdentity(request);
+  // Fail closed for old cached clients as well. No chargeable session is created.
+  if (DIDIT_VERIFICATION_PAUSED) throw new HttpsError('failed-precondition',
+    'Didit age verification is temporarily unavailable while Nightjar resolves a technical issue. Please do not retry. No new check was started.');
   const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
   if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
   if (diditConfigured()) {
