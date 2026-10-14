@@ -150,6 +150,8 @@ const EditorShowcaseModeration = lazy(() => import('./components/EditorShowcaseM
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'calendar' | 'settings';
 type AgeStage = 'gate' | 'assurance' | 'app';
+// Set to false only after the live Didit flow is repaired and tested.
+const DIDIT_VERIFICATION_PAUSED = true;
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type TestingMode = 'off' | 'demo' | 'simulation' | 'live';
@@ -2065,6 +2067,10 @@ function App() {
   };
 
   const openAgeCheck = async (adminPilot = false, memberPilot = false, acknowledgedOnGate = false) => {
+    if (DIDIT_VERIFICATION_PAUSED) {
+      setAgeStatusError('Age verification is temporarily offline while Nightjar repairs the connection. Please do not retry.');
+      return;
+    }
     setAgeLoading(true);
     try {
       if (!nightjarAuth.current()) {
@@ -2131,6 +2137,10 @@ function App() {
   };
 
   const beginAgeVerificationFromGate = async () => {
+    if (DIDIT_VERIFICATION_PAUSED) {
+      setAgeStatusError('Age verification is temporarily offline. No new check is needed until Nightjar reopens verification.');
+      return;
+    }
     if (ageLoading) return;
     setAgeLoading(true);
     setAgeStatusError('');
@@ -4293,7 +4303,13 @@ function App() {
             <div><Check size={16} /><span>{ageTemporaryBypass ? 'Removing this email from the tester allowlist revokes the bypass immediately.' : 'Nightjar stores verification state and an opaque reference rather than raw identity documents.'}</span></div>
             {ageReverifyRequired && !ageTemporaryBypass && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
           </div>
-          <section className="nj-didit-privacy-check" aria-label="Age-verification privacy and permission">
+          {DIDIT_VERIFICATION_PAUSED && <section className="nj-didit-privacy-check" role="status" aria-live="polite">
+            <h2>Age verification temporarily unavailable</h2>
+            <p>We have paused new Didit identity checks while fixing a technical issue. Please do not keep retrying or submit another ID check. We will restore verification when it is working reliably.</p>
+            <p>Existing account information and recorded verifications remain intact. Adult content stays protected and this pause does not grant new access.</p>
+            <p><a href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Read our Age Verification &amp; Didit Privacy Notice</a></p>
+          </section>}
+          {!DIDIT_VERIFICATION_PAUSED && <section className="nj-didit-privacy-check" aria-label="Age-verification privacy and permission">
             <h2>Before you verify</h2>
             <p>Nightjar uses Didit to verify that members are 18 or older. Didit may ask for government-issued photo ID and a selfie or liveness check. Nightjar stores your account-linked verification result rather than the original ID or selfie images.</p>
             <p>Our Didit verification-evidence retention setting is six months. Some audit and security records may be retained longer. Nightjar retains your valid verified-adult status to avoid unnecessary repeat identity checks.</p>
@@ -4306,17 +4322,17 @@ function App() {
               <input type="checkbox" checked={ageDiditPermission} onChange={event => setAgeDiditPermission(event.target.checked)} />
               <span><strong>Permission to start this check.</strong> I understand that Didit may request ID, facial matching and liveness evidence, and I choose to begin the verification now. A live check may incur a cost to Nightjar. This does not give consent for unrelated processing.</span>
             </label>}
-          </section>
+          </section>}
           {ageStatusError && <div className="access-note" role="alert">{ageStatusError}</div>}
-          <button className="primary-button wide-button" disabled={ageLoading ||
+          {!DIDIT_VERIFICATION_PAUSED && <button className="primary-button wide-button" disabled={ageLoading ||
             (!ageNoticeAccepted && !ageNoticeAcknowledged) ||
             (!ageProviderVerified && !ageDiditPermission) ||
             (ageProviderStatus === 'PENDING_REVIEW')} onClick={() => void beginAgeVerificationFromGate()}>
             {ageLoading ? 'Saving your preferences…' : ageProviderVerified && !ageReverifyRequired ? 'Acknowledge notice and continue' :
               ageSessionActive ? 'Continue existing Didit verification' :
               role === 'admin' ? 'Accept and start my live Didit admin pilot' : 'Accept and start secure age check'} <LockKeyhole size={16} />
-          </button>
-          {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button wide-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Continue existing Didit session <ArrowRight size={16} /></a>}
+          </button>}
+          {!DIDIT_VERIFICATION_PAUSED && ageLaunchUrl && !ageProviderVerified && <a className="secondary-button wide-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Continue existing Didit session <ArrowRight size={16} /></a>}
           <button type="button" className="secondary-button wide-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}><RefreshCw size={16} /> Refresh verification status</button>
           {ageProviderStatus === 'PENDING_REVIEW' && <p className="access-fine">Your previous check is under review. Contact Nightjar support instead of starting another paid verification.</p>}
           <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
@@ -5166,7 +5182,7 @@ function App() {
               />
             )}
 
-            {agePilotEligible && effectiveRole !== 'admin' && <section className="nj-didit-member-pilot" aria-label="Voluntary identity verification pilot">
+            {!DIDIT_VERIFICATION_PAUSED && agePilotEligible && effectiveRole !== 'admin' && <section className="nj-didit-member-pilot" aria-label="Voluntary identity verification pilot">
               <div className="nj-didit-member-pilot-heading">
                 <ShieldCheck size={22} aria-hidden="true"/>
                 <div><span className="mini-label">AGE ASSURANCE · AUTHORISED TEST ACCOUNT</span>
@@ -5502,7 +5518,8 @@ function App() {
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
               <AdminLegalReadiness />
             </Suspense>
-            <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Administrator Didit verification pilot">
+            {DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Didit verification paused"><span className="mini-label">AGE ASSURANCE · TEMPORARILY PAUSED</span><h2>Didit verification is offline</h2><p>New identity checks and tester enrolment are paused while Nightjar fixes the 503 error. Previous results are preserved. Please do not ask members to retry.</p><button type="button" className="secondary-button" onClick={() => void refreshAgeStatus()}>Refresh status (no ID check)</button></section>}
+            {!DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Administrator Didit verification pilot">
               <span className="mini-label">AGE ASSURANCE · ADMIN PILOT</span>
               <h2>Didit Age Verification</h2>
               <p>Test Didit as an administrator, or invite one registered beta tester to initiate their own voluntary check. Live verification can incur provider charges; other testers keep their normal bypass.</p>
@@ -5533,7 +5550,7 @@ function App() {
                   {diditPilotFeedback && <p className="nj-didit-pilot-feedback" role="status">{diditPilotFeedback}</p>}
                 </div>
               </div>
-            </section>
+            </section>}
             </>}
             {adminWorkspace === 'tools' && <Suspense fallback={<NightjarSkeleton variant="cards" count={1} label="Loading Audio Upload Test" />}>
               <AdminAudioUploadTest />
