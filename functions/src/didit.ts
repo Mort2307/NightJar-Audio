@@ -51,6 +51,8 @@ export const startDiditSession = async (uid: string) => {
   });
   if (claimed === 'verified') return { verified: true, status: 'COMPLETE', provider: 'didit', environment: 'live', configured: true };
   if (claimed === 'busy') throw new HttpsError('aborted', 'A verification session is starting. Try again shortly.');
+  let failurePhase: 'provider-request' | 'provider-http' | 'provider-json' | 'provider-response' | 'account-binding' = 'provider-request';
+  let providerHttpStatus: number | null = null;
   try {
     const result = await fetch('https://verification.didit.me/v3/session/', {
       method: 'POST',
@@ -64,16 +66,36 @@ export const startDiditSession = async (uid: string) => {
       }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!result.ok) throw new Error('Didit session request failed with status ' + result.status);
+    providerHttpStatus = result.status;
+    failurePhase = 'provider-http';
+    if (!result.ok) throw new Error('Didit session request was not accepted');
+    failurePhase = 'provider-json';
     const session = await result.json() as Record<string, unknown>;
+    failurePhase = 'provider-response';
+    if (!session || typeof session !== 'object' || Array.isArray(session)) throw new Error('Invalid Didit session payload');
     const sessionId = text(session.session_id);
     const url = text(session.url, 2048);
     let hostname = '';
     try { hostname = new URL(url).hostname; } catch { /* invalid */ }
+    // Didit's published v3 response guarantees session_id and url, but does not
+    // promise to echo vendor_data or workflow_id on every session creation.
+    // Verify echoed values strictly when present, and bind the session ourselves
+    // to the authenticated UID and server-configured workflow below.
+    const hasVendorEcho = session.vendor_data !== undefined && session.vendor_data !== null;
+    const hasWorkflowEcho = session.workflow_id !== undefined && session.workflow_id !== null;
     if (!sessionId || !['verify.didit.me','verification.didit.me'].includes(hostname) ||
         !url.startsWith('https://') || (session.session_kind && session.session_kind !== 'user') ||
-        text(session.vendor_data) !== uid ||
-        text(session.workflow_id) !== DIDIT_WORKFLOW_ID.value()) throw new Error('Invalid Didit session response');
+        (hasVendorEcho && text(session.vendor_data) !== uid) ||
+        (hasWorkflowEcho && text(session.workflow_id) !== DIDIT_WORKFLOW_ID.value())) {
+      console.warn('Rejected Didit response shape', {
+        hasSessionId: Boolean(sessionId), allowedHost: ['verify.didit.me','verification.didit.me'].includes(hostname),
+        httpsUrl: url.startsWith('https://'), hasVendorEcho, hasWorkflowEcho,
+        vendorEchoMatched: !hasVendorEcho || text(session.vendor_data) === uid,
+        workflowEchoMatched: !hasWorkflowEcho || text(session.workflow_id) === DIDIT_WORKFLOW_ID.value(),
+      });
+      throw new Error('Invalid Didit session response');
+    }
+    failurePhase = 'account-binding';
     await db().runTransaction(async tx => {
       const ref = ageRef(uid);
       const snap = await tx.get(ref);
@@ -99,8 +121,14 @@ export const startDiditSession = async (uid: string) => {
         status: 'NOT_STARTED', creatingSinceMs: 0, updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     });
-    console.error('Didit session creation failed', { code: error instanceof Error ? error.name : 'unknown' });
-    throw new HttpsError('unavailable', 'Nightjar could not start the Didit verification. Please try again.');
+    // Safe diagnostics only: never log provider response bodies, keys, IDs,
+    // session URLs, identity details, or biometric/document data.
+    console.error('Didit session creation failed', {
+      phase: failurePhase, providerHttpStatus,
+      category: error instanceof Error ? error.name : 'unknown',
+    });
+    throw new HttpsError('unavailable',
+      'Nightjar could not start Didit. Please contact Nightjar support before retrying; a provider session may already have been created.');
   }
 };
 
