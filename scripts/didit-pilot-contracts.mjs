@@ -46,8 +46,8 @@ const transcript = index.split('export const getReleaseTranscript = onCall')[1]?
 const listing = index.split('export const listCatalogue = onCall')[1]?.split('export const createRelease')[0] ?? '';
 const dashboard = index.split('export const adminDiditDashboard = onCall')[1]?.split('export const getAdminReleasePreviewUrl')[0] ?? '';
 assert.match(legalNotice, /NIGHTJAR_AGE_NOTICE_VERSION/, 'age notice is independently versioned');
-assert.match(legalNotice, /chosen six months as the retention period/, 'Didit six-month choice is disclosed without falsely asserting external save confirmation');
-assert.match(runbook, /Persistence has not been independently verified/, 'runbook must not misstate saved live provider configuration');
+assert.match(legalNotice, /configured a six-month retention period/, 'The notice reflects the six-month retention confirmed by the Nightjar operator');
+assert.match(runbook, /not an independent API inspection/, 'Owner confirmation must remain distinct from independent API verification');
 assert.match(runbook, /six months/, 'Didit six-month retention target clearly documented');
 assert.match(runbook, /model.*training|model.*improve/i, 'organisational model-training opt-out documented');
 assert.match(start, /requireAgeNoticeAcknowledgement\(identity.uid\)/, 'legal acknowledgement is required before starting a provider check');
