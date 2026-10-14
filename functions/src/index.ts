@@ -75,7 +75,7 @@ const CURRENT_LEGAL_DOCUMENTS = {
   },
   age_assurance_notice: {
     id: 'age_assurance_notice',
-    version: '2026-10-14.2',
+    version: '2026-10-14.3',
     title: 'Nightjar Age Verification & Didit Privacy Notice',
     path: '/legal/age-verification',
     requiredForAccount: false,
@@ -6428,7 +6428,9 @@ export const adminDiditDashboard = onCall({ region: REGION }, async request => {
   return { counts, recent, truncated:snapshot.size >= 500,
     providerConsole:'https://business.didit.me/',
     retentionWindowConfirmed:false,
-    note:'Open the restricted Didit Business Console for documentary evidence. Confirm retention settings before publishing an exact storage period.' };
+    retentionOwnerAttested:true,
+    retentionSelectedMonths:6,
+    note:'Nightjar owner confirmed the saved six-month Didit setting on 14 October 2026. This is not live API evidence; inspect Didit Business Console for independent review.' };
 });
 
 export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (request) => {
