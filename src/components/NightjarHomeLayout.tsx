@@ -124,6 +124,15 @@ export function WorkspaceSection({userId,sectionId,title,summary,children,defaul
     try {const saved=localStorage.getItem(key);return saved===null?defaultOpen:saved==='open';}catch{return defaultOpen;}
   });
   useEffect(()=>{try {const saved=localStorage.getItem(key);setOpen(saved===null?defaultOpen:saved==='open');}catch{setOpen(defaultOpen)}},[key,defaultOpen]);
+  useEffect(() => {
+    const reveal = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== sectionId) return;
+      setOpen(true);
+      try { localStorage.setItem(key,'open'); } catch { /* storage optional */ }
+    };
+    window.addEventListener('nightjar:open-workspace-section',reveal);
+    return () => window.removeEventListener('nightjar:open-workspace-section',reveal);
+  },[key,sectionId]);
   const flip=()=>setOpen(previous=>{
     const next=!previous;
     try {localStorage.setItem(key,next?'open':'closed');}catch{ /* optional */ }
