@@ -40,4 +40,12 @@ assert.match(access,/planningMonthlyPricePence: identity\.admin \?/, 'price reda
 assert.match(access,/subscriptionUrl: identity\.admin \?/, 'checkout URL redacted for non-admin');
 const market=backend.slice(backend.indexOf('export const listScriptMarketplace'),backend.indexOf('export const getMarketplaceScriptSample'));
 assert.match(market,/commissionPricePence: _hiddenIndicativePrice/,'backend omits indicative script fee from member discovery');
+const giftApi=read('functions/src/nightjars.ts');
+for(const fn of ['nightjarGiftConfig','myNightjarWallet','sendNightjars','myNightjarEarnings','myNightjarGiftHistory']) {
+  const start=giftApi.indexOf('export const '+fn+' = onCall');
+  assert.ok(start>=0,fn+' should remain available for administrator testing');
+  const next=giftApi.indexOf('export const ',start+15);
+  const body=giftApi.slice(start,next>=0?next:undefined);
+  assert.match(body,/await requireAdmin\(request\)/,fn+' must not be callable by members during payment embargo');
+}
 console.log('Nightjar beta payment visibility and backend price-redaction contracts PASS.');
