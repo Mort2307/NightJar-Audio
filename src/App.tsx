@@ -4904,6 +4904,7 @@ function App() {
                 <p className="eyebrow"><BarChart3 size={14} /> CREATOR STUDIO</p>
                 <h1>{liveRolePreview ? 'Welcome to Creator Studio.' : 'Your audience. Your catalogue. Your creative studio.'}</h1>
                 <p>{liveRolePreview ? 'A complete look at the VA experience, connected to real Nightjar public records. Protected account work remains visible only to its owner.' : accountStatus === 'pending_review' ? 'Your Creator application is awaiting approval.' : 'Your real release pipeline, from upload through moderation to live catalogue.'}</p>
+                {!liveRolePreview && accountStatus !== 'pending_review' && <p className="panel-note">Any compensation arrangements are discussed privately with approved creators using consistent written information. Listening statistics and featured positions are not earnings promises.</p>}
               </div>
               {!liveRolePreview && <button className="primary-button with-icon" disabled={!creatorOnly} onClick={() => document.getElementById('creator-pipeline')?.scrollIntoView({ behavior: 'smooth' })}>
                 <Upload size={16} /> New release
