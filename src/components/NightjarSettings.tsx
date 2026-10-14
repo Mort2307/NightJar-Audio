@@ -7,6 +7,7 @@ import NotificationPreferences from './NotificationPreferences';
 import ThemePreferences from './ThemePreferences';
 import PasskeySettings from './PasskeySettings';
 import AdminAudioUploadTest from './AdminAudioUploadTest';
+import NightjarFinancePreview from './NightjarFinancePreview';
 
 type Props = {
   email?: string | null;
@@ -55,6 +56,7 @@ export default function NightjarSettings({ email, administrator, simulationMode,
           <details className="nj-settings-collapsible"><summary>Appearance preferences</summary><ThemePreferences simulationMode={simulationMode} notify={notify}/></details>
           <div className="nj-settings-info"><BookOpenText size={17}/><span>Audio transcript defaults, text size and playback-following preferences can be configured under Accessibility below.</span></div>
         </section>
+        <NightjarFinancePreview kind="membership" />
 
       </div>
 
