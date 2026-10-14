@@ -21,7 +21,7 @@ assert.match(catalogue, /nightjarAudioContentType\(file\)/, 'Creator upload cano
 assert.match(portfolio, /nightjarAudioContentType\(file\)/, 'Editor upload canonicalises supported audio MIME');
 assert.match(creator, /catch \(error\)/, 'Creator exposes safe error details instead of generic failure');
 assert.match(editor, /catch \(error\)/, 'Editor exposes safe error details instead of generic failure');
-assert.match(settings, /administrator && !simulationMode && <div className="nj-settings-tools"><AdminAudioUploadTest\/>/, 'Only live admins see the upload QA control');
+assert.match(settings, /administrator && !simulationMode && <div className="nj-settings-tools"><details[^]*?<AdminAudioUploadTest\/>/, 'Only live admins see the upload QA control');
 assert.match(admin, /type="file"/, 'Admin file picker is unrestricted');
 assert.match(client, /uploadBytesResumable/, 'Admin test performs actual Firebase Storage transfer');
 assert.match(client, /adminVerifyAudioUpload/, 'Admin test verifies transfer and deletion on server');
