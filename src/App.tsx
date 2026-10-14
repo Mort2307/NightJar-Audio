@@ -4165,7 +4165,7 @@ function App() {
           <section className="nj-didit-privacy-check" aria-label="Age-verification privacy and permission">
             <h2>Before you verify</h2>
             <p>We use Didit to check that every Nightjar member is 18+. Didit may request photo identification and a selfie or liveness check. Didit handles that evidence; Nightjar stores an account-level approval and minimal audit information, not your ID images.</p>
-            <p>Nightjar has selected a six-month retention period for Didit verification-session evidence, pending confirmation that it is saved in the live settings. Separate Didit audit records can be kept longer, and your approved 18+ status remains on your Nightjar account so you do not have to repeat the check.</p>
+            <p>Nightjar has confirmed a six-month retention setting for Didit verification-session evidence. Didit may retain separate audit and security records for longer. Nightjar saves your approved 18+ status so you do not have to repeat the ID check just because the original documents are deleted.</p>
             <p><a href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Read the Age Verification & Didit Privacy Notice <ArrowRight size={13}/></a></p>
             {!ageNoticeAccepted
               ? <label className="nj-didit-member-consent">
