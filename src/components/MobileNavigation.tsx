@@ -1,4 +1,4 @@
-import { Brush, Headphones, Home, Library, MessageCircle, Mic2, Search, Settings2, ShieldCheck, FileText, type LucideIcon } from 'lucide-react';
+import { Brush, Headphones, Home, Library, MessageCircle, Mic2, Bell, Search, Settings2, ShieldCheck, FileText, type LucideIcon } from 'lucide-react';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'calendar' | 'settings';
 type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | null;
@@ -8,13 +8,15 @@ type Props = {
   role: Role;
   onNavigate: (view: View) => void;
   onSearch: () => void;
+  onActivity: () => void;
+  activityUnreadCount?: number;
   messageUnreadCount?: number;
   messageNeedsReplyCount?: number;
 };
 
-type Item = { view?: View; label: string; accessibleLabel?: string; icon: LucideIcon; search?: boolean };
+type Item = { view?: View; label: string; accessibleLabel?: string; icon: LucideIcon; search?: boolean; activity?: boolean };
 
-export default function MobileNavigation({ view, role, onNavigate, onSearch, messageUnreadCount = 0, messageNeedsReplyCount = 0 }: Props) {
+export default function MobileNavigation({ view, role, onNavigate, onSearch, onActivity, activityUnreadCount = 0, messageUnreadCount = 0, messageNeedsReplyCount = 0 }: Props) {
   if (!role) return null;
 
   const workspace: Item = role === 'creator'
@@ -25,7 +27,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
         ? { view: 'editor', label: 'Editor', accessibleLabel: 'Editor Studio', icon: FileText }
         : { view: 'artist', label: 'Artist', accessibleLabel: 'Artist Studio', icon: Brush };
 
-  const settings: Item = { view: 'settings', label: 'Settings', icon: Settings2 };
+  const settings: Item = { view: 'settings', label: 'You', accessibleLabel: 'Your profile, settings and account', icon: Settings2 };
   const search: Item = { label: 'Search', icon: Search, search: true };
 
   // Exactly five unique destinations. Previously Admin appeared twice, and
@@ -33,9 +35,9 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
   const items: Item[] = role === 'listener'
     ? [
         { view: 'discover', label: 'Home', icon: Home },
+        { label:'Explore', icon:Search, search:true, accessibleLabel:'Explore Nightjar releases and creators' },
         { view: 'library', label: 'Library', icon: Library },
-        { view: 'creators', label: 'Creators', accessibleLabel:'Discover creators and their work', icon: Headphones },
-        search,
+        { label:'Activity', icon:Bell, activity:true, accessibleLabel:'Activity and notifications' },
         settings,
       ]
     : role === 'admin'
@@ -64,12 +66,13 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, mes
             type="button"
             key={item.view ?? 'search'}
             className={active ? 'active' : ''}
-            onClick={() => item.search ? onSearch() : item.view && onNavigate(item.view)}
+            onClick={() => item.search ? onSearch() : item.activity ? onActivity() : item.view && onNavigate(item.view)}
             aria-current={active ? 'page' : undefined}
             aria-label={item.accessibleLabel ?? item.label}
           >
             <span className="nj-mobile-nav-icon">
               <Icon size={19} aria-hidden="true" />
+              {item.activity && activityUnreadCount > 0 && <em>{activityUnreadCount > 9 ? '9+' : activityUnreadCount}</em>}
               {item.view === 'messages' && messageUnreadCount > 0 && <em>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</em>}
               {item.view === 'messages' && messageUnreadCount === 0 && messageNeedsReplyCount > 0 && <em className="needs-reply" title={messageNeedsReplyCount + ' conversation(s) need your reply'}>!</em>}
             </span>
