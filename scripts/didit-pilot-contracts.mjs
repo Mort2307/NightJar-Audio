@@ -63,4 +63,15 @@ assert.match(app, /!ageProviderVerified && !ageDiditPermission/, 'missing ID-che
 assert.match(app, /Read Nightjar's Age Verification/, 'user can read the actual notice from the gate');
 assert.match(legalPage, /age_assurance_notice/, 'legal document shows correct age notice effective date');
 
-console.log('Nightjar Didit controlled tester pilot, reusable verification, notice acknowledgement and bypass preservation contracts PASS (source level).');
+
+const pauseStarter = index.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0] ?? '';
+assert.match(index, /const DIDIT_VERIFICATION_PAUSED = true/, 'live start kill switch is enabled');
+assert.match(pauseStarter, /if \(DIDIT_VERIFICATION_PAUSED\) throw new HttpsError\('failed-precondition'/, 'backend rejects new sessions from cached clients');
+assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED)') < pauseStarter.indexOf('return startDiditSession'), 'pause check precedes provider creation');
+assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client can read pause status');
+assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'app visibly pauses verification');
+assert.match(app, /Age verification temporarily unavailable/, 'age gate explains outage');
+assert.match(app, /!DIDIT_VERIFICATION_PAUSED && agePilotEligible/, 'member pilot suppressed');
+assert.match(app, /!DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot"/, 'admin pilot suppressed');
+
+console.log('Nightjar Didit emergency pause and existing pilot contracts PASS (source level).');
