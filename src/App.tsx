@@ -2064,7 +2064,7 @@ function App() {
     }
   };
 
-  const openAgeCheck = async (adminPilot = false, memberPilot = false) => {
+  const openAgeCheck = async (adminPilot = false, memberPilot = false, acknowledgedOnGate = false) => {
     setAgeLoading(true);
     try {
       if (!nightjarAuth.current()) {
@@ -2072,7 +2072,7 @@ function App() {
         return;
       }
       setAgeStatusError('');
-      if (!ageNoticeAccepted) {
+      if (!ageNoticeAccepted && !acknowledgedOnGate) {
         setAgeStatusError('Read and acknowledge the Nightjar Age Verification & Didit Privacy Notice before starting Didit.');
         setAgeStage('assurance');
         return;
@@ -2082,7 +2082,7 @@ function App() {
           notify('Didit is only available to testers explicitly enrolled by a Nightjar administrator.'); return;
         }
         if (ageProviderVerified) { notify('Your Nightjar account is already verified by Didit. No further identity check is required.'); return; }
-        if (!agePilotConsent) { notify('Please acknowledge the live ID verification notice first.'); return; }
+        if (!agePilotConsent && !acknowledgedOnGate) { notify('Please acknowledge the live ID verification notice first.'); return; }
         if (!window.confirm(
           ageEnvironment === 'live'
             ? 'Start the REAL Didit 18+ ID check for this test account? You may need to show a government ID. A charge may apply to Nightjar. Your existing beta access will remain available.'
@@ -2134,6 +2134,7 @@ function App() {
     if (ageLoading) return;
     setAgeLoading(true);
     setAgeStatusError('');
+    let proceed = false;
     try {
       if (!nightjarAuth.current()) {
         setAgeStatusError('Sign in to Nightjar before accepting the age-verification notice.');
@@ -2159,6 +2160,7 @@ function App() {
       }
       // The provider session remains user-initiated and subject to the existing
       // explicit live-check confirmation. No age bypass or automatic payment.
+      proceed = true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Nightjar could not save the notice acknowledgement.';
       setAgeStatusError('Could not save your age-verification acknowledgement: ' + message);
@@ -2166,9 +2168,9 @@ function App() {
     } finally {
       setAgeLoading(false);
     }
-    // React state updates commit after this handler; backend consent has already
-    // been durably saved above, so invoke the starter after the state is updated.
-    setTimeout(() => { void openAgeCheck(role === 'admin', role !== 'admin' && agePilotEligible); }, 0);
+    // Backend acceptance is durable before the signed-in account is allowed
+    // to initiate a provider session. Avoid stale React state after acceptance.
+    if (proceed) await openAgeCheck(role === 'admin', role !== 'admin' && agePilotEligible, true);
   };
 
   useEffect(() => {
