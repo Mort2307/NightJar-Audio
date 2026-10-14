@@ -19,6 +19,7 @@ export type AgeStatus = {
   diditPilotEligible?: boolean;
   sessionActive?: boolean;
   verificationPaused?: boolean;
+  controlledAdminTestClaimed?: boolean;
   temporaryBypass?: boolean;
   temporaryBypassReason?: string | null;
 };
