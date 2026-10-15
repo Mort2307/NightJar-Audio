@@ -2681,7 +2681,7 @@ export const approvedImage = onRequest({ region: REGION }, async (request, respo
 
   response.setHeader('Content-Type', cleanText(asset.contentType, 80) || 'application/octet-stream');
   response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Cache-Control', 'no-store,max-age=0');
+  response.setHeader('Cache-Control', 'public,max-age=30,s-maxage=30,must-revalidate');
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
 
@@ -2707,8 +2707,7 @@ export const brandLogoImage = onRequest({ region: REGION }, async (_request, res
   if (!asset || asset.status !== 'approved' || asset.kind !== 'brand_logo' || !storagePath) { if (fallbackUrl) response.redirect(302,fallbackUrl); else response.status(404).send('Nightjar logo not available.'); return; }
   response.setHeader('Content-Type', cleanText(asset.contentType,80) || 'application/octet-stream');
   response.setHeader('Access-Control-Allow-Origin','*');
-  response.setHeader('Cache-Control','no-store,max-age=0,must-revalidate');
-  response.setHeader('Pragma','no-cache');
+  response.setHeader('Cache-Control','public,max-age=60,s-maxage=60,must-revalidate');
   response.setHeader('X-Content-Type-Options','nosniff');
   const stream=getStorage().bucket().file(storagePath).createReadStream();
   stream.on('error',()=>{ if(!response.headersSent && fallbackUrl) response.redirect(302,fallbackUrl); else if(!response.headersSent) response.status(404).send('Nightjar logo not available.'); else response.end(); });
@@ -2721,8 +2720,7 @@ const streamBrandingIcon = async (field: 'icon192Path'|'icon512Path'|'maskable51
   const path=branding.logoStatus==='approved' ? cleanText(branding[field],500) : '';
   if(!path){ response.status(404).send('Nightjar app icon not generated yet.'); return; }
   response.setHeader('Content-Type','image/png');
-  response.setHeader('Cache-Control','no-store,max-age=0,must-revalidate');
-  response.setHeader('Pragma','no-cache');
+  response.setHeader('Cache-Control','public,max-age=120,s-maxage=120,must-revalidate');
   response.setHeader('X-Content-Type-Options','nosniff');
   const stream=getStorage().bucket().file(path).createReadStream();
   stream.on('error',()=>{ if(!response.headersSent) response.status(404).send('Nightjar app icon not available.'); else response.end(); });
