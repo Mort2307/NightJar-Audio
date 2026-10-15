@@ -1,0 +1,228 @@
+
+/* NightJar public portraits — readable, theme-aware and compact on mobile.
+   No private data is introduced: presentation uses the existing public profile. */
+.creator-profile-modal.premium-public-profile {
+  --portrait-ink: var(--nj-text-primary, var(--ivory, #f5edf0));
+  --portrait-muted: var(--nj-text-secondary, var(--muted, #c6b8c3));
+  --portrait-line: var(--nj-line-default, rgba(220,189,212,.22));
+  --portrait-surface: var(--nj-surface-raised, rgba(255,255,255,.045));
+  --portrait-accent: var(--nj-accent, var(--gold, #caa17c));
+  color: var(--portrait-ink);
+}
+.premium-public-profile .creator-profile-body { gap: 16px; }
+.premium-public-profile .creator-profile-hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 180px;
+  padding: clamp(18px,3.5vw,30px);
+  overflow: hidden;
+  border: 1px solid var(--portrait-line);
+  border-radius: 22px;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--portrait-accent) 14%, transparent), transparent 68%),
+              linear-gradient(155deg, var(--portrait-surface), transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  align-items: center;
+}
+.premium-public-profile .nj-profile-hero-glow {
+  position: absolute;
+  pointer-events: none;
+  z-index: -1;
+  width: min(46vw,280px);
+  aspect-ratio: 1;
+  top: -150px;
+  right: -90px;
+  border-radius: 100%;
+  background: color-mix(in srgb, var(--portrait-accent) 14%, transparent);
+  filter: blur(18px);
+}
+.premium-public-profile .creator-profile-avatar {
+  width: clamp(76px, 10vw, 112px);
+  height: clamp(76px, 10vw, 112px);
+  border-radius: 24px;
+  border: 2px solid var(--portrait-line);
+  box-shadow: 0 13px 30px rgba(0,0,0,.2), inset 0 0 0 3px var(--portrait-surface);
+  font-size: clamp(25px, 5vw, 39px);
+  overflow: hidden;
+}
+.premium-public-profile .creator-profile-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+.premium-public-profile .nj-profile-primary-identity { min-width:0; }
+.premium-public-profile .nj-profile-hero-eyebrow {
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  color:var(--portrait-accent);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+  margin-bottom:8px;
+}
+.premium-public-profile .creator-profile-hero h3 {
+  font-size: clamp(25px,3vw,40px);
+  line-height:1.14;
+  overflow-wrap:anywhere;
+}
+.premium-public-profile .creator-profile-hero p {
+  font-size: clamp(13px,1.5vw,16px);
+  line-height:1.55;
+  max-width:56ch;
+  color:var(--portrait-muted);
+}
+.premium-public-profile .creator-profile-hero small,
+.premium-public-profile .creator-profile-head p { font-size:12px; }
+.premium-public-profile .writer-discovery-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+}
+.premium-public-profile .writer-discovery-actions button { min-height:40px; font-size:12px; }
+.premium-public-profile .public-profile-metrics {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px;
+}
+.premium-public-profile .public-profile-metrics > div {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  align-items:flex-start;
+  justify-content:center;
+  padding:14px 16px;
+  border:1px solid var(--portrait-line);
+  border-radius:14px;
+  background:var(--portrait-surface);
+  min-height:85px;
+}
+.premium-public-profile .public-profile-metrics strong {
+  margin:0;
+  font-size:clamp(23px,3vw,32px);
+  line-height:1;
+  font-variant-numeric:tabular-nums;
+}
+.premium-public-profile .public-profile-metrics span {
+  font-size:11px;
+  letter-spacing:.08em;
+  line-height:1.3;
+}
+.premium-public-profile .nj-public-profile-about {
+  display:grid;
+  gap:8px;
+  padding:18px 20px;
+  border:1px solid var(--portrait-line);
+  border-radius:17px;
+  background:var(--portrait-surface);
+}
+.premium-public-profile .nj-public-profile-about-heading {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  color:var(--portrait-accent);
+}
+.premium-public-profile .creator-profile-bio,
+.premium-public-profile .creator-profile-welcome {
+  border:0;
+  background:transparent;
+  padding:0;
+  margin:0;
+  color:var(--portrait-muted);
+  font-size:clamp(13px,1.6vw,16px);
+  line-height:1.75;
+  overflow-wrap:anywhere;
+}
+.premium-public-profile .creator-profile-welcome { color:var(--portrait-ink); font-weight:600; }
+.premium-public-profile .nj-public-social-details,
+.premium-public-profile .nj-public-profile-privacy {
+  border:1px solid var(--portrait-line);
+  border-radius:14px;
+  background:var(--portrait-surface);
+  overflow:hidden;
+}
+.premium-public-profile .nj-public-social-details > summary,
+.premium-public-profile .nj-public-profile-privacy > summary {
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  min-height:48px;
+  padding:12px 16px;
+  font-size:13px;
+  font-weight:650;
+  list-style:none;
+}
+.premium-public-profile .nj-public-social-details > summary::-webkit-details-marker,
+.premium-public-profile .nj-public-profile-privacy > summary::-webkit-details-marker { display:none; }
+.premium-public-profile .nj-public-social-details > summary:focus-visible,
+.premium-public-profile .nj-public-profile-privacy > summary:focus-visible {
+  outline:2px solid var(--portrait-accent);
+  outline-offset:-3px;
+}
+.premium-public-profile .nj-public-social-details > summary small {
+  margin-left:6px;
+  color:var(--portrait-muted);
+  font-weight:400;
+}
+.premium-public-profile details[open] > summary > svg:last-child { transform:rotate(180deg); }
+.premium-public-profile .nj-public-social-details .nj-social-public { padding:0 14px 14px; }
+.premium-public-profile .nj-public-social-details .nj-social-public-heading { display:none; }
+.premium-public-profile .nj-public-social-details .nj-social-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.premium-public-profile .nj-public-social-details .nj-social-public-link { min-width:0; padding:10px; }
+.premium-public-profile .nj-public-social-details .nj-social-link-copy { min-width:0; }
+.premium-public-profile .nj-public-social-details .nj-social-link-copy small { overflow-wrap:anywhere; }
+.premium-public-profile .nj-public-profile-privacy > summary { justify-content:flex-start; color:var(--portrait-muted); }
+.premium-public-profile .nj-public-profile-privacy > summary > svg:last-child { margin-left:auto; }
+.premium-public-profile .nj-public-profile-privacy .writer-public-note {
+  margin:0 12px 12px;
+  padding:12px;
+  border-radius:12px;
+  background:transparent;
+}
+.premium-public-profile .role-public-professional {
+  border-radius:17px;
+  border-color:var(--portrait-line);
+  background:var(--portrait-surface);
+}
+.premium-public-profile .role-public-fact-grid > div {
+  min-height:62px;
+  padding:12px 14px;
+  border-color:var(--portrait-line);
+  background:color-mix(in srgb, var(--portrait-accent) 4%, transparent);
+}
+.premium-public-profile .role-public-fact-grid span { font-size:11px; line-height:1.3; }
+.premium-public-profile .role-public-fact-grid strong { font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
+.premium-public-profile .role-public-detail-card {
+  border-color:var(--portrait-line);
+  background:var(--portrait-surface);
+}
+.premium-public-profile .role-public-detail-card h4 { font-size:clamp(18px,2.5vw,22px); }
+.premium-public-profile .role-public-detail-card p { font-size:12px; }
+.premium-public-profile .creator-profile-tags span { font-size:11px; letter-spacing:.04em; padding:8px 11px; }
+.premium-public-profile .creator-profile-releases { padding-top:8px; }
+@media (max-width:760px) {
+  .premium-public-profile .creator-profile-hero {
+    grid-template-columns:auto minmax(0,1fr);
+    align-items:start;
+    padding:19px 16px;
+    min-height:0;
+    gap:12px;
+  }
+  .premium-public-profile .creator-profile-avatar { width:76px; height:76px; border-radius:18px; }
+  .premium-public-profile .writer-discovery-actions { grid-column:1/-1; justify-content:flex-start; }
+  .premium-public-profile .writer-discovery-actions button { flex:1 1 130px; }
+  .premium-public-profile .creator-profile-body { padding:14px; gap:12px; }
+  .premium-public-profile .public-profile-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .premium-public-profile .public-profile-metrics > div { min-height:70px; padding:11px 13px; }
+  .premium-public-profile .nj-public-social-details .nj-social-list { grid-template-columns:1fr; }
+  .premium-public-profile .role-public-fact-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:430px) {
+  .premium-public-profile .public-profile-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .premium-public-profile .creator-profile-hero h3 { font-size:24px; }
+  .premium-public-profile .nj-profile-hero-eyebrow { font-size:10px; }
+  .premium-public-profile .role-public-fact-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .premium-public-profile details > summary > svg { transition:none; }
+}
