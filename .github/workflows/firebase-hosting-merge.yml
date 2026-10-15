@@ -112,19 +112,19 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "One-user KYC endpoint deployed; no verification session has been started."
 
-      # Owner-approved staged release. No PR and no branch push deploys this.
+      # Staged account-wide release. No PR and no branch push deploys this.
       # Only a main push explicitly tagged for this change can dispatch the two
       # selected account-bound Didit callables before production Hosting updates.
-      # Meg alone can see the invitation; the ordinary public pause remains on.
-      - name: Deploy Meg direct Didit pilot backend before Hosting
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-didit-direct-meg-release]') }}
+      # All eligible signed-in members can opt in; legacy public starter stays paused.
+      - name: Deploy all-account Didit self-service backend before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-didit-all-members-release]') }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           grep -q 'const DIDIT_VERIFICATION_PAUSED = true' functions/src/index.ts
-          grep -q 'const directDiditPilotAccount =' functions/src/index.ts
+          grep -q 'const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true' functions/src/index.ts
           test -f scripts/didit-direct-pilot-contracts.mjs
           node scripts/didit-direct-pilot-contracts.mjs
           START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -146,7 +146,7 @@ jobs:
             exit 1
           fi
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
-          echo "Direct Meg pilot enabled server-side. The global public verification pause stays active."
+          echo "Account-wide Didit self-service is available. Legacy public starter stays paused."
 
       # Single account-bound member live check, globally paused otherwise.
       # Deploy these callables FIRST or the app's invitation will lead to a 404.
