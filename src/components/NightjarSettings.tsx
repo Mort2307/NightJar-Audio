@@ -6,6 +6,7 @@ import NotificationPreferences from './NotificationPreferences';
 import ThemePreferences from './ThemePreferences';
 import PasskeySettings from './PasskeySettings';
 import DiditExistingCheckRequest from './DiditExistingCheckRequest';
+import DiditControlledLiveCheck from './DiditControlledLiveCheck';
 import AppUpdateControl from './AppUpdateControl';
 import ControlledSingleMemberDiditCheck from './ControlledSingleMemberDiditCheck';
 import AdminAudioUploadTest from './AdminAudioUploadTest';
@@ -56,6 +57,8 @@ export default function NightjarSettings({ email, administrator, simulationMode,
           <button type="button" className="nj-settings-link" onClick={onSignOut}><span><strong>Sign out</strong><small>Safely end this Nightjar session</small></span><LogOut size={17} aria-hidden="true" /></button>
         </section>
       </div>
+
+      {!simulationMode && <DiditControlledLiveCheck />}
 
       <details className="nj-settings-master-disclosure">
         <summary><span className="nj-settings-master-title"><Settings2 size={17} aria-hidden="true"/><span><strong>Preferences, help &amp; policies</strong><small>Security, appearance, notifications, accessibility, updates and legal documents</small></span></span><ChevronDown size={18} className="nj-settings-master-chevron" aria-hidden="true"/></summary>
