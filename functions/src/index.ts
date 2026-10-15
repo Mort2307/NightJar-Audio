@@ -6404,6 +6404,133 @@ export const ageStatus = onCall({
   };
 });
 
+// Closed-beta, ONE-USE normal live KYC: a specific signed-in member may
+// voluntarily start one account-bound Didit session while the public kill
+// switch stays ON. This exception is NOT the owner maintenance test.
+const controlledDiditRef = (uid: string) => db.collection('diditControlledChecks').doc(uid);
+
+export const adminAuthoriseDiditControlledCheck = onCall({ region: REGION }, async request => {
+  const administrator = requireAdminIdentity(request);
+  const uid = cleanText((request.data ?? {}).uid, 128);
+  const acknowledgedCharge = (request.data ?? {}).acknowledgedCharge === true;
+  if (!DIDIT_VERIFICATION_PAUSED || !/^[a-zA-Z0-9_-]{10,128}$/.test(uid) || !acknowledgedCharge) {
+    throw new HttpsError('invalid-argument', 'Select one member and explicitly acknowledge the possible real Didit verification charge.');
+  }
+  // This callable only grants permission; no API keys or provider sessions.
+  const [authRecord, ageRecord] = await Promise.all([
+    getAuth().getUser(uid),
+    db.collection('ageAssurance').doc(uid).get(),
+  ]);
+  if (!authRecord.emailVerified || authRecord.disabled) {
+    throw new HttpsError('failed-precondition','The member must have an active, email-verified Nightjar sign-in.');
+  }
+  if (diditPass(ageRecord.data())) {
+    throw new HttpsError('failed-precondition','This member already has an accepted live 18+ result. No second check is allowed.');
+  }
+  const ref = controlledDiditRef(uid);
+  const reuseRef = diditReuseRef(uid);
+  await db.runTransaction(async tx => {
+    const [grant, reuse] = await Promise.all([tx.get(ref), tx.get(reuseRef)]);
+    if (grant.exists) {
+      throw new HttpsError('already-exists','A controlled Didit check has already been authorised or attempted for this member. It cannot be reset by clicking again.');
+    }
+    if (!reuse.exists || reuse.data()?.status !== 'approved_for_reuse' ||
+        reuse.data()?.memberConsent !== true) {
+      throw new HttpsError('failed-precondition','An active member-consented, administrator-approved Didit enquiry is required.');
+    }
+    tx.create(ref, {
+      uid, state:'authorised', authorisedAt:FieldValue.serverTimestamp(),
+      authorisedBy:administrator.uid, acknowledgedCharge:true, attempts:0,
+      source:'approved-standalone-enquiry-normal-id-check', updatedAt:FieldValue.serverTimestamp(),
+    });
+  });
+  return { authorised:true, sessionStarted:false };
+});
+
+export const myDiditControlledCheck = onCall({ region: REGION }, async request => {
+  const identity = await requireActiveIdentity(request);
+  const [grant, age, reuse] = await Promise.all([
+    controlledDiditRef(identity.uid).get(),
+    db.collection('ageAssurance').doc(identity.uid).get(),
+    diditReuseRef(identity.uid).get(),
+  ]);
+  const data = grant.data() ?? {};
+  const status = String(data.state ?? 'none');
+  const providerVerified = diditPass(age.data());
+  let launchUrl: string | null = null;
+  if (grant.exists && status !== 'authorised' && !providerVerified) {
+    const sessionId = cleanText(age.data()?.sessionId, 128);
+    if (sessionId) {
+      const previous = (await db.collection('diditSessions').doc(sessionId).get()).data() ?? {};
+      if (previous.uid === identity.uid && previous.environment === 'live' &&
+          previous.sessionId !== 'invalid' && previous.createdAtMs > Date.now() - 6 * 86400_000 &&
+          ['PENDING','IN_PROGRESS','RESUBMITTED'].includes(String(age.data()?.status))) {
+        launchUrl = cleanText(previous.url, 2048) || null;
+      }
+    }
+  }
+  const authorised = status === 'authorised' &&
+    reuse.data()?.status === 'approved_for_reuse' && reuse.data()?.memberConsent === true;
+  return {
+    authorised, state: status, providerVerified,
+    launchUrl, publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
+    // NO provider session can be started without explicit member action.
+  };
+});
+
+export const startMyDiditControlledCheck = onCall({
+  region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+  timeoutSeconds: 40, maxInstances: 2,
+}, async request => {
+  const identity = await requireActiveIdentity(request);
+  if (!DIDIT_VERIFICATION_PAUSED || !diditConfigured() || diditMode() !== 'live' ||
+      (request.data ?? {}).explicitConsent !== true) {
+    throw new HttpsError('failed-precondition', 'One-use live Didit verification requires explicit member consent and configured live Didit.');
+  }
+  // Server-stored acceptance, never a client-side checkbox alone.
+  await requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice');
+  const ageRef = db.collection('ageAssurance').doc(identity.uid);
+  if (diditPass((await ageRef.get()).data())) return { verified:true, provider:'didit' };
+  const grantRef = controlledDiditRef(identity.uid);
+  const requestRef = diditReuseRef(identity.uid);
+  await db.runTransaction(async tx => {
+    const [grant, consent, age] = await Promise.all([
+      tx.get(grantRef), tx.get(requestRef), tx.get(ageRef),
+    ]);
+    if (diditPass(age.data())) {
+      throw new HttpsError('already-exists','Didit verification is already approved for this account. Refresh status.');
+    }
+    if (grant.data()?.state !== 'authorised' || grant.data()?.attempts !== 0 ||
+        consent.data()?.status !== 'approved_for_reuse' ||
+        consent.data()?.memberConsent !== true) {
+      throw new HttpsError('failed-precondition','Your single live Didit check has not been authorised, has already been claimed, or consent was withdrawn. No additional check was started.');
+    }
+    // Durable pre-provider claim: an error or timeout must NEVER silently
+    // permit another paid request. Existing support tools can investigate.
+    tx.update(grantRef, {
+      state:'claimed', attempts:1, claimedAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp(),
+    });
+  });
+  try {
+    const result = await startDiditSession(identity.uid);
+    const returned = result as Record<string, any>;
+    await grantRef.set({
+      state: returned.verified === true ? 'already_verified' : 'session_started',
+      providerSessionId: cleanText(returned.sessionId, 128) || null,
+      updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+    return result;
+  } catch {
+    // Do not release the claim: Didit might have received a chargeable
+    // request even if Nightjar timed out before receiving its response.
+    await grantRef.set({
+      state:'requires_review', updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+    throw new HttpsError('unavailable','Nightjar could not confirm whether Didit started the one-use check. Please contact support; do NOT retry or start a second check.');
+  }
+});
+
 // Reusable KYC preparation: validate the actual historic provider decision
 // and a separate published, zero-cost reuse workflow BEFORE allowing members
 // to authenticate. These calls never create Didit sessions or grant age access.
