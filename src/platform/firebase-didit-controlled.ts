@@ -8,6 +8,7 @@ export type DiditControlledStatus = {
   state: 'none' | 'authorised' | 'claimed' | 'session_started' |
     'already_verified' | 'requires_review';
   providerVerified: boolean;
+  directPilot?: boolean;
   launchUrl: string | null;
   publicVerificationPaused: boolean;
 };
