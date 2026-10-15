@@ -16,7 +16,7 @@ export default function DiditExistingCheckRequest() {
     finally {setBusy(false);}
   };
   useEffect(()=>{void refresh();},[]);
-  const active = record && ['requested','investigating','waiting_for_member'].includes(record.status);
+  const active = record && ['requested','investigating','waiting_for_member','approved_for_reuse'].includes(record.status);
   const request = async () => {
     if(!consented || busy || !window.confirm('Ask Nightjar to investigate reuse of an ALREADY APPROVED Didit check? This records your request, but does not itself verify your identity, contact Didit, or initiate a new ID check.'))return;
     setBusy(true);setError('');setMessage('');
@@ -42,9 +42,10 @@ export default function DiditExistingCheckRequest() {
     <h3>Already completed a Didit check?</h3>
     <p>If you were approved in Didit before linking your Nightjar account, request a review here. Your previous <strong>standalone</strong> check is not automatically proof of account ownership.</p>
     <p>Didit's Reusable KYC can allow you to consent to share an earlier result after a short identity confirmation. Nightjar will only link an approval after receiving authenticated provider evidence tied to your signed-in account. Public verification is still paused.</p>
+    <p><strong>Administrator approval means the request can proceed, not that you are verified.</strong> A secure Didit identity-reuse confirmation is still required; do not start another paid ID check while maintenance continues.</p>
     {record && active && <div className="nj-didit-reuse-current" role="status">
       <CheckCircle2 size={18} aria-hidden="true"/>
-      <div><strong>{record.status==='requested'?'Request received':record.status==='investigating'?'Nightjar is investigating':'Awaiting secure member follow-up'}</strong><p>{record.note}</p>
+      <div><strong>{record.status==='requested'?'Request received · awaiting review':record.status==='investigating'?'Under review · existing Didit check being assessed':record.status==='waiting_for_member'?'Member identity confirmation needed':record.status==='approved_for_reuse'?'Reuse request approved · not yet verified 18+':'Request status unknown'}</strong><p>{record.note}</p>
         {record.requestedAt && <small>Requested {new Date(record.requestedAt).toLocaleString('en-GB')}</small>}
       </div>
     </div>}
