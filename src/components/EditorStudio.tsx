@@ -13,6 +13,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import SearchableMultiSelect from './SearchableMultiSelect';
+import ContextHelp from './ContextHelp';
 import CollaborationHub from './CollaborationHub';
 import RoleDashboard, { type RoleDashboardAction } from './RoleDashboard';
 import EditorShowcaseManager from './EditorShowcaseManager';
@@ -269,8 +270,7 @@ export default function EditorStudio({
 
           <article className="panel editor-profile-form-card">
             <span className="mini-label">SKILL MATRIX</span>
-            <h3>Self-described proficiency</h3>
-            <p className="panel-note">This is deliberately separate from Nightjar Verified Credits. It tells collaborators where you feel strongest without pretending Nightjar has independently certified a score.</p>
+            <h3>Self-described proficiency <ContextHelp topic="editor-skill-rating"/></h3>
             {(profile.roleSpecialties ?? []).length ? <div className="editor-skill-matrix-list">{(profile.roleSpecialties ?? []).map((skill:string)=><label key={skill}><span>{skill}</span><select value={profile.editorSkillLevels?.[skill] ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,editorSkillLevels:{...(current.editorSkillLevels??{}),[skill]:event.target.value}}))}><option value="">Not stated</option>{EDITOR_PROFICIENCY_OPTIONS.map((level)=><option key={level} value={level}>{level}</option>)}</select></label>)}</div> : <div className="people-empty"><strong>Choose services first.</strong><span>Your selected editing services become the rows in this matrix.</span></div>}
           </article>
         </div>
