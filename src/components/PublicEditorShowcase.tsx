@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileAudio, Play, ShieldCheck } from 'lucide-react';
 import { nightjarEditorPortfolio, type EditorPortfolioItem } from '../platform/firebase-editor-portfolio';
+import ContextHelp from './ContextHelp';
 
 export default function PublicEditorShowcase({ items }: { items: EditorPortfolioItem[] }) {
   const [urls,setUrls]=useState<Record<string,string>>({});
@@ -18,8 +19,7 @@ export default function PublicEditorShowcase({ items }: { items: EditorPortfolio
 
   if(!items?.length)return null;
   return <section className="public-editor-showcase">
-    <div className="public-role-profile-head"><div><span className="mini-label">APPROVED AUDIO SHOWCASE</span><h3>Hear the editing work</h3></div><FileAudio size={18}/></div>
-    <p className="panel-note">These samples were uploaded with rights/permission attestations and approved through Nightjar moderation. Playback links expire automatically.</p>
+    <div className="public-role-profile-head"><div><span className="mini-label">APPROVED AUDIO SHOWCASE</span><h3>Hear the editing work <ContextHelp topic="editor-showcase"/></h3></div><FileAudio size={18}/></div>
     <div className="public-editor-showcase-grid">
       {items.map((item)=><article key={item.id}>
         <strong>{item.title}</strong><p>{item.description}</p>
