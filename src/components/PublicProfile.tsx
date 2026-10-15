@@ -55,6 +55,12 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const focusArtworkId = focusArtworkIdProp ?? new URLSearchParams(window.location.search).get('artwork');
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
+  useEffect(() => {
+    // Direct-open public profiles must start at the TOP, not at the
+    // background page's previous scroll position.
+    dialogRef.current?.scrollTo({ top:0, behavior:'instant' });
+    dialogRef.current?.focus({ preventScroll:true });
+  }, [userId, initialRole]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,12 +189,17 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     ? selectedProfileRole
     : (profile?.role && availableProfileRoles.includes(String(profile.role)) ? String(profile.role) : availableProfileRoles[0] ?? 'listener'))) as ProfileRoleKey;
   const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
-  // getPublicProfile only exposes professionally approved roles from the server.
-  // A listener credited on a release does not receive this designation.
-  const isOfficialCreator = !profile?.nightjarTeam && profileRole !== 'listener' && availableProfileRoles.includes(profileRole);
+  // Official crescent follows the server's approved professional roles across
+  // EVERY connected role tab, including Listener. Release credits alone do not count.
+  const approvedProfessionalRoles = Array.isArray(profile?.approvedProfessionalRoles)
+    ? profile.approvedProfessionalRoles.filter((role:unknown) => ['creator','writer','editor','artist'].includes(String(role)))
+    : [];
+  const hasNightjarApproval = !profile?.nightjarTeam && approvedProfessionalRoles.length > 0;
   const roleDetails = profile?.roleProfiles && typeof profile.roleProfiles === 'object' && profile.roleProfiles[profileRole]
     ? profile.roleProfiles[profileRole]
     : profile ?? {};
+  const memberTagline = String(profile?.headline || roleDetails?.roleHeadline || '').trim();
+  const bannerFromPortrait = profile?.headerImageMode === 'portrait' && Boolean(profile?.avatarUrl);
   const roleFeaturedWork = (profile?.featuredWorkByRole?.[profileRole] ?? profile?.featuredWork ?? []) as any[];
   const roleCreditedReleases = (profile?.creditedReleasesByRole?.[profileRole] ?? profile?.creditedReleases ?? []) as any[];
   const profileMetrics = profile ? (
@@ -241,17 +252,17 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       {readOnlyPreview && <div className="nj-profile-viewer-modal-note"><ShieldCheck size={15}/> Admin live public profile view · original member data · all actions disabled</div>}
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero nj-cinema-profile-hero">
-          <div className="nj-cinema-profile-cover" aria-hidden="true">
-            {profile.avatarUrl && <img className="nj-profile-hero-banner" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" onLoad={(event)=>{ if(event.currentTarget.naturalWidth < 480 || event.currentTarget.naturalHeight < 320) event.currentTarget.classList.add("nj-cinema-banner-lowres"); }}/>}
+          <div className={'nj-cinema-profile-cover'+(bannerFromPortrait ? ' nj-cinema-cover-portrait' : ' nj-cinema-cover-branded')} aria-hidden="true">
+            {bannerFromPortrait && <img className="nj-profile-hero-banner" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" onLoad={(event)=>{ if(event.currentTarget.naturalWidth < 480 || event.currentTarget.naturalHeight < 320) event.currentTarget.classList.add("nj-cinema-banner-lowres"); }}/>}
             <span className="nj-cinema-profile-cover-shade"/>
-            <span className="nj-cinema-cover-words"><small>NIGHTJAR {profileRole === 'listener' ? 'COMMUNITY' : 'CREATOR STUDIO'}</small><em>{profileRole === 'listener' ? 'Stay curious.' : 'Stories you can feel.'}</em></span>
+            <span className="nj-cinema-cover-words"><small>NIGHTJAR / {roleLabel(profileRole).toUpperCase()}</small><em>{memberTagline || (profileRole === 'listener' ? 'Stay curious.' : 'Stories you can feel.')}</em></span>
             <span className="nj-cinema-cover-moon">☾</span>
           </div>
           <span className="nj-profile-avatar-frame">
             <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
-            {isOfficialCreator && <details className="nj-official-creator-badge">
-              <summary aria-label="Official NightJar Creator — show badge details" title="Official NightJar Creator"><Moon size={18} aria-hidden="true"/></summary>
-              <span role="note">Official NightJar Creator — approved through NightJar creator onboarding. Release credits alone do not grant this badge.</span>
+            {hasNightjarApproval && <details className="nj-official-creator-badge">
+              <summary aria-label="NightJar-approved professional — badge details" title="NightJar-approved professional"><Moon size={18} aria-hidden="true"/></summary>
+              <span role="note">Official NightJar-approved professional: {approvedProfessionalRoles.map((role:string)=>roleLabel(role)).join(', ')}. Badge eligibility comes from NightJar onboarding approval, not release credits or profile claims.</span>
             </details>}
           </span>
           <div className="nj-profile-primary-identity">
