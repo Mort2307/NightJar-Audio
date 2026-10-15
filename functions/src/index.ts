@@ -4726,6 +4726,22 @@ export const adminSetAccountSuspension = onCall({
 });
 
 
+export const adminRetryMemberSecurityNotice = onCall({
+  region: REGION, secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
+  requireAdminIdentity(request);
+  const userId = cleanText((request.data as {userId?:unknown}|undefined)?.userId, 160);
+  if (!userId || userId.includes('/')) throw new HttpsError('invalid-argument', 'Choose a valid member.');
+  const snapshot = await accountRef(userId).get();
+  const account = snapshot.data() ?? {};
+  if (account.status !== 'suspended') throw new HttpsError('failed-precondition', 'Only a currently suspended member has a pending suspension notice.');
+  const caseId = cleanText(account.suspensionCaseId, 80);
+  const reason = cleanText(account.suspensionReason, 500);
+  if (!caseId || !reason) throw new HttpsError('failed-precondition', 'No reviewable suspension notice is recorded.');
+  const notificationDelivery = await deliverMemberSecurityNotice(userId, 'suspend', reason, caseId);
+  return { notificationDelivery, caseId };
+});
+
 export const adminMemberSecurityDossier = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const userId = cleanText((request.data as { userId?: unknown } | undefined)?.userId, 160);
@@ -4739,6 +4755,8 @@ export const adminMemberSecurityDossier = onCall({ region: REGION }, async (requ
   if (!account.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
   const a = account.data() ?? {};
   const p = profile.data() ?? {};
+  const noticeId = cleanText(a.suspensionCaseId, 80);
+  const noticeSnapshot = noticeId ? await accountRef(userId).collection('securityNotices').doc(noticeId).get() : null;
   const evidence = events.docs.map((doc) => {
     const e = doc.data();
     return {
@@ -4760,6 +4778,7 @@ export const adminMemberSecurityDossier = onCall({ region: REGION }, async (requ
       authDisabled: authUser.disabled === true,
       suspensionReason: cleanText(a.suspensionReason, 500) || null,
       suspensionCaseId: cleanText(a.suspensionCaseId, 80) || null,
+      notificationDelivery: cleanText(noticeSnapshot?.data()?.status, 30) || null,
       lastSignIn: authUser.metadata.lastSignInTime ?? null,
     },
     evidence,
