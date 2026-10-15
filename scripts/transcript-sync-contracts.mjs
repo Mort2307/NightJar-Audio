@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const client = readFileSync('src/components/TranscriptSyncTool.tsx', 'utf8');
+const creator = readFileSync('src/components/CreatorAudioPipeline.tsx', 'utf8');
+const admin = readFileSync('src/components/ContentModeration.tsx', 'utf8');
+const catalogue = readFileSync('src/platform/firebase-catalogue.ts', 'utf8');
+const backend = readFileSync('functions/src/index.ts', 'utf8');
+const player = readFileSync('src/components/NightjarPlayer.tsx', 'utf8');
+
+assert.match(creator, /<TranscriptSyncTool/);
+assert.match(admin, /<TranscriptSyncTool/);
+assert.match(admin, /isAdmin/);
+assert.match(admin, /selected\.audioAvailable/);
+assert.match(client, /return_timestamps: 'word'/);
+assert.match(client, /chunk_length_s: 30/);
+assert.match(client, /'onnx-community\/whisper-tiny\.en'/);
+assert.match(client, /onSaved\(response\.release\)/);
+assert.match(client, /reviewed.*save|save.*reviewed/s);
+assert.match(client, /No reliably timed speech was found/);
+assert.match(catalogue, /getReleaseSyncAudioUrl/);
+assert.match(catalogue, /saveSyncedReleaseTranscript/);
+assert.match(backend, /export const getReleaseSyncAudioUrl/);
+assert.match(backend, /export const saveSyncedReleaseTranscript/);
+assert.match(backend, /requireAccountRole\(request, \['creator'\]\)/);
+assert.match(backend, /data\.creatorUserId !== identity\.uid/);
+assert.match(backend, /transcriptAccessibilityReviewed: true/);
+assert.match(backend, /transcriptAccessibilityReviewed: false/);
+assert.match(backend, /transcriptSyncSource: 'local_speech_recognition_reviewed'/);
+assert.match(player, /const timedTranscript =/);
+assert.match(player, /transcriptFollowPlayback/);
+assert.doesNotMatch(client, /api\.openai\.com|api\.assemblyai\.com|api\.deepgram\.com/);
+console.log('Local transcript sync creator/admin permissions and player contracts PASS.');
