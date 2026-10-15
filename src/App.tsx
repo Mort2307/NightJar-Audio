@@ -477,7 +477,7 @@ const readFileDataUrl = (file: File) => new Promise<string>((resolve, reject) =>
   reader.readAsDataURL(file);
 });
 
-const EMPTY_PROFILE = { displayName: '', handle: '', headline: '', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, creatorLanguages: [], creatorDirectionModes: [], creatorDeliveryFormats: [], creatorTurnaround: '', creatorEquipment: '', writerScriptLengths: [], writerCollaborationPreferences: [], writerTurnaround: '', writerRightsNote: '', artistMediums: [], artistDeliveryFormats: [], artistTurnaround: '', artistSoftware: [], listenerCommunityStyle: [], publicProfile: true };
+const EMPTY_PROFILE = { displayName: '', handle: '', headline: '', headerImageMode: 'cinematic', bio: '', welcomeMessage: '', pronouns: '', avatarInitials: '', avatarTone: 'plum', avatarUrl: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, favouriteTags: [], favouriteTropes: [], favouriteCategories: [], roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: '', roleHeadline: '', roleBio: '', roleDetailOne: '', roleDetailTwo: '', portfolioNote: '', featuredPortfolioIds: [], editorSoftware: [], editorProjectTypes: [], editorDeliveryFormats: [], editorCollaborationPreferences: [], editorTurnaround: '', editorExperienceYears: '', editorSkillLevels: {}, creatorLanguages: [], creatorDirectionModes: [], creatorDeliveryFormats: [], creatorTurnaround: '', creatorEquipment: '', writerScriptLengths: [], writerCollaborationPreferences: [], writerTurnaround: '', writerRightsNote: '', artistMediums: [], artistDeliveryFormats: [], artistTurnaround: '', artistSoftware: [], listenerCommunityStyle: [], publicProfile: true };
 
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','calendar','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
@@ -5075,7 +5075,7 @@ function App() {
 
 
 
-            <HomeSection id="writers" title="Discover writers"><WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} /></HomeSection>
+            <HomeSection id="writers" title="Discover writers"><WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} onOpenProfile={(userId, profileRole)=>openPublicProfile(userId,profileRole)} notify={notify} demoMode={demoMode} /></HomeSection>
 
             <HomeSection id="catalogue" title="Published audio">
             <section id="catalogue" className="section-wrap">
