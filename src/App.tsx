@@ -679,6 +679,8 @@ function App() {
   const [focusedReleaseId, setFocusedReleaseId] = useState<string | null>(null);
   const [nightjarUpdate, setNightjarUpdate] = useState<NightjarUpdateStatus | null>(null);
   const [nightjarUpdating, setNightjarUpdating] = useState(false);
+  const [nightjarUpdateChecking, setNightjarUpdateChecking] = useState(false);
+  const [nightjarUpdateFeedback, setNightjarUpdateFeedback] = useState('');
   const [releaseReactions, setReleaseReactions] = useState<Record<string, Exclude<ReleaseReaction, null>>>({});
   const [messageRecipientUserId, setMessageRecipientUserId] = useState<string | null>(null);
   const [messageCollaborationId, setMessageCollaborationId] = useState<string | null>(null);
@@ -1668,6 +1670,25 @@ function App() {
       window.removeEventListener('nightjar:update-available', check);
     };
   }, []);
+
+  const checkLatestNightjarUpdate = async () => {
+    if (nightjarUpdateChecking || nightjarUpdating) return;
+    setNightjarUpdateChecking(true);
+    setNightjarUpdateFeedback('');
+    try {
+      const result = await checkNightjarUpdate();
+      setNightjarUpdate(result);
+      setNightjarUpdateFeedback(!result.latestBuildId
+        ? 'Nightjar could not reach the latest release. Check your connection or use the repair link below.'
+        : result.updateAvailable
+          ? 'A new version is ready. Tap Update now to install it without deleting your Nightjar account.'
+          : 'You are running the latest deployed Nightjar version.');
+    } catch {
+      setNightjarUpdateFeedback('Unable to check for updates. Check your connection or open the repair link below.');
+    } finally {
+      setNightjarUpdateChecking(false);
+    }
+  };
 
   const installNightjarUpdate = async () => {
     if (nightjarUpdating) return;
@@ -4661,16 +4682,34 @@ function App() {
           </div>}
           {user && !liveRolePreview && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
           {user && !liveRolePreview && <div className="notification-wrap">
-            <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) void loadNotifications(productLoadEpoch.current); setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0) ? String(notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0)) + ' updates and unread notifications' : 'Notifications'}>
+            <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) { void loadNotifications(productLoadEpoch.current); void checkLatestNightjarUpdate(); } setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0) ? String(notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0)) + ' updates and unread notifications' : 'Notifications'}>
               <Bell size={17} />
               {(notificationUnreadCount > 0 || nightjarUpdate?.updateAvailable) && <span className="notification-badge">{notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0) > 9 ? '9+' : notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0)}</span>}
             </button>
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
               <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
-              {nightjarUpdate?.updateAvailable && <div className="nightjar-update-notification" role="status">
-                <div className="nightjar-update-notification-copy"><Download size={18} aria-hidden="true"/><span><strong>New Nightjar version available</strong><small>Latest build {nightjarUpdate.latestBuildId}. Update this device to enjoy the newest features.</small></span></div>
-                <button type="button" className="primary-button" onClick={() => void installNightjarUpdate()} disabled={nightjarUpdating}><Download size={14}/>{nightjarUpdating ? 'Updating…' : 'Update now'}</button>
-              </div>}
+              <div className={nightjarUpdate?.updateAvailable ? 'nightjar-update-notification has-update' : 'nightjar-update-notification'} aria-label="Nightjar app updates">
+                <div className="nightjar-update-notification-copy">
+                  {nightjarUpdate?.updateAvailable ? <Download size={19} aria-hidden="true"/> : <RefreshCw size={19} aria-hidden="true"/>}
+                  <span>
+                    <strong>{nightjarUpdate?.updateAvailable ? 'Nightjar update available' : 'Keep Nightjar up to date'}</strong>
+                    <small>{nightjarUpdate?.updateAvailable ? 'A new build is available for this device. Tap Update now.' :
+                      nightjarUpdateChecking ? 'Checking the latest Nightjar version…' :
+                      nightjarUpdate?.latestBuildId ? 'Latest version checked. You can check again at any time.' :
+                      'Missing new features? Check and update your app here.'}</small>
+                  </span>
+                </div>
+                <div className="nightjar-update-notification-actions">
+                  <button type="button" className="secondary-button" disabled={nightjarUpdateChecking || nightjarUpdating}
+                    onClick={() => void checkLatestNightjarUpdate()}><RefreshCw size={15}/>{nightjarUpdateChecking ? 'Checking…' : 'Check for updates'}</button>
+                  {nightjarUpdate?.updateAvailable && <button type="button" className="primary-button"
+                    onClick={() => void installNightjarUpdate()} disabled={nightjarUpdating || nightjarUpdateChecking}>
+                    <Download size={15}/>{nightjarUpdating ? 'Updating…' : 'Update now'}
+                  </button>}
+                </div>
+                {nightjarUpdateFeedback && <small className="nightjar-update-notification-feedback" role="status">{nightjarUpdateFeedback}</small>}
+                <a className="nightjar-update-repair-link" href="/recover.html">Not seeing the latest changes? Repair Nightjar <ArrowRight size={13} aria-hidden="true"/></a>
+              </div>
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => { if (nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title)))) void installNightjarUpdate(); else void openNotification(item); }}>
                 <span className="notification-row-icon">{item.type === 'admin_action' || item.type === 'admin_attention' ? <ShieldCheck size={15}/> : item.type === 'spotlight' ? <Star size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small>{nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title))) && <span className="notification-inline-update"><Download size={12} aria-hidden="true" /> Update now</span>}</span>
