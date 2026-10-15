@@ -33,11 +33,10 @@ let transcriberPromise: Promise<InferenceFn> | null = null;
 async function loadLocalTranscriber(onProgress: (message: string) => void): Promise<InferenceFn> {
   if (!transcriberPromise) {
     transcriberPromise = (async () => {
-      // Official no-bundler ES-module distribution. Pin to a tested major/minor,
-      // avoiding a large AI library and models in the Nightjar initial bundle.
-      // No metered transcription API credentials are used.
-      const cdn = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
-      const module: any = await import(/* @vite-ignore */ cdn);
+      // Installed and lockfile-pinned: bundled as a lazy app chunk, never execute
+      // arbitrary CDN JavaScript with access to a listener's private audio.
+      // Model weights/WASM download separately on first use; inference is local.
+      const module = await import('@huggingface/transformers');
       const hasGpu = Boolean((navigator as Navigator & { gpu?: unknown }).gpu);
       const options = {
         progress_callback: (event: Progress) => {
