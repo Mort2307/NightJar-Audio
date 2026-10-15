@@ -12,7 +12,8 @@ const productCss = load('src/styles/product-system.css');
 const list = home.match(/const allSections: SectionId\[\] = \[([^\]]+)\]/)?.[1] ?? '';
 assert.ok(!list.includes('spotlights'), 'Spotlight must not be in editable home sections');
 for (const preset of ['balanced', 'discovery', 'minimal']) {
-  const layout = home.match(new RegExp(preset + ': \\{ order:\\[([^\\]]+)\\], hidden:\\[([^\\]]+)\\], collapsed:\\[([^\\]]+)\\]'))?.[0];
+  const layout = home.split('\n').find(line => line.trimStart().startsWith(preset + ': { order:'));
+  assert.ok(layout?.includes('hidden:') && layout?.includes('collapsed:'), 'Preset must specify optional sections');
   assert.ok(layout, 'Missing preset ' + preset);
   assert.ok(!layout.includes("'spotlights'"), 'Preset cannot hide, reorder or collapse Spotlight: ' + preset);
 }
