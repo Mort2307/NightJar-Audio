@@ -1,4 +1,4 @@
-import { Accessibility, ArrowRight, Bell, BookOpenText, CalendarDays, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Accessibility, ArrowRight, Bell, BookOpenText, CalendarDays, ChevronDown, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import HelpGlossary from './HelpGlossary';
 import { VisionAccessControls } from './VisionAccess';
@@ -9,6 +9,8 @@ import PasskeySettings from './PasskeySettings';
 import DiditExistingCheckRequest from './DiditExistingCheckRequest';
 import AdminAudioUploadTest from './AdminAudioUploadTest';
 import NightjarFinancePreview from './NightjarFinancePreview';
+import ContextHelp from './ContextHelp';
+import './nightjar-settings-compact.css';
 
 type Props = {
   email?: string | null;
@@ -32,7 +34,6 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <p>Your profile, security, preferences and app tools in one place. Open only the sections you need.</p>
       </div>
 
-      <HelpGlossary/>
       <div className="nj-settings-grid">
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-account">
           <div className="nj-settings-section-head"><UserCircle2 size={19} /><div><span className="mini-label">PERSONAL</span><h2 id="nj-settings-account">Account and profile</h2></div></div>
@@ -43,7 +44,13 @@ export default function NightjarSettings({ email, administrator, simulationMode,
           {administrator && <button type="button" className="nj-settings-link" onClick={onAdmin}><span><strong>Administrator workspace</strong><small>People, moderation, permissions and platform controls</small></span><ArrowRight size={17} aria-hidden="true" /></button>}
           <button type="button" className="nj-settings-link" onClick={onSignOut}><span><strong>Sign out</strong><small>Safely end this Nightjar session</small></span><LogOut size={17} aria-hidden="true" /></button>
         </section>
+      </div>
 
+      <details className="nj-settings-master-disclosure">
+        <summary><span className="nj-settings-master-title"><Settings2 size={17} aria-hidden="true"/><span><strong>Preferences, help &amp; policies</strong><small>Security, appearance, notifications, accessibility, updates and legal documents</small></span></span><ChevronDown size={18} className="nj-settings-master-chevron" aria-hidden="true"/></summary>
+        <div className="nj-settings-master-content">
+          <HelpGlossary/>
+          <div className="nj-settings-grid">
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-privacy">
           <div className="nj-settings-section-head"><LockKeyhole size={19} /><div><span className="mini-label">SECURITY</span><h2 id="nj-settings-privacy">Privacy and safety</h2></div></div>
           <details className="nj-settings-collapsible"><summary>Biometrics and passkey security</summary><PasskeySettings simulationMode={simulationMode}/></details>
@@ -56,7 +63,7 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-display">
           <div className="nj-settings-section-head"><Palette size={19} /><div><span className="mini-label">EXPERIENCE</span><h2 id="nj-settings-display">Appearance and playback</h2></div></div>
           <details className="nj-settings-collapsible"><summary>Appearance preferences</summary><ThemePreferences simulationMode={simulationMode} notify={notify}/></details>
-          <div className="nj-settings-info"><BookOpenText size={17}/><span>Audio transcript defaults, text size and playback-following preferences can be configured under Accessibility below.</span></div>
+          <div className="nj-settings-inline-info"><span>Reading and playback preferences</span><ContextHelp topic="playback-preferences"/></div>
         </section>
         <NightjarFinancePreview kind="membership" />
 
@@ -85,6 +92,8 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <div className="nj-settings-tool-heading"><ShieldCheck size={19}/><div><span className="mini-label">APP & DEVICE</span><h2>Updates and support</h2></div></div>
         <article className="panel nj-settings-section"><AppUpdateControl compact /><button type="button" className="nj-settings-link" onClick={onProtection}><span><strong>Report a problem</strong><small>Technical issues, abuse or other concerns</small></span><ArrowRight size={17} aria-hidden="true" /></button><a className="nj-settings-link" href="/legal"><span><strong>Legal centre</strong><small>All Nightjar policies and legal documents</small></span><FileText size={17} aria-hidden="true"/></a></article>
       </div>
+        </div>
+      </details>
     </section>
   );
 }
