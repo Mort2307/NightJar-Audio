@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { ArrowRight, Heart, MessageCircle, Mic2, Share2, ShieldCheck, Sparkles, ThumbsUp } from 'lucide-react';
+import { ArrowRight, Heart, MessageCircle, Mic2, Moon, Share2, ShieldCheck, Sparkles, ThumbsUp } from 'lucide-react';
 import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
@@ -17,6 +17,7 @@ type CreatorProfileData = {
   pronouns?: string | null;
   initials?: string | null;
   avatarUrl?: string | null;
+  bannerUrl?: string | null;
   welcomeMessage?: string | null;
   followers?: number;
   followingCount?: number;
@@ -59,6 +60,11 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
   const [loading, setLoading] = useState(false);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
+  useEffect(()=>{
+    const old=document.body.style.overflow;document.body.style.overflow='hidden';
+    dialogRef.current?.scrollTo({top:0,behavior:'auto'});
+    return ()=>{document.body.style.overflow=old;};
+  },[creatorUserId]);
 
   useEffect(() => {
     if (!creatorUserId) return;
@@ -115,16 +121,19 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
     }
   };
 
-  return <div className="creator-profile-backdrop" role="dialog" aria-modal="true">
+  return <div className="creator-profile-backdrop nj-full-profile-route" role="dialog" aria-modal="true">
     <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal nj-cinema-creator-legacy">
       <header className="creator-profile-head"><div><span className="mini-label">NIGHTJAR / CREATOR</span><h2>{loading ? 'Loading creator…' : profile?.name ?? 'Creator profile'}</h2><p>{profile?.handle ? '@' + profile.handle.replace(/^@/, '') : 'Independent Nightjar creator'}</p></div><button className="icon-button" onClick={onClose}>×</button></header>
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero nj-cinema-legacy-hero">
           <div className="nj-cinema-legacy-cover" aria-hidden="true">
-            {profile.avatarUrl && <img src={profile.avatarUrl} alt="" loading="lazy" decoding="async" onLoad={(event)=>{ if(event.currentTarget.naturalWidth < 480) event.currentTarget.classList.add('nj-cinema-banner-lowres'); }} />}
-            <span>NIGHTJAR CREATOR STUDIO <em>Stories you can feel.</em></span>
+            {profile.bannerUrl && <img src={profile.bannerUrl} alt="" loading="lazy" decoding="async" />}
+            <span>NIGHTJAR CREATOR STUDIO <em>{profile.headline || 'Stories you can feel.'}</em></span>
           </div>
-          <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span><div className="nj-cinema-legacy-identity"><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button>{canMessage && onMessage && <button className="secondary-button" onClick={()=>onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}</div></div>
+          <span className="nj-legacy-avatar-moon-wrap">
+            <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
+            <span className="nj-legacy-official-moon" aria-label="Official NightJar creator approved through onboarding" title="Official NightJar creator"><Moon size={17} aria-hidden="true"/></span>
+          </span><div className="nj-cinema-legacy-identity"><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button>{canMessage && onMessage && <button className="secondary-button" onClick={()=>onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}</div></div>
         <div className="public-profile-metrics">
           <div><span>Followers</span><strong>{profile.followers ?? 0}</strong></div>
           <div><span>Following</span><strong>{profile.followingCount ?? 0}</strong></div>

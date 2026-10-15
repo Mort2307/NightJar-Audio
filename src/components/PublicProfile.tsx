@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { scrollNightjarToTop } from '../platform/scroll-navigation';
 import { Bird, BookOpenText, Brush, ChevronDown, FileCheck2, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Moon, Share2, ShieldCheck, Sparkles, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
@@ -55,6 +54,18 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   const focusArtworkId = focusArtworkIdProp ?? new URLSearchParams(window.location.search).get('artwork');
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
+  useEffect(()=>{
+    const old=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    dialogRef.current?.scrollTo({top:0,behavior:'auto'});
+    return ()=>{document.body.style.overflow=old;};
+  },[userId]);
+  const goToSection=(id:string)=>{
+    const root=dialogRef.current,target=root?.querySelector<HTMLElement>('#'+id);
+    if(!root||!target)return;
+    const y=target.getBoundingClientRect().top-root.getBoundingClientRect().top+root.scrollTop-72;
+    root.scrollTo({top:Math.max(0,y),behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  };
   useEffect(() => {
     // Direct-open public profiles must start at the TOP, not at the
     // background page's previous scroll position.
@@ -199,7 +210,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     ? profile.roleProfiles[profileRole]
     : profile ?? {};
   const memberTagline = String(profile?.headline || roleDetails?.roleHeadline || '').trim();
-  const bannerFromPortrait = profile?.headerImageMode !== 'cinematic' && Boolean(profile?.avatarUrl);
+  const bannerFromCustom = profile?.headerImageMode === 'custom' && Boolean(profile?.bannerUrl);
+  const bannerFromPortrait = profile?.headerImageMode !== 'cinematic' && profile?.headerImageMode !== 'custom' && Boolean(profile?.avatarUrl);
   const roleFeaturedWork = (profile?.featuredWorkByRole?.[profileRole] ?? profile?.featuredWork ?? []) as any[];
   const roleCreditedReleases = (profile?.creditedReleasesByRole?.[profileRole] ?? profile?.creditedReleases ?? []) as any[];
   const profileMetrics = profile ? (
@@ -240,7 +252,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   ) : [];
 
 
-  return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
+  return <div className="creator-profile-backdrop nj-full-profile-route" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
     <section ref={dialogRef} tabIndex={-1} className={"creator-profile-modal premium-public-profile premium-public-profile-"+profileRole}>
       <header className="creator-profile-head">
         <div className="nj-cinema-profile-back"><span aria-hidden="true">☾</span><span className="mini-label">NIGHTJAR <span aria-hidden="true">/</span> {profile?.nightjarTeam ? 'TEAM' : profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span></div>
@@ -252,8 +264,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       {readOnlyPreview && <div className="nj-profile-viewer-modal-note"><ShieldCheck size={15}/> Admin live public profile view · original member data · all actions disabled</div>}
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero nj-cinema-profile-hero">
-          <div className={'nj-cinema-profile-cover'+(bannerFromPortrait ? ' nj-cinema-cover-portrait' : ' nj-cinema-cover-branded')} aria-hidden="true">
-            {bannerFromPortrait && <img className="nj-profile-hero-banner" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" onLoad={(event)=>{ if(event.currentTarget.naturalWidth < 480 || event.currentTarget.naturalHeight < 320) event.currentTarget.classList.add("nj-cinema-banner-lowres"); }}/>}
+          <div className={'nj-cinema-profile-cover'+(bannerFromCustom ? ' nj-cinema-cover-custom' : bannerFromPortrait ? ' nj-cinema-cover-portrait' : ' nj-cinema-cover-branded')} aria-hidden="true">
+            {(bannerFromCustom || bannerFromPortrait) && <img className="nj-profile-hero-banner"
+              src={bannerFromCustom ? profile.bannerUrl : profile.avatarUrl} alt="" loading="lazy" decoding="async"
+              onLoad={(event)=>{ if(event.currentTarget.naturalWidth < 480 || event.currentTarget.naturalHeight < 320) event.currentTarget.classList.add('nj-cinema-banner-lowres'); }}/>}
             <span className="nj-cinema-profile-cover-shade"/>
             <span className="nj-cinema-cover-words"><small>NIGHTJAR / {roleLabel(profileRole).toUpperCase()}</small><em>{memberTagline || (profileRole === 'listener' ? 'Stay curious.' : 'Stories you can feel.')}</em></span>
             <span className="nj-cinema-cover-moon">☾</span>
@@ -272,7 +286,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <p>{roleDetails.roleHeadline || profile.headline || (profileRole === 'editor' ? 'Audio Editor on Nightjar.' : profileRole === 'listener' ? 'A curated corner of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
             {profile.nightjarTeam === true && <div className="profile-activity-badges public-profile-badges"><span><ShieldCheck size={12}/>Official Nightjar Team</span></div>}
-            {availableProfileRoles.length > 0 && <div className="profile-role-chips" role="tablist" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" role="tab" aria-selected={profileRole===role} data-nightjar-scroll-top className={profileRole===role?'active':''} key={role} onClick={()=>{ setSelectedProfileRole(role); scrollNightjarToTop(); }}>{profile.nightjarTeam === true ? 'Nightjar Team' : roleLabel(role)}</button>)}</div>}
+            {availableProfileRoles.length > 0 && <div className="profile-role-chips" role="tablist" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" role="tab" aria-selected={profileRole===role} data-nightjar-scroll-top className={profileRole===role?'active':''} key={role} onClick={()=>{ setSelectedProfileRole(role); dialogRef.current?.scrollTo({top:0,behavior:'auto'}); }}>{profile.nightjarTeam === true ? 'Nightjar Team' : roleLabel(role)}</button>)}</div>}
           </div>
           <div className="writer-discovery-actions">
             {!readOnlyPreview && <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>}
@@ -286,10 +300,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {profileMetrics.map(([label, value]) => <div key={String(label)}><strong>{value}</strong><span>{label}</span></div>)}
         </div>
         <nav className="nj-cinema-profile-tabs" aria-label="Profile sections">
-          <button type="button" onClick={()=>document.getElementById('nj-cinema-work')?.scrollIntoView({block:'start',behavior:'smooth'})}>Work</button>
-          {(profile.welcomeMessage || profile.bio) && <button type="button" onClick={()=>document.getElementById('nj-cinema-about')?.scrollIntoView({block:'start',behavior:'smooth'})}>About</button>}
-          <button type="button" onClick={()=>document.getElementById('nj-cinema-collaborate')?.scrollIntoView({block:'start',behavior:'smooth'})}>Collaborate</button>
-          {!!profile.socialLinks?.length && <button type="button" onClick={()=>document.getElementById('nj-cinema-links')?.scrollIntoView({block:'start',behavior:'smooth'})}>Links</button>}
+          <button type="button" onClick={()=>goToSection('nj-cinema-work')}>Work</button>
+          {(profile.welcomeMessage || profile.bio) && <button type="button" onClick={()=>goToSection('nj-cinema-about')}>About</button>}
+          <button type="button" onClick={()=>goToSection('nj-cinema-collaborate')}>Collaborate</button>
+          {!!profile.socialLinks?.length && <button type="button" onClick={()=>goToSection('nj-cinema-links')}>Links</button>}
         </nav>
 
         {(profile.welcomeMessage || profile.bio) && <section id="nj-cinema-about" className="nj-public-profile-about" aria-label="About this member">
