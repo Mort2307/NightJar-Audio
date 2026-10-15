@@ -29,6 +29,7 @@ export type DiditDiagnostics = {
     'awaiting_signed_webhook' | 'webhook_waiting_for_processing' |
     'webhook_ignored_or_superseded' | 'adult_evidence_missing' | 'provider_result_not_verified';
   providerVerified: boolean;
+  verificationEvidenceSource?: string | null;
   oneShotClaimed: boolean;
   accountProviderStatus: string;
   sessionRecorded: boolean;
