@@ -1,4 +1,5 @@
 import { ArrowRight, Brush, FileCheck2, FileText, Heart, Headphones, MessageCircle, Mic2, Search, Share2, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import ContextHelp from './ContextHelp';
 
 export type LibraryRole = 'creator' | 'writer' | 'editor' | 'artist';
 export type LibraryCategory = 'all' | LibraryRole | 'listener';
@@ -134,7 +135,7 @@ export default function ProfessionalLibrary({
     <div className="nj-pro-library-banner"><div><span className="mini-label">THE PEOPLE BEHIND NIGHTJAR</span>
       <h2>{audience==='listener'?'The Creator Collection':'The Professional Library'}</h2>
       <p>{audience==='listener' ? 'One community. Discover the voices, storytelling, sound and visual work you love. Follow for free, explore published work or choose to send Nightjars to show appreciation.' : 'One creative community, four distinct professions. Browse approved public profiles, portfolios and services—without losing the individuality of each creator.'}</p>
-    </div><span className="nj-pro-library-total"><strong>{uniqueProfessionals}</strong><small>public professionals</small></span></div>
+    </div><span className="nj-pro-library-total"><strong>{uniqueProfessionals}</strong><small>public professionals <ContextHelp topic="directory-counts"/></small></span></div>
 
     {category!=='listener'&&teamProfiles.length>0&&<section className="nj-pro-library-section nj-pro-library-team" aria-label="Meet the Nightjar team">
       <div className="nj-pro-library-section-head"><span className="nj-pro-library-section-icon"><ShieldCheck size={21}/></span><div><span className="mini-label">OFFICIAL NIGHTJAR TEAM</span><h2>Meet the people behind Nightjar</h2><p>Our team is part of this community too. Explore our public profiles, follow along and see who's helping Nightjar grow.</p></div><span className="nj-pro-library-section-count">{teamProfiles.length} {teamProfiles.length===1?'member':'members'}</span></div>
@@ -173,6 +174,5 @@ export default function ProfessionalLibrary({
           <p>{category==='all'?'This category will populate as approved Nightjar members publish their professional profiles.':'Try clearing the search, specialty or availability filters. Private profiles remain private.'}</p></div>}
       </section>;
     })}
-    {category==='all'&&<p className="nj-pro-library-footnote">Members with multiple approved professions appear in each relevant category. Counts within each category are accurate; the all-professionals total counts each person only once. All content shown is published public profile data. {audience==='listener'?'No professional enquiry is needed to follow or support someone.':''}</p>}
   </div>;
 }
