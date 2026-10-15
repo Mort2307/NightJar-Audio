@@ -23,7 +23,35 @@ const withdraw = httpsCallable<void,{status:'closed'}>(functions,'withdrawDiditR
 const adminList = httpsCallable<void,{requests:AdminDiditReuse[]}>(functions,'adminListDiditReuseRequests');
 const adminReview = httpsCallable<{uid:string;status:'investigating'|'waiting_for_member'|'approved_for_reuse'|'closed'},{status:string}>(functions,'adminReviewDiditReuseRequest');
 
+export type DiditReuseWorkflowReadiness = {
+  workflowRecognised: boolean;
+  workflowLabel: string | null;
+  published: boolean;
+  zeroCostConfirmed: boolean;
+  reusableShapeConfirmed: boolean;
+  sessionLaunchEnabled: boolean;
+  providerSourceBindingConfirmed: boolean;
+  publicVerificationPaused: boolean;
+};
+type DiditSourceInspection = {
+  existingApprovalFound: boolean;
+  sourceUniquelyReserved: boolean;
+  memberVerified: false;
+  nextStep: string;
+};
+type DiditWorkflowInspection = {
+  workflowRecognised: boolean; published: boolean; zeroCostConfirmed: boolean;
+  reusableShapeConfirmed: boolean; workflowLabel: string;
+  sessionLaunchEnabled: false; nextStep: string;
+};
+const inspectReuseWorkflow = httpsCallable<{workflowId:string}, DiditWorkflowInspection>(functions,'adminInspectDiditReuseWorkflow');
+const bindReuseSource = httpsCallable<{uid:string;sessionId:string}, DiditSourceInspection>(functions,'adminBindExistingDiditSource');
+const reuseReadiness = httpsCallable<void,DiditReuseWorkflowReadiness>(functions,'adminDiditReuseReadiness');
+
 export const nightjarDiditReuse = {
+  async readiness() { return (await reuseReadiness()).data; },
+  async inspectWorkflow(workflowId:string) { return (await inspectReuseWorkflow({workflowId})).data; },
+  async inspectOriginal(uid:string,sessionId:string) { return (await bindReuseSource({uid,sessionId})).data; },
   async memberStatus() { return (await memberStatus()).data; },
   async request() { return (await submitRequest({consent:true,previousCheck:'standalone'})).data; },
   async withdraw() { return (await withdraw()).data; },
