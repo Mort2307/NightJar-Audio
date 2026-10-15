@@ -1,0 +1,65 @@
+name: NightJar Android test APK
+
+# This never deploys Firebase and never publishes to Google Play.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'capacitor.config.json'
+      - 'scripts/apply-android-security.mjs'
+      - '.github/workflows/android-debug-apk.yml'
+      - 'docs/android-build.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightjar-android-debug-apk
+  cancel-in-progress: false
+
+jobs:
+  android-debug:
+    name: Build protected Android debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Build the existing NightJar web bundle
+        run: |
+          npm ci
+          npm run build
+      - name: Install pinned Capacitor build tools without altering the website lockfile
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts \
+            @capacitor/cli@8.0.0 @capacitor/core@8.0.0 @capacitor/android@8.0.0
+      - name: Generate Android project and copy web bundle
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Enforce native screenshot and screen recording blocking
+        run: node scripts/apply-android-security.mjs
+      - name: Use Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Build Android debug APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Upload Android test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightjar-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
