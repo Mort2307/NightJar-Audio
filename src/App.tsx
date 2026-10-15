@@ -82,6 +82,7 @@ import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
 import AppUpdateControl from './components/AppUpdateControl';
+import DiditControlledLiveCheck from './components/DiditControlledLiveCheck';
 import CommunityUpdateReader from './components/CommunityUpdateReader';
 import { checkNightjarUpdate, applyNightjarSafeUpdate, type NightjarUpdateStatus } from './platform/pwa';
 import { PROFILE_TAG_OPTIONS } from './data/nightjarTaxonomy';
@@ -4502,11 +4503,12 @@ function App() {
             {ageReverifyRequired && !ageTemporaryBypass && <div><ShieldCheck size={16} /><span>A fresh verification is currently required before adult access can continue.</span></div>}
           </div>
           {DIDIT_VERIFICATION_PAUSED && <section className="nj-didit-privacy-check" role="status" aria-live="polite">
-            <h2>Age verification temporarily unavailable</h2>
-            <p>We have paused new Didit identity checks while fixing a technical issue. Please do not keep retrying or submit another ID check. We will restore verification when it is working reliably.</p>
-            <p>Existing account information and recorded verifications remain intact. Adult content stays protected and this pause does not grant new access.</p>
-            <p><a href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Read our Age Verification &amp; Didit Privacy Notice</a></p>
+            <h2>Verify securely with Didit</h2>
+            <p>The previous age-check route remains paused. The updated account-linked check below lets eligible Nightjar members complete verification themselves without a prior administrator invitation.</p>
+            <p>Verification never starts automatically. You must read the privacy notice and explicitly agree before Didit can request your ID or liveness check.</p>
+            <p>Adult catalogue access still requires approved 18+ evidence or separately authorised temporary private-beta access.</p>
           </section>}
+          {DIDIT_VERIFICATION_PAUSED && <DiditControlledLiveCheck onVerified={() => { void refreshAgeStatus(); }} />}
           {!DIDIT_VERIFICATION_PAUSED && <section className="nj-didit-privacy-check" aria-label="Age-verification privacy and permission">
             <h2>Before you verify</h2>
             <p>Nightjar uses Didit to verify that members are 18 or older. Didit may ask for government-issued photo ID and a selfie or liveness check. Nightjar stores your account-linked verification result rather than the original ID or selfie images.</p>
