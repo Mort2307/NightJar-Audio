@@ -11496,3 +11496,54 @@ textarea:focus-visible,
   .nightjar-update-notification-actions button {flex-basis:100%;}
   .nj-member-update-quick-access .app-update-control.compact button {flex:1 1 100%;}
 }
+
+/* A one-time real Didit pilot invitation is placed at the TOP of Settings,
+ * not behind the generic collapsed policies panel. */
+.nj-didit-controlled-panel {
+  display:grid;
+  gap:13px;
+  padding:clamp(16px,3vw,24px);
+  border:1px solid rgba(214,178,121,.45);
+  border-radius:16px;
+  background:rgba(190,143,81,.075);
+  color:inherit;
+  min-width:0;
+}
+.nj-didit-controlled-panel .mini-label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+}
+.nj-didit-controlled-panel h2 {font-size:clamp(19px,4vw,24px);margin:0;}
+.nj-didit-controlled-panel p {font-size:14px;line-height:1.65;margin:0;}
+.nj-didit-controlled-panel p a {
+  color:inherit;
+  text-decoration:underline;
+  text-underline-offset:3px;
+  display:inline;
+}
+.nj-didit-controlled-panel p a svg {display:inline;vertical-align:middle;}
+.nj-didit-controlled-panel button,.nj-didit-controlled-panel>a.primary-button {
+  display:flex;
+  gap:9px;
+  align-items:center;
+  justify-content:center;
+  padding:12px 15px;
+  min-height:48px;
+  max-width:100%;
+  text-align:center;
+}
+.nj-didit-controlled-panel button:disabled{opacity:.52;cursor:not-allowed;}
+.nj-didit-controlled-panel small{opacity:.76;line-height:1.55;}
+.nj-didit-controlled-saved{display:flex;gap:7px;align-items:center;}
+.nj-didit-reuse-approval>.primary-button{
+  min-height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  width:100%;
+}
+@media(max-width:520px){
+  .nj-didit-controlled-panel button,.nj-didit-controlled-panel>a.primary-button{width:100%;}
+}

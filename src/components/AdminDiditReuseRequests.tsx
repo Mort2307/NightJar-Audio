@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, CircleHelp, RefreshCw, ShieldCheck } from 'lucide-react';
 import { nightjarDiditReuse, type AdminDiditReuse } from '../platform/firebase-didit-reuse';
+import { nightjarDiditControlled } from '../platform/firebase-didit-controlled';
 
 type ReviewAction = 'investigating' | 'waiting_for_member' | 'approved_for_reuse' | 'closed';
 
@@ -32,6 +33,7 @@ export default function AdminDiditReuseRequests() {
   const [loading,setLoading]=useState(false);
   const [acting,setActing]=useState('');
   const [acknowledged,setAcknowledged]=useState<Record<string,boolean>>({});
+  const [authorisedChecks,setAuthorisedChecks]=useState<Record<string,boolean>>({});
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
 
@@ -63,6 +65,17 @@ export default function AdminDiditReuseRequests() {
       setRequests((await nightjarDiditReuse.adminList()).requests);
     }catch(e){setError(e instanceof Error?e.message:'Unable to update support request.');}
     finally{setActing('');}
+  };
+  const authoriseOneLiveCheck=async(uid:string)=>{
+    if(!window.confirm('AUTHORISE exactly ONE possible billable live Didit ID verification for this specific member? The member must sign in, explicitly consent and start it themselves. The grant cannot be reissued by tapping again; everyone else remains paused.'))return;
+    setActing(uid);setError('');setNotice('');
+    try{
+      await nightjarDiditControlled.authorise(uid);
+      setAuthorisedChecks(prev=>({...prev,[uid]:true}));
+      setNotice('One-time live Didit invitation created. The member can sign in to Nightjar → Settings → Verify your identity with Didit. NO provider session has started yet.');
+    }catch(error){
+      setError(error instanceof Error?error.message:'Could not safely authorise this single member. No provider session was started.');
+    }finally{setActing('');}
   };
   const active=requests.filter(x=>x.status!=='closed');
   return <section className="nj-didit-reuse-admin" aria-label="Existing Didit verification reuse requests">
@@ -105,6 +118,16 @@ export default function AdminDiditReuseRequests() {
         <button className="primary-button" type="button" disabled={Boolean(acting)||!acknowledged[item.uid]} onClick={()=>void change(item.uid,'approved_for_reuse')}><ShieldCheck size={16}/> {acting===item.uid?'Saving…':'Approve reuse request'}</button>
       </div>}
       {item.status==='approved_for_reuse' && <p className="nj-didit-reuse-next"><CheckCircle2 size={18}/> <span>Administrator-approved to proceed. <strong>Not verified 18+.</strong> Await Didit’s confirmed identity reuse and account binding.</span></p>}
+      {item.status==='approved_for_reuse' && <div className="nj-didit-reuse-approval">
+        <strong>Alternative: one normal live ID verification</strong>
+        <p>Authorise this member to complete one fresh, account-linked Didit document and liveness check. Their previous standalone approval stays unchanged. Didit may charge Nightjar, and duplicate/fraud warnings remain active.</p>
+        <button type="button" className="primary-button"
+          disabled={Boolean(acting)||Boolean(authorisedChecks[item.uid])}
+          onClick={()=>void authoriseOneLiveCheck(item.uid)}>
+          <ShieldCheck size={16}/>{authorisedChecks[item.uid]?'One-time invitation authorised':'Authorise one live ID check'}
+        </button>
+        <small>Authorising does not start the check. The member must visit Nightjar → Settings and explicitly consent before Didit is contacted.</small>
+      </div>}
       <div className="nj-didit-reuse-admin-actions">
         {item.status!=='investigating'&&item.status!=='approved_for_reuse'&&<button className="secondary-button" type="button" disabled={Boolean(acting)} onClick={()=>void change(item.uid,'investigating')}>Mark as under review</button>}
         {item.status!=='waiting_for_member'&&item.status!=='approved_for_reuse'&&<button className="secondary-button" type="button" disabled={Boolean(acting)} onClick={()=>void change(item.uid,'waiting_for_member')}>Member confirmation needed</button>}
