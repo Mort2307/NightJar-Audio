@@ -44,7 +44,9 @@ assert.match(follow, /profile\.data\(\)\?\.adminCommunityVisible !== true/,
 
 assert.match(profileEditor, /checked=\{discoverable\}/);
 assert.match(profileEditor, /adminCommunityVisible:event\.target\.checked/);
-assert.match(profileEditor, /Off by default/);
+const contextualHelp = read('src/components/ContextHelp.tsx');
+assert.match(profileEditor, /ContextHelp topic="team-profile-visibility"/, 'the opt-in privacy explanation remains accessible');
+assert.match(contextualHelp, /Your administrator profile is private by default/, 'visibility defaults are explained in contextual help');
 assert.match(app, /nightjarTeam:item\.nightjarTeam === true/);
 assert.match(app, /profile\.adminCommunityVisible === true/);
 assert.match(directory, /Official Nightjar Team/);
