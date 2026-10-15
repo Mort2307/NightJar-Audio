@@ -34,7 +34,7 @@ assert.match(member,/does not itself verify your identity/,'member cannot confus
 assert.match(member,/Withdraw request/,'member may cancel consent');
 assert.match(settings,/!administrator && !simulationMode && <details[^\n]*<DiditExistingCheckRequest/,'member settings exposes workflow outside simulation');
 assert.match(admin,/<AdminDiditReuseRequests/,'queue is linked from Didit control centre');
-assert.match(owner,/does not an identity verification|not an identity verification/i,'owner queue clearly distinguishes process from verification');
+assert.match(owner,/not<\/strong> an identity verification/i,'owner queue clearly distinguishes process from verification');
 assert.match(owner,/No identity verification or Didit session was created/,'triage feedback guarantees no verification change');
 assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'public Didit checks remain stopped');
 console.log('Nightjar Didit existing-KYC member consent, triage and no-paid-session security contracts PASS.');
