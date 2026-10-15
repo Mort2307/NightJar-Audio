@@ -18,6 +18,8 @@ const submitReleaseCall = httpsCallable<{ releaseId: string }, { release: any }>
 const dashboardCall = httpsCallable<{ creatorUserId?: string }, { releases: any[]; metrics: any }>(functions, 'creatorDashboard');
 const listenCountsCall = httpsCallable<void, { counts: { releaseId: string; listens: number }[]; refreshedAt: string }>(functions, 'getReleaseListenCounts');
 const playbackCall = httpsCallable<{ releaseId: string }, { releaseId: string; url: string; expiresInSeconds: number; accessReason: 'admin' | 'credited_work' | 'subscription' }>(functions, 'getReleasePlaybackUrl');
+const syncAudioCall = httpsCallable<{ releaseId: string }, { url: string; expiresInSeconds: number }>(functions, 'getReleaseSyncAudioUrl');
+const saveSyncedTranscriptCall = httpsCallable<{ releaseId: string; transcript: string; language: string; accuracyConfirmed: boolean }, { release: any }>(functions, 'saveSyncedReleaseTranscript');
 const transcriptCall = httpsCallable<{ releaseId: string }, {
   releaseId: string;
   title: string;
@@ -107,6 +109,14 @@ export const nightjarCatalogue = {
 
   async transcript(releaseId: string) {
     return repairMojibakeDisplayData((await transcriptCall({ releaseId })).data);
+  },
+
+  async syncAudioUrl(releaseId: string) {
+    return (await syncAudioCall({ releaseId })).data;
+  },
+
+  async saveSyncedTranscript(releaseId: string, transcript: string, language = 'en', accuracyConfirmed = false) {
+    return (await saveSyncedTranscriptCall({ releaseId, transcript, language, accuracyConfirmed })).data;
   },
 
   async moderationQueue() {
