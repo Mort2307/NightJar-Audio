@@ -6692,21 +6692,32 @@ export const myDiditControlledCheck = onCall({ region: REGION }, async request =
   const data = grant.data() ?? {};
   const selfServiceEnabled = accountDiditSelfServiceEligible();
   const providerVerified = diditPass(age.data());
-  // Every eligible account can see its own choice to verify; reading status
-  // does not contact the paid provider or create an account-side claim.
-  const status = String(data.state ?? (selfServiceEnabled && !providerVerified ? 'authorised' : selfServiceEnabled && providerVerified ? 'already_verified' : 'none'));
+  const existingAgeStatus = String(age.data()?.status ?? '');
+  const existingPending = ['CREATING','PENDING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(existingAgeStatus);
+  // Never offer a second chargeable session while an earlier account-bound
+  // provider check remains in progress, even if the new grant does not exist.
   let launchUrl: string | null = null;
-  if (grant.exists && status !== 'authorised' && !providerVerified) {
+  if (existingPending && !providerVerified) {
     const sessionId = cleanText(age.data()?.sessionId, 128);
     if (sessionId) {
       const previous = (await db.collection('diditSessions').doc(sessionId).get()).data() ?? {};
       if (previous.uid === identity.uid && previous.environment === 'live' &&
-          previous.sessionId !== 'invalid' && previous.createdAtMs > Date.now() - 6 * 86400_000 &&
-          ['PENDING','IN_PROGRESS','RESUBMITTED'].includes(String(age.data()?.status))) {
-        launchUrl = cleanText(previous.url, 2048) || null;
+          previous.workflowId && previous.createdAtMs > Date.now() - 6 * 86400_000 &&
+          ['PENDING','IN_PROGRESS','RESUBMITTED'].includes(existingAgeStatus)) {
+        const candidate = cleanText(previous.url, 2048);
+        try {
+          const parsed = new URL(candidate);
+          if (parsed.protocol === 'https:' && ['verify.didit.me','verification.didit.me'].includes(parsed.hostname)) {
+            launchUrl = candidate;
+          }
+        } catch { /* malformed provider link: support review required */ }
       }
     }
   }
+  // Viewing status is read-only: no provider request and no billable claim.
+  const status = String(data.state ?? (providerVerified && selfServiceEnabled ? 'already_verified'
+    : existingPending && selfServiceEnabled ? (launchUrl ? 'session_started' : 'requires_review')
+    : selfServiceEnabled ? 'authorised' : 'none'));
   const authorised = !providerVerified && status === 'authorised' &&
     (selfServiceEnabled || (grant.exists &&
       reuse.data()?.status === 'approved_for_reuse' && reuse.data()?.memberConsent === true));
@@ -6739,6 +6750,9 @@ export const startMyDiditControlledCheck = onCall({
     ]);
     if (diditPass(age.data())) {
       throw new HttpsError('already-exists','Didit verification is already approved for this account. Refresh status.');
+    }
+    if (['CREATING','PENDING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(String(age.data()?.status ?? ''))) {
+      throw new HttpsError('failed-precondition','An earlier Didit check for this account is already active or awaiting review. Resume it or contact support; no second check was started.');
     }
     // Prior reuse reviews are no longer prerequisites for normal account
     // verification. Existing invitation-based checks retain their fallback
