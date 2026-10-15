@@ -17,7 +17,7 @@ type Props={
 // profile. Only member-editable fields are included; photos and permissions
 // are saved by their own Nightjar backend workflows.
 const fields=[
-  'displayName','handle','pronouns','headline','bio','welcomeMessage',
+  'displayName','handle','pronouns','headline','headerImageMode','bio','welcomeMessage',
   'favouriteTags','favouriteTropes','favouriteCategories','publicProfile','avatarInitials','avatarTone',
   'roleFocus','roleSpecialties','roleSecondary','roleAvailability','roleHeadline',
   'roleBio','roleDetailOne','roleDetailTwo','portfolioNote','featuredPortfolioIds',
