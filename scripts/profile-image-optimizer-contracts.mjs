@@ -106,5 +106,7 @@ assert.match(app, /optimiseProfileImage\(file\)/, 'portrait upload invokes local
 assert.match(app, /readFileDataUrl\(resultImage\.file\)/, 'only optimised bytes reach the callable');
 assert.match(app, /contentType: resultImage\.file\.type/, 'declared content type matches compressed file');
 assert.match(studio, /Optimising photo/, 'the interface provides progress feedback');
-assert.match(studio, /automatically resizes photos/, 'members are informed of optimisation');
+const contextHelp = fs.readFileSync('src/components/ContextHelp.tsx', 'utf8');
+assert.match(studio, /ContextHelp topic="profile-photo"/, 'profile optimisation explanation is available on demand');
+assert.match(contextHelp, /'profile-photo': \{title:.*NightJar resizes and optimises photos/, 'profile help discloses the optimisation process');
 console.log('Nightjar profile photo compression contracts passed.');
