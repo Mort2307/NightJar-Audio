@@ -77,7 +77,7 @@ assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdmi
 assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client can read pause status');
 assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'app visibly pauses verification');
 assert.match(app, /Verify securely with Didit/, 'age gate offers secure account-linked replacement');
-assert.match(app, /<DiditControlledLiveCheck \/>/, 'users cannot be stranded behind the 18+ gate when legacy verification is paused');
+assert.match(app, /<DiditControlledLiveCheck onVerified=/, 'users cannot be stranded behind the 18+ gate when legacy verification is paused');
 assert.match(app, /!DIDIT_VERIFICATION_PAUSED && agePilotEligible/, 'member pilot suppressed');
 assert.match(app, /DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot"/, 'only one-shot admin maintenance controls replace regular pilot');
 assert.match(app, /!DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot"/, 'regular admin/member pilots remain hidden while maintenance switch is active');
