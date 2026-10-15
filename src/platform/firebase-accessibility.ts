@@ -28,7 +28,7 @@ export const DEFAULT_ACCESSIBILITY_PREFERENCES: AccessibilityPreferences = {
   transcriptFollowPlayback: true,
   transcriptTextSize: 'standard',
   transcriptHighContrast: false,
-  theme: 'nocturne',
+  theme: 'bronze',
 };
 
 export const nightjarAccessibility = {

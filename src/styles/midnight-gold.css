@@ -1,0 +1,421 @@
+/* NIGHTJAR / MIDNIGHT GOLD
+   Official cinematic black-and-gold identity, shared across all roles.
+   Do not add identity badges here: approval must come from trusted profile data.
+   Vision Access overlays remain independent of these brand-only rules. */
+
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) {
+  color-scheme: dark;
+  --bg: #080808;
+  --panel: #11100f;
+  --panel-soft: #191614;
+  --line: rgba(215,176,110,.26);
+  --line-soft: rgba(215,176,110,.12);
+  --muted: #c4baab;
+  --muted-2: #aaa092;
+  --ivory: #f5efe5;
+  --plum: #d6b174;
+  --plum-soft: #e2c18b;
+  --wine: #6c4d2f;
+  --gold: #d6b174;
+  --accent: #e2c18b;
+  --border: rgba(215,176,110,.26);
+  --surface: #151311;
+  --nj-surface-0: #080808;
+  --nj-surface-1: #11100f;
+  --nj-surface-2: #191614;
+  --nj-surface-raised: rgba(22,19,16,.97);
+  --nj-line-subtle: rgba(215,176,110,.12);
+  --nj-line-default: rgba(215,176,110,.26);
+  --nj-line-strong: rgba(238,204,147,.57);
+  --nj-text-primary: #f5efe5;
+  --nj-text-secondary: #c4baab;
+  --nj-text-tertiary: #aaa092;
+  --nj-accent: #e2c18b;
+  --nj-accent-soft: rgba(215,176,110,.13);
+  --nj-warning: #e2c18b;
+  --nj-shadow-raised: 0 22px 75px rgba(0,0,0,.5);
+  --nj-shadow-modal: 0 40px 110px rgba(0,0,0,.75);
+  --nj-gold-gradient: linear-gradient(125deg,#f0d6a6 0%,#d7ad6f 47%,#b98a4b 100%);
+  --nj-gold-hairline: 1px solid rgba(215,176,110,.28);
+}
+
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) body {
+  background: #080808;
+  color: var(--ivory);
+}
+
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(.app-shell,.access-shell,.account-portal-shell,.nj-recovery-shell) {
+  background:
+    radial-gradient(ellipse at 84% -9%,rgba(204,149,75,.095),transparent 32%),
+    radial-gradient(ellipse at 4% 65%,rgba(126,82,38,.035),transparent 34%),
+    #080808;
+}
+
+/* Restrained cinematic surfaces; never brown full-page fills. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .panel,.premium-user-card,.studio-preview-card,.studio-dashboard,.panel-card,
+  .track-card,.featured-card,.role-card,.nj-settings-section,.nj-settings-tools,
+  .nj-skeleton-card,.nj-recovery-card,.access-card,.account-access-card,
+  .nj-settings-master-disclosure,.nj-home-section,.nj-listening-experience,
+  .nj-production-timeline,.nj-voice-card-public,.nj-voice-card-editor
+) {
+  color: var(--ivory);
+  border-color: var(--line);
+  background: linear-gradient(153deg,#1b1815 0%,#12100f 52%,#100f0e 100%);
+  box-shadow: inset 0 1px 0 rgba(246,220,177,.04),0 14px 38px rgba(0,0,0,.12);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .featured-card,.track-card,.panel-card,.nj-listener-discovery-category,
+  .nj-listener-discovery-release,.nj-spotlight-card
+) {
+  transition: transform var(--nj-motion-base) var(--nj-ease),border-color var(--nj-motion-base) var(--nj-ease),box-shadow var(--nj-motion-base) var(--nj-ease);
+}
+@media (hover:hover) and (prefers-reduced-motion:no-preference) {
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+    .featured-card,.track-card,.nj-listener-discovery-category,.nj-listener-discovery-release
+  ):hover {
+    transform:translateY(-2px);
+    border-color:var(--nj-line-strong);
+    box-shadow:0 16px 36px rgba(0,0,0,.38);
+  }
+}
+
+/* Identity, editorial headers, navigation and the signature gold line. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(.topbar,.player-dock,.site-footer,.notification-popover) {
+  background: rgba(9,8,8,.96);
+  border-color: var(--line-soft);
+  backdrop-filter: blur(18px);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+ .brand-button,.brand-lockup,.footer-brand
+) {
+  color:var(--ivory);
+  letter-spacing:.27em;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nightjar-mark {
+  color:var(--nj-accent);
+  border-color:var(--line);
+  background:radial-gradient(circle at 28% 23%,rgba(217,173,103,.14),transparent 49%),#14110e;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+ .page-heading h1,.access-card h1,.hero-copy h1,.section-head h2,
+ .nj-settings-heading h1,.nj-public-profile-about h3,
+ .creator-profile-head h2,.creator-profile-hero h3,.nj-spotlight-card h2
+) {
+  font-family:Georgia,'Times New Roman',serif;
+  font-weight:400;
+  letter-spacing:-.025em;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .eyebrow,.mini-label,.nj-up-kicker,.nj-profile-hero-eyebrow,
+  .nj-listener-discovery-eyebrow,.nj-spotlight-kicker
+) {
+  color:var(--nj-accent);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nav-link.active,.nav-link:hover,.text-button,
+  .nj-theme-new-tag
+) {
+  color:var(--nj-accent);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nav-link.active {
+  background:rgba(214,177,116,.11);
+  box-shadow:inset 0 -2px var(--nj-accent);
+}
+
+/* One decisive champagne-gold primary action, dark outlined secondary actions. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .primary-button,.nj-launch-unlock-action,.account-access-passkey,
+  .nj-spotlight-card-actions .primary-button
+) {
+  color:#18110a;
+  background:var(--nj-gold-gradient);
+  border:1px solid #e4c38e;
+  border-radius:13px;
+  box-shadow:inset 0 1px rgba(255,255,255,.24),0 8px 24px rgba(0,0,0,.36);
+  font-weight:750;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(.secondary-button,.ghost-button) {
+  color:var(--ivory);
+  background:rgba(14,12,11,.75);
+  border:var(--nj-gold-hairline);
+  border-radius:13px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(.primary-button,.secondary-button,.ghost-button):focus-visible {
+  outline:3px solid #f2d49d;
+  outline-offset:3px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(input,select,textarea) {
+  color:var(--ivory);
+  background:#171411;
+  border-color:var(--line);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(input,textarea)::placeholder {
+  color:var(--muted-2);
+  opacity:1;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(input[type="checkbox"],input[type="radio"],input[type="range"]) {
+  accent-color:var(--nj-accent);
+}
+
+/* Premium public profiles: dark photographic stage; actual images come from
+   member-approved profile content, never invented stock artwork. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .creator-profile-modal.premium-public-profile {
+  --portrait-ink:#f5efe5;
+  --portrait-muted:#c4baab;
+  --portrait-line:rgba(215,176,110,.28);
+  --portrait-surface:rgba(22,19,16,.96);
+  --portrait-accent:#e2c18b;
+  border-color:var(--portrait-line);
+  background:#090909;
+  box-shadow:0 28px 90px rgba(0,0,0,.74);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-head {
+  border-bottom:1px solid var(--portrait-line);
+  background:linear-gradient(120deg,#0a0909,#17120e);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero {
+  border-radius:23px;
+  border-color:rgba(215,176,110,.32);
+  background:
+    radial-gradient(ellipse at 89% 7%,rgba(217,170,103,.19),transparent 34%),
+    linear-gradient(136deg,#251b12 0%,#17120f 39%,#090909 100%);
+  box-shadow:inset 0 1px rgba(255,232,193,.09),0 15px 45px rgba(0,0,0,.25);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-avatar {
+  border-radius:50%;
+  border:2px solid #e2bd80;
+  box-shadow:0 0 0 4px rgba(8,8,8,.92),0 0 0 5px rgba(224,185,121,.55),0 12px 30px rgba(0,0,0,.5);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .public-profile-metrics>div,.nj-public-profile-about,
+  .role-public-professional,.role-public-detail-card,
+  .nj-public-social-details,.nj-public-profile-privacy
+) {
+  border-color:var(--portrait-line);
+  background:linear-gradient(140deg,#1b1713,#0f0e0d);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics strong {
+  font-family:Georgia,serif;
+  color:var(--ivory);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-tags span {
+  border:1px solid var(--portrait-line);
+  background:rgba(215,176,110,.08);
+  color:var(--ivory);
+  border-radius:999px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .profile-role-chips button.active {
+  color:#18110a;
+  background:var(--nj-gold-gradient);
+}
+
+/* Discover, Spotlight, library, music player, inbox and settings all share
+   the same boundaries and stage lighting. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-listener-discovery-hero,.nj-spotlight-card,.nj-spotlight-feature,
+  .nj-home-section,.nj-settings-master-disclosure,.nj-settings-link,
+  .notification-panel,.message-thread,.message-card
+) {
+  border-color:var(--line);
+  background:linear-gradient(150deg,#1c1814,#0e0d0c 80%);
+  color:var(--ivory);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-listener-discovery-category,.nj-listener-discovery-release
+) {
+  border-color:var(--line);
+  background:linear-gradient(150deg,#191613,#0d0c0b 85%);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-listener-discovery-category.active,
+  .nj-listener-discovery-category-icon
+) {
+  color:var(--nj-accent);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-root {
+  --up-ink:#080808;
+  --up-surface:#17130f;
+  --up-accent:#e2c18b;
+  --up-deep:#70502d;
+  --up-text:#f5efe5;
+  --up-muted:#c4baab;
+  --up-border:rgba(215,176,110,.3);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-sheet {
+  background:radial-gradient(ellipse at 86% 0%,rgba(210,161,88,.15),transparent 40%),linear-gradient(155deg,#211a13,#0a0909 78%);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav {
+  border:1px solid var(--line);
+  background:rgba(10,9,9,.97);
+  box-shadow:0 -10px 35px rgba(0,0,0,.5);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav button.active {
+  background:rgba(215,176,110,.12);
+  color:#f0d6a6;
+  box-shadow:inset 0 0 0 1px rgba(215,176,110,.35);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(.nj-settings-section-head>svg,.nj-settings-tool-heading>svg) {
+  color:var(--nj-accent);
+}
+
+/* Locked brand appearance is informative, never a fake clickable picker. */
+.nj-theme-locked-card {
+  display:flex;
+  align-items:center;
+  gap:15px;
+  min-width:0;
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:15px;
+  background:linear-gradient(135deg,#211a12,#0b0a09);
+}
+.nj-theme-locked-card>.nj-theme-swatch {
+  display:flex;
+  flex:0 0 100px;
+  align-items:center;
+  gap:4px;
+  height:55px;
+  padding:9px;
+  border:1px solid rgba(215,176,110,.34);
+  border-radius:12px;
+  color:#e2c18b;
+}
+.nj-theme-locked-card>.nj-theme-swatch>span {
+  width:18px;
+  height:18px;
+  border:1px solid rgba(255,255,255,.24);
+  border-radius:50%;
+}
+.nj-theme-locked-card>.nj-theme-swatch>svg {margin-left:auto;flex-shrink:0;}
+.nj-theme-locked-copy{min-width:0;flex:1;display:grid;gap:4px;}
+.nj-theme-locked-copy strong{display:flex;gap:8px;align-items:center;color:var(--ivory);}
+.nj-theme-locked-copy strong svg{color:var(--nj-accent);}
+.nj-theme-locked-copy small{color:var(--muted);line-height:1.4;}
+.nj-theme-locked-copy>span{color:var(--nj-accent);font-size:11px;letter-spacing:.04em;}
+.nj-theme-locked-card>svg:last-child{flex:0 0 auto;color:var(--muted);}
+
+@media(max-width:520px) {
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero {padding:18px 15px;}
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-avatar {width:76px;height:76px;}
+  .nj-theme-locked-card{gap:10px;padding:11px;}
+  .nj-theme-locked-card>.nj-theme-swatch{flex-basis:75px;height:50px;padding:6px;}
+  .nj-theme-locked-card>.nj-theme-swatch>span{width:13px;height:13px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  :root[data-nightjar-theme="bronze"] :is(.featured-card,.track-card,.nj-listener-discovery-category,.nj-listener-discovery-release) {
+    transition:none;
+    transform:none;
+  }
+}
+@media(forced-colors:active) {
+  .nj-theme-locked-card { forced-color-adjust:auto;border-color:CanvasText; }
+}
+
+/* Gold crescent means NightJar-approved professional account, not a release
+   credit, age check, or decorative icon. Keep the explanation keyboard/touch
+   accessible and maintain the badge on the profile portrait. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero {
+  overflow:visible;
+}
+.premium-public-profile .nj-profile-avatar-frame {
+  display:inline-grid;
+  position:relative;
+  width:max-content;
+  height:max-content;
+  isolation:isolate;
+  flex:none;
+  z-index:2;
+}
+.premium-public-profile .nj-profile-avatar-frame>.creator-profile-avatar {
+  display:grid;
+  place-items:center;
+  position:relative;
+  z-index:1;
+}
+.premium-public-profile .nj-profile-hero-banner {
+  position:absolute;
+  top:0;
+  right:0;
+  width:58%;
+  height:100%;
+  object-fit:cover;
+  object-position:center 36%;
+  opacity:.3;
+  z-index:0;
+  pointer-events:none;
+  border-radius:inherit;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 34%);
+  mask-image:linear-gradient(90deg,transparent,#000 34%);
+  clip-path:inset(0 round 22px);
+}
+.premium-public-profile .nj-profile-primary-identity,
+.premium-public-profile .writer-discovery-actions {
+  position:relative;
+  z-index:1;
+}
+.premium-public-profile .nj-official-creator-badge {
+  position:absolute;
+  z-index:5;
+  right:-7px;
+  bottom:-7px;
+  color:#e8c48c;
+}
+.premium-public-profile .nj-official-creator-badge>summary {
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  list-style:none;
+  cursor:pointer;
+  border:2px solid #e8c48c;
+  border-radius:50%;
+  background:#0b0a09;
+  color:#e8c48c;
+  box-shadow:0 4px 17px rgba(0,0,0,.58),0 0 0 3px #0b0a09;
+}
+.premium-public-profile .nj-official-creator-badge>summary::-webkit-details-marker {display:none;}
+.premium-public-profile .nj-official-creator-badge>summary:focus-visible {
+  outline:3px solid #f4d9ab;
+  outline-offset:4px;
+}
+.premium-public-profile .nj-official-creator-badge>span {
+  display:block;
+  position:absolute;
+  z-index:12;
+  top:calc(100% + 12px);
+  left:0;
+  width:min(268px,calc(100vw - 80px));
+  padding:13px 15px;
+  background:#18130f;
+  color:#f5efe5;
+  font-size:12px;
+  line-height:1.55;
+  border:1px solid #d9b574;
+  border-radius:12px;
+  box-shadow:0 16px 36px rgba(0,0,0,.65);
+  overflow-wrap:anywhere;
+}
+.premium-public-profile .nj-official-creator-badge:not([open])>span {display:none;}
+@media(max-width:520px){
+  .premium-public-profile .nj-profile-hero-banner {width:66%;opacity:.18;}
+  .premium-public-profile .nj-official-creator-badge>summary {width:34px;height:34px;}
+  .premium-public-profile .nj-official-creator-badge>span {left:-4px;width:min(235px,calc(100vw - 65px));}
+}
+:root[data-nightjar-vision] .premium-public-profile .nj-profile-hero-banner {display:none;}
+:root[data-nightjar-vision] .premium-public-profile .nj-official-creator-badge>summary {
+  color:var(--ivory);
+  background:var(--panel);
+  border:2px solid var(--line);
+}
+
+/* Vision Access presets override the decorative locked-theme preview surface. */
+:root[data-nightjar-vision] .nj-theme-locked-card {
+  color:var(--ivory);
+  background:var(--panel);
+  border:2px solid var(--line);
+  box-shadow:none;
+}
+:root[data-nightjar-vision] .nj-theme-locked-card>svg:last-child {
+  color:var(--ivory);
+}

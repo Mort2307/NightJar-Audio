@@ -36,30 +36,42 @@ if (failures.length) {
   process.exit(1);
 }
 
-// Theme customisation is account-backed but never bypasses existing transcript controls.
+// Midnight Gold is the sole public brand appearance. Historical theme IDs remain
+// recognised by the backend, while the independent Vision Access controls provide
+// accessible user-selected colours, scaling and motion preferences.
 const backend=fs.readFileSync('functions/src/index.ts','utf8');
 const themeUi=fs.readFileSync('src/components/ThemePreferences.tsx','utf8');
 const themePlatform=fs.readFileSync('src/platform/nightjar-theme.ts','utf8');
 const settings=fs.readFileSync('src/components/NightjarSettings.tsx','utf8');
 const main=fs.readFileSync('src/main.tsx','utf8');
-assert.match(themeUi,/nightjarAccessibility\.save\(\{\.\.\.current,theme:next\}\)/,'theme saves alongside existing preferences');
-assert.match(themeUi,/nightjarThemes\.map/,'theme swatches are selectable');
-assert.match(themeUi,/simulationMode/,'theme preview preserves role-simulation separation');
-assert.match(themePlatform,/nightjar\.appearance\.theme\.v1/,'theme is cached locally for instant bootstrap');
-assert.match(main,/nightjarTheme\.initialise\(\)/,'theme applies before rendering the app');
-assert.match(settings,/<ThemePreferences/,'Settings exposes theme choices');
-assert.match(themePlatform, /\| 'bronze'/, 'Bronze Noir is included in the typed Nightjar appearance options');
-assert.match(themePlatform, /id:'bronze',label:'Bronze Noir'/, 'Bronze Noir appears in selectable swatches');
-assert.match(themePlatform, /updateBrowserChrome\(theme\)/, 'system browser chrome matches the selected dark Nightjar theme');
-assert.match(themeUi, /Bronze Noir/, 'member-facing appearance choice explains new black and bronze style');
-const themeStyles = fs.readFileSync('src/index.css','utf8');
-assert.match(themeStyles, /:root\[data-nightjar-theme="bronze"\]/, 'Bronze Noir provides its own scoped brand tokens');
-assert.match(themeStyles, /--nj-accent:\s*#dfb985/, 'professional workspaces inherit bronze premium accents');
-assert.match(themeStyles, /--bg:\s*#08090b/, 'Bronze Noir retains jet-black discreet backgrounds');
-assert.match(themeStyles, /:root\[data-nightjar-theme="bronze"\] \.primary-button/, 'primary actions have matching bronze gradients');
-assert.match(themeStyles, /--panel-soft:\s*#1b1d21/, 'Bronze Noir panels remain graphite, not warm brown');
-assert.doesNotMatch(themeStyles.slice(themeStyles.indexOf('/* BRONZE NOIR'), themeStyles.indexOf('/* Mobile onboarding regression:')), /#1a1511|rgba\(31,24,18/, 'Bronze Noir avoids its previous brown panel paints');
+const brand=fs.readFileSync('src/styles/midnight-gold.css','utf8');
+const vision=fs.readFileSync('src/styles/vision-access.css','utf8');
+const publicProfile=fs.readFileSync('src/components/PublicProfile.tsx','utf8');
 
-assert.match(backend,/theme: \['nocturne','aubergine','midnight','ember','obsidian','bronze'\]/,'theme preference is whitelist validated by Firebase');
+assert.match(themePlatform,/NIGHTJAR_BRAND_THEME: NightjarTheme = 'bronze'/,'Midnight Gold is the canonical brand theme');
+assert.match(themePlatform,/nightjar\.appearance\.theme\.v1/,'local appearance cache remains compatible');
+assert.match(themePlatform,/return NIGHTJAR_BRAND_THEME/,'old saved colours cannot override the locked brand');
+assert.match(themePlatform,/document\.documentElement\.dataset\.nightjarTheme = NIGHTJAR_BRAND_THEME/,'applied brand never changes per account');
+assert.match(themeUi,/Midnight Gold/,'appearance information names the new brand');
+assert.match(themeUi,/Vision Access/,'accessible colour overrides are discoverable');
+assert.doesNotMatch(themeUi,/nightjarThemes\.map|nightjarAccessibility\.save/,'user cannot re-enable archived colour schemes');
+assert.match(themeUi,/simulationMode/,'simulation remains separate from live account settings');
+assert.match(settings,/<ThemePreferences/,'Settings shows brand identity');
+assert.match(settings,/<VisionAccessControls/,'low-vision controls stay available');
+assert.match(main,/nightjarTheme\.initialise\(\)/,'brand applies before React');
+assert.match(main,/import '\.\/styles\/midnight-gold\.css';/,'all screens load the central brand stylesheet');
+assert.ok(main.indexOf('midnight-gold.css') < main.indexOf('vision-access.css'),'Vision Access styles load after brand rules');
+assert.match(brand,/--nj-gold-gradient/,'consistent champagne-gold primary action');
+assert.match(brand,/--bg:\s*#080808/,'background remains black rather than brown');
+assert.match(brand,/--nj-text-secondary:\s*#c4baab/,'secondary text remains readable');
+assert.match(brand,/:root\[data-nightjar-theme="bronze"\]:not\(\[data-nightjar-vision\]\)/,'brand rules defer to Vision Access');
+assert.match(brand,/\.nj-up-root/,'audio player is included in design system');
+assert.match(brand,/\.nj-mobile-nav/,'mobile navigation is included in design system');
+assert.match(brand,/\.creator-profile-modal\.premium-public-profile/,'public creator profiles are included');
+assert.match(publicProfile,/isOfficialCreator && <details className="nj-official-creator-badge"/,'gold creator crescent is conditional on an approved professional role');
+assert.match(vision,/data-nightjar-vision="clarity"/,'high-contrast accessible override retained');
+assert.match(vision,/data-nightjar-vision="paper"/,'paper accessible override retained');
+assert.match(vision,/data-nightjar-vision-quiet/,'reduced-motion preference retained');
+assert.match(backend,/theme: \['nocturne','aubergine','midnight','ember','obsidian','bronze'\]/,'previous cloud preference values remain valid without a backend migration');
 
 console.log('Nightjar accessibility contracts passed.');

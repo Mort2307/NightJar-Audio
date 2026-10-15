@@ -1,35 +1,39 @@
+/**
+ * NightJar's approved brand identity: Midnight Gold.
+ *
+ * The six historical IDs remain valid for existing cloud preference records and
+ * legacy validators, but the public brand appearance is now intentionally locked.
+ * Disability/low-vision colour and motion preferences are a separate overlay,
+ * applied by nightjar-vision and never blocked by this theme lock.
+ */
 export type NightjarTheme = 'nocturne' | 'aubergine' | 'midnight' | 'ember' | 'obsidian' | 'bronze';
+export const NIGHTJAR_BRAND_THEME: NightjarTheme = 'bronze';
 
 export const nightjarThemes: { id: NightjarTheme; label: string; description: string; swatches: string[] }[] = [
-  { id:'nocturne',label:'Nocturne',description:'Original Nightjar charcoal and soft plum.',swatches:['#0c0b0d','#a88aab','#eee7df'] },
-  { id:'aubergine',label:'Velvet Plum',description:'Deep violet and satin lavender.',swatches:['#130e18','#b19acb','#f3e9f5'] },
-  { id:'midnight',label:'Midnight Blue',description:'Ink navy and silver-blue highlights.',swatches:['#0a101c','#89a9d1','#eaf0fa'] },
-  { id:'ember',label:'Ember',description:'Burgundy, copper and candlelit warmth.',swatches:['#170d12','#c69680','#f7e8de'] },
-  { id:'obsidian',label:'Obsidian',description:'Pure charcoal with restrained metallic accents.',swatches:['#080a0c','#bbc5ce','#edf1f3'] },
-  { id:'bronze',label:'Bronze Noir',description:'Near-black graphite, discreet burnished bronze and soft ivory — inspired by the Nightjar N.',swatches:['#08090b','#b78b59','#f0ece8'] },
+  { id:'bronze', label:'Midnight Gold', description:'NightJar signature obsidian black, cinematic champagne gold and soft ivory.', swatches:['#080808','#d9b574','#f5efe5'] },
 ];
-const storageKey = 'nightjar.appearance.theme.v1';
-const isTheme = (value:unknown):value is NightjarTheme => nightjarThemes.some((item)=>item.id===value);
 
-const updateBrowserChrome = (theme: NightjarTheme) => {
+const storageKey = 'nightjar.appearance.theme.v1';
+
+const updateBrowserChrome = () => {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = theme === 'bronze' ? '#08090b' : '#0c0b0d';
+  if (meta) meta.content = '#080808';
 };
 
 export const nightjarTheme = {
   current():NightjarTheme {
-    try { const stored=window.localStorage.getItem(storageKey);return isTheme(stored)?stored:'nocturne'; }
-    catch { return 'nocturne'; }
+    return NIGHTJAR_BRAND_THEME;
   },
-  apply(theme:NightjarTheme) {
-    document.documentElement.dataset.nightjarTheme = theme;
-    updateBrowserChrome(theme);
-    try { window.localStorage.setItem(storageKey,theme); } catch { /* private browser */ }
-    window.dispatchEvent(new CustomEvent('nightjar-theme-change',{detail:theme}));
+  // Accept legacy values for compatibility, but never enable old colours.
+  apply(_theme:NightjarTheme) {
+    document.documentElement.dataset.nightjarTheme = NIGHTJAR_BRAND_THEME;
+    updateBrowserChrome();
+    try { window.localStorage.setItem(storageKey,NIGHTJAR_BRAND_THEME); } catch { /* private browser */ }
+    window.dispatchEvent(new CustomEvent('nightjar-theme-change',{detail:NIGHTJAR_BRAND_THEME}));
   },
   initialise() {
-    const theme = this.current();
-    document.documentElement.dataset.nightjarTheme = theme;
-    updateBrowserChrome(theme);
+    document.documentElement.dataset.nightjarTheme = NIGHTJAR_BRAND_THEME;
+    updateBrowserChrome();
+    try { window.localStorage.setItem(storageKey,NIGHTJAR_BRAND_THEME); } catch { /* private browser */ }
   },
 };

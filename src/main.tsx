@@ -3,6 +3,7 @@ import './platform/nightjar-install';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import './styles/product-system.css';
+import './styles/midnight-gold.css';
 import './styles/vision-access.css';
 import App from './App';
 import { nightjarTheme } from './platform/nightjar-theme';

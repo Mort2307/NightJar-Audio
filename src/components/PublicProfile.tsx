@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { scrollNightjarToTop } from '../platform/scroll-navigation';
-import { Bird, BookOpenText, Brush, ChevronDown, FileCheck2, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, Sparkles, ThumbsUp, X } from 'lucide-react';
+import { Bird, BookOpenText, Brush, ChevronDown, FileCheck2, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Moon, Share2, ShieldCheck, Sparkles, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -183,6 +183,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     ? selectedProfileRole
     : (profile?.role && availableProfileRoles.includes(String(profile.role)) ? String(profile.role) : availableProfileRoles[0] ?? 'listener'))) as ProfileRoleKey;
   const roleConfig = ROLE_PROFILE_CONFIG[profileRole];
+  // getPublicProfile only exposes professionally approved roles from the server.
+  // A listener credited on a release does not receive this designation.
+  const isOfficialCreator = !profile?.nightjarTeam && profileRole !== 'listener' && availableProfileRoles.includes(profileRole);
   const roleDetails = profile?.roleProfiles && typeof profile.roleProfiles === 'object' && profile.roleProfiles[profileRole]
     ? profile.roleProfiles[profileRole]
     : profile ?? {};
@@ -243,7 +246,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero">
           <span className="nj-profile-hero-glow" aria-hidden="true"/>
-          <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
+          {profile.avatarUrl && <img className="nj-profile-hero-banner" src={profile.avatarUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />}
+          <span className="nj-profile-avatar-frame">
+            <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
+            {isOfficialCreator && <details className="nj-official-creator-badge">
+              <summary aria-label="Official NightJar Creator — show badge details" title="Official NightJar Creator"><Moon size={18} aria-hidden="true"/></summary>
+              <span role="note">Official NightJar Creator — approved through NightJar creator onboarding. Release credits alone do not grant this badge.</span>
+            </details>}
+          </span>
           <div className="nj-profile-primary-identity">
             <span className="nj-profile-hero-eyebrow"><Sparkles size={13} aria-hidden="true"/> {profileRole === "listener" ? "THE NIGHTJAR COMMUNITY" : "MEET THE MAKER"}</span>
             <h3>{profile.displayName}</h3>

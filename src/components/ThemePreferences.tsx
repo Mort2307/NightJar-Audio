@@ -1,59 +1,28 @@
-import { useEffect, useState } from 'react';
-import { Check, Palette, Sparkles } from 'lucide-react';
-import { nightjarAccessibility } from '../platform/firebase-accessibility';
-import { nightjarTheme, nightjarThemes, type NightjarTheme } from '../platform/nightjar-theme';
+import { Check, LockKeyhole, Moon, Palette } from 'lucide-react';
+import { nightjarThemes } from '../platform/nightjar-theme';
 
 type Props = { simulationMode:boolean; notify:(message:string)=>void };
 
-export default function ThemePreferences({ simulationMode, notify }:Props) {
-  const [selected,setSelected]=useState<NightjarTheme>(()=>nightjarTheme.current());
-  const [saving,setSaving]=useState(false);
-  useEffect(()=>{
-    if (simulationMode) return;
-    let cancelled=false;
-    void nightjarAccessibility.get().then((prefs)=>{
-      if(cancelled)return;
-      const next=prefs.theme??'nocturne';
-      setSelected(next);
-      nightjarTheme.apply(next);
-    }).catch(()=>{/* local theme remains usable offline */});
-    return()=>{cancelled=true;};
-  },[simulationMode]);
-
-  const choose=async(next:NightjarTheme)=>{
-    if(saving||selected===next)return;
-    const previous=selected;
-    setSelected(next);
-    nightjarTheme.apply(next);
-    if(simulationMode){notify('Previewing '+nightjarThemes.find(t=>t.id===next)?.label+' locally. No live account preference changed.');return;}
-    setSaving(true);
-    try {
-      const current=await nightjarAccessibility.get();
-      const saved=await nightjarAccessibility.save({...current,theme:next});
-      setSelected(saved.theme??next);
-      nightjarTheme.apply(saved.theme??next);
-      notify('Nightjar theme saved to your account.');
-    } catch {
-      setSelected(previous);
-      nightjarTheme.apply(previous);
-      notify('Unable to save the theme to your account. Previous appearance restored.');
-    } finally {setSaving(false);}
-  };
-
-  return <div className="nj-theme-picker">
-    <p>Choose a Nightjar atmosphere. All six keep the dark, discreet player and premium editorial look. <strong>Bronze Noir</strong> matches Nightjar's black-and-gold N from the startup screen. Your saved choice follows your account across devices.</p>
-    <div className="nj-theme-grid" role="group" aria-label="Choose Nightjar theme">
-      {nightjarThemes.map((theme)=><button type="button" key={theme.id}
-        className={selected===theme.id?'nj-theme-choice selected':'nj-theme-choice'}
-        aria-pressed={selected===theme.id} disabled={saving} onClick={()=>void choose(theme.id)}>
-        <span className="nj-theme-swatch" style={{background:theme.swatches[0]}}>
-          {theme.swatches.map((color,i)=><span key={i} style={{background:color}}/>)}
-          {selected===theme.id&&<Check size={16}/>}
-        </span>
-        <strong>{theme.label}{theme.id==='bronze' && <span className="nj-theme-new-tag"> · NEW</span>}</strong>
-        <small>{theme.description}</small>
-      </button>)}
+/**
+ * Brand colours are consistent across every member account. Accessibility
+ * preferences remain independent via Vision Access in the same Settings menu.
+ */
+export default function ThemePreferences({ simulationMode }:Props) {
+  const brand = nightjarThemes[0];
+  return <div className="nj-theme-picker nj-theme-locked">
+    <p>NightJar uses one signature appearance across the app. Accessible colour modes, text scaling and reduced motion remain available separately in <strong>Vision Access</strong>.</p>
+    <div className="nj-theme-locked-card" aria-label="NightJar appearance: Midnight Gold, active and locked">
+      <span className="nj-theme-swatch" aria-hidden="true" style={{background:brand.swatches[0]}}>
+        {brand.swatches.map((color,index)=><span key={index} style={{background:color}} />)}
+        <Moon size={17}/>
+      </span>
+      <div className="nj-theme-locked-copy">
+        <strong>Midnight Gold <Check size={15} aria-hidden="true"/></strong>
+        <small>Obsidian black · champagne gold · warm ivory</small>
+        <span>NightJar's official visual identity</span>
+      </div>
+      <LockKeyhole size={17} aria-hidden="true"/>
     </div>
-    <div className="nj-theme-picker-note"><Palette size={15}/><span>{saving?'Saving appearance…':simulationMode?'Role simulation: colours preview locally only.':'Your private account and security settings remain unchanged.'}</span><Sparkles size={14}/></div>
+    <div className="nj-theme-picker-note"><Palette size={15} aria-hidden="true"/><span>{simulationMode ? 'Simulation also uses the official NightJar appearance.' : 'This brand style is fixed. Low-vision colour overrides are still your choice.'}</span></div>
   </div>;
 }
