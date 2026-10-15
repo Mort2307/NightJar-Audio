@@ -228,7 +228,7 @@
   background:linear-gradient(150deg,#191613,#0d0c0b 85%);
 }
 :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
-  .nj-listener-discovery-category.active,.nj-spotlight-card .primary-button,
+  .nj-listener-discovery-category.active,
   .nj-listener-discovery-category-icon
 ) {
   color:var(--nj-accent);
@@ -310,4 +310,101 @@
 }
 @media(forced-colors:active) {
   .nj-theme-locked-card { forced-color-adjust:auto;border-color:CanvasText; }
+}
+
+/* Gold crescent means NightJar-approved professional account, not a release
+   credit, age check, or decorative icon. Keep the explanation keyboard/touch
+   accessible and maintain the badge on the profile portrait. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero {
+  overflow:visible;
+}
+.premium-public-profile .nj-profile-avatar-frame {
+  display:inline-grid;
+  position:relative;
+  width:max-content;
+  height:max-content;
+  isolation:isolate;
+  flex:none;
+  z-index:2;
+}
+.premium-public-profile .nj-profile-avatar-frame>.creator-profile-avatar {
+  display:grid;
+  place-items:center;
+  position:relative;
+  z-index:1;
+}
+.premium-public-profile .nj-profile-hero-banner {
+  position:absolute;
+  top:0;
+  right:0;
+  width:58%;
+  height:100%;
+  object-fit:cover;
+  object-position:center 36%;
+  opacity:.3;
+  z-index:0;
+  pointer-events:none;
+  border-radius:inherit;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 34%);
+  mask-image:linear-gradient(90deg,transparent,#000 34%);
+  clip-path:inset(0 round 22px);
+}
+.premium-public-profile .nj-profile-primary-identity,
+.premium-public-profile .writer-discovery-actions {
+  position:relative;
+  z-index:1;
+}
+.premium-public-profile .nj-official-creator-badge {
+  position:absolute;
+  z-index:5;
+  right:-7px;
+  bottom:-7px;
+  color:#e8c48c;
+}
+.premium-public-profile .nj-official-creator-badge>summary {
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  list-style:none;
+  cursor:pointer;
+  border:2px solid #e8c48c;
+  border-radius:50%;
+  background:#0b0a09;
+  color:#e8c48c;
+  box-shadow:0 4px 17px rgba(0,0,0,.58),0 0 0 3px #0b0a09;
+}
+.premium-public-profile .nj-official-creator-badge>summary::-webkit-details-marker {display:none;}
+.premium-public-profile .nj-official-creator-badge>summary:focus-visible {
+  outline:3px solid #f4d9ab;
+  outline-offset:4px;
+}
+.premium-public-profile .nj-official-creator-badge>span {
+  display:block;
+  position:absolute;
+  z-index:12;
+  top:calc(100% + 12px);
+  left:0;
+  width:min(268px,calc(100vw - 80px));
+  padding:13px 15px;
+  background:#18130f;
+  color:#f5efe5;
+  font-size:12px;
+  line-height:1.55;
+  border:1px solid #d9b574;
+  border-radius:12px;
+  box-shadow:0 16px 36px rgba(0,0,0,.65);
+  overflow-wrap:anywhere;
+}
+.premium-public-profile .nj-official-creator-badge:not([open])>span {display:none;}
+@media(max-width:520px){
+  .premium-public-profile .nj-profile-hero-banner {width:66%;opacity:.18;}
+  .premium-public-profile .nj-official-creator-badge>summary {width:34px;height:34px;}
+  .premium-public-profile .nj-official-creator-badge>span {left:-4px;width:min(235px,calc(100vw - 65px));}
+}
+:root[data-nightjar-vision] .premium-public-profile .nj-profile-hero-banner {display:none;}
+:root[data-nightjar-vision] .premium-public-profile .nj-official-creator-badge>summary {
+  color:var(--ivory);
+  background:var(--panel);
+  border:2px solid var(--line);
 }
