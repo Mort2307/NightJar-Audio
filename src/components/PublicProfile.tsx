@@ -276,7 +276,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         </div>
         <nav className="nj-cinema-profile-tabs" aria-label="Profile sections">
           <button type="button" onClick={()=>document.getElementById('nj-cinema-work')?.scrollIntoView({block:'start',behavior:'smooth'})}>Work</button>
-          <button type="button" onClick={()=>document.getElementById('nj-cinema-about')?.scrollIntoView({block:'start',behavior:'smooth'})}>About</button>
+          {(profile.welcomeMessage || profile.bio) && <button type="button" onClick={()=>document.getElementById('nj-cinema-about')?.scrollIntoView({block:'start',behavior:'smooth'})}>About</button>}
           <button type="button" onClick={()=>document.getElementById('nj-cinema-collaborate')?.scrollIntoView({block:'start',behavior:'smooth'})}>Collaborate</button>
           {!!profile.socialLinks?.length && <button type="button" onClick={()=>document.getElementById('nj-cinema-links')?.scrollIntoView({block:'start',behavior:'smooth'})}>Links</button>}
         </nav>
