@@ -114,6 +114,18 @@ export default function AdminMemberSafety({
         <h3>Verified account information</h3>
         <p><strong>Firebase sign-in:</strong> {dossier.member.authDisabled ? 'Disabled' : 'Enabled'} · <strong>Nightjar status:</strong> {dossier.member.status}</p>
         {dossier.member.suspensionCaseId && <p>Case reference: <strong>{dossier.member.suspensionCaseId}</strong></p>}
+        {dossier.member.status === 'suspended' && <div className="nj-member-safety-actions">
+          <p><strong>Member notice:</strong> {dossier.member.notificationDelivery === 'sent' ? 'Email sent' : 'Pending delivery / Nightjar Mail may be disconnected'}</p>
+          {dossier.member.notificationDelivery !== 'sent' && <button type="button" className="secondary-button" disabled={dossierLoading} onClick={() => {
+            if (!selected || !window.confirm('Retry the recorded suspension notice to this member\'s verified email?')) return;
+            setDossierLoading(true);
+            void nightjarAdministration.retryMemberSecurityNotice(selected.userId).then((result) => {
+              setSuccess(result.notificationDelivery === 'sent' ? 'Suspension email delivered.' : 'Suspension email remains pending; check Nightjar Mail connection.');
+              return nightjarAdministration.memberSecurityDossier(selected.userId);
+            }).then(setDossier).catch((error) => setError(error instanceof Error ? error.message : 'Unable to retry the security notice.'))
+              .finally(() => setDossierLoading(false));
+          }}>Retry member notification</button>}
+        </div>}
         {dossier.member.suspensionReason && <p>Recorded suspension reason: {dossier.member.suspensionReason}</p>}
         <p>{dossier.note}</p>
         <details>
