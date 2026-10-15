@@ -6,7 +6,7 @@ const client=fs.readFileSync('src/platform/firebase-didit-reuse.ts','utf8');
 const admin=fs.readFileSync('src/components/AdminDiditReuseReadiness.tsx','utf8');
 const control=fs.readFileSync('src/components/AdminDiditControlCentre.tsx','utf8');
 const start=backend.indexOf('// Reusable KYC preparation: validate');
-const end=backend.indexOf('// One-off owner recovery',start);
+const end=backend.indexOf('// Existing Didit KYC reuse coordination',start);
 assert.ok(start>0 && end>start,'reuse-readiness callables must be isolated');
 const code=backend.slice(start,end);
 assert.match(code,/export const adminInspectDiditReuseWorkflow = onCall/,'workflow inspection callable exists');
