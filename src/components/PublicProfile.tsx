@@ -264,7 +264,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             {availableProfileRoles.length > 0 && <div className="profile-role-chips" role="tablist" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" role="tab" aria-selected={profileRole===role} data-nightjar-scroll-top className={profileRole===role?'active':''} key={role} onClick={()=>{ setSelectedProfileRole(role); scrollNightjarToTop(); }}>{profile.nightjarTeam === true ? 'Nightjar Team' : roleLabel(role)}</button>)}</div>}
           </div>
           <div className="writer-discovery-actions">
-            {!readOnlyPreview && <button className="primary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>}
+            {!readOnlyPreview && <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>}
             {canMessage && onMessage && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
             {!readOnlyPreview && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Support creator</button>}
             {!readOnlyPreview && <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>}
