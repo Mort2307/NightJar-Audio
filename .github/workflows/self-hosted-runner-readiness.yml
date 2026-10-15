@@ -22,14 +22,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check runner isolation prerequisites
-        run: bash scripts/check-private-runner.sh
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
+      - name: Check runner isolation prerequisites
+        run: bash scripts/check-private-runner.sh
 
       - name: Install app dependencies without funding or audit network requests
         run: npm ci --no-audit --no-fund
