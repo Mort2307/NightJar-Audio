@@ -232,11 +232,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
   return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
     <section ref={dialogRef} tabIndex={-1} className={"creator-profile-modal premium-public-profile premium-public-profile-"+profileRole}>
       <header className="creator-profile-head">
-        <div>
-          <span className="mini-label">NIGHTJAR / {profile?.nightjarTeam ? 'OFFICIAL TEAM' : profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
-          <h2>{loading ? 'Loading profile…' : profile?.displayName ?? 'Nightjar profile'}</h2>
-          <p>{profile?.handle ? '@' + String(profile.handle).replace(/^@/, '') : roleLabel(profileRole)}</p>
-        </div>
+        <div className="nj-cinema-profile-back"><span aria-hidden="true">☾</span><span className="mini-label">NIGHTJAR <span aria-hidden="true">/</span> {profile?.nightjarTeam ? 'TEAM' : profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span></div>
         <button className="icon-button" onClick={onClose} aria-label="Close public profile"><X size={18}/></button>
       </header>
 
@@ -244,9 +240,13 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       {!loading && !loadError && !profile && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile not available</strong><p>This profile is private, unavailable or no longer active.</p></div></div>}
       {readOnlyPreview && <div className="nj-profile-viewer-modal-note"><ShieldCheck size={15}/> Admin live public profile view · original member data · all actions disabled</div>}
       {profile && <div className="creator-profile-body">
-        <div className="creator-profile-hero">
-          <span className="nj-profile-hero-glow" aria-hidden="true"/>
-          {profile.avatarUrl && <img className="nj-profile-hero-banner" src={profile.avatarUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />}
+        <div className="creator-profile-hero nj-cinema-profile-hero">
+          <div className="nj-cinema-profile-cover" aria-hidden="true">
+            {profile.avatarUrl && <img className="nj-profile-hero-banner" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" />}
+            <span className="nj-cinema-profile-cover-shade"/>
+            <span className="nj-cinema-cover-words"><small>NIGHTJAR {profileRole === 'listener' ? 'COMMUNITY' : 'CREATOR STUDIO'}</small><em>{profileRole === 'listener' ? 'Stay curious.' : 'Stories you can feel.'}</em></span>
+            <span className="nj-cinema-cover-moon">☾</span>
+          </div>
           <span className="nj-profile-avatar-frame">
             <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
             {isOfficialCreator && <details className="nj-official-creator-badge">
@@ -257,13 +257,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           <div className="nj-profile-primary-identity">
             <span className="nj-profile-hero-eyebrow"><Sparkles size={13} aria-hidden="true"/> {profileRole === "listener" ? "THE NIGHTJAR COMMUNITY" : "MEET THE MAKER"}</span>
             <h3>{profile.displayName}</h3>
+            {profile.handle && <span className="nj-cinema-profile-handle">@{String(profile.handle).replace(/^@/, '')}</span>}
             <p>{roleDetails.roleHeadline || profile.headline || (profileRole === 'editor' ? 'Audio Editor on Nightjar.' : profileRole === 'listener' ? 'A curated corner of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
             {profile.nightjarTeam === true && <div className="profile-activity-badges public-profile-badges"><span><ShieldCheck size={12}/>Official Nightjar Team</span></div>}
             {availableProfileRoles.length > 0 && <div className="profile-role-chips" role="tablist" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" role="tab" aria-selected={profileRole===role} data-nightjar-scroll-top className={profileRole===role?'active':''} key={role} onClick={()=>{ setSelectedProfileRole(role); scrollNightjarToTop(); }}>{profile.nightjarTeam === true ? 'Nightjar Team' : roleLabel(role)}</button>)}</div>}
           </div>
           <div className="writer-discovery-actions">
-            {!readOnlyPreview && <button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>}
+            {!readOnlyPreview && <button className="primary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'}/> {following ? 'Following' : 'Follow'}</button>}
             {canMessage && onMessage && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}
             {!readOnlyPreview && (profile.roles ?? [profile.role]).some((role:string)=>['creator','writer','editor','artist'].includes(role)) && <button className="secondary-button" onClick={() => setGiftOpen(true)}><Bird size={14}/> Support creator</button>}
             {!readOnlyPreview && <button className="ghost-button" onClick={() => void share()}><Share2 size={14}/> Share</button>}
@@ -273,13 +274,19 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         <div className="public-profile-metrics" aria-label="Public profile highlights">
           {profileMetrics.map(([label, value]) => <div key={String(label)}><strong>{value}</strong><span>{label}</span></div>)}
         </div>
+        <nav className="nj-cinema-profile-tabs" aria-label="Profile sections">
+          <button type="button" onClick={()=>document.getElementById('nj-cinema-work')?.scrollIntoView({block:'start',behavior:'smooth'})}>Work</button>
+          <button type="button" onClick={()=>document.getElementById('nj-cinema-about')?.scrollIntoView({block:'start',behavior:'smooth'})}>About</button>
+          <button type="button" onClick={()=>document.getElementById('nj-cinema-collaborate')?.scrollIntoView({block:'start',behavior:'smooth'})}>Collaborate</button>
+          {!!profile.socialLinks?.length && <button type="button" onClick={()=>document.getElementById('nj-cinema-links')?.scrollIntoView({block:'start',behavior:'smooth'})}>Links</button>}
+        </nav>
 
-        {(profile.welcomeMessage || profile.bio) && <section className="nj-public-profile-about" aria-label="About this member">
+        {(profile.welcomeMessage || profile.bio) && <section id="nj-cinema-about" className="nj-public-profile-about" aria-label="About this member">
           <div className="nj-public-profile-about-heading"><span className="mini-label">BEHIND THE PROFILE</span><Sparkles size={16} aria-hidden="true"/></div>
           {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}
           {profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
         </section>}
-        {!!profile.socialLinks?.length && <details className="nj-public-social-details">
+        {!!profile.socialLinks?.length && <details id="nj-cinema-links" className="nj-public-social-details">
           <summary><span>Find {profileRole === 'listener' ? 'this member' : 'this creator'} elsewhere <small>{profile.socialLinks.length} {profile.socialLinks.length === 1 ? 'link' : 'links'}</small></span><ChevronDown size={18} aria-hidden="true"/></summary>
           <SocialLinksDisplay links={profile.socialLinks} />
         </details>}
@@ -291,7 +298,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         {!!roleDetails.roleFocus?.length && <div className="creator-profile-tags">{roleDetails.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
         {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
 
-        <section className="public-role-profile">
+        <section id="nj-cinema-collaborate" className="public-role-profile">
           <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profileRole).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{roleDetails.roleAvailability && <strong>{roleDetails.roleAvailability}</strong>}</div>
           <p>{roleDetails.roleBio || roleConfig.description}</p>
           {!!roleDetails.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{roleDetails.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
@@ -465,7 +472,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           </div> : <div className="people-empty"><ImagePlus size={18}/><strong>No approved portfolio pieces yet</strong><span>This Artist has not published moderated artwork to their Nightjar portfolio yet.</span></div>}
         </section>}
 
-        <div className="creator-profile-releases">
+        <div id="nj-cinema-work" className="creator-profile-releases">
           <div className="section-head">
             <div>
               <span className="mini-label">{profileRole === 'listener' ? 'COMMUNITY' : 'PUBLIC WORK'}</span>
@@ -483,6 +490,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {profileRole === 'creator' && !!roleFeaturedWork.length && <div className="public-featured-work">
             <span className="mini-label">FEATURED</span>
             {roleFeaturedWork.map((release:any)=><article key={release.id}>
+              {release.artworkUrl && <img className="nj-cinema-work-art" src={release.artworkUrl} alt="" loading="lazy" decoding="async" />}
               <div><strong>{release.title}</strong><span>{release.creatorName ?? profile.displayName}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===profile.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div>
               <div className="public-work-community-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div>
