@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const backend=fs.readFileSync('functions/src/index.ts','utf8');
+const client=fs.readFileSync('src/platform/firebase-didit-reuse.ts','utf8');
+const admin=fs.readFileSync('src/components/AdminDiditReuseReadiness.tsx','utf8');
+const control=fs.readFileSync('src/components/AdminDiditControlCentre.tsx','utf8');
+const start=backend.indexOf('// Reusable KYC preparation: validate');
+const end=backend.indexOf('// One-off owner recovery',start);
+assert.ok(start>0 && end>start,'reuse-readiness callables must be isolated');
+const code=backend.slice(start,end);
+assert.match(code,/export const adminInspectDiditReuseWorkflow = onCall/,'workflow inspection callable exists');
+assert.match(code,/export const adminBindExistingDiditSource = onCall/,'read-only original session evidence inspection exists');
+assert.match(code,/export const adminDiditReuseReadiness = onCall/,'admins can check provider readiness');
+assert.match(code,/requireAdminIdentity\(request\)/,'all functions require server-authorised admin');
+assert.match(code,/DIDIT_VERIFICATION_PAUSED/,'public verification pause is mandatory');
+assert.match(code,/method: 'GET'/,'provider lookups are always read-only');
+assert.match(code,/v3\/workflows\//,'provider workflow is fetched from official API');
+assert.match(code,/v3\/session\//,'provider original approval is fetched from official API');
+assert.match(code,/workflow\.total_price === 'number' && workflow\.total_price === 0/,'workflow price checked against provider');
+assert.match(code,/workflow\.is_liveness_enabled === true/,'liveness must be enabled');
+assert.match(code,/workflow\.is_face_match_enabled === true/,'face match must be enabled');
+assert.match(code,/workflow\.status === 'published'/,'reuse workflow must be published');
+assert.match(code,/workflow\.workflow_type/,'reuse workflow type is inspected');
+assert.match(code,/sessionLaunchEnabled: false/g,'provider session launch is explicitly blocked');
+assert.match(code,/providerSourceBindingConfirmed: false/,'source-session ownership remains blocked until documented binding works');
+assert.match(code,/decision\.session_id !== sessionId/,'provider response matches the original session');
+assert.match(code,/decision\.environment !== 'live'/,'original report must be live');
+assert.match(code,/decision\.status !== 'Approved'/,'original provider must have approved');
+assert.match(code,/verifiedAdultFromDecision\(decision\)/,'the exact original must satisfy adult-documentary evidence');
+assert.match(code,/decision\.liveness_checks\.some/,'original result requires approved liveness evidence');
+assert.match(code,/diditReuseSourceClaims/,'same original session cannot be linked to multiple members');
+assert.match(code,/memberConsent !== true/,'binding preparation depends on active member consent');
+assert.match(code,/approved_for_reuse/,'admin support approval is prerequisite to source inspection');
+assert.doesNotMatch(code,/method:\s*'POST'|startDiditSession\(|tx\.set\(ageRef|status:\s*'COMPLETE'|verified:\s*true/,
+ 'no paid/new KYC session, age approval or fake verified status');
+assert.doesNotMatch(code,/console\.log|console\.error|console\.warn|date_of_birth:\s*|portrait_image:\s*|face_image:/,
+ 'raw identity details may never be logged or persisted in readiness calls');
+assert.match(client,/inspectReuseWorkflow/,'client supports secure provider workflow inspection');
+assert.match(client,/bindReuseSource/,'client supports original session retrieval');
+assert.match(admin,/Inspect workflow settings · no paid check/,'workflow inspection is clearly non-billable');
+assert.match(admin,/Check original approval · no new ID check/,'original session verification clearly never starts a new check');
+assert.match(admin,/secure biometric ownership confirmation and account binding are still required/,'no implied age pass');
+assert.match(control,/<AdminDiditReuseReadiness \/>/,'admin control centre contains provider readiness');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'public Didit verification stays disabled');
+console.log('Didit source evidence, zero-cost reuse workflow and fail-closed launch-readiness contracts PASS.');
