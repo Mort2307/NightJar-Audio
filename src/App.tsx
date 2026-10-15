@@ -98,6 +98,7 @@ import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorks
 import AdminDiditControlCentre from './components/AdminDiditControlCentre';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
 import AdminSecurityAlerts from './components/AdminSecurityAlerts';
+import AdminMemberSafety from './components/AdminMemberSafety';
 import AdminAuthenticationLog from './components/AdminAuthenticationLog';
 import AdminAssistance from './components/AdminAssistance';
 import ProductExperience from './components/ProductExperience';
@@ -741,6 +742,89 @@ function App() {
     };
   }, [liveRoleMenuOpen]);
   useEffect(() => installNativeProtectionBridge(), []);
+
+  // Observe only explicit browser security shortcuts. Never capture text,
+  // passwords, individual keys, clipboard data or private messages.
+  useEffect(() => {
+    if (!user?.userId || role === 'admin' || demoMode || simulationMode || protectedReaderOpen) return;
+    let lastRecorded = 0;
+    const report = (eventType: string, detectionSource: string, confidence = 'possible') => {
+      const now = Date.now();
+      if (now - lastRecorded < 15000) return;
+      lastRecorded = now;
+      void nightjarProtection.record({
+        eventType, relatedType: 'app', relatedId: 'nightjar-ui',
+        detectionSource, detectionConfidence: confidence,
+        clientPlatform: navigator.platform || 'web',
+        route: window.location.pathname.slice(0, 160),
+        summary: 'App-wide security shortcut signal; not evidence a screenshot or recording occurred.',
+      }).catch(() => { /* Telemetry must never interrupt legitimate app use. */ });
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const command = event.metaKey || event.ctrlKey;
+      if (key === 'printscreen') report('possible_screenshot_key', 'browser_printscreen');
+      else if (event.metaKey && event.shiftKey && ['s','3','4','5'].includes(key))
+        report('possible_capture_shortcut', 'browser_os_capture_shortcut');
+      else if (command && key === 'p') report('app_print_shortcut', 'browser_print_shortcut', 'contextual');
+      else if (command && key === 's') report('app_save_shortcut', 'browser_save_shortcut', 'contextual');
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === 'printscreen') report('possible_screenshot_key', 'browser_printscreen');
+    };
+    const onNativeScreenshot = () => report('native_screenshot_detected', 'native_bridge', 'native_callback');
+    const onNativeCapture = () => report('native_screen_capture_detected', 'native_bridge', 'native_callback');
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    window.addEventListener('nightjar:native-screenshot', onNativeScreenshot);
+    window.addEventListener('nightjar:native-screen-capture', onNativeCapture);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('nightjar:native-screenshot', onNativeScreenshot);
+      window.removeEventListener('nightjar:native-screen-capture', onNativeCapture);
+    };
+  }, [user?.userId, role, demoMode, simulationMode, protectedReaderOpen]);
+
+  // If an owner suspends an active session, clear the on-screen workspace
+  // when the user returns to Nightjar or at most 60s later while visible.
+  // Server-side callable and Storage guards apply immediately.
+  useEffect(() => {
+    if (!user?.userId || role === 'admin') return;
+    let mounted = true;
+    let checking = false;
+    const check = async () => {
+      if (checking || document.visibilityState === 'hidden') return;
+      checking = true;
+      try {
+        const access = await nightjarAccount.accessStatus();
+        if (mounted && access.status === 'suspended') {
+          setPlaying(null);
+          setProtectedReaderOpen(false);
+          setRole(null);
+          setAgeStage('gate');
+          await nightjarAuth.signOut();
+          notify('Your Nightjar account is suspended. Contact support to request a review.');
+        }
+      } catch (error) {
+        const code = String((error as {code?:unknown})?.code ?? '');
+        if (mounted && (code.includes('unauthenticated') || code.includes('user-disabled'))) {
+          setPlaying(null);
+          await nightjarAuth.signOut().catch(() => {});
+        }
+      } finally { checking = false; }
+    };
+    const wake = () => { void check(); };
+    const timer = window.setInterval(wake, 60000);
+    window.addEventListener('focus', wake);
+    document.addEventListener('visibilitychange', wake);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', wake);
+      document.removeEventListener('visibilitychange', wake);
+    };
+  }, [user?.userId, role]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -3009,10 +3093,10 @@ function App() {
         return;
       }
 
-      await nightjarAdministration.setAccountRole(
+      await nightjarAdministration.setAccountSuspension(
         report.subjectUserId,
-        report.subjectRole as 'listener'|'creator'|'writer'|'editor',
-        'suspended',
+        'suspend',
+        'Administrator-reviewed community report ' + (report.id ?? 'with evidence'),
       );
       await loadAdminOverview();
       notify('Reported account suspended. The report remains open for a separate content decision.');
@@ -3039,6 +3123,7 @@ function App() {
 
   const suspendFromSecurityAlert = async (alert: any) => {
     if (!canAdmin || !alert?.id) return;
+    if (!demoMode && !window.confirm('Confirm reviewed security evidence justifies suspending this account? Firebase sign-in will be disabled and member sessions revoked.')) return;
     try {
       if (demoMode) {
         setSecurityAlerts((items:any[]) => { const updated=items.map((item:any)=>item.id===alert.id?{...item,status:'actioned'}:item); writeDemo('securityAlerts',updated); return updated; });
@@ -3869,6 +3954,24 @@ function App() {
     }
   };
 
+  const changeAccountSuspension = async (account: any, action: 'suspend' | 'restore', reason: string) => {
+    if (!canAdmin || !account?.userId || account.role === 'admin') {
+      throw new Error('Only an administrator can change a non-admin member suspension.');
+    }
+    if (demoMode) {
+      const status = action === 'suspend' ? 'suspended' : 'active';
+      setAdminOverview((current:any) => {
+        const updated={ ...(current ?? {}), people:{ ...(current?.people ?? {}), accounts:(current?.people?.accounts ?? []).map((item:any) => item.userId===account.userId?{...item,status}:item) } };
+        writeDemo('adminOverview',updated);
+        return updated;
+      });
+      return { userId: account.userId, status, authDisabled: action === 'suspend', revokedReaderSessions: 0 };
+    }
+    const result = await nightjarAdministration.setAccountSuspension(account.userId, action, reason);
+    await loadAdminOverview();
+    return result;
+  };
+
   const changeAccountStatus = async (account: any, nextStatus: 'active' | 'pending_review' | 'suspended') => {
     if (!canAdmin || !account?.userId || !account?.role || account.role === 'admin') return;
     try {
@@ -3877,9 +3980,21 @@ function App() {
         notify(`Demo account status changed to ${nextStatus.replace('_', ' ')} locally.`);
         return;
       }
-      await nightjarAdministration.setAccountRole(account.userId, account.role, nextStatus);
-      await loadAdminOverview();
-      notify(`Account status changed to ${nextStatus.replace('_', ' ')}.`);
+      if (nextStatus === 'suspended' || account.status === 'suspended') {
+        const action = nextStatus === 'suspended' ? 'suspend' : 'restore';
+        const reason = window.prompt(action === 'suspend'
+          ? 'Reason / report reference (required, 12+ characters). Firebase login will be disabled.'
+          : 'Reason for restoring this member (required, 12+ characters):');
+        if (!reason) return;
+        if (reason.trim().length < 12) { notify('Please provide a reason of at least 12 characters.'); return; }
+        if (!window.confirm(action === 'suspend' ? 'Confirm suspension and disable Firebase login?' : 'Confirm reactivation and enable Firebase login?')) return;
+        await changeAccountSuspension(account, action, reason.trim());
+        notify(action === 'suspend' ? 'Firebase login disabled and member sessions revoked.' : 'Member access restored by the server.');
+      } else {
+        await nightjarAdministration.setAccountRole(account.userId, account.role, nextStatus);
+        await loadAdminOverview();
+        notify(`Account status changed to ${nextStatus.replace('_', ' ')}.`);
+      }
     } catch {
       notify('Account status could not be changed.');
     }
@@ -5716,6 +5831,12 @@ function App() {
             </div>}
             {canAdmin && adminWorkspace === 'people' && <section className="security-alert-panel" id="nightjar-admin-testers"><div><span className="mini-label">PRIVATE TESTING / EMAIL ALLOWLIST</span><h2>Approved tester emails</h2><p>Only the owner accounts and emails listed here can enter Nightjar while Closed Beta is enabled. Approved testers still verify their Firebase email normally; the temporary age bypass is clearly marked as test access.</p></div><div className="admin-application-wavebar"><label>Tester email<input type="email" value={adminTesterEmail} onChange={(event)=>setAdminTesterEmail(event.target.value)} placeholder="tester@example.com" /></label><button className="primary-button" disabled={!adminTesterEmail.trim()} onClick={()=>void changeClosedBetaTester(adminTesterEmail,true)}>Approve tester email</button></div><div className="security-alert-list">{(adminOverview?.testing?.approvedTesters ?? []).length === 0 ? <div className="people-empty"><ShieldCheck size={18}/><strong>No tester emails approved</strong><span>Owner administrator emails remain allowed automatically.</span></div> : (adminOverview?.testing?.approvedTesters ?? []).map((tester:any)=><article className="security-alert-row" key={tester.email}><div><strong>{tester.email}</strong><span>Private beta account access · temporary age-assurance bypass while test mode is enabled</span><em>Removing access blocks Nightjar backend use even if a Firebase Auth identity already exists.</em></div><div className="security-alert-actions"><button className="ghost-button" onClick={()=>void changeClosedBetaTester(tester.email,false)}>Remove tester access</button></div></article>)}</div><strong>{adminOverview?.testing?.approvedTesterCount ?? 0} approved tester email{(adminOverview?.testing?.approvedTesterCount ?? 0) === 1 ? '' : 's'} · Closed Beta {adminOverview?.testing?.closedBeta === false ? 'OFF' : 'ON'}</strong></section>}
             {adminWorkspace === 'security' && <div className="demo-warning admin-note"><ShieldCheck size={17} /><div><strong>ADMIN ACCESS MODEL</strong><span>Only the three approved Nightjar owner emails receive this role. Administrator access is enforced by the backend allowlist.</span></div></div>}
+            {canAdmin && adminWorkspace === 'security' && <AdminMemberSafety
+              accounts={adminOverview?.people?.accounts ?? []}
+              loading={adminOverviewLoading}
+              onRefresh={() => { void loadAdminOverview(); }}
+              onAction={changeAccountSuspension}
+            />}
             {canAdmin && adminWorkspace === 'security' && <AdminSecurityAlerts
               alerts={securityAlerts}
               loading={securityAlertsLoading}
