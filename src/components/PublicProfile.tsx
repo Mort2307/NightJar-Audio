@@ -242,7 +242,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero nj-cinema-profile-hero">
           <div className="nj-cinema-profile-cover" aria-hidden="true">
-            {profile.avatarUrl && <img className="nj-profile-hero-banner" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" />}
+            {profile.avatarUrl && <img className="nj-profile-hero-banner" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" onLoad={(event)=>{ if(event.currentTarget.naturalWidth < 480 || event.currentTarget.naturalHeight < 320) event.currentTarget.classList.add("nj-cinema-banner-lowres"); }}/>}
             <span className="nj-cinema-profile-cover-shade"/>
             <span className="nj-cinema-cover-words"><small>NIGHTJAR {profileRole === 'listener' ? 'COMMUNITY' : 'CREATOR STUDIO'}</small><em>{profileRole === 'listener' ? 'Stay curious.' : 'Stories you can feel.'}</em></span>
             <span className="nj-cinema-cover-moon">☾</span>
