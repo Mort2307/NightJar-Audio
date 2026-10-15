@@ -1,4 +1,4 @@
-import { Accessibility, ArrowRight, Bell, BookOpenText, CalendarDays, ChevronDown, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Accessibility, ArrowRight, Bell, CalendarDays, ChevronDown, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import HelpGlossary from './HelpGlossary';
 import { VisionAccessControls } from './VisionAccess';
