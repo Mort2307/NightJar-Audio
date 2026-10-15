@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock3, Gift, WalletCards } from 'lucide-react';
 import { nightjarGifts, type NightjarEarnings, type NightjarGiftConfig, type NightjarGiftHistoryItem, type NightjarWallet } from '../platform/firebase-nightjars';
+import ContextHelp from './ContextHelp';
 
 type Props = {
   notify: (message: string) => void;
@@ -64,13 +65,13 @@ export default function NightjarWalletPanel({ notify, professional=false, demoMo
     </div>
 
     {compact?<details className="nightjar-pack-section compact-disclosure"><summary>Nightjar packs</summary><div className="compact-disclosure-body">
-      <div><span className="mini-label">PACKS</span><h3>Nightjar packs</h3><p>Each Nightjar always contributes £1.00 to the professional you eventually send it to.</p></div>
+      <div><span className="mini-label">PACKS</span><h3>Nightjar packs <ContextHelp topic="wallet-checkout"/></h3><p>Each Nightjar always contributes £1.00 to the professional you eventually send it to.</p></div>
       <div className="nightjar-pack-grid">{config?.packs.map((pack)=><article key={pack.count}><span className="nightjar-pack-birds"><img className="nightjar-token-inline" src="/nightjar-token.svg" alt=""/> ×{pack.count}</span><strong>{money(pack.pricePence)}</strong><small>{money(Math.round(pack.pricePence/pack.count))} each</small><button className="secondary-button" disabled={!config.checkoutConfigured} onClick={()=>notify('Nightjar checkout will open here once the live payment provider is connected.')}>{config.checkoutConfigured?'Buy pack':'Checkout not connected yet'}</button></article>)}</div>
-      {!config?.checkoutConfigured&&<p className="panel-note">The wallet, packs, gifting ledger and creator-credit logic are live in the product code. Real-money pack checkout stays disabled until Nightjar's production payment provider and verified purchase callback are connected.</p>}
+      {!config?.checkoutConfigured&&<p className="panel-note">Pack purchases are not available yet.</p>}
     </div></details>:<section className="nightjar-pack-section">
-      <div><span className="mini-label">PACKS</span><h3>Nightjar packs</h3><p>Each Nightjar always contributes £1.00 to the professional you eventually send it to.</p></div>
+      <div><span className="mini-label">PACKS</span><h3>Nightjar packs <ContextHelp topic="wallet-checkout"/></h3><p>Each Nightjar always contributes £1.00 to the professional you eventually send it to.</p></div>
       <div className="nightjar-pack-grid">{config?.packs.map((pack)=><article key={pack.count}><span className="nightjar-pack-birds"><img className="nightjar-token-inline" src="/nightjar-token.svg" alt=""/> ×{pack.count}</span><strong>{money(pack.pricePence)}</strong><small>{money(Math.round(pack.pricePence/pack.count))} each</small><button className="secondary-button" disabled={!config.checkoutConfigured} onClick={()=>notify('Nightjar checkout will open here once the live payment provider is connected.')}>{config.checkoutConfigured?'Buy pack':'Checkout not connected yet'}</button></article>)}</div>
-      {!config?.checkoutConfigured&&<p className="panel-note">The wallet, packs, gifting ledger and creator-credit logic are live in the product code. Real-money pack checkout stays disabled until Nightjar's production payment provider and verified purchase callback are connected.</p>}
+      {!config?.checkoutConfigured&&<p className="panel-note">Pack purchases are not available yet.</p>}
     </section>}
 
     {showEarnings&&earnings&&Object.keys(earnings.byRole??{}).length>0&&<section className="nightjar-role-earnings"><span className="mini-label">SUPPORT BY ROLE</span><div>{Object.entries(earnings.byRole).map(([role,value])=><article key={role}><strong>{roleLabel(role)}</strong><span>{money(Number(value.clearedPence??0))} cleared</span><small>{money(Number(value.pendingPence??0))} pending</small></article>)}</div></section>}
