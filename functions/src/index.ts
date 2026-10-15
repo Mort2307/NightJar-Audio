@@ -6404,6 +6404,115 @@ export const ageStatus = onCall({
   };
 });
 
+// Existing Didit KYC reuse coordination during the production verification pause.
+// A consented support request is NOT identity proof and cannot grant age access.
+// Reuse approval must later come from an authenticated, account-bound Didit flow.
+const diditReuseRef = (uid: string) => db.collection('diditReuseRequests').doc(uid);
+type DiditReuseState = 'requested' | 'investigating' | 'waiting_for_member' | 'closed';
+export const myDiditReuseRequest = onCall({ region: REGION }, async request => {
+  const identity = await requireActiveIdentity(request);
+  const data = (await diditReuseRef(identity.uid).get()).data() ?? {};
+  return {
+    status: ['requested','investigating','waiting_for_member','closed'].includes(String(data.status))
+      ? data.status as DiditReuseState : 'none',
+    requestedAt: toIso(data.requestedAt),
+    updatedAt: toIso(data.updatedAt),
+    note: cleanText(data.publicNote, 280) || null,
+    publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
+  };
+});
+
+export const requestDiditReuse = onCall({ region: REGION }, async request => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as { consent?: unknown; previousCheck?: unknown };
+  if (input.consent !== true || input.previousCheck !== 'standalone') {
+    throw new HttpsError('invalid-argument', 'You must explicitly consent to request reuse of your earlier Didit identity check.');
+  }
+  if (!DIDIT_VERIFICATION_PAUSED) {
+    throw new HttpsError('failed-precondition', 'Use Nightjar\'s normal account-linked Didit verification when the provider is available.');
+  }
+  const age = (await db.collection('ageAssurance').doc(identity.uid).get()).data();
+  if (diditPass(age)) return { status: 'already_verified' };
+  const ref = diditReuseRef(identity.uid);
+  const state = await db.runTransaction(async tx => {
+    const current = (await tx.get(ref)).data() ?? {};
+    if (['requested','investigating','waiting_for_member'].includes(String(current.status))) {
+      return current.status as DiditReuseState;
+    }
+    tx.set(ref, {
+      uid: identity.uid,
+      emailMasked: maskSecurityEmail(identity.email),
+      status: 'requested',
+      previousCheck: 'standalone',
+      memberConsent: true,
+      requestedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      publicNote: 'Our team will review how to connect your previous Didit approval securely. Do not repeat your identity check.',
+    });
+    return 'requested';
+  });
+  return { status: state };
+});
+
+export const withdrawDiditReuseRequest = onCall({ region: REGION }, async request => {
+  const identity = await requireActiveIdentity(request);
+  const ref = diditReuseRef(identity.uid);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()?.status === 'closed') return;
+    tx.set(ref, {
+      status: 'closed', memberConsent: false,
+      publicNote: 'You withdrew your request to reuse your previous Didit verification.',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+  return { status: 'closed' };
+});
+
+export const adminListDiditReuseRequests = onCall({ region: REGION }, async request => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('diditReuseRequests').orderBy('requestedAt', 'desc').limit(80).get();
+  return { requests: snapshot.docs.map(doc => {
+    const item = doc.data();
+    return {
+      uid: doc.id,
+      emailMasked: cleanText(item.emailMasked, 90),
+      status: ['requested','investigating','waiting_for_member','closed'].includes(String(item.status))
+        ? item.status as DiditReuseState : 'closed',
+      requestedAt: toIso(item.requestedAt),
+      updatedAt: toIso(item.updatedAt),
+    };
+  }) };
+});
+
+export const adminReviewDiditReuseRequest = onCall({ region: REGION }, async request => {
+  const identity = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as { uid?: unknown; status?: unknown };
+  const uid = cleanText(input.uid, 128);
+  const status = cleanText(input.status, 50);
+  if (!/^[a-zA-Z0-9_-]{10,128}$/.test(uid) ||
+      !['investigating','waiting_for_member','closed'].includes(status)) {
+    throw new HttpsError('invalid-argument','Invalid reuse request or review action.');
+  }
+  const ref = diditReuseRef(uid);
+  await db.runTransaction(async tx => {
+    const current = await tx.get(ref);
+    if (!current.exists || current.data()?.memberConsent !== true) {
+      throw new HttpsError('failed-precondition', 'An active member-consented reuse request is required.');
+    }
+    tx.set(ref, {
+      status,
+      updatedAt: FieldValue.serverTimestamp(),
+      lastReviewedBy: identity.uid,
+      publicNote: status === 'investigating' ? 'Nightjar is reviewing how to reuse your existing Didit identity check.'
+        : status === 'waiting_for_member' ? 'The team will contact you through your registered Nightjar account with next steps.'
+        : 'Your reuse enquiry was closed without changing your account verification. Contact support if you still need assistance.',
+      ...(status === 'closed' ? { memberConsent: false } : {}),
+    }, { merge: true });
+  });
+  return { status };
+});
+
 // One-off owner recovery of an already-completed, account-bound live Didit
 // verification. This GET-only provider check does not initiate an ID session,
 // skip age validation, accept client-supplied session IDs, or trust stale events.
