@@ -6692,7 +6692,7 @@ export const myDiditControlledCheck = onCall({ region: REGION }, async request =
   const providerVerified = diditPass(age.data());
   // Meg's direct one-use pilot appears without an old standalone approval.
   // This is only an invitation: status never starts a billable Didit session.
-  const status = String(data.state ?? (directPilot && !providerVerified ? 'authorised' : providerVerified ? 'already_verified' : 'none'));
+  const status = String(data.state ?? (directPilot && !providerVerified ? 'authorised' : directPilot && providerVerified ? 'already_verified' : 'none'));
   let launchUrl: string | null = null;
   if (grant.exists && status !== 'authorised' && !providerVerified) {
     const sessionId = cleanText(age.data()?.sessionId, 128);
