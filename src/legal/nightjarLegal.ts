@@ -194,7 +194,7 @@ export const currentLegalAcceptancePayload = (
     { id:'privacy_notice', version:NIGHTJAR_LEGAL_VERSION, accepted:true },
   ];
   if (professional) {
-    documents.push({ id:'professional_terms', version:NIGHTJAR_LEGAL_VERSION, accepted:true });
+    documents.push({ id:'professional_terms', version:NIGHTJAR_PROFESSIONAL_VERSION, accepted:true });
   }
   return documents;
 };
