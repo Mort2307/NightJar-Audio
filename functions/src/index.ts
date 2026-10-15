@@ -62,7 +62,7 @@ const accountRef = (uid: string) => db.collection('accounts').doc(uid);
 const CURRENT_LEGAL_DOCUMENTS = {
   platform_terms: {
     id: 'platform_terms',
-    version: '2026-10-15.1',
+    version: '2026-10-15.2',
     title: 'Nightjar Terms of Use',
     path: '/legal/terms',
     requiredForAccount: true,
@@ -240,6 +240,18 @@ export const acceptLegalAgreements = onCall({ region: REGION }, async (request) 
       withdrawnAt:null,
       updatedAt:FieldValue.serverTimestamp(),
     }, { merge:true });
+    // Preserve each explicit decision: the current-version mirror is overwritten
+    // when terms change and is not sufficient to evidence earlier acceptances.
+    batch.create(accountRef(identity.uid).collection('legalAcceptanceHistory').doc(), {
+      documentId:id,
+      title:document.title,
+      version:document.version,
+      accepted:true,
+      acceptedAt:FieldValue.serverTimestamp(),
+      acceptedByUserId:identity.uid,
+      acceptedByEmail:identity.email,
+      source,
+    });
     accepted.push({ id, version:document.version });
   }
 
@@ -483,6 +495,16 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
         withdrawnAt:null,
         updatedAt:FieldValue.serverTimestamp(),
       }, { merge:true });
+      legalBatch.create(accountRef(identity.uid).collection('legalAcceptanceHistory').doc(), {
+        documentId:id,
+        title:document.title,
+        version:document.version,
+        accepted:true,
+        acceptedAt:FieldValue.serverTimestamp(),
+        acceptedByUserId:identity.uid,
+        acceptedByEmail:identity.email,
+        source:'registration',
+      });
     }
     await legalBatch.commit();
     await registrationIntent.ref.delete();
