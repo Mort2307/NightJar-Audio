@@ -4,6 +4,7 @@ import { demoDirectory } from '../demo/nightjarDemo';
 import { FileText, Heart, Search, Share2, ShieldCheck, X } from 'lucide-react';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
+import ContextHelp from './ContextHelp';
 
 type Writer = {
   userId: string;
@@ -191,9 +192,8 @@ export default function WriterDiscovery({ followingIds, onToggleFollow, notify, 
             {selected.portfolioNote && <p>{selected.portfolioNote}</p>}
             {(selected.completedCollaborations ?? 0) > 0 && <CollaborationHistoryButton userId={selected.userId} displayName={selected.name} count={selected.completedCollaborations ?? 0} demoMode={demoMode} />}
           </section>}
-          <div className="writer-public-note"><FileText size={16}/><div><strong>Public writing identity, protected manuscripts.</strong><p>Nightjar shows public profile metadata and credits without exposing private manuscript text, collaboration permissions, protected drafts or private deal terms.</p></div></div>
           <div className="creator-profile-releases">
-            <div className="section-head"><div><span className="mini-label">PUBLIC WORK</span><h3>Writing portfolio</h3></div></div>
+            <div className="section-head"><div><span className="mini-label">PUBLIC WORK</span><h3>Writing portfolio <ContextHelp topic="writer-privacy"/></h3></div></div>
             {!!selected.featuredWork?.length && <div className="public-featured-work"><span className="mini-label">FEATURED BY WRITER</span>{selected.featuredWork.map((release:any)=><article key={release.id}><div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div><div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===selected.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div></article>)}</div>}
             {!!selected.creditedReleases?.length && <div className="public-credit-list">{selected.creditedReleases.slice(0,12).map((release:any)=><article key={release.id}><div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div><div className="track-credit-line">{(release.contributors ?? []).filter((credit:any)=>credit.userId===selected.userId).map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}</span>)}</div></article>)}</div>}
             {!selected.creditedReleases?.length && <div className="people-empty"><FileText size={18}/><strong>{selected.publishedWorkCount ?? 0} published script{selected.publishedWorkCount === 1 ? '' : 's'}.</strong><span>Protected script text is never exposed here. Release credits will appear when published work is linked to a Nightjar release.</span></div>}
