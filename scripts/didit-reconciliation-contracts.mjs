@@ -41,4 +41,33 @@ assert.match(control, /Recover my existing Didit approval/,'owner control must b
 assert.doesNotMatch(control,/nightjarAge\.start\(/,'dashboard must not open an ID session');
 assert.match(workflow, /\[nightjar-didit-reconciliation-release\]/,'backend-first deploy guard is required');
 assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'do not reopen public age verification');
+// All-member read-only recovery shares the established authenticated provider
+// evidence path, without allowing a member to select another account/session.
+const memberStart=backend.indexOf('export const reconcileMyDiditVerification = onCall');
+const memberEnd=backend.indexOf('// Owner-only read-only evidence trail',memberStart);
+assert.ok(memberStart>0 && memberEnd>memberStart,'member recovery is a standalone callable');
+const member=backend.slice(memberStart,memberEnd);
+const memberClient=fs.readFileSync('src/platform/firebase-didit-controlled.ts','utf8');
+const memberPanel=fs.readFileSync('src/components/DiditControlledLiveCheck.tsx','utf8');
+assert.match(member,/await requireActiveIdentity\(request\)/,'only the current authenticated member can reconcile');
+assert.match(member,/const sessionId = cleanText\(age\.sessionId/,'session is read from the caller account');
+assert.match(member,/session\.uid !== identity\.uid/,'session belongs to authenticated member');
+assert.match(member,/session\.workflowId !== DIDIT_WORKFLOW_ID\.value\(\)/,'server configured workflow');
+assert.match(member,/method: 'GET'/,'member recovery only reads the existing decision');
+assert.doesNotMatch(member,/method: 'POST'|startDiditSession\(/,'never starts an additional paid provider check');
+assert.match(member,/decision\.session_id !== sessionId/,'response session binding');
+assert.match(member,/decision\.vendor_data !== identity\.uid/,'response account binding');
+assert.match(member,/decision\.workflow_id !== session\.workflowId/,'response workflow binding');
+assert.match(member,/decision\.environment !== 'live'/,'sandbox results cannot unlock adult access');
+assert.match(member,/decision\.session_kind !== 'user'/,'business decisions do not qualify');
+assert.match(member,/verifiedAdultFromDecision\(decision\)/,'approved documentary evidence must prove adulthood');
+assert.match(member,/!\['PENDING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'\]\.includes/,'only active or under-review sessions may be recovered');
+assert.match(member,/db\.runTransaction/,'recovery is atomic');
+assert.match(member,/Number\(ageNow\.diditEventCreatedAt \?\? 0\) !== previousEventTime/,'newer verification results cannot be overwritten');
+assert.match(member,/verificationEvidenceSource:'didit-authenticated-session-read'/,'recovery is distinguishable from a signed webhook');
+assert.doesNotMatch(member,/console\.log|console\.error|document_number|date_of_birth|session_url|face_matches/,'never log or store KYC documents');
+assert.match(memberClient,/reconcileMyDiditVerification/,'browser calls dedicated existing-decision recovery');
+assert.match(memberPanel,/nightjarDiditControlled\.reconcile\(\)/,'member explicitly requests result recovery');
+assert.match(memberPanel,/Check my completed Didit result · no new ID check/,'button prevents duplicate charges by design');
+assert.doesNotMatch(memberPanel,/onClick=\{\(\)=>void begin\(\)\}[^\n]*Check my completed/,'recovery UI cannot start another session');
 console.log('Nightjar secure one-shot existing Didit approval reconciliation contracts PASS.');
