@@ -684,7 +684,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </section>
 
           <section className="nj-release-distribution-panel" id="release-distribution" aria-label="Release debut and distribution">
-            <div className="release-transcript-head"><div><span className="mini-label">RELEASE IDENTITY · CREATOR DECLARED</span><strong className="nj-term-label">Where does this recording debut? <ContextHelp topic="first-on-nightjar"/></strong><p>Choose First on NightJar only if this is its first public release. You remain free to publish anywhere else. NightJar Original is reserved for productions commissioned and paid for by NightJar.</p></div></div>
+            <div className="release-transcript-head"><div><span className="mini-label">RELEASE IDENTITY · CREATOR DECLARED</span><strong className="nj-term-label">Where does this recording debut? <ContextHelp topic="first-on-nightjar"/></strong><p>Choose how to label this recording’s first release.</p></div></div>
             <div className="nj-release-distribution-options" role="radiogroup" aria-label="Release distribution label">
               {([
                 {value:'standard',label:'Standard release',help:'Available elsewhere already, or no special release label.'},
@@ -694,7 +694,6 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
                 <span><strong>{option.label}</strong><small>{option.help}</small></span>
               </label>)}
             </div>
-            {current.releaseDistribution === 'nightjar_first' && <p className="nj-release-distribution-note">By selecting First on NightJar, you confirm this is its first public release. You remain free to publish this recording on other platforms at any time. No exclusivity or rights transfer applies.</p>}
           </section>
 
           <details className="release-transcript-editor nj-optional-transcript" id="release-transcript">
