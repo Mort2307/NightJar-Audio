@@ -17,3 +17,9 @@
 .nj-member-safety-success, .nj-member-safety-error { display: flex; align-items: center; gap: .5rem; }
 .nj-member-safety-error { color: var(--danger, #e27d7d); }
 @media(max-width:640px){ .nj-member-safety-search-row { flex-wrap: wrap; } .nj-member-safety-search-row input { flex-basis: calc(100% - 32px); } .nj-member-safety-result { align-items: flex-start; flex-direction: column; gap: .4rem; } }
+
+.nj-member-safety-dossier { display: grid; gap: .6rem; padding: .85rem; border: 1px solid var(--line-soft); border-radius: 12px; }
+.nj-member-safety-dossier h3 { margin: 0; }
+.nj-member-safety-dossier details { max-height: 26rem; overflow-y: auto; }
+.nj-member-safety-evidence { display: grid; gap: .3rem; padding: .65rem 0; border-bottom: 1px solid var(--line-soft); }
+.nj-member-safety-evidence small { color: var(--muted-2); }
