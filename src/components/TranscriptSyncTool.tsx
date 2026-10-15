@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BookOpenText, CheckCircle2, RefreshCw, Sparkles } from 'lucide-react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
+import './transcript-sync.css';
 
 /**
  * Zero paid-AI-API design: recognition runs on the operator's own device.
