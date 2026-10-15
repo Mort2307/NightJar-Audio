@@ -22,6 +22,7 @@
 .nj-social-editor-actions button{min-height:45px;}
 .nj-social-editor-note{color:#c3b3c2;font-size:13px;padding:12px;}
 .nj-social-public{margin:16px 0;padding:17px;border:1px solid rgba(220,181,209,.21);background:rgba(118,79,108,.08);border-radius:18px;}
+.nj-social-public-heading,.nj-social-heading-icons{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .nj-social-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr));gap:10px;margin:13px 0;}
 .nj-social-public-link{display:flex;align-items:center;gap:12px;min-width:0;border:1px solid rgba(228,193,217,.18);padding:10px;border-radius:14px;text-decoration:none;background:rgba(255,255,255,.025);color:inherit;transition:background .16s ease,border-color .16s ease;}
 .nj-social-public-link:hover,.nj-social-public-link:focus-visible{border-color:rgba(236,205,225,.52);background:rgba(211,160,195,.12);}
