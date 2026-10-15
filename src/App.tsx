@@ -4420,7 +4420,7 @@ function App() {
     </section></main>;
   }
 
-  if (user && !mandatoryAgreementReady) {
+  if (user && nightjarAuth.current()?.emailVerified && !mandatoryAgreementReady) {
     return <MemberSecurityGate onComplete={() => {
       setMandatoryAgreementReady(true);
       setSessionHydrating(true);
