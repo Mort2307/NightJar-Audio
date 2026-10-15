@@ -4938,6 +4938,21 @@ function App() {
           </div>}
         {view === 'discover' && (
           <PersonalisedHome userId={user?.userId ?? "guest"} editable={!liveRolePreview && !simulationMode} onNavigate={navigate}>
+            <HomeSection id="spotlights" title="Community spotlights">
+            <SpotlightExperience
+              spotlightMeta={spotlightMeta}
+              spotlights={[creatorSpotlight, writerSpotlight, editorSpotlight, artistSpotlight, listenerSpotlight].filter((person): person is Spotlight => person !== null)}
+              viewerUserId={simulationMode ? null : user?.userId}
+              followingIds={followingProfileIds}
+              simulationMode={simulationMode}
+              simulationRole={simulationMode ? previewRole : null}
+              onProfile={openPublicProfile}
+              onFollow={toggleProfileFollow}
+              onShare={shareSpotlight}
+              onListen={(releaseId) => { const track = tracks.find((item)=>item.id===releaseId); if (track) togglePlayback(track); }}
+            />
+            </HomeSection>
+
             <HomeSection id="featured" title="Featured audio">
             <section className="hero-section">
               <div className="hero-copy">
@@ -5056,20 +5071,7 @@ function App() {
 
             </HomeSection>
 
-            <HomeSection id="spotlights" title="Community spotlights">
-            <SpotlightExperience
-              spotlightMeta={spotlightMeta}
-              spotlights={[creatorSpotlight, writerSpotlight, editorSpotlight, artistSpotlight, listenerSpotlight].filter((person): person is Spotlight => person !== null)}
-              viewerUserId={simulationMode ? null : user?.userId}
-              followingIds={followingProfileIds}
-              simulationMode={simulationMode}
-              simulationRole={simulationMode ? previewRole : null}
-              onProfile={openPublicProfile}
-              onFollow={toggleProfileFollow}
-              onShare={shareSpotlight}
-              onListen={(releaseId) => { const track = tracks.find((item)=>item.id===releaseId); if (track) togglePlayback(track); }}
-            />
-            </HomeSection>
+
 
             <HomeSection id="writers" title="Discover writers"><WriterDiscovery followingIds={followingProfileIds} onToggleFollow={toggleProfileFollow} notify={notify} demoMode={demoMode} /></HomeSection>
 
