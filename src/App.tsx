@@ -95,6 +95,7 @@ import { MEMBER_PAYMENT_FEATURES_ENABLED } from './platform/nightjar-financial-v
 import NightjarFinancePreview from './components/NightjarFinancePreview';
 import NightjarSettings from './components/NightjarSettings';
 import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
+import AdminDiditControlCentre from './components/AdminDiditControlCentre';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
 import AdminSecurityAlerts from './components/AdminSecurityAlerts';
 import AdminAuthenticationLog from './components/AdminAuthenticationLog';
@@ -580,7 +581,7 @@ function App() {
   });
   const [adminProfileViewerUserId, setAdminProfileViewerUserId] = useState<string | null>(null);
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>(() => {
-    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|finance|security|assistance|tools)\/?$/);
+    const match = window.location.pathname.match(/^\/admin\/workspace\/(overview|people|content|launch|didit|finance|security|assistance|tools)\/?$/);
     return (match?.[1] ?? 'overview') as AdminWorkspace;
   });
   const [adminApplications, setAdminApplications] = useState<any[]>([]);
@@ -5494,7 +5495,7 @@ function App() {
           <section className={adminPanel || adminPeopleRole ? 'page-wrap admin-page admin-detail-active' : 'page-wrap admin-page'}>
             <div className="page-heading admin-owner-heading">
               <div><p className="eyebrow"><Settings2 size={14} /> ADMINISTRATOR WORKSPACE</p>
-              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', finance:'Finance & subscriptions', security:'Safety & security', assistance:'Admin assistance', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
+              <h1>{adminWorkspace === 'overview' ? 'Owner dashboard' : ({ people:'People & accounts', content:'Content & approvals', launch:'Launch readiness', didit:'Didit verification', finance:'Finance & subscriptions', security:'Safety & security', assistance:'Admin assistance', tools:'Platform tools' } as Record<string,string>)[adminWorkspace]}</h1>
               <p>{adminWorkspace === 'overview' ? 'Daily priorities, pending decisions and the right tools — without endless scrolling.' : 'A focused Nightjar workpage. Choose another section above to move between administrative tasks.'}</p></div>
               <button className="secondary-button" onClick={() => { void loadAdminOverview(); void loadSecurityAlerts(); void loadAuthenticationEvents(); void loadAdminApplications(); void loadAdminCreatorSuggestions(); void loadAdminReports(); void loadAdminReviews(); void loadAdminEditorial(); void loadPendingImages(); void loadCommercialControls(); }}><RefreshCw size={14}/> Refresh</button>
             </div>
@@ -5527,7 +5528,7 @@ function App() {
                 openSecurityAlerts={securityAlerts.filter((item:any)=>item.status==='open').length}
                 pendingImages={imageModeration.length}
                 pendingApplications={applicationGroups.pending.length}
-                onOpenDidit={() => document.getElementById('nightjar-admin-didit')?.scrollIntoView({ behavior:'instant', block:'start' })}
+                onOpenDidit={() => openAdminWorkspace('didit')}
                 onOpenTesters={() => openAdminWorkspace('people')}
                 onOpenSecurityAlerts={() => openAdminWorkspace('security')}
                 onOpenImages={() => openAdminPanel('images')}
@@ -5540,6 +5541,9 @@ function App() {
             <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Loading legal readiness" />}>
               <AdminLegalReadiness />
             </Suspense>
+            </>}
+            {adminWorkspace === 'didit' && <>
+            <AdminDiditControlCentre />
             {DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot" id="nightjar-admin-didit" aria-label="Didit admin-only controlled maintenance test">
               <span className="mini-label">AGE ASSURANCE · PUBLIC VERIFICATION PAUSED</span>
               <h2>One controlled administrator test</h2>
@@ -5554,7 +5558,7 @@ function App() {
                 <input type="checkbox" checked={ageNoticeAcknowledged} onChange={event => setAgeNoticeAcknowledged(event.target.checked)}/>
                 <span>I have read the current Nightjar Age Verification &amp; Didit Privacy Notice (version {NIGHTJAR_AGE_NOTICE_VERSION}) and acknowledge it for my account.</span>
               </label> : <p className="nj-didit-notice-saved"><Check size={16}/> Privacy notice already acknowledged for this account.</p>}
-              {!ageProviderVerified && <label className="nj-didit-member-consent">
+              {!ageProviderVerified && !ageAdminTestClaimed && <label className="nj-didit-member-consent">
                 <input type="checkbox" checked={ageDiditPermission} onChange={event => setAgeDiditPermission(event.target.checked)}/>
                 <span>I explicitly choose to start the one permitted live Didit identity check on my own account. I understand this may incur a charge, uses my government ID and facial/liveness evidence, and cannot be automatically retried.</span>
               </label>}
