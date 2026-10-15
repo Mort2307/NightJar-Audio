@@ -24,7 +24,8 @@ for (const term of [
   'nightjar-original', 'transcript', 'verified-status',
 ]) assert.ok(help.includes("'"+term+"'"), 'Missing help topic: ' + term);
 
-assert.match(help, /<span aria-hidden="true">ℹ️<\/span>/, 'Help marker is the requested ℹ️ emoji');
+assert.match(help, /<Info size=\{14\} strokeWidth=\{1\.8\} aria-hidden="true"\/>/, 'Help marker is a small, theme-neutral information icon');
+assert.match(style, /nj-context-help-trigger>svg\{display:block;width:14px;height:14px\}/, 'Visual help glyph stays discreet');
 assert.match(help, /aria-expanded=\{open\}/);
 assert.match(help, /aria-label=\{'What does '/);
 assert.match(help, /event\.key === 'Escape'/);
