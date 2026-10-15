@@ -1,11 +1,11 @@
-# Temporary isolated verification of the prepared Didit pilot.
+# Isolated build-only check for the staged all-account Didit verification rollout.
 # No secrets, firebase deploy, Hosting, PR preview, or production API calls.
 name: Didit pre-deployment validation only
 
 on:
   push:
     branches:
-      - prepare/didit-meg-direct-test-release-20261015
+      - prepare/didit-all-member-self-service-20261015
 
 permissions:
   contents: read
@@ -28,7 +28,7 @@ jobs:
           cache: npm
       - name: Install frontend dependencies
         run: npm ci --no-fund --no-audit
-      - name: Validate direct pilot contracts without provider calls
+      - name: Validate self-service Didit contracts without provider calls
         run: node scripts/didit-direct-pilot-contracts.mjs && node scripts/didit-controlled-check-contracts.mjs
       - name: Typecheck frontend
         run: npm run typecheck
