@@ -1,224 +1,210 @@
-import { useState } from 'react';
-import { BookOpenText, CheckCircle2, RefreshCw, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BookOpenText, CheckCircle2, Play, RotateCcw, SkipBack, Timer } from 'lucide-react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 import './transcript-sync.css';
 
 /**
- * Zero paid-AI-API design: recognition runs on the operator's own device.
- * No private recording is sent to an AI transcription service. The JS runtime
- * and open model files are downloaded over HTTPS on first use.
- *
- * AI-generated spoken text is deliberately REVIEW REQUIRED: it may omit
- * effects, invent phrases, mishear names or disagree with a writer's script.
+ * Human-timed transcription: no speech recognition, generative AI,
+ * remote inference, model downloads or third-party transcription APIs.
+ * Source audio is streamed through a normal private Nightjar playback URL.
  */
-type SyncWord = { text: string; timestamp: [number, number | null] };
-type SpeechResult = { text?: string; chunks?: SyncWord[] };
-type InferenceFn = (audio: string, options: Record<string, unknown>) => Promise<SpeechResult>;
-type Progress = { status?: string; progress?: number; file?: string };
+type TimedLine = { id: number; text: string; seconds: number | null };
 
 type Props = {
   releaseId: string;
   audioAvailable: boolean;
   transcriptText?: string;
   language?: string;
-  sourceUrl?: string | null;
-  sourceFile?: File | null;
   isAdmin?: boolean;
   simulationMode?: boolean;
   onSaved: (release: any) => void | Promise<void>;
 };
 
-let transcriberPromise: Promise<InferenceFn> | null = null;
+const parseTimestamp = (stamp: string): number | null => {
+  const numbers = stamp.split(':').map(Number);
+  if (numbers.some((value) => !Number.isFinite(value))) return null;
+  if (numbers.length < 2 || numbers.length > 3 || numbers[numbers.length - 1] >= 60) return null;
+  if (numbers.length === 3 && numbers[1] >= 60) return null;
+  return numbers.reduce((seconds, part) => seconds * 60 + part, 0);
+};
 
-async function loadLocalTranscriber(onProgress: (message: string) => void): Promise<InferenceFn> {
-  if (!transcriberPromise) {
-    transcriberPromise = (async () => {
-      // Installed and lockfile-pinned: bundled as a lazy app chunk, never execute
-      // arbitrary CDN JavaScript with access to a listener's private audio.
-      // Model weights/WASM download separately on first use; inference is local.
-      const module = await import('@huggingface/transformers');
-      const hasGpu = Boolean((navigator as Navigator & { gpu?: unknown }).gpu);
-      const options = {
-        progress_callback: (event: Progress) => {
-          if (event.status === 'progress' && Number.isFinite(event.progress)) {
-            onProgress('Downloading local speech model · ' + Math.round(Number(event.progress)) + '%');
-          } else if (event.status === 'ready') {
-            onProgress('Speech model ready. Analysing the recording on this device…');
-          }
-        },
-      };
-      if (hasGpu) {
-        try {
-          return await module.pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny.en', {
-            ...options, device: 'webgpu',
-          }) as InferenceFn;
-        } catch {
-          onProgress('Graphics acceleration unavailable. Trying on-device CPU processing…');
-        }
-      }
-      return await module.pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny.en', {
-        ...options, device: 'wasm',
-      }) as InferenceFn;
-    })().catch((error) => {
-      transcriberPromise = null;
-      throw error;
-    });
+const stamp = (seconds: number) => {
+  const whole = Math.max(0, Math.floor(seconds));
+  const hh = Math.floor(whole / 3600);
+  const mm = Math.floor((whole % 3600) / 60);
+  const ss = String(whole % 60).padStart(2, '0');
+  return hh ? [hh, String(mm).padStart(2, '0'), ss].join(':') : [String(mm).padStart(2, '0'), ss].join(':');
+};
+
+const prepareText = (input: string): TimedLine[] => {
+  const lines: TimedLine[] = [];
+  for (const paragraph of input.replace(/\r\n?/g, '\n').split('\n')) {
+    const trimmed = paragraph.trim();
+    if (!trimmed) continue;
+    const found = trimmed.match(/^\[((?:\d{1,2}:)?\d{1,3}:\d{2})\]\s*(.*)$/);
+    const text = (found ? found[2] : trimmed).trim();
+    if (!text) continue;
+    const knownTime = found ? parseTimestamp(found[1]) : null;
+    // Divide long prose into manageable spoken sentences, without changing
+    // the actual words. Sound-effect cues and speaker-labelled lines stay intact.
+    const parts = found || /^\[[^\]]+\]/.test(text) || /^[\p{L}\p{N} -]{1,35}:\s/u.test(text)
+      ? [text]
+      : text.split(/(?<=[.!?]["'’”]?)\s+(?=[“"'‘\p{Lu}\[])/u);
+    for (const part of parts) {
+      if (part.trim()) lines.push({ id: lines.length, text: part.trim(), seconds: parts.length === 1 ? knownTime : null });
+    }
   }
-  return transcriberPromise;
-}
-
-function timedLines(words: SyncWord[]): string {
-  const output: string[] = [];
-  let text = '';
-  let start = 0;
-  let lastEnd = 0;
-  let count = 0;
-  const flush = () => {
-    if (!text.trim()) return;
-    const seconds = Math.max(0, Math.floor(start));
-    const hh = Math.floor(seconds / 3600);
-    const mm = Math.floor((seconds % 3600) / 60);
-    const ss = String(seconds % 60).padStart(2, '0');
-    const stamp = hh ? [hh, String(mm).padStart(2, '0'), ss].join(':') : [String(mm).padStart(2, '0'), ss].join(':');
-    output.push('[' + stamp + '] ' + text.trim());
-    text = '';
-    count = 0;
-  };
-  for (const word of words) {
-    const spoken = String(word?.text ?? '').trim();
-    const at = Number(word?.timestamp?.[0]);
-    if (!spoken || !Number.isFinite(at) || at < 0) continue;
-    if (text && (at - lastEnd > 1.15 || count >= 11)) flush();
-    if (!text) start = at;
-    text += (text ? ' ' : '') + spoken;
-    count += 1;
-    const end = Number(word?.timestamp?.[1]);
-    lastEnd = Number.isFinite(end) && end >= at ? end : at;
-    if (/[.!?]["'’]?$/u.test(spoken) && count >= 4) flush();
-  }
-  flush();
-  return output.join('\n');
-}
-
-function normaliseWords(text: string) {
-  return text.toLowerCase().replace(/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/gm, '')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
-}
-function approximateAgreement(original: string, recognised: string): number | null {
-  const source = normaliseWords(original);
-  if (!source.length) return null;
-  const spoken = normaliseWords(recognised);
-  const counts = new Map<string, number>();
-  spoken.forEach((word) => counts.set(word, (counts.get(word) ?? 0) + 1));
-  let matched = 0;
-  source.forEach((word) => {
-    const left = counts.get(word) ?? 0;
-    if (left) { matched++; counts.set(word, left - 1); }
-  });
-  return Math.round(matched / source.length * 100);
-}
+  return lines;
+};
 
 export default function TranscriptSyncTool({
-  releaseId, audioAvailable, transcriptText = '', language = 'en', sourceUrl,
-  sourceFile, isAdmin = false, simulationMode = false, onSaved,
+  releaseId, audioAvailable, transcriptText = '', language = 'en',
+  isAdmin = false, simulationMode = false, onSaved,
 }: Props) {
-  const [busy, setBusy] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [draft, setDraft] = useState<string | null>(null);
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [original, setOriginal] = useState(transcriptText);
+  const [lines, setLines] = useState<TimedLine[]>(() => prepareText(transcriptText));
+  const [cursor, setCursor] = useState(0);
   const [reviewed, setReviewed] = useState(false);
-  const [agreement, setAgreement] = useState<number | null>(null);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) return;
+    setOriginal(transcriptText);
+    setLines(prepareText(transcriptText));
+  }, [transcriptText, open]);
 
   const start = async () => {
-    if (!audioAvailable || busy || saving || simulationMode) return;
-    setBusy(true); setError(''); setMessage('Preparing on-device speech recognition…');
-    setReviewed(false);
+    if (!audioAvailable || simulationMode || loading) return;
+    setLoading(true); setError(''); setNotice('');
     try {
-      if (language && !/^en(?:-|$)/i.test(language)) {
-        throw new Error('The free local model currently supports English recordings. Do not run an English-only model on another language.');
-      }
-      const recogniser = await loadLocalTranscriber(setMessage);
-      let input = '';
-      let temporaryUrl: string | null = null;
-      try {
-        if (sourceFile) {
-          temporaryUrl = URL.createObjectURL(sourceFile);
-          input = temporaryUrl;
-        } else if (sourceUrl) {
-          input = sourceUrl;
-        } else {
-          setMessage('Requesting a private, short-lived audio link…');
-          input = (await nightjarCatalogue.syncAudioUrl(releaseId)).url;
-        }
-        setMessage('Listening locally and generating timestamps. This can be slow on phones…');
-        const output = await recogniser(input, {
-          return_timestamps: 'word',
-          chunk_length_s: 30,
-          stride_length_s: 5,
-          task: 'transcribe',
-        });
-        const lines = timedLines(output.chunks ?? []);
-        if (!lines) throw new Error('No reliably timed speech was found. The original transcript has not been changed.');
-        if (lines.length > 120000) throw new Error('The generated transcript is too long. Please divide the recording into smaller parts.');
-        setAgreement(approximateAgreement(transcriptText, output.text || lines));
-        setDraft(lines);
-        setMessage('Timed transcript generated. Review the spoken words and timings before saving.');
-      } finally {
-        if (temporaryUrl) URL.revokeObjectURL(temporaryUrl);
-      }
+      const playback = await nightjarCatalogue.syncAudioUrl(releaseId);
+      setSourceUrl(playback.url);
+      setOpen(true);
+      setNotice('Press Play, then Mark current line when each sentence begins. No AI or automatic speech processing is used.');
     } catch (cause) {
-      const detail = cause instanceof Error ? cause.message : 'This browser could not run the speech model.';
-      setError(detail + ' Your original transcript is unchanged. Try a desktop browser or use manual timestamps.');
-    } finally { setBusy(false); }
+      setError(cause instanceof Error ? cause.message : 'Could not open the private audio recording.');
+    } finally { setLoading(false); }
+  };
+
+  const markLine = (index: number) => {
+    const current = audioRef.current;
+    if (!current || !Number.isFinite(current.currentTime)) {
+      setError('Open the audio in this panel before marking timestamps.');
+      return;
+    }
+    setError('');
+    const seconds = Math.max(0, current.currentTime);
+    setLines((prior) => prior.map((line, i) => i === index ? { ...line, seconds } : line));
+    setCursor((prior) => index === prior && index < lines.length - 1 ? index + 1 : prior);
+    setReviewed(false);
+  };
+
+  const offsetTime = (delta: number) => {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime + delta);
+  };
+
+  const updateLine = (index: number, patch: Partial<TimedLine>) => {
+    setLines((prior) => prior.map((line, i) => i === index ? { ...line, ...patch } : line));
+    setReviewed(false);
   };
 
   const save = async () => {
-    if (!draft?.trim() || !reviewed || busy || saving || simulationMode) return;
+    if (saving || !reviewed || simulationMode) return;
+    const valid = lines.filter((line) => line.text.trim());
+    if (!valid.length || valid.some((line) => line.seconds === null || !Number.isFinite(line.seconds))) {
+      setError('Give every line a timestamp before saving, including any sound cues.');
+      return;
+    }
+    let previous = -1;
+    for (const line of valid) {
+      const second = Math.floor(line.seconds!);
+      if (second < previous) {
+        setError('The lines are out of order. Correct their timestamps before saving.');
+        return;
+      }
+      previous = second;
+    }
+    const transcript = valid.map((line) => '[' + stamp(line.seconds!) + '] ' + line.text.trim()).join('\n');
+    if (transcript.length > 120000) {
+      setError('The timed transcript exceeds NightJar\'s 120,000-character limit.');
+      return;
+    }
     setSaving(true); setError('');
     try {
-      const response = await nightjarCatalogue.saveSyncedTranscript(releaseId, draft, language || 'en', true);
+      const response = await nightjarCatalogue.saveSyncedTranscript(releaseId, transcript, language, true);
       await onSaved(response.release);
-      setMessage('Timed transcript saved. Nightjar listeners can use read-along once this release is published.');
-      setDraft(null);
-      setAgreement(null);
+      setNotice('Human-timed transcript saved. The NightJar player can now follow the audio after release.');
+      setOpen(false); setSourceUrl(''); setReviewed(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Nightjar could not save the timed transcript.');
+      setError(cause instanceof Error ? cause.message : 'Could not save the timed transcript.');
     } finally { setSaving(false); }
   };
 
+  const ready = lines.length > 0 && lines.every((line) => Boolean(line.text.trim()) && line.seconds !== null);
   return <div className="nj-transcript-sync-tool">
     <div className="nj-transcript-sync-intro">
-      <strong><Sparkles size={16} aria-hidden="true"/> Sync Transcript</strong>
-      <p>Nightjar can recognise speech and create timed read-along lines on your device, without a paid AI transcription API. First use downloads a sizeable free model. Desktop recommended for long recordings.</p>
-      <p>{isAdmin ? 'Admin sync also works on already-submitted recordings. The recording remains private during processing.' : 'You can skip syncing and submit normally. Admins can add the timing later.'}</p>
+      <strong><Timer size={16} aria-hidden="true"/> Sync Transcript — no AI</strong>
+      <p>Listen and tap to mark the start of each line. NightJar adds timestamps for read-along playback without speech recognition or external processing.</p>
+      <p>{isAdmin ? 'Administrators can synchronise recordings after submission, even if the creator skipped it.' : 'Completely optional. You can submit normally and NightJar administrators can add the timing later.'}</p>
     </div>
-    <button type="button" className="secondary-button"
-      disabled={!audioAvailable || busy || saving || simulationMode}
+    {!open && <button className="secondary-button" type="button" disabled={!audioAvailable || loading || simulationMode}
       onClick={() => void start()}>
-      <RefreshCw size={15} aria-hidden="true"/>{busy ? 'Synchronising on this device…' : draft ? 'Regenerate timing' : 'Sync Transcript'}
-    </button>
-    {simulationMode && <small>Available with a real uploaded recording, not fictional demo audio.</small>}
-    {message && <p role="status" aria-live="polite">{message}</p>}
-    {error && <p role="alert" className="nj-audio-review-error">{error}</p>}
-    {draft !== null && <div className="nj-transcript-sync-review">
-      <strong><BookOpenText size={15} aria-hidden="true"/> Review synchronised text</strong>
-      {agreement !== null && <p>Approximate word agreement with the supplied transcript: <strong>{agreement}%</strong>. This is a rough comparison, not an accuracy guarantee. Check any missing or changed dialogue.</p>}
-      <p>The words below come from speech recognition, not a forced alignment of the original script. Sound effects, names and pauses may need corrections. Edits here are not saved until you confirm.</p>
-      <label>Timed transcript preview
-        <textarea rows={10} maxLength={120000} value={draft} onChange={(event) => { setDraft(event.target.value); setReviewed(false); }}/>
+      <BookOpenText size={15} aria-hidden="true"/>{loading ? 'Opening private recording…' : 'Open manual Sync Transcript'}
+    </button>}
+    {simulationMode && <small>Manual sync requires real audio; fictional demo uploads are not playable.</small>}
+    {notice && <p role="status">{notice}</p>}
+    {error && <p className="nj-audio-review-error" role="alert">{error}</p>}
+    {open && <section className="nj-transcript-sync-review" aria-label="Manual transcript synchronisation">
+      <strong><Play size={16} aria-hidden="true"/> Play recording and mark lines</strong>
+      <audio ref={audioRef} controls preload="metadata" src={sourceUrl} aria-label="Private recording for transcript synchronisation"/>
+      <div className="nj-transcript-sync-actions">
+        <button type="button" className="secondary-button" onClick={() => offsetTime(-5)}><SkipBack size={15}/> Back 5 seconds</button>
+        <button type="button" className="secondary-button" onClick={() => markLine(cursor)} disabled={!lines.length}>Mark current line</button>
+        <button type="button" className="ghost-button" onClick={() => setCursor((index) => Math.max(0, index - 1))} disabled={cursor === 0}>Previous line</button>
+      </div>
+      <label className="nj-sync-source-label">Script or transcript text
+        <textarea rows={5} value={original} maxLength={120000} onChange={(event) => setOriginal(event.target.value)}
+          aria-label="Script text to prepare for manual timestamps"/>
       </label>
+      <button className="secondary-button" type="button" disabled={!original.trim()} onClick={() => {
+        if (!window.confirm('Prepare lines from the text above? Unsaved timing marks in this panel will be reset.')) return;
+        setLines(prepareText(original)); setCursor(0); setReviewed(false);
+      }}><RotateCcw size={15}/> Prepare lines from text</button>
+      <p>Select any line to mark or correct its start time. A sentence is highlighted while you work. Edit the text without having to change the original writer manuscript.</p>
+      <div className="nj-sync-line-list">
+        {lines.map((line, index) => <div className={cursor === index ? 'nj-sync-line active' : 'nj-sync-line'} key={line.id}>
+          <div className="nj-sync-line-head">
+            <button type="button" className="ghost-button" onClick={() => setCursor(index)}>Line {index + 1}{cursor === index ? ' · current' : ''}</button>
+            <label>Starts at (seconds)
+              <input aria-label={'Start time for line ' + (index + 1)} type="number" min={0} step={0.1}
+                value={line.seconds ?? ''} placeholder="Unmarked"
+                onChange={(event) => updateLine(index, { seconds: event.target.value === '' ? null : Math.max(0, Number(event.target.value)) })}/>
+            </label>
+            <button type="button" className="secondary-button" onClick={() => markLine(index)}>Mark now</button>
+          </div>
+          <textarea rows={2} value={line.text} aria-label={'Text for line ' + (index + 1)}
+            onChange={(event) => updateLine(index, { text: event.target.value })}/>
+        </div>)}
+      </div>
+      <p>{lines.filter((line) => line.seconds !== null).length} of {lines.length} lines timed.</p>
       <label className="release-transcript-confirm">
-        <input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)}/>
-        <span><strong>I have checked this timed text against the finished audio.</strong>
-          <small>Correct any speech-recognition mistakes before publishing.</small></span>
+        <input type="checkbox" checked={reviewed} disabled={!ready} onChange={(event) => setReviewed(event.target.checked)}/>
+        <span><strong>I have checked the transcript timing against the finished recording.</strong>
+          <small>No AI has processed or generated the script. The original text is preserved until you save.</small></span>
       </label>
       <div className="nj-transcript-sync-actions">
-        <button type="button" className="primary-button" disabled={!reviewed || saving || !draft.trim()} onClick={() => void save()}>
-          <CheckCircle2 size={15} aria-hidden="true"/>{saving ? 'Saving timing…' : 'Save timed transcript'}
+        <button type="button" className="primary-button" disabled={saving || !ready || !reviewed} onClick={() => void save()}>
+          <CheckCircle2 size={15} aria-hidden="true"/>{saving ? 'Saving…' : 'Save timed transcript'}
         </button>
-        <button type="button" className="ghost-button" disabled={saving} onClick={() => { setDraft(null); setReviewed(false); }}>Discard generated text</button>
+        <button type="button" className="ghost-button" disabled={saving} onClick={() => {setOpen(false); setSourceUrl(''); setError('');}}>Close without saving</button>
       </div>
-    </div>}
+    </section>}
   </div>;
 }
