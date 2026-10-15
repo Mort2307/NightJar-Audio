@@ -6636,11 +6636,13 @@ export const ageStatus = onCall({
 // voluntarily start one account-bound Didit session while the public kill
 // switch stays ON. This exception is NOT the owner maintenance test.
 const controlledDiditRef = (uid: string) => db.collection('diditControlledChecks').doc(uid);
-// Deployment-staged, account-specific owner pilot. This is not a public
-// reopening: Firebase verifies the email claim, and the admin role is
-// independently derived from the server allowlist. No prior reuse enquiry.
-const directDiditPilotAccount = (identity: { admin: boolean; email: string }) =>
-  DIDIT_VERIFICATION_PAUSED && identity.admin && identity.email === 'megan.wright666@hotmail.com';
+// Account-wide, opt-in verification rollout (staged, NOT yet deployed).
+// The legacy public age-session starter stays paused; this separate route
+// is available to every active, email-verified Nightjar account admitted by
+// requireActiveIdentity. It never requires an old standalone Didit enquiry.
+const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true;
+const accountDiditSelfServiceEligible = () =>
+  DIDIT_VERIFICATION_PAUSED && DIDIT_ACCOUNT_SELF_SERVICE_ENABLED;
 
 export const adminAuthoriseDiditControlledCheck = onCall({ region: REGION }, async request => {
   const administrator = requireAdminIdentity(request);
@@ -6688,11 +6690,11 @@ export const myDiditControlledCheck = onCall({ region: REGION }, async request =
     diditReuseRef(identity.uid).get(),
   ]);
   const data = grant.data() ?? {};
-  const directPilot = directDiditPilotAccount(identity);
+  const selfServiceEnabled = accountDiditSelfServiceEligible();
   const providerVerified = diditPass(age.data());
-  // Meg's direct one-use pilot appears without an old standalone approval.
-  // This is only an invitation: status never starts a billable Didit session.
-  const status = String(data.state ?? (directPilot && !providerVerified ? 'authorised' : directPilot && providerVerified ? 'already_verified' : 'none'));
+  // Every eligible account can see its own choice to verify; reading status
+  // does not contact the paid provider or create an account-side claim.
+  const status = String(data.state ?? (selfServiceEnabled && !providerVerified ? 'authorised' : selfServiceEnabled && providerVerified ? 'already_verified' : 'none'));
   let launchUrl: string | null = null;
   if (grant.exists && status !== 'authorised' && !providerVerified) {
     const sessionId = cleanText(age.data()?.sessionId, 128);
@@ -6706,10 +6708,10 @@ export const myDiditControlledCheck = onCall({ region: REGION }, async request =
     }
   }
   const authorised = !providerVerified && status === 'authorised' &&
-    (directPilot || (grant.exists &&
+    (selfServiceEnabled || (grant.exists &&
       reuse.data()?.status === 'approved_for_reuse' && reuse.data()?.memberConsent === true));
   return {
-    authorised, state: status, providerVerified, directPilot,
+    authorised, state: status, providerVerified, selfServiceEnabled,
     launchUrl, publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
     // NO provider session can be started without explicit member action.
   };
@@ -6720,7 +6722,7 @@ export const startMyDiditControlledCheck = onCall({
   timeoutSeconds: 40, maxInstances: 2,
 }, async request => {
   const identity = await requireActiveIdentity(request);
-  const directPilot = directDiditPilotAccount(identity);
+  const selfServiceEnabled = accountDiditSelfServiceEligible();
   if (!DIDIT_VERIFICATION_PAUSED || !diditConfigured() || diditMode() !== 'live' ||
       (request.data ?? {}).explicitConsent !== true) {
     throw new HttpsError('failed-precondition', 'One-use live Didit verification requires explicit member consent and configured live Didit.');
@@ -6738,25 +6740,26 @@ export const startMyDiditControlledCheck = onCall({
     if (diditPass(age.data())) {
       throw new HttpsError('already-exists','Didit verification is already approved for this account. Refresh status.');
     }
-    // Existing non-pilot invitations still require the original, consented
-    // reuse review. The named direct pilot never needs that old request.
-    if (!directPilot && (consent.data()?.status !== 'approved_for_reuse' ||
+    // Prior reuse reviews are no longer prerequisites for normal account
+    // verification. Existing invitation-based checks retain their fallback
+    // consent guard only when self-service is disabled.
+    if (!selfServiceEnabled && (consent.data()?.status !== 'approved_for_reuse' ||
         consent.data()?.memberConsent !== true)) {
       throw new HttpsError('failed-precondition','Your approved Didit enquiry is unavailable or consent has been withdrawn. No check was started.');
     }
     if (grant.exists && (grant.data()?.state !== 'authorised' || grant.data()?.attempts !== 0)) {
       throw new HttpsError('failed-precondition','This account already claimed its one live Didit attempt. Contact support; no second check was started.');
     }
-    if (!grant.exists && !directPilot) {
-      throw new HttpsError('failed-precondition','This account has no authorised live Didit check.');
+    if (!grant.exists && !selfServiceEnabled) {
+      throw new HttpsError('failed-precondition','Account self-service Didit verification is currently unavailable.');
     }
     // Durable claim BEFORE contacting Didit. A second tab, timeout or error
-    // cannot create another billable attempt, including for the direct pilot.
+    // cannot create another billable attempt for this account.
     if (!grant.exists) {
       tx.create(grantRef, {
         uid:identity.uid, state:'claimed', attempts:1,
-        authorisedAt:FieldValue.serverTimestamp(), authorisedBy:'account-bound-owner-pilot',
-        source:'direct-owner-pilot-normal-id-check', acknowledgedCharge:true,
+        authorisedAt:FieldValue.serverTimestamp(), authorisedBy:'self-service-user',
+        source:'direct-account-self-service-normal-id-check', acknowledgedCharge:true,
         claimedAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp(),
       });
     } else {
