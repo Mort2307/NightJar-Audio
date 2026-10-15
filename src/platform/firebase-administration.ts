@@ -7,6 +7,8 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 const overviewCall = httpsCallable<void, { people: any }>(functions, 'adminAccountOverview');
 const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist'; status: 'active' | 'pending_review' | 'suspended' }, { userId: string; role: string; status: string }>(functions, 'adminSetAccountRole');
 export type NightjarManagedProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
+export type NightjarSuspensionResult = { userId: string; status: string; authDisabled: boolean; revokedReaderSessions: number };
+const suspensionCall = httpsCallable<{userId:string;action:'suspend'|'restore';reason:string}, NightjarSuspensionResult>(functions,'adminSetAccountSuspension');
 const setWorkspaceCall = httpsCallable<{
   userId: string;
   role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
@@ -167,6 +169,10 @@ export const nightjarAdministration = {
 
   async setAccountRole(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist', status: 'active' | 'pending_review' | 'suspended' = 'active') {
     return (await setRoleCall({ userId, role, status })).data;
+  },
+
+  async setAccountSuspension(userId: string, action: 'suspend' | 'restore', reason: string) {
+    return (await suspensionCall({ userId, action, reason })).data;
   },
 
   async setAccountWorkspace(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') {
