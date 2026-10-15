@@ -1,10 +1,25 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { Info, X } from 'lucide-react';
 import './context-help.css';
 
 /** Central glossary. Use the same precise explanation across all NightJar roles. */
 export const NIGHTJAR_HELP = {
+  'editor-showcase': {title:"Approved editor samples", description:"Editor samples are submitted with rights and permission declarations and reviewed before publication.", detail:"Playback links are temporary. Moderation does not independently prove all copyright claims."},
+  'creator-discovery': {title:"Discover the community", description:"Browse approved public profiles and published work. This discovery area is not a hiring directory.", detail:"Following, listening and support are always optional."},
+  'directory-counts': {title:"Understanding directory counts", description:"People with more than one approved profession may appear in multiple categories.", detail:"The total professionals count includes each person only once; only public data is shown."},
+  'playlist-privacy': {title:"Playlist privacy", description:"Playlists are private by default. Only ones you deliberately share appear on your public profile.", detail:"Your listening history and favourites remain private even if a playlist is shared."},
+  'editor-skill-rating': {title:"Self-described editor skills", description:"Editors can identify their strongest services to help collaborators find a good match.", detail:"These levels are self-reported, not NightJar certified scores or Verified Credits."},
+  'audio-equalizer': {title:"Audio EQ", description:"Choosing an EQ preset or moving a band slider enables the equalizer automatically on supported streams.", detail:"If you hear no change, check the EQ status. Some audio streams need browser cross-origin permissions."},
+  'social-avatar-protection': {title:"External profiles and pictures", description:"Upload a matching social profile photo; NightJar does not guess or scrape one for you.", detail:"External links are supplied by members, not verified as theirs by NightJar. Uploaded pictures go through moderation."},
+  'playback-preferences': {title:"Reading and playback preferences", description:"Configure transcript defaults, reading options and playback-following preferences under Accessibility and transcripts.", detail:"Vision Access includes additional low-vision and reduced-motion settings."},
+  'writer-privacy': {title:"Protected manuscripts", description:"A Writer’s public profile contains approved details, credits and portfolio information, not private manuscript text.", detail:"Protected drafts, deal terms and private collaboration conversations stay in authorised workflows."},
+  'profile-photo': {title:"Profile picture uploads", description:"NightJar resizes and optimises photos for the app. Photos may be up to 20 MB.", detail:"Uploads are generally limited to 768 pixels or less and compressed to around 224 KB. New images are moderated."},
+  'team-profile-visibility': {title:"NightJar Team visibility", description:"Your administrator profile is private by default. Enable visibility to share only the public profile details you select.", detail:"Administrator permissions, private account data and security controls remain protected."},
+  'profile-interests': {title:"Profile interests", description:"Choose interests and themes for finding work you enjoy and connecting with people.", detail:"These are discovery signals, not a personality judgement."},
+  'taste-constellation': {title:"Your taste constellation", description:"Listening patterns help make private recommendations more relevant.", detail:"Your constellation is separate from your public identity."},
+  'spotlight-rotation': {title:"Spotlight rotation", description:"NightJar rotates featured people so everyone eligible has an opportunity to be discovered.", detail:"Listener recognition may celebrate seven people across the week, giving each a separate featured day."},
+  'wallet-checkout': {title:"NightJar pack availability", description:"NightJar packs support creators. Buying packs stays disabled until approved live checkout is ready.", detail:"A visible token ledger or creator-support balance does not mean a purchase has been charged."},
   'exclusive-licence': {
     title: 'Exclusive licence',
     description: 'The Writer agrees that only the named licensee may exercise the specified rights for the agreed territory, uses and period. The Writer may also be restricted from using those rights themselves unless the contract reserves that permission.',
@@ -188,7 +203,7 @@ export default function ContextHelp({ topic, className = '', placement = 'auto' 
     <button type="button" className="nj-context-help-trigger" aria-label={'What does ' + entry.title + ' mean?'}
       aria-expanded={open} aria-controls={open ? id : undefined} title={'Explain: ' + entry.title}
       onClick={(event) => { event.stopPropagation(); setOpen(v => !v); }}>
-      <span aria-hidden="true">ℹ️</span>
+      <Info size={14} strokeWidth={1.8} aria-hidden="true"/>
     </button>
     {open && typeof document !== 'undefined' && createPortal(
       <span ref={panel} id={id} className="nj-context-help-panel" role="dialog" aria-modal="false"
