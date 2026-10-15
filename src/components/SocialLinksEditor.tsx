@@ -49,7 +49,6 @@ export function SocialLinksDisplay({links}:{links?:NightjarSocialLink[]}) {
         <ExternalLink size={15} aria-hidden="true"/>
       </a>)}
     </div>
-    <small className="nj-social-external-note">External profiles belong to their respective platforms. Links are shared by the member, not verified by Nightjar.</small>
   </section>;
 }
 
