@@ -62,7 +62,7 @@ const accountRef = (uid: string) => db.collection('accounts').doc(uid);
 const CURRENT_LEGAL_DOCUMENTS = {
   platform_terms: {
     id: 'platform_terms',
-    version: '2026-10-09.1',
+    version: '2026-10-15.1',
     title: 'Nightjar Terms of Use',
     path: '/legal/terms',
     requiredForAccount: true,
@@ -70,7 +70,7 @@ const CURRENT_LEGAL_DOCUMENTS = {
   },
   privacy_notice: {
     id: 'privacy_notice',
-    version: '2026-10-09.1',
+    version: '2026-10-15.1',
     title: 'Nightjar Privacy Notice',
     path: '/legal/privacy',
     requiredForAccount: true,
@@ -243,6 +243,21 @@ export const acceptLegalAgreements = onCall({ region: REGION }, async (request) 
     accepted.push({ id, version:document.version });
   }
 
+  // Update an account mirror as part of the legal acceptance transaction,
+  // so active-account middleware can enforce versions with no extra reads.
+  const acceptedFields: Record<string, unknown> = {};
+  if (accepted.some((entry) => entry.id === 'platform_terms')) {
+    acceptedFields.acceptedPlatformTermsVersion = CURRENT_LEGAL_DOCUMENTS.platform_terms.version;
+  }
+  if (accepted.some((entry) => entry.id === 'privacy_notice')) {
+    acceptedFields.acknowledgedPrivacyNoticeVersion = CURRENT_LEGAL_DOCUMENTS.privacy_notice.version;
+  }
+  if (Object.keys(acceptedFields).length) {
+    batch.set(accountRef(identity.uid), {
+      ...acceptedFields, legalUpdatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
   await batch.commit();
   return { accepted };
 });
@@ -308,9 +323,16 @@ const requireActiveIdentity = async (request: { auth?: { uid: string; token: Rec
   const identity = requireVerifiedIdentity(request);
   if (identity.admin) return identity;
   const snapshot = await accountRef(identity.uid).get();
-  await requireClosedBetaAccess(identity.email, snapshot.data() ?? null);
-  if (snapshot.exists && snapshot.data()?.status === 'suspended') {
+  const account = snapshot.data() ?? {};
+  await requireClosedBetaAccess(identity.email, account);
+  if (account.status === 'suspended') {
     throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
+  }
+  if (account.acceptedPlatformTermsVersion !== CURRENT_LEGAL_DOCUMENTS.platform_terms.version ||
+      account.acknowledgedPrivacyNoticeVersion !== CURRENT_LEGAL_DOCUMENTS.privacy_notice.version) {
+    throw new HttpsError('failed-precondition', 'Review Nightjar\'s current Terms of Use and Privacy Notice before continuing.', {
+      code: 'mandatory_agreement_required',
+    });
   }
   return identity;
 };
