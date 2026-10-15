@@ -28,6 +28,8 @@ type Props = {
   tasteVector: any[];
   onUploadAvatar: (file: File) => Promise<void>;
   onRemoveAvatar: () => Promise<void>;
+  onUploadBanner: (file: File) => Promise<void>;
+  onRemoveBanner: () => Promise<void>;
   onSave: () => Promise<void>;
   onRevert: () => void;
   notify: (message:string) => void;
@@ -65,6 +67,8 @@ export default function UserProfileStudio({
   tasteVector,
   onUploadAvatar,
   onRemoveAvatar,
+  onUploadBanner,
+  onRemoveBanner,
   onSave,
   onRevert,
   notify,
@@ -162,6 +166,26 @@ export default function UserProfileStudio({
 
       <article className="panel premium-user-card presence">
         <div className="premium-user-card-head"><div><span className="mini-label">PRESENCE</span><h2>Make the profile memorable.</h2></div><Sparkles size={18}/></div>
+        <div className="nj-profile-banner-editor">
+          <div className="nj-profile-banner-preview" role="img" aria-label="Approved cover image preview">
+            {profile.bannerStatus === 'approved' && profile.bannerUrl
+              ? <img src={profile.bannerUrl} alt="" loading="lazy" decoding="async"/>
+              : <span>YOUR NIGHTJAR COVER</span>}
+            <span className="nj-profile-banner-title">{String(profile.roleHeadline || profile.headline || 'Your story. Your voice.')}</span>
+          </div>
+          <div className="nj-profile-banner-edit-actions">
+            <label className="secondary-button upload-label"><ImagePlus size={14}/>
+              {profileImageBusy ? 'Preparing image…' : profile.bannerUrl ? 'Change cover image' : 'Choose cover image'}
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif"
+                hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0];if(file)void onUploadBanner(file);event.currentTarget.value='';}}/>
+            </label>
+            {(profile.bannerUrl || profile.pendingBannerAssetId) &&
+              <button type="button" className="ghost-button" disabled={profileImageBusy} onClick={()=>void onRemoveBanner()}>Remove cover</button>}
+          </div>
+          {profile.pendingBannerStatus === 'pending' && <small>Cover awaiting approval. Your previous approved cover stays visible until the replacement passes review.</small>}
+          {profile.pendingBannerStatus === 'rejected' && <small>Cover not approved. Choose a different image if you'd like.</small>}
+          <small>Choose a landscape image (16:9 recommended). NightJar compresses it privately and sends it for moderation; your portrait remains separate.</small>
+        </div>
         <label>Profile headline<input maxLength={140} value={profile.headline ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,headline:event.target.value}))} placeholder="A short line that feels like you"/><small className="field-counter">{String(profile.headline ?? '').length}/140</small></label>
         <label>About you<textarea maxLength={1200} value={profile.bio ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,bio:event.target.value}))} placeholder="Your story, your way."/><small className="field-counter">{String(profile.bio ?? '').length}/1200</small></label>
         <label>Welcome note <span className="optional-label">optional</span><textarea maxLength={300} value={profile.welcomeMessage ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,welcomeMessage:event.target.value}))} placeholder="A small message for people visiting your profile."/><small className="field-counter">{String(profile.welcomeMessage ?? '').length}/300</small></label>
