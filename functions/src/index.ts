@@ -6404,6 +6404,156 @@ export const ageStatus = onCall({
   };
 });
 
+// Reusable KYC preparation: validate the actual historic provider decision
+// and a separate published, zero-cost reuse workflow BEFORE allowing members
+// to authenticate. These calls never create Didit sessions or grant age access.
+// The source session is kept privately in Firestore and never returned to clients.
+const DIDIT_REUSE_CONTROL = 'didit-reuse-readiness-2026-10-15';
+const diditUuid = (value: unknown) => {
+  const valueString = cleanText(value, 48);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(valueString) ? valueString : '';
+};
+
+export const adminInspectDiditReuseWorkflow = onCall({
+  region: REGION,
+  secrets: [DIDIT_API_KEY, DIDIT_ENVIRONMENT],
+  timeoutSeconds: 25,
+}, async request => {
+  const identity = requireAdminIdentity(request);
+  const id = diditUuid((request.data ?? {}).workflowId);
+  if (!DIDIT_VERIFICATION_PAUSED || diditMode() !== 'live' || !id) {
+    throw new HttpsError('failed-precondition','Use a valid live Didit Reusable KYC workflow ID during maintenance.');
+  }
+  // Only a fixed Didit-hosted HTTPS URL is ever contacted, avoiding SSRF.
+  let workflow: Record<string, any>;
+  try {
+    const response = await fetch('https://verification.didit.me/v3/workflows/' + encodeURIComponent(id) + '/', {
+      method: 'GET', headers: { 'x-api-key': DIDIT_API_KEY.value(), Accept: 'application/json' },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) throw Error('Didit workflow lookup failed');
+    workflow = await response.json() as Record<string, any>;
+  } catch {
+    throw new HttpsError('unavailable','Could not inspect Didit workflow settings. No verification session was created.');
+  }
+  const kind = cleanText(workflow.workflow_type, 70).toLowerCase();
+  const label = cleanText(workflow.workflow_label, 100);
+  const isPublished = workflow.status === 'published' && workflow.is_archived !== true;
+  const free = typeof workflow.total_price === 'number' && workflow.total_price === 0 &&
+    (workflow.min_price === undefined || workflow.min_price === 0) &&
+    (workflow.max_price === undefined || workflow.max_price === 0);
+  const isReuse = kind.includes('reusable') || kind === 'reusable_kyc';
+  const safeShape = isReuse && workflow.is_liveness_enabled === true &&
+    workflow.is_face_match_enabled === true && workflow.is_simple_workflow !== true;
+  const valid = workflow.uuid === id && isPublished && free && safeShape;
+  // A free workflow alone does not prove that its returned result identifies
+  // the ORIGINAL standalone session. Keep launches blocked until a documented
+  // provider-authenticated source-session binding is implemented and tested.
+  const controlRef = db.collection('operationalControls').doc(DIDIT_REUSE_CONTROL);
+  await controlRef.set({
+    workflowId: id, workflowLabel: label, workflowType: kind,
+    published: isPublished, zeroCostConfirmed: free, reusableShapeConfirmed: safeShape,
+    inspectedAt: FieldValue.serverTimestamp(), inspectedBy: identity.uid,
+    sessionLaunchEnabled: false, providerSourceBindingConfirmed: false,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return {
+    workflowRecognised: valid, published: isPublished, zeroCostConfirmed: free,
+    reusableShapeConfirmed: safeShape, workflowLabel: label,
+    sessionLaunchEnabled: false,
+    nextStep: valid
+      ? 'Free workflow recognised. Configure authenticated original-session binding before starting a member selfie check.'
+      : 'The workflow is not independently confirmed as a published, free Reusable KYC flow. No session can start.',
+  };
+});
+
+export const adminBindExistingDiditSource = onCall({
+  region: REGION,
+  secrets: [DIDIT_API_KEY, DIDIT_ENVIRONMENT],
+  timeoutSeconds: 25,
+}, async request => {
+  const identity = requireAdminIdentity(request);
+  const uid = cleanText((request.data ?? {}).uid, 128);
+  const sessionId = diditUuid((request.data ?? {}).sessionId);
+  if (!DIDIT_VERIFICATION_PAUSED || diditMode() !== 'live' ||
+      !/^[a-zA-Z0-9_-]{10,128}$/.test(uid) || !sessionId) {
+    throw new HttpsError('invalid-argument','Valid member and existing Didit session IDs are required.');
+  }
+  const ref = diditReuseRef(uid);
+  const current = (await ref.get()).data() ?? {};
+  if (current.memberConsent !== true || current.status !== 'approved_for_reuse') {
+    throw new HttpsError('failed-precondition','Only an approved and explicitly consented member reuse request can be inspected.');
+  }
+  const old = (await db.collection('diditSessions').doc(sessionId).get()).data();
+  if (old?.uid && old.uid !== uid) {
+    throw new HttpsError('failed-precondition','This session is already bound to a different Nightjar account.');
+  }
+
+  let decision: Record<string, any>;
+  try {
+    const response = await fetch('https://verification.didit.me/v3/session/' + encodeURIComponent(sessionId) + '/decision/', {
+      method: 'GET', headers: { 'x-api-key': DIDIT_API_KEY.value(), Accept: 'application/json' },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) throw Error('Didit session lookup failed');
+    decision = await response.json() as Record<string, any>;
+  } catch {
+    throw new HttpsError('unavailable','Nightjar could not read the prior Didit result. No identity status was changed.');
+  }
+  if (decision.session_id !== sessionId || decision.environment !== 'live' ||
+      decision.session_kind !== 'user' || decision.status !== 'Approved' ||
+      !verifiedAdultFromDecision(decision) ||
+      !Array.isArray(decision.liveness_checks) ||
+      !decision.liveness_checks.some((item: any) => item?.status === 'Approved')) {
+    throw new HttpsError('failed-precondition','The original provider session does not contain the required live approved 18+ identity evidence.');
+  }
+  const sourceRef = db.collection('diditReuseSourceClaims').doc(sessionId);
+  await db.runTransaction(async tx => {
+    const [requestSnap,sourceSnap]=await Promise.all([tx.get(ref),tx.get(sourceRef)]);
+    if (requestSnap.data()?.status !== 'approved_for_reuse' ||
+        requestSnap.data()?.memberConsent !== true ||
+        (sourceSnap.exists && sourceSnap.data()?.uid !== uid)) {
+      throw new HttpsError('failed-precondition','This source is already assigned or the member withdrew consent.');
+    }
+    const previous = cleanText(requestSnap.data()?.sourceSessionId, 128);
+    if (previous && previous !== sessionId) {
+      throw new HttpsError('failed-precondition','A different source is already associated with this request. Contact support.');
+    }
+    tx.set(sourceRef, { uid, claimedAt: FieldValue.serverTimestamp(), claimedBy: identity.uid }, { merge: true });
+    tx.set(ref, {
+      sourceSessionId: sessionId,
+      originalAdultEvidenceCheckedAt: FieldValue.serverTimestamp(),
+      originalAdultEvidenceConfirmed: true,
+      updatedAt: FieldValue.serverTimestamp(),
+      publicNote: 'Your prior live Didit 18+ approval has been located. Nightjar is preparing secure provider-confirmed identity reuse. No new identity check is available yet.',
+    }, { merge: true });
+  });
+  return {
+    existingApprovalFound: true,
+    sourceUniquelyReserved: true,
+    memberVerified: false,
+    nextStep: 'Provider-confirmed identity reuse is still required. No new Didit check was started.',
+  };
+});
+
+export const adminDiditReuseReadiness = onCall({
+  region: REGION,
+}, async request => {
+  requireAdminIdentity(request);
+  const ref = db.collection('operationalControls').doc(DIDIT_REUSE_CONTROL);
+  const data = (await ref.get()).data() ?? {};
+  return {
+    workflowRecognised: Boolean(data.published && data.zeroCostConfirmed && data.reusableShapeConfirmed),
+    workflowLabel: cleanText(data.workflowLabel, 100) || null,
+    published: data.published === true,
+    zeroCostConfirmed: data.zeroCostConfirmed === true,
+    reusableShapeConfirmed: data.reusableShapeConfirmed === true,
+    sessionLaunchEnabled: false,
+    providerSourceBindingConfirmed: false,
+    publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
+  };
+});
+
 // Existing Didit KYC reuse coordination during the production verification pause.
 // A consented support request is NOT identity proof and cannot grant age access.
 // Reuse approval must later come from an authenticated, account-bound Didit flow.
