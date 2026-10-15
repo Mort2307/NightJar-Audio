@@ -24,7 +24,7 @@ for (const phrase of [
   'lawfully required or permitted',
   'not conclusive proof',
   'a human review',
-  'do not impose automatic contractual fines',
+  'does not impose automatic contractual fines',
   'independent right to act',
   'Good-faith reports',
   'Nothing in this section prevents uses permitted by copyright law',
