@@ -99,7 +99,7 @@ export default function DiditControlledLiveCheck() {
         <ExternalLink size={16} aria-hidden="true"/> Open secure Didit verification
       </a>}
       {!canStart && !launchUrl && <p><strong>Check already claimed.</strong> Nightjar will not start another paid session. Contact support if your verification link is missing.</p>}
-      <p>Complete the check in Didit, return to Nightjar and tap **Refresh verification status**. An approved provider decision must be received and validated before you become Verified 18+.</p>
+      <p>Complete the check in Didit, return to Nightjar and tap Refresh verification status. An approved provider decision must be received and validated before you become Verified 18+.</p>
     </>}
     <button className="secondary-button" type="button" disabled={pending} onClick={()=>void refresh()}>
       <RefreshCw size={15} aria-hidden="true"/>{pending?'Checking…':'Refresh verification status'}</button>
