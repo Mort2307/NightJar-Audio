@@ -11397,3 +11397,29 @@ textarea:focus-visible,
 .nj-didit-reuse-setup button {min-height:46px;display:flex;align-items:center;justify-content:center;gap:9px;}
 .nj-didit-reuse-admin>p:last-child {display:flex;align-items:flex-start;gap:9px;}
 .nj-didit-reuse-admin>p:last-child svg {flex:0 0 auto;margin-top:3px;}
+
+/* Isolated one-use normal Didit check for an individually authorised account. */
+.nj-single-member-didit {
+  display:grid;
+  gap:13px;
+  min-width:0;
+  padding:clamp(13px,3vw,22px);
+  border:1px solid rgba(210,173,122,.35);
+  border-radius:14px;
+  background:rgba(182,130,66,.05);
+}
+.nj-single-member-didit h3 {margin:0;font-size:1.2rem;line-height:1.4;}
+.nj-single-member-didit p {margin:0;line-height:1.65;font-size:13px;}
+.nj-single-member-didit a:not(.secondary-button) {color:#e6c89b;display:inline-flex;align-items:center;gap:6px;}
+.nj-single-member-didit .primary-button,.nj-single-member-didit>.secondary-button {
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:47px;width:100%;white-space:normal;text-align:center;
+}
+.nj-single-member-didit .primary-button:disabled {opacity:.45;cursor:not-allowed;}
+.nj-single-member-didit-info {padding:13px;border-radius:11px;
+  background:rgba(188,138,80,.09);border:1px solid rgba(219,167,91,.38);}
+.nj-single-member-didit-success {display:flex;align-items:flex-start;gap:11px;
+  padding:15px;border-radius:12px;background:rgba(90,155,103,.1);
+  border:1px solid rgba(127,200,145,.5);font-weight:700;}
+.nj-single-member-didit-success svg {flex:0 0 auto;}
+.nj-single-member-didit small {line-height:1.55;opacity:.8;}

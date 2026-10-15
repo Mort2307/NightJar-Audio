@@ -6915,6 +6915,132 @@ export const adminAgeTestPass = onCall({ region: REGION }, async (request) => {
   return { verified: true, status: 'COMPLETE', provider: 'admin-test' };
 });
 
+// One explicitly authorised, user-initiated normal live Didit check for the
+// administrator whose earlier standalone setup test did not bind to Nightjar.
+// Global/public verification remains paused. This uses the existing standard
+// ID + liveness workflow and the existing signed-webhook verification rules.
+const MEG_DIDIT_MAINTENANCE_EMAIL = 'megan.wright666@hotmail.com';
+const MEG_DIDIT_MAINTENANCE_CONTROL = 'didit-meg-one-live-check-2026-10-15';
+const isMegDiditMaintenanceMember = (identity: { admin: boolean; email: string }) =>
+  identity.admin && cleanEmail(identity.email) === MEG_DIDIT_MAINTENANCE_EMAIL;
+
+const megMaintenanceSession = async (uid: string, age: Record<string, any>) => {
+  const sessionId = cleanText(age.sessionId, 128);
+  if (!sessionId || age.provider !== 'didit' || age.environment !== 'live') return null;
+  const previous = (await db.collection('diditSessions').doc(sessionId).get()).data() ?? {};
+  if (previous.uid !== uid || previous.workflowId !== DIDIT_WORKFLOW_ID.value() ||
+      previous.environment !== 'live' || !Number.isFinite(previous.createdAtMs) ||
+      previous.createdAtMs < Date.now() - 6 * 86400_000) return null;
+  const launchUrl = cleanText(previous.url, 2048);
+  try {
+    const url = new URL(launchUrl);
+    if (url.protocol !== 'https:' || !['verify.didit.me','verification.didit.me'].includes(url.hostname)) return null;
+  } catch { return null; }
+  return { sessionId, launchUrl, status: String(age.status ?? 'PENDING') };
+};
+
+export const singleMemberDiditMaintenanceStatus = onCall({
+  region: REGION, secrets: [DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+}, async request => {
+  const identity = await requireActiveIdentity(request);
+  if (!isMegDiditMaintenanceMember(identity)) {
+    return { eligible: false, checkAvailable: false, alreadyClaimed: false, providerVerified: false,
+      existingSession: false, sessionLaunchUrl: null as string | null, reason: 'not_invited' };
+  }
+  const [reuseSnap, ageSnap, guardSnap] = await Promise.all([
+    db.collection('diditReuseRequests').doc(identity.uid).get(),
+    db.collection('ageAssurance').doc(identity.uid).get(),
+    db.collection('operationalControls').doc(MEG_DIDIT_MAINTENANCE_CONTROL).get(),
+  ]);
+  const age = ageSnap.data() ?? {};
+  const approvedRequest = reuseSnap.data()?.status === 'approved_for_reuse' && reuseSnap.data()?.memberConsent === true;
+  const verified = diditPass(age);
+  const claimed = guardSnap.exists;
+  const ownedSession = claimed && guardSnap.data()?.initiatedByUid === identity.uid
+    ? await megMaintenanceSession(identity.uid, age) : null;
+  const checkAvailable = DIDIT_VERIFICATION_PAUSED && diditMode() === 'live' &&
+    approvedRequest && !verified && !claimed &&
+    !(['PENDING','IN_PROGRESS','CREATING','PENDING_REVIEW','RESUBMITTED'].includes(String(age.status)) && age.sessionId);
+  return {
+    eligible: approvedRequest || verified || claimed,
+    checkAvailable: Boolean(checkAvailable),
+    alreadyClaimed: claimed,
+    providerVerified: verified,
+    existingSession: Boolean(ownedSession),
+    sessionLaunchUrl: ownedSession?.launchUrl ?? null,
+    reason: verified ? 'verified' : !approvedRequest ? 'request_not_approved'
+      : claimed ? ownedSession ? 'session_created' : 'one_attempt_claimed'
+      : checkAvailable ? 'ready' : 'not_ready',
+  };
+});
+
+export const startSingleMemberDiditMaintenanceCheck = onCall({
+  region: REGION,
+  secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+  timeoutSeconds: 30, maxInstances: 2,
+}, async request => {
+  const identity = await requireActiveIdentity(request);
+  if (!isMegDiditMaintenanceMember(identity) ||
+      !DIDIT_VERIFICATION_PAUSED || !DIDIT_LIVE_PILOT_ADMINS_ONLY ||
+      !diditConfigured() || diditMode() !== 'live') {
+    throw new HttpsError('permission-denied', 'This controlled verification is not available for this account.');
+  }
+  if ((request.data as { consentsToNewPaidCheck?: unknown } | undefined)?.consentsToNewPaidCheck !== true) {
+    throw new HttpsError('invalid-argument', 'Explicit consent to the new live ID check is required.');
+  }
+  await requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice');
+  const ageRef = db.collection('ageAssurance').doc(identity.uid);
+  const requestRef = db.collection('diditReuseRequests').doc(identity.uid);
+  const guardRef = db.collection('operationalControls').doc(MEG_DIDIT_MAINTENANCE_CONTROL);
+  const [ageSnap, requestSnap, guardSnap] = await Promise.all([
+    ageRef.get(), requestRef.get(), guardRef.get(),
+  ]);
+  const age = ageSnap.data() ?? {};
+  if (diditPass(age)) return { verified: true, status: 'COMPLETE', provider: 'didit' };
+  if (requestSnap.data()?.status !== 'approved_for_reuse' || requestSnap.data()?.memberConsent !== true) {
+    throw new HttpsError('failed-precondition', 'A consented, administrator-approved account request is required.');
+  }
+  if (guardSnap.exists) {
+    if (guardSnap.data()?.initiatedByUid !== identity.uid) {
+      throw new HttpsError('permission-denied', 'The maintenance attempt belongs to a different account.');
+    }
+    const linked = await megMaintenanceSession(identity.uid, age);
+    if (linked) return { ...linked, provider: 'didit', environment: 'live', resumed: true };
+    throw new HttpsError('resource-exhausted',
+      'Your single live maintenance check has already been claimed. Contact Nightjar support; do not try another paid check.');
+  }
+  if (['PENDING','IN_PROGRESS','CREATING','PENDING_REVIEW','RESUBMITTED'].includes(String(age.status)) && age.sessionId) {
+    throw new HttpsError('failed-precondition', 'An earlier Nightjar-linked Didit session needs support review before another check.');
+  }
+
+  // Durable single-attempt claim precedes ALL calls to Didit. Concurrent tabs,
+  // retries, timeouts and failed network responses cannot create a second charge.
+  await db.runTransaction(async tx => {
+    const [claim, activeRequest, currentAge] = await Promise.all([
+      tx.get(guardRef), tx.get(requestRef), tx.get(ageRef),
+    ]);
+    if (claim.exists) throw new HttpsError('resource-exhausted',
+      'This one-use Didit verification has already been claimed. Please refresh the existing status.');
+    if (activeRequest.data()?.status !== 'approved_for_reuse' ||
+        activeRequest.data()?.memberConsent !== true || diditPass(currentAge.data())) {
+      throw new HttpsError('failed-precondition', 'The member request is no longer eligible for a new live verification.');
+    }
+    if (['PENDING','IN_PROGRESS','CREATING','PENDING_REVIEW','RESUBMITTED'].includes(String(currentAge.data()?.status)) &&
+        currentAge.data()?.sessionId) {
+      throw new HttpsError('failed-precondition', 'An earlier account-linked verification requires support review.');
+    }
+    tx.create(guardRef, {
+      initiatedByUid: identity.uid,
+      scope: 'one-standard-live-didit-check-during-public-pause',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  // This is the existing normal Nightjar Didit workflow, not a reuse claim.
+  // Its vendor_data is the authenticated UID, and adult access still requires
+  // an accepted signed live provider event with documentary 18+ evidence.
+  return startDiditSession(identity.uid);
+});
+
 export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
