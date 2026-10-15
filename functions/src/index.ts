@@ -972,7 +972,7 @@ const roleProfileSlice = (data: Record<string, any>, role: string) => {
 // under the authenticated account, rather than device storage, and use
 // optimistic revision checks to avoid silently overwriting another device.
 const PROFILE_DRAFT_SHARED_FIELDS = new Set([
-  'displayName','handle','pronouns','headline','bio','welcomeMessage',
+  'displayName','handle','pronouns','headline','headerImageMode','bio','welcomeMessage',
   'favouriteTags','favouriteTropes','favouriteCategories','publicProfile',
   'avatarInitials','avatarTone',
 ]);
