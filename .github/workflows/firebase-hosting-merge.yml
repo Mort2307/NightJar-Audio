@@ -112,6 +112,38 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "One-user KYC endpoint deployed; no verification session has been started."
 
+      # Separate opt-in member recovery of EXISTING provider decisions only.
+      # PRs and branch pushes never deploy production. Backend goes first.
+      - name: Deploy member Didit decision recovery before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-didit-member-recovery-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          grep -q 'export const reconcileMyDiditVerification = onCall' functions/src/index.ts
+          node scripts/didit-reconciliation-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=reconcileMyDiditVerification' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          RUN_ID=""
+          for attempt in $(seq 1 48); do
+            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "$START_TIME" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::error::Member Didit reconciliation was not deployed; keep Hosting unchanged."
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Read-only member Didit decision recovery is deployed; no new ID session is created."
+
       # Staged account-wide release. No PR and no branch push deploys this.
       # Only a main push explicitly tagged for this change can dispatch the two
       # selected account-bound Didit callables before production Hosting updates.

@@ -24,9 +24,11 @@ export type DiditControlledStart = {
 const statusCallable = httpsCallable<void,DiditControlledStatus>(functions,'myDiditControlledCheck');
 const startCallable = httpsCallable<{explicitConsent:true},DiditControlledStart>(functions,'startMyDiditControlledCheck');
 const grantCallable = httpsCallable<{uid:string;acknowledgedCharge:true},{authorised:boolean;sessionStarted:false}>(functions,'adminAuthoriseDiditControlledCheck');
+const reconcileCallable = httpsCallable<void,{verified:boolean;outcome:'reconciled'|'already_verified'|'provider_not_approved'|'adult_evidence_missing'|'no_reconcilable_session'}>(functions,'reconcileMyDiditVerification');
 
 export const nightjarDiditControlled = {
   async status() { return (await statusCallable()).data; },
   async start() { return (await startCallable({explicitConsent:true})).data; },
+  async reconcile() { return (await reconcileCallable()).data; },
   async authorise(uid:string) { return (await grantCallable({uid,acknowledgedCharge:true})).data; },
 };
