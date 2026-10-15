@@ -62,7 +62,7 @@ const accountRef = (uid: string) => db.collection('accounts').doc(uid);
 const CURRENT_LEGAL_DOCUMENTS = {
   platform_terms: {
     id: 'platform_terms',
-    version: '2026-10-09.1',
+    version: '2026-10-15.1',
     title: 'Nightjar Terms of Use',
     path: '/legal/terms',
     requiredForAccount: true,
@@ -70,7 +70,7 @@ const CURRENT_LEGAL_DOCUMENTS = {
   },
   privacy_notice: {
     id: 'privacy_notice',
-    version: '2026-10-09.1',
+    version: '2026-10-15.1',
     title: 'Nightjar Privacy Notice',
     path: '/legal/privacy',
     requiredForAccount: true,
@@ -243,6 +243,21 @@ export const acceptLegalAgreements = onCall({ region: REGION }, async (request) 
     accepted.push({ id, version:document.version });
   }
 
+  // Update an account mirror as part of the legal acceptance transaction,
+  // so active-account middleware can enforce versions with no extra reads.
+  const acceptedFields: Record<string, unknown> = {};
+  if (accepted.some((entry) => entry.id === 'platform_terms')) {
+    acceptedFields.acceptedPlatformTermsVersion = CURRENT_LEGAL_DOCUMENTS.platform_terms.version;
+  }
+  if (accepted.some((entry) => entry.id === 'privacy_notice')) {
+    acceptedFields.acknowledgedPrivacyNoticeVersion = CURRENT_LEGAL_DOCUMENTS.privacy_notice.version;
+  }
+  if (Object.keys(acceptedFields).length) {
+    batch.set(accountRef(identity.uid), {
+      ...acceptedFields, legalUpdatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
   await batch.commit();
   return { accepted };
 });
@@ -308,9 +323,16 @@ const requireActiveIdentity = async (request: { auth?: { uid: string; token: Rec
   const identity = requireVerifiedIdentity(request);
   if (identity.admin) return identity;
   const snapshot = await accountRef(identity.uid).get();
-  await requireClosedBetaAccess(identity.email, snapshot.data() ?? null);
-  if (snapshot.exists && snapshot.data()?.status === 'suspended') {
+  const account = snapshot.data() ?? {};
+  await requireClosedBetaAccess(identity.email, account);
+  if (account.status === 'suspended') {
     throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
+  }
+  if (account.acceptedPlatformTermsVersion !== CURRENT_LEGAL_DOCUMENTS.platform_terms.version ||
+      account.acknowledgedPrivacyNoticeVersion !== CURRENT_LEGAL_DOCUMENTS.privacy_notice.version) {
+    throw new HttpsError('failed-precondition', 'Review Nightjar\'s current Terms of Use and Privacy Notice before continuing.', {
+      code: 'mandatory_agreement_required',
+    });
   }
   return identity;
 };
@@ -387,6 +409,8 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     role,
     status,
     emailVerified: true,
+    suspensionReason: status === 'suspended' ? cleanText(current.suspensionReason, 500) : null,
+    suspensionCaseId: status === 'suspended' ? cleanText(current.suspensionCaseId, 80) : null,
     testAccess: current.testAccess === true || betaAccess.reason === 'approved-tester' || betaAccess.reason === 'legacy-test-access',
     updatedAt: FieldValue.serverTimestamp(),
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
@@ -4416,6 +4440,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       roles: account.role === 'admin' ? ['admin'] : ['listener', ...professionalRolesForAccount(account)],
       pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles),
       status: account.status ?? 'active',
+      suspensionCaseId: cleanText(account.suspensionCaseId, 80) || null,
       name: profileData.displayName ?? account.email?.split('@')?.[0] ?? 'Nightjar account',
       handle: profileData.handle ?? null,
       publicProfile: profileData.publicProfile !== false,
@@ -4571,6 +4596,208 @@ export const adminSetDiditPilotAccess = onCall({ region: REGION }, async (reques
   return { email, enabled, unchanged: false };
 });
 
+
+type MemberSuspensionAction = 'suspend' | 'restore';
+
+// Account lockout is independent of workspace/role changes. Auth is disabled in
+// addition to the existing server-side account.status checks. No automatic bans.
+const setMemberSuspension = async (userId: string, action: MemberSuspensionAction, reason: string, administratorId: string) => {
+  if (!userId || userId.includes('/') || userId === administratorId) {
+    throw new HttpsError('invalid-argument', 'Choose a valid non-administrator member.');
+  }
+  const ref = accountRef(userId);
+  const [snapshot, authUser] = await Promise.all([ref.get(), getAuth().getUser(userId)]);
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar member not found.');
+  const account = snapshot.data() ?? {};
+  if (ADMIN_EMAILS.has(cleanEmail(authUser.email)) || ADMIN_EMAILS.has(cleanEmail(account.email)) || account.role === 'admin') {
+    throw new HttpsError('permission-denied', 'Nightjar administrator accounts cannot be suspended here.');
+  }
+
+  const previousStatus = cleanText(account.status, 30) || 'active';
+  const suspended = action === 'suspend';
+  const caseId = suspended
+    ? (cleanText(account.suspensionCaseId, 80) || 'NJ-' + randomUUID().slice(0, 8).toUpperCase())
+    : cleanText(account.suspensionCaseId, 80);
+  if (!suspended && previousStatus !== 'suspended') {
+    throw new HttpsError('failed-precondition', 'This account is not suspended.');
+  }
+
+  // Deny backend operations immediately, even while an existing Firebase ID
+  // token remains valid. A partial Firebase failure remains fail-closed and
+  // can be retried safely by the administrator.
+  if (suspended) {
+    await ref.set({
+      status: 'suspended',
+      suspendedPriorStatus: previousStatus === 'suspended' ? (account.suspendedPriorStatus || 'active') : previousStatus,
+      suspensionReason: reason,
+      suspensionCaseId: caseId,
+      suspendedBy: administratorId,
+      suspendedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  await getAuth().updateUser(userId, { disabled: suspended });
+  if (suspended) await getAuth().revokeRefreshTokens(userId);
+
+  const restoredStatus = account.suspendedPriorStatus === 'pending_review' ? 'pending_review' : 'active';
+  if (!suspended) {
+    await ref.set({
+      status: restoredStatus,
+      suspensionReason: null,
+      suspensionCaseId: null,
+      suspendedPriorStatus: null,
+      restoredBy: administratorId,
+      restoredAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  const revokedReaderSessions = suspended ? await revokeReaderSessions(userId, undefined, 'administrator_suspension') : 0;
+  await db.collection('memberSecurityActions').add({
+    targetUserId: userId,
+    administratorId,
+    action,
+    reason,
+    caseId,
+    previousStatus,
+    resultingStatus: suspended ? 'suspended' : restoredStatus,
+    authDisabled: suspended,
+    revokedReaderSessions,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { userId, status: suspended ? 'suspended' : restoredStatus, authDisabled: suspended, caseId, revokedReaderSessions };
+};
+
+
+const deliverMemberSecurityNotice = async (userId: string, action: MemberSuspensionAction, reason: string, caseId: string) => {
+  const recordId = action === 'suspend' ? caseId : caseId + '-restored';
+  const noticeRef = accountRef(userId).collection('securityNotices').doc(recordId);
+  const previous = await noticeRef.get();
+  if (previous.data()?.status === 'sent') return 'sent' as const;
+
+  // Persist the intended delivery before attempting mail. A disconnected
+  // Gmail integration never prevents immediate protection of the account.
+  const authUser = await getAuth().getUser(userId);
+  const email = cleanEmail(authUser.email);
+  await noticeRef.set({
+    type: action, caseId, status: 'pending', emailMasked: maskSecurityEmail(email),
+    reason, updatedAt: FieldValue.serverTimestamp(),
+    ...(previous.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge: true });
+  if (!validEmailAddress(email)) return 'pending' as const;
+
+  const subject = 'Your Nightjar account access has changed';
+  const text = action === 'suspend'
+    ? 'Your Nightjar account has been suspended after an administrator review.\n\nReason: ' + reason +
+      '\n\nReference: ' + caseId + '\n\nYou can dispute this decision or ask for clarification by contacting Nightjar Support. Browser screenshot shortcuts are not conclusive proof of a screenshot or recording.\n\nNightjar Support'
+    : 'Your Nightjar account has been restored following an administrator review.\n\nReview note: ' + reason +
+      '\n\nReference: ' + caseId + '\n\nYou may now sign in to Nightjar again.\n\nNightjar Support';
+  try {
+    const accessToken = await gmailAccessToken();
+    const sent = await sendGmailApiMessage({
+      accessToken, fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      fromName: 'Nightjar Support', replyTo: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      message: { toEmail: email, subject, text,
+        html: '<div style="font:15px/1.6 Arial,sans-serif"><h2>Nightjar account update</h2><p>' +
+        text.split('\n').map((line) => line.replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] ?? c))).join('<br/>') + '</p></div>',
+      },
+    });
+    await noticeRef.set({ status: 'sent', providerMessageId: sent.id || null, sentAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return 'sent' as const;
+  } catch (error) {
+    console.warn('Nightjar security notice delivery pending', caseId, String(error));
+    await noticeRef.set({ status: 'pending', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return 'pending' as const;
+  }
+};
+
+export const adminSetAccountSuspension = onCall({
+  region: REGION, secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
+  const administrator = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const action = cleanText(input.action, 20);
+  const reason = cleanText(input.reason, 500);
+  if (action !== 'suspend' && action !== 'restore') throw new HttpsError('invalid-argument', 'Choose suspend or restore.');
+  if (reason.length < 12) throw new HttpsError('invalid-argument', 'Provide a specific reviewable reason (at least 12 characters).');
+  const result = await setMemberSuspension(userId, action, reason, administrator.uid);
+  const notificationDelivery = await deliverMemberSecurityNotice(userId, action, reason, result.caseId);
+  return { ...result, notificationDelivery };
+});
+
+
+export const adminRetryMemberSecurityNotice = onCall({
+  region: REGION, secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
+  requireAdminIdentity(request);
+  const userId = cleanText((request.data as {userId?:unknown}|undefined)?.userId, 160);
+  if (!userId || userId.includes('/')) throw new HttpsError('invalid-argument', 'Choose a valid member.');
+  const snapshot = await accountRef(userId).get();
+  const account = snapshot.data() ?? {};
+  if (account.status !== 'suspended') throw new HttpsError('failed-precondition', 'Only a currently suspended member has a pending suspension notice.');
+  const caseId = cleanText(account.suspensionCaseId, 80);
+  const reason = cleanText(account.suspensionReason, 500);
+  if (!caseId || !reason) throw new HttpsError('failed-precondition', 'No reviewable suspension notice is recorded.');
+  const notificationDelivery = await deliverMemberSecurityNotice(userId, 'suspend', reason, caseId);
+  return { notificationDelivery, caseId };
+});
+
+export const adminMemberSecurityDossier = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const userId = cleanText((request.data as { userId?: unknown } | undefined)?.userId, 160);
+  if (!userId || userId.includes('/')) throw new HttpsError('invalid-argument', 'Select a valid member.');
+  const [account, profile, events, authUser] = await Promise.all([
+    accountRef(userId).get(),
+    profileRef(userId).get(),
+    db.collection('protectionEvents').where('userId', '==', userId).limit(250).get(),
+    getAuth().getUser(userId),
+  ]);
+  if (!account.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
+  const a = account.data() ?? {};
+  const p = profile.data() ?? {};
+  const noticeId = cleanText(a.suspensionCaseId, 80);
+  const noticeSnapshot = noticeId ? await accountRef(userId).collection('securityNotices').doc(noticeId).get() : null;
+  const evidence = events.docs.map((doc) => {
+    const e = doc.data();
+    return {
+      id: doc.id, eventType: cleanText(e.eventType, 80),
+      relatedType: cleanText(e.relatedType, 80),
+      relatedId: cleanText(e.relatedId, 160),
+      route: cleanText(e.route, 240), summary: cleanText(e.summary, 800),
+      detectionSource: cleanText(e.detectionSource, 120),
+      detectionConfidence: cleanText(e.detectionConfidence, 32),
+      createdAt: toIso(e.createdAt),
+    };
+  }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 50);
+  return {
+    member: {
+      userId, displayName: cleanText(p.displayName, 120) || cleanEmail(authUser.email).split('@')[0],
+      handle: cleanText(p.handle, 120) || null,
+      email: cleanEmail(authUser.email),
+      status: cleanText(a.status, 30) || 'active',
+      authDisabled: authUser.disabled === true,
+      suspensionReason: cleanText(a.suspensionReason, 500) || null,
+      suspensionCaseId: cleanText(a.suspensionCaseId, 80) || null,
+      notificationDelivery: cleanText(noticeSnapshot?.data()?.status, 30) || null,
+      lastSignIn: authUser.metadata.lastSignInTime ?? null,
+    },
+    evidence,
+    note: 'Capture shortcuts may be incomplete or false-positive signals, not proof of recording. Review context before enforcement.',
+  };
+});
+
+export const memberAccessStatus = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  if (identity.admin) return { status: 'active' };
+  const snapshot = await accountRef(identity.uid).get();
+  const data = snapshot.data() ?? {};
+  return {
+    status: cleanText(data.status, 30) || 'active',
+    suspensionReason: data.status === 'suspended' ? cleanText(data.suspensionReason, 500) : null,
+    suspensionCaseId: data.status === 'suspended' ? cleanText(data.suspensionCaseId, 80) : null,
+  };
+});
+
 export const adminSetAccountRole = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -4581,14 +4808,15 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   if (!userId || !['listener', 'creator', 'writer', 'editor', 'artist'].includes(role)) {
     throw new HttpsError('invalid-argument', 'Choose a valid Nightjar account role.');
   }
-  if (!['active', 'pending_review', 'suspended'].includes(status)) {
-    throw new HttpsError('invalid-argument', 'Choose a valid account status.');
+  if (!['active', 'pending_review'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Use the audited suspension control for suspending or restoring a member.');
   }
 
   const ref = accountRef(userId);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
   const accountData = snapshot.data() ?? {};
+  if (accountData.status === 'suspended') throw new HttpsError('failed-precondition', 'Use the audited suspension control to restore this member first.');
   const email = cleanEmail(accountData.email);
   if (ADMIN_EMAILS.has(email)) {
     throw new HttpsError('failed-precondition', 'Owner administrator accounts cannot be reassigned here.');
@@ -8208,10 +8436,14 @@ const assessProtectedActivityFirebase = async (userId: string, signal: Record<st
 export const recordProtectionEvent = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
-  const eventType = cleanText(input.eventType, 80);
-  if (!eventType) throw new HttpsError('invalid-argument', 'Protection event type is required.');
+  const reportedEventType = cleanText(input.eventType, 80);
+  if (!reportedEventType) throw new HttpsError('invalid-argument', 'Protection event type is required.');
+  // A browser can forge our JS bridge callbacks. Until a native shell can
+  // provide server-verifiable attestation, never rate one as confirmed OS capture.
+  const unverifiedNativeSignal = NATIVE_CAPTURE_EVENTS.has(reportedEventType);
+  const eventType = unverifiedNativeSignal ? 'possible_capture_shortcut' : reportedEventType;
 
-  const requestedConfidence = cleanText(input.detectionConfidence, 32);
+  const requestedConfidence = unverifiedNativeSignal ? 'possible' : cleanText(input.detectionConfidence, 32);
   const detectionConfidence = ['contextual','possible','strong','native_callback'].includes(requestedConfidence)
     ? requestedConfidence
     : null;
@@ -8225,7 +8457,7 @@ export const recordProtectionEvent = onCall({ region: REGION }, async (request) 
     clientPlatform: cleanText(input.clientPlatform, 120) || null,
     visibilityState: cleanText(input.visibilityState, 40) || null,
     viewport: cleanText(input.viewport, 80) || null,
-    detectionSource: cleanText(input.detectionSource, 120) || null,
+    detectionSource: unverifiedNativeSignal ? 'unverified_native_js_bridge' : (cleanText(input.detectionSource, 120) || null),
     detectionConfidence,
     route: cleanText(input.route, 240) || null,
     summary: cleanText(input.summary, 800) || null,
@@ -8824,7 +9056,9 @@ export const securityAlertEvidence = onCall({ region: REGION }, async (request) 
   };
 });
 
-export const suspendFromSecurityAlert = onCall({ region: REGION }, async (request) => {
+export const suspendFromSecurityAlert = onCall({
+  region: REGION, secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
   const admin = requireAdminIdentity(request);
   const alertId = cleanText((request.data as { alertId?: unknown } | undefined)?.alertId, 160);
   const alertRef = db.collection('securityAlerts').doc(alertId);
@@ -8835,13 +9069,15 @@ export const suspendFromSecurityAlert = onCall({ region: REGION }, async (reques
     throw new HttpsError('failed-precondition', 'Failed-login alerts are evidence only and cannot suspend the targeted account.');
   }
 
-  await accountRef(String(data.userId)).set({
-    status: 'suspended',
-    suspendedBy: admin.uid,
-    suspendedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  const revokedCount = await revokeReaderSessions(String(data.userId), undefined, 'admin_security_action');
+  const result = await setMemberSuspension(
+    String(data.userId),
+    'suspend',
+    'Administrator-reviewed security alert ' + alertId,
+    admin.uid,
+  );
+  const revokedCount = result.revokedReaderSessions;
+  const notificationDelivery = await deliverMemberSecurityNotice(String(data.userId), 'suspend',
+    'Administrator-reviewed security alert ' + alertId, result.caseId);
 
   await alertRef.set({
     status: 'actioned',
@@ -8852,7 +9088,7 @@ export const suspendFromSecurityAlert = onCall({ region: REGION }, async (reques
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  return { suspended: true, revokedReaderSessions: revokedCount };
+  return { suspended: true, revokedReaderSessions: revokedCount, notificationDelivery, caseId: result.caseId };
 });
 
 export const revokeSessionsFromSecurityAlert = onCall({ region: REGION }, async (request) => {

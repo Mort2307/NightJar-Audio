@@ -3,6 +3,8 @@ import { ShieldCheck } from 'lucide-react';
 import AccountAccess from './AccountAccess';
 import ProductExperience from './ProductExperience';
 import AppUpdateControl from './AppUpdateControl';
+import MemberSecurityGate from './MemberSecurityGate';
+import { nightjarLegal } from '../platform/firebase-legal';
 import { nightjarAuth, type NightjarIdentity } from '../platform/firebase-auth';
 import { nightjarAccount, type NightjarAccountIdentity } from '../platform/firebase-account';
 import { nightjarMedia } from '../platform/firebase-media';
@@ -23,6 +25,7 @@ export default function AccountPortal() {
   const [identity, setIdentity] = useState<NightjarIdentity | null>(() => nightjarAuth.current());
   const [authReady, setAuthReady] = useState(false);
   const [account, setAccount] = useState<NightjarAccountIdentity | null>(null);
+  const [agreementsOutstanding, setAgreementsOutstanding] = useState(false);
   const [loadingAccount, setLoadingAccount] = useState(false);
   const [message, setMessage] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -53,6 +56,21 @@ export default function AccountPortal() {
       // Email verification already refreshes the token when it changes.
       let nextAccount = await nightjarAccount.identity();
       if (nightjarAuth.current()?.userId !== request.userId) return;
+      if (nextAccount.status === 'suspended') {
+        setAccount(nextAccount);
+        setMessage('Your Nightjar account is suspended. ' + (nextAccount.suspensionReason || 'Contact Nightjar Support to request a review.') +
+          (nextAccount.suspensionCaseId ? ' Case: ' + nextAccount.suspensionCaseId : ''));
+        return;
+      }
+      // Check BEFORE chooseRole: registration must not bypass versioned terms,
+      // and a new member must be able to accept them before role creation.
+      const agreements = await nightjarLegal.status();
+      if ((agreements.documents ?? []).some(doc => doc.requiredForAccount && !doc.accepted)) {
+        setAccount(nextAccount);
+        setAgreementsOutstanding(true);
+        return;
+      }
+      setAgreementsOutstanding(false);
       const pendingRole = sessionStorage.getItem('nightjar.registrationRole') as 'listener' | 'creator' | 'writer' | 'editor' | 'artist' | null;
       const referralCode = sessionStorage.getItem('nightjar.creatorReferralCode') ?? '';
       if (!nextAccount.admin && !nextAccount.role && pendingRole && ['listener','creator','writer','editor','artist'].includes(pendingRole)) {
@@ -67,10 +85,6 @@ export default function AccountPortal() {
       }
       setAccount(nextAccount);
 
-      if (nextAccount.status === 'suspended') {
-        setMessage('This Nightjar account is suspended. Contact Nightjar support if you believe this needs review.');
-        return;
-      }
 
       if (request.enterApp) {
         const destination = accountDestination(nextAccount);
@@ -172,10 +186,15 @@ export default function AccountPortal() {
       onSignedOut={() => {
         setIdentity(null);
         setAccount(null);
+        setAgreementsOutstanding(false);
       }}
     />}
 
-    {authReady && identity?.emailVerified && <section className="account-backend-card">
+    {authReady && identity?.emailVerified && agreementsOutstanding && <MemberSecurityGate onComplete={() => {
+      setAgreementsOutstanding(false);
+      void loadAccount(identity, true);
+    }}/>}
+    {authReady && identity?.emailVerified && !agreementsOutstanding && <section className="account-backend-card">
       <div className="account-testing-notice"><ShieldCheck size={14}/><span><strong>TESTING BUILD</strong> Age assurance is temporarily disabled for controlled QA. Email verification and protected backend permissions remain active.</span></div>
       <div className="account-backend-heading">
         <ShieldCheck size={19} />

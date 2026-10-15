@@ -7,6 +7,23 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 const overviewCall = httpsCallable<void, { people: any }>(functions, 'adminAccountOverview');
 const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist'; status: 'active' | 'pending_review' | 'suspended' }, { userId: string; role: string; status: string }>(functions, 'adminSetAccountRole');
 export type NightjarManagedProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
+export type NightjarSuspensionResult = { userId: string; status: string; authDisabled: boolean; revokedReaderSessions: number; caseId?: string; notificationDelivery?: 'sent' | 'pending' };
+const suspensionCall = httpsCallable<{userId:string;action:'suspend'|'restore';reason:string}, NightjarSuspensionResult>(functions,'adminSetAccountSuspension');
+export type NightjarSecurityDossier = {
+  member: {
+    userId: string; displayName: string; email: string; handle: string | null;
+    status: string; authDisabled: boolean; suspensionReason: string | null;
+    suspensionCaseId: string | null; notificationDelivery?: string | null; lastSignIn: string | null;
+  };
+  evidence: Array<{
+    id: string; eventType: string; relatedType: string; relatedId: string;
+    route: string; summary: string; detectionSource: string;
+    detectionConfidence: string; createdAt: string | null;
+  }>;
+  note: string;
+};
+const securityDossierCall = httpsCallable<{userId:string}, NightjarSecurityDossier>(functions,'adminMemberSecurityDossier');
+const retrySuspensionNoticeCall = httpsCallable<{userId:string},{notificationDelivery:'sent'|'pending';caseId:string}>(functions,'adminRetryMemberSecurityNotice');
 const setWorkspaceCall = httpsCallable<{
   userId: string;
   role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
@@ -167,6 +184,17 @@ export const nightjarAdministration = {
 
   async setAccountRole(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist', status: 'active' | 'pending_review' | 'suspended' = 'active') {
     return (await setRoleCall({ userId, role, status })).data;
+  },
+
+  async memberSecurityDossier(userId: string) {
+    return (await securityDossierCall({ userId })).data;
+  },
+  async retryMemberSecurityNotice(userId: string) {
+    return (await retrySuspensionNoticeCall({userId})).data;
+  },
+
+  async setAccountSuspension(userId: string, action: 'suspend' | 'restore', reason: string) {
+    return (await suspensionCall({ userId, action, reason })).data;
   },
 
   async setAccountWorkspace(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') {

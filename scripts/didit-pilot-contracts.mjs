@@ -8,7 +8,7 @@ const ageClient = fs.readFileSync('src/platform/firebase-age.ts', 'utf8');
 const adminClient = fs.readFileSync('src/platform/firebase-administration.ts', 'utf8');
 const css = fs.readFileSync('src/index.css', 'utf8');
 
-const cohort = index.split('export const adminSetDiditPilotAccess = onCall')[1]?.split('export const adminSetAccountRole')[0] ?? '';
+const cohort = index.split('export const adminSetDiditPilotAccess = onCall')[1]?.split(/\nexport const /)[0] ?? '';
 assert.ok(cohort, 'dedicated admin-only pilot enrollment callable is exported');
 assert.match(cohort, /requireAdminIdentity\(request\)/, 'only backend administrators may enroll members');
 assert.match(cohort, /data\.emailVerified !== true/, 'enrolled members must have a verified Firebase email');

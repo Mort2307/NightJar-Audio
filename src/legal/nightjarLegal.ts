@@ -1,7 +1,8 @@
 export type NightjarLegalDocumentId = 'platform_terms' | 'privacy_notice' | 'professional_terms' | 'age_assurance_notice';
 
-export const NIGHTJAR_LEGAL_VERSION = '2026-10-09.1';
+export const NIGHTJAR_LEGAL_VERSION = '2026-10-15.1';
 export const NIGHTJAR_AGE_NOTICE_VERSION = '2026-10-14.3';
+export const NIGHTJAR_PROFESSIONAL_VERSION = '2026-10-09.1';
 
 export type NightjarLegalDocument = {
   id: NightjarLegalDocumentId;
@@ -50,7 +51,13 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
         'You may stop using Nightjar at any time. Nightjar may suspend or terminate access where reasonably necessary for serious or repeated breaches, legal requirements, safety risks, fraud, rights infringement or security.',
         'Any contractual payment, licensing or content-removal obligations that are intended to survive account closure continue according to their applicable terms.'
       ]},
-      { heading:'8. Beta legal status', paragraphs:[
+      { heading:'8. Protecting the community and creative work', paragraphs:[
+        'Nightjar restricts unauthorised copying, extraction, recording, bulk collection and redistribution of private scripts, unreleased media and restricted platform content. Members must respect copyright, licences, role access and other creators\' permissions.',
+        'To investigate security incidents, Nightjar records limited account-linked events such as protected-content opens, blocked copy/print/download actions, and capture-related shortcuts or operating-system callbacks when a device supports them. Nightjar does not record everything you type, log your passwords or silently activate your camera or microphone.',
+        'Browser screenshot and screen-recording detection is incomplete. An isolated keyboard shortcut, screen-sharing activity or missing signal is not by itself proof of misuse. Nightjar reviews evidence and context before any discretionary enforcement.',
+        'Serious or repeated violations may lead to temporary suspension or termination following a reasonable review. Suspended members may contact Nightjar Support to challenge a decision; access restrictions do not eliminate applicable privacy or contractual rights.'
+      ]},
+      { heading:'9. Beta legal status', paragraphs:[
         'This document is the Nightjar private-beta Terms of Use. It must receive UK solicitor review and final operator details before public commercial launch. Nothing in these terms excludes rights or remedies that cannot lawfully be excluded.'
       ]},
     ],
@@ -66,6 +73,7 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
     sections:[
       { heading:'1. What Nightjar collects', paragraphs:[
         'Nightjar may process account details, profile information, role applications, age-assurance status, uploaded content and metadata, collaborations, messages, moderation records, security events, notification-device information, payment/subscription records and support or safety reports.',
+        'To protect accounts and creative work, Nightjar may log limited security-related interactions, such as a protected document being opened, blocked copying, a print or save shortcut, a possible screenshot shortcut and a platform or device capture signal where supported. These records may include the account ID, time, page and event type. A shortcut signal is not proof that a capture occurred. Nightjar does not record general keystrokes, typed messages, passwords or form contents for this purpose.',
         'Nightjar should minimise data collection to what is reasonably necessary for the relevant purpose. Age-assurance providers should return the minimum result Nightjar needs rather than unnecessary identity data wherever the provider supports that model.'
       ]},
       { heading:'2. Why it is used', paragraphs:[
@@ -87,7 +95,13 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
       { heading:'6. International services and processors', paragraphs:[
         'Some technology providers may process information outside the UK. Before public launch, Nightjar must document its processors, international-transfer safeguards and retention schedule in the final Privacy Notice.'
       ]},
-      { heading:'7. Beta legal status', paragraphs:[
+      { heading:'7. Account security event monitoring', paragraphs:[
+        'For service security, fraud prevention and protection of creators\' work, Nightjar records limited in-app security metadata: account identifier, date and time, protected resource identifier, app page, attempted protected action and capture signals where supported. Some events can be associated with a browser/device token. Nightjar does not record general keystrokes or store passwords, private message text or the contents of your clipboard as security telemetry.',
+        'A web browser cannot reliably detect screenshots or external screen recordings. Capture signals are treated as indicators for contextual review, not conclusive evidence or grounds for an automatic ban. We may restrict an account based on substantiated security or policy breaches after human review, record the reason, and provide a support review route.',
+        'Necessary security processing relies on an applicable legal basis assessed by Nightjar, such as legitimate interests where appropriate, rather than forced consent. Accepting the Terms is required for continued use; acknowledging this notice confirms you have seen it, not that you consent to optional tracking. Optional push notifications and marketing choices remain separately controllable.',
+        'Only authorised administrators may view identifiable security records. Records will be retained for defined, proportionate periods with access and deletion controls, subject to justified dispute or legal holds. Nightjar must finalise retention periods and a legitimate-interests assessment before expanding systematic monitoring.'
+      ]},
+      { heading:'8. Beta legal status', paragraphs:[
         'This is the private-beta Privacy Notice framework. The final public version must identify the legal operator and contact details, applicable lawful bases, processor categories, retention periods and international-transfer arrangements following professional legal/data-protection review.'
       ]},
     ],
@@ -131,7 +145,7 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
     id:'professional_terms',
     title:'Nightjar Professional & Content Terms',
     shortTitle:'Professional & Content Terms',
-    version:NIGHTJAR_LEGAL_VERSION,
+    version:NIGHTJAR_PROFESSIONAL_VERSION,
     path:'/legal/professional',
     summary:'Additional rules for VA Creators, Writers, Audio Editors and Artists who upload, collaborate, publish or earn through Nightjar.',
     sections:[
@@ -180,7 +194,7 @@ export const currentLegalAcceptancePayload = (
     { id:'privacy_notice', version:NIGHTJAR_LEGAL_VERSION, accepted:true },
   ];
   if (professional) {
-    documents.push({ id:'professional_terms', version:NIGHTJAR_LEGAL_VERSION, accepted:true });
+    documents.push({ id:'professional_terms', version:NIGHTJAR_PROFESSIONAL_VERSION, accepted:true });
   }
   return documents;
 };
