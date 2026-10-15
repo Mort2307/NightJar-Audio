@@ -1,0 +1,19 @@
+/* Secondary settings have one clear disclosure rather than dominating the page. */
+.nj-settings-master-disclosure{margin-block:1rem;border:1px solid var(--border,rgba(255,255,255,.18));border-radius:16px;background:var(--panel,rgba(255,255,255,.025));color:inherit;min-width:0}
+.nj-settings-master-disclosure>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;list-style:none;cursor:pointer;padding:15px 18px;min-height:58px}
+.nj-settings-master-disclosure>summary::-webkit-details-marker{display:none}
+.nj-settings-master-disclosure>summary:hover{background:color-mix(in srgb,currentColor 4%,transparent);border-radius:16px}
+.nj-settings-master-disclosure>summary:focus-visible{outline:2px solid var(--accent,currentColor);outline-offset:2px}
+.nj-settings-master-title{display:flex;gap:12px;align-items:center;min-width:0}
+.nj-settings-master-title>svg{flex:0 0 auto;opacity:.7}
+.nj-settings-master-title>span{display:grid;gap:4px;min-width:0}
+.nj-settings-master-title strong{font-size:.92rem;font-weight:650}
+.nj-settings-master-title small{font-size:.76rem;line-height:1.4;opacity:.7}
+.nj-settings-master-chevron{flex:0 0 auto;opacity:.6;transition:transform .18s ease}
+.nj-settings-master-disclosure[open] .nj-settings-master-chevron{transform:rotate(180deg)}
+.nj-settings-master-content{display:grid;gap:16px;padding:0 12px 15px;min-width:0}
+.nj-settings-master-content>.nj-settings-grid{min-width:0}
+.nj-settings-inline-info,.nj-social-heading-icons{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.nj-settings-inline-info{font-size:.82rem;opacity:.88}
+@media(max-width:640px){.nj-settings-master-disclosure>summary{padding:12px 14px}.nj-settings-master-title small{font-size:.72rem}.nj-settings-master-content{padding:0 8px 12px}}
+@media(prefers-reduced-motion:reduce){.nj-settings-master-chevron{transition:none}}
