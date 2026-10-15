@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { scrollNightjarToTop } from '../platform/scroll-navigation';
+
 import { Bird, BookOpenText, Brush, ChevronDown, FileCheck2, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Moon, Share2, ShieldCheck, Sparkles, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
