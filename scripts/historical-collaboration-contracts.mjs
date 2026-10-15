@@ -27,7 +27,11 @@ assert.doesNotMatch(button, /updateCollaborationStatus|setStatus\(|saveMyProfile
 assert.match(api, /getVerifiedCollaborationHistory/, 'typed callable connected');
 assert.match(hub, /<CollaborationHistoryButton/, 'directory badges are clickable');
 assert.match(hub, /className="nj-collab-select"/, 'directory selection remains independent');
-for (const [name, source] of [['Creator', creator], ['Writer', writer], ['Public', publicProfile]]) {
+for (const [name, source] of [['Creator', creator], ['Public', publicProfile]]) {
   assert.match(source, /<CollaborationHistoryButton/, name + ' profile can inspect verified collaboration details');
 }
+// Writer discovery opens the same PublicProfile as other roles, so a second
+// Writer modal with its own separate history control must not reappear.
+assert.match(writer,/onOpenProfile\(writer\.userId, 'writer'\)/,'Writer opens the premium profile with verified collaboration history');
+assert.doesNotMatch(writer,/\{selected && <div className="creator-profile-backdrop"/,'the obsolete Writer modal is removed');
 console.log('Nightjar historical collaboration recognition and clickable handshake contracts PASS.');
