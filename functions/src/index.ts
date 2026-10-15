@@ -6443,6 +6443,7 @@ export const adminDiditDiagnostics = onCall({ region: REGION }, async (request) 
   return {
     outcome,
     providerVerified: verified,
+    verificationEvidenceSource: cleanText(age.verificationEvidenceSource, 80) || (verified ? 'signed-didit-webhook' : null),
     oneShotClaimed: claimed.exists,
     accountProviderStatus: cleanText(age.status, 40) || 'NOT_STARTED',
     sessionRecorded: Boolean(sessionId),
