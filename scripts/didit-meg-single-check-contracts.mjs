@@ -46,7 +46,7 @@ assert.match(code,/previous\.uid !== uid \|\| previous\.workflowId !== DIDIT_WOR
  'resume link must belong to authenticated member and same workflow');
 assert.match(code,/\['verify.didit.me','verification.didit.me'\]\.includes\(url\.hostname\)/,
  'resume URL must be Didit-hosted HTTPS');
-assert.match(code,/existing.*Didit session needs support review/i,'existing check blocks duplicate billing');
+assert.match(code,/Nightjar-linked Didit session needs support review/i,'existing check blocks duplicate billing');
 assert.doesNotMatch(code,/status:\s*'COMPLETE'\s*,\s*verified:\s*true|tx\.set\(ageRef.*verified:\s*true/,
  'maintenance pilot never grants adult access on its own');
 assert.match(didit,/uid !== payload\.vendorData/,'signed webhook must match Nightjar UID');
