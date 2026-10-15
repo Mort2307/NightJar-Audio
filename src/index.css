@@ -11570,3 +11570,39 @@ textarea:focus-visible,
 .nj-full-profile-route .premium-public-profile .nj-cinema-profile-tabs {scrollbar-width:thin}
 .nj-full-profile-route .premium-public-profile .nj-cinema-profile-tabs button {cursor:pointer}
 @media(max-width:700px) {.nj-full-profile-route .premium-public-profile .creator-profile-body{width:100%}}
+
+
+/* Approved moon is attached to the portrait in the alternate CreatorProfile
+   entry point too, not merely the role-specific public-profile overlay. */
+.nj-full-profile-route .creator-profile-modal.nj-cinema-creator-legacy {width:100%;max-width:100vw!important;height:100dvh;max-height:100dvh!important;border:0!important;border-radius:0!important;overflow-y:auto;overscroll-behavior:contain;background:#0a0908}
+.nj-full-profile-route .nj-cinema-creator-legacy .creator-profile-body {width:min(960px,100%);margin:0 auto}
+.nj-full-profile-route .nj-cinema-creator-legacy .creator-profile-head {position:sticky;z-index:25;top:0;background:#0c0a08;color:#f6e4c7}
+.nj-legacy-avatar-moon-wrap {position:relative;display:inline-grid;width:max-content;align-self:center}
+.nj-legacy-avatar-moon-wrap>.creator-profile-avatar {overflow:hidden}
+.nj-legacy-official-moon {display:grid;place-items:center;position:absolute;bottom:-5px;right:-9px;width:30px;height:30px;border-radius:50%;border:2px solid #080706;background:#d7ad72;color:#15100c;box-shadow:0 2px 10px #0009}
+:root[data-nightjar-vision] .nj-legacy-official-moon {background:var(--panel);color:var(--ivory);border-color:var(--line)}
+/* A browser with a different saved decorative theme still receives the approved
+   cinematic profile geometry; accessible Vision Access retains its own palette. */
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile {background:#090807;color:#f5e8d2;border-color:rgba(218,179,113,.35)}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-head {display:flex;justify-content:space-between;align-items:center;min-height:55px;padding:10px clamp(17px,4vw,32px);background:rgba(12,10,8,.97);border-bottom:1px solid rgba(218,179,113,.25)}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-body {display:flex;flex-direction:column;padding:0 clamp(17px,4vw,32px) 28px;gap:14px}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-hero.nj-cinema-profile-hero {display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px 20px;overflow:visible;padding:0 0 12px;background:transparent;border:0;box-shadow:none}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-profile-cover {grid-column:1/-1;position:relative;height:clamp(172px,25vw,230px);margin-inline:calc(-1 * clamp(17px,4vw,32px));overflow:hidden;background:linear-gradient(110deg,#120e0b,#332010 75%,#120d0a)}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-profile-hero-banner {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-profile-cover-shade {position:absolute;inset:0;background:linear-gradient(90deg,#090807db 0%,#0908074d 100%)}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-cover-words {position:absolute;z-index:2;left:clamp(20px,4vw,42px);top:50%;transform:translateY(-40%);max-width:min(75%,650px);display:grid;gap:6px}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-cover-words small {color:#e1c18f;font-size:10px;font-weight:700;letter-spacing:.17em}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-cover-words em {font:italic clamp(22px,4vw,40px)/1.15 Georgia,serif;color:#f8f0de;text-shadow:0 3px 15px #000;overflow-wrap:anywhere}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-profile-avatar-frame {position:relative;z-index:4;margin-top:-42px}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-profile-avatar-frame>.creator-profile-avatar {width:clamp(85px,12vw,115px);height:clamp(85px,12vw,115px);border:3px solid #e3c187;border-radius:50%;overflow:hidden}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-profile-avatar-frame>.creator-profile-avatar img {width:100%;height:100%;object-fit:cover}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-profile-primary-identity {padding-top:8px;color:#f9ead3}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-profile-primary-identity h3 {font:400 clamp(27px,4vw,41px)/1.15 Georgia,serif;color:#f8ecdc}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-profile-tabs {display:flex;gap:6px;overflow-x:auto;margin:0;order:2}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-profile-tabs button {flex:1;min-height:45px;min-width:70px;color:#efdbb8;background:transparent;border:0;border-bottom:2px solid #bb8f59}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .public-profile-metrics {order:1}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-releases {order:3}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-public-profile-about {order:4}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .public-role-profile {order:5}
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-body>:not(.creator-profile-hero,.public-profile-metrics,.nj-cinema-profile-tabs,.creator-profile-releases,.nj-public-profile-about,.public-role-profile) {order:6}
+@media(max-width:700px){:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-body {padding:0 15px 25px}:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-profile-cover {margin-inline:-15px;height:175px}:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-hero.nj-cinema-profile-hero {grid-template-columns:90px minmax(0,1fr);gap:8px 12px}}
