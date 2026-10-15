@@ -785,3 +785,9 @@
   :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .track-cover {min-height:160px;}
   :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .track-body {padding:13px;}
 }
+
+/* A 64- to 128-pixel avatar is not a high-resolution cover photo. Keep the
+   gold photographic stage rather than upscale it into a pixelated banner. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-hero-banner.nj-cinema-banner-lowres {
+  display:none;
+}
