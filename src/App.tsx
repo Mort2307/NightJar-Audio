@@ -3418,6 +3418,41 @@ function App() {
     }
   };
 
+  const uploadProfileBanner = async (file: File) => {
+    if (!user || profileImageBusy) return;
+    setProfileImageBusy(true);
+    try {
+      const image = await optimiseProfileImage(file, 'banner');
+      if (demoMode) {
+        setProfile((current:any)=>({...current,pendingBannerStatus:'pending',pendingBannerAssetId:'demo-banner-'+Date.now()}));
+        notify('Simulation: landscape cover prepared for moderation, without uploading.');
+        return;
+      }
+      const dataUrl = await readFileDataUrl(image.file);
+      const result = await nightjarMedia.submitImage({
+        kind:'profile_banner', dataUrl, contentType:image.file.type, fileName:image.file.name,
+      });
+      setProfile((current:any)=>({...current,pendingBannerStatus:result.status,pendingBannerAssetId:result.assetId}));
+      notify('Your cover image was compressed and sent for NightJar moderation. Your approved cover remains visible meanwhile.');
+    } catch(error) {
+      notify(error instanceof Error?error.message:'Your cover could not be processed. Please try a landscape JPG or PNG.');
+    } finally {setProfileImageBusy(false);}
+  };
+
+  const removeProfileBanner = async () => {
+    if (!user || profileImageBusy) return;
+    setProfileImageBusy(true);
+    try {
+      if (!demoMode) await nightjarMedia.removeProfileBanner();
+      setProfile((current:any)=>({
+        ...current,bannerAssetId:null,bannerUrl:null,bannerStatus:null,
+        pendingBannerAssetId:null,pendingBannerStatus:null,
+      }));
+      notify(demoMode?'Simulation: cover removed locally.':'Your cover image has been removed.');
+    } catch {notify('Could not remove your cover image.');}
+    finally {setProfileImageBusy(false);}
+  };
+
   const removeProfileImage = async () => {
     setProfileImageBusy(true);
     try {
@@ -5467,6 +5502,8 @@ function App() {
                 tasteVector={tasteVector}
                 onUploadAvatar={uploadProfileAvatar}
                 onRemoveAvatar={removeProfileImage}
+                onUploadBanner={uploadProfileBanner}
+                onRemoveBanner={removeProfileBanner}
                 onSave={saveProfile}
                 onRevert={()=>profileBaseline && setProfile(structuredClone(profileBaseline))}
                 notify={notify}
