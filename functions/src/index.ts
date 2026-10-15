@@ -6715,9 +6715,9 @@ export const myDiditControlledCheck = onCall({ region: REGION }, async request =
     }
   }
   // Viewing status is read-only: no provider request and no billable claim.
-  const status = String(data.state ?? (providerVerified && selfServiceEnabled ? 'already_verified'
+  const status = String(providerVerified && selfServiceEnabled ? 'already_verified'
     : existingPending && selfServiceEnabled ? (launchUrl ? 'session_started' : 'requires_review')
-    : selfServiceEnabled ? 'authorised' : 'none'));
+    : data.state ?? (selfServiceEnabled ? 'authorised' : 'none'));
   const authorised = !providerVerified && status === 'authorised' &&
     (selfServiceEnabled || (grant.exists &&
       reuse.data()?.status === 'approved_for_reuse' && reuse.data()?.memberConsent === true));
