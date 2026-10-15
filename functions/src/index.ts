@@ -6404,6 +6404,62 @@ export const ageStatus = onCall({
   };
 });
 
+// Owner-only read-only evidence trail. This never contacts Didit, changes
+// verification, creates a chargeable session, or exposes sensitive KYC material.
+export const adminDiditDiagnostics = onCall({ region: REGION }, async (request) => {
+  const identity = requireAdminIdentity(request);
+  const age = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
+  const sessionId = cleanText(age.sessionId, 128);
+  const claimed = await db.collection('operationalControls')
+    .doc('didit-maintenance-one-shot-2026-10-14').get();
+  const session = sessionId
+    ? (await db.collection('diditSessions').doc(sessionId).get()).data() ?? {}
+    : {};
+  const sessionBound = Boolean(sessionId && session.uid === identity.uid);
+  // Only status/data events can grant a verified-adult result. All receipts
+  // were already signature-validated by diditWebhook before Firestore storage.
+  const receipts = sessionBound
+    ? await db.collection('diditWebhookEvents').where('sessionId', '==', sessionId).limit(30).get()
+    : null;
+  const events = (receipts?.docs ?? [])
+    .map((doc) => doc.data())
+    .filter((event) => ['status.updated', 'data.updated'].includes(String(event.webhookType)))
+    .sort((a, b) => Number(b.receivedAt?.toMillis?.() ?? 0) - Number(a.receivedAt?.toMillis?.() ?? 0));
+  const latest = events[0];
+  const verified = diditPass(age);
+  const receiptAccepted = Boolean(latest);
+  const processed = Boolean(latest?.processedAt);
+  const ignored = latest?.ignored === true;
+  const adultEvidence = latest?.adultEvidence === true;
+  const decisionStatus = cleanText(latest?.status, 40) || null;
+  const outcome = verified ? 'verified'
+    : !sessionId ? 'no_account_session'
+    : !sessionBound ? 'session_binding_missing'
+    : !receiptAccepted ? 'awaiting_signed_webhook'
+    : !processed ? 'webhook_waiting_for_processing'
+    : ignored ? 'webhook_ignored_or_superseded'
+    : decisionStatus === 'Approved' && !adultEvidence ? 'adult_evidence_missing'
+    : 'provider_result_not_verified';
+  return {
+    outcome,
+    providerVerified: verified,
+    oneShotClaimed: claimed.exists,
+    accountProviderStatus: cleanText(age.status, 40) || 'NOT_STARTED',
+    sessionRecorded: Boolean(sessionId),
+    sessionBound,
+    sessionProviderStatus: cleanText(session.status, 40) || null,
+    signedWebhookReceived: receiptAccepted,
+    webhookProcessed: processed,
+    webhookIgnored: ignored,
+    webhookStatus: decisionStatus,
+    // No DOB, ID, selfie, vendor_data, token, session URL or session identifier.
+    adultEvidenceConfirmed: adultEvidence,
+    lastWebhookReceivedAt: latest?.receivedAt?.toDate?.()?.toISOString?.() ?? null,
+    lastWebhookProcessedAt: latest?.processedAt?.toDate?.()?.toISOString?.() ?? null,
+    publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
+  };
+});
+
 export const startAgeAssurance = onCall({
   region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
 }, async request => {

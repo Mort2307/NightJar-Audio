@@ -11123,3 +11123,139 @@ textarea:focus-visible,
   .release-comment-report-actions button { flex: 1 1 120px; }
   .release-comment-report-form { padding: 12px; }
 }
+
+
+/* Owner-only Didit control centre. These informational components must never
+ * imply that claiming a paid test is the same as passing an age check. */
+.nj-didit-control {
+  display: grid;
+  gap: 18px;
+  margin: 20px 0;
+  min-width: 0;
+}
+.nj-didit-control-hero, .nj-didit-control-evidence {
+  min-width: 0;
+  border: 1px solid rgba(207,171,125,.27);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(29,25,31,.96), rgba(13,13,16,.98) 77%);
+  padding: clamp(18px,4vw,26px);
+}
+.nj-didit-control-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.nj-didit-control-emblem {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  place-items: center;
+  border: 1px solid rgba(227,180,117,.57);
+  border-radius: 15px;
+  color: #efc997;
+  background: linear-gradient(135deg,rgba(195,142,76,.2),rgba(55,39,33,.25));
+}
+.nj-didit-control-head h2 {
+  color: #f3e7dc;
+  margin: 6px 0 0;
+  font-size: clamp(19px,4.8vw,27px);
+  line-height: 1.23;
+}
+.nj-didit-verdict {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px;
+  border: 1px solid rgba(212,160,97,.54);
+  border-radius: 16px;
+  color: #f1d2a7;
+  background: rgba(160,111,53,.09);
+}
+.nj-didit-verdict.verified {
+  border-color: rgba(123,200,147,.62);
+  color: #a9e3b9;
+  background: rgba(68,139,91,.14);
+}
+.nj-didit-verdict.unknown { color: #cbc3bd; border-color: rgba(194,184,175,.35); background: rgba(255,255,255,.025); }
+.nj-didit-verdict > svg { flex: 0 0 auto; margin-top: 3px; }
+.nj-didit-verdict strong { font-size: clamp(20px,5.5vw,30px); letter-spacing: .03em; }
+.nj-didit-verdict p { margin: 7px 0 0; font-size: 13px; line-height: 1.7; color: #e5dcd6; }
+.nj-didit-control-facts {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.nj-didit-control-facts > span {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(215,183,147,.15);
+  background: rgba(255,255,255,.025);
+  min-width: 0;
+}
+.nj-didit-control-facts small, .nj-didit-control-step small { font-size: 11px; color: #b4a9ac; }
+.nj-didit-control-facts strong { color: #f2e7da; font-size: 13px; overflow-wrap: anywhere; }
+.nj-didit-control-actions, .nj-didit-control-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 17px 0;
+}
+.nj-didit-control-actions > :is(a,button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 46px;
+  flex: 1 1 225px;
+  text-align: center;
+}
+.nj-didit-control-hero > small, .nj-didit-control-footnote { color: #b5a7a3; font-size: 12px; line-height: 1.7; }
+.nj-didit-control-errors { margin: 12px 0; color: #f4b5ae; font-size: 12px; }
+.nj-didit-control-evidence-title h3 { margin: 8px 0 6px; color: #f2e7dc; font-size: clamp(19px,4vw,25px); }
+.nj-didit-control-evidence-title p, .nj-didit-control-diagnosis p { color: #c6b9b7; line-height: 1.6; font-size: 13px; }
+.nj-didit-control-steps { display: grid; gap: 9px; margin: 18px 0; }
+.nj-didit-control-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 10px;
+  border: 1px solid rgba(215,183,147,.13);
+  border-radius: 12px;
+  background: rgba(255,255,255,.018);
+}
+.nj-didit-control-step > span { flex: 0 0 24px; color: #b8a39d; }
+.nj-didit-control-step > span.done { color: #a9e3b9; }
+.nj-didit-control-step > span.waiting { color: #d5af7b; }
+.nj-didit-control-step > div { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.nj-didit-control-step strong { color: #f0e9df; font-size: 13px; }
+.nj-didit-control-step em { flex: 0 0 auto; color: #cbb7a4; font-size: 9px; font-style: normal; font-weight: 700; letter-spacing: .065em; }
+.nj-didit-control-diagnosis {
+  padding: 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(210,166,106,.23);
+  background: rgba(196,147,81,.06);
+}
+.nj-didit-control-diagnosis > strong { color: #eccc9d; }
+.nj-didit-control-diagnosis p { margin: 7px 0; }
+.nj-didit-control-diagnosis > small { color: #bcb2ae; font-size: 11px; }
+.nj-didit-control-links a {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #dfbf8f;
+  text-underline-offset: 3px;
+  font-size: 12px;
+}
+.nj-didit-control-footnote { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; }
+.nj-didit-control-footnote svg { flex: 0 0 15px; margin-top: 2px; }
+@media (max-width: 440px) {
+  .nj-didit-control-facts { grid-template-columns: minmax(0,1fr); }
+  .nj-didit-control-step em { font-size: 8px; }
+  .nj-didit-control-step { gap: 8px; }
+  .nj-didit-control-actions > :is(a,button) { flex-basis: 100%; }
+}
