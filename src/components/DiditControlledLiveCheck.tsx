@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, ExternalLink, LockKeyhole, RefreshCw, ShieldCheck } from 'lucide-react';
 import { nightjarDiditControlled, type DiditControlledStatus } from '../platform/firebase-didit-controlled';
-import { nightjarAge } from '../platform/firebase-age';
 import { nightjarLegal } from '../platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from '../legal/nightjarLegal';
 
