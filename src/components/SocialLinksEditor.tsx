@@ -41,7 +41,7 @@ export function SocialPicture({link}:{link:Pick<NightjarSocialLink,'photoUrl'|'p
 export function SocialLinksDisplay({links}:{links?:NightjarSocialLink[]}) {
   if(!links?.length)return null;
   return <section className="nj-social-public" aria-label="Member social media links">
-    <span className="mini-label">FIND ME ELSEWHERE</span>
+    <div className="nj-social-public-heading"><span className="mini-label">FIND ME ELSEWHERE</span><ContextHelp topic="social-avatar-protection"/></div>
     <div className="nj-social-list">
       {links.map((link)=><a key={link.id} className="nj-social-public-link" href={link.url}
         target="_blank" rel="noopener noreferrer nofollow ugc" title={'Open '+link.platform+' in a new tab'}>
