@@ -408,3 +408,14 @@
   background:var(--panel);
   border:2px solid var(--line);
 }
+
+/* Vision Access presets override the decorative locked-theme preview surface. */
+:root[data-nightjar-vision] .nj-theme-locked-card {
+  color:var(--ivory);
+  background:var(--panel);
+  border:2px solid var(--line);
+  box-shadow:none;
+}
+:root[data-nightjar-vision] .nj-theme-locked-card>svg:last-child {
+  color:var(--ivory);
+}
