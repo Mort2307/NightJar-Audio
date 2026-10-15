@@ -66,14 +66,14 @@ assert.match(legalPage, /age_assurance_notice/, 'legal document shows correct ag
 
 const pauseStarter = index.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0] ?? '';
 assert.match(index, /const DIDIT_VERIFICATION_PAUSED = true/, 'live start kill switch is enabled');
-assert.match(pauseStarter, /if \(DIDIT_VERIFICATION_PAUSED && !controlledAdminTest\) throw new HttpsError\('failed-precondition'/, 'backend rejects all ordinary and cached clients during pause');
+assert.match(pauseStarter, /if \(DIDIT_VERIFICATION_PAUSED && !controlledAdminTest && !controlledMemberPilot\) throw new HttpsError\('failed-precondition'/, 'backend rejects all ordinary and cached clients during pause');
 assert.match(pauseStarter, /DIDIT_VERIFICATION_PAUSED && identity.admin && requestedControlledAdminTest/, 'maintenance exception is restricted to explicit server-authenticated administrator test');
 assert.match(pauseStarter, /transaction.create\(testGuard,/, 'maintenance test claim is transactional and one-use globally');
 assert.match(pauseStarter, /await requireCurrentLegalAcceptance\(identity.uid, 'age_assurance_notice'\)/, 'live admin test requires persisted privacy notice acknowledgement');
 assert.match(app, /nightjarAge.start\(adminPilot && DIDIT_VERIFICATION_PAUSED\)/, 'public and cached app clients never signal test bypass');
 assert.match(app, /!ageDiditPermission \|\| \(!ageNoticeAccepted && !ageNoticeAcknowledged\)/, 'admin test requires explicit consent and acknowledgement');
 assert.match(ageClient, /controlledAdminTest \? \{ controlledAdminTest: true \} : \{\}/, 'admin test flag is opt-in, never default');
-assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest)') >= 0 && pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest)') < pauseStarter.indexOf('return startDiditSession'), 'pause check precedes provider creation');
+assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest && !controlledMemberPilot)') >= 0 && pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest && !controlledMemberPilot)') < pauseStarter.indexOf('return startDiditSession'), 'pause check precedes provider creation');
 assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client can read pause status');
 assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'app visibly pauses verification');
 assert.match(app, /Age verification temporarily unavailable/, 'age gate explains outage');
