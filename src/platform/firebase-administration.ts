@@ -9,6 +9,20 @@ const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator'
 export type NightjarManagedProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
 export type NightjarSuspensionResult = { userId: string; status: string; authDisabled: boolean; revokedReaderSessions: number };
 const suspensionCall = httpsCallable<{userId:string;action:'suspend'|'restore';reason:string}, NightjarSuspensionResult>(functions,'adminSetAccountSuspension');
+export type NightjarSecurityDossier = {
+  member: {
+    userId: string; displayName: string; email: string; handle: string | null;
+    status: string; authDisabled: boolean; suspensionReason: string | null;
+    suspensionCaseId: string | null; lastSignIn: string | null;
+  };
+  evidence: Array<{
+    id: string; eventType: string; relatedType: string; relatedId: string;
+    route: string; summary: string; detectionSource: string;
+    detectionConfidence: string; createdAt: string | null;
+  }>;
+  note: string;
+};
+const securityDossierCall = httpsCallable<{userId:string}, NightjarSecurityDossier>(functions,'adminMemberSecurityDossier');
 const setWorkspaceCall = httpsCallable<{
   userId: string;
   role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
@@ -169,6 +183,10 @@ export const nightjarAdministration = {
 
   async setAccountRole(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist', status: 'active' | 'pending_review' | 'suspended' = 'active') {
     return (await setRoleCall({ userId, role, status })).data;
+  },
+
+  async memberSecurityDossier(userId: string) {
+    return (await securityDossierCall({ userId })).data;
   },
 
   async setAccountSuspension(userId: string, action: 'suspend' | 'restore', reason: string) {
