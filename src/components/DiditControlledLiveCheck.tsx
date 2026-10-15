@@ -79,7 +79,9 @@ export default function DiditControlledLiveCheck() {
     {alreadyVerified ? <>
       <p><CheckCircle2 size={17} aria-hidden="true"/> Nightjar has securely recorded your permanent Didit <strong>Verified 18+</strong> result.</p>
     </> : <>
-      <p>This is a single, administrator-authorised live verification for your own Nightjar account. It uses the normal Didit ID and liveness check, rather than attempting to transfer a previous standalone test.</p>
+      <p>{status.directPilot
+          ? 'This one-time ID verification pilot is enabled for your signed-in Nightjar account. No earlier Didit approval request or administrator dropdown selection is needed. You must still explicitly consent and start your own normal ID and liveness check.'
+          : 'This is a single, administrator-authorised live verification for your own Nightjar account. It uses the normal Didit ID and liveness check, rather than attempting to transfer a previous standalone test.'}</p>
       {canStart && <>
         <p><strong>Before you start:</strong> Read the current <a href="/legal/age-verification" target="_blank" rel="noopener noreferrer">Age Verification &amp; Didit Privacy Notice <ExternalLink size={12}/></a>.</p>
         {!legalAccepted && <label className="nj-didit-reuse-consent">
