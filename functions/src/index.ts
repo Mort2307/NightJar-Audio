@@ -6408,12 +6408,12 @@ export const ageStatus = onCall({
 // A consented support request is NOT identity proof and cannot grant age access.
 // Reuse approval must later come from an authenticated, account-bound Didit flow.
 const diditReuseRef = (uid: string) => db.collection('diditReuseRequests').doc(uid);
-type DiditReuseState = 'requested' | 'investigating' | 'waiting_for_member' | 'closed';
+type DiditReuseState = 'requested' | 'investigating' | 'waiting_for_member' | 'approved_for_reuse' | 'closed';
 export const myDiditReuseRequest = onCall({ region: REGION }, async request => {
   const identity = await requireActiveIdentity(request);
   const data = (await diditReuseRef(identity.uid).get()).data() ?? {};
   return {
-    status: ['requested','investigating','waiting_for_member','closed'].includes(String(data.status))
+    status: ['requested','investigating','waiting_for_member','approved_for_reuse','closed'].includes(String(data.status))
       ? data.status as DiditReuseState : 'none',
     requestedAt: toIso(data.requestedAt),
     updatedAt: toIso(data.updatedAt),
@@ -6436,7 +6436,7 @@ export const requestDiditReuse = onCall({ region: REGION }, async request => {
   const ref = diditReuseRef(identity.uid);
   const state = await db.runTransaction(async tx => {
     const current = (await tx.get(ref)).data() ?? {};
-    if (['requested','investigating','waiting_for_member'].includes(String(current.status))) {
+    if (['requested','investigating','waiting_for_member','approved_for_reuse'].includes(String(current.status))) {
       return current.status as DiditReuseState;
     }
     tx.set(ref, {
@@ -6477,7 +6477,7 @@ export const adminListDiditReuseRequests = onCall({ region: REGION }, async requ
     return {
       uid: doc.id,
       emailMasked: cleanText(item.emailMasked, 90),
-      status: ['requested','investigating','waiting_for_member','closed'].includes(String(item.status))
+      status: ['requested','investigating','waiting_for_member','approved_for_reuse','closed'].includes(String(item.status))
         ? item.status as DiditReuseState : 'closed',
       requestedAt: toIso(item.requestedAt),
       updatedAt: toIso(item.updatedAt),
@@ -6491,7 +6491,7 @@ export const adminReviewDiditReuseRequest = onCall({ region: REGION }, async req
   const uid = cleanText(input.uid, 128);
   const status = cleanText(input.status, 50);
   if (!/^[a-zA-Z0-9_-]{10,128}$/.test(uid) ||
-      !['investigating','waiting_for_member','closed'].includes(status)) {
+      !['investigating','waiting_for_member','approved_for_reuse','closed'].includes(status)) {
     throw new HttpsError('invalid-argument','Invalid reuse request or review action.');
   }
   const ref = diditReuseRef(uid);
@@ -6500,13 +6500,26 @@ export const adminReviewDiditReuseRequest = onCall({ region: REGION }, async req
     if (!current.exists || current.data()?.memberConsent !== true) {
       throw new HttpsError('failed-precondition', 'An active member-consented reuse request is required.');
     }
+    if (current.data()?.status === 'closed') {
+      throw new HttpsError('failed-precondition', 'This enquiry is closed. The member must submit a fresh consented request.');
+    }
+    // Approval is permission for the member to proceed with Didit's own
+    // reuse/ownership-confirmation process. It never grants verified-adult status.
     tx.set(ref, {
       status,
       updatedAt: FieldValue.serverTimestamp(),
       lastReviewedBy: identity.uid,
-      publicNote: status === 'investigating' ? 'Nightjar is reviewing how to reuse your existing Didit identity check.'
-        : status === 'waiting_for_member' ? 'The team will contact you through your registered Nightjar account with next steps.'
-        : 'Your reuse enquiry was closed without changing your account verification. Contact support if you still need assistance.',
+      publicNote: status === 'investigating'
+        ? 'Nightjar is checking your existing Didit request. No new identity check has started.'
+        : status === 'waiting_for_member'
+          ? 'Identity confirmation is required before your previous Didit approval can be linked. Nightjar support must provide the secure next steps; no automatic message or check has been sent.'
+          : status === 'approved_for_reuse'
+            ? 'Nightjar approved your request to proceed with secure Didit reuse. Your account is NOT yet verified 18+; Didit must still confirm ownership and 18+ evidence before access is granted.'
+            : 'Your reuse enquiry was closed without changing your account verification. Contact support if you still need assistance.',
+      ...(status === 'approved_for_reuse' ? {
+        reuseRequestApprovedAt: FieldValue.serverTimestamp(),
+        reuseRequestApprovedBy: identity.uid,
+      } : {}),
       ...(status === 'closed' ? { memberConsent: false } : {}),
     }, { merge: true });
   });
