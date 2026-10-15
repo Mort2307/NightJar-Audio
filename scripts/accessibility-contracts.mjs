@@ -68,7 +68,8 @@ assert.match(brand,/:root\[data-nightjar-theme="bronze"\]:not\(\[data-nightjar-v
 assert.match(brand,/\.nj-up-root/,'audio player is included in design system');
 assert.match(brand,/\.nj-mobile-nav/,'mobile navigation is included in design system');
 assert.match(brand,/\.creator-profile-modal\.premium-public-profile/,'public creator profiles are included');
-assert.match(publicProfile,/isOfficialCreator && <details className="nj-official-creator-badge"/,'gold creator crescent is conditional on an approved professional role');
+assert.match(publicProfile,/hasNightjarApproval && <details className="nj-official-creator-badge"/,'gold crescent must be conditional on server-approved professional status, across linked profiles');
+assert.match(publicProfile,/profile\?\.approvedProfessionalRoles/,'badge must use server-approved roles, never release credits');
 assert.match(vision,/data-nightjar-vision="clarity"/,'high-contrast accessible override retained');
 assert.match(vision,/data-nightjar-vision="paper"/,'paper accessible override retained');
 assert.match(vision,/data-nightjar-vision-quiet/,'reduced-motion preference retained');
