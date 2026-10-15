@@ -23,7 +23,7 @@ const topSettings = settings.slice(settings.indexOf('export default function Nig
 assert.match(topSettings,/<AppUpdateControl compact\/>/,'update action is at top of Settings');
 assert.doesNotMatch(topSettings, /\{administrator &&[^\n]*<AppUpdateControl/, 'member update controls are not admin-gated');
 assert.match(update,/applyNightjarSafeUpdate\(\)/,'member updates use the safe FCM-preserving apply method');
-assert.match(pwa,/registration\.waiting\?\.postMessage\(\{ type: 'SKIP_WAITING' \} \)/,'waiting worker can be activated');
+assert.match(pwa,/registration\.waiting\?\.postMessage\(\{ type: 'SKIP_WAITING' \}\)/,'waiting worker can be activated');
 assert.match(pwa,/startsWith\('nightjar-'\)/,'safe updates clear only app-shell caches');
 assert.match(pwa,/cache: 'no-store'/,'version manifest comparison bypasses stale caches');
 assert.match(sw,/url\.pathname === '\/version\.json'/,'service worker never caches the version check');
