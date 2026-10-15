@@ -1,4 +1,5 @@
 import { ArrowRight, Brush, CheckCircle2, Crown, FileCheck2, FileText, Headphones, Heart, Mic2, Play, Share2, Sparkles, Star, type LucideIcon } from 'lucide-react';
+import ContextHelp from './ContextHelp';
 
 export type SpotlightPerson = {
   kind: 'creator' | 'writer' | 'editor' | 'artist' | 'listener';
@@ -92,7 +93,7 @@ export default function SpotlightExperience(props: Props) {
   return <section className="spotlight-section section-wrap nj-spotlight-experience" aria-labelledby="daily-spotlights-title">
     <header className="nj-spotlight-section-head">
       <div className="nj-spotlight-section-kicker"><span className="nj-spotlight-kicker-icon"><Crown size={17}/></span> THE NIGHTJAR SPOTLIGHT <span className="nj-spotlight-live"><span/> LIVE TODAY</span></div>
-      <h2 id="daily-spotlights-title">Their moment. <em>Our stage.</em></h2>
+      <h2 id="daily-spotlights-title">Their moment. <em>Our stage.</em> <ContextHelp topic="spotlight-rotation"/></h2>
       <p>Each featured member gets their own spotlight day. We celebrate the voices, imaginations, craft and listeners who make Nightjar what it is.</p>
       <div className="nj-spotlight-promises"><span><CheckCircle2 size={14}/> A place for every creative discipline</span><span><Sparkles size={14}/> Featured members rotate</span></div>
     </header>
@@ -101,7 +102,6 @@ export default function SpotlightExperience(props: Props) {
         {ordered.map(person=><PersonCard key={person.kind+':'+person.targetId} {...props} person={person}/>)}
       </div>
       <p className="nj-spotlight-outro"><Sparkles size={14}/> Spotlight days rotate, giving each featured person their own moment on the Nightjar stage.</p>
-      {Boolean(props.spotlightMeta?.listenerTopSevenCount) && <p className="nj-spotlight-weekly-note">Weekly listener recognition celebrates {props.spotlightMeta!.listenerTopSevenCount} listener{props.spotlightMeta!.listenerTopSevenCount === 1 ? '' : 's'} across the week, with one featured day at a time.</p>}
     </> : <div className="nj-spotlight-empty"><Star size={24}/><strong>The stage is being prepared.</strong><p>Featured members will appear as public profiles become eligible. Each approved professional is included in Nightjar's fair daily rotation.</p></div>}
   </section>;
 }
