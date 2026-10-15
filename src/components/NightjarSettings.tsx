@@ -7,6 +7,7 @@ import NotificationPreferences from './NotificationPreferences';
 import ThemePreferences from './ThemePreferences';
 import PasskeySettings from './PasskeySettings';
 import DiditExistingCheckRequest from './DiditExistingCheckRequest';
+import AppUpdateControl from './AppUpdateControl';
 import ControlledSingleMemberDiditCheck from './ControlledSingleMemberDiditCheck';
 import AdminAudioUploadTest from './AdminAudioUploadTest';
 import NightjarFinancePreview from './NightjarFinancePreview';
@@ -34,6 +35,16 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <h1 id="nightjar-settings-title">Your Nightjar.</h1>
         <p>Your profile, security, preferences and app tools in one place. Open only the sections you need.</p>
       </div>
+
+      <section className="panel nj-member-update-quick-access" aria-label="Update Nightjar on this device">
+        <div className="nj-settings-section-head"><Download size={19} aria-hidden="true"/><div>
+          <span className="mini-label">APP UPDATES · EVERY MEMBER</span>
+          <h2>Keep Nightjar current.</h2>
+        </div></div>
+        <p>Missing the latest features? Check your device for the latest Nightjar build or refresh an older installation. You'll also find this in the notification bell.</p>
+        <AppUpdateControl compact/>
+        <a className="nj-settings-update-repair" href="/recover.html">Still not seeing updates? Repair this app <ArrowRight size={14} aria-hidden="true"/></a>
+      </section>
 
       <div className="nj-settings-grid">
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-account">
