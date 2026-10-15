@@ -3,6 +3,7 @@ import { Check, ExternalLink, ImagePlus, Link2, Plus, RefreshCw, Trash2, X } fro
 import { nightjarSocialLinks, type NightjarSocialLink } from '../platform/firebase-social-links';
 import { nightjarMedia } from '../platform/firebase-media';
 import { optimiseProfileImage } from '../platform/profile-image-optimizer';
+import ContextHelp from './ContextHelp';
 import './social-profile-links.css';
 
 type EditorRow = NightjarSocialLink & { draft?:boolean; editing?:boolean };
@@ -117,7 +118,7 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
   };
   return <article className="panel premium-user-card nj-social-editor">
     <div className="premium-user-card-head">
-      <div><span className="mini-label">SOCIAL PRESENCE</span><h2>Find me elsewhere.</h2></div><Link2 size={18} />
+      <div><span className="mini-label">SOCIAL PRESENCE</span><h2>Find me elsewhere.</h2></div><span className="nj-social-heading-icons"><Link2 size={18}/><ContextHelp topic="social-avatar-protection"/></span>
     </div>
     <p className="panel-note">Paste a social profile link, select Save, then tap + to add another. Each link is saved independently of your other profile edits.</p>
     <div className="nj-social-editor-list">
@@ -157,6 +158,5 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
       <button type="button" className="secondary-button" disabled={disabled||loading||rows.length>=12} onClick={add}><Plus size={17}/> Add another social link</button>
       <button type="button" className="ghost-button" disabled={loading||busyId!==null} onClick={()=>void refresh()}><RefreshCw size={14}/> Refresh photos</button>
     </div>
-    <p className="nj-social-external-note">Nightjar won't substitute a random picture or claim a profile is linked/verified. Social networks generally restrict automatic profile-photo access, so upload the same picture you use there. Pictures go through Nightjar's usual image moderation. Only approved pictures are public.</p>
   </article>;
 }
