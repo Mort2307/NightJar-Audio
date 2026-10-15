@@ -28,6 +28,7 @@
     "setup:didit:live": "node scripts/setup-didit-live.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "3.8.1",
     "firebase": "^12.19.0",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",
