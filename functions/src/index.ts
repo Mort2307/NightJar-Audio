@@ -4667,7 +4667,52 @@ const setMemberSuspension = async (userId: string, action: MemberSuspensionActio
   return { userId, status: suspended ? 'suspended' : restoredStatus, authDisabled: suspended, caseId, revokedReaderSessions };
 };
 
-export const adminSetAccountSuspension = onCall({ region: REGION }, async (request) => {
+
+const deliverMemberSecurityNotice = async (userId: string, action: MemberSuspensionAction, reason: string, caseId: string) => {
+  const recordId = action === 'suspend' ? caseId : caseId + '-restored';
+  const noticeRef = accountRef(userId).collection('securityNotices').doc(recordId);
+  const previous = await noticeRef.get();
+  if (previous.data()?.status === 'sent') return 'sent' as const;
+
+  // Persist the intended delivery before attempting mail. A disconnected
+  // Gmail integration never prevents immediate protection of the account.
+  const authUser = await getAuth().getUser(userId);
+  const email = cleanEmail(authUser.email);
+  await noticeRef.set({
+    type: action, caseId, status: 'pending', emailMasked: maskSecurityEmail(email),
+    reason, updatedAt: FieldValue.serverTimestamp(),
+    ...(previous.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge: true });
+  if (!validEmailAddress(email)) return 'pending' as const;
+
+  const subject = 'Your Nightjar account access has changed';
+  const text = action === 'suspend'
+    ? 'Your Nightjar account has been suspended after an administrator review.\n\nReason: ' + reason +
+      '\n\nReference: ' + caseId + '\n\nYou can dispute this decision or ask for clarification by contacting Nightjar Support. Browser screenshot shortcuts are not conclusive proof of a screenshot or recording.\n\nNightjar Support'
+    : 'Your Nightjar account has been restored following an administrator review.\n\nReview note: ' + reason +
+      '\n\nReference: ' + caseId + '\n\nYou may now sign in to Nightjar again.\n\nNightjar Support';
+  try {
+    const accessToken = await gmailAccessToken();
+    const sent = await sendGmailApiMessage({
+      accessToken, fromEmail: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      fromName: 'Nightjar Support', replyTo: NIGHTJAR_GMAIL_SENDER_EMAIL,
+      message: { toEmail: email, subject, text,
+        html: '<div style="font:15px/1.6 Arial,sans-serif"><h2>Nightjar account update</h2><p>' +
+        text.split('\n').map((line) => line.replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] ?? c))).join('<br/>') + '</p></div>',
+      },
+    });
+    await noticeRef.set({ status: 'sent', providerMessageId: sent.id || null, sentAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return 'sent' as const;
+  } catch (error) {
+    console.warn('Nightjar security notice delivery pending', caseId, String(error));
+    await noticeRef.set({ status: 'pending', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return 'pending' as const;
+  }
+};
+
+export const adminSetAccountSuspension = onCall({
+  region: REGION, secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
   const administrator = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const userId = cleanText(input.userId, 160);
@@ -4675,7 +4720,9 @@ export const adminSetAccountSuspension = onCall({ region: REGION }, async (reque
   const reason = cleanText(input.reason, 500);
   if (action !== 'suspend' && action !== 'restore') throw new HttpsError('invalid-argument', 'Choose suspend or restore.');
   if (reason.length < 12) throw new HttpsError('invalid-argument', 'Provide a specific reviewable reason (at least 12 characters).');
-  return setMemberSuspension(userId, action, reason, administrator.uid);
+  const result = await setMemberSuspension(userId, action, reason, administrator.uid);
+  const notificationDelivery = await deliverMemberSecurityNotice(userId, action, reason, result.caseId);
+  return { ...result, notificationDelivery };
 });
 
 
@@ -8859,7 +8906,9 @@ export const securityAlertEvidence = onCall({ region: REGION }, async (request) 
   };
 });
 
-export const suspendFromSecurityAlert = onCall({ region: REGION }, async (request) => {
+export const suspendFromSecurityAlert = onCall({
+  region: REGION, secrets: [NIGHTJAR_GMAIL_CLIENT_ID, NIGHTJAR_GMAIL_CLIENT_SECRET],
+}, async (request) => {
   const admin = requireAdminIdentity(request);
   const alertId = cleanText((request.data as { alertId?: unknown } | undefined)?.alertId, 160);
   const alertRef = db.collection('securityAlerts').doc(alertId);
@@ -8877,6 +8926,8 @@ export const suspendFromSecurityAlert = onCall({ region: REGION }, async (reques
     admin.uid,
   );
   const revokedCount = result.revokedReaderSessions;
+  const notificationDelivery = await deliverMemberSecurityNotice(String(data.userId), 'suspend',
+    'Administrator-reviewed security alert ' + alertId, result.caseId);
 
   await alertRef.set({
     status: 'actioned',
@@ -8887,7 +8938,7 @@ export const suspendFromSecurityAlert = onCall({ region: REGION }, async (reques
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  return { suspended: true, revokedReaderSessions: revokedCount };
+  return { suspended: true, revokedReaderSessions: revokedCount, notificationDelivery, caseId: result.caseId };
 });
 
 export const revokeSessionsFromSecurityAlert = onCall({ region: REGION }, async (request) => {
