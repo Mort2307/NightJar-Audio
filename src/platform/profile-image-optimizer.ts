@@ -96,7 +96,7 @@ const toImageBlob = (canvas: HTMLCanvasElement, type: string, quality: number) =
  * Tries WebP first; falls back to JPEG on browsers without canvas WebP encoding.
  * Never silently uploads the uncompressed original after an encoding failure.
  */
-export async function optimiseProfileImage(file: File): Promise<OptimisedProfileImage> {
+export async function optimiseProfileImage(file: File, purpose: 'portrait' | 'banner' = 'portrait'): Promise<OptimisedProfileImage> {
   const sourceType = file.type.toLowerCase();
   if (!acceptedTypes.has(sourceType) && !(sourceType === '' && acceptedExtensions.test(file.name))) {
     throw new Error('Choose a JPG, PNG, WebP or browser-supported HEIC/AVIF photo.');
@@ -117,7 +117,7 @@ export async function optimiseProfileImage(file: File): Promise<OptimisedProfile
 
     let format: 'image/webp' | 'image/jpeg' = 'image/webp';
 
-    for (const maxEdge of [PROFILE_IMAGE_MAX_EDGE, 640, 512, 384, PROFILE_IMAGE_MIN_EDGE]) {
+    for (const maxEdge of purpose === 'banner' ? [1600, 1440, 1280, 1024, 768] : [PROFILE_IMAGE_MAX_EDGE, 640, 512, 384, PROFILE_IMAGE_MIN_EDGE]) {
       const dimensions = profileImageDimensions(source.width, source.height, maxEdge);
       canvas.width = dimensions.width;
       canvas.height = dimensions.height;
@@ -145,14 +145,14 @@ export async function optimiseProfileImage(file: File): Promise<OptimisedProfile
           draw();
           const jpeg = await toImageBlob(canvas, format, quality);
           if (jpeg.type !== format) throw new Error('Your browser cannot encode a supported photo format.');
-          if (jpeg.size <= PROFILE_IMAGE_TARGET_BYTES) {
+          if (jpeg.size <= (purpose === 'banner' ? 640 * 1024 : PROFILE_IMAGE_TARGET_BYTES)) {
             const safeName = file.name.replace(/\.[^.]+$/, '') || 'profile-photo';
             return { file: new File([jpeg], safeName + '.jpg', { type: format }), originalBytes: file.size, outputBytes: jpeg.size, ...dimensions };
           }
           continue;
         }
 
-        if (blob.size <= PROFILE_IMAGE_TARGET_BYTES) {
+        if (blob.size <= (purpose === 'banner' ? 640 * 1024 : PROFILE_IMAGE_TARGET_BYTES)) {
           const safeName = file.name.replace(/\.[^.]+$/, '') || 'profile-photo';
           const extension = format === 'image/webp' ? '.webp' : '.jpg';
           return { file: new File([blob], safeName + extension, { type: format }), originalBytes: file.size, outputBytes: blob.size, ...dimensions };
