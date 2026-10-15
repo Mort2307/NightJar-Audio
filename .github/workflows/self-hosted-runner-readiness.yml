@@ -1,0 +1,50 @@
+# Manual, non-deploying acceptance test for a dedicated, isolated Nightjar CI runner.
+# This workflow will remain queued until the owner registers an appropriate runner.
+name: Nightjar self-hosted runner readiness
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightjar-self-hosted-readiness
+  cancel-in-progress: true
+
+jobs:
+  readiness:
+    runs-on: [self-hosted, linux, x64, nightjar-ci]
+    timeout-minutes: 60
+    steps:
+      - name: Check out Nightjar (no persistent credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check runner isolation prerequisites
+        run: bash scripts/check-private-runner.sh
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies without funding or audit network requests
+        run: npm ci --no-audit --no-fund
+
+      - name: Run all existing frontend validation contracts
+        run: npm run validate
+
+      - name: Install backend validation dependencies
+        run: npm --prefix functions ci --no-audit --no-fund
+
+      - name: Typecheck Firebase Functions without deploying
+        run: npm --prefix functions run check
+
+      - name: Confirm non-deploying runner is ready
+        run: |
+          echo '### Nightjar local runner is ready for CI' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Frontend validation and Firebase Functions typecheck passed.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Production deployment workflows and secrets were not touched.' >> "$GITHUB_STEP_SUMMARY"
