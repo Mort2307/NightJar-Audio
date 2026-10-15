@@ -226,7 +226,7 @@
   font-size:12px;
   white-space:normal;
 }
-:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero .writer-discovery-actions>.primary-button {
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero .writer-discovery-actions>.secondary-button:first-child {
   color:#120d08;
   border-color:#f0d3a0;
   background:linear-gradient(110deg,#edcd97,#cc9c5e);
