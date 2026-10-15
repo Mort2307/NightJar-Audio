@@ -93,7 +93,7 @@ export default function AdminDiditControlCentre() {
         <div><strong>{title}</strong><p>{description}</p></div>
       </div>
       <div className="nj-didit-control-facts">
-        <span><small>Nightjar provider status</small><strong>{status ? status.providerStatus.replaceAll('_',' ') : 'Not available'}</strong></span>
+        <span><small>Nightjar provider status</small><strong>{status ? String(status.providerStatus ?? status.status ?? 'NOT_STARTED').replaceAll('_',' ') : 'Not available'}</strong></span>
         <span><small>One-time test</small><strong>{diagnostics?.oneShotClaimed || status?.controlledAdminTestClaimed ? 'Claimed · no retries' : 'Not claimed / unknown'}</strong></span>
         <span><small>Didit environment</small><strong>{status ? status.environment === 'live' ? 'Live' : 'Sandbox / unconfigured' : 'Unknown'}</strong></span>
         <span><small>Public verification</small><strong>{status?.verificationPaused !== false ? 'Paused · protected' : 'Backend reports enabled'}</strong></span>
