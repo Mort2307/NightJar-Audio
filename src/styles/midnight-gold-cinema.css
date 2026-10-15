@@ -1,0 +1,670 @@
+/* NIGHTJAR CINEMATIC LAYOUT / V2
+   Structural layout pass, not another palette pass. Match the approved mobile
+   editorial mockups with real approved NightJar media and legible content.
+   Brand treatment opts out when Vision Access is active. */
+
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) {
+  --cinema-ink:#080807;
+  --cinema-card:#14110f;
+  --cinema-gold:#e1bd80;
+  --cinema-border:rgba(214,175,108,.34);
+}
+
+/* 1. Profile: full-bleed cover, floating portrait, name, release-first sections. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .creator-profile-backdrop {
+  padding:clamp(0px,2.5vw,22px);
+  background:rgba(0,0,0,.87);
+  backdrop-filter:blur(15px);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .creator-profile-modal.premium-public-profile {
+  width:min(850px,100%);
+  height:auto;
+  max-height:min(94dvh,1000px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-color:#7e5d35 #0d0b09;
+  border:1px solid rgba(218,179,113,.37);
+  border-radius:22px;
+  background:var(--cinema-ink);
+  box-shadow:0 35px 100px rgba(0,0,0,.8);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-head {
+  position:sticky;
+  z-index:15;
+  top:0;
+  min-height:56px;
+  padding:10px clamp(17px,4vw,32px);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:rgba(8,8,7,.96);
+  border-bottom:1px solid rgba(214,175,108,.19);
+  backdrop-filter:blur(14px);
+}
+.premium-public-profile .nj-cinema-profile-back {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+.premium-public-profile .nj-cinema-profile-back>span:first-child {
+  font:400 23px/1 Georgia,serif;
+  color:#e1bd80;
+}
+.premium-public-profile .nj-cinema-profile-back .mini-label {
+  margin:0;
+  color:#ead0a0;
+  font-size:10px;
+  letter-spacing:.17em;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-head .icon-button {
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  border:1px solid var(--cinema-border);
+  background:#16120f;
+  color:#f5eee4;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-body {
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  padding:0 clamp(17px,4vw,32px) 30px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero.nj-cinema-profile-hero {
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:0 clamp(16px,3vw,25px);
+  overflow:visible;
+  isolation:isolate;
+  padding:0 0 16px;
+  min-height:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-profile-cover {
+  position:relative;
+  grid-column:1 / -1;
+  height:clamp(170px,25vw,230px);
+  margin-inline:calc(-1 * clamp(17px,4vw,32px));
+  overflow:hidden;
+  background:
+    radial-gradient(ellipse at 73% 21%,rgba(182,113,54,.32),transparent 54%),
+    linear-gradient(120deg,#0e0c0a 0%,#2b1c12 61%,#0a0908 100%);
+  border-bottom:1px solid rgba(214,175,108,.19);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-profile-cover .nj-profile-hero-banner {
+  position:absolute;
+  inset:0 0 0 auto;
+  width:57%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+  object-position:center 35%;
+  opacity:.72;
+  filter:saturate(.82) contrast(1.13);
+  border-radius:0;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,black 38%);
+  mask-image:linear-gradient(90deg,transparent 0%,black 38%);
+  clip-path:none;
+}
+.premium-public-profile .nj-cinema-profile-cover-shade {
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg,rgba(5,4,3,.77) 0%,transparent 70%),linear-gradient(0deg,rgba(8,8,7,.55),transparent 60%);
+  pointer-events:none;
+}
+.premium-public-profile .nj-cinema-cover-words {
+  position:absolute;
+  left:clamp(22px,4vw,42px);
+  top:50%;
+  transform:translateY(-38%);
+  z-index:1;
+  display:grid;
+  max-width:55%;
+  gap:9px;
+  pointer-events:none;
+}
+.premium-public-profile .nj-cinema-cover-words small {
+  color:#e1c18f;
+  letter-spacing:.25em;
+  font:700 clamp(9px,1.3vw,11px)/1.4 system-ui,sans-serif;
+}
+.premium-public-profile .nj-cinema-cover-words em {
+  font:italic 400 clamp(24px,4.5vw,44px)/1.08 Georgia,serif;
+  color:#f7ecd9;
+  text-shadow:0 5px 20px #000;
+}
+.premium-public-profile .nj-cinema-cover-moon {
+  position:absolute;
+  top:14px;
+  right:15px;
+  font:400 29px Georgia,serif;
+  color:rgba(225,189,128,.75);
+  pointer-events:none;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-avatar-frame {
+  align-self:start;
+  margin-top:-43px;
+  margin-left:4px;
+  z-index:5;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-avatar-frame>.creator-profile-avatar {
+  width:clamp(92px,13vw,116px);
+  height:clamp(92px,13vw,116px);
+  border:3px solid #e3c187;
+  border-radius:50%;
+  box-shadow:0 0 0 5px #090807,0 0 0 6px rgba(233,191,119,.37),0 10px 30px #000a;
+  background:#23180f;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-primary-identity {
+  padding-top:13px;
+  min-width:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-hero-eyebrow {
+  margin-bottom:5px;
+  font-size:10px;
+  letter-spacing:.18em;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero h3 {
+  margin:0;
+  color:#f6f0e7;
+  font:400 clamp(30px,4.5vw,44px)/1.08 Georgia,serif;
+  letter-spacing:-.025em;
+}
+.premium-public-profile .nj-cinema-profile-handle {
+  display:block;
+  margin:5px 0 8px;
+  color:#c0aa88;
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-primary-identity>p {
+  margin:0;
+  color:#d3c6b3;
+  font-size:clamp(12px,1.6vw,15px);
+  line-height:1.55;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .profile-role-chips {
+  margin-top:12px;
+  gap:6px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .profile-role-chips>button {
+  min-height:30px;
+  padding:5px 11px;
+  border:1px solid var(--cinema-border);
+  border-radius:99px;
+  background:rgba(21,18,15,.9);
+  color:#e1d4be;
+  font-size:11px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .profile-role-chips>button.active {
+  background:#e1bd80;
+  color:#100c08;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero .writer-discovery-actions {
+  grid-column:1 / -1;
+  margin-top:15px;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  width:100%;
+  padding:0;
+  border:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero .writer-discovery-actions>button {
+  grid-column:auto;
+  width:100%;
+  min-width:0;
+  min-height:45px;
+  padding:10px 8px;
+  border-radius:12px;
+  font-size:12px;
+  white-space:normal;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero .writer-discovery-actions>.primary-button {
+  color:#120d08;
+  border-color:#f0d3a0;
+  background:linear-gradient(110deg,#edcd97,#cc9c5e);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics {
+  order:1;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:0;
+  width:100%;
+  padding:13px 5px;
+  margin:0 0 5px;
+  border:1px solid rgba(214,175,108,.24);
+  border-radius:15px;
+  background:linear-gradient(140deg,rgba(31,23,17,.7),rgba(11,10,9,.75));
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics>div {
+  min-width:0;
+  display:grid;
+  place-content:center;
+  gap:4px;
+  padding:3px 6px;
+  min-height:54px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  text-align:center;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics>div+div {
+  border-left:1px solid rgba(214,175,108,.2);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics strong {
+  font:400 clamp(21px,3vw,27px)/1.1 Georgia,serif;
+  color:#fff0d6;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics span {
+  color:#bfb2a1;
+  font-size:10px;
+  letter-spacing:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-profile-tabs {
+  order:2;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  overflow-x:auto;
+  margin:0 0 17px;
+  padding:9px 2px 5px;
+  border-bottom:1px solid rgba(214,175,108,.28);
+  scrollbar-width:thin;
+}
+.premium-public-profile .nj-cinema-profile-tabs button {
+  flex:1 0 auto;
+  min-height:43px;
+  border:0;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  color:#cfc2ae;
+  font-size:13px;
+  font-weight:650;
+  cursor:pointer;
+}
+.premium-public-profile .nj-cinema-profile-tabs button:first-child {
+  color:#f1d29a;
+  border-bottom-color:#e1bd80;
+}
+.premium-public-profile .nj-cinema-profile-tabs button:focus-visible {
+  outline:2px solid #f5d9ab;
+  outline-offset:-2px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-releases {
+  order:3;
+  margin:0 0 16px;
+  padding:15px;
+  border:1px solid var(--cinema-border);
+  border-radius:17px;
+  background:linear-gradient(145deg,#19140f,#0d0c0a 65%);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-releases .section-head h3 {
+  color:#f7e7cd;
+  font:400 clamp(25px,3.5vw,32px)/1.15 Georgia,serif;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-featured-work {
+  display:grid;
+  gap:10px;
+  border:0;
+  background:transparent;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-featured-work>article {
+  position:relative;
+  min-width:0;
+  padding:13px;
+  border:1px solid rgba(219,180,114,.29);
+  border-radius:13px;
+  background:linear-gradient(115deg,rgba(63,38,18,.31),rgba(12,11,10,.95));
+  box-shadow:inset 0 1px rgba(255,235,195,.05);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-featured-work>article:has(>img.nj-cinema-work-art) {
+  display:grid;
+  grid-template-columns:clamp(87px,18vw,126px) minmax(0,1fr);
+  align-items:start;
+  gap:8px 14px;
+}
+.premium-public-profile .nj-cinema-work-art {
+  width:100%;
+  aspect-ratio:1;
+  display:block;
+  object-fit:cover;
+  border:1px solid rgba(232,188,118,.42);
+  border-radius:10px;
+  grid-column:1;
+  grid-row:1 / span 3;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-featured-work>article:has(>img.nj-cinema-work-art)>:not(img) {
+  grid-column:2;
+  min-width:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-featured-work>article strong {
+  font:400 clamp(17px,2.3vw,23px)/1.3 Georgia,serif;
+  color:#f5eee3;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-featured-work>article span {
+  font-size:11px;
+  color:#d0c0ac;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-public-profile-about {
+  order:4;
+  padding:19px;
+  margin:0 0 12px;
+  background:linear-gradient(135deg,#191511,#0e0d0b);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-role-profile {
+  order:5;
+  margin:0 0 12px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-public-social-details {order:8;}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-artist-portfolio {order:3;}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-body>:not(
+  .creator-profile-hero,.public-profile-metrics,.nj-cinema-profile-tabs,
+  .creator-profile-releases,.nj-public-profile-about,.public-role-profile,
+  .nj-public-social-details,.public-artist-portfolio
+) {order:6;}
+.premium-public-profile :is(#nj-cinema-work,#nj-cinema-about,#nj-cinema-collaborate,#nj-cinema-links) {
+  scroll-margin-top:75px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-tags span {
+  font-size:11px;
+  line-height:1.25;
+  padding:7px 11px;
+  letter-spacing:.025em;
+  text-transform:none;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .nj-public-profile-about,.public-role-profile,.role-public-professional,.nj-public-social-details
+) {
+  border-color:rgba(214,175,108,.27);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .role-public-professional,.public-role-profile
+) :is(h3,h4) {
+  font-family:Georgia,serif;
+  font-weight:400;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .nj-public-profile-about,.public-role-profile
+) p {
+  font-size:clamp(13px,1.5vw,15px);
+  line-height:1.65;
+}
+
+/* 2. Fixed Spotlight really leads home, above customisation and shortcut UI. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-personal-home>.nj-home-spotlight-fixed {
+  order:-30;
+  padding:0;
+  background:transparent;
+  border:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-personal-home>.nj-personal-home-toolbar {
+  order:-20;
+  padding:13px 17px;
+  background:linear-gradient(140deg,#1c1711,#0e0c0a);
+  border:1px solid rgba(214,175,108,.22);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-personal-home-toolbar strong {
+  color:#f5e7d0;
+  font-family:Georgia,serif;
+  font-weight:400;
+  font-size:19px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-home-shortcuts button {
+  background:#15120f;
+  border-color:rgba(214,175,108,.28);
+  color:#ead6b7;
+  border-radius:999px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-experience {
+  --nj-sp-gold:#e1bd80;
+  padding:20px 0 30px;
+  border:0;
+  color:#f4ece0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head {
+  padding-bottom:16px;
+  margin-bottom:16px;
+  gap:10px;
+  border-color:rgba(214,175,108,.28);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head h2 {
+  font-size:clamp(32px,6vw,55px);
+  font-weight:400;
+  letter-spacing:-.035em;
+  color:#f5e6d0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head>p {
+  color:#c6b49d;
+  font-size:13px;
+  line-height:1.5;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card {
+  border-color:rgba(214,175,108,.34);
+  border-radius:17px;
+  background:linear-gradient(155deg,#211a13 0%,#0c0a09 75%);
+  box-shadow:0 15px 45px rgba(0,0,0,.4);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-portrait,
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card[data-role] .nj-spotlight-portrait {
+  background:radial-gradient(ellipse at 60% 28%,#523723,transparent 70%),#15110e;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-portrait-stamp {
+  color:#e8c891;
+  background:rgba(8,7,6,.88);
+  border:1px solid rgba(227,185,115,.47);
+  border-radius:999px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-story {
+  padding:clamp(15px,2.5vw,25px);
+  gap:8px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-story h3 {
+  color:#f8edde;
+  font-size:clamp(26px,3vw,39px);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-story-text {
+  color:#c6b8a5;
+  font-size:12px;
+  line-height:1.55;
+  margin-bottom:3px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card-actions .primary-button {
+  color:#120e09;
+  background:linear-gradient(110deg,#edce96,#cfa36b);
+  border:1px solid #e8c58b;
+}
+
+/* 3. Editorial discovery, directory, inbox, artwork and library cards. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-pro-library-banner,.nj-listener-discovery-hero,.nj-settings-heading
+) h2 {
+  font:400 clamp(28px,5vw,42px)/1.12 Georgia,serif;
+  color:#f3e5cd;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-pro-library-person,.nj-pro-library-banner,.nj-listener-discovery-following,
+  .nj-listener-discovery-release,.nj-listener-discovery-category
+) {
+  background:linear-gradient(135deg,#1c1712,#0d0c0a 78%);
+  border:1px solid rgba(214,175,108,.32);
+  border-radius:17px;
+  box-shadow:inset 0 1px rgba(251,225,179,.04);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-pro-library-person-avatar {
+  border:2px solid #ceaa73;
+  border-radius:50%;
+  box-shadow:0 0 0 3px rgba(12,10,9,.9);
+  overflow:hidden;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-pro-library-person h3,.nj-pro-library-banner h2,.nj-listener-discovery-release h4
+) {
+  font-family:Georgia,serif;
+  font-weight:400;
+  color:#f6ecdc;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-pro-library-person p,.nj-listener-discovery-release p,.nj-pro-library-banner p
+) {
+  color:#c6b9a9;
+  font-size:13px;
+  line-height:1.6;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav {
+  background:rgba(7,7,6,.97);
+  border:1px solid rgba(214,175,108,.4);
+  border-radius:18px;
+  box-shadow:0 -8px 32px #0008;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav button.active {
+  background:linear-gradient(155deg,rgba(214,175,108,.25),rgba(214,175,108,.07));
+  color:#efcb91;
+  box-shadow:inset 0 0 0 1px rgba(214,175,108,.34);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .topbar {
+  min-height:64px;
+  background:rgba(7,7,7,.94);
+  border-color:rgba(214,175,108,.23);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .topbar .brand-button {
+  letter-spacing:.22em;
+  color:#f7ebd9;
+}
+
+/* No sacrifice of Vision Access. The structural layout may persist, but all
+   decorative photo banners and gold-only styling defer to accessible palettes. */
+:root[data-nightjar-vision] .premium-public-profile .nj-cinema-profile-cover {
+  background:var(--panel);
+  color:var(--ivory);
+  border:1px solid var(--line);
+}
+:root[data-nightjar-vision] .premium-public-profile .nj-cinema-profile-cover :is(.nj-profile-hero-banner,.nj-cinema-profile-cover-shade) {display:none;}
+:root[data-nightjar-vision] .premium-public-profile .nj-cinema-cover-words :is(small,em) {color:var(--ivory);text-shadow:none;}
+:root[data-nightjar-vision] .premium-public-profile .nj-cinema-profile-tabs button {color:var(--ivory);}
+:root[data-nightjar-vision] .premium-public-profile .nj-cinema-profile-tabs button:focus-visible {outline:3px solid var(--line);}
+
+@media (max-width:700px) {
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .creator-profile-backdrop {
+    padding:0;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .creator-profile-modal.premium-public-profile {
+    width:100%;
+    height:100dvh;
+    max-height:100dvh;
+    border:0;
+    border-radius:0;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-body {
+    padding:0 15px 28px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-profile-cover {
+    height:176px;
+    margin-inline:-15px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero.nj-cinema-profile-hero {
+    grid-template-columns:95px minmax(0,1fr);
+    gap:0 13px;
+    padding-bottom:13px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-avatar-frame {
+    grid-column:1;
+    margin-top:-37px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-avatar-frame>.creator-profile-avatar {
+    width:87px;
+    height:87px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-primary-identity {
+    grid-column:2;
+    padding-top:11px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero h3 {
+    font-size:clamp(25px,7vw,32px);
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-primary-identity>p {
+    font-size:12px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero .writer-discovery-actions {
+    grid-column:1 / -1;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero .writer-discovery-actions>button {
+    min-height:44px;
+    padding:9px 7px;
+    font-size:12px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    padding:10px 0;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics>div {
+    padding:2px 3px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics>div strong {
+    font-size:21px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .public-profile-metrics>div span {
+    font-size:9px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-releases {
+    padding:12px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-editorial-grid {
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(270px,84vw);
+    grid-template-columns:none;
+    gap:12px;
+    overflow-x:auto;
+    padding:3px 12px 15px 2px;
+    scroll-snap-type:x mandatory;
+    overscroll-behavior-inline:contain;
+    scrollbar-color:#ab824e #16110d;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-editorial-grid>.nj-spotlight-card {
+    scroll-snap-align:start;
+    min-width:0;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-portrait {
+    height:190px;
+    min-height:190px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-story {
+    padding:16px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card-actions button {
+    font-size:11px;
+    min-height:44px;
+    flex:1 1 44%;
+    padding:8px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card-actions .primary-button {
+    flex-basis:100%;
+  }
+}
+@media (max-width:360px) {
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .creator-profile-hero.nj-cinema-profile-hero {
+    grid-template-columns:78px minmax(0,1fr);
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-avatar-frame>.creator-profile-avatar {
+    width:74px;
+    height:74px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-profile-cover {
+    height:158px;
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  .premium-public-profile .nj-cinema-profile-tabs {scroll-behavior:auto;}
+  .nj-spotlight-editorial-grid {scroll-behavior:auto;}
+}
