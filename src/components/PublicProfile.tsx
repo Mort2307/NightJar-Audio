@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { scrollNightjarToTop } from '../platform/scroll-navigation';
-import { Bird, BookOpenText, Brush, FileCheck2, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, ThumbsUp, X } from 'lucide-react';
+import { Bird, BookOpenText, Brush, ChevronDown, FileCheck2, Headphones, Heart, ImagePlus, ListMusic, MessageCircle, Mic2, Share2, ShieldCheck, Sparkles, ThumbsUp, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { demoDirectory, demoTracks, demoWriterScripts } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG, type ProfileRoleKey } from '../data/nightjarTaxonomy';
@@ -15,6 +15,7 @@ import PublicWriterPortfolio from './PublicWriterPortfolio';
 import { SocialLinksDisplay } from './SocialLinksEditor';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
 import { VoiceCallingCardPublic } from './VoiceCallingCard';
+import './public-profile-premium.css';
 
 type Props = {
   userId: string;
@@ -226,7 +227,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
 
   return <div className="creator-profile-backdrop" role="dialog" aria-modal="true" aria-label="Nightjar public profile">
-    <section ref={dialogRef} tabIndex={-1} className="creator-profile-modal premium-public-profile">
+    <section ref={dialogRef} tabIndex={-1} className={"creator-profile-modal premium-public-profile premium-public-profile-"+profileRole}>
       <header className="creator-profile-head">
         <div>
           <span className="mini-label">NIGHTJAR / {profile?.nightjarTeam ? 'OFFICIAL TEAM' : profile ? roleLabel(profileRole).toUpperCase() : 'PROFILE'}</span>
@@ -241,8 +242,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       {readOnlyPreview && <div className="nj-profile-viewer-modal-note"><ShieldCheck size={15}/> Admin live public profile view · original member data · all actions disabled</div>}
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero">
+          <span className="nj-profile-hero-glow" aria-hidden="true"/>
           <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
-          <div>
+          <div className="nj-profile-primary-identity">
+            <span className="nj-profile-hero-eyebrow"><Sparkles size={13} aria-hidden="true"/> {profileRole === "listener" ? "THE NIGHTJAR COMMUNITY" : "MEET THE MAKER"}</span>
             <h3>{profile.displayName}</h3>
             <p>{roleDetails.roleHeadline || profile.headline || (profileRole === 'editor' ? 'Audio Editor on Nightjar.' : profileRole === 'listener' ? 'A curated corner of the Nightjar listening community.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
@@ -257,13 +260,19 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           </div>
         </div>
 
-        {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}
-        {profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
-        <SocialLinksDisplay links={profile.socialLinks} />
-
-        <div className="public-profile-metrics">
-          {profileMetrics.map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}
+        <div className="public-profile-metrics" aria-label="Public profile highlights">
+          {profileMetrics.map(([label, value]) => <div key={String(label)}><strong>{value}</strong><span>{label}</span></div>)}
         </div>
+
+        {(profile.welcomeMessage || profile.bio) && <section className="nj-public-profile-about" aria-label="About this member">
+          <div className="nj-public-profile-about-heading"><span className="mini-label">BEHIND THE PROFILE</span><Sparkles size={16} aria-hidden="true"/></div>
+          {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}
+          {profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
+        </section>}
+        {!!profile.socialLinks?.length && <details className="nj-public-social-details">
+          <summary><span>Find {profileRole === 'listener' ? 'this member' : 'this creator'} elsewhere <small>{profile.socialLinks.length} {profile.socialLinks.length === 1 ? 'link' : 'links'}</small></span><ChevronDown size={18} aria-hidden="true"/></summary>
+          <SocialLinksDisplay links={profile.socialLinks} />
+        </details>}
 
         {!!profile.activityBadges?.length && <div className="profile-activity-badges public-profile-badges">
           {profile.activityBadges.map((badge:any)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}
@@ -292,10 +301,10 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <div><span>Collaborations</span><strong>{profile.completedCollaborations ?? 0}</strong></div>
           </div>
           {!!roleDetails.creatorLanguages?.length && <div className="role-public-detail-card"><span className="mini-label">VOICE RANGE</span><h4>Languages, accents & dialects</h4><div className="creator-profile-tags">{roleDetails.creatorLanguages.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          <div className="role-public-two-column">
-            <div className="role-public-detail-card"><span className="mini-label">DIRECTION</span><h4>How they like to work</h4>{roleDetails.creatorDirectionModes?.length?<div className="creator-profile-tags">{roleDetails.creatorDirectionModes.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Direction preferences not listed yet.</p>}</div>
-            <div className="role-public-detail-card"><span className="mini-label">DELIVERY</span><h4>What they can hand off</h4>{roleDetails.creatorDeliveryFormats?.length?<div className="creator-profile-tags">{roleDetails.creatorDeliveryFormats.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Delivery options not listed yet.</p>}</div>
-          </div>
+          {(!!roleDetails.creatorDirectionModes?.length || !!roleDetails.creatorDeliveryFormats?.length) && <div className="role-public-two-column">
+            {!!roleDetails.creatorDirectionModes?.length && <div className="role-public-detail-card"><span className="mini-label">DIRECTION</span><h4>How they like to work</h4><div className="creator-profile-tags">{roleDetails.creatorDirectionModes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+            {!!roleDetails.creatorDeliveryFormats?.length && <div className="role-public-detail-card"><span className="mini-label">DELIVERY</span><h4>What they can hand off</h4><div className="creator-profile-tags">{roleDetails.creatorDeliveryFormats.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          </div>}
           {roleDetails.creatorEquipment && <div className="role-public-note"><strong>Studio / equipment</strong><p>{roleDetails.creatorEquipment}</p></div>}
         </section>}
 
@@ -397,7 +406,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {(profile.completedCollaborations ?? 0) > 0 && <CollaborationHistoryButton userId={userId} displayName={profile.displayName ?? 'Nightjar member'} count={profile.completedCollaborations ?? 0} demoMode={demoMode} />}
         </section>}
 
-        <div className="writer-public-note">
+        <details className="nj-public-profile-privacy">
+          <summary><ShieldCheck size={16} aria-hidden="true"/> Profile privacy and visibility <ChevronDown size={16} aria-hidden="true"/></summary>
+          <div className="writer-public-note">
           {profileRole === 'editor' ? <FileCheck2 size={16}/> : <Headphones size={16}/>}
           <div>
             <strong>{profileRole === 'editor'
@@ -420,6 +431,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
                     : 'VA Creator identity, public catalogue work and collaboration information are presented separately from private account data.'}</p>
           </div>
         </div>
+        </details>
 
         {profileRole === 'listener' && <section className="premium-listener-signature">
           <div className="premium-listener-signature-head">
