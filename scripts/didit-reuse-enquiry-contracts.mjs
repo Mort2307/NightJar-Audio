@@ -59,7 +59,7 @@ assert.match(owner,/Member confirmation required/,
   'ambiguous awaiting-member terminology is explained');
 assert.match(owner,/What do the review statuses mean/,
   'statuses have visible explanations');
-assert.match(owner,/it cannot verify the member/i,
+assert.match(owner,/It does not verify the member/i,
   'approval does not grant age assurance');
 assert.match(member,/Reuse request approved · not yet verified 18\+/,
   'member gets accurate state after admin approval');
