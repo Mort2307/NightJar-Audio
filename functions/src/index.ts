@@ -8309,10 +8309,14 @@ const assessProtectedActivityFirebase = async (userId: string, signal: Record<st
 export const recordProtectionEvent = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
-  const eventType = cleanText(input.eventType, 80);
-  if (!eventType) throw new HttpsError('invalid-argument', 'Protection event type is required.');
+  const reportedEventType = cleanText(input.eventType, 80);
+  if (!reportedEventType) throw new HttpsError('invalid-argument', 'Protection event type is required.');
+  // A browser can forge our JS bridge callbacks. Until a native shell can
+  // provide server-verifiable attestation, never rate one as confirmed OS capture.
+  const unverifiedNativeSignal = NATIVE_CAPTURE_EVENTS.has(reportedEventType);
+  const eventType = unverifiedNativeSignal ? 'possible_capture_shortcut' : reportedEventType;
 
-  const requestedConfidence = cleanText(input.detectionConfidence, 32);
+  const requestedConfidence = unverifiedNativeSignal ? 'possible' : cleanText(input.detectionConfidence, 32);
   const detectionConfidence = ['contextual','possible','strong','native_callback'].includes(requestedConfidence)
     ? requestedConfidence
     : null;
@@ -8326,7 +8330,7 @@ export const recordProtectionEvent = onCall({ region: REGION }, async (request) 
     clientPlatform: cleanText(input.clientPlatform, 120) || null,
     visibilityState: cleanText(input.visibilityState, 40) || null,
     viewport: cleanText(input.viewport, 80) || null,
-    detectionSource: cleanText(input.detectionSource, 120) || null,
+    detectionSource: unverifiedNativeSignal ? 'unverified_native_js_bridge' : (cleanText(input.detectionSource, 120) || null),
     detectionConfidence,
     route: cleanText(input.route, 240) || null,
     summary: cleanText(input.summary, 800) || null,
