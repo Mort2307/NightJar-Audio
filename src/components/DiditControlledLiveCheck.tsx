@@ -42,6 +42,30 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
   };
   useEffect(()=>{void refresh();},[]);
 
+  // This is a READ of the existing Didit decision, not a new ID session.
+  // The backend uses the signed-in account's stored session; no pasted IDs.
+  const recover=async()=>{
+    if(pending)return;
+    setPending(true);setError('');setMessage('');
+    try {
+      const result=await nightjarDiditControlled.reconcile();
+      if(result.verified) {
+        setMessage('Didit has confirmed your existing approved 18+ result. Nightjar has securely linked it to your account.');
+        const current=await nightjarDiditControlled.status();
+        setStatus(current);
+        if(current.providerVerified) onVerified?.();
+      } else if(result.outcome==='adult_evidence_missing') {
+        setMessage('Didit reports an approval, but Nightjar could not confirm the required 18+ documentary evidence. Contact support; do not repeat your ID check.');
+      } else if(result.outcome==='provider_not_approved') {
+        setMessage('Didit has not yet returned an approved verification decision for this Nightjar-linked session. If Didit showed a tick, contact support with the approximate time; do not start another check.');
+      } else {
+        setMessage('Nightjar could not locate a completed, account-linked session to recover. Contact support before repeating any ID check.');
+      }
+    } catch(cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not safely recover the existing Didit decision. Please contact support.');
+    } finally {setPending(false);}
+  };
+
   const begin=async()=>{
     if(pending || !permission || (!legalAccepted && !legalAcknowledged))return;
     if(!window.confirm('Start ONE real, account-linked Didit 18+ verification now? You may need to show your government ID and complete a selfie/liveness check. This may incur a charge to Nightjar. The attempt cannot be repeated automatically.'))return;
@@ -103,6 +127,8 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
       {!canStart && !launchUrl && <p><strong>Check already claimed.</strong> Nightjar will not start another paid session. Contact support if your verification link is missing.</p>}
       <p>Complete the check in Didit, return to Nightjar and tap Refresh verification status. An approved provider decision must be received and validated before you become Verified 18+.</p>
     </>}
+    {!alreadyVerified && !canStart && <button className="primary-button" type="button" disabled={pending} onClick={()=>void recover()}>
+      <ShieldCheck size={16} aria-hidden="true"/>{pending?'Checking completed Didit decision…':'Check my completed Didit result · no new ID check'}</button>}
     <button className="secondary-button" type="button" disabled={pending} onClick={()=>void refresh()}>
       <RefreshCw size={15} aria-hidden="true"/>{pending?'Checking…':'Refresh verification status'}</button>
     {error && <p className="nj-didit-reuse-error" role="alert">{error}</p>}
