@@ -11,6 +11,18 @@ export type NightjarSuspensionResult = { userId: string; status: string; authDis
 const suspensionCall = httpsCallable<{userId:string;action:'suspend'|'restore';reason:string}, NightjarSuspensionResult>(functions,'adminSetAccountSuspension');
 export type NightjarSecurityDossier = {
   member: {
+    userId:string; displayName:string; email:string; handle?:string|null;
+    status:string;authDisabled:boolean;suspensionReason?:string|null;suspensionCaseId?:string|null;lastSignIn?:string|null;
+  };
+  evidence: Array<{
+    id:string;eventType:string;relatedType:string;relatedId:string;route:string;summary:string;
+    detectionSource:string;detectionConfidence:string;createdAt:string|null;
+  }>;
+  note:string;
+};
+const memberSecurityDossierCall = httpsCallable<{userId:string}, NightjarSecurityDossier>(functions,'adminMemberSecurityDossier');
+export type NightjarSecurityDossier = {
+  member: {
     userId: string; displayName: string; email: string; handle: string | null;
     status: string; authDisabled: boolean; suspensionReason: string | null;
     suspensionCaseId: string | null; lastSignIn: string | null;
@@ -191,6 +203,10 @@ export const nightjarAdministration = {
 
   async setAccountSuspension(userId: string, action: 'suspend' | 'restore', reason: string) {
     return (await suspensionCall({ userId, action, reason })).data;
+  },
+
+  async memberSecurityDossier(userId: string) {
+    return (await memberSecurityDossierCall({userId})).data;
   },
 
   async setAccountWorkspace(userId: string, role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist') {
