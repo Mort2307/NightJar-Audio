@@ -1,5 +1,7 @@
 export type NightjarLegalDocumentId = 'platform_terms' | 'privacy_notice' | 'professional_terms' | 'age_assurance_notice';
 
+// Terms acceptance changes independently from the Privacy Notice acknowledgement.
+export const NIGHTJAR_PLATFORM_TERMS_VERSION = '2026-10-15.2';
 export const NIGHTJAR_LEGAL_VERSION = '2026-10-15.1';
 export const NIGHTJAR_AGE_NOTICE_VERSION = '2026-10-14.3';
 export const NIGHTJAR_PROFESSIONAL_VERSION = '2026-10-09.1';
@@ -19,7 +21,7 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
     id:'platform_terms',
     title:'Nightjar Terms of Use',
     shortTitle:'Terms of Use',
-    version:NIGHTJAR_LEGAL_VERSION,
+    version:NIGHTJAR_PLATFORM_TERMS_VERSION,
     path:'/legal/terms',
     summary:'The rules for using Nightjar during private beta and, after legal review, the basis for the public service.',
     sections:[
@@ -51,13 +53,54 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
         'You may stop using Nightjar at any time. Nightjar may suspend or terminate access where reasonably necessary for serious or repeated breaches, legal requirements, safety risks, fraud, rights infringement or security.',
         'Any contractual payment, licensing or content-removal obligations that are intended to survive account closure continue according to their applicable terms.'
       ]},
-      { heading:'8. Protecting the community and creative work', paragraphs:[
-        'Nightjar restricts unauthorised copying, extraction, recording, bulk collection and redistribution of private scripts, unreleased media and restricted platform content. Members must respect copyright, licences, role access and other creators\' permissions.',
-        'To investigate security incidents, Nightjar records limited account-linked events such as protected-content opens, blocked copy/print/download actions, and capture-related shortcuts or operating-system callbacks when a device supports them. Nightjar does not record everything you type, log your passwords or silently activate your camera or microphone.',
-        'Browser screenshot and screen-recording detection is incomplete. An isolated keyboard shortcut, screen-sharing activity or missing signal is not by itself proof of misuse. Nightjar reviews evidence and context before any discretionary enforcement.',
-        'Serious or repeated violations may lead to temporary suspension or termination following a reasonable review. Suspended members may contact Nightjar Support to challenge a decision; access restrictions do not eliminate applicable privacy or contractual rights.'
+      { heading:'8.1 Ownership and responsible access', paragraphs:[
+        'Nightjar respects the legal rights and dignity of listeners, creators, collaborators and the platform operator. Unless a separate valid agreement provides otherwise, creators retain the intellectual-property rights they legally own in original scripts, recordings, performances, artwork and other contributions. Nightjar owns only the rights it creates, acquires or is legally entitled to enforce.',
+        'Access to Nightjar, including paid access, grants only the permission needed to use content through the service for its intended purpose. It does not transfer ownership or confer a general right to reproduce, republish or supply the content to others.',
+        'Where an individual owns a work or holds valid publication or licensing rights, Nightjar does not prohibit that person from using their own work within those rights or a valid separate agreement.'
       ]},
-      { heading:'9. Beta legal status', paragraphs:[
+      { heading:'8.2 Unauthorised copying, distribution and misuse', paragraphs:[
+        'Unless the relevant rights holder permits it or the law allows it, members must not copy, record, extract, download, reproduce, re-upload, sell, license or redistribute protected content outside the access and uses Nightjar authorises.',
+        'This includes private manuscripts, unreleased audio, restricted artwork, paid or otherwise protected releases, and creative materials supplied for moderation or collaboration. Members must not misrepresent authorship or ownership, circumvent reasonable content-access restrictions, or exploit access entrusted to them for unauthorised commercial use.',
+        'Passing protected content to a competing service or another third party without the necessary rights or permission may be a material breach of these Terms. The recipient being a competitor does not, by itself, make an authorised or otherwise lawful disclosure a breach.'
+      ]},
+      { heading:'8.3 Confidentiality and the privacy of others', paragraphs:[
+        'Members who receive unpublished manuscripts, unreleased recordings, private collaboration materials, confidential business information or other material clearly identified as confidential, or reasonably understood to be confidential, must not disclose or exploit it without lawful authority.',
+        'Members must also respect the privacy and personal data of listeners, creators and collaborators. Access to private messages or personal information does not authorise their publication or sale. Members may nevertheless retain or disclose necessary evidence when legally entitled to make a complaint, seek advice, report harm or exercise their rights.',
+        'Confidentiality obligations do not apply to material lawfully public without a breach, independently developed without use of restricted information, lawfully obtained from an unrestricted independent source, disclosed with valid permission, or lawfully required or permitted to be disclosed.'
+      ]},
+      { heading:'8.4 Protection measures and proportionate monitoring', paragraphs:[
+        'Nightjar may use reasonable access controls, watermarking, copy/print restrictions and limited account-linked security logs to help safeguard its members and their work. Where supported, event records may identify protected-content access, blocked actions, or possible screenshot or recording signals as described in the Privacy Notice.',
+        'Nightjar does not use this clause to authorise general keylogging, recording private messages as security telemetry, or silently activating a camera or microphone. A browser or native device cannot detect every method of capture.',
+        'A shortcut, device signal or allegation is not conclusive proof of a leak. Decisions about suspected misuse must take context, corroborating evidence and the rights of the affected member into account.'
+      ]},
+      { heading:'8.5 Investigation, fair decisions and appeal', paragraphs:[
+        'Nightjar may investigate credible reports of unauthorised use or disclosure and preserve relevant evidence where lawful and proportionate. Access to identifiable evidence is restricted to authorised personnel and subject to applicable data-protection requirements.',
+        'Where there are reasonable grounds to believe immediate restrictions are necessary to prevent significant harm, Nightjar may temporarily restrict access pending review. Substantiated material or repeated breaches may result in a warning, content or role restrictions, suspension or termination proportionate to their seriousness.',
+        'Nightjar will not automatically suspend a member solely on an unverified capture signal. Where reasonably practicable and lawful, the affected member will receive the reason for the decision and a way to request a human review or correct mistaken information. Members and reporting rights holders should be treated with fairness and dignity.'
+      ]},
+      { heading:'8.6 Rights-holder enforcement and legal remedies', paragraphs:[
+        'Nightjar may enforce these Terms and pursue appropriate legal remedies for infringement of rights it owns or is legally entitled to enforce. Creators and other rights holders retain their independent right to act against infringement of rights they own or have authority to enforce.',
+        'Depending on the applicable law and evidence, available remedies may include requests to stop infringement, removal of unauthorised copies, court injunctions, damages or other orders. Nightjar does not impose automatic contractual fines or predetermined compensation under this section; remedies are subject to applicable law and, where necessary, a court.',
+        'Nightjar may cooperate lawfully with affected rights holders, professional advisers and competent authorities. It will not disclose a member’s personal information solely because another person alleges wrongdoing: any disclosure requires a lawful basis and appropriate safeguards.'
+      ]},
+      { heading:'8.7 Reporting and support for affected creators and listeners', paragraphs:[
+        'Creators and other rights holders may report suspected copying, leaks, false ownership claims or misuse of their work through Nightjar Support. Listeners and other members may report misuse of their privacy or personal information through the same support route.',
+        'Nightjar may assess the report, preserve relevant records, restrict access or content where justified, and help the affected person identify appropriate next steps. Assistance does not transfer the creator’s copyright to Nightjar, guarantee legal proceedings, or make Nightjar responsible for independently pursuing every third-party claim.',
+        'Knowingly false or malicious accusations are themselves prohibited. Good-faith reports will not be penalised merely because a suspected breach cannot ultimately be established.'
+      ]},
+      { heading:'8.8 Lawful disclosures and statutory rights', paragraphs:[
+        'Nothing in this section prevents uses permitted by copyright law, including applicable exceptions; lawful criticism, review or complaints; disclosures to regulators, law enforcement, courts or legal advisers; good-faith reporting of suspected unlawful conduct; or the exercise of consumer, privacy, data-protection and other statutory rights.',
+        'Nothing in these Terms prevents a rights holder from exercising their own rights or overrides valid licences and permissions. A person does not breach this section merely because they lawfully discuss Nightjar or disclose information about it.'
+      ]},
+      { heading:'8.9 Obligations after access ends', paragraphs:[
+        'Ending or suspending an account does not give anyone permission to retain, disclose or exploit protected materials unlawfully. Existing intellectual-property rights and enforceable confidentiality obligations continue for as long as the law and applicable agreements permit.',
+        'Termination does not require someone to delete information they are legally entitled or required to keep, including evidence for legitimate complaints, legal advice or legal proceedings.'
+      ]},
+      { heading:'8.10 Fairness and limits', paragraphs:[
+        'Nightjar will apply this section transparently, consistently and proportionately, considering the nature of the alleged conduct, the evidence available, the harm involved and any reasonable explanation. Nothing in these Terms excludes or restricts rights or liabilities where doing so would be unlawful.',
+        'Accepting these Terms creates obligations within applicable contract law. It is not proof that a particular incident occurred, does not automatically establish copyright ownership or liability, and does not guarantee that legal action will succeed.'
+      ]},
+            { heading:'9. Beta legal status', paragraphs:[
         'This document is the Nightjar private-beta Terms of Use. It must receive UK solicitor review and final operator details before public commercial launch. Nothing in these terms excludes rights or remedies that cannot lawfully be excluded.'
       ]},
     ],
@@ -190,7 +233,7 @@ export const currentLegalAcceptancePayload = (
   professional: boolean,
 ): Array<{ id: NightjarLegalDocumentId; version: string; accepted: true }> => {
   const documents: Array<{ id: NightjarLegalDocumentId; version: string; accepted: true }> = [
-    { id:'platform_terms', version:NIGHTJAR_LEGAL_VERSION, accepted:true },
+    { id:'platform_terms', version:NIGHTJAR_PLATFORM_TERMS_VERSION, accepted:true },
     { id:'privacy_notice', version:NIGHTJAR_LEGAL_VERSION, accepted:true },
   ];
   if (professional) {

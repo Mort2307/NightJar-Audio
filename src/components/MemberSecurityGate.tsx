@@ -57,7 +57,8 @@ export default function MemberSecurityGate({ onComplete }: { onComplete: () => v
     <section className="access-card" style={{ maxWidth: 700 }}>
       <span className="mini-label"><ShieldCheck size={15}/> REQUIRED ACCOUNT UPDATE</span>
       <h1>Protecting your Nightjar account and creative work</h1>
-      <p className="access-lede">Nightjar has updated its Terms of Use and Privacy Notice as our private beta develops. Existing and new members must review the current versions before entering the app.</p>
+      <p className="access-lede">Nightjar has strengthened its protections for listeners, creators and creative work. Please review and accept any updated Terms before entering the app; the Privacy Notice remains a separate acknowledgement.</p>
+      <p><strong>Fair protection for everyone.</strong> Unauthorised copying or disclosure of protected work can lead to reviewed account action and lawful rights-holder remedies. Good-faith reports, creators’ ownership, lawful disclosures and members’ right to challenge decisions remain protected.</p>
       <p>Nightjar may record limited security events tied to your account: protected-content access, blocked copying or printing, and screenshot or recording signals where your device supports them. These signals are not proof of misuse and administrators review evidence before taking action.</p>
       <p><strong>No keylogging.</strong> We do not record ordinary typing, passwords, clipboard contents or private messages as security telemetry. Optional notification and marketing permissions are separate choices.</p>
       <div className="legal-agreement-list" aria-busy={loading}>
@@ -70,7 +71,7 @@ export default function MemberSecurityGate({ onComplete }: { onComplete: () => v
           </div>
           {doc.accepted ? <span className="status-pill">CURRENT</span> : <label className="rights-check">
             <input type="checkbox" checked={checked[doc.id] === true} onChange={(e) => setChecked((v) => ({...v, [doc.id]:e.target.checked}))}/>
-            <span>{doc.id === 'privacy_notice' ? 'I acknowledge I have been shown this privacy notice' : 'I agree to these Terms of Use'}</span>
+            <span>{doc.id === 'privacy_notice' ? 'I acknowledge I have been shown this privacy notice' : 'I have reviewed and agree to these Terms of Use, including the fair protection of creative works'}</span>
           </label>}
         </article>)}
       </div>
