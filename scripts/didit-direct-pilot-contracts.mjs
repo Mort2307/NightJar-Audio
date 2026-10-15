@@ -64,7 +64,7 @@ assert.match(panel,/nightjarDiditControlled\.start\(\)/,'only explicit member cl
 assert.match(panel,/No earlier Didit approval request/,'members do not need old reuse applications');
 assert.match(client,/selfServiceEnabled\?: boolean/,'client receives server-scoped rollout status');
 assert.match(settings,/<DiditControlledLiveCheck \/>/,'verification is available from member Settings');
-assert.match(app,/<DiditControlledLiveCheck \/>/,'verification is available at the age gate');
+assert.match(app,/<DiditControlledLiveCheck onVerified=/,'verification is available at the age gate and reconnects after a successful check');
 assert.match(workflow,/\[nightjar-didit-all-members-release\]/,'only tagged main release dispatches backend deploy');
 assert.match(workflow,/myDiditControlledCheck,startMyDiditControlledCheck/,
   'both account callables deploy before Hosting');
