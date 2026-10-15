@@ -6471,7 +6471,7 @@ export const adminReconcileDiditApproval = onCall({
         decision.application_id !== session.applicationId)) {
     throw new HttpsError('failed-precondition', 'The Didit response could not be securely matched to the existing Nightjar session.');
   }
-  if (decision.status !== 'Approved') {
+  if (!['Approved', 'APPROVED'].includes(String(decision.status))) {
     return { verified: false, outcome: 'provider_not_approved' };
   }
   if (!verifiedAdultFromDecision(decision)) {
