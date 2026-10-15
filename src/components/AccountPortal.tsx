@@ -56,6 +56,21 @@ export default function AccountPortal() {
       // Email verification already refreshes the token when it changes.
       let nextAccount = await nightjarAccount.identity();
       if (nightjarAuth.current()?.userId !== request.userId) return;
+      if (nextAccount.status === 'suspended') {
+        setAccount(nextAccount);
+        setMessage('Your Nightjar account is suspended. ' + (nextAccount.suspensionReason || 'Contact Nightjar Support to request a review.') +
+          (nextAccount.suspensionCaseId ? ' Case: ' + nextAccount.suspensionCaseId : ''));
+        return;
+      }
+      // Check BEFORE chooseRole: registration must not bypass versioned terms,
+      // and a new member must be able to accept them before role creation.
+      const agreements = await nightjarLegal.status();
+      if ((agreements.documents ?? []).some(doc => doc.requiredForAccount && !doc.accepted)) {
+        setAccount(nextAccount);
+        setAgreementsOutstanding(true);
+        return;
+      }
+      setAgreementsOutstanding(false);
       const pendingRole = sessionStorage.getItem('nightjar.registrationRole') as 'listener' | 'creator' | 'writer' | 'editor' | 'artist' | null;
       const referralCode = sessionStorage.getItem('nightjar.creatorReferralCode') ?? '';
       if (!nextAccount.admin && !nextAccount.role && pendingRole && ['listener','creator','writer','editor','artist'].includes(pendingRole)) {
@@ -70,17 +85,7 @@ export default function AccountPortal() {
       }
       setAccount(nextAccount);
 
-      if (nextAccount.status === 'suspended') {
-        setMessage('Your Nightjar account is suspended. ' + (nextAccount.suspensionReason || 'Contact Nightjar Support to request a review.') + (nextAccount.suspensionCaseId ? ' Case: ' + nextAccount.suspensionCaseId : ''));
-        return;
-      }
 
-      const agreements = await nightjarLegal.status();
-      if ((agreements.documents ?? []).some(doc => doc.requiredForAccount && !doc.accepted)) {
-        setAgreementsOutstanding(true);
-        return;
-      }
-      setAgreementsOutstanding(false);
       if (request.enterApp) {
         const destination = accountDestination(nextAccount);
         if (destination) {
