@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, LockKeyhole, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Eye, LockKeyhole, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { nightjarAdministration, type NightjarSecurityDossier } from '../platform/firebase-administration';
 import './admin-member-safety.css';
 
 export type SafetyMember = {
   userId: string;
   name?: string | null;
+  avatarUrl?: string | null;
   email?: string | null;
   handle?: string | null;
   role?: string | null;
@@ -16,11 +17,12 @@ type SafetyAction = 'suspend' | 'restore';
 type SafetyResult = { status: string; authDisabled: boolean; revokedReaderSessions: number; caseId?: string; notificationDelivery?: 'sent' | 'pending' };
 
 export default function AdminMemberSafety({
-  accounts, onAction, onRefresh, loading = false,
+  accounts, onAction, onRefresh, onOpenProfile, loading = false,
 }: {
   accounts: SafetyMember[];
   onAction: (account: SafetyMember, action: SafetyAction, reason: string) => Promise<SafetyResult>;
   onRefresh: () => void;
+  onOpenProfile?: (userId: string) => void;
   loading?: boolean;
 }) {
   const [query, setQuery] = useState('');
@@ -99,14 +101,14 @@ export default function AdminMemberSafety({
       {matches.length ? matches.map(account => <button type="button" key={account.userId}
         className={account.userId === selectedId ? 'nj-member-safety-result selected' : 'nj-member-safety-result'}
         aria-pressed={account.userId === selectedId} onClick={() => choose(account)}>
-        <span><strong>{account.name || 'Nightjar member'}</strong><small>{account.email || account.userId}{account.handle ? ' · @' + account.handle.replace(/^@/, '') : ''}</small></span>
+        <span className="nj-member-safety-ident"><span className="nj-member-safety-avatar">{account.avatarUrl ? <img src={account.avatarUrl} alt="" /> : (account.name || 'N').charAt(0).toUpperCase()}</span><span><strong>{account.name || 'Nightjar member'}</strong><small>{account.email || account.userId}{account.handle ? ' · @' + account.handle.replace(/^@/, '') : ''}</small></span></span>
         <em>{account.status === 'suspended' ? 'SUSPENDED' : account.status === 'pending_review' ? 'PENDING REVIEW' : 'ACTIVE'}</em>
       </button>) : <p>No account matched. Verify the spelling or refresh the account directory.</p>}
       {matches.length === 20 && <small>Showing the first 20 matches. Add more of the name or email to narrow the list.</small>}
     </div>}
     {selected && <div className="nj-member-safety-case">
-      <h3><LockKeyhole size={18}/> {selected.name || 'Nightjar member'}</h3>
-      <p>{selected.email || selected.userId} · Current status: <strong>{selected.status || 'active'}</strong></p>
+      <div className="nj-member-safety-preview"><span className="nj-member-safety-avatar large">{selected.avatarUrl ? <img src={selected.avatarUrl} alt="" /> : (selected.name || 'N').charAt(0).toUpperCase()}</span><div><h3><LockKeyhole size={18}/> {selected.name || 'Nightjar member'}</h3><p>{selected.email || selected.userId}{selected.handle ? ' · @'+selected.handle.replace(/^@/,'') : ''} · {selected.role || 'member'} · <strong>{selected.status || 'active'}</strong></p></div></div>
+      {onOpenProfile && <button type="button" className="secondary-button" onClick={() => onOpenProfile(selected.userId)}><Eye size={16}/> Preview member profile</button>}
       <button type="button" className="secondary-button" disabled={dossierLoading} onClick={() => void inspect()}>
         <ShieldCheck size={16}/> {dossierLoading ? 'Checking Firebase and security history…' : 'Review account and security evidence'}
       </button>
