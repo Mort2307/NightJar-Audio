@@ -1,0 +1,109 @@
+import { useMemo, useState } from 'react';
+import { CheckCircle2, LockKeyhole, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
+import './admin-member-safety.css';
+
+export type SafetyMember = {
+  userId: string;
+  name?: string | null;
+  email?: string | null;
+  handle?: string | null;
+  role?: string | null;
+  status?: string | null;
+};
+
+type SafetyAction = 'suspend' | 'restore';
+type SafetyResult = { status: string; authDisabled: boolean; revokedReaderSessions: number };
+
+export default function AdminMemberSafety({
+  accounts, onAction, onRefresh, loading = false,
+}: {
+  accounts: SafetyMember[];
+  onAction: (account: SafetyMember, action: SafetyAction, reason: string) => Promise<SafetyResult>;
+  onRefresh: () => void;
+  loading?: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const [selectedId, setSelectedId] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const matches = useMemo(() => {
+    const value = query.trim().toLowerCase().replace(/^@/, '');
+    if (!value) return [];
+    return accounts.filter(item => [item.name, item.email, item.handle, item.userId]
+      .some(field => String(field ?? '').toLowerCase().replace(/^@/, '').includes(value))).slice(0, 20);
+  }, [accounts, query]);
+  const selected = accounts.find(item => item.userId === selectedId);
+  const suspended = selected?.status === 'suspended';
+  const choose = (account: SafetyMember) => {
+    setSelectedId(account.userId);
+    setReason('');
+    setError('');
+    setSuccess('');
+  };
+  const apply = async (action: SafetyAction) => {
+    if (!selected || busy || reason.trim().length < 12) return;
+    const title = selected.name || selected.email || selected.userId;
+    if (!window.confirm((action === 'suspend'
+      ? 'Disable Firebase sign-in and revoke sessions for '
+      : 'Restore Firebase sign-in for ') + title + '?\n\nThis administrative decision is recorded and must be supported by your case note.')) return;
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await onAction(selected, action, reason.trim());
+      setSuccess(action === 'suspend'
+        ? 'Suspension confirmed by the server: Firebase login disabled, refresh tokens revoked, and ' + result.revokedReaderSessions + ' manuscript session(s) revoked.'
+        : 'Restoration confirmed by the server: Firebase login enabled and account status ' + result.status + '.');
+      setReason('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The security action failed. Nothing has been confirmed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <section className="admin-panel nj-member-safety" id="nightjar-member-safety" aria-label="Find and suspend a Nightjar member">
+    <span className="mini-label"><ShieldAlert size={16}/> OWNER SECURITY / MEMBER LOCKOUT</span>
+    <h2>Find a member and control access</h2>
+    <p>Search by display name, email, @handle or account ID. Suspensions require a case note and explicit confirmation. A keyboard or screenshot signal alone is not proof of misconduct.</p>
+    <div className="nj-member-safety-search">
+      <label htmlFor="nj-member-safety-search">Find account</label>
+      <div className="nj-member-safety-search-row">
+        <Search size={17} aria-hidden="true"/>
+        <input id="nj-member-safety-search" type="search" autoComplete="off" value={query}
+          onChange={event => { setQuery(event.target.value); setSelectedId(''); setError(''); setSuccess(''); }}
+          placeholder="Name, email, @handle or user ID"/>
+        <button type="button" className="secondary-button" disabled={loading} onClick={onRefresh}>Refresh</button>
+      </div>
+    </div>
+    {query.trim().length > 0 && <div className="nj-member-safety-results" aria-label="Matching Nightjar accounts">
+      {matches.length ? matches.map(account => <button type="button" key={account.userId}
+        className={account.userId === selectedId ? 'nj-member-safety-result selected' : 'nj-member-safety-result'}
+        aria-pressed={account.userId === selectedId} onClick={() => choose(account)}>
+        <span><strong>{account.name || 'Nightjar member'}</strong><small>{account.email || account.userId}{account.handle ? ' · @' + account.handle.replace(/^@/, '') : ''}</small></span>
+        <em>{account.status === 'suspended' ? 'SUSPENDED' : account.status === 'pending_review' ? 'PENDING REVIEW' : 'ACTIVE'}</em>
+      </button>) : <p>No account matched. Verify the spelling or refresh the account directory.</p>}
+      {matches.length === 20 && <small>Showing the first 20 matches. Add more of the name or email to narrow the list.</small>}
+    </div>}
+    {selected && <div className="nj-member-safety-case">
+      <h3><LockKeyhole size={18}/> {selected.name || 'Nightjar member'}</h3>
+      <p>{selected.email || selected.userId} · Current status: <strong>{selected.status || 'active'}</strong></p>
+      <label htmlFor="nj-member-safety-reason">Case note (required, at least 12 characters)</label>
+      <textarea id="nj-member-safety-reason" rows={3} maxLength={500} value={reason}
+        onChange={event => setReason(event.target.value)}
+        placeholder={suspended ? 'Why is it appropriate to restore access?' : 'Evidence, report reference or reason for precautionary suspension'}/>
+      <div className="nj-member-safety-actions">
+        {suspended ? <button className="primary-button" type="button" disabled={busy || reason.trim().length < 12} onClick={() => void apply('restore')}>
+          <ShieldCheck size={16}/> {busy ? 'Restoring…' : 'Restore member access'}
+        </button> : <button className="danger-button" type="button" disabled={busy || reason.trim().length < 12} onClick={() => void apply('suspend')}>
+          <LockKeyhole size={16}/> {busy ? 'Suspending…' : 'Suspend member access'}
+        </button>}
+      </div>
+    </div>}
+    {error && <p className="nj-member-safety-error" role="alert">{error}</p>}
+    {success && <p className="nj-member-safety-success" role="status"><CheckCircle2 size={17}/> {success}</p>}
+    <small>Security events record action types and contextual routes—not raw keystrokes, passwords, form contents or private messages. Manual review is always required before suspension.</small>
+  </section>;
+}
