@@ -27,7 +27,7 @@ assert.match(grant,/getAuth\(\)\.getUser\(uid\)/,'grant validates actual signed-
 assert.match(grant,/authRecord\.emailVerified/,'member email must be verified');
 assert.match(grant,/grant\.exists/,'grant cannot be recreated after claim');
 assert.match(grant,/tx\.create\(ref/,'grant is durable and one-use');
-assert.match(grant,/reuse\.data\(\)\?\.status !== 'approved_for_reuse'/,'member's existing consented review is prerequisite');
+assert.match(grant,/reuse\.data\(\)\?\.status !== 'approved_for_reuse'/,"member\'s existing consented review is prerequisite");
 assert.match(grant,/reuse\.data\(\)\?\.memberConsent !== true/,'member consent is still active');
 assert.match(grant,/acknowledgedCharge/,'admin separately acknowledges possible live charge');
 assert.doesNotMatch(grant,/startDiditSession\(|DIDIT_API_KEY\.value\(|\.status\(200\)|verified:\s*true/,'admin authorisation cannot start a paid session or grant 18+ status');
