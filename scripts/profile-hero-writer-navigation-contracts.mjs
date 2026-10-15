@@ -23,13 +23,13 @@ assert.match(publicProfile,/const hasNightjarApproval = !profile\?\.nightjarTeam
   'moon remains across professional and listener profile tabs');
 assert.match(publicProfile,/hasNightjarApproval && <details className="nj-official-creator-badge"/,
   'official gold crescent only for NightJar-approved members');
-assert.match(backend,/headerImageMode: input\.headerImageMode === 'portrait' \? 'portrait' : 'cinematic'/,
+assert.match(backend,/headerImageMode: input\.headerImageMode === 'cinematic' \? 'cinematic' : 'portrait'/,
   'server restricts cover choice to known modes');
-assert.match(endpoint,/headerImageMode: data\.headerImageMode === 'portrait' \? 'portrait' : 'cinematic'/,
+assert.match(endpoint,/headerImageMode: data\.headerImageMode === 'cinematic' \? 'cinematic' : 'portrait'/,
   'public cover choice is persisted and sanitized');
 assert.match(endpoint,/avatarUrl: data\.avatarStatus === 'approved' \? data\.avatarUrl \?\? null : null/,
   'public header cannot display pending or rejected portraits');
-assert.match(publicProfile,/profile\?\.headerImageMode === 'portrait' && Boolean\(profile\?\.avatarUrl\)/,
+assert.match(publicProfile,/profile\?\.headerImageMode !== 'cinematic' && Boolean\(profile\?\.avatarUrl\)/,
   'portrait background only after member opt-in and approved photo');
 assert.match(publicProfile,/const memberTagline = String\(profile\?\.headline \|\| roleDetails\?\.roleHeadline/,
   'personal tagline wins over static NightJar copy');
