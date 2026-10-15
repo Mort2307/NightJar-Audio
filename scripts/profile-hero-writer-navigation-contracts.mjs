@@ -23,13 +23,13 @@ assert.match(publicProfile,/const hasNightjarApproval = !profile\?\.nightjarTeam
   'moon remains across professional and listener profile tabs');
 assert.match(publicProfile,/hasNightjarApproval && <details className="nj-official-creator-badge"/,
   'official gold crescent only for NightJar-approved members');
-assert.match(backend,/headerImageMode: input\.headerImageMode === 'cinematic' \? 'cinematic' : 'portrait'/,
+assert.match(backend,/headerImageMode: \['cinematic','portrait','custom'\]\.includes\(String\(input\.headerImageMode\)\)/,
   'server restricts cover choice to known modes');
-assert.match(endpoint,/headerImageMode: data\.headerImageMode === 'cinematic' \? 'cinematic' : 'portrait'/,
+assert.match(endpoint,/headerImageMode: \['cinematic','portrait','custom'\]\.includes\(String\(data\.headerImageMode\)\)/,
   'public cover choice is persisted and sanitized');
 assert.match(endpoint,/avatarUrl: data\.avatarStatus === 'approved' \? data\.avatarUrl \?\? null : null/,
   'public header cannot display pending or rejected portraits');
-assert.match(publicProfile,/profile\?\.headerImageMode !== 'cinematic' && Boolean\(profile\?\.avatarUrl\)/,
+assert.match(publicProfile,/profile\?\.headerImageMode !== 'cinematic' && profile\?\.headerImageMode !== 'custom' && Boolean\(profile\?\.avatarUrl\)/,
   'portrait background only after member opt-in and approved photo');
 assert.match(publicProfile,/const memberTagline = String\(profile\?\.headline \|\| roleDetails\?\.roleHeadline/,
   'personal tagline wins over static NightJar copy');
@@ -46,7 +46,7 @@ assert.doesNotMatch(writer,/\{selected && <div className="creator-profile-backdr
   'outdated nested inline Writer modal is removed');
 assert.match(app,/onOpenProfile=\{\(userId, profileRole\)=>openPublicProfile\(userId,profileRole\)\}/,
   'Writer discovery shares the same premium routed profile modal');
-assert.match(publicProfile,/dialogRef\.current\?\.scrollTo\(\{ top:0/,
+assert.match(publicProfile,/dialogRef\.current\?\.scrollTo\(\{\s*top:0/,
   'public profile starts at top of its own scroll container');
 assert.match(cinema,/nj-cinema-cover-portrait/,'cinematic styling supports opted-in portrait');
 assert.match(cinema,/nj-profile-cover-choice/,'header editor matches the premium theme');
