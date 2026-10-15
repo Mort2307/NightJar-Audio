@@ -6658,6 +6658,13 @@ export const ageStatus = onCall({
 // voluntarily start one account-bound Didit session while the public kill
 // switch stays ON. This exception is NOT the owner maintenance test.
 const controlledDiditRef = (uid: string) => db.collection('diditControlledChecks').doc(uid);
+// Account-wide, opt-in verification rollout (staged, NOT yet deployed).
+// The legacy public age-session starter stays paused; this separate route
+// is available to every active, email-verified Nightjar account admitted by
+// requireActiveIdentity. It never requires an old standalone Didit enquiry.
+const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true;
+const accountDiditSelfServiceEligible = () =>
+  DIDIT_VERIFICATION_PAUSED && DIDIT_ACCOUNT_SELF_SERVICE_ENABLED;
 
 export const adminAuthoriseDiditControlledCheck = onCall({ region: REGION }, async request => {
   const administrator = requireAdminIdentity(request);
@@ -6705,24 +6712,39 @@ export const myDiditControlledCheck = onCall({ region: REGION }, async request =
     diditReuseRef(identity.uid).get(),
   ]);
   const data = grant.data() ?? {};
-  const status = String(data.state ?? 'none');
+  const selfServiceEnabled = accountDiditSelfServiceEligible();
   const providerVerified = diditPass(age.data());
+  const existingAgeStatus = String(age.data()?.status ?? '');
+  const existingPending = ['CREATING','PENDING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(existingAgeStatus);
+  // Never offer a second chargeable session while an earlier account-bound
+  // provider check remains in progress, even if the new grant does not exist.
   let launchUrl: string | null = null;
-  if (grant.exists && status !== 'authorised' && !providerVerified) {
+  if (existingPending && !providerVerified) {
     const sessionId = cleanText(age.data()?.sessionId, 128);
     if (sessionId) {
       const previous = (await db.collection('diditSessions').doc(sessionId).get()).data() ?? {};
       if (previous.uid === identity.uid && previous.environment === 'live' &&
-          previous.sessionId !== 'invalid' && previous.createdAtMs > Date.now() - 6 * 86400_000 &&
-          ['PENDING','IN_PROGRESS','RESUBMITTED'].includes(String(age.data()?.status))) {
-        launchUrl = cleanText(previous.url, 2048) || null;
+          previous.workflowId && previous.createdAtMs > Date.now() - 6 * 86400_000 &&
+          ['PENDING','IN_PROGRESS','RESUBMITTED'].includes(existingAgeStatus)) {
+        const candidate = cleanText(previous.url, 2048);
+        try {
+          const parsed = new URL(candidate);
+          if (parsed.protocol === 'https:' && ['verify.didit.me','verification.didit.me'].includes(parsed.hostname)) {
+            launchUrl = candidate;
+          }
+        } catch { /* malformed provider link: support review required */ }
       }
     }
   }
-  const authorised = status === 'authorised' &&
-    reuse.data()?.status === 'approved_for_reuse' && reuse.data()?.memberConsent === true;
+  // Viewing status is read-only: no provider request and no billable claim.
+  const status = String(providerVerified && selfServiceEnabled ? 'already_verified'
+    : existingPending && selfServiceEnabled ? (launchUrl ? 'session_started' : 'requires_review')
+    : data.state ?? (selfServiceEnabled ? 'authorised' : 'none'));
+  const authorised = !providerVerified && status === 'authorised' &&
+    (selfServiceEnabled || (grant.exists &&
+      reuse.data()?.status === 'approved_for_reuse' && reuse.data()?.memberConsent === true));
   return {
-    authorised, state: status, providerVerified,
+    authorised, state: status, providerVerified, selfServiceEnabled,
     launchUrl, publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
     // NO provider session can be started without explicit member action.
   };
@@ -6733,6 +6755,7 @@ export const startMyDiditControlledCheck = onCall({
   timeoutSeconds: 40, maxInstances: 2,
 }, async request => {
   const identity = await requireActiveIdentity(request);
+  const selfServiceEnabled = accountDiditSelfServiceEligible();
   if (!DIDIT_VERIFICATION_PAUSED || !diditConfigured() || diditMode() !== 'live' ||
       (request.data ?? {}).explicitConsent !== true) {
     throw new HttpsError('failed-precondition', 'One-use live Didit verification requires explicit member consent and configured live Didit.');
@@ -6750,17 +6773,37 @@ export const startMyDiditControlledCheck = onCall({
     if (diditPass(age.data())) {
       throw new HttpsError('already-exists','Didit verification is already approved for this account. Refresh status.');
     }
-    if (grant.data()?.state !== 'authorised' || grant.data()?.attempts !== 0 ||
-        consent.data()?.status !== 'approved_for_reuse' ||
-        consent.data()?.memberConsent !== true) {
-      throw new HttpsError('failed-precondition','Your single live Didit check has not been authorised, has already been claimed, or consent was withdrawn. No additional check was started.');
+    if (['CREATING','PENDING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(String(age.data()?.status ?? ''))) {
+      throw new HttpsError('failed-precondition','An earlier Didit check for this account is already active or awaiting review. Resume it or contact support; no second check was started.');
     }
-    // Durable pre-provider claim: an error or timeout must NEVER silently
-    // permit another paid request. Existing support tools can investigate.
-    tx.update(grantRef, {
-      state:'claimed', attempts:1, claimedAt:FieldValue.serverTimestamp(),
-      updatedAt:FieldValue.serverTimestamp(),
-    });
+    // Prior reuse reviews are no longer prerequisites for normal account
+    // verification. Existing invitation-based checks retain their fallback
+    // consent guard only when self-service is disabled.
+    if (!selfServiceEnabled && (consent.data()?.status !== 'approved_for_reuse' ||
+        consent.data()?.memberConsent !== true)) {
+      throw new HttpsError('failed-precondition','Your approved Didit enquiry is unavailable or consent has been withdrawn. No check was started.');
+    }
+    if (grant.exists && (grant.data()?.state !== 'authorised' || grant.data()?.attempts !== 0)) {
+      throw new HttpsError('failed-precondition','This account already claimed its one live Didit attempt. Contact support; no second check was started.');
+    }
+    if (!grant.exists && !selfServiceEnabled) {
+      throw new HttpsError('failed-precondition','Account self-service Didit verification is currently unavailable.');
+    }
+    // Durable claim BEFORE contacting Didit. A second tab, timeout or error
+    // cannot create another billable attempt for this account.
+    if (!grant.exists) {
+      tx.create(grantRef, {
+        uid:identity.uid, state:'claimed', attempts:1,
+        authorisedAt:FieldValue.serverTimestamp(), authorisedBy:'self-service-user',
+        source:'direct-account-self-service-normal-id-check', acknowledgedCharge:true,
+        claimedAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp(),
+      });
+    } else {
+      tx.update(grantRef, {
+        state:'claimed', attempts:1, claimedAt:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp(),
+      });
+    }
   });
   try {
     const result = await startDiditSession(identity.uid);
