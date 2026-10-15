@@ -99,6 +99,7 @@ import AdminDiditControlCentre from './components/AdminDiditControlCentre';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
 import AdminSecurityAlerts from './components/AdminSecurityAlerts';
 import AdminMemberSafety from './components/AdminMemberSafety';
+import MemberSecurityGate from './components/MemberSecurityGate';
 import AdminAuthenticationLog from './components/AdminAuthenticationLog';
 import AdminAssistance from './components/AdminAssistance';
 import ProductExperience from './components/ProductExperience';
@@ -529,6 +530,8 @@ function App() {
   const [favouriteReleaseIds, setFavouriteReleaseIds] = useState<string[]>([]);
   const [followingProfileIds, setFollowingProfileIds] = useState<string[]>([]);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [mandatoryAgreementReady, setMandatoryAgreementReady] = useState(false);
+  const [suspensionNotice, setSuspensionNotice] = useState<{reason:string;caseId:string}|null>(null);
   const [role, setRole] = useState<AccountRole | null>(null);
   const [accountStatus, setAccountStatus] = useState<'active' | 'pending_review'>('active');
   const [accountLoading, setAccountLoading] = useState(false);
@@ -801,10 +804,12 @@ function App() {
         if (mounted && access.status === 'suspended') {
           setPlaying(null);
           setProtectedReaderOpen(false);
+          setSuspensionNotice({
+            reason: access.suspensionReason || 'Contact Nightjar Support for the reason and review procedure.',
+            caseId: access.suspensionCaseId || '',
+          });
           setRole(null);
           setAgeStage('gate');
-          await nightjarAuth.signOut();
-          notify('Your Nightjar account is suspended. Contact support to request a review.');
         }
       } catch (error) {
         const code = String((error as {code?:unknown})?.code ?? '');
@@ -1145,6 +1150,8 @@ function App() {
         setSimulationMode(false);
         setPreviewRole(null);
         setUser(null);
+        setMandatoryAgreementReady(false);
+        setSuspensionNotice(null);
         setRole(null);
         setAgeVerified(false);
         setAgeNoticeAccepted(false);
@@ -1169,6 +1176,14 @@ function App() {
 
       void (async () => {
         try {
+          const agreements = await nightjarLegal.status();
+          if (cancelled || nightjarAuth.current()?.userId !== identity.userId) return;
+          if ((agreements.documents ?? []).some(doc => doc.requiredForAccount && !doc.accepted)) {
+            setMandatoryAgreementReady(false);
+            setAgeStage('gate');
+            return;
+          }
+          setMandatoryAgreementReady(true);
           await loadAccount();
           if (cancelled || nightjarAuth.current()?.userId !== identity.userId) return;
           const verified = await refreshAgeStatus();
@@ -2073,6 +2088,7 @@ function App() {
       setIdentityAdmin(data.admin === true);
 
       if (data.status === 'suspended') {
+        setSuspensionNotice({ reason: data.suspensionReason ?? 'Contact Nightjar Support for the reason and review procedure.', caseId: data.suspensionCaseId ?? '' });
         setRole(null);
         setRolePicker(false);
         setAgeStage('gate');
@@ -4391,6 +4407,29 @@ function App() {
         <p className="access-lede">Restoring your secure session and checking account access…</p>
       </section>
     </main>;
+  }
+
+  if (user && suspensionNotice) {
+    return <main className="access-shell"><section className="access-card" role="alert">
+      <span className="mini-label"><LockKeyhole size={16}/> ACCOUNT ACCESS RESTRICTED</span>
+      <h1>Nightjar account suspended</h1>
+      <p>{suspensionNotice.reason}</p>
+      {suspensionNotice.caseId && <p><strong>Case reference:</strong> {suspensionNotice.caseId}</p>}
+      <p>This decision can be reviewed. Contact Nightjar Support if you dispute the reason or believe the activity was legitimate. A suspected screenshot shortcut alone does not prove capture.</p>
+      <button className="secondary-button" onClick={() => void signOut()}>Sign out</button>
+    </section></main>;
+  }
+
+  if (user && !mandatoryAgreementReady) {
+    return <MemberSecurityGate onComplete={() => {
+      setMandatoryAgreementReady(true);
+      setSessionHydrating(true);
+      void (async () => {
+        try { await loadAccount(); const verified = await refreshAgeStatus(); if (!verified) setAgeStage('assurance'); }
+        catch { setSessionRestoreError(true); }
+        finally { setSessionHydrating(false); }
+      })();
+    }}/>;
   }
 
   if (ageStage === 'gate') {
