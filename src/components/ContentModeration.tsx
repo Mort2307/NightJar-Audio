@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
+import TranscriptSyncTool from './TranscriptSyncTool';
 import { demoCreatorDashboard, demoTracks } from '../demo/nightjarDemo';
 import { readDemo, writeDemo } from '../demo/demoSession';
 import { BookOpenText, Check, Eye, FileAudio, MessageSquare, X } from 'lucide-react';
@@ -180,6 +181,20 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
               ? <pre className="moderation-transcript-copy">{String(selected.transcriptText)}</pre>
               : <div className="people-empty"><BookOpenText size={16}/><strong>No transcript supplied.</strong><span>Transcripts are optional. You may approve this recording without one.</span></div>}
             <small>{selected.transcriptLanguage || 'en'} · {Math.max(0, Number(selected.transcriptWordCount ?? 0)).toLocaleString('en-GB')} words</small>
+            {selected.audioAvailable && <TranscriptSyncTool
+              key={selected.id}
+              releaseId={selected.id}
+              audioAvailable={selected.audioAvailable === true}
+              transcriptText={selected.transcriptText}
+              language={selected.transcriptLanguage}
+              isAdmin
+              simulationMode={demoMode}
+              onSaved={async (saved) => {
+                setSelected((prior: any) => prior?.id === selected.id ? { ...prior, ...saved } : prior);
+                await load();
+                notify('Timed transcript saved for this recording. The creator does not need to resubmit it.');
+              }}
+            />}
           </section>
           <div className="moderation-tags">{[...(selected.tags || []), ...(selected.tropes || [])].map((tag:string) => <span key={tag}>{tag}</span>)}</div>{!!selected.contributors?.length && <div className="moderation-credit-list">{selected.contributors.map((credit:any)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}{selected.status === 'pending_review' && <div className="nj-original-paid-gate">
               <label className="rights-check moderation-original-check"><input type="checkbox" checked={nightjarOriginal} onChange={(e)=>{setNightjarOriginal(e.target.checked);setOriginalCommissionConfirmed(false);}}/> Designate as a Nightjar Original (paid for and commissioned by Nightjar only)</label>
