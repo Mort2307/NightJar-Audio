@@ -199,7 +199,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     ? profile.roleProfiles[profileRole]
     : profile ?? {};
   const memberTagline = String(profile?.headline || roleDetails?.roleHeadline || '').trim();
-  const bannerFromPortrait = profile?.headerImageMode === 'portrait' && Boolean(profile?.avatarUrl);
+  const bannerFromPortrait = profile?.headerImageMode !== 'cinematic' && Boolean(profile?.avatarUrl);
   const roleFeaturedWork = (profile?.featuredWorkByRole?.[profileRole] ?? profile?.featuredWork ?? []) as any[];
   const roleCreditedReleases = (profile?.creditedReleasesByRole?.[profileRole] ?? profile?.creditedReleases ?? []) as any[];
   const profileMetrics = profile ? (
