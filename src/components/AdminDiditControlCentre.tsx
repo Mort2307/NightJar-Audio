@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, CircleHelp, ExternalLink, Fingerprint, RefreshCw, ShieldAlert, ShieldCheck, XCircle } from 'lucide-react';
 import { nightjarAge, type AgeStatus, type DiditDiagnostics } from '../platform/firebase-age';
+import AdminDiditReuseRequests from './AdminDiditReuseRequests';
 
 const diditSteps = [
   { key:'session', label:'Nightjar created and linked the Didit session' },
@@ -164,5 +165,6 @@ export default function AdminDiditControlCentre() {
       </div>
       <p className="nj-didit-control-footnote"><ShieldCheck size={15}/> Live verification stays paused until the result, webhook binding, under-18 rejection, persistence, and security checks have been separately validated. A green account result alone does not authorise public launch.</p>
     </section>
+    <AdminDiditReuseRequests />
   </section>;
 }
