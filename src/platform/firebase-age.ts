@@ -29,6 +29,7 @@ export type DiditDiagnostics = {
     'awaiting_signed_webhook' | 'webhook_waiting_for_processing' |
     'webhook_ignored_or_superseded' | 'adult_evidence_missing' | 'provider_result_not_verified';
   providerVerified: boolean;
+  verificationEvidenceSource?: string | null;
   oneShotClaimed: boolean;
   accountProviderStatus: string;
   sessionRecorded: boolean;
@@ -45,6 +46,7 @@ export type DiditDiagnostics = {
 };
 
 const diagnosticsCall = httpsCallable<void, DiditDiagnostics>(functions, 'adminDiditDiagnostics');
+const reconcileCall = httpsCallable<void, { verified: boolean; outcome: 'reconciled' | 'already_verified' | 'provider_not_approved' }>(functions, 'adminReconcileDiditApproval');
 const statusCall = httpsCallable<void, AgeStatus>(functions, 'ageStatus');
 const startCall = httpsCallable<{ controlledAdminTest?: boolean }, Record<string, unknown>>(functions, 'startAgeAssurance');
 const testPassCall = httpsCallable<void, { verified: boolean; status: string; provider: string }>(functions, 'adminAgeTestPass');
@@ -57,6 +59,12 @@ export const nightjarAge = {
   // Administrative diagnostics are read-only: never open a provider session.
   async adminDiagnostics() {
     return (await diagnosticsCall()).data;
+  },
+
+  // Explicit owner action, limited to the account's pre-existing claimed session.
+  // Provider GET only: does not start or repeat a chargeable identity check.
+  async reconcileExistingApproval() {
+    return (await reconcileCall()).data;
   },
 
   async start(controlledAdminTest = false) {

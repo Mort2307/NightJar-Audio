@@ -10,7 +10,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
-import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession } from './didit';
+import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision } from './didit';
 import { hasPaidEntitlement } from './entitlements';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
@@ -6404,6 +6404,116 @@ export const ageStatus = onCall({
   };
 });
 
+// One-off owner recovery of an already-completed, account-bound live Didit
+// verification. This GET-only provider check does not initiate an ID session,
+// skip age validation, accept client-supplied session IDs, or trust stale events.
+// The existing one-shot maintenance claim restricts use to the test owner.
+export const adminReconcileDiditApproval = onCall({
+  region: REGION,
+  secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+  timeoutSeconds: 30,
+  maxInstances: 2,
+}, async (request) => {
+  const identity = requireAdminIdentity(request);
+  if (!DIDIT_VERIFICATION_PAUSED || !diditConfigured() || diditMode() !== 'live') {
+    throw new HttpsError('failed-precondition', 'Didit maintenance recovery is not available in this environment.');
+  }
+
+  const claimRef = db.collection('operationalControls').doc('didit-maintenance-one-shot-2026-10-14');
+  const ageRef = db.collection('ageAssurance').doc(identity.uid);
+  const [claimSnap, ageSnap] = await Promise.all([claimRef.get(), ageRef.get()]);
+  if (!claimSnap.exists || claimSnap.data()?.initiatedByUid !== identity.uid) {
+    throw new HttpsError('permission-denied', 'Only the administrator who claimed the existing maintenance test may reconcile it.');
+  }
+  const currentAge = ageSnap.data() ?? {};
+  if (diditPass(currentAge)) return { verified: true, outcome: 'already_verified' };
+  const sessionId = cleanText(currentAge.sessionId, 128);
+  if (!sessionId || currentAge.provider !== 'didit' || currentAge.environment !== 'live' ||
+      !['PENDING', 'IN_PROGRESS', 'RESUBMITTED'].includes(String(currentAge.status))) {
+    throw new HttpsError('failed-precondition', 'No eligible pending live Didit session is linked to your account.');
+  }
+  const sessionRef = db.collection('diditSessions').doc(sessionId);
+  const session = (await sessionRef.get()).data() ?? {};
+  if (session.uid !== identity.uid || session.environment !== 'live' ||
+      session.workflowId !== DIDIT_WORKFLOW_ID.value()) {
+    throw new HttpsError('failed-precondition', 'The stored Didit session does not match the current Nightjar account and live workflow.');
+  }
+  const claimedAtMs = claimSnap.data()?.createdAt?.toMillis?.();
+  if (!Number.isFinite(claimedAtMs) || !Number.isFinite(session.createdAtMs) ||
+      session.createdAtMs < claimedAtMs - 60000) {
+    throw new HttpsError('failed-precondition', 'The stored session was not created for this controlled maintenance test.');
+  }
+
+  // Didit's authenticated read API is the source of truth when a signed
+  // historical webhook was rejected and cannot pass the freshness window.
+  // Never log the response: it contains DOB, IDs, images and personal data.
+  let decision: Record<string, any>;
+  try {
+    const response = await fetch(
+      'https://verification.didit.me/v3/session/' + encodeURIComponent(sessionId) + '/decision/',
+      {
+        method: 'GET',
+        headers: { 'x-api-key': DIDIT_API_KEY.value(), Accept: 'application/json' },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    if (!response.ok) throw new Error('Didit read API unavailable');
+    decision = await response.json() as Record<string, any>;
+  } catch {
+    throw new HttpsError('unavailable', 'Nightjar could not obtain the existing Didit decision. No new identity check was started.');
+  }
+
+  if (!decision || typeof decision !== 'object' || Array.isArray(decision) ||
+      decision.session_id !== sessionId || decision.vendor_data !== identity.uid ||
+      decision.workflow_id !== session.workflowId || decision.session_kind !== 'user' ||
+      decision.environment !== 'live' ||
+      (session.applicationId && decision.application_id != null &&
+        decision.application_id !== session.applicationId)) {
+    throw new HttpsError('failed-precondition', 'The Didit response could not be securely matched to the existing Nightjar session.');
+  }
+  if (!['Approved', 'APPROVED'].includes(String(decision.status))) {
+    return { verified: false, outcome: 'provider_not_approved' };
+  }
+  if (!verifiedAdultFromDecision(decision)) {
+    throw new HttpsError('failed-precondition', 'Didit did not provide sufficient approved 18+ documentary evidence for this session.');
+  }
+
+  // Write only an opaque audit marker and verified-age status. Raw Didit
+  // decisions, DOB, biometrics, document data and session URLs remain unpersisted.
+  const previousEventTime = Number(currentAge.diditEventCreatedAt ?? 0);
+  const reconciled = await db.runTransaction(async tx => {
+    const [ageNowSnap, sessionNowSnap, claimNowSnap] = await Promise.all([
+      tx.get(ageRef), tx.get(sessionRef), tx.get(claimRef),
+    ]);
+    const ageNow = ageNowSnap.data() ?? {};
+    const sessionNow = sessionNowSnap.data() ?? {};
+    if (diditPass(ageNow)) return false;
+    if (claimNowSnap.data()?.initiatedByUid !== identity.uid ||
+        ageNow.sessionId !== sessionId || ageNow.provider !== 'didit' ||
+        ageNow.environment !== 'live' || sessionNow.uid !== identity.uid ||
+        sessionNow.environment !== 'live' || sessionNow.workflowId !== session.workflowId ||
+        Number(ageNow.diditEventCreatedAt ?? 0) !== previousEventTime ||
+        !['PENDING', 'IN_PROGRESS', 'RESUBMITTED'].includes(String(ageNow.status))) {
+      throw new HttpsError('aborted', 'Nightjar verification changed during reconciliation. Refresh the current status.');
+    }
+    tx.set(ageRef, {
+      provider: 'didit', environment: 'live', status: 'COMPLETE',
+      verified: true, reverifyRequired: false, testMode: false,
+      verifiedAt: FieldValue.serverTimestamp(),
+      diditEventCreatedAt: Math.floor(Date.now() / 1000),
+      verificationEvidenceSource: 'didit-authenticated-session-read',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.set(sessionRef, { status: 'Approved', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(claimRef, {
+      reconciledAt: FieldValue.serverTimestamp(),
+      reconciliationMethod: 'didit-authenticated-session-read',
+    }, { merge: true });
+    return true;
+  });
+  return { verified: true, outcome: reconciled ? 'reconciled' : 'already_verified' };
+});
+
 // Owner-only read-only evidence trail. This never contacts Didit, changes
 // verification, creates a chargeable session, or exposes sensitive KYC material.
 export const adminDiditDiagnostics = onCall({ region: REGION }, async (request) => {
@@ -6443,6 +6553,7 @@ export const adminDiditDiagnostics = onCall({ region: REGION }, async (request) 
   return {
     outcome,
     providerVerified: verified,
+    verificationEvidenceSource: cleanText(age.verificationEvidenceSource, 80) || (verified ? 'signed-didit-webhook' : null),
     oneShotClaimed: claimed.exists,
     accountProviderStatus: cleanText(age.status, 40) || 'NOT_STARTED',
     sessionRecorded: Boolean(sessionId),

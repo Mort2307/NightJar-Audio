@@ -11,7 +11,7 @@ const requireMarker = (value, marker, label) => { if (!value.includes(marker)) f
 for (const [marker,label] of [
   ['request.rawBody', 'Didit raw webhook bytes'],
   ['verifiedAdultFromDecision(value.decision)', 'Approved KYC requires verified 18+ ID evidence'],
-  ["id.status !== 'Approved'", 'Only approved ID checks count as adult evidence'],
+  ["!['Approved', 'APPROVED'].includes(String(id.status))", 'Only approved ID checks count as adult evidence'],
   ['payload.adultEvidence === true', 'Adult evidence checked before any live verified pass'],
   ['(session.applicationId && session.applicationId !== payload.applicationId)', 'Provider application bound on webhooks'],
   ['X-Signature-V2','Signed V2 webhook verification'],

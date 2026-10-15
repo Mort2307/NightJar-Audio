@@ -27,6 +27,8 @@ export default function AdminDiditControlCentre() {
   const [status, setStatus] = useState<AgeStatus | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiditDiagnostics | null>(null);
   const [checking, setChecking] = useState(true);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconciliationFeedback, setReconciliationFeedback] = useState('');
   const [statusError, setStatusError] = useState('');
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
@@ -54,6 +56,27 @@ export default function AdminDiditControlCentre() {
   };
 
   useEffect(() => { void refresh(); }, []);
+
+  const reconcileExisting = async () => {
+    if (!window.confirm('Recover the ALREADY COMPLETED live Didit check linked to this administrator account? Nightjar will read the existing provider decision securely and grant permanent 18+ verification ONLY if approved documentary adult evidence matches your stored session. No new ID session will be created.')) return;
+    setReconciling(true);
+    setReconciliationFeedback('');
+    try {
+      const result = await nightjarAge.reconcileExistingApproval();
+      if (result.verified) {
+        setReconciliationFeedback(result.outcome === 'already_verified'
+          ? 'Your existing Didit account verification was already saved.'
+          : 'Didit approved your existing check and Nightjar securely saved your permanent verified 18+ result.');
+        await refresh();
+      } else {
+        setReconciliationFeedback('The existing Didit session is not currently approved. No Nightjar verification state was changed.');
+      }
+    } catch (error) {
+      setReconciliationFeedback(error instanceof Error ? error.message : 'Nightjar could not reconcile the existing Didit approval. No new identity check was started.');
+    } finally {
+      setReconciling(false);
+    }
+  };
 
   const verified = status?.providerVerified === true && status.reverifyRequired !== true
     && status.provider === 'didit' && status.environment === 'live';
@@ -103,15 +126,22 @@ export default function AdminDiditControlCentre() {
         <button type="button" className="primary-button" disabled={checking} onClick={() => void refresh()}>
           <RefreshCw size={16} aria-hidden="true"/>{checking ? 'Checking Nightjar…' : 'Refresh verification result · no paid check'}
         </button>
+        {!verified && status?.controlledAdminTestClaimed === true && diagnostics?.sessionBound === true
+          && status.environment === 'live' && status.verificationPaused !== false
+          && ['PENDING','IN_PROGRESS','RESUBMITTED'].includes(String(status.providerStatus ?? ''))
+          && <button type="button" className="secondary-button" disabled={checking || reconciling} onClick={() => void reconcileExisting()}>
+            <ShieldCheck size={16} aria-hidden="true"/>{reconciling ? 'Checking the existing Didit approval…' : 'Recover my existing Didit approval'}
+          </button>}
         <a className="secondary-button" href="https://business.didit.me/sign-in" target="_blank" rel="noopener noreferrer">
           Didit Business Console <ExternalLink size={15} aria-hidden="true"/>
         </a>
       </div>
+      {reconciliationFeedback && <p className="nj-didit-control-recovery-message" role="status" aria-live="polite">{reconciliationFeedback}</p>}
       {(statusError || diagnosticsError) && <div className="nj-didit-control-errors" role="alert">{statusError && <p>{statusError}</p>}{diagnosticsError && <p>{diagnosticsError}</p>}</div>}
       <small>{checkedAt ? 'Last checked: ' + new Date(checkedAt).toLocaleString('en-GB') : 'Checking Nightjar…'} · This panel reads saved verification records only and does not contact Didit to create a session.</small>
     </div>
     <section className="nj-didit-control-evidence" aria-label="Didit verification evidence trail">
-      <div className="nj-didit-control-evidence-title"><span className="mini-label">INTEGRATION DIAGNOSTICS · READ ONLY</span><h3>Where did the data gremlins stop?</h3><p>All steps must be confirmed before Nightjar displays a verified-adult result. Unknown is not the same as passed.</p></div>
+      <div className="nj-didit-control-evidence-title"><span className="mini-label">INTEGRATION DIAGNOSTICS · READ ONLY</span><h3>Where did the data gremlins stop?</h3><p>Each stage reports real recorded evidence. During maintenance, Nightjar can also independently recover a completed approval through Didit's authenticated session API. A recovered provider decision never counts as a received signed webhook.</p></div>
       <div className="nj-didit-control-steps">
         {diditSteps.map(({key,label},i) => {
           const result=steps[key];
@@ -124,6 +154,7 @@ export default function AdminDiditControlCentre() {
       </div>
       <div className="nj-didit-control-diagnosis">
         <strong>Current finding</strong><p>{latestOutcome}</p>
+        {verified && diagnostics?.verificationEvidenceSource === 'didit-authenticated-session-read' && <small>Approval recovered using Didit's authenticated live session decision API. The original webhook delivery remains unconfirmed; end-to-end webhook validation is still required before public launch.</small>}
         {diagnostics?.webhookStatus && <small>Last signed Didit status: {diagnostics.webhookStatus}{diagnostics.lastWebhookReceivedAt ? ' · Received ' + new Date(diagnostics.lastWebhookReceivedAt).toLocaleString('en-GB') : ''}</small>}
       </div>
       <div className="nj-didit-control-links">
