@@ -1832,6 +1832,7 @@ const publicProfilePayload = (
     welcomeMessage: data.welcomeMessage ?? null,
     pronouns: data.pronouns ?? null,
     avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+      bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
     avatarStatus: data.avatarStatus ?? null,
     avatarInitials: data.avatarInitials ?? null,
     initials: data.avatarInitials ?? null,
@@ -2007,6 +2008,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         welcomeMessage: data.welcomeMessage ?? null,
         pronouns: data.pronouns ?? null,
         avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+      bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
         avatarStatus: data.avatarStatus ?? null,
         avatarInitials: data.avatarInitials ?? null,
         initials: data.avatarInitials ?? null,
@@ -2185,6 +2187,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       socialLinks: publicSocialLinks,
       pronouns: data.pronouns ?? null,
       avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+      bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
       initials: data.avatarInitials ?? null,
       avatarTone: data.avatarTone ?? 'plum',
       followerCount: Math.max(0, Number(data.followerCount ?? 0)),
@@ -2262,6 +2265,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
       welcomeMessage: data.welcomeMessage ?? null,
       pronouns: data.pronouns ?? null,
       avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+      bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
       avatarStatus: data.avatarStatus ?? null,
       initials: data.avatarInitials ?? null,
       followers: Math.max(0, Number(data.followerCount ?? 0)),
@@ -2442,7 +2446,7 @@ export const setFavouriteRelease = onCall({ region: REGION }, async (request) =>
   return { releaseId, favourite: input.favourite !== false };
 });
 
-type ModeratedImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'script_artwork' | 'artist_portfolio' | 'social_avatar';
+type ModeratedImageKind = 'profile_avatar' | 'profile_banner' | 'brand_logo' | 'release_artwork' | 'script_artwork' | 'artist_portfolio' | 'social_avatar';
 
 const IMAGE_CONTENT_TYPES = new Map([
   ['image/png', 'png'],
@@ -2509,14 +2513,14 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const kind = cleanText(input.kind, 40) as ModeratedImageKind;
-  if (!['profile_avatar', 'brand_logo', 'release_artwork', 'script_artwork', 'artist_portfolio', 'social_avatar'].includes(kind)) {
+  if (!['profile_avatar', 'profile_banner', 'brand_logo', 'release_artwork', 'script_artwork', 'artist_portfolio', 'social_avatar'].includes(kind)) {
     throw new HttpsError('invalid-argument', 'Unsupported image type.');
   }
   if (kind === 'brand_logo' && !identity.admin) {
     throw new HttpsError('permission-denied', 'Administrator access required for Nightjar branding.');
   }
 
-  const targetId = kind === 'profile_avatar'
+  const targetId = kind === 'profile_avatar' || kind === 'profile_banner'
     ? identity.uid
     : cleanText(input.targetId, 160);
 
@@ -2623,6 +2627,21 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       pendingAvatarStatus: 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+  } else if (kind === 'profile_banner') {
+    const profile = await profileRef(identity.uid).get();
+    const oldId = cleanText(profile.data()?.pendingBannerAssetId, 160);
+    if (oldId && oldId !== assetId) {
+      const old = await db.collection('imageAssets').doc(oldId).get();
+      if (old.exists && old.data()?.ownerUserId === identity.uid &&
+          old.data()?.kind === 'profile_banner' && old.data()?.status === 'pending') {
+        await clearAssetFile(old.data() ?? {});
+        await old.ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      }
+    }
+    await profileRef(identity.uid).set({
+      pendingBannerAssetId:assetId, pendingBannerStatus:'pending',
+      updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
   } else if (kind === 'social_avatar') {
     const ref=socialLinkCollection(identity.uid).doc(targetId);
     const existing=await ref.get();
@@ -2934,6 +2953,12 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         pendingAvatarStatus: 'rejected',
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+    } else if (asset.kind === 'profile_banner') {
+      const profile = await profileRef(String(asset.ownerUserId)).get();
+      if (profile.data()?.pendingBannerAssetId === assetId) {
+        await profile.ref.set({pendingBannerAssetId:null,pendingBannerStatus:'rejected',
+          updatedAt:FieldValue.serverTimestamp()}, {merge:true});
+      }
     } else if (asset.kind === 'social_avatar' && asset.targetId) {
       const ref=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
       const linked=await ref.get();
@@ -2987,6 +3012,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         subtype: 'rejected',
         title: asset.kind === 'profile_avatar'
           ? 'Profile picture not approved'
+          : asset.kind === 'profile_banner' ? 'Profile cover not approved'
           : asset.kind === 'release_artwork'
             ? 'Release artwork not approved'
             : asset.kind === 'script_artwork'
@@ -3033,6 +3059,28 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       if (previous.exists) {
         await clearAssetFile(previous.data() ?? {});
         await previous.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+    }
+  } else if (asset.kind === 'profile_banner') {
+    const profile = await profileRef(String(asset.ownerUserId)).get();
+    // A replaced or withdrawn submission must never become the live cover.
+    if (profile.data()?.pendingBannerAssetId !== assetId) {
+      await ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await clearAssetFile(asset);
+      throw new HttpsError('failed-precondition', 'This cover was replaced or withdrawn.');
+    }
+    const previousId = cleanText(profile.data()?.bannerAssetId,160);
+    await profile.ref.set({
+      bannerAssetId:assetId, bannerUrl:url, bannerStatus:'approved',
+      pendingBannerAssetId:null, pendingBannerStatus:null,
+      updatedAt:FieldValue.serverTimestamp(),
+    }, {merge:true});
+    if (previousId && previousId !== assetId) {
+      const previous = await db.collection('imageAssets').doc(previousId).get();
+      if (previous.exists && previous.data()?.ownerUserId === asset.ownerUserId &&
+          previous.data()?.kind === 'profile_banner') {
+        await clearAssetFile(previous.data()??{});
+        await previous.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
       }
     }
   } else if (asset.kind === 'social_avatar' && asset.targetId) {
@@ -3169,6 +3217,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
       subtype: 'approved',
       title: asset.kind === 'profile_avatar'
         ? 'Profile picture approved'
+        : asset.kind === 'profile_banner' ? 'Profile cover approved'
         : asset.kind === 'release_artwork'
           ? 'Release artwork approved'
           : asset.kind === 'script_artwork'
@@ -3326,6 +3375,29 @@ export const removeProfileAvatar = onCall({ region: REGION }, async (request) =>
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   return { removed: true };
+});
+
+// A cover is independent of the portrait; only the owner can withdraw it.
+export const removeProfileBanner = onCall({region:REGION}, async request => {
+  const identity = await requireActiveIdentity(request);
+  const ref = profileRef(identity.uid);
+  const profile = await ref.get();
+  const data = profile.data() ?? {};
+  for (const raw of [data.bannerAssetId, data.pendingBannerAssetId]) {
+    const assetId = cleanText(raw,160);
+    if (!assetId) continue;
+    const asset = await db.collection('imageAssets').doc(assetId).get();
+    if (asset.exists && asset.data()?.ownerUserId === identity.uid && asset.data()?.kind === 'profile_banner') {
+      await clearAssetFile(asset.data() ?? {});
+      await asset.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    }
+  }
+  await ref.set({
+    bannerAssetId:null, bannerUrl:null, bannerStatus:null,
+    pendingBannerAssetId:null, pendingBannerStatus:null,
+    updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  return {removed:true};
 });
 
 export const getBranding = onCall({ region: REGION }, async () => {
@@ -9685,6 +9757,7 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
         handle: data.handle ?? null,
         headline: data.headline ?? null,
         avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
+      bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
         favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
         favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
         roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
