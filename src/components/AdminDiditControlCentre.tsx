@@ -3,6 +3,7 @@ import { ArrowRight, CheckCircle2, CircleHelp, ExternalLink, Fingerprint, Refres
 import { nightjarAge, type AgeStatus, type DiditDiagnostics } from '../platform/firebase-age';
 import AdminDiditReuseRequests from './AdminDiditReuseRequests';
 import AdminDiditReuseReadiness from './AdminDiditReuseReadiness';
+import AdminDiditSingleMemberPilot from './AdminDiditSingleMemberPilot';
 
 const diditSteps = [
   { key:'session', label:'Nightjar created and linked the Didit session' },
@@ -168,5 +169,6 @@ export default function AdminDiditControlCentre() {
     </section>
     <AdminDiditReuseRequests />
     <AdminDiditReuseReadiness />
+    <AdminDiditSingleMemberPilot />
   </section>;
 }
