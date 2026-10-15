@@ -1,0 +1,44 @@
+# Temporary isolated verification of the prepared Didit pilot.
+# No secrets, firebase deploy, Hosting, PR preview, or production API calls.
+name: Didit pre-deployment validation only
+
+on:
+  push:
+    branches:
+      - prepare/didit-meg-direct-test-release-20261015
+
+permissions:
+  contents: read
+
+concurrency:
+  group: didit-prepare-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_validate_only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install frontend dependencies
+        run: npm ci --no-fund --no-audit
+      - name: Validate direct pilot contracts without provider calls
+        run: node scripts/didit-direct-pilot-contracts.mjs && node scripts/didit-controlled-check-contracts.mjs
+      - name: Typecheck frontend
+        run: npm run typecheck
+      - name: Build frontend (local artefact only)
+        run: npm run build
+      - name: Install Firebase Functions dependencies
+        run: npm --prefix functions ci --no-fund --no-audit
+      - name: Typecheck Firebase Functions
+        run: npm --prefix functions run check
+      - name: Build Firebase Functions (local artefact only)
+        run: npm --prefix functions run build
+      - name: Validate existing Didit privacy and age-assurance contracts
+        run: node scripts/didit-contracts.mjs && node scripts/didit-pilot-contracts.mjs && node scripts/didit-meg-single-check-contracts.mjs
