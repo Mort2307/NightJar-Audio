@@ -11560,7 +11560,8 @@ textarea:focus-visible,
 .nj-profile-banner-edit-actions {display:flex;flex-wrap:wrap;gap:8px}
 .nj-profile-banner-editor>small {font-size:12px;line-height:1.5;color:var(--muted)}
 :root[data-nightjar-vision] .nj-profile-banner-preview {background:var(--panel);border:2px solid var(--line);color:var(--ivory)}
-:root[data-nightjar-vision] .nj-profile-banner-preview :is(img,.nj-profile-banner-title) {display:none}
+:root[data-nightjar-vision] .nj-profile-banner-preview img {display:none}
+:root[data-nightjar-vision] .nj-profile-banner-preview .nj-profile-banner-title {color:var(--ivory);text-shadow:none}
 
 /* A profile is a whole view, not an inner modal floating over a scrollable Home. */
 .creator-profile-backdrop.nj-full-profile-route {position:fixed;inset:0;display:block;padding:0!important;overflow:hidden;overscroll-behavior:contain;z-index:250;background:#080706}
