@@ -28,8 +28,10 @@
 - Prevent externally forked PRs from using self-hosted runners, and prohibit arbitrary external contributors from running code there.
 - Keep `firebase-backend-deploy.yml` and `firebase-hosting-merge.yml` on hosted runners (their production identities/permissions must not run inside the CI VM). Hosted minutes will therefore **not** become literally zero.
 - GitHub-hosted PR Hosting previews also consume minutes; decide separately whether they should remain automatic or become on-demand. Do not remove testing or deployment guardrails in pursuit of zero cost.
-- Run a full real PR with frontend/build/backend validation, then a controlled merge and Firebase Hosting deployment, before switching the repository visibility.
-- Confirm ChatGPT/GitHub connectivity **after** the repository becomes private. If access disappears, inspect [GitHub App installations](https://github.com/settings/installations) and reconnect/re-authorise the relevant integration; do not make the source public again solely to debug access.
+- **Do not assign any automatic pull-request workflows to a self-hosted runner while Nightjar remains public.** Run only the trusted manual readiness job first.
+- Confirm that the ChatGPT GitHub App installation covers Nightjar, then switch the repository to **private** in a controlled short maintenance window. If ChatGPT loses repository access, inspect [GitHub App installations](https://github.com/settings/installations) and reconnect/re-authorise the integration; do not make source public again solely to debug access.
+- While private, migrate non-privileged validation jobs to the isolated runner and perform a full real internal PR test. Review any branch-protection checks that still point at hosted-only workflows.
+- Run a controlled merge and confirm Firebase Hosting and backend deployment. Leave the trusted production release path on GitHub-hosted runners until a separate hardened release environment exists.
 - APK packaging/signing is a separate follow-up after CI has stabilised. Keep Android signing keys in a protected signing environment, **never** on the general-purpose PR runner.
 
 ## Important security boundaries
