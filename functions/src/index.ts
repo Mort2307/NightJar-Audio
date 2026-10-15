@@ -1593,6 +1593,9 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
     displayName: cleanText(input.displayName, 80) || identity.email.split('@')[0],
     handle,
     headline: cleanText(input.headline, 140),
+    // Header mode is an explicit member choice; only an approved existing
+    // portrait may be used. Never allow arbitrary unmoderated image URLs.
+    headerImageMode: input.headerImageMode === 'portrait' ? 'portrait' : 'cinematic',
     bio: cleanText(input.bio, 1200),
     welcomeMessage: cleanText(input.welcomeMessage, 300),
     pronouns: cleanText(input.pronouns, 60),
@@ -2173,6 +2176,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       name: data.displayName ?? 'Nightjar member',
       handle: data.handle ?? null,
       headline: data.headline ?? null,
+      headerImageMode: data.headerImageMode === 'portrait' ? 'portrait' : 'cinematic',
+      // Professional approval originates from account privileges, never
+      // release credits or self-authored profile fields. Applies to ALL tabs.
+      approvedProfessionalRoles: professionalRoles,
       bio: data.bio ?? null,
       welcomeMessage: data.welcomeMessage ?? null,
       socialLinks: publicSocialLinks,
