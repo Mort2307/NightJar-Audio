@@ -1,5 +1,6 @@
 import { ArrowRight, BookOpenText, Brush, CheckCircle2, FileCheck2, Headphones, Heart, Mic2, Play, Sparkles, Users, type LucideIcon } from 'lucide-react';
 import { belongsToLibraryCategory, type LibraryCategory, type LibraryProfile, type LibraryRole } from './ProfessionalLibrary';
+import ContextHelp from './ContextHelp';
 
 type ReleaseCredit = { userId?: string | null; role?: string | null; name?: string | null };
 export type DiscoverableRelease = {
@@ -66,7 +67,7 @@ export default function ListenerCreatorDiscovery({profiles,releases,followingIds
     <header className="nj-listener-discovery-hero">
       <div className="nj-listener-discovery-copy">
         <div className="nj-listener-discovery-eyebrow"><Sparkles size={16}/> THE NIGHTJAR CREATOR COLLECTION</div>
-        <h2>Find the people behind <em>what you love.</em></h2>
+        <h2>Find the people behind <em>what you love.</em> <ContextHelp topic="creator-discovery"/></h2>
         <p>Love the performance, the writing, the sound or the artwork? Discover who made it, explore their public work and decide how you’d like to support them.</p>
         <div className="nj-listener-discovery-value">
           <span><Heart size={15}/> Follow for free</span><span><BookOpenText size={15}/> Explore real published work</span><span><CheckCircle2 size={15}/> Support is always your choice</span>
@@ -108,6 +109,5 @@ export default function ListenerCreatorDiscovery({profiles,releases,followingIds
       </article>)}</div>
     </section>}
 
-    <p className="nj-listener-discovery-footnote"><Users size={14}/> This is a discovery space, not a hiring directory. Following, listening and showing appreciation are always optional. Only approved public profiles and published credits are shown.</p>
   </section>;
 }
