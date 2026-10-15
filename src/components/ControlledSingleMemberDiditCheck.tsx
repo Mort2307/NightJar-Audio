@@ -29,7 +29,7 @@ export default function ControlledSingleMemberDiditCheck() {
   };
   useEffect(()=>{void refresh();},[]);
 
-  if(status?.reason==='not_invited' || (status!==null && !status.eligible))return null;
+  if(status===null || status.reason==='not_invited' || !status.eligible)return null;
 
   const start=async()=>{
     if(loading||!consent||(!noticeAlreadyAccepted&&!noticeAcknowledged))return;
