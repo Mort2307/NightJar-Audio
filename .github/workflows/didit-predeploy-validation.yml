@@ -42,3 +42,5 @@ jobs:
         run: npm --prefix functions run build
       - name: Validate existing Didit privacy and age-assurance contracts
         run: node scripts/didit-contracts.mjs && node scripts/didit-pilot-contracts.mjs && node scripts/didit-meg-single-check-contracts.mjs
+      - name: Run full application contract suite without Firebase deployment
+        run: npm run validate:contracts
