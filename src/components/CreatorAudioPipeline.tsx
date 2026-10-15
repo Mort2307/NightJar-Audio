@@ -8,6 +8,7 @@ import { nightjarAudioFileProblem } from '../platform/audio-upload';
 import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import ContextHelp from './ContextHelp';
+import TranscriptSyncTool from './TranscriptSyncTool';
 import './creator-workflow.css';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
@@ -94,6 +95,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [audioStage, setAudioStage] = useState<'idle' | 'uploading' | 'verifying' | 'saved' | 'error'>('idle');
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioFileLabel, setAudioFileLabel] = useState('');
+  const [lastUploadedAudio, setLastUploadedAudio] = useState<File | null>(null);
   const [audioFeedback, setAudioFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -135,6 +137,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   }, [releases, selectedRelease?.id, selectedRelease?.status]);
 
   const chooseRelease = (release: Release) => {
+    setLastUploadedAudio(null);
     setSelectedRelease(release);
     try { window.sessionStorage.setItem(lastOpenedKey, release.id); } catch {}
     setWorkflowStep(release.status === 'draft' ? 'prepare' : 'review');
@@ -397,6 +400,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           : 'Transfer finished. Nightjar is verifying and attaching the file to your saved release.');
       });
       if (data.release?.audioAvailable !== true) throw new Error('Nightjar did not confirm that the audio was attached to your release.');
+      setLastUploadedAudio(file);
       setSelectedRelease(data.release);
       setAudioStage('saved');
       setAudioProgress(100);
@@ -451,6 +455,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         return;
       }
       await nightjarCatalogue.removeAudio(current.id);
+      setLastUploadedAudio(null);
       setSelectedRelease({ ...current, audioAvailable: false, audioUrl: null, durationMinutes: 0 });
       await onRefresh();
       setAudioStage('idle');
@@ -761,6 +766,27 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
                 <small>Only needed when a transcript is included. Check dialogue, sound cues and changes from the original script.</small>
               </span>
             </label>
+            {current.audioAvailable && <TranscriptSyncTool
+              key={current.id}
+              releaseId={current.id}
+              audioAvailable={current.audioAvailable === true}
+              transcriptText={current.transcriptText}
+              language={current.transcriptLanguage}
+              sourceFile={lastUploadedAudio}
+              simulationMode={simulationMode}
+              onSaved={async (saved) => {
+                setSelectedRelease((prior) => prior?.id === current.id ? {
+                  ...prior,
+                  transcriptText: saved.transcriptText,
+                  transcriptLanguage: saved.transcriptLanguage,
+                  transcriptAccessibilityReviewed: saved.transcriptAccessibilityReviewed,
+                  transcriptAvailable: saved.transcriptAvailable,
+                  transcriptWordCount: saved.transcriptWordCount,
+                } : prior);
+                await onRefresh().catch(() => {});
+                notify('Timed transcript saved to your release.');
+              }}
+            />}
           </details>
 
           <section className="release-credits-editor">
