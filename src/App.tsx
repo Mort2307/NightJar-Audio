@@ -4508,7 +4508,7 @@ function App() {
             <p>Verification never starts automatically. You must read the privacy notice and explicitly agree before Didit can request your ID or liveness check.</p>
             <p>Adult catalogue access still requires approved 18+ evidence or separately authorised temporary private-beta access.</p>
           </section>}
-          {DIDIT_VERIFICATION_PAUSED && <DiditControlledLiveCheck />}
+          {DIDIT_VERIFICATION_PAUSED && <DiditControlledLiveCheck onVerified={() => { void refreshAgeStatus(); }} />}
           {!DIDIT_VERIFICATION_PAUSED && <section className="nj-didit-privacy-check" aria-label="Age-verification privacy and permission">
             <h2>Before you verify</h2>
             <p>Nightjar uses Didit to verify that members are 18 or older. Didit may ask for government-issued photo ID and a selfie or liveness check. Nightjar stores your account-linked verification result rather than the original ID or selfie images.</p>
