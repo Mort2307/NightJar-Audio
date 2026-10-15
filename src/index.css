@@ -11369,3 +11369,31 @@ textarea:focus-visible,
 }
 .nj-didit-reuse-next svg {flex:0 0 auto;margin-top:2px;color:#efca90;}
 .nj-didit-reuse-admin-actions button {flex:1 1 190px;}
+
+/* Read-only reusable-KYC provider configuration and source-evidence inspection. */
+.nj-didit-reuse-setup {
+  display:grid;
+  gap:10px;
+  border:1px solid rgba(209,168,109,.27);
+  border-radius:14px;
+  background:rgba(255,255,255,.022);
+  padding:16px;
+}
+.nj-didit-reuse-setup h4 {margin:0;font-size:15px;line-height:1.45;}
+.nj-didit-reuse-setup p {margin:0;font-size:13px;line-height:1.6;}
+.nj-didit-reuse-setup label {font-size:12px;font-weight:650;}
+.nj-didit-reuse-setup input,.nj-didit-reuse-setup select {
+  width:100%;
+  min-height:45px;
+  padding:10px 12px;
+  color:inherit;
+  background:var(--surface,rgba(18,16,20,.95));
+  border:1px solid rgba(210,171,122,.35);
+  border-radius:10px;
+  font-size:14px;
+  min-width:0;
+}
+.nj-didit-reuse-setup a {color:#e4c69a;display:inline-flex;align-items:center;gap:7px;font-size:12px;}
+.nj-didit-reuse-setup button {min-height:46px;display:flex;align-items:center;justify-content:center;gap:9px;}
+.nj-didit-reuse-admin>p:last-child {display:flex;align-items:flex-start;gap:9px;}
+.nj-didit-reuse-admin>p:last-child svg {flex:0 0 auto;margin-top:3px;}
