@@ -77,7 +77,7 @@ assert.match(app, /adminWorkspace === 'security' && <AdminAuthenticationLog/, 'S
 assert.match(app, /adminWorkspace === 'tools' && <Suspense/, 'Mail tools are not mounted until requested');
 assert.match(app, /\/admin\/workspace\//, 'admin workspace navigation uses dedicated deep links');
 assert.match(app, /setAdminWorkspace\(\(workspaceFromPath/, 'browser Back restores admin workpage');
-assert.match(workspaceTabs, /'overview' \| 'people' \| 'content' \| 'launch' \| 'finance' \| 'security' \| 'assistance' \| 'tools'/, 'all admin workspaces are present');
+assert.match(workspaceTabs, /'overview' \| 'people' \| 'content' \| 'launch' \| 'didit' \| 'finance' \| 'security' \| 'assistance' \| 'tools'/, 'all admin workspaces are present');
 assert.match(workspaceTabs, /aria-current=\{active === section\.id \? 'page' : undefined\}/, 'current admin workspace is accessible');
 assert.match(product, /\.nj-owner-workspaces\s*\{/, 'compact workspace navigation has CSS');
 assert.match(product, /\.nj-admin-focused-grid \.admin-panel p\s*\{ font-size: 13px;/, 'Admin cards have readable body text');
