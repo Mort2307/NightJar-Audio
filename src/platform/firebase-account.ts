@@ -10,6 +10,8 @@ export type NightjarAccountIdentity = {
   role: 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | null;
   status: string;
   emailVerified: boolean;
+  suspensionReason?: string | null;
+  suspensionCaseId?: string | null;
 };
 
 export type ClosedBetaRegistrationStatus = {
@@ -20,7 +22,7 @@ export type ClosedBetaRegistrationStatus = {
 
 const registrationStatusCall = httpsCallable<{ email: string }, ClosedBetaRegistrationStatus>(functions, 'closedBetaRegistrationStatus');
 const identityCall = httpsCallable<void, NightjarAccountIdentity>(functions, 'accountIdentity');
-const memberAccessStatusCall = httpsCallable<void,{status:string}>(functions,'memberAccessStatus');
+const memberAccessStatusCall = httpsCallable<void,{status:string;suspensionReason?:string|null;suspensionCaseId?:string|null}>(functions,'memberAccessStatus');
 const roleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; referralCode?: string }, { userId: string; role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; requestedProfessionalRole?: 'creator' | 'writer' | 'editor' | 'artist' | null; status: string }>(functions, 'chooseAccountRole');
 
 export type NightjarProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
