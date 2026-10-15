@@ -163,6 +163,15 @@ export default function UserProfileStudio({
       <article className="panel premium-user-card presence">
         <div className="premium-user-card-head"><div><span className="mini-label">PRESENCE</span><h2>Make the profile memorable.</h2></div><Sparkles size={18}/></div>
         <label>Profile headline<input maxLength={140} value={profile.headline ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,headline:event.target.value}))} placeholder="A short line that feels like you"/><small className="field-counter">{String(profile.headline ?? '').length}/140</small></label>
+        <fieldset className="nj-profile-cover-choice">
+          <legend>Public profile header</legend>
+          <p>Your profile headline appears on the header image. Choose the classic Midnight Gold look or show your approved portrait in the background.</p>
+          <div className="nj-profile-cover-options">
+            <label><input type="radio" name="nightjar-profile-cover" value="cinematic" checked={profile.headerImageMode === 'cinematic'} onChange={()=>setProfile((current:any)=>({...current,headerImageMode:'cinematic'}))}/> Cinematic NightJar header</label>
+            <label><input type="radio" name="nightjar-profile-cover" value="portrait" checked={profile.headerImageMode !== 'cinematic'} onChange={()=>setProfile((current:any)=>({...current,headerImageMode:'portrait'}))}/> Use my approved profile photo</label>
+          </div>
+          {profile.headerImageMode === 'portrait' && !profile.avatarUrl && <small>Upload a portrait and wait for approval before it can appear publicly. The Midnight Gold header stays visible until then.</small>}
+        </fieldset>
         <label>About you<textarea maxLength={1200} value={profile.bio ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,bio:event.target.value}))} placeholder="Your story, your way."/><small className="field-counter">{String(profile.bio ?? '').length}/1200</small></label>
         <label>Welcome note <span className="optional-label">optional</span><textarea maxLength={300} value={profile.welcomeMessage ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,welcomeMessage:event.target.value}))} placeholder="A small message for people visiting your profile."/><small className="field-counter">{String(profile.welcomeMessage ?? '').length}/300</small></label>
         <label className="profile-toggle premium-profile-public-toggle"><input type="checkbox" checked={discoverable} onChange={(event)=>setProfile((current:any)=>role === 'admin' ? {...current,adminCommunityVisible:event.target.checked} : {...current,publicProfile:event.target.checked})}/>{role === 'admin' ? 'Show my Nightjar Team profile to the community' : 'Allow Nightjar members to discover my profile'}</label>

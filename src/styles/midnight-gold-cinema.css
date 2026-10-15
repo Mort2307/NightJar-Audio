@@ -791,3 +791,45 @@
 :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-hero-banner.nj-cinema-banner-lowres {
   display:none;
 }
+
+
+/* Member-selected public profile cover. Never substitute unapproved assets:
+   PublicProfile receives only the approved avatar URL from the server. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-cover-branded {
+  background:
+    radial-gradient(ellipse at 82% 30%,rgba(186,135,65,.30),transparent 54%),
+    radial-gradient(ellipse at 18% 76%,rgba(109,68,42,.26),transparent 62%),
+    linear-gradient(120deg,#0e0c0a,#271c13 58%,#0b0908);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-cover-portrait .nj-profile-hero-banner.nj-cinema-banner-lowres {
+  /* When the member explicitly chooses their portrait, avoid hiding it for
+     being avatar-sized; soften the upscale rather than showing an empty cover. */
+  display:block;
+  filter:saturate(.82) contrast(1.08) blur(1px);
+}
+.premium-public-profile .nj-cinema-cover-words em {
+  overflow-wrap:break-word;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  overflow:hidden;
+}
+@media(max-width:520px){
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-profile-cover {height:clamp(162px,42vw,206px);}
+  .premium-public-profile .nj-cinema-cover-words {max-width:75%;left:22px;gap:6px;}
+  .premium-public-profile .nj-cinema-cover-words em {font-size:clamp(21px,6vw,30px);line-height:1.12;}
+  .premium-public-profile .nj-cinema-cover-words small {font-size:9px;letter-spacing:.16em;}
+}
+.nj-profile-cover-choice {
+  min-width:0;
+  padding:14px 16px;
+  border:1px solid var(--nj-line-default,rgba(214,175,108,.25));
+  border-radius:13px;
+  background:var(--nj-surface-raised,rgba(255,255,255,.03));
+}
+.nj-profile-cover-choice legend {padding-inline:4px;font-weight:700;color:var(--ivory,#f5edf0);}
+.nj-profile-cover-choice p,.nj-profile-cover-choice small {color:var(--muted,#c6b8c3);font-size:12px;line-height:1.55;}
+.nj-profile-cover-options {display:flex;flex-wrap:wrap;gap:10px;margin-block:10px;}
+.nj-profile-cover-options label {display:inline-flex;align-items:center;gap:7px;flex:1 1 180px;font-size:12px;}
+.nj-profile-cover-options input {width:17px;height:17px;accent-color:var(--gold,#ddba7f);flex:none;}
+:root[data-nightjar-vision] .nj-profile-cover-choice {background:var(--panel);border-color:var(--ivory);}
