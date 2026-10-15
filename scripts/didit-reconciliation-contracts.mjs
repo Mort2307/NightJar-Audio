@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const backend=fs.readFileSync('functions/src/index.ts','utf8');
+const didit=fs.readFileSync('functions/src/didit.ts','utf8');
+const client=fs.readFileSync('src/platform/firebase-age.ts','utf8');
+const control=fs.readFileSync('src/components/AdminDiditControlCentre.tsx','utf8');
+const workflow=fs.readFileSync('.github/workflows/firebase-hosting-merge.yml','utf8');
+const begin=backend.indexOf('export const adminReconcileDiditApproval = onCall');
+const end=backend.indexOf('export const startAgeAssurance = onCall',begin);
+assert.ok(begin>0 && end>begin,'owner recovery must be an independent callable');
+const fn=backend.slice(begin,end);
+assert.match(fn,/requireAdminIdentity\(request\)/,'only server-validated owner access allowed');
+assert.match(fn,/DIDIT_VERIFICATION_PAUSED/,'feature is maintenance-only');
+assert.match(fn,/claimSnap\.data\(\)\?\.initiatedByUid !== identity\.uid/,'the initiating administrator is the only allowed account');
+assert.match(fn,/session\.uid !== identity\.uid/,'cannot reconcile another account session');
+assert.match(fn,/sessionId = cleanText\(currentAge\.sessionId/,'session is looked up only from authenticated account');
+assert.match(fn,/session\.workflowId !== DIDIT_WORKFLOW_ID\.value\(\)/,'workflow scope cannot be spoofed');
+assert.match(fn,/session\.createdAtMs < claimedAtMs - 60000/,'session tied to maintenance claim');
+assert.match(fn,/https:\/\/verification\.didit\.me\/v3\/session\//,'decision read uses official Didit session API');
+assert.match(fn,/method: 'GET'/,'reconciliation reads only a pre-existing decision');
+assert.doesNotMatch(fn,/method: 'POST'|startDiditSession\(|startAgeAssurance\(|fetch\('https:\/\/verification\.didit\.me\/v3\/session\/'\s*,/,
+  'never create an additional chargeable verification session');
+assert.match(fn,/decision\.vendor_data !== identity\.uid/,'fetched response must bind to caller');
+assert.match(fn,/decision\.workflow_id !== session\.workflowId/,'fetched response must bind to known workflow');
+assert.match(fn,/decision\.session_id !== sessionId/,'fetched response must bind to stored session');
+assert.match(fn,/decision\.environment !== 'live'/,'sandbox results cannot grant verification');
+assert.match(fn,/decision\.session_kind !== 'user'/,'business verification does not unlock listeners');
+assert.match(fn,/decision\.status !== 'Approved'/,'provider must explicitly approve');
+assert.match(fn,/verifiedAdultFromDecision\(decision\)/,'approved documentary 18+ evidence required');
+assert.match(didit,/export const verifiedAdultFromDecision/,'same age validator used for live webhook approval');
+assert.match(fn,/db\.runTransaction/,'account verification update must be atomic');
+assert.match(fn,/Number\(ageNow\.diditEventCreatedAt \?\? 0\) !== previousEventTime/,'superseded decision is rejected');
+assert.match(fn,/diditEventCreatedAt: Math\.floor\(Date\.now\(\) \/ 1000\)/,'stale webhook events cannot override a reconciled current approval');
+assert.match(fn,/verificationEvidenceSource: 'didit-authenticated-session-read'/,'audit marker never masquerades as a signed webhook');
+assert.doesNotMatch(fn,/console\.log|console\.error|\.set\(\{\s*decision:|rawBody|document_number|source_image|date_of_birth|session_url|face_matches/,
+  'raw identity documents, images and provider decisions must never be logged or persisted');
+assert.match(client, /async reconcileExistingApproval\(/,'client exposes explicit safe recovery action');
+assert.match(control, /window\.confirm\(/,'owner must explicitly opt in before authenticated state change');
+assert.match(control, /Recover my existing Didit approval/,'owner control must be labelled clearly');
+assert.doesNotMatch(control,/nightjarAge\.start\(/,'dashboard must not open an ID session');
+assert.match(workflow, /\[nightjar-didit-reconciliation-release\]/,'backend-first deploy guard is required');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'do not reopen public age verification');
+console.log('Nightjar secure one-shot existing Didit approval reconciliation contracts PASS.');
