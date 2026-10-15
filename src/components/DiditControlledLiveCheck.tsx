@@ -12,7 +12,7 @@ const isSafeDiditLink = (link: string | undefined | null) => {
   } catch { return false; }
 };
 
-export default function DiditControlledLiveCheck() {
+export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: () => void } = {}) {
   const [status,setStatus]=useState<DiditControlledStatus|null>(null);
   const [legalAccepted,setLegalAccepted]=useState(false);
   const [legalAcknowledged,setLegalAcknowledged]=useState(false);
@@ -35,7 +35,7 @@ export default function DiditControlledLiveCheck() {
           document.id==='age_assurance_notice' &&
           document.version===NIGHTJAR_AGE_NOTICE_VERSION && document.accepted === true));
       }
-      if (result.providerVerified) setMessage('Nightjar has confirmed your permanent Didit Verified 18+ result.');
+      if (result.providerVerified) { setMessage('Nightjar has confirmed your permanent Didit Verified 18+ result.'); onVerified?.(); }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not check your account verification status.');
     } finally { setPending(false);setLoaded(true); }
@@ -58,6 +58,7 @@ export default function DiditControlledLiveCheck() {
       const started=await nightjarDiditControlled.start();
       if(started.verified===true) {
         setMessage('Your account is already verified by Didit. No new check was started.');
+        onVerified?.();
       } else if(isSafeDiditLink(started.launchUrl)) {
         setLaunchUrl(started.launchUrl!);
         setMessage('Your single live Didit session is ready. Tap “Open secure Didit verification” below to complete it.');
