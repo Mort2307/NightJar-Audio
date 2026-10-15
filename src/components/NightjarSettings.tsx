@@ -6,6 +6,7 @@ import AppUpdateControl from './AppUpdateControl';
 import NotificationPreferences from './NotificationPreferences';
 import ThemePreferences from './ThemePreferences';
 import PasskeySettings from './PasskeySettings';
+import DiditExistingCheckRequest from './DiditExistingCheckRequest';
 import AdminAudioUploadTest from './AdminAudioUploadTest';
 import NightjarFinancePreview from './NightjarFinancePreview';
 
@@ -46,6 +47,7 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-privacy">
           <div className="nj-settings-section-head"><LockKeyhole size={19} /><div><span className="mini-label">SECURITY</span><h2 id="nj-settings-privacy">Privacy and safety</h2></div></div>
           <details className="nj-settings-collapsible"><summary>Biometrics and passkey security</summary><PasskeySettings simulationMode={simulationMode}/></details>
+          {!administrator && !simulationMode && <details className="nj-settings-collapsible"><summary>Use an existing Didit verification</summary><DiditExistingCheckRequest/></details>}
           <button type="button" className="nj-settings-link" onClick={onProtection}><span><strong>Protection Centre</strong><small>Account safety, reporting and protected evidence</small></span><ArrowRight size={17} aria-hidden="true" /></button>
           <a className="nj-settings-link" href="/legal/privacy"><span><strong>Privacy notice</strong><small>How Nightjar handles your information</small></span><ArrowRight size={17} aria-hidden="true" /></a>
           <a className="nj-settings-link" href="/legal/terms"><span><strong>Terms and conditions</strong><small>Platform responsibilities and access terms</small></span><ArrowRight size={17} aria-hidden="true" /></a>
