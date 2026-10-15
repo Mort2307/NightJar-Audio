@@ -3,7 +3,7 @@ import { firebaseApp } from './firebase-auth';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
-type ImageKind = 'profile_avatar' | 'brand_logo' | 'release_artwork' | 'script_artwork' | 'artist_portfolio' | 'social_avatar';
+type ImageKind = 'profile_avatar' | 'profile_banner' | 'brand_logo' | 'release_artwork' | 'script_artwork' | 'artist_portfolio' | 'social_avatar';
 
 const submitImageCall = httpsCallable<{
   kind: ImageKind;
@@ -19,6 +19,7 @@ const moderateCall = httpsCallable<{ assetId: string; decision: 'approved' | 're
 const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status: string; publicUrl: string | null; moderationNote: string | null }>(functions, 'getImageAssetStatus');
 const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string }>(functions, 'removeOwnedImageAsset');
 const removeAvatarCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileAvatar');
+const removeBannerCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileBanner');
 const brandingCall = httpsCallable<void, { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null }>(functions, 'getBranding');
 const syncBrandIconsCall = httpsCallable<{
   icon192DataUrl: string;
@@ -54,6 +55,10 @@ export const nightjarMedia = {
 
   async removeProfileAvatar() {
     return (await removeAvatarCall()).data;
+  },
+
+  async removeProfileBanner() {
+    return (await removeBannerCall()).data;
   },
 
   async getBranding() {
