@@ -66,6 +66,7 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
     sections:[
       { heading:'1. What Nightjar collects', paragraphs:[
         'Nightjar may process account details, profile information, role applications, age-assurance status, uploaded content and metadata, collaborations, messages, moderation records, security events, notification-device information, payment/subscription records and support or safety reports.',
+        'To protect accounts and creative work, Nightjar may log limited security-related interactions, such as a protected document being opened, blocked copying, a print or save shortcut, a possible screenshot shortcut and a platform or device capture signal where supported. These records may include the account ID, time, page and event type. A shortcut signal is not proof that a capture occurred. Nightjar does not record general keystrokes, typed messages, passwords or form contents for this purpose.',
         'Nightjar should minimise data collection to what is reasonably necessary for the relevant purpose. Age-assurance providers should return the minimum result Nightjar needs rather than unnecessary identity data wherever the provider supports that model.'
       ]},
       { heading:'2. Why it is used', paragraphs:[
