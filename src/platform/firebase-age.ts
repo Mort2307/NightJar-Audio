@@ -50,8 +50,29 @@ const reconcileCall = httpsCallable<void, { verified: boolean; outcome: 'reconci
 const statusCall = httpsCallable<void, AgeStatus>(functions, 'ageStatus');
 const startCall = httpsCallable<{ controlledAdminTest?: boolean }, Record<string, unknown>>(functions, 'startAgeAssurance');
 const testPassCall = httpsCallable<void, { verified: boolean; status: string; provider: string }>(functions, 'adminAgeTestPass');
+export type SingleMemberDiditMaintenanceStatus = {
+  eligible: boolean;
+  checkAvailable: boolean;
+  alreadyClaimed: boolean;
+  providerVerified: boolean;
+  existingSession: boolean;
+  sessionLaunchUrl: string | null;
+  reason: 'not_invited' | 'verified' | 'request_not_approved' | 'session_created' | 'one_attempt_claimed' | 'ready' | 'not_ready';
+};
+export type SingleMemberDiditStart = {
+  verified?: boolean; status: string; provider: string; environment?: string;
+  sessionId?: string; launchUrl?: string; resumed?: boolean;
+};
+const maintenanceStatusCall = httpsCallable<void,SingleMemberDiditMaintenanceStatus>(functions,'singleMemberDiditMaintenanceStatus');
+const maintenanceStartCall = httpsCallable<{consentsToNewPaidCheck:true},SingleMemberDiditStart>(functions,'startSingleMemberDiditMaintenanceCheck');
 
 export const nightjarAge = {
+  async singleMemberMaintenanceStatus() {
+    return (await maintenanceStatusCall()).data;
+  },
+  async startSingleMemberMaintenanceCheck() {
+    return (await maintenanceStartCall({consentsToNewPaidCheck:true})).data;
+  },
   async status() {
     return (await statusCall()).data;
   },
