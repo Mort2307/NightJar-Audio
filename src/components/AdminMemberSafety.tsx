@@ -13,7 +13,7 @@ export type SafetyMember = {
 };
 
 type SafetyAction = 'suspend' | 'restore';
-type SafetyResult = { status: string; authDisabled: boolean; revokedReaderSessions: number };
+type SafetyResult = { status: string; authDisabled: boolean; revokedReaderSessions: number; caseId?: string; notificationDelivery?: 'sent' | 'pending' };
 
 export default function AdminMemberSafety({
   accounts, onAction, onRefresh, loading = false,
@@ -69,6 +69,10 @@ export default function AdminMemberSafety({
         ? 'Suspension confirmed by the server: Firebase login disabled, refresh tokens revoked, and ' + result.revokedReaderSessions + ' manuscript session(s) revoked.'
         : 'Restoration confirmed by the server: Firebase login enabled and account status ' + result.status + '.');
       setReason('');
+      setSuccess((action === 'suspend' ? 'Account suspended' : 'Account restored') +
+        (result.caseId ? ' · case ' + result.caseId : '') + '. Firebase access: ' +
+        (result.authDisabled ? 'disabled' : 'enabled') + '. Member notification: ' +
+        (result.notificationDelivery === 'sent' ? 'email sent' : result.notificationDelivery === 'pending' ? 'delivery pending — review Nightjar Mail connection' : 'not sent (demo mode)') + '.');
       setDossier(null); // Refresh the authoritative Firebase status after any action.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The security action failed. Nothing has been confirmed.');
