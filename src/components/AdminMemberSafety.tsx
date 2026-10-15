@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CheckCircle2, LockKeyhole, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { nightjarAdministration, type NightjarSecurityDossier } from '../platform/firebase-administration';
 import './admin-member-safety.css';
 
 export type SafetyMember = {
@@ -28,6 +29,8 @@ export default function AdminMemberSafety({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [dossier, setDossier] = useState<NightjarSecurityDossier | null>(null);
+  const [dossierLoading, setDossierLoading] = useState(false);
   const matches = useMemo(() => {
     const value = query.trim().toLowerCase().replace(/^@/, '');
     if (!value) return [];
@@ -41,6 +44,15 @@ export default function AdminMemberSafety({
     setReason('');
     setError('');
     setSuccess('');
+    setDossier(null);
+  };
+  const inspect = async () => {
+    if (!selected || dossierLoading) return;
+    setDossierLoading(true);
+    setError('');
+    try { setDossier(await nightjarAdministration.memberSecurityDossier(selected.userId)); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load verified security evidence.'); }
+    finally { setDossierLoading(false); }
   };
   const apply = async (action: SafetyAction) => {
     if (!selected || busy || reason.trim().length < 12) return;
@@ -57,6 +69,7 @@ export default function AdminMemberSafety({
         ? 'Suspension confirmed by the server: Firebase login disabled, refresh tokens revoked, and ' + result.revokedReaderSessions + ' manuscript session(s) revoked.'
         : 'Restoration confirmed by the server: Firebase login enabled and account status ' + result.status + '.');
       setReason('');
+      setDossier(null); // Refresh the authoritative Firebase status after any action.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The security action failed. Nothing has been confirmed.');
     } finally {
@@ -73,7 +86,7 @@ export default function AdminMemberSafety({
       <div className="nj-member-safety-search-row">
         <Search size={17} aria-hidden="true"/>
         <input id="nj-member-safety-search" type="search" autoComplete="off" value={query}
-          onChange={event => { setQuery(event.target.value); setSelectedId(''); setError(''); setSuccess(''); }}
+          onChange={event => { setQuery(event.target.value); setSelectedId(''); setDossier(null); setError(''); setSuccess(''); }}
           placeholder="Name, email, @handle or user ID"/>
         <button type="button" className="secondary-button" disabled={loading} onClick={onRefresh}>Refresh</button>
       </div>
@@ -90,6 +103,24 @@ export default function AdminMemberSafety({
     {selected && <div className="nj-member-safety-case">
       <h3><LockKeyhole size={18}/> {selected.name || 'Nightjar member'}</h3>
       <p>{selected.email || selected.userId} · Current status: <strong>{selected.status || 'active'}</strong></p>
+      <button type="button" className="secondary-button" disabled={dossierLoading} onClick={() => void inspect()}>
+        <ShieldCheck size={16}/> {dossierLoading ? 'Checking Firebase and security history…' : 'Review account and security evidence'}
+      </button>
+      {dossier && dossier.member.userId === selected.userId && <div className="nj-member-safety-dossier">
+        <h3>Verified account information</h3>
+        <p><strong>Firebase sign-in:</strong> {dossier.member.authDisabled ? 'Disabled' : 'Enabled'} · <strong>Nightjar status:</strong> {dossier.member.status}</p>
+        {dossier.member.suspensionCaseId && <p>Case reference: <strong>{dossier.member.suspensionCaseId}</strong></p>}
+        {dossier.member.suspensionReason && <p>Recorded suspension reason: {dossier.member.suspensionReason}</p>}
+        <p>{dossier.note}</p>
+        <details>
+          <summary>Recent security evidence ({dossier.evidence.length})</summary>
+          {dossier.evidence.length ? dossier.evidence.map(item => <article key={item.id} className="nj-member-safety-evidence">
+            <strong>{item.eventType.replaceAll('_', ' ')}</strong>
+            <small>{item.createdAt ? new Date(item.createdAt).toLocaleString('en-GB') : 'Time not available'} · {item.detectionConfidence || 'Contextual'} · {item.route || 'Protected reader'}</small>
+            <span>{item.summary || 'Security signal recorded.'}</span>
+          </article>) : <p>No account-linked events recorded in the available history. This does not prove no screenshots occurred.</p>}
+        </details>
+      </div>}
       <label htmlFor="nj-member-safety-reason">Case note (required, at least 12 characters)</label>
       <textarea id="nj-member-safety-reason" rows={3} maxLength={500} value={reason}
         onChange={event => setReason(event.target.value)}
