@@ -1,4 +1,4 @@
-import { ArrowRight, Brush, FileCheck2, FileText, Heart, Headphones, MessageCircle, Mic2, Search, Share2, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Brush, FileCheck2, FileText, Heart, Headphones, MessageCircle, Mic2, Moon, Search, Share2, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import ContextHelp from './ContextHelp';
 
 export type LibraryRole = 'creator' | 'writer' | 'editor' | 'artist';
@@ -100,6 +100,8 @@ function PersonCard({
     <div className="nj-pro-library-person-top"><div className="nj-pro-library-person-avatar">
       {person.avatarUrl ? <img src={person.avatarUrl} alt="" loading="lazy" decoding="async"/>
         : <span>{person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>}
+      {!person.nightjarTeam && category!=='listener' && belongsToLibraryCategory(person,category) &&
+        <span className="nj-pro-library-official-moon" aria-label="Official NightJar Creator — approved professional" title="Official NightJar Creator"><Moon size={13} aria-hidden="true"/></span>}
     </div><div className="nj-pro-library-person-title"><div className="nj-pro-library-person-role"><Icon size={13}/>{person.nightjarTeam ? 'Nightjar Team' : roleName[category]}</div>
       <h3>{person.name}</h3><small>{person.handle ? '@'+person.handle.replace(/^@/,'') : 'Nightjar member'}</small>
     </div></div>

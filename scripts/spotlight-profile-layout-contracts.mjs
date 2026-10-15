@@ -38,4 +38,24 @@ assert.match(css, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/, 'Mobile m
 assert.match(css, /prefers-reduced-motion/, 'Respect reduced motion');
 assert.match(css, /focus-visible/, 'Preserve keyboard focus feedback');
 
+const cinema = load('src/styles/midnight-gold-cinema.css');
+const main = load('src/main.tsx');
+const directory = load('src/components/ProfessionalLibrary.tsx');
+assert.match(main, /import '\.\/styles\/midnight-gold-cinema\.css';/, 'Cinematic structural CSS must actually load');
+assert.ok(main.indexOf('midnight-gold-cinema.css') < main.indexOf('vision-access.css'), 'Accessibility palette layer must load after cinematic CSS');
+assert.match(cinema, /\.nj-personal-home>\.nj-home-spotlight-fixed\s*\{\s*order:-30/, 'Spotlight must precede home toolbar and shortcuts visually');
+assert.match(cinema, /\.nj-cinema-profile-cover/, 'Creator portraits need true top-of-page cinematic covers');
+assert.match(cinema, /\.nj-profile-avatar-frame/, 'Portrait must overlap the cinematic cover');
+assert.match(cinema, /\.nj-cinema-profile-tabs/, 'Profile must expose working section navigation');
+assert.match(cinema, /\.public-featured-work>article:has\(>img/, 'Published release artwork must be visually prominent');
+assert.match(cinema, /\.nj-spotlight-editorial-grid\s*\{[\s\S]*?scroll-snap-type:x mandatory/, 'Spotlight should be swipeable on phones');
+assert.match(cinema, /\.nj-cinema-banner-lowres/, 'Low-resolution approved avatars must never be blurred as giant cover photos');
+assert.match(profile, /naturalWidth < 480/, 'Cover image resolution must be checked at load time');
+assert.match(profile, /id="nj-cinema-work"/, 'Work tab has a real scroll target');
+assert.match(profile, /id="nj-cinema-about"/, 'About tab has a real scroll target');
+assert.match(profile, /id="nj-cinema-collaborate"/, 'Collaborate tab has a real scroll target');
+assert.match(profile, /release\.artworkUrl/, 'Real approved catalogue artwork is used');
+assert.match(directory, /belongsToLibraryCategory\(person,category\)/, 'Directory verified crescent must be restricted to approved professional membership');
+assert.match(cinema, /data-nightjar-vision/, 'Alternate low-vision palettes must remain usable');
+
 console.log('PASS fixed first-place spotlight and themed creator profile hierarchy');
