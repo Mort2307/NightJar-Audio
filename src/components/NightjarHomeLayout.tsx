@@ -9,11 +9,12 @@ const sectionLabels: Record<SectionId, string> = {
   spotlights: 'Community spotlight', writers: 'Discover writers', trending: 'Trending now',
   creators: 'Creators to follow', studio: 'Creative opportunities',
 };
-const allSections: SectionId[] = ['featured','catalogue','recommended','spotlights','writers','trending','creators','studio'];
+const allSections: SectionId[] = ['featured','catalogue','recommended','writers','trending','creators','studio'];
+// Spotlights are editorial, always shown first; they are not a home-layout preference.
 const presets: Record<Preset, Layout> = {
-  balanced: { order:['featured','catalogue','recommended','spotlights','creators','writers','trending','studio'], hidden:[], collapsed:['spotlights','writers','trending','studio'] },
-  discovery: { order:['recommended','featured','trending','creators','catalogue','spotlights','writers','studio'], hidden:[], collapsed:['writers','studio'] },
-  minimal: { order:['featured','catalogue','recommended','spotlights','creators','writers','trending','studio'], hidden:['spotlights','writers','trending','studio'], collapsed:['recommended'] },
+  balanced: { order:['featured','catalogue','recommended','creators','writers','trending','studio'], hidden:[], collapsed:['writers','trending','studio'] },
+  discovery: { order:['recommended','featured','trending','creators','catalogue','writers','studio'], hidden:[], collapsed:['writers','studio'] },
+  minimal: { order:['featured','catalogue','recommended','creators','writers','trending','studio'], hidden:['writers','trending','studio'], collapsed:['recommended'] },
 };
 const copyLayout = (v: Layout): Layout => ({order:[...v.order],hidden:[...v.hidden],collapsed:[...v.collapsed]});
 const readLayout = (key: string): Layout => {
@@ -68,13 +69,13 @@ export function PersonalisedHome({userId, editable, children, onNavigate}: {
     <section className="page-wrap nj-animate nj-personal-home" aria-label="Your Nightjar home">
       <div className="nj-personal-home-toolbar">
         <div><span className="mini-label">YOUR NIGHTJAR</span><strong>Made for your listening mood.</strong>
-          <small>Your favourite areas, in the order you prefer.</small></div>
+          <small>Spotlights always lead. Arrange everything else your way.</small></div>
         {editable && <button type="button" className="secondary-button" aria-expanded={editing} aria-controls="nj-home-layout-editor" onClick={()=>setEditing(v=>!v)}>
           <Settings2 size={16}/> {editing?'Done arranging':'Customise home'}
         </button>}
       </div>
       {editable && editing && <section id="nj-home-layout-editor" className="nj-home-layout-editor" aria-label="Arrange your home">
-        <p>Move sections, hide optional areas or start from a preset. Your layout is saved on this device.</p>
+        <p>The Spotlight stays first and visible for everyone. Move or hide the other sections, or start from a preset. Your layout is saved on this device.</p>
         <div className="nj-home-layout-presets" role="group" aria-label="Homepage layout presets">
           {(['balanced','discovery','minimal'] as Preset[]).map(preset=><button type="button" key={preset} onClick={()=>setLayout(()=>copyLayout(presets[preset]))}>{preset==='balanced'?'Balanced':preset==='discovery'?'Discovery':'Minimal'}</button>)}
         </div>
@@ -103,6 +104,9 @@ export function PersonalisedHome({userId, editable, children, onNavigate}: {
 export function HomeSection({id, title, children}: {id: SectionId;title: string;children: ReactNode}) {
   const ctx=useContext(HomeContext);
   if (!ctx) return <>{children}</>;
+  // A fixed editorial placement is not collapsible, reorderable or hideable,
+  // including for accounts with an older saved layout that hid spotlights.
+  if (id === 'spotlights') return <section className="nj-home-spotlight-fixed" id="nightjar-home-spotlights" aria-label={title}>{children}</section>;
   const {layout,setLayout}=ctx;
   if(layout.hidden.includes(id)) return null;
   const expanded=!layout.collapsed.includes(id);

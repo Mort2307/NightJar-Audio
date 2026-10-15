@@ -3843,3 +3843,27 @@ textarea {
 .nj-finance-preview-dialog .nj-finance-preview-content { padding-right:32px; }
 .nj-finance-preview-dialog > .secondary-button { justify-self:start; min-height:44px; }
 @media(max-width:600px){ .nj-finance-preview-card,.nj-finance-preview-dialog { padding:15px; } }
+
+
+/* The editorial Spotlight is always the first content section on Home.
+   The home-layout editor cannot hide, collapse, or reorder this slot. */
+.nj-personal-home > .nj-home-spotlight-fixed {
+  order:-17;
+  min-width:0;
+  scroll-margin-top:100px;
+  border:1px solid var(--nj-line-default,rgba(255,255,255,.18));
+  border-radius:18px;
+  padding:clamp(6px,1.3vw,14px);
+  background:var(--nj-surface-raised,rgba(255,255,255,.025));
+}
+.nj-home-spotlight-fixed > .spotlight-section {
+  margin:0;
+  padding:0;
+  max-width:none;
+}
+.nj-home-spotlight-fixed .nj-spotlight-section-head {
+  margin-top:0;
+}
+@media(max-width:700px) {
+  .nj-personal-home > .nj-home-spotlight-fixed { padding:6px; border-radius:15px; }
+}

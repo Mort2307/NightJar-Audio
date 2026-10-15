@@ -24,7 +24,7 @@ assert.match(app, /<HomeSection id="studio" title="Creative opportunities">/, 'c
 assert.match(preview, /No payment or transfer will take place/, 'support preview is explicitly non-transactional');
 assert.doesNotMatch(preview,/£\s*\d|\$\s*\d|\b(?:pay cap|monthly cap|payout split|revenue split)\b/i,'previews must never show money figures or internal pay models');
 assert.match(home,/\| 'studio'/, 'creative opportunities are included in home personalisation');
-assert.match(home,/collapsed:\['spotlights','writers','trending','studio'\]/, 'creative section starts collapsed for compact home');
+assert.match(home,/collapsed:\['writers','trending','studio'\]/, 'creative section starts collapsed for compact home while Spotlight remains open');
 assert.match(app,/MEMBER_PAYMENT_FEATURES_ENABLED \? <Suspense[^\n]*Nightjar wallet/, 'real wallet stays gated');
 assert.match(app,/<NightjarFinancePreview kind="wallet"/, 'member support area returns without wallet figures');
 assert.match(app,/onSupport=\{\(person,role\)=>\{/, 'support discovery button returns');
