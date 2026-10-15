@@ -409,6 +409,8 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
     role,
     status,
     emailVerified: true,
+    suspensionReason: status === 'suspended' ? cleanText(current.suspensionReason, 500) : null,
+    suspensionCaseId: status === 'suspended' ? cleanText(current.suspensionCaseId, 80) : null,
     testAccess: current.testAccess === true || betaAccess.reason === 'approved-tester' || betaAccess.reason === 'legacy-test-access',
     updatedAt: FieldValue.serverTimestamp(),
     ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
@@ -4438,6 +4440,7 @@ export const adminAccountOverview = onCall({ region: REGION }, async (request) =
       roles: account.role === 'admin' ? ['admin'] : ['listener', ...professionalRolesForAccount(account)],
       pendingProfessionalRoles: cleanProfessionalRoles(account.pendingProfessionalRoles),
       status: account.status ?? 'active',
+      suspensionCaseId: cleanText(account.suspensionCaseId, 80) || null,
       name: profileData.displayName ?? account.email?.split('@')?.[0] ?? 'Nightjar account',
       handle: profileData.handle ?? null,
       publicProfile: profileData.publicProfile !== false,
@@ -4612,6 +4615,9 @@ const setMemberSuspension = async (userId: string, action: MemberSuspensionActio
 
   const previousStatus = cleanText(account.status, 30) || 'active';
   const suspended = action === 'suspend';
+  const caseId = suspended
+    ? (cleanText(account.suspensionCaseId, 80) || 'NJ-' + randomUUID().slice(0, 8).toUpperCase())
+    : cleanText(account.suspensionCaseId, 80);
   if (!suspended && previousStatus !== 'suspended') {
     throw new HttpsError('failed-precondition', 'This account is not suspended.');
   }
@@ -4624,6 +4630,7 @@ const setMemberSuspension = async (userId: string, action: MemberSuspensionActio
       status: 'suspended',
       suspendedPriorStatus: previousStatus === 'suspended' ? (account.suspendedPriorStatus || 'active') : previousStatus,
       suspensionReason: reason,
+      suspensionCaseId: caseId,
       suspendedBy: administratorId,
       suspendedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -4637,6 +4644,7 @@ const setMemberSuspension = async (userId: string, action: MemberSuspensionActio
     await ref.set({
       status: restoredStatus,
       suspensionReason: null,
+      suspensionCaseId: null,
       suspendedPriorStatus: null,
       restoredBy: administratorId,
       restoredAt: FieldValue.serverTimestamp(),
@@ -4649,13 +4657,14 @@ const setMemberSuspension = async (userId: string, action: MemberSuspensionActio
     administratorId,
     action,
     reason,
+    caseId,
     previousStatus,
     resultingStatus: suspended ? 'suspended' : restoredStatus,
     authDisabled: suspended,
     revokedReaderSessions,
     createdAt: FieldValue.serverTimestamp(),
   });
-  return { userId, status: suspended ? 'suspended' : restoredStatus, authDisabled: suspended, revokedReaderSessions };
+  return { userId, status: suspended ? 'suspended' : restoredStatus, authDisabled: suspended, caseId, revokedReaderSessions };
 };
 
 export const adminSetAccountSuspension = onCall({ region: REGION }, async (request) => {
@@ -4669,11 +4678,58 @@ export const adminSetAccountSuspension = onCall({ region: REGION }, async (reque
   return setMemberSuspension(userId, action, reason, administrator.uid);
 });
 
+
+export const adminMemberSecurityDossier = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const userId = cleanText((request.data as { userId?: unknown } | undefined)?.userId, 160);
+  if (!userId || userId.includes('/')) throw new HttpsError('invalid-argument', 'Select a valid member.');
+  const [account, profile, events, authUser] = await Promise.all([
+    accountRef(userId).get(),
+    profileRef(userId).get(),
+    db.collection('protectionEvents').where('userId', '==', userId).limit(250).get(),
+    getAuth().getUser(userId),
+  ]);
+  if (!account.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
+  const a = account.data() ?? {};
+  const p = profile.data() ?? {};
+  const evidence = events.docs.map((doc) => {
+    const e = doc.data();
+    return {
+      id: doc.id, eventType: cleanText(e.eventType, 80),
+      relatedType: cleanText(e.relatedType, 80),
+      relatedId: cleanText(e.relatedId, 160),
+      route: cleanText(e.route, 240), summary: cleanText(e.summary, 800),
+      detectionSource: cleanText(e.detectionSource, 120),
+      detectionConfidence: cleanText(e.detectionConfidence, 32),
+      createdAt: toIso(e.createdAt),
+    };
+  }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 50);
+  return {
+    member: {
+      userId, displayName: cleanText(p.displayName, 120) || cleanEmail(authUser.email).split('@')[0],
+      handle: cleanText(p.handle, 120) || null,
+      email: cleanEmail(authUser.email),
+      status: cleanText(a.status, 30) || 'active',
+      authDisabled: authUser.disabled === true,
+      suspensionReason: cleanText(a.suspensionReason, 500) || null,
+      suspensionCaseId: cleanText(a.suspensionCaseId, 80) || null,
+      lastSignIn: authUser.metadata.lastSignInTime ?? null,
+    },
+    evidence,
+    note: 'Capture shortcuts may be incomplete or false-positive signals, not proof of recording. Review context before enforcement.',
+  };
+});
+
 export const memberAccessStatus = onCall({ region: REGION }, async (request) => {
   const identity = requireVerifiedIdentity(request);
   if (identity.admin) return { status: 'active' };
   const snapshot = await accountRef(identity.uid).get();
-  return { status: cleanText(snapshot.data()?.status, 30) || 'active' };
+  const data = snapshot.data() ?? {};
+  return {
+    status: cleanText(data.status, 30) || 'active',
+    suspensionReason: data.status === 'suspended' ? cleanText(data.suspensionReason, 500) : null,
+    suspensionCaseId: data.status === 'suspended' ? cleanText(data.suspensionCaseId, 80) : null,
+  };
 });
 
 export const adminSetAccountRole = onCall({ region: REGION }, async (request) => {
