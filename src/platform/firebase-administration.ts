@@ -7,7 +7,7 @@ const functions = getFunctions(firebaseApp, 'europe-west2');
 const overviewCall = httpsCallable<void, { people: any }>(functions, 'adminAccountOverview');
 const setRoleCall = httpsCallable<{ userId: string; role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist'; status: 'active' | 'pending_review' | 'suspended' }, { userId: string; role: string; status: string }>(functions, 'adminSetAccountRole');
 export type NightjarManagedProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
-export type NightjarSuspensionResult = { userId: string; status: string; authDisabled: boolean; revokedReaderSessions: number };
+export type NightjarSuspensionResult = { userId: string; status: string; authDisabled: boolean; revokedReaderSessions: number; caseId?: string; notificationDelivery?: 'sent' | 'pending' };
 const suspensionCall = httpsCallable<{userId:string;action:'suspend'|'restore';reason:string}, NightjarSuspensionResult>(functions,'adminSetAccountSuspension');
 export type NightjarSecurityDossier = {
   member: {
