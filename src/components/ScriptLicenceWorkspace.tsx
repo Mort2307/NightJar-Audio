@@ -81,6 +81,5 @@ export default function ScriptLicenceWorkspace({role,currentUserId,demoMode=fals
         </div>}
       </article>;
     })}</div>
-    <p className="script-licence-disclaimer"><ContextHelp topic="licence-status"/> Payments, escrow and legal licence execution are disabled until NightJar completes its approved processor and contract setup. Accepting terms alone does not authorise use, copying, recording or publication of the manuscript.</p>
   </section>;
 }
