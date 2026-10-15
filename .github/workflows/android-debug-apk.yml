@@ -49,8 +49,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Configure Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Verify preinstalled Android SDK on GitHub runner
+        run: |
+          test -d "$ANDROID_HOME/platforms"
+          echo "Android SDK present: $ANDROID_HOME"
       - name: Build Android debug APK
         working-directory: android
         run: |
