@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, FileCheck2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
+import { nightjarAuth } from '../platform/firebase-auth';
 
 /** Explicit current-version account terms + privacy NOTICE acknowledgement.
  * Not consent to optional analytics, marketing, OS permissions or surveillance.
@@ -79,7 +80,8 @@ export default function MemberSecurityGate({ onComplete }: { onComplete: () => v
         <button className="secondary-button" type="button" disabled={loading || saving} onClick={() => void load()}><RefreshCw size={14}/> Retry</button>
         <button className="primary-button" type="button" disabled={!ready || loading || saving} onClick={() => void accept()}>{saving ? 'Saving securely…' : 'Accept and continue'} <ArrowRight size={16}/></button>
       </div>
-      <p className="access-fine">If you do not wish to accept the Terms, you may sign out and contact support. Your separate statutory privacy rights remain available.</p>
+      <button type="button" className="ghost-button" disabled={saving} onClick={() => void nightjarAuth.signOut()}>Decline and sign out</button>
+      <p className="access-fine">Declining does not waive your statutory rights. You can contact Nightjar Support about your account, privacy or an access decision.</p>
     </section>
   </main>;
 }
