@@ -5,6 +5,7 @@ import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } f
 import AccountSecurityActivity from './AccountSecurityActivity';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import SocialLinksEditor from './SocialLinksEditor';
+import ContextHelp from './ContextHelp';
 import LegalAgreementPanel from './LegalAgreementPanel';
 import ProfileSectionBoundary from './ProfileSectionBoundary';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
@@ -131,7 +132,7 @@ export default function UserProfileStudio({
           </span>
           <div>
             <label className="secondary-button upload-label"><ImagePlus size={14}/> {profileImageBusy ? 'Optimising photo…' : profile.avatarUrl ? 'Replace portrait' : 'Add portrait'}<input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file) void onUploadAvatar(file); event.currentTarget.value='';}}/></label>
-             <small className="profile-photo-optimisation-note">Nightjar automatically resizes photos to 768 px or less and compresses them to about 224 KB before uploading. Photos can be up to 20 MB.</small>
+             <ContextHelp topic="profile-photo"/>
             {(profile.avatarUrl || profile.pendingAvatarAssetId) && <button className="ghost-button" disabled={profileImageBusy} onClick={()=>void onRemoveAvatar()}>Remove</button>}
             {profile.pendingAvatarStatus === 'pending' && <small>New portrait awaiting moderation.</small>}
             {profile.pendingAvatarStatus === 'rejected' && <small>The submitted portrait was not approved.</small>}
@@ -165,20 +166,18 @@ export default function UserProfileStudio({
         <label>About you<textarea maxLength={1200} value={profile.bio ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,bio:event.target.value}))} placeholder="Your story, your way."/><small className="field-counter">{String(profile.bio ?? '').length}/1200</small></label>
         <label>Welcome note <span className="optional-label">optional</span><textarea maxLength={300} value={profile.welcomeMessage ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,welcomeMessage:event.target.value}))} placeholder="A small message for people visiting your profile."/><small className="field-counter">{String(profile.welcomeMessage ?? '').length}/300</small></label>
         <label className="profile-toggle premium-profile-public-toggle"><input type="checkbox" checked={discoverable} onChange={(event)=>setProfile((current:any)=>role === 'admin' ? {...current,adminCommunityVisible:event.target.checked} : {...current,publicProfile:event.target.checked})}/>{role === 'admin' ? 'Show my Nightjar Team profile to the community' : 'Allow Nightjar members to discover my profile'}</label>
-        {role === 'admin' && <p className="panel-note">Off by default. When enabled, only your chosen public profile details are visible to signed-in Nightjar members. Administrator permissions, security tools and account information remain private. Each administrator controls their own visibility.</p>}
+        {role === 'admin' && <ContextHelp topic="team-profile-visibility"/>}
       </article>
 
       <article className="panel premium-user-card discovery">
-        <div className="premium-user-card-head"><div><span className="mini-label">YOUR WORLD</span><h2>What belongs in your Nightjar orbit?</h2></div><Heart size={18}/></div>
-        <p className="panel-note">This makes Listener profiles interesting too. These are public-facing interests and discovery signals — never a claim about who you are or what you must like next.</p>
+        <div className="premium-user-card-head"><div><span className="mini-label">YOUR WORLD</span><h2>What belongs in your Nightjar orbit? <ContextHelp topic="profile-interests"/></h2></div><Heart size={18}/></div>
         <SearchableMultiSelect label="Moods & tags" options={combinedTagOptions} values={profile.favouriteTags ?? []} onChange={(values)=>setProfile((current:any)=>({...current,favouriteTags:values}))} allowCreate={role !== 'admin'} createLabel="Add custom tag"/>
         <SearchableMultiSelect label="Tropes & themes" options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>setProfile((current:any)=>({...current,favouriteTropes:values}))}/>
         <SearchableMultiSelect label="Categories" options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>setProfile((current:any)=>({...current,favouriteCategories:values}))}/>
       </article>
 
       <article className="panel premium-user-card taste">
-        <div className="premium-user-card-head"><div><span className="mini-label">TASTE CONSTELLATION</span><h2>Your evolving discovery fingerprint.</h2></div><Star size={18}/></div>
-        <p className="panel-note">Listening can refine recommendations without redefining your identity. Think of this as your private discovery compass, not a personality score.</p>
+        <div className="premium-user-card-head"><div><span className="mini-label">TASTE CONSTELLATION</span><h2>Your evolving discovery fingerprint. <ContextHelp topic="taste-constellation"/></h2></div><Star size={18}/></div>
         <div className="premium-taste-constellation">
           {tasteVector.length ? tasteVector.slice(0,10).map((item:any,index:number)=><div key={item.label} style={{'--weight':Math.max(.2,Math.min(1,Number(item.weight ?? .5))), '--index':index} as CSSProperties}><strong>{item.label}</strong><span>{Math.round(Number(item.weight ?? 0)*100)}%</span></div>) : <div className="people-empty"><Star size={17}/><strong>Your constellation will form naturally.</strong><span>Save, finish, replay and explore. Nightjar keeps this separate from your public identity.</span></div>}
         </div>
