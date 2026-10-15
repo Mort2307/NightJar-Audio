@@ -13,7 +13,7 @@ export type NightjarSecurityDossier = {
   member: {
     userId: string; displayName: string; email: string; handle: string | null;
     status: string; authDisabled: boolean; suspensionReason: string | null;
-    suspensionCaseId: string | null; lastSignIn: string | null;
+    suspensionCaseId: string | null; notificationDelivery?: string | null; lastSignIn: string | null;
   };
   evidence: Array<{
     id: string; eventType: string; relatedType: string; relatedId: string;
@@ -23,6 +23,7 @@ export type NightjarSecurityDossier = {
   note: string;
 };
 const securityDossierCall = httpsCallable<{userId:string}, NightjarSecurityDossier>(functions,'adminMemberSecurityDossier');
+const retrySuspensionNoticeCall = httpsCallable<{userId:string},{notificationDelivery:'sent'|'pending';caseId:string}>(functions,'adminRetryMemberSecurityNotice');
 const setWorkspaceCall = httpsCallable<{
   userId: string;
   role: 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
@@ -187,6 +188,9 @@ export const nightjarAdministration = {
 
   async memberSecurityDossier(userId: string) {
     return (await securityDossierCall({ userId })).data;
+  },
+  async retryMemberSecurityNotice(userId: string) {
+    return (await retrySuspensionNoticeCall({userId})).data;
   },
 
   async setAccountSuspension(userId: string, action: 'suspend' | 'restore', reason: string) {
