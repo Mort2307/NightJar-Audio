@@ -5376,8 +5376,8 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
   return { releaseId, url, expiresInSeconds: 900, accessReason:access.reason };
 });
 
-// Private sync uses a browser-local speech model. Firebase only signs the
-// recording URL and persists reviewed timing; no paid AI API is called.
+// Manual transcript sync only: Firebase signs a protected playback URL.
+// No AI, speech recognition or external processing is performed.
 export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
@@ -5400,8 +5400,8 @@ export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request)
   return { releaseId, url, expiresInSeconds: 600 };
 });
 
-// Explicit human approval prevents automatic speech recognition from silently
-// replacing a writer's exact text with an unreviewed machine guess.
+// Human-set timestamps are saved only after reviewing against the recording.
+// The original writer script is not processed by a transcription engine.
 export const saveSyncedReleaseTranscript = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -5445,7 +5445,7 @@ export const saveSyncedReleaseTranscript = onCall({ region: REGION }, async (req
     transcriptText: transcript,
     transcriptLanguage: cleanTranscriptLanguage(input.language),
     transcriptAccessibilityReviewed: true,
-    transcriptSyncSource: 'local_speech_recognition_reviewed',
+    transcriptSyncSource: 'manual_timing_reviewed',
     transcriptSyncedBy: identity.uid,
     transcriptSyncedByAdmin: identity.admin === true,
     transcriptSyncedAt: FieldValue.serverTimestamp(),
