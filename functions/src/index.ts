@@ -6970,6 +6970,101 @@ export const adminDiditDiagnostics = onCall({ region: REGION }, async (request) 
   };
 });
 
+// Exception to the maintenance pause: ONE pre-authorised account-bound normal
+// Didit ID check, after an admin's explicit charge acknowledgement and member
+// opt-in. A global Firestore claim restricts this to one member/one live attempt;
+// this must never become a public or automatic verification launch.
+const DIDIT_SINGLE_MEMBER_PILOT_ID = 'didit-maintenance-member-normal-check-2026-10-15';
+const memberNormalPilotRef = db.collection('operationalControls').doc(DIDIT_SINGLE_MEMBER_PILOT_ID);
+
+export const adminAuthoriseDiditMemberNormalPilot = onCall({
+  region: REGION,
+  secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+}, async request => {
+  const identity = requireAdminIdentity(request);
+  const uid = cleanText((request.data ?? {}).uid, 128);
+  if ((request.data ?? {}).acceptPotentialCharge !== true ||
+      (request.data ?? {}).confirmOneAttemptOnly !== true ||
+      !/^[a-zA-Z0-9_-]{10,128}$/.test(uid)) {
+    throw new HttpsError('invalid-argument', 'Choose the member and acknowledge a single potentially billable live identity check.');
+  }
+  if (!DIDIT_VERIFICATION_PAUSED || !diditConfigured() || diditMode() !== 'live') {
+    throw new HttpsError('failed-precondition', 'The controlled member pilot requires the current live maintenance environment.');
+  }
+  const user = await getAuth().getUser(uid);
+  if (user.disabled || user.emailVerified !== true || !user.email || ADMIN_EMAILS.has(cleanEmail(user.email))) {
+    throw new HttpsError('failed-precondition','Pilot member must have an active, verified non-administrator Nightjar login.');
+  }
+  const account = (await accountRef(uid).get()).data() ?? {};
+  if (account.status === 'suspended' || account.emailVerified !== true || cleanEmail(account.email) !== cleanEmail(user.email)) {
+    throw new HttpsError('failed-precondition','The member must have a verified, active Nightjar account.');
+  }
+  const reuseRef = diditReuseRef(uid);
+  const assuranceRef = db.collection('ageAssurance').doc(uid);
+  const now = Date.now();
+  await db.runTransaction(async tx => {
+    const [guardSnap, reuseSnap, assuranceSnap] = await Promise.all([
+      tx.get(memberNormalPilotRef), tx.get(reuseRef), tx.get(assuranceRef),
+    ]);
+    // A failed/ambiguous provider start never gives us permission to charge
+    // again. This record is intentionally NOT refreshed or overwritten.
+    if (guardSnap.exists) {
+      throw new HttpsError('resource-exhausted','The single member maintenance verification has already been authorised. No further paid checks are permitted.');
+    }
+    const reuse = reuseSnap.data() ?? {};
+    if (reuse.uid !== uid || reuse.status !== 'approved_for_reuse' || reuse.memberConsent !== true) {
+      throw new HttpsError('failed-precondition','A consented and administrator-approved existing-check request is required.');
+    }
+    const age = assuranceSnap.data() ?? {};
+    if (diditPass(age) || age.sessionId || age.status === 'CREATING') {
+      throw new HttpsError('failed-precondition','An existing account-linked Didit verification or session must be reviewed before another check can start.');
+    }
+    tx.create(memberNormalPilotRef, {
+      uid, status: 'authorised', authorisedBy: identity.uid,
+      authorisedAt: FieldValue.serverTimestamp(), authorisedAtMs: now,
+      expiresAtMs: now + 48 * 3600000,
+      chargeAcknowledged: true, maxProviderSessionCreations: 1,
+      purpose: 'account-bound-live-identity-test-during-public-pause',
+    });
+  });
+  return { authorised: true, memberEmailMasked: maskSecurityEmail(user.email), expiresInHours: 48 };
+});
+
+export const myDiditMemberNormalPilot = onCall({ region: REGION }, async request => {
+  const identity = await requireActiveIdentity(request);
+  const [pilotSnap, ageSnap] = await Promise.all([
+    memberNormalPilotRef.get(), db.collection('ageAssurance').doc(identity.uid).get(),
+  ]);
+  const pilot = pilotSnap.data() ?? {};
+  const age = ageSnap.data() ?? {};
+  const verified = diditPass(age);
+  const mine = pilot.uid === identity.uid;
+  let stage = 'not_authorised';
+  if (verified) stage = 'verified';
+  else if (mine && pilot.status === 'claimed') stage = 'session_claimed';
+  else if (mine && pilot.status === 'authorised' && Date.now() < Number(pilot.expiresAtMs ?? 0)) stage = 'ready';
+  else if (mine && pilot.status === 'authorised') stage = 'expired';
+  let existingLaunchUrl: string | null = null;
+  if (mine && pilot.status === 'claimed' && age.sessionId && age.provider === 'didit' && age.environment === 'live') {
+    const session = (await db.collection('diditSessions').doc(String(age.sessionId)).get()).data() ?? {};
+    if (session.uid === identity.uid && session.environment === 'live' && session.status !== 'Declined' &&
+        session.createdAtMs > Date.now() - 6 * 86400_000) {
+      const candidate = cleanText(session.url, 2048);
+      try {
+        const parsed = new URL(candidate);
+        if (parsed.protocol === 'https:' && ['verify.didit.me','verification.didit.me'].includes(parsed.hostname)) {
+          existingLaunchUrl = candidate;
+        }
+      } catch { /* No verified launch URL; do not start another provider session. */ }
+    }
+  }
+  return {
+    stage, verified, approvedForOneAttempt: stage === 'ready',
+    existingLaunchUrl,
+    publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
+  };
+});
+
 export const startAgeAssurance = onCall({
   region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
 }, async request => {
@@ -6979,7 +7074,9 @@ export const startAgeAssurance = onCall({
   // Old clients, ordinary members, and tester-pilot accounts all fail closed.
   const requestedControlledAdminTest = (request.data as { controlledAdminTest?: unknown } | undefined)?.controlledAdminTest === true;
   const controlledAdminTest = DIDIT_VERIFICATION_PAUSED && identity.admin && requestedControlledAdminTest;
-  if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest) throw new HttpsError('failed-precondition',
+  const requestedControlledMemberPilot = (request.data as { controlledMemberPilot?: unknown } | undefined)?.controlledMemberPilot === true;
+  const controlledMemberPilot = DIDIT_VERIFICATION_PAUSED && !identity.admin && requestedControlledMemberPilot;
+  if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest && !controlledMemberPilot) throw new HttpsError('failed-precondition',
     'Didit age verification is temporarily unavailable while Nightjar resolves a technical issue. Please do not retry. No new check was started.');
   const record = (await db.collection('ageAssurance').doc(identity.uid).get()).data() ?? {};
   if (diditPass(record)) return { verified: true, status: 'COMPLETE', configured: true, provider: 'didit', environment: 'live' };
@@ -6987,6 +7084,37 @@ export const startAgeAssurance = onCall({
     // A versioned, account-owned notice acknowledgement is required even for
     // owner-led live pilots. Do not allow a deployed old starter to skip it.
     await requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice');
+    if (controlledMemberPilot) {
+      if (diditMode() !== 'live') throw new HttpsError('failed-precondition','Single member maintenance verification requires live Didit.');
+      const pilotRef = memberNormalPilotRef;
+      const reuseRef = diditReuseRef(identity.uid);
+      const memberAgeRef = db.collection('ageAssurance').doc(identity.uid);
+      // Crucial: claim and consume the single provider start BEFORE any
+      // billable request. A failed/ambiguous start is not automatically retried.
+      await db.runTransaction(async tx => {
+        const [pilotSnap,reuseSnap,ageSnap] = await Promise.all([
+          tx.get(pilotRef), tx.get(reuseRef), tx.get(memberAgeRef),
+        ]);
+        const pilot = pilotSnap.data() ?? {};
+        const reuse = reuseSnap.data() ?? {};
+        const age = ageSnap.data() ?? {};
+        if (pilot.uid !== identity.uid || pilot.status !== 'authorised' ||
+            pilot.maxProviderSessionCreations !== 1 ||
+            Number(pilot.expiresAtMs ?? 0) <= Date.now() ||
+            reuse.uid !== identity.uid || reuse.memberConsent !== true ||
+            reuse.status !== 'approved_for_reuse') {
+          throw new HttpsError('failed-precondition','This member has no unused one-time maintenance check. Do not retry or start a second ID session.');
+        }
+        if (diditPass(age) || age.sessionId || age.status === 'CREATING') {
+          throw new HttpsError('failed-precondition','Nightjar already has a session or verification for this account. Refresh status before proceeding.');
+        }
+        tx.set(pilotRef, {
+          status: 'claimed', claimedAt: FieldValue.serverTimestamp(),
+          claimedByUid: identity.uid,
+        }, { merge: true });
+      });
+      return startDiditSession(identity.uid);
+    }
     if (controlledAdminTest) {
       // A single, account-bound live test for the entire outage. Claim the
       // attempt BEFORE provider contact to avoid repeat billable sessions from
