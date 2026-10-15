@@ -7,7 +7,7 @@ const client=fs.readFileSync('src/platform/firebase-age.ts','utf8');
 const control=fs.readFileSync('src/components/AdminDiditControlCentre.tsx','utf8');
 const workflow=fs.readFileSync('.github/workflows/firebase-hosting-merge.yml','utf8');
 const begin=backend.indexOf('export const adminReconcileDiditApproval = onCall');
-const end=backend.indexOf('export const startAgeAssurance = onCall',begin);
+const end=backend.indexOf('export const adminDiditDiagnostics = onCall',begin);
 assert.ok(begin>0 && end>begin,'owner recovery must be an independent callable');
 const fn=backend.slice(begin,end);
 assert.match(fn,/requireAdminIdentity\(request\)/,'only server-validated owner access allowed');
