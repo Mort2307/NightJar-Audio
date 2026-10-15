@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpenText, Brush, CheckCircle2, FileCheck2, Headphones, Heart, Mic2, Play, Sparkles, Users, type LucideIcon } from 'lucide-react';
+import { ArrowRight, BookOpenText, Brush, CheckCircle2, FileCheck2, Headphones, Heart, Mic2, Play, Sparkles, type LucideIcon } from 'lucide-react';
 import { belongsToLibraryCategory, type LibraryCategory, type LibraryProfile, type LibraryRole } from './ProfessionalLibrary';
 import ContextHelp from './ContextHelp';
 
