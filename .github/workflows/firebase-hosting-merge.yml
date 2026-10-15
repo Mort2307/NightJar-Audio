@@ -62,7 +62,7 @@ jobs:
           gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
             -f ref=main \
             -f 'inputs[scope]=functions:selected' \
-            -f 'inputs[function_names]=adminSetAccountSuspension,adminMemberSecurityDossier,adminRetryMemberSecurityNotice,memberAccessStatus,adminSetAccountRole,suspendFromSecurityAlert,accountIdentity,getLegalAgreementStatus,acceptLegalAgreements,stageRegistrationIntent,ageStatus' \
+            -f 'inputs[function_names]=adminSetAccountSuspension,adminMemberSecurityDossier,adminRetryMemberSecurityNotice,memberAccessStatus,adminSetAccountRole,suspendFromSecurityAlert,accountIdentity,getLegalAgreementStatus,acceptLegalAgreements,stageRegistrationIntent' \
             -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
           RUN_ID=""
           for attempt in $(seq 1 48); do
