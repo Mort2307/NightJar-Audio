@@ -11270,3 +11270,46 @@ textarea:focus-visible,
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* Existing Didit KYC can be requested for review without opening a new ID
+ * session or treating a consent form as identity verification evidence. */
+.nj-didit-reuse-member,.nj-didit-reuse-admin {
+  display:grid;gap:12px;
+  border:1px solid rgba(205,159,100,.27);
+  border-radius:15px;
+  background:rgba(178,127,68,.055);
+  padding:clamp(14px,3vw,22px);
+  color:inherit;
+  min-width:0;
+}
+.nj-didit-reuse-admin{margin-top:12px;}
+.nj-didit-reuse-member h3,.nj-didit-reuse-admin h3{margin:0;font-size:1.16rem;}
+.nj-didit-reuse-member p,.nj-didit-reuse-admin p{
+  font-size:13px;line-height:1.65;color:inherit;opacity:.9;margin:0;
+}
+.nj-didit-reuse-member >small,.nj-didit-reuse-admin >small{
+  color:inherit;opacity:.7;line-height:1.6;
+}
+.nj-didit-reuse-member .mini-label,.nj-didit-reuse-admin .mini-label{
+  display:inline-flex;align-items:center;gap:7px;
+}
+.nj-didit-reuse-consent{display:flex;align-items:flex-start;gap:12px;line-height:1.6;font-size:13px;}
+.nj-didit-reuse-consent input{flex:0 0 auto;margin-top:4px;accent-color:#cda76e;}
+.nj-didit-reuse-current{display:flex;align-items:flex-start;gap:11px;border:1px solid rgba(147,197,156,.4);
+  background:rgba(86,143,89,.08);border-radius:12px;padding:14px;}
+.nj-didit-reuse-current svg{flex:0 0 auto;}
+.nj-didit-reuse-current >div{display:grid;gap:6px;}
+.nj-didit-reuse-current small{opacity:.7;}
+.nj-didit-reuse-error{color:#f3aaa5!important;}
+.nj-didit-reuse-message{color:#b9deb9!important;}
+.nj-didit-reuse-admin-head{display:flex;justify-content:space-between;align-items:start;gap:14px;flex-wrap:wrap;}
+.nj-didit-reuse-admin-head >div{display:grid;gap:9px;flex:1;min-width:230px;}
+.nj-didit-reuse-entry{border:1px solid rgba(205,159,100,.25);border-radius:12px;padding:16px;display:grid;gap:10px;}
+.nj-didit-reuse-entry-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.nj-didit-reuse-entry-info small{opacity:.7;}
+.nj-didit-reuse-admin-actions{display:flex;flex-wrap:wrap;gap:8px;}
+.nj-didit-reuse-admin-actions button{min-height:40px;}
+@media(max-width:480px){
+  .nj-didit-reuse-admin-actions button{flex:1 1 100%;}
+  .nj-didit-reuse-admin-head>button{width:100%;}
+}
