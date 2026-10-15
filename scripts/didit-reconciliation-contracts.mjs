@@ -26,7 +26,7 @@ assert.match(fn,/decision\.workflow_id !== session\.workflowId/,'fetched respons
 assert.match(fn,/decision\.session_id !== sessionId/,'fetched response must bind to stored session');
 assert.match(fn,/decision\.environment !== 'live'/,'sandbox results cannot grant verification');
 assert.match(fn,/decision\.session_kind !== 'user'/,'business verification does not unlock listeners');
-assert.match(fn,/decision\.status !== 'Approved'/,'provider must explicitly approve');
+assert.match(fn,/\['Approved', 'APPROVED'\]\.includes\(String\(decision\.status\)\)/,'provider must explicitly approve');
 assert.match(fn,/verifiedAdultFromDecision\(decision\)/,'approved documentary 18+ evidence required');
 assert.match(didit,/export const verifiedAdultFromDecision/,'same age validator used for live webhook approval');
 assert.match(fn,/db\.runTransaction/,'account verification update must be atomic');
