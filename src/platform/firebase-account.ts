@@ -20,6 +20,7 @@ export type ClosedBetaRegistrationStatus = {
 
 const registrationStatusCall = httpsCallable<{ email: string }, ClosedBetaRegistrationStatus>(functions, 'closedBetaRegistrationStatus');
 const identityCall = httpsCallable<void, NightjarAccountIdentity>(functions, 'accountIdentity');
+const memberAccessStatusCall = httpsCallable<void,{status:string}>(functions,'memberAccessStatus');
 const roleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; referralCode?: string }, { userId: string; role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; requestedProfessionalRole?: 'creator' | 'writer' | 'editor' | 'artist' | null; status: string }>(functions, 'chooseAccountRole');
 
 export type NightjarProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
@@ -74,6 +75,10 @@ export const nightjarAccount = {
   async identity() {
     const result = await identityCall();
     return result.data;
+  },
+
+  async accessStatus() {
+    return (await memberAccessStatusCall()).data;
   },
 
   async stageRegistration(
