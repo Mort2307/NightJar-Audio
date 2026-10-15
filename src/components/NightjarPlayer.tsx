@@ -11,6 +11,7 @@ import { AudioLines, BookmarkPlus, BookOpenText, ChevronDown, ChevronLeft, Chevr
 import { useNightjarEqualizer } from '../hooks/useNightjarEqualizer';
 import { useNightjarMediaSession } from '../hooks/useNightjarMediaSession';
 import './nightjar-player-premium.css';
+import ContextHelp from './ContextHelp';
 
 export type NightjarPlayerTrack = {
   id: string;
@@ -521,7 +522,7 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         <button className="primary-button" type="submit" disabled={momentSaving}>{momentSaving ? 'Saving…' : 'Save Moment Mark'}</button>
       </form>}
       {showEq && <div id="nj-up-eq" className="nj-up-eq">
-        <div className="nj-up-eq-head"><div><strong>Audio equalizer</strong><small>Choose a preset to turn EQ on automatically.</small></div>
+        <div className="nj-up-eq-head"><div><strong>Audio equalizer <ContextHelp topic="audio-equalizer"/></strong><small>Choose a preset to turn EQ on automatically.</small></div>
           <button type="button" className={equalizer.enabled ? 'nj-up-eq-enable on' : 'nj-up-eq-enable'} onClick={() => void equalizer.toggle()} aria-pressed={equalizer.enabled} disabled={equalizer.busy || simulationMode} aria-busy={equalizer.busy}>{simulationMode ? 'Live only' : equalizer.busy ? 'Connecting…' : equalizer.enabled ? 'EQ ACTIVE · On' : 'EQ Off · Enable'}</button>
         </div>
         <div className="nj-up-presets" aria-label="Equalizer presets">
@@ -530,7 +531,6 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         <div className="nj-up-eq-bands">{(['bass', 'mid', 'treble'] as const).map((band) => <label key={band}><span>{band === 'mid' ? 'Mids' : band === 'treble' ? 'Treble' : 'Bass'} <strong>{equalizer.levels[band] > 0 ? '+' : ''}{equalizer.levels[band]} dB</strong></span><input type="range" min="-12" max="12" step="1" value={equalizer.levels[band]} onChange={(event) => equalizer.updateBand(band, Number(event.target.value))} aria-label={band + ' EQ gain in decibels'}/></label>)}</div>
         {simulationMode && <p className="nj-up-eq-message" role="status">Audio EQ works on actual Nightjar recordings. Simulation mode has no audio stream to process.</p>}
         {equalizer.message && <p className="nj-up-eq-message" role="status">{equalizer.message}</p>}
-        <small className="nj-up-eq-footnote">Presets and sliders enable EQ automatically. If sound does not change, check the status above. Signed Nightjar recordings need browser audio CORS permissions.</small>
       </div>}
       <div className="nj-up-section-toggle">
         <span><Headphones size={17}/> Now playing</span>
