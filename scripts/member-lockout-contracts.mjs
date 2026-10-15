@@ -19,6 +19,7 @@ requireMatch(backend, /memberSecurityActions/, 'Administrator action audit missi
 requireMatch(backend, /ADMIN_EMAILS\.has\(cleanEmail\(authUser\.email\)\)/, 'Owner email safety guard missing');
 requireMatch(backend, /Use the audited suspension control to restore this member first/, 'role status dropdown must not unsuspend');
 requireMatch(backend, /export const memberAccessStatus = onCall/, 'live member access status missing');
+requireMatch(backend, /export const adminMemberSecurityDossier = onCall/, 'owner-only member security evidence is missing');
 requireMatch(backend, /const result = await setMemberSuspension\(/, 'security alert must use lockout helper');
 requireMatch(safety, /type="search"/, 'member search field missing');
 requireMatch(safety, /reason\.trim\(\)\.length < 12/, 'case-note prerequisite missing');
