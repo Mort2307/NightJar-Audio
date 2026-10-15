@@ -165,7 +165,7 @@ export const verifiedAdultFromDecision = (decision: unknown, at = new Date()) =>
   return checks.some((item: unknown) => {
     if (!item || typeof item !== 'object') return false;
     const id = item as Record<string, unknown>;
-    if (id.status !== 'Approved' || typeof id.date_of_birth !== 'string') return false;
+    if (!['Approved', 'APPROVED'].includes(String(id.status)) || typeof id.date_of_birth !== 'string') return false;
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(id.date_of_birth);
     if (!match) return false;
     const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
