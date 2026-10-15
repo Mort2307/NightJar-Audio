@@ -4571,6 +4571,89 @@ export const adminSetDiditPilotAccess = onCall({ region: REGION }, async (reques
   return { email, enabled, unchanged: false };
 });
 
+
+type MemberSuspensionAction = 'suspend' | 'restore';
+
+// Account lockout is independent of workspace/role changes. Auth is disabled in
+// addition to the existing server-side account.status checks. No automatic bans.
+const setMemberSuspension = async (userId: string, action: MemberSuspensionAction, reason: string, administratorId: string) => {
+  if (!userId || userId.includes('/') || userId === administratorId) {
+    throw new HttpsError('invalid-argument', 'Choose a valid non-administrator member.');
+  }
+  const ref = accountRef(userId);
+  const [snapshot, authUser] = await Promise.all([ref.get(), getAuth().getUser(userId)]);
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar member not found.');
+  const account = snapshot.data() ?? {};
+  if (ADMIN_EMAILS.has(cleanEmail(authUser.email)) || ADMIN_EMAILS.has(cleanEmail(account.email)) || account.role === 'admin') {
+    throw new HttpsError('permission-denied', 'Nightjar administrator accounts cannot be suspended here.');
+  }
+
+  const previousStatus = cleanText(account.status, 30) || 'active';
+  const suspended = action === 'suspend';
+  if (!suspended && previousStatus !== 'suspended') {
+    throw new HttpsError('failed-precondition', 'This account is not suspended.');
+  }
+
+  // Deny backend operations immediately, even while an existing Firebase ID
+  // token remains valid. A partial Firebase failure remains fail-closed and
+  // can be retried safely by the administrator.
+  if (suspended) {
+    await ref.set({
+      status: 'suspended',
+      suspendedPriorStatus: previousStatus === 'suspended' ? (account.suspendedPriorStatus || 'active') : previousStatus,
+      suspensionReason: reason,
+      suspendedBy: administratorId,
+      suspendedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  await getAuth().updateUser(userId, { disabled: suspended });
+  if (suspended) await getAuth().revokeRefreshTokens(userId);
+
+  const restoredStatus = account.suspendedPriorStatus === 'pending_review' ? 'pending_review' : 'active';
+  if (!suspended) {
+    await ref.set({
+      status: restoredStatus,
+      suspensionReason: null,
+      suspendedPriorStatus: null,
+      restoredBy: administratorId,
+      restoredAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  const revokedReaderSessions = suspended ? await revokeReaderSessions(userId, undefined, 'administrator_suspension') : 0;
+  await db.collection('memberSecurityActions').add({
+    targetUserId: userId,
+    administratorId,
+    action,
+    reason,
+    previousStatus,
+    resultingStatus: suspended ? 'suspended' : restoredStatus,
+    authDisabled: suspended,
+    revokedReaderSessions,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { userId, status: suspended ? 'suspended' : restoredStatus, authDisabled: suspended, revokedReaderSessions };
+};
+
+export const adminSetAccountSuspension = onCall({ region: REGION }, async (request) => {
+  const administrator = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const userId = cleanText(input.userId, 160);
+  const action = cleanText(input.action, 20);
+  const reason = cleanText(input.reason, 500);
+  if (action !== 'suspend' && action !== 'restore') throw new HttpsError('invalid-argument', 'Choose suspend or restore.');
+  if (reason.length < 12) throw new HttpsError('invalid-argument', 'Provide a specific reviewable reason (at least 12 characters).');
+  return setMemberSuspension(userId, action, reason, administrator.uid);
+});
+
+export const memberAccessStatus = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  if (identity.admin) return { status: 'active' };
+  const snapshot = await accountRef(identity.uid).get();
+  return { status: cleanText(snapshot.data()?.status, 30) || 'active' };
+});
+
 export const adminSetAccountRole = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -4581,14 +4664,15 @@ export const adminSetAccountRole = onCall({ region: REGION }, async (request) =>
   if (!userId || !['listener', 'creator', 'writer', 'editor', 'artist'].includes(role)) {
     throw new HttpsError('invalid-argument', 'Choose a valid Nightjar account role.');
   }
-  if (!['active', 'pending_review', 'suspended'].includes(status)) {
-    throw new HttpsError('invalid-argument', 'Choose a valid account status.');
+  if (!['active', 'pending_review'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Use the audited suspension control for suspending or restoring a member.');
   }
 
   const ref = accountRef(userId);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
   const accountData = snapshot.data() ?? {};
+  if (accountData.status === 'suspended') throw new HttpsError('failed-precondition', 'Use the audited suspension control to restore this member first.');
   const email = cleanEmail(accountData.email);
   if (ADMIN_EMAILS.has(email)) {
     throw new HttpsError('failed-precondition', 'Owner administrator accounts cannot be reassigned here.');
@@ -8708,13 +8792,13 @@ export const suspendFromSecurityAlert = onCall({ region: REGION }, async (reques
     throw new HttpsError('failed-precondition', 'Failed-login alerts are evidence only and cannot suspend the targeted account.');
   }
 
-  await accountRef(String(data.userId)).set({
-    status: 'suspended',
-    suspendedBy: admin.uid,
-    suspendedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  const revokedCount = await revokeReaderSessions(String(data.userId), undefined, 'admin_security_action');
+  const result = await setMemberSuspension(
+    String(data.userId),
+    'suspend',
+    'Administrator-reviewed security alert ' + alertId,
+    admin.uid,
+  );
+  const revokedCount = result.revokedReaderSessions;
 
   await alertRef.set({
     status: 'actioned',
