@@ -167,8 +167,8 @@ export default function UserProfileStudio({
           <legend>Public profile header</legend>
           <p>Your profile headline appears on the header image. Choose the classic Midnight Gold look or show your approved portrait in the background.</p>
           <div className="nj-profile-cover-options">
-            <label><input type="radio" name="nightjar-profile-cover" value="cinematic" checked={profile.headerImageMode !== 'portrait'} onChange={()=>setProfile((current:any)=>({...current,headerImageMode:'cinematic'}))}/> Cinematic NightJar header</label>
-            <label><input type="radio" name="nightjar-profile-cover" value="portrait" checked={profile.headerImageMode === 'portrait'} onChange={()=>setProfile((current:any)=>({...current,headerImageMode:'portrait'}))}/> Use my approved profile photo</label>
+            <label><input type="radio" name="nightjar-profile-cover" value="cinematic" checked={profile.headerImageMode === 'cinematic'} onChange={()=>setProfile((current:any)=>({...current,headerImageMode:'cinematic'}))}/> Cinematic NightJar header</label>
+            <label><input type="radio" name="nightjar-profile-cover" value="portrait" checked={profile.headerImageMode !== 'cinematic'} onChange={()=>setProfile((current:any)=>({...current,headerImageMode:'portrait'}))}/> Use my approved profile photo</label>
           </div>
           {profile.headerImageMode === 'portrait' && !profile.avatarUrl && <small>Upload a portrait and wait for approval before it can appear publicly. The Midnight Gold header stays visible until then.</small>}
         </fieldset>
