@@ -5875,6 +5875,7 @@ function App() {
               loading={adminOverviewLoading}
               onRefresh={() => { void loadAdminOverview(); }}
               onAction={changeAccountSuspension}
+              onOpenProfile={(userId) => openLiveMemberProfile(userId)}
             />}
             {canAdmin && adminWorkspace === 'security' && <AdminSecurityAlerts
               alerts={securityAlerts}
