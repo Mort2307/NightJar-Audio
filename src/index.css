@@ -11313,3 +11313,59 @@ textarea:focus-visible,
   .nj-didit-reuse-admin-actions button{flex:1 1 100%;}
   .nj-didit-reuse-admin-head>button{width:100%;}
 }
+
+/* Didit existing-verification support state: approval authorises reuse enquiry
+ * only. Use distinct visual language from the green Verified 18+ result. */
+.nj-didit-reuse-guide {
+  border: 1px solid rgba(205,159,100,.28);
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: rgba(255,255,255,.025);
+}
+.nj-didit-reuse-guide summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 13px;
+}
+.nj-didit-reuse-guide summary::-webkit-details-marker {display:none;}
+.nj-didit-reuse-guide dl {margin: 14px 0 0;display:grid;gap:7px;}
+.nj-didit-reuse-guide dt {font-size:13px;font-weight:700;color:inherit;}
+.nj-didit-reuse-guide dd {margin:0 0 7px;font-size:12px;line-height:1.6;opacity:.84;}
+.nj-didit-reuse-stage {
+  display:grid;
+  justify-items:start;
+  gap:8px;
+  padding:14px;
+  border-radius:12px;
+  background:rgba(255,255,255,.025);
+  border:1px solid rgba(220,184,136,.23);
+}
+.nj-didit-reuse-stage strong {font-size:14px;line-height:1.4;}
+.nj-didit-reuse-stage .status-pill {font-size:10px;letter-spacing:.04em;}
+.nj-didit-reuse-approval {
+  display:grid;
+  gap:12px;
+  padding:15px;
+  border:1px solid rgba(210,167,100,.4);
+  border-radius:12px;
+  background:rgba(184,124,59,.07);
+}
+.nj-didit-reuse-approval .primary-button {
+  display:inline-flex;justify-content:center;gap:8px;align-items:center;
+  min-height:46px;
+  width:100%;
+}
+.nj-didit-reuse-approval .primary-button:disabled {opacity:.45;cursor:not-allowed;}
+.nj-didit-reuse-next {
+  display:flex;align-items:flex-start;gap:9px;
+  padding:13px;
+  border-radius:12px;
+  border:1px solid rgba(216,178,107,.42);
+  background:rgba(177,126,61,.09);
+  line-height:1.6;
+}
+.nj-didit-reuse-next svg {flex:0 0 auto;margin-top:2px;color:#efca90;}
+.nj-didit-reuse-admin-actions button {flex:1 1 190px;}
