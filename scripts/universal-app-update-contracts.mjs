@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const app = fs.readFileSync('src/App.tsx', 'utf8');
+const settings = fs.readFileSync('src/components/NightjarSettings.tsx', 'utf8');
+const update = fs.readFileSync('src/components/AppUpdateControl.tsx', 'utf8');
+const pwa = fs.readFileSync('src/platform/pwa.ts', 'utf8');
+const sw = fs.readFileSync('public/service-worker.js', 'utf8');
+const css = fs.readFileSync('src/index.css', 'utf8');
+const notes = app.slice(app.indexOf('<section className="notification-popover"'), app.indexOf('notification-empty'));
+assert.ok(notes.length>500,'header notifications are present');
+assert.match(notes,/<div className=\{nightjarUpdate\?\.updateAvailable \? 'nightjar-update-notification has-update' : 'nightjar-update-notification'\}/,
+  'the update entry appears in the notification bell for all members, not only if update is detected');
+assert.match(notes,/Check for updates/,'manual check is always available in the notification bell');
+assert.match(notes,/onClick=\{\(\) => void checkLatestNightjarUpdate\(\)\}/,'the manual check performs a live version comparison');
+assert.match(notes,/Update now/,'available updates show a direct apply action');
+assert.match(notes,/\/recover\.html/,'stuck devices can always access the recovery link');
+assert.match(app,/void checkLatestNightjarUpdate\(\); \} setNotificationsOpen/,'opening the notification bell refreshes the version check');
+assert.match(app,/setNightjarUpdate\(result\)/,'version comparison updates the notifications state');
+assert.match(app,/checkNightjarUpdate\(\)/,'updates are compared with server-published build metadata');
+assert.match(settings,/APP UPDATES · EVERY MEMBER/,'settings surface is role independent');
+const topSettings = settings.slice(settings.indexOf('export default function NightjarSettings'),settings.indexOf('nj-settings-master-disclosure'));
+assert.match(topSettings,/<AppUpdateControl compact\/>/,'update action is at top of Settings');
+assert.doesNotMatch(topSettings, /\{administrator &&[^\n]*<AppUpdateControl/, 'member update controls are not admin-gated');
+assert.match(update,/applyNightjarSafeUpdate\(\)/,'member updates use the safe FCM-preserving apply method');
+assert.match(pwa,/registration\.waiting\?\.postMessage\(\{ type: 'SKIP_WAITING' \} \)/,'waiting worker can be activated');
+assert.match(pwa,/startsWith\('nightjar-'\)/,'safe updates clear only app-shell caches');
+assert.match(pwa,/cache: 'no-store'/,'version manifest comparison bypasses stale caches');
+assert.match(sw,/url\.pathname === '\/version\.json'/,'service worker never caches the version check');
+assert.match(css,/\.nightjar-update-notification-actions/,'notifications update actions are mobile-styled');
+assert.match(css,/\.nj-member-update-quick-access/,'settings update entry has shared mobile layout');
+console.log('Nightjar universal app updates, notification controls and safe cached-build recovery PASS.');
