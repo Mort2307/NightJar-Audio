@@ -11259,3 +11259,14 @@ textarea:focus-visible,
   .nj-didit-control-step { gap: 8px; }
   .nj-didit-control-actions > :is(a,button) { flex-basis: 100%; }
 }
+
+/* Existing-approved-session recovery never starts a new age check. */
+.nj-didit-control-recovery-message {
+  padding: 12px 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(214,182,126,.4);
+  background: rgba(166,127,71,.08);
+  color: #f0d8af;
+  font-size: 13px;
+  line-height: 1.6;
+}
