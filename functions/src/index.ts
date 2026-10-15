@@ -7030,6 +7030,21 @@ export const adminAuthoriseDiditMemberNormalPilot = onCall({
   return { authorised: true, memberEmailMasked: maskSecurityEmail(user.email), expiresInHours: 48 };
 });
 
+export const adminDiditMemberNormalPilotStatus = onCall({ region: REGION }, async request => {
+  requireAdminIdentity(request);
+  const snap = await memberNormalPilotRef.get();
+  const record = snap.data() ?? {};
+  return {
+    status: record.status === 'authorised' || record.status === 'claimed' ? record.status : 'unused',
+    memberUid: cleanText(record.uid, 128) || null,
+    authorisedAt: toIso(record.authorisedAt),
+    claimedAt: toIso(record.claimedAt),
+    expiresAtMs: Number(record.expiresAtMs ?? 0) || null,
+    chargeAcknowledged: record.chargeAcknowledged === true,
+    publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
+  };
+});
+
 export const myDiditMemberNormalPilot = onCall({ region: REGION }, async request => {
   const identity = await requireActiveIdentity(request);
   const [pilotSnap, ageSnap] = await Promise.all([
