@@ -1,0 +1,572 @@
+/* NightJar Midnight Gold | App-wide refinement
+   User-recording audit, 2026-10-15.
+   Works on real app components (not just colour tokens), and yields fully to
+   Vision Access colour overrides when a member activates one. */
+
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) {
+  --nj-rf-panel:#12100f;
+  --nj-rf-raised:#1b1611;
+  --nj-rf-border:rgba(221,178,106,.28);
+  --nj-rf-muted:#c5b8a4;
+  --nj-rf-gold:#e2bd80;
+  --nj-rf-radius:17px;
+}
+
+/* Editorial typography and readable minimums for ordinary UI metadata. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .mini-label,.eyebrow,.track-index,.nj-up-kicker,
+  .nj-listener-discovery-eyebrow,.nj-pro-library-person-role
+) {
+  font-size:clamp(10px,1.3vw,12px);
+  line-height:1.45;
+  letter-spacing:.12em;
+  color:#e0bd84;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-personal-home,.nj-pro-library,.nj-listener-discovery,
+  .nj-spotlight-experience,.creator-profile-modal,.nj-settings-master-disclosure
+) {
+  color:#f3ebdf;
+  -webkit-font-smoothing:antialiased;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-personal-home p,.nj-pro-library p,.nj-listener-discovery p,
+  .nj-settings-master-disclosure p,.nj-spotlight-section-head>p
+) {
+  line-height:1.58;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-settings-master-disclosure,.nj-pro-library-banner,.nj-listener-discovery-hero,
+  .nj-home-section,.nj-workspace-fold
+) {
+  border-color:var(--nj-rf-border);
+  border-radius:var(--nj-rf-radius);
+  background:linear-gradient(149deg,#1b1611,#0d0c0a 82%);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-home-section-toggle,.nj-workspace-fold-trigger,.nj-settings-master-disclosure>summary
+) {
+  min-height:53px;
+  padding:12px clamp(12px,2vw,17px);
+  color:#f3ebdf;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-home-section-toggle strong,.nj-workspace-fold-trigger strong,
+  .nj-settings-master-title strong
+) {
+  font-size:clamp(14px,1.7vw,16px);
+  font-weight:650;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-home-section-toggle small,.nj-workspace-fold-trigger small,.nj-settings-master-title small
+) {font-size:12px;color:var(--nj-rf-muted);}
+
+/* Spotlight: keep first on Home without letting introductory copy consume
+   an entire mobile viewport; preserve server-selected fair rotation. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-experience {
+  padding-block:18px 26px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head {
+  padding-bottom:15px;
+  margin-bottom:15px;
+  gap:8px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head h2 {
+  font-size:clamp(30px,6.5vw,53px);
+  line-height:1.09;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head>p {
+  max-width:58ch;
+  font-size:13px;
+  color:#cabbab;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-promises {
+  margin-top:2px;
+  gap:7px 13px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-promises span {
+  font-size:11px;
+  color:#d9c6a8;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card {
+  border:1px solid rgba(222,177,107,.37);
+  border-radius:16px;
+  background:linear-gradient(155deg,#231910,#0b0a09 78%);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card::after {
+  border-color:rgba(221,178,106,.1);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-eyebrow {
+  color:#d8b781;
+  font-size:10px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-editorial {
+  margin-top:2px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-story {
+  min-width:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-story-text {
+  color:#c8b9a5;
+  overflow-wrap:anywhere;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card-actions button {
+  min-height:44px;
+  font-size:12px;
+}
+
+/* Every published creator profile should have one visual treatment,
+   including the less frequently used CreatorProfile entry point. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .creator-profile-modal.nj-cinema-creator-legacy {
+  background:#090807;
+  border:1px solid var(--nj-rf-border);
+  border-radius:19px;
+  width:min(800px,100%);
+  max-height:min(95dvh,920px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-head {
+  position:sticky;
+  top:0;
+  z-index:4;
+  background:rgba(10,9,8,.96);
+  border-color:var(--nj-rf-border);
+  backdrop-filter:blur(12px);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-head h2 {
+  font-size:clamp(25px,3vw,34px);
+  color:#f5e7d3;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-body {
+  display:flex;
+  flex-direction:column;
+  gap:13px;
+  padding:0 clamp(14px,3vw,24px) 24px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-hero.nj-cinema-legacy-hero {
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:11px 17px;
+  border:0;
+  padding:0 0 12px;
+  margin:0;
+  overflow:visible;
+  isolation:isolate;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-legacy-cover {
+  grid-column:1/-1;
+  position:relative;
+  height:clamp(156px,24vw,215px);
+  margin-inline:calc(-1 * clamp(14px,3vw,24px));
+  overflow:hidden;
+  background:radial-gradient(ellipse at 76% 23%,#634126 0%,transparent 51%),linear-gradient(110deg,#100e0b,#25190f 60%,#070707);
+  border-bottom:1px solid var(--nj-rf-border);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-legacy-cover img {
+  position:absolute;
+  right:0;
+  top:0;
+  width:55%;
+  height:100%;
+  object-fit:cover;
+  opacity:.76;
+  -webkit-mask-image:linear-gradient(90deg,transparent,black 39%);
+  mask-image:linear-gradient(90deg,transparent,black 39%);
+}
+.nj-cinema-legacy-cover img.nj-cinema-banner-lowres {display:none;}
+.nj-cinema-legacy-cover>span {
+  position:absolute;
+  z-index:1;
+  left:26px;
+  top:39%;
+  color:#e3c290;
+  font-size:10px;
+  letter-spacing:.22em;
+}
+.nj-cinema-legacy-cover em {
+  display:block;
+  max-width:220px;
+  margin-top:13px;
+  color:#fff0d8;
+  font:italic 400 clamp(25px,4vw,40px)/1.1 Georgia,serif;
+  letter-spacing:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-avatar {
+  width:clamp(86px,13vw,107px);
+  height:clamp(86px,13vw,107px);
+  position:relative;
+  margin:-33px 0 0 3px;
+  border:3px solid #e0bb7e;
+  border-radius:50%;
+  box-shadow:0 0 0 4px #090807,0 0 0 5px rgba(216,172,100,.47);
+  z-index:2;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-avatar img {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:50%;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .nj-cinema-legacy-identity {
+  min-width:0;
+  padding-top:10px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .nj-cinema-legacy-identity h3 {
+  font-size:clamp(26px,4vw,39px);
+  color:#f4e8d6;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-hero .writer-discovery-actions {
+  grid-column:1/-1;
+  display:flex;
+  justify-content:flex-start;
+  gap:8px;
+  padding:0;
+  border:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-hero .writer-discovery-actions button {
+  flex:1 1 auto;
+  min-height:44px;
+  background:#17130f;
+  border-color:var(--nj-rf-border);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-hero .writer-discovery-actions button:first-child {
+  background:linear-gradient(110deg,#edcd97,#c89b62);
+  color:#120c08;
+  border-color:#e3c18d;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .public-profile-metrics {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:0;
+  border:1px solid var(--nj-rf-border);
+  border-radius:13px;
+  background:#15110d;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .public-profile-metrics>div {
+  display:grid;
+  justify-items:center;
+  min-width:0;
+  min-height:65px;
+  padding:10px 4px;
+  border:0;
+  background:transparent;
+  border-radius:0;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .public-profile-metrics>div+div {
+  border-left:1px solid rgba(213,175,111,.22);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .public-profile-metrics strong {
+  font:400 clamp(20px,2.5vw,27px)/1.1 Georgia,serif;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .public-profile-metrics span {font-size:10px;color:#c3b49e;}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-featured-releases {
+  order:3;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .nj-cinema-legacy-releases {
+  order:4;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-body>:not(
+  .creator-profile-hero,.public-profile-metrics,.creator-featured-releases,.nj-cinema-legacy-releases
+) {order:5;}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy :is(
+  .creator-profile-release,.public-role-profile,.creator-featured-releases,.creator-profile-releases
+) {
+  border-color:var(--nj-rf-border);
+  background:linear-gradient(135deg,#1a1510,#0b0a08 83%);
+  border-radius:13px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy :is(
+  .creator-featured-releases,.creator-profile-releases
+) {padding:14px;}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-legacy-release-art {
+  float:left;
+  width:80px;
+  height:80px;
+  margin:0 12px 8px 0;
+  object-fit:cover;
+  border-radius:9px;
+  border:1px solid var(--nj-rf-border);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy :is(
+  .creator-profile-release strong,.creator-profile-releases h3,.creator-featured-releases h3
+) {
+  font:400 clamp(19px,2.6vw,27px)/1.23 Georgia,serif;
+  color:#f6e7ce;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-release p {
+  font-size:12px;
+  color:var(--nj-rf-muted);
+}
+
+/* Progressive disclosure: all profile data still reachable, but not a giant
+   wall of labels before the creator's catalogue. */
+.premium-public-profile .nj-cinema-optional-details {
+  min-width:0;
+  border:1px solid var(--portrait-line,var(--line));
+  border-radius:13px;
+  background:var(--portrait-surface,var(--panel));
+  overflow:hidden;
+}
+.premium-public-profile .nj-cinema-optional-details>summary {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  cursor:pointer;
+  min-height:47px;
+  padding:11px 14px;
+  color:var(--ivory);
+  font-size:13px;
+  font-weight:650;
+  list-style:none;
+}
+.premium-public-profile .nj-cinema-optional-details>summary::-webkit-details-marker{display:none;}
+.premium-public-profile .nj-cinema-optional-details>summary:focus-visible {
+  outline:3px solid var(--portrait-accent,var(--ivory));
+  outline-offset:-3px;
+}
+.premium-public-profile .nj-cinema-optional-details>summary svg {flex:none;color:var(--portrait-accent,var(--ivory));}
+.premium-public-profile .nj-cinema-optional-details[open]>summary svg {transform:rotate(180deg);}
+.premium-public-profile .nj-cinema-optional-details-body {display:grid;gap:12px;padding:3px 14px 14px;}
+.premium-public-profile .nj-cinema-optional-details-body .creator-profile-tags {display:flex;flex-wrap:wrap;gap:6px;}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-optional-details {
+  border-color:var(--nj-rf-border);
+  background:linear-gradient(145deg,#19150f,#100e0c);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-cinema-optional-details>summary {
+  color:#f4e7d6;
+}
+
+/* Public profiles: replace residual plum/purple panels across all roles with
+   a single hierarchy; keep danger, verification and moderation colours alone. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .role-public-professional,.public-role-profile,.role-public-detail-card,
+  .public-showcase-intro,.public-artist-portfolio,.premium-listener-signature,
+  .public-credit-list>article,.public-artist-grid>article,
+  .editor-public-professional,.nj-public-profile-about
+) {
+  border-color:var(--nj-rf-border);
+  background:linear-gradient(147deg,#1a1611,#0d0c0a 87%);
+  color:#f3eadd;
+  border-radius:15px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .role-public-professional,.public-role-profile,.editor-public-professional
+) {padding:clamp(15px,2.2vw,22px);}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .role-public-professional h3,.public-role-profile h3,
+  .public-artist-portfolio h3,.public-showcase-intro h3,
+  .editor-public-professional h3
+) {
+  color:#f5e5ca;
+  font-family:Georgia,serif;
+  font-weight:400;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .role-public-professional p,.public-role-profile p,.public-showcase-intro p
+) {color:#d2c4b0;line-height:1.65;font-size:13px;}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .role-public-fact-grid>div,.editor-public-facts>div
+) {
+  border-color:rgba(214,173,103,.23);
+  background:#14110e;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile :is(
+  .creator-profile-tags span,.profile-activity-badges span,.editor-public-skills span
+) {
+  color:#e9d6b6;
+  border-color:rgba(215,177,111,.28);
+  background:rgba(214,175,110,.08);
+}
+
+/* Player: the transcript is a reading space. Increase separation from audio
+   transport, remove muddy brown fill, and provide readable paragraph rhythm. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-sheet {
+  background:radial-gradient(ellipse at 86% 0%,rgba(192,142,77,.13),transparent 40%),#0c0a09;
+  border-color:rgba(221,178,106,.37);
+  box-shadow:0 25px 90px rgba(0,0,0,.8);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-header {
+  padding-bottom:12px;
+  border-bottom:1px solid rgba(221,178,106,.19);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-identity h2 {
+  color:#f5e5ca;
+  font:400 clamp(25px,4vw,35px)/1.12 Georgia,serif;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-transcript {
+  background:#080807;
+  border-color:rgba(221,178,106,.42);
+  border-radius:17px;
+  box-shadow:0 6px 25px rgba(0,0,0,.28);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-transcript-heading {
+  padding:5px 16px 11px;
+  border-bottom:1px solid rgba(221,178,106,.15);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-transcript-body {
+  padding:13px clamp(17px,3vw,26px) 25px;
+  line-height:1.7;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-transcript-body p {
+  font-size:clamp(15px,1.8vw,18px);
+  line-height:1.72;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-progress {
+  margin-block:16px 10px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-cover {
+  border-color:rgba(221,178,106,.46);
+  border-radius:13px;
+}
+
+/* Unify compact info cards in directory, catalogue and professional workspaces. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-pro-library-person,.nj-listener-discovery-release,.nj-listener-discovery-category,
+  .track-card,.panel-card,.featured-card
+) {
+  border:1px solid rgba(221,178,106,.29);
+  border-radius:16px;
+  box-shadow:inset 0 1px rgba(245,218,168,.05),0 12px 32px rgba(0,0,0,.23);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-pro-library-person {
+  padding:clamp(13px,2vw,20px);
+  background:linear-gradient(140deg,#19140f,#0c0b09);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-pro-library-person :is(
+  h3,.nj-pro-library-headline
+) {
+  color:#f7e8d1;
+  font-family:Georgia,serif;
+  font-weight:400;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-pro-library-person :is(
+  p,small,.nj-pro-library-summary,.nj-pro-library-meta
+) {color:#cdbda5;font-size:12px;line-height:1.55;}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-pro-library-actions button {
+  min-height:43px;
+  font-size:12px;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-listener-discovery-hero {
+  padding:clamp(18px,3.5vw,30px);
+  background:radial-gradient(ellipse at 92% -5%,rgba(191,132,61,.16),transparent 45%),#100d0a;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-listener-discovery-category strong {
+  font-size:15px;
+  color:#f2e6d3;
+}
+
+/* Touch targets and safe-area keep the compact gold nav functional. */
+@media(max-width:700px) {
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) {
+    --nj-mobile-dock-clearance:84px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav {
+    height:66px;
+    max-height:66px;
+    bottom:calc(7px + env(safe-area-inset-bottom,0px));
+    padding:4px;
+    border-radius:18px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav button {
+    padding:5px 1px;
+    gap:4px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav button>.nj-mobile-nav-label {
+    font-size:clamp(9px,2.5vw,11px);
+    line-height:1.05;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head {
+    padding-bottom:12px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head h2 {
+    font-size:clamp(30px,8vw,43px);
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-section-head>p {
+    font-size:12px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-editorial-grid {
+    grid-auto-columns:minmax(260px,min(83vw,355px));
+    gap:11px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-portrait {
+    height:190px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-story {
+    gap:7px;
+    padding:14px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-story h3 {
+    font-size:clamp(26px,7vw,34px);
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-card-actions .primary-button {
+    min-height:44px;
+    padding:9px 11px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy.creator-profile-modal {
+    width:100%;
+    height:100dvh;
+    max-height:100dvh;
+    border:0;
+    border-radius:0;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-head {
+    padding:12px 16px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-body {
+    padding-inline:15px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-hero.nj-cinema-legacy-hero {
+    grid-template-columns:87px minmax(0,1fr);
+    gap:10px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .nj-cinema-legacy-cover {
+    margin-inline:-15px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-creator-legacy .creator-profile-avatar {
+    width:79px;
+    height:79px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-sheet {
+    border-radius:17px;
+    padding:12px 14px 18px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-up-transcript-body p {
+    font-size:16px;
+  }
+}
+@media(max-width:370px) {
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-pro-library-actions button {
+    font-size:11px;
+    padding:8px;
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav button>.nj-mobile-nav-label {font-size:9px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .premium-public-profile .nj-cinema-optional-details>summary svg {
+    transition:none;
+  }
+}
+
+/* Vision Access keeps contrast overrides, typography and motion preferences.
+   Disclosures are still useful without forcing the brand colours. */
+:root[data-nightjar-vision] .premium-public-profile .nj-cinema-optional-details {
+  border:2px solid var(--line);
+  background:var(--panel);
+  color:var(--ivory);
+}
+:root[data-nightjar-vision] .premium-public-profile .nj-cinema-optional-details>summary {color:var(--ivory);}
+:root[data-nightjar-vision] .nj-cinema-creator-legacy .nj-cinema-legacy-cover {
+  background:var(--panel);
+  border-color:var(--line);
+}
+:root[data-nightjar-vision] .nj-cinema-creator-legacy .nj-cinema-legacy-cover img {display:none;}
+:root[data-nightjar-vision] .nj-cinema-creator-legacy .nj-cinema-legacy-cover :is(span,em) {color:var(--ivory);}
+:root[data-nightjar-vision] .nj-cinema-creator-legacy .creator-profile-avatar {
+  border-color:var(--line);
+  box-shadow:none;
+}

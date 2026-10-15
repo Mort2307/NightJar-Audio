@@ -58,4 +58,21 @@ assert.match(profile, /release\.artworkUrl/, 'Real approved catalogue artwork is
 assert.match(directory, /belongsToLibraryCategory\(person,category\)/, 'Directory verified crescent must be restricted to approved professional membership');
 assert.match(cinema, /data-nightjar-vision/, 'Alternate low-vision palettes must remain usable');
 
+// Third-pass production polish: structural consistency from the October mobile recording.
+const polish = load('src/styles/midnight-gold-refinement.css');
+const oldCreator = load('src/components/CreatorProfile.tsx');
+assert.match(main, /import '\.\/styles\/midnight-gold-refinement\.css';/, 'Refinement must be imported');
+assert.ok(main.indexOf('midnight-gold-refinement.css') < main.indexOf('vision-access.css'), 'Vision Access stylesheet must remain the final colour override');
+assert.match(profile, /className="nj-cinema-optional-details"/, 'Public profile optional genres and interests must be collapsible');
+assert.match(profile, /Specialties, genres & preferences/, 'Advanced specialties remain discoverable');
+assert.match(profile, /id="nj-cinema-work"/, 'Publication content remains the primary profile landing');
+assert.match(oldCreator, /nj-cinema-creator-legacy/, 'CreatorProfile alternate route must use consistent premium layout');
+assert.match(oldCreator, /nj-cinema-legacy-cover/, 'Alternate CreatorProfile needs a cinematic cover');
+assert.match(oldCreator, /nj-cinema-legacy-release-art/, 'Alternate CreatorProfile uses existing release artwork');
+assert.match(polish, /\.nj-up-transcript-body/, 'Player reading view receives layout refinements');
+assert.match(polish, /\.nj-spotlight-section-head/, 'Home spotlight hierarchy receives spacing refinements');
+assert.match(polish, /\.nj-mobile-nav/, 'Mobile navigation size and touch targeting are refined');
+assert.match(polish, /data-nightjar-vision/, 'Accessible alternative vision modes remain supported');
+assert.match(polish, /prefers-reduced-motion/, 'Reduced motion remains supported');
+
 console.log('PASS fixed first-place spotlight and themed creator profile hierarchy');

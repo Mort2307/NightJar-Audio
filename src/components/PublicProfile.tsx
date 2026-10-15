@@ -295,16 +295,26 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {profile.activityBadges.map((badge:any)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}
         </div>}
 
-        {!!roleDetails.roleFocus?.length && <div className="creator-profile-tags">{roleDetails.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
-        {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
+        {(!!roleDetails.roleFocus?.length || !!profile.favouriteTags?.length) && <details className="nj-cinema-optional-details">
+          <summary><span>Interests & creative focus</span><ChevronDown size={16} aria-hidden="true"/></summary>
+          <div className="nj-cinema-optional-details-body">
+            {!!roleDetails.roleFocus?.length && <div className="creator-profile-tags">{roleDetails.roleFocus.map((item: string) => <span key={item}>{item}</span>)}</div>}
+            {!!profile.favouriteTags?.length && <div className="creator-profile-tags">{profile.favouriteTags.map((item: string) => <span key={item}>{item}</span>)}</div>}
+          </div>
+        </details>}
 
         <section id="nj-cinema-collaborate" className="public-role-profile">
           <div className="public-role-profile-head"><div><span className="mini-label">{roleLabel(profileRole).toUpperCase()} IDENTITY</span><h3>{roleConfig.title}</h3></div>{roleDetails.roleAvailability && <strong>{roleDetails.roleAvailability}</strong>}</div>
           <p>{roleDetails.roleBio || roleConfig.description}</p>
-          {!!roleDetails.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{roleDetails.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          {!!roleDetails.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{roleDetails.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          {!!profile.favouriteCategories?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite categories' : 'Relevant categories'}</span><div className="creator-profile-tags">{profile.favouriteCategories.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite tropes' : 'Tropes & themes'}</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+          {(!!roleDetails.roleSpecialties?.length || !!roleDetails.roleSecondary?.length || !!profile.favouriteCategories?.length || !!profile.favouriteTropes?.length) && <details className="nj-cinema-optional-details">
+            <summary><span>Specialties, genres & preferences</span><ChevronDown size={16} aria-hidden="true"/></summary>
+            <div className="nj-cinema-optional-details-body">
+              {!!roleDetails.roleSpecialties?.length && <div className="public-role-group"><span>{roleConfig.specialtiesLabel}</span><div className="creator-profile-tags">{roleDetails.roleSpecialties.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+              {!!roleDetails.roleSecondary?.length && <div className="public-role-group"><span>{roleConfig.secondaryLabel}</span><div className="creator-profile-tags">{roleDetails.roleSecondary.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+              {!!profile.favouriteCategories?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite categories' : 'Relevant categories'}</span><div className="creator-profile-tags">{profile.favouriteCategories.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+              {!!profile.favouriteTropes?.length && <div className="public-role-group"><span>{profileRole === 'listener' ? 'Favourite tropes' : 'Tropes & themes'}</span><div className="creator-profile-tags">{profile.favouriteTropes.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
+            </div>
+          </details>}
           {(roleDetails.roleDetailOne || roleDetails.roleDetailTwo) && <div className="public-role-copy">{roleDetails.roleDetailOne && <div><strong>{roleConfig.detailOneLabel}</strong><p>{roleDetails.roleDetailOne}</p></div>}{roleDetails.roleDetailTwo && <div><strong>{roleConfig.detailTwoLabel}</strong><p>{roleDetails.roleDetailTwo}</p></div>}</div>}
         </section>
 
