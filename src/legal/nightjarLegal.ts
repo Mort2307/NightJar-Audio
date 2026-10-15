@@ -2,6 +2,7 @@ export type NightjarLegalDocumentId = 'platform_terms' | 'privacy_notice' | 'pro
 
 export const NIGHTJAR_LEGAL_VERSION = '2026-10-15.1';
 export const NIGHTJAR_AGE_NOTICE_VERSION = '2026-10-14.3';
+export const NIGHTJAR_PROFESSIONAL_VERSION = '2026-10-09.1';
 
 export type NightjarLegalDocument = {
   id: NightjarLegalDocumentId;
@@ -144,7 +145,7 @@ export const NIGHTJAR_LEGAL_DOCUMENTS: Record<NightjarLegalDocumentId, NightjarL
     id:'professional_terms',
     title:'Nightjar Professional & Content Terms',
     shortTitle:'Professional & Content Terms',
-    version:NIGHTJAR_LEGAL_VERSION,
+    version:NIGHTJAR_PROFESSIONAL_VERSION,
     path:'/legal/professional',
     summary:'Additional rules for VA Creators, Writers, Audio Editors and Artists who upload, collaborate, publish or earn through Nightjar.',
     sections:[
