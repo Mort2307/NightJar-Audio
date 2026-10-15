@@ -3,6 +3,7 @@ import { Bookmark, BookmarkPlus, Clock3, Eye, EyeOff, Heart, ListMusic, Play, Pl
 import { nightjarLibrary } from '../platform/firebase-library';
 import { nightjarExperience, type MomentMark } from '../platform/firebase-experience';
 import { demoLibrary } from '../demo/nightjarDemo';
+import ContextHelp from './ContextHelp';
 import { readDemo, writeDemo } from '../demo/demoSession';
 
 type Props = {
@@ -220,12 +221,11 @@ export default function ListenerLibrary({ onPlayRelease, onPlayMoment, notify, d
       </article>)}
     </div> : <div className="playlist-workspace">
       <article className="research-panel">
-        <div className="research-panel-head"><div><span className="mini-label">NEW PLAYLIST</span><h2>Build your own listening shelf.</h2></div><Plus size={20}/></div>
+        <div className="research-panel-head"><div><span className="mini-label">NEW PLAYLIST</span><h2>Build your own listening shelf. <ContextHelp topic="playlist-privacy"/></h2><small>Private by default</small></div><Plus size={20}/></div>
         <label>Playlist name<input value={playlistTitle} onChange={(e) => setPlaylistTitle(e.target.value)} placeholder="Late night favourites"/></label>
         <div className="playlist-picker">{available.length === 0 ? <span className="taste-empty">Favourite or listen to releases first.</span> : available.map((release: any) => <label key={release.id}><input type="checkbox" checked={selectedReleaseIds.includes(String(release.id))} onChange={(e) => setSelectedReleaseIds((ids) => e.target.checked ? Array.from(new Set([...ids, String(release.id)])) : ids.filter((id) => id !== String(release.id)))}/><span>{release.title}</span></label>)}</div>
         <button className="primary-button" onClick={() => void createPlaylist()}><Plus size={14}/> Save playlist</button>
       </article>
-      <div className="playlist-privacy-note"><Eye size={15}/><div><strong>Playlists are private by default.</strong><span>Only playlists you explicitly share appear on your public Listener profile. Listening history and favourites remain private.</span></div></div>
       <div className="playlist-list">{(library.playlists ?? []).map((playlist: any) => <article className={playlist.publicOnProfile ? 'playlist-card public' : 'playlist-card'} key={playlist.id}><div><span>{playlist.releaseIds?.length ?? 0} releases · {playlist.publicOnProfile ? 'PUBLIC PROFILE' : 'PRIVATE'}</span><strong>{playlist.title}</strong></div><div className="playlist-card-actions"><button className={playlist.publicOnProfile ? 'secondary-button' : 'ghost-button'} onClick={() => void togglePlaylistProfileVisibility(playlist)}>{playlist.publicOnProfile ? <><EyeOff size={13}/> Remove from profile</> : <><Eye size={13}/> Share on profile</>}</button><button className="ghost-button" onClick={() => void removePlaylist(playlist.id)}><Trash2 size={13}/> Delete</button></div></article>)}</div>
     </div>}
   </section>;
