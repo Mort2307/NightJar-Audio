@@ -208,6 +208,51 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Server-approved badge and cover preferences released before the UI."
 
+      # Credits are strictly backend-first. Never expose callable UI while its
+      # Firestore indexes and account-authorised Cloud Functions are missing.
+      - name: Deploy verified credits indexes and functions before Hosting
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          force_credit="${{ contains(github.event.head_commit.message, '[nightjar-credit-release]') }}"
+          if ! grep -Eq '^(functions/src/verified-credits.ts|src/platform/firebase-verified-credits.ts|src/components/VerifiedCreditWorkspace.tsx|src/platform/verified-credit.ts|firestore.indexes.json|src/App.tsx)$' <<< "$changed" && [[ "$force_credit" != 'true' ]]; then
+            echo "No verified-credit changes in this revision."
+            exit 0
+          fi
+          node scripts/verified-credit-release-contracts.mjs
+          deploy_credit_batch() {
+            local scope="$1" functions="${2:-}" start run_id
+            start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [[ "$scope" == "functions:selected" ]]; then
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+                -f ref=main -f "inputs[scope]=$scope" -f "inputs[function_names]=$functions" \
+                -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+            else
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+                -f ref=main -f "inputs[scope]=$scope" -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+            fi
+            run_id=""
+            for attempt in $(seq 1 48); do
+              run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+                | jq -r --arg head "${GITHUB_SHA}" --arg start "$start" \
+                  '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+              if [[ -n "$run_id" ]]; then break; fi
+              sleep 10
+            done
+            if [[ -z "$run_id" ]]; then
+              echo "::error::Required backend scope $scope did not start. Hosting is blocked."
+              exit 1
+            fi
+            gh run watch "$run_id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          }
+          deploy_credit_batch 'firestore:indexes'
+          deploy_credit_batch 'functions:selected' 'claimMyReleaseCredit,inviteCreditedContributor,respondToCreditInvitation,respondToCreditClaim,adminReviewCreditClaim,appealCreditClaim,getCreditClaim,listMyCreditClaims,adminListCreditClaims,getPublicProfile,listNotifications'
+          echo "Verified-credit index and Cloud Functions deployment passed before Hosting."
+
       # A mandatory 18+ release changes shared verification policy embedded in
       # every protected Cloud Function, not just ageStatus. Deploy ALL Functions
       # before Hosting, otherwise older endpoints can still honour tester bypasses.
@@ -881,51 +926,6 @@ jobs:
           deploy_single_batch 'firestore:indexes'
           deploy_single_batch 'functions:selected' 'listPublicProfileConnections'
           echo "Public connections index and the single callable are deployed; safe to publish UI."
-
-      # Credits are strictly backend-first. Never expose callable UI while its
-      # Firestore indexes and account-authorised Cloud Functions are missing.
-      - name: Deploy verified credits indexes and functions before Hosting
-        if: ${{ github.event_name == 'push' }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          changed="$(git diff --name-only HEAD^ HEAD)"
-          force_credit="${{ contains(github.event.head_commit.message, '[nightjar-credit-release]') }}"
-          if ! grep -Eq '^(functions/src/verified-credits.ts|src/platform/firebase-verified-credits.ts|src/components/VerifiedCreditWorkspace.tsx|src/platform/verified-credit.ts|firestore.indexes.json|src/App.tsx)$' <<< "$changed" && [[ "$force_credit" != 'true' ]]; then
-            echo "No verified-credit changes in this revision."
-            exit 0
-          fi
-          node scripts/verified-credit-release-contracts.mjs
-          deploy_credit_batch() {
-            local scope="$1" functions="${2:-}" start run_id
-            start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            if [[ "$scope" == "functions:selected" ]]; then
-              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
-                -f ref=main -f "inputs[scope]=$scope" -f "inputs[function_names]=$functions" \
-                -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
-            else
-              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
-                -f ref=main -f "inputs[scope]=$scope" -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
-            fi
-            run_id=""
-            for attempt in $(seq 1 48); do
-              run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
-                | jq -r --arg head "${GITHUB_SHA}" --arg start "$start" \
-                  '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
-              if [[ -n "$run_id" ]]; then break; fi
-              sleep 10
-            done
-            if [[ -z "$run_id" ]]; then
-              echo "::error::Required backend scope $scope did not start. Hosting is blocked."
-              exit 1
-            fi
-            gh run watch "$run_id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
-          }
-          deploy_credit_batch 'firestore:indexes'
-          deploy_credit_batch 'functions:selected' 'claimMyReleaseCredit,inviteCreditedContributor,respondToCreditInvitation,respondToCreditClaim,adminReviewCreditClaim,appealCreditClaim,getCreditClaim,listMyCreditClaims,adminListCreditClaims,getPublicProfile,listNotifications'
-          echo "Verified-credit index and Cloud Functions deployment passed before Hosting."
 
       - name: Deploy Hosting live
         id: deploy

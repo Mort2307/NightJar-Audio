@@ -77,4 +77,9 @@ assert.equal((hosting.match(/      - name: Deploy verified credits indexes and f
 assert.ok(hosting.indexOf('name: Deploy verified credits indexes and functions before Hosting') <
           hosting.indexOf('name: Deploy Hosting live'),'credit backend must deploy ahead of Hosting');
 assert.match(read('.github/workflows/nightjar-pr-preflight.yml'),/ruby -r yaml -e/,'CI must parse production workflow YAML');
+assert.ok(backendWorkflow.includes('prepare-safe-firestore-indexes.mjs'),'production indexes are merged additively before deploy');
+assert.ok(backendWorkflow.includes('verified-credit-index-readiness.mjs'),'indexes must be READY before changing backends');
+assert.ok(hosting.indexOf('name: Deploy verified credits indexes and functions before Hosting') <
+    hosting.indexOf('name: Enforce mandatory approved Didit access before Hosting'),
+    'credit indexes must be READY before deploying the global verified-18+ Cloud Functions batch');
 console.log('Nightjar verified-credit release contract PASS: identity, permissions, notifications, navigation, pagination, indexes, backend-first release.');

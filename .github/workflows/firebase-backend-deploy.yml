@@ -135,7 +135,17 @@ jobs:
         run: |
           set -euo pipefail
           firebase firestore:indexes --project nightjar-audio --json > "$RUNNER_TEMP/nightjar-remote-indexes.json"
-          node scripts/firestore-index-preservation-guard.mjs "$RUNNER_TEMP/nightjar-remote-indexes.json" firestore.indexes.json
+          # Add only requested indexes; preserve EVERY existing composite index,
+          # single-field override and TTL retention policy. No destructive sync.
+          cp firestore.indexes.json "$RUNNER_TEMP/nightjar-repository-indexes.json"
+          node scripts/prepare-safe-firestore-indexes.mjs \
+            "$RUNNER_TEMP/nightjar-remote-indexes.json" \
+            "$RUNNER_TEMP/nightjar-repository-indexes.json" \
+            "$RUNNER_TEMP/nightjar-union-indexes.json"
+          node scripts/firestore-index-preservation-guard.mjs \
+            "$RUNNER_TEMP/nightjar-remote-indexes.json" \
+            "$RUNNER_TEMP/nightjar-union-indexes.json"
+          cp "$RUNNER_TEMP/nightjar-union-indexes.json" firestore.indexes.json
 
       - name: Propose conservative release batches (read-only)
         if: ${{ inputs.scope == 'plan' }}
@@ -284,6 +294,38 @@ jobs:
           echo "### Nightjar EQ audio CORS" >> "$GITHUB_STEP_SUMMARY"
           echo "Approved Hosting origins can request signed audio through browser CORS." >> "$GITHUB_STEP_SUMMARY"
           echo "This does not grant public Storage access or change signed URL expiry." >> "$GITHUB_STEP_SUMMARY"
+
+      # Firebase accepts index creation requests before composite indexes finish
+      # building. Block the next (index-dependent) Cloud Functions batch until
+      # the exact three verified-credit query indexes report READY.
+      - name: Prepare Cloud SDK for credit index readiness
+        if: ${{ success() && inputs.scope == 'firestore:indexes' }}
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: nightjar-audio
+
+      - name: Require READY verified-credit indexes
+        if: ${{ success() && inputs.scope == 'firestore:indexes' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            gcloud firestore indexes composite list \
+              --database='(default)' --project=nightjar-audio \
+              --format=json > "$RUNNER_TEMP/nightjar-credit-index-states.json"
+            if node scripts/verified-credit-index-readiness.mjs \
+              "$RUNNER_TEMP/nightjar-credit-index-states.json" \
+              "$RUNNER_TEMP/nightjar-repository-indexes.json"; then
+              ready=1
+              break
+            fi
+            sleep 20
+          done
+          if [[ "$ready" != '1' ]]; then
+            echo "::error::New credit indexes are not READY. Block Cloud Functions and Hosting until Firestore completes building them."
+            exit 1
+          fi
 
       # Post-deploy verification is read-only. No webhooks, scheduled jobs,
       # auth callables, email sends, age checks, payments or write APIs are invoked.
