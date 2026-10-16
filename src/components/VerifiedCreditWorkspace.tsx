@@ -91,6 +91,7 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
           </div>}
         {administrator&&<div className="nj-credit-actions">
           {!['rejected','revoked'].includes(item.state)&&<label>Review reason (required for rejection or revocation)<input maxLength={600} value={reviewReasons[item.id]??''} onChange={event=>setReviewReasons(current=>({...current,[item.id]:event.target.value}))} placeholder="Explain the decision" /></label>}
+          {item.appealPending&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'resolve_appeal',reviewReasons[item.id].trim()))}>Resolve appeal with reason</button>}
           {item.state==='uploader_confirmed'&&<button type="button" disabled={busy!==null} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'approve'))}>Approve</button>}
           {!['approved','rejected','revoked'].includes(item.state)&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'reject',reviewReasons[item.id].trim()))}>Reject</button>}
           {item.state==='approved'&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'revoke',reviewReasons[item.id].trim()))}>Revoke</button>}
