@@ -91,6 +91,14 @@ export function buildVerifiedCreditCallables(
       if (!data) throw new HttpsError('not-found','Credit claim not found.');
       if ([data.claimantUserId,data.uploaderUserId].includes(identity.uid)) throw new HttpsError('permission-denied','An independent administrator must review this claim.');
       if (decision === 'approve' && data.state !== 'uploader_confirmed') throw new HttpsError('failed-precondition','Uploader confirmation required.');
+      if (decision === 'approve') {
+        const release = await tx.get(getFirestore().collection('releases').doc(data.releaseId));
+        const releaseData = release.data();
+        const slot = (Array.isArray(releaseData?.contributors) ? releaseData.contributors : []).find((item:any,i:number) => (clean(item?.slotId) || String(i)) === data.contributorSlotId);
+        if (!releaseData || releaseData.status !== 'released' || releaseData.creatorUserId !== data.uploaderUserId || !slot || slot.role !== data.releaseRole || clean(slot.name,100) !== data.creditName) {
+          throw new HttpsError('failed-precondition','Release attribution has changed; this claim must be reviewed again.');
+        }
+      }
       if (decision === 'revoke' && data.state !== 'approved') throw new HttpsError('failed-precondition','Only approved claims can be revoked.');
       if (decision === 'reject' && !activeStates.has(data.state)) throw new HttpsError('failed-precondition','Claim is not pending.');
       const state:ClaimState = decision === 'approve' ? 'approved' : decision === 'revoke' ? 'revoked' : 'rejected';
@@ -101,6 +109,10 @@ export function buildVerifiedCreditCallables(
         reviewReason:clean(input.reason,600),
       });
       tx.create(auditRef(id),{actorUserId:identity.uid,event:'admin_'+decision,at:FieldValue.serverTimestamp(),reason:clean(input.reason,600)});
+      if (state === 'rejected' || state === 'revoked') {
+        const lockId = createHash('sha256').update([data.releaseId,data.contributorSlotId,data.claimantUserId].join('|')).digest('hex');
+        tx.delete(getFirestore().collection('verifiedCreditLocks').doc(lockId));
+      }
     });
     return {state:decision === 'approve'?'approved':decision === 'revoke'?'revoked':'rejected'};
   });
