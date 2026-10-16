@@ -51,13 +51,13 @@ const TRANSITIONS: readonly Transition[] = [
   { from: ['awaiting_uploader'], event: 'uploader_confirm', actor: 'uploader', to: 'uploader_confirmed' },
   { from: ['awaiting_uploader'], event: 'uploader_dispute', actor: 'uploader', to: 'uploader_disputed' },
   { from: ['awaiting_uploader'], event: 'uploader_unsure', actor: 'uploader', to: 'uploader_unsure' },
-  { from: ['uploader_confirmed', 'uploader_disputed', 'uploader_unsure'], event: 'submit_for_admin_review', actor: 'admin', to: 'admin_review' },
+  { from: ['uploader_confirmed', 'uploader_disputed', 'uploader_unsure', 'awaiting_uploader'], event: 'submit_for_admin_review', actor: 'admin', to: 'admin_review' },
   { from: ['admin_review'], event: 'admin_approve', actor: 'admin', to: 'approved' },
   { from: ['admin_review'], event: 'admin_reject', actor: 'admin', to: 'rejected' },
   { from: ['approved'], event: 'admin_revoke', actor: 'admin', to: 'revoked' },
 ];
 
-/** Returns null when the requested transition is not permitted. */
+/** Returns null when the requested transition is not permitted.\n * This is a pure state machine, not an authorization check: backend handlers\n * must verify actor UID, role, evidence and independence of corroboration.\n */
 export function nextCreditClaimState(
   current: CreditClaimState,
   event: CreditClaimEvent,
