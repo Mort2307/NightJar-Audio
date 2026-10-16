@@ -97,14 +97,14 @@ function PersonCard({
   const available=slice.roleAvailability || (person.role===category ? person.roleAvailability : null);
   const Icon=category==='listener' ? Headphones : categories.find(item=>item.id===category)?.icon??Users;
   return <article className="nj-pro-library-person" data-profession={category}>
-    <div className="nj-pro-library-person-top"><div className="nj-pro-library-person-avatar">
+    <button type="button" className="nj-pro-library-person-top nj-directory-identity-trigger" aria-label={'Open '+person.name+' public profile'} onClick={()=>onOpen(person.userId,category)}><div className="nj-pro-library-person-avatar">
       {person.avatarUrl ? <img src={person.avatarUrl} alt="" loading="lazy" decoding="async"/>
         : <span>{person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>}
       {!person.nightjarTeam && category!=='listener' && belongsToLibraryCategory(person,category) &&
         <span className="nj-pro-library-official-moon" aria-label="Official NightJar Creator — approved professional" title="Official NightJar Creator"><Moon size={13} aria-hidden="true"/></span>}
     </div><div className="nj-pro-library-person-title"><div className="nj-pro-library-person-role"><Icon size={13}/>{person.nightjarTeam ? 'Nightjar Team' : roleName[category]}</div>
       <h3>{person.name}</h3><small>{person.handle ? '@'+person.handle.replace(/^@/,'') : 'Nightjar member'}</small>
-    </div></div>
+    </div></button>
     <strong className="nj-pro-library-headline">{roleHeadline}</strong>
     <p className="nj-pro-library-summary">{summary}</p>
     {!!tags.length&&<div className="nj-pro-library-tags">{tags.map(tag=><span key={tag}>{tag}</span>)}</div>}
