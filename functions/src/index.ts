@@ -5437,7 +5437,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     mood: cleanText(input.mood ?? current.mood, 80),
     tags: Array.isArray(input.tags) ? cleanStringList(input.tags, 24) : (current.tags ?? []),
     tropes: Array.isArray(input.tropes) ? cleanStringList(input.tropes, 24) : (current.tropes ?? []),
-    contributors: Array.isArray(input.contributors) ? normaliseReleaseContributors(input.contributors) : normaliseReleaseContributors(current.contributors),
+    contributors: Array.isArray(input.contributors) ? normaliseReleaseContributors(input.contributors, current.contributors) : normaliseReleaseContributors(current.contributors, current.contributors),
     contentRating: typeof input.contentRating !== 'undefined' ? cleanReleaseContentRating(input.contentRating) : cleanReleaseContentRating(current.contentRating),
     seriesTitle: typeof input.seriesTitle !== 'undefined' ? cleanText(input.seriesTitle, 160) || null : current.seriesTitle ?? null,
     episodeNumber: typeof input.episodeNumber !== 'undefined' ? cleanEpisodeNumber(input.episodeNumber) : cleanEpisodeNumber(current.episodeNumber),
@@ -9467,19 +9467,20 @@ const cleanEpisodeNumber = (value: unknown) => {
   return Number.isFinite(number) ? Math.max(0, Math.min(10000, Math.round(number))) : null;
 };
 
-const normaliseReleaseContributors = (value: unknown) => {
+const normaliseReleaseContributors = (value: unknown, existing: unknown = []) => {
   if (!Array.isArray(value)) return [];
   const allowedRoles = new Set([
     'Voice Actor', 'Writer', 'Audio Editor', 'Producer', 'Director',
     'Sound Designer', 'Cover Artist', 'Composer', 'Other',
   ]);
-  return value.slice(0, 24).map((item: any) => {
+  const previous = Array.isArray(existing) ? existing : [];
+  return value.slice(0, 24).map((item: any, index: number) => {
     const role = cleanText(item?.role, 48);
     return {
       // Server-issued immutable contributor slot reference. Legacy credits use
       // their original zero-based position until a controlled migration.
-      slotId: /^[a-f0-9-]{36}$/i.test(String(item?.slotId ?? ''))
-        ? String(item.slotId) : randomUUID(),
+      slotId: previous[index] && previous[index].name === cleanText(item?.name,100) && previous[index].role === (allowedRoles.has(role) ? role : 'Other') && /^[a-f0-9-]{36}$/i.test(String(previous[index].slotId ?? ''))
+        ? previous[index].slotId : randomUUID(),
       userId: cleanText(item?.userId, 160) || null,
       name: cleanText(item?.name, 100),
       role: allowedRoles.has(role) ? role : 'Other',
