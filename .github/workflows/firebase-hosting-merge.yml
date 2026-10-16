@@ -213,14 +213,27 @@ jobs:
       # before Hosting, otherwise older endpoints can still honour tester bypasses.
       # Never automatically start a Didit session or create a billable provider check.
       - name: Enforce mandatory approved Didit access before Hosting
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-didit-mandatory-gate-release]') }}
+        if: ${{ github.event_name == 'push' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          grep -q 'const TESTING_AGE_ASSURANCE_BYPASS = false' functions/src/index.ts
-          grep -q 'const DIDIT_VERIFICATION_PAUSED = true' functions/src/index.ts
+          # Compare against the previous main commit. A flag transition must
+          # NEVER publish the updated age gate before all protected functions
+          # inherit the same real-ID requirements. A tagged rollout may
+          # explicitly repeat deployment for reconciliation.
+          old_paused="$(git show HEAD^:functions/src/index.ts | grep -m1 '^const DIDIT_VERIFICATION_PAUSED =' || true)"
+          current_paused="$(grep -m1 '^const DIDIT_VERIFICATION_PAUSED =' functions/src/index.ts)"
+          old_bypass="$(git show HEAD^:functions/src/index.ts | grep -m1 '^const TESTING_AGE_ASSURANCE_BYPASS =' || true)"
+          current_bypass="$(grep -m1 '^const TESTING_AGE_ASSURANCE_BYPASS =' functions/src/index.ts)"
+          tagged="${{ contains(github.event.head_commit.message, '[nightjar-didit-mandatory-gate-release]') }}"
+          if [[ "$old_paused" == "$current_paused" && "$old_bypass" == "$current_bypass" && "$tagged" != 'true' ]]; then
+            echo "No Didit enforcement changes; protected functions need no redeployment."
+            exit 0
+          fi
+          grep -q '^const TESTING_AGE_ASSURANCE_BYPASS = false' functions/src/index.ts
+          grep -q '^const DIDIT_VERIFICATION_PAUSED = false' functions/src/index.ts
           node scripts/didit-mandatory-gate-contracts.mjs
           START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
@@ -869,10 +882,8 @@ jobs:
           deploy_single_batch 'functions:selected' 'listPublicProfileConnections'
           echo "Public connections index and the single callable are deployed; safe to publish UI."
 
-      # The credits feature includes new callables, account-bound in-app
-      # notifications and composite Firestore queries. Any merge that changes
-      # this feature MUST stage its indexes + backend before the new UI is live.
-      # No PR preview, Didit session, payment, or production write during tests.
+      # Credits are strictly backend-first. Never expose callable UI while its
+      # Firestore indexes and account-authorised Cloud Functions are missing.
       - name: Deploy verified credits indexes and functions before Hosting
         if: ${{ github.event_name == 'push' }}
         shell: bash
@@ -881,42 +892,12 @@ jobs:
         run: |
           set -euo pipefail
           changed="$(git diff --name-only HEAD^ HEAD)"
-          if ! grep -Eq '^(functions/src/verified-credits.ts|src/platform/firebase-verified-credits.ts|src/components/VerifiedCreditWorkspace.tsx|src/platform/verified-credit.ts|firestore.indexes.json|src/App.tsx)        id: deploy
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NIGHTJAR_AUDIO }}
-          channelId: live
-          projectId: nightjar-audio
-
-      - name: Verify deployed version matches commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if curl --fail --silent --show-error --location --max-time 15 \
-              "https://nightjar-audio.web.app/version.json?verify=$GITHUB_SHA" \
-              | jq -e --arg sha "$GITHUB_SHA" '.sourceCommit == $sha' >/dev/null; then
-              echo "Nightjar Hosting smoke test passed for $GITHUB_SHA"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::error::Live Hosting version.json did not match the deployed commit. Verify Hosting immediately."
-          exit 1
-
-      - name: Summarise release
-        if: always()
-        run: |
-          echo "### Nightjar Firebase Hosting production" >> "$GITHUB_STEP_SUMMARY"
-          echo "Commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Hosting: https://nightjar-audio.web.app" >> "$GITHUB_STEP_SUMMARY"
- <<< "$changed"; then
-            echo "No verified-credit dependent changes; existing Hosting release pathway unchanged."
+          force_credit="${{ contains(github.event.head_commit.message, '[nightjar-credit-release]') }}"
+          if ! grep -Eq '^(functions/src/verified-credits.ts|src/platform/firebase-verified-credits.ts|src/components/VerifiedCreditWorkspace.tsx|src/platform/verified-credit.ts|firestore.indexes.json|src/App.tsx)$' <<< "$changed" && [[ "$force_credit" != 'true' ]]; then
+            echo "No verified-credit changes in this revision."
             exit 0
           fi
           node scripts/verified-credit-release-contracts.mjs
-          # Fixed allowlist of exact functions. Production never runs 'all-backend'
-          # and never invokes Didit, sends a verification, or resets approvals.
           deploy_credit_batch() {
             local scope="$1" functions="${2:-}" start run_id
             start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -937,14 +918,14 @@ jobs:
               sleep 10
             done
             if [[ -z "$run_id" ]]; then
-              echo "::error::Backend scope $scope did not start. Do not publish the frontend."
+              echo "::error::Required backend scope $scope did not start. Hosting is blocked."
               exit 1
             fi
             gh run watch "$run_id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           }
           deploy_credit_batch 'firestore:indexes'
           deploy_credit_batch 'functions:selected' 'claimMyReleaseCredit,inviteCreditedContributor,respondToCreditInvitation,respondToCreditClaim,adminReviewCreditClaim,appealCreditClaim,getCreditClaim,listMyCreditClaims,adminListCreditClaims,getPublicProfile,listNotifications'
-          echo "Verified credit indexes and callables passed backend-first release gates."
+          echo "Verified-credit index and Cloud Functions deployment passed before Hosting."
 
       - name: Deploy Hosting live
         id: deploy

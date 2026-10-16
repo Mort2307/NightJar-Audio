@@ -27,6 +27,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Parse production workflows as YAML before allowing merge
+        run: |
+          ruby -r yaml -e 'ARGV.each { |path| YAML.parse_file(path); puts "Valid workflow YAML: #{path}" }' .github/workflows/firebase-hosting-merge.yml .github/workflows/firebase-backend-deploy.yml
       - run: npm ci --no-fund
       - run: npm run validate
 

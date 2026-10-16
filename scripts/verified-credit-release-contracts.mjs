@@ -60,4 +60,18 @@ requirePattern(hosting,/Deploy verified credits indexes and functions before Hos
 requirePattern(hosting,/deploy_credit_batch 'firestore:indexes'/,'release indexes before callables');
 requirePattern(hosting,/deploy_credit_batch 'functions:selected'/,'release callables before hosting');
 assert.ok(backendWorkflow.includes('firestore-index-preservation-guard.mjs'),'prevent deletion of existing production indexes');
+// The Github PR preview workflow runs on main; CI must explicitly parse the
+// PR version of the production workflow or malformed YAML can go unnoticed.
+const diditStage=hosting.slice(hosting.indexOf('name: Enforce mandatory approved Didit access before Hosting'),
+  hosting.indexOf('# Staged account-wide release.'));
+assert.match(diditStage,/git show HEAD\^:functions\/src\/index\.ts/,'Didit policy transitions must auto-trigger complete backend release');
+assert.match(diditStage,/current_paused/,'current age-verification switch is inspected');
+assert.match(diditStage,/old_bypass/,'legacy tester bypass transition is inspected');
+assert.match(diditStage,/DIDIT_VERIFICATION_PAUSED = false/,'mandatory Didit gate must be enabled before deploying');
+assert.match(diditStage,/inputs\[scope\]=functions/,'global Didit policy change requires every protected function');
+assert.equal((hosting.match(/      - name: Deploy Hosting live/g)??[]).length,1,'exactly one live Hosting deploy step');
+assert.equal((hosting.match(/      - name: Deploy verified credits indexes and functions before Hosting/g)??[]).length,1,'exactly one credit backend deploy step');
+assert.ok(hosting.indexOf('name: Deploy verified credits indexes and functions before Hosting') <
+          hosting.indexOf('name: Deploy Hosting live'),'credit backend must deploy ahead of Hosting');
+assert.match(read('.github/workflows/nightjar-pr-preflight.yml'),/ruby -r yaml -e/,'CI must parse production workflow YAML');
 console.log('Nightjar verified-credit release contract PASS: identity, permissions, notifications, navigation, pagination, indexes, backend-first release.');

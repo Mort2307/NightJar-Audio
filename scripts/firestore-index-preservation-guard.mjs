@@ -29,4 +29,27 @@ if (unmanaged.length) {
   console.error('Import/reconcile existing indexes into firestore.indexes.json before any production index deployment.');
   process.exit(1);
 }
-console.log('PASS: all existing production composite indexes are represented in the release manifest; no unmanaged deletion.');
+// Index deployment can also reconcile TTL and single-field overrides.
+// Keep *every* remotely configured override, not only composites.
+if (!Array.isArray(remote.fieldOverrides) || !Array.isArray(manifest.fieldOverrides)) {
+  throw new Error('Cannot establish field override inventory; blocking index deployment.');
+}
+const overrideKey=(entry)=>{
+  const group=String(entry.collectionGroup ?? entry.collection_group ?? '');
+  const field=String(entry.fieldPath ?? entry.field_path ?? '');
+  if (!group || !field) throw new Error('Unrecognised Firestore field override.');
+  const parts=(entry.indexes ?? []).map(item=>{
+    const scope=String(item.queryScope ?? item.query_scope ?? '');
+    const kind=item.order ?? item.arrayConfig ?? item.array_config;
+    if (!scope || typeof kind !== 'string') throw new Error('Unsupported field override index mode.');
+    return scope+':'+kind;
+  }).sort();
+  return group+'/'+field+'/ttl:'+String(entry.ttl === true)+'/'+parts.join('|');
+};
+const plannedOverrides=new Set(manifest.fieldOverrides.map(overrideKey));
+const lostOverrides=remote.fieldOverrides.map(overrideKey).filter(key=>!plannedOverrides.has(key));
+if (lostOverrides.length) {
+  console.error('BLOCKED: Firestore field override or TTL policy would be modified/removed by index release.');
+  process.exit(1);
+}
+console.log('PASS: all existing production composite indexes and field overrides are represented in the release manifest; no unmanaged deletion.');
