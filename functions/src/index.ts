@@ -13648,4 +13648,4 @@ export const myProductionTimeline = onCall({ region: REGION }, async (request) =
 export const {
   claimMyReleaseCredit, respondToCreditClaim, adminReviewCreditClaim,
   listMyCreditClaims, adminListCreditClaims,
-} = buildVerifiedCreditCallables(requireActiveIdentity, requireAdminIdentity);
+} = buildVerifiedCreditCallables(requireActiveIdentity, requireAdminIdentity, requireAgeVerified);
