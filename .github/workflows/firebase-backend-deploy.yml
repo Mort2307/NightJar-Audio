@@ -16,6 +16,7 @@ on:
           - audio-eq-cors
           - functions:selected
           - didit:reconcile
+          - didit:testers
           - admin-attention
           - functions
           - firestore:rules
@@ -153,7 +154,7 @@ jobs:
         run: npm ci --no-fund && npm run validate
 
       - name: Install, check and build backend
-        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'didit:reconcile' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend' }}
+        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'didit:reconcile' || inputs.scope == 'didit:testers' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend' }}
         run: |
           npm --prefix functions ci --no-fund
           npm --prefix functions run check
@@ -186,6 +187,11 @@ jobs:
                 targets+=("functions:$name")
               done
               DEPLOY_SCOPE="$(IFS=,; echo "${targets[*]}")" ;;
+            didit:testers)
+              # Staged tester rollout: account-owned one-time start, status, reconciliation and signed webhook.
+              # Keep the legacy public starter paused and retain explicit member consent.
+              targets=(functions:ageStatus functions:myDiditControlledCheck functions:startMyDiditControlledCheck functions:reconcileMyDiditVerification functions:diditWebhook functions:processDiditWebhook)
+              DEPLOY_SCOPE="$(IFS=,; echo "${targets[*]}")" ;;
             didit:reconcile)
               # Safe recovery: reconciliation and status only. No new chargeable Didit sessions.
               targets=(functions:ageStatus functions:reconcileMyDiditVerification functions:adminReconcileDiditApproval functions:adminDiditDiagnostics functions:myDiditControlledCheck)
@@ -202,7 +208,7 @@ jobs:
           echo "Nightjar project=nightjar-audio; scope=$DEPLOY_SCOPE; commit=$GITHUB_SHA"
           date +%s > "$RUNNER_TEMP/nightjar-deploy-start"
           trap 'date +%s > "$RUNNER_TEMP/nightjar-deploy-end"' EXIT
-          if [[ "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" ]]; then
+          if [[ "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" || "$REQUESTED_SCOPE" == "didit:testers" ]]; then
             # Reuse the existing OIDC-authorized workflow. Keep batches small
             # and never retry non-quota failures automatically.
             batch_size=5
