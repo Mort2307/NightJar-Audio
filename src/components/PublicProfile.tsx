@@ -13,7 +13,6 @@ import PublicEditorShowcase from './PublicEditorShowcase';
 import PublicWriterPortfolio from './PublicWriterPortfolio';
 import { SocialLinksDisplay } from './SocialLinksEditor';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
-import ProfileConnections from './ProfileConnections';
 import { VoiceCallingCardPublic } from './VoiceCallingCard';
 import './public-profile-premium.css';
 
@@ -21,7 +20,7 @@ type Props = {
   userId: string;
   followingIds: string[];
   onToggleFollow: (userId: string) => Promise<void>;
-  onOpenConnectedProfile?: (userId:string, role?:string) => void;
+  onOpenConnections: (userId:string,kind:'followers'|'following',displayName:string)=>void;
   onClose: () => void;
   notify: (message: string) => void;
   canMessage?: boolean;
@@ -45,14 +44,13 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onOpenConnectedProfile, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = '', readOnlyPreview = false, focusArtworkId:focusArtworkIdProp=null }: Props) {
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onOpenConnections, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = '', readOnlyPreview = false, focusArtworkId:focusArtworkIdProp=null }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
   const [giftOpen, setGiftOpen] = useState(false);
-  const [connectionKind,setConnectionKind] = useState<'followers'|'following'|null>(null);
   const [selectedProfileRole, setSelectedProfileRole] = useState<string | null>(initialRole);
   const focusArtworkId = focusArtworkIdProp ?? new URLSearchParams(window.location.search).get('artwork');
 
@@ -309,16 +307,12 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             return kind || target
               ? <button type="button" className="nj-profile-metric-button" key={String(label)}
                   aria-label={kind ? 'View '+String(label).toLowerCase()+' of '+String(profile.displayName) : 'Explore '+String(label).toLowerCase()}
-                  aria-expanded={kind ? connectionKind===kind : undefined}
-                  onClick={()=>kind ? setConnectionKind(previous=>previous===kind?null:kind) : goToSection(target!)}>
+                  onClick={()=>kind ? onOpenConnections(profile.userId,kind,profile.displayName) : goToSection(target!)}>
                   <strong>{value}</strong><span>{label}</span>
                 </button>
               : <div key={String(label)}><strong>{value}</strong><span>{label}</span></div>;
           })}
         </div>
-        {connectionKind && <ProfileConnections userId={profile.userId} kind={connectionKind}
-          demoMode={demoMode} onClose={()=>setConnectionKind(null)}
-          onOpenProfile={(targetUserId,role)=>{setConnectionKind(null);onOpenConnectedProfile?.(targetUserId,role);}}/>}
         <nav className="nj-cinema-profile-tabs" aria-label="Profile sections">
           <button type="button" onClick={()=>goToSection('nj-cinema-work')}>Work</button>
           {(profile.welcomeMessage || profile.bio) && <button type="button" onClick={()=>goToSection('nj-cinema-about')}>About</button>}
