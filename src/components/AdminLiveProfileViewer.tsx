@@ -167,6 +167,6 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
       onOpenProfile={(userId,role)=>{
         setViewerConnections(null);
         setProfileOpen({userId,role:order.includes(role as Role) ? role as Role : 'listener'});
-      }}/>
+      }}/>}
   </section>;
 }
