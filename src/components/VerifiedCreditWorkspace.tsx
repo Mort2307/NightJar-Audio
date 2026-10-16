@@ -5,6 +5,7 @@ import { nightjarCatalogue } from '../platform/firebase-catalogue';
 type Props = { currentUserId:string; administrator?: boolean; onNotice?: (message:string)=>void };
 export default function VerifiedCreditWorkspace({currentUserId,administrator=false,onNotice}:Props) {
   const [claims,setClaims] = useState<CreditClaim[]>([]);
+  const [nextCursor,setNextCursor] = useState<string|null>(null);
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState<string|null>(null);
   const [error,setError] = useState('');
@@ -15,7 +16,10 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
   const [reviewReasons,setReviewReasons] = useState<Record<string,string>>({});
   const refresh = useCallback(async()=>{
     setLoading(true);setError('');
-    try {setClaims(await (administrator ? verifiedCreditApi.adminClaims() : verifiedCreditApi.myClaims()));}
+    try {
+      if (administrator) { const page = await verifiedCreditApi.adminClaims();setClaims(page.claims);setNextCursor(page.nextCursor); }
+      else {setClaims(await verifiedCreditApi.myClaims());setNextCursor(null);}
+    }
     catch(e) {setError(e instanceof Error?e.message:'Could not load credit claims.');}
     finally {setLoading(false);}
   },[administrator]);
@@ -28,6 +32,15 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
       .finally(()=>{if(active)setCatalogueLoading(false);});
     return ()=>{active=false;};
   },[administrator]);
+  const loadMore = async () => {
+    if (!administrator || !nextCursor || busy) return;
+    setBusy('next-page');setError('');
+    try {const page = await verifiedCreditApi.adminClaims(nextCursor);
+      setClaims(previous=>[...new Map([...previous,...page.claims].map(item=>[item.id,item])).values()]);
+      setNextCursor(page.nextCursor);
+    } catch(e) {setError(e instanceof Error?e.message:'Could not load more claims.');}
+    finally {setBusy(null);}
+  };
   const act = async (id:string,fn:()=>Promise<unknown>)=>{
     setBusy(id);setError('');
     try {await fn();onNotice?.('Credit claim updated.');await refresh();}
@@ -75,6 +88,6 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
           {!['approved','rejected','revoked'].includes(item.state)&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'reject',reviewReasons[item.id].trim()))}>Reject</button>}
           {item.state==='approved'&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'revoke',reviewReasons[item.id].trim()))}>Revoke</button>}
         </div>}
-      </article>)}</div>}
+      </article>)}{administrator&&nextCursor&&<button type="button" className="secondary-button" disabled={busy!==null} onClick={()=>void loadMore()}>Load more claims</button>}</div>}
   </section>;
 }
