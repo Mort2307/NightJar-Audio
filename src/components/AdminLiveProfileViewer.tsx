@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, Eye, FileCheck2, FileText, Headphones, ImagePlus, LockKeyhole, Mic2, RefreshCw, Search, ShieldCheck, Users, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import PublicProfile from './PublicProfile';
+import ProfileConnectionsPage, { type ConnectionKind } from './ProfileConnectionsPage';
 
 type Role = 'listener' | 'creator' | 'writer' | 'editor' | 'artist';
 type Account = {
@@ -32,6 +33,7 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
   const [results,setResults] = useState<Record<string,Result>>({});
   const [rolesByAccount,setRolesByAccount] = useState<Record<string,Role[]>>({});
   const [profileOpen,setProfileOpen] = useState<{userId:string;role:Role}|null>(null);
+  const [viewerConnections,setViewerConnections] = useState<{userId:string;kind:ConnectionKind;displayName:string}|null>(null);
   const [refreshToken,setRefreshToken] = useState(0);
 
   useEffect(() => {
@@ -145,18 +147,26 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
       })}
     </div>
 
-    {profileOpen&&<PublicProfile
+    {profileOpen&&!viewerConnections&&<PublicProfile
       key={profileOpen.userId+':'+profileOpen.role}
       userId={profileOpen.userId}
       initialRole={profileOpen.role}
       readOnlyPreview
       followingIds={[]}
       onToggleFollow={async()=>{}}
+      onOpenConnections={(userId,kind,displayName)=>setViewerConnections({userId,kind,displayName})}
       onClose={()=>setProfileOpen(null)}
       notify={notify}
       canMessage={false}
       canReact={false}
       demoMode={false}
     />}
+    {viewerConnections && <ProfileConnectionsPage key={viewerConnections.userId}
+      userId={viewerConnections.userId} initialKind={viewerConnections.kind} displayName={viewerConnections.displayName}
+      onBack={()=>setViewerConnections(null)}
+      onOpenProfile={(userId,role)=>{
+        setViewerConnections(null);
+        setProfileOpen({userId,role:order.includes(role as Role) ? role as Role : 'listener'});
+      }}/>
   </section>;
 }
