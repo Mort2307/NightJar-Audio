@@ -15,7 +15,7 @@ assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'private-bet
 assert.match(nightjars, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'gift and token endpoints must not bypass Didit');
 const backendWorkflow = read('.github/workflows/firebase-backend-deploy.yml');
 assert.ok(backendWorkflow.includes('DEPLOY_SCOPE="$(node scripts/firebase-current-functions-scope.mjs)"'), 'all-functions release must use explicit non-deleting targets');
-assert.match(backend, /const DIDIT_VERIFICATION_PAUSED = true/, 'legacy public session starter remains disabled');
+assert.match(backend, /const DIDIT_VERIFICATION_PAUSED = false/, 'public Didit session starter is enabled');
 assert.match(backend, /const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true/, 'approved safe self-service check remains available to members');
 assert.match(backend, /const persistentVerified = diditPass\(data\)/, 'adult backend checks durable provider evidence');
 assert.match(backend, /if \(persistentVerified\) return data/, 'provider-approved accounts retain access without repeating ID');
@@ -29,7 +29,7 @@ assert.match(app, /setAgeStage\(mayEnter \? 'app' : 'assurance'\)/, 'non-approve
 assert.match(app, /if \(ageStage === 'assurance'\) \{/, 'role picker must not hide mandatory gate');
 assert.match(app, /aria-modal="true" aria-labelledby="nightjar-verification-title"/, 'mandatory verification is an accessible dialog');
 assert.match(app, /<DiditControlledLiveCheck onVerified=/, 'account-linked check is presented at the required gate');
-assert.match(app, /DIDIT_VERIFICATION_PAUSED = true/, 'frontend cannot reopen legacy paid starter');
+assert.match(app, /DIDIT_VERIFICATION_PAUSED = false/, 'frontend presents the standard verification flow to all unverified members');
 
 assert.match(panel, /if\(result.authorised \|\| result.providerVerified\)/, 'previously approved member notice status is checked');
 assert.match(panel, /const acceptApprovedNotice=async\(\)=>/, 'approved member can acknowledge a new notice');
