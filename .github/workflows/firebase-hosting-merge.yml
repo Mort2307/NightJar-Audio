@@ -820,6 +820,54 @@ jobs:
           gh run watch "$BACKEND_RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Protected administrator test backend deployed. Public verification remains paused."
 
+      # Velvet Interaction release: two strictly scoped backend batches in order.
+      # Firestore index first; ONE read-only social lookup function second; then
+      # and only then publish its UI. No Didit, billing, or other functions.
+      - name: Release public connections backend in small batches
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-public-connections-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          grep -q 'export const listPublicProfileConnections = onCall' functions/src/index.ts
+          node scripts/profile-connections-contracts.mjs
+          node -e "const x=require('./firestore.indexes.json');if(!x.fieldOverrides.some(v=>v.collectionGroup==='follows' && v.fieldPath==='targetUserId' && v.indexes?.some(i=>i.queryScope==='COLLECTION_GROUP')))process.exit(1)"
+
+          # Deliberately 1 scope per release, never `functions` or `all-backend`.
+          deploy_single_batch() {
+            local scope="$1" functions="${2:-}" start run_id
+            start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Nightjar small batch: ${scope}${functions:+ ($functions)}"
+            if [[ "$scope" == "functions:selected" ]]; then
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+                -f ref=main -f "inputs[scope]=$scope" \
+                -f "inputs[function_names]=$functions" \
+                -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+            else
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+                -f ref=main -f "inputs[scope]=$scope" \
+                -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+            fi
+            run_id=""
+            for attempt in $(seq 1 48); do
+              run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+                | jq -r --arg head "${GITHUB_SHA}" --arg start "$start" \
+                  '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+              if [[ -n "$run_id" ]]; then break; fi
+              sleep 10
+            done
+            if [[ -z "$run_id" ]]; then
+              echo "::error::Could not find confirmed backend batch for $scope; Hosting remains unchanged."
+              exit 1
+            fi
+            echo "Nightjar $scope: https://github.com/${GITHUB_REPOSITORY}/actions/runs/$run_id"
+            gh run watch "$run_id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          }
+          deploy_single_batch 'firestore:indexes'
+          deploy_single_batch 'functions:selected' 'listPublicProfileConnections'
+          echo "Public connections index and the single callable are deployed; safe to publish UI."
+
       - name: Deploy Hosting live
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
