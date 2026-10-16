@@ -10,7 +10,7 @@ export const CREDIT_PROFESSIONS = ['va', 'writer', 'editor', 'artist'] as const;
 export type CreditProfession = typeof CREDIT_PROFESSIONS[number];
 
 export const CREDIT_CLAIM_STATES = [
-  'awaiting_contributor', 'awaiting_uploader', 'uploader_confirmed',
+  'awaiting_member', 'awaiting_uploader', 'uploader_confirmed',
   'uploader_disputed', 'uploader_unsure', 'admin_review',
   'approved', 'rejected', 'revoked',
 ] as const;
@@ -58,14 +58,14 @@ export interface VerifiedCreditClaim {
 type Transition = { from: CreditClaimState[]; event: CreditClaimEvent; actor: CreditClaimActor; to: CreditClaimState };
 
 const TRANSITIONS: readonly Transition[] = [
-  { from: ['awaiting_contributor'], event: 'contributor_accept', actor: 'contributor', to: 'awaiting_uploader' },
-  { from: ['awaiting_contributor'], event: 'contributor_decline', actor: 'contributor', to: 'rejected' },
+  { from: ['awaiting_member'], event: 'contributor_accept', actor: 'contributor', to: 'uploader_confirmed' },
+  { from: ['awaiting_member'], event: 'contributor_decline', actor: 'contributor', to: 'rejected' },
   { from: ['awaiting_uploader'], event: 'uploader_confirm', actor: 'uploader', to: 'uploader_confirmed' },
   { from: ['awaiting_uploader'], event: 'uploader_dispute', actor: 'uploader', to: 'uploader_disputed' },
   { from: ['awaiting_uploader'], event: 'uploader_unsure', actor: 'uploader', to: 'uploader_unsure' },
   { from: ['uploader_confirmed', 'uploader_disputed', 'uploader_unsure', 'awaiting_uploader'], event: 'submit_for_admin_review', actor: 'admin', to: 'admin_review' },
-  { from: ['admin_review'], event: 'admin_approve', actor: 'admin', to: 'approved' },
-  { from: ['admin_review'], event: 'admin_reject', actor: 'admin', to: 'rejected' },
+  { from: ['uploader_confirmed'], event: 'admin_approve', actor: 'admin', to: 'approved' },
+  { from: ['awaiting_member','awaiting_uploader','uploader_confirmed','uploader_disputed','uploader_unsure','admin_review'], event: 'admin_reject', actor: 'admin', to: 'rejected' },
   { from: ['approved'], event: 'admin_revoke', actor: 'admin', to: 'revoked' },
 ];
 

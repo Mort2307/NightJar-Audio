@@ -2068,7 +2068,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   // Public credit attribution is derived exclusively from independent admin approvals.
   // Never treat contributor.userId in uploader-supplied release metadata as verification.
   const verifiedCreditDocs = await db.collection('verifiedCreditClaims')
-    .where('claimantUserId', '==', userId).limit(100).get();
+    .where('claimantUserId', '==', userId).where('state','==','approved')
+    .orderBy('approvedAt','desc').limit(100).get();
   const verifiedCredits = verifiedCreditDocs.docs
     .filter(doc => {
       const credit = doc.data();
@@ -13648,5 +13649,17 @@ export const myProductionTimeline = onCall({ region: REGION }, async (request) =
 // Verified credit workflow uses the same account and administrator identity gates.
 export const {
   claimMyReleaseCredit, inviteCreditedContributor, respondToCreditInvitation, respondToCreditClaim, adminReviewCreditClaim, appealCreditClaim,
-  listMyCreditClaims, adminListCreditClaims,
-} = buildVerifiedCreditCallables(requireActiveIdentity, requireAdminIdentity, requireAgeVerified);
+  getCreditClaim, listMyCreditClaims, adminListCreditClaims,
+} = buildVerifiedCreditCallables(
+  requireActiveIdentity, requireAdminIdentity, requireAgeVerified,
+  createNotification,
+  async () => {
+    // Official administrators only: the contributor or uploader can never
+    // independently approve their own claim through this notification queue.
+    const accounts = await db.collection('accounts').where('role','==','admin').limit(50).get();
+    return accounts.docs.filter(doc => {
+      const account = doc.data();
+      return ADMIN_EMAILS.has(cleanEmail(account.email)) && account.status === 'active';
+    }).map(doc => doc.id);
+  },
+);

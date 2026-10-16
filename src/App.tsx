@@ -484,6 +484,10 @@ const EMPTY_PROFILE = { displayName: '', handle: '', headline: '', headerImageMo
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','calendar','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
+  const [creditFocusClaimId, setCreditFocusClaimId] = useState<string | null>(() => {
+    const id = new URLSearchParams(window.location.search).get('credits');
+    return id && /^claim_[a-zA-Z0-9-]{16,80}$/.test(id) ? id : null;
+  });
   const [playing, setPlaying] = useState<string | null>(null);
   const [focusedContentReleaseId, setFocusedContentReleaseId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('release'));
   const [focusedContentScriptId, setFocusedContentScriptId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('script'));
@@ -1118,6 +1122,8 @@ function App() {
         return;
       }
       setPublicProfileUserId(null);
+      const credit = new URLSearchParams(window.location.search).get('credits');
+      setCreditFocusClaimId(credit && /^claim_[a-zA-Z0-9-]{16,80}$/.test(credit) ? credit : null);
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
       const topLevel = value.split('/')[0];
       setProfileRolesPage(value === 'profile/roles');
@@ -1515,6 +1521,22 @@ function App() {
     try {
       const target = new URL(rawRoute, window.location.origin);
       if (target.origin !== window.location.origin) return;
+      const creditId = target.searchParams.get('credits');
+      if (creditId && /^claim_[a-zA-Z0-9-]{16,80}$/.test(creditId)) {
+        if (target.pathname === '/profile') {
+          setCreditFocusClaimId(creditId);
+          navigate('profile');
+          window.history.replaceState({}, '', target.pathname + target.search);
+          return;
+        }
+        if (target.pathname === '/admin/workspace/content' && canAdmin) {
+          setCreditFocusClaimId(creditId);
+          navigate('admin');
+          openAdminWorkspace('content');
+          window.history.replaceState({}, '', target.pathname + target.search);
+          return;
+        }
+      }
       if (target.pathname === '/discover') {
         const releaseId = target.searchParams.get('release');
         const scriptId = target.searchParams.get('script');
@@ -1887,6 +1909,10 @@ function App() {
     }
     await markNotificationRead(item);
     setNotificationsOpen(false);
+    if (item.type === 'verified_credit') {
+      openPublicationNotificationRoute(String(item.route ?? ''));
+      return;
+    }
 
     if ((item.type === 'content' && ['new_audio','new_script','new_artwork'].includes(String(item.subtype))) || (item.type === 'follow' && item.subtype === 'new_follower')) {
       openPublicationNotificationRoute(String(item.route ?? ''));
@@ -5409,7 +5435,7 @@ function App() {
           />
         )}
 
-        {view === 'profile' && !profileRolesPage && user?.userId && !simulationMode && !demoMode && <details className="page-wrap nj-credit-workspace-disclosure"><summary>🎧 My credited releases</summary><VerifiedCreditWorkspace currentUserId={user.userId} onNotice={notify}/></details>}
+        {view === 'profile' && !profileRolesPage && user?.userId && !simulationMode && !demoMode && <details className="page-wrap nj-credit-workspace-disclosure" open={Boolean(creditFocusClaimId)}><summary>🎧 My credited releases</summary><VerifiedCreditWorkspace currentUserId={user.userId} focusedClaimId={creditFocusClaimId} onNotice={notify}/></details>}
 
         {view === 'profile' && !profileRolesPage && (
           <section className="page-section profile-page premium-profile-page">
@@ -5746,7 +5772,7 @@ function App() {
               pendingImages={imageModeration.length}
               openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
             />
-            {adminWorkspace === 'content' && user?.userId && <details className="nj-credit-workspace-disclosure"><summary>🎧 Credited account review</summary><VerifiedCreditWorkspace currentUserId={user.userId} administrator onNotice={notify}/></details>}
+            {adminWorkspace === 'content' && user?.userId && <details className="nj-credit-workspace-disclosure" open={Boolean(creditFocusClaimId)}><summary>🎧 Credited account review</summary><VerifiedCreditWorkspace currentUserId={user.userId} focusedClaimId={creditFocusClaimId} administrator onNotice={notify}/></details>}
             {adminWorkspace === 'assistance' && <AdminAssistance initialEmail={assistancePrefillEmail} onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
             {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"

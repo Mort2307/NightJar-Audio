@@ -50,3 +50,25 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm run audit:guard
+
+  credit-security:
+    name: Verified credits emulator security (no deploy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-fund && npm --prefix functions ci --no-fund
+      - name: Validate release authorization and routing contracts
+        run: node scripts/verified-credit-release-contracts.mjs
+      - name: Test Firestore rules and transaction contention in isolated emulators
+        run: npx --yes firebase-tools@15.33.0 emulators:exec --project demo-nightjar-credit-ci --only firestore,auth 'node scripts/verified-credit-firestore-emulator.mjs'

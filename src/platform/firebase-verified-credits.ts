@@ -15,6 +15,7 @@ export type CreditClaim = {
   createdAt: string | null;
   updatedAt: string | null;
 };
+const one = httpsCallable<{claimId:string},{claim:CreditClaim}>(functions,'getCreditClaim');
 const mine = httpsCallable<{cursor?:string},{claims:CreditClaim[];nextCursor:string|null}>(functions,'listMyCreditClaims');
 const admin = httpsCallable<{cursor?:string},{claims:CreditClaim[];nextCursor:string|null}>(functions,'adminListCreditClaims');
 const claim = httpsCallable<{releaseId:string;contributorSlotId:string},{claimId:string;state:string}>(functions,'claimMyReleaseCredit');
@@ -25,6 +26,7 @@ const appeal = httpsCallable<{claimId:string;reason:string},{appealPending:boole
 const review = httpsCallable<{claimId:string;decision:'approve'|'reject'|'revoke'|'resolve_appeal';reason?:string},{state:string}>(functions,'adminReviewCreditClaim');
 
 export const verifiedCreditApi = {
+  async getClaim(claimId:string) { return (await one({claimId})).data; },
   async myClaims(cursor?:string) { return (await mine({cursor})).data; },
   async adminClaims(cursor?:string) { return (await admin({cursor})).data; },
   async claim(releaseId:string,contributorSlotId:string) { return (await claim({releaseId,contributorSlotId})).data; },

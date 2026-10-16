@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { verifiedCreditApi, type CreditClaim } from '../platform/firebase-verified-credits';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
 
-type Props = { currentUserId:string; administrator?: boolean; onNotice?: (message:string)=>void };
-export default function VerifiedCreditWorkspace({currentUserId,administrator=false,onNotice}:Props) {
+type Props = { currentUserId:string; administrator?: boolean; focusedClaimId?:string|null; onNotice?: (message:string)=>void };
+export default function VerifiedCreditWorkspace({currentUserId,administrator=false,focusedClaimId=null,onNotice}:Props) {
   const [claims,setClaims] = useState<CreditClaim[]>([]);
   const [nextCursor,setNextCursor] = useState<string|null>(null);
   const [loading,setLoading] = useState(true);
@@ -21,13 +21,23 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
   const refresh = useCallback(async()=>{
     setLoading(true);setError('');
     try {
-      if (administrator) { const page = await verifiedCreditApi.adminClaims();setClaims(page.claims);setNextCursor(page.nextCursor); }
-      else {const page = await verifiedCreditApi.myClaims();setClaims(page.claims);setNextCursor(page.nextCursor);}
+      const [page, selected] = await Promise.all([
+        administrator ? verifiedCreditApi.adminClaims() : verifiedCreditApi.myClaims(),
+        focusedClaimId ? verifiedCreditApi.getClaim(focusedClaimId).catch(()=>null) : Promise.resolve(null),
+      ]);
+      const focused = selected?.claim;
+      setClaims(focused ? [focused,...page.claims.filter(item=>item.id!==focused.id)] : page.claims);
+      setNextCursor(page.nextCursor);
     }
     catch(e) {setError(e instanceof Error?e.message:'Could not load credit claims.');}
     finally {setLoading(false);}
-  },[administrator]);
+  },[administrator,focusedClaimId]);
   useEffect(()=>{void refresh();},[refresh]);
+  useEffect(()=>{
+    if (focusedClaimId && claims.some(item=>item.id===focusedClaimId)) {
+      document.getElementById('nj-credit-' + focusedClaimId)?.scrollIntoView({block:'center'});
+    }
+  },[claims,focusedClaimId]);
   useEffect(()=>{
     if(administrator) return;
     let active=true;setCatalogueLoading(true);
@@ -86,7 +96,7 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
     {error && <p role="alert">{error}</p>}
     <button type="button" className="secondary-button" onClick={()=>void refresh()} disabled={loading||busy!==null}>Refresh credits</button>
     {loading?<p role="status">Loading credits…</p>:claims.length===0?<p>No credit claims to review yet.</p>:
-      <div className="nj-credit-claim-list">{claims.map(item=><article className="panel" key={item.id}>
+      <div className="nj-credit-claim-list">{claims.map(item=><article id={"nj-credit-" + item.id} data-focused={focusedClaimId===item.id?"true":undefined} className="panel" key={item.id}>
         <strong>{item.releaseRole}</strong> <span>{item.state.replaceAll('_',' ')}</span>
         <small>Release: {item.releaseId} · Slot: {item.contributorSlotId}</small>
         {!administrator&&item.claimantUserId===currentUserId&&item.state==='awaiting_member'&&
