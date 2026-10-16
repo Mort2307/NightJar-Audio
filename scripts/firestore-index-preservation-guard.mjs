@@ -34,22 +34,34 @@ if (unmanaged.length) {
 if (!Array.isArray(remote.fieldOverrides) || !Array.isArray(manifest.fieldOverrides)) {
   throw new Error('Cannot establish field override inventory; blocking index deployment.');
 }
-const overrideKey=(entry)=>{
+const overrideSpec=(entry)=>{
   const group=String(entry.collectionGroup ?? entry.collection_group ?? '');
   const field=String(entry.fieldPath ?? entry.field_path ?? '');
-  if (!group || !field) throw new Error('Unrecognised Firestore field override.');
-  const parts=(entry.indexes ?? []).map(item=>{
-    const scope=String(item.queryScope ?? item.query_scope ?? '');
+  if (!group || !field || !Array.isArray(entry.indexes))
+    throw new Error('Unrecognised Firestore field override.');
+  if (entry.ttl !== undefined && typeof entry.ttl !== 'boolean')
+    throw new Error('Unrecognised existing Firestore TTL policy: '+group+'/'+field);
+  const modes=new Set(entry.indexes.map(item=>{
+    const scope=item.queryScope ?? item.query_scope;
     const kind=item.order ?? item.arrayConfig ?? item.array_config;
-    if (!scope || typeof kind !== 'string') throw new Error('Unsupported field override index mode.');
+    if (!['COLLECTION','COLLECTION_GROUP'].includes(scope) || typeof kind !== 'string')
+      throw new Error('Unsupported field override index mode: '+group+'/'+field);
     return scope+':'+kind;
-  }).sort();
-  return group+'/'+field+'/ttl:'+String(entry.ttl === true)+'/'+parts.join('|');
+  }));
+  return {id:group+'/'+field,ttl:entry.ttl===true,modes};
 };
-const plannedOverrides=new Set(manifest.fieldOverrides.map(overrideKey));
-const lostOverrides=remote.fieldOverrides.map(overrideKey).filter(key=>!plannedOverrides.has(key));
+const plannedOverrides=new Map(manifest.fieldOverrides.map(entry=>{
+  const spec=overrideSpec(entry);
+  return [spec.id,spec];
+}));
+const lostOverrides=remote.fieldOverrides.map(overrideSpec).filter(original=>{
+  const candidate=plannedOverrides.get(original.id);
+  return !candidate || (original.ttl && !candidate.ttl) ||
+    [...original.modes].some(mode=>!candidate.modes.has(mode));
+});
 if (lostOverrides.length) {
-  console.error('BLOCKED: Firestore field override or TTL policy would be modified/removed by index release.');
+  console.error('BLOCKED: Firestore field override or TTL policy would be removed by index release: '+
+    lostOverrides.map(item=>item.id).join(', '));
   process.exit(1);
 }
 console.log('PASS: all existing production composite indexes and field overrides are represented in the release manifest; no unmanaged deletion.');
