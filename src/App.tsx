@@ -2154,7 +2154,9 @@ function App() {
         setAgeNoticeAccepted(false);
         setAgeStatusError('Nightjar could not load the age-verification permissions. Please retry before starting a check.');
       }
-      const verified = data.verified === true;
+      // Only a permanent, unrevoked live Didit adult pass unlocks the app.
+      // Private-beta test access must never count as completed verification.
+      const verified = data.providerVerified === true && data.reverifyRequired !== true && data.environment === 'live';
       setAgeVerified(verified);
       setAgeConfigured(data.configured === true);
       setAgeProvider(String(data.provider ?? 'didit'));
@@ -2171,21 +2173,18 @@ function App() {
       setAgeTemporaryBypassReason(typeof data.temporaryBypassReason === 'string' ? data.temporaryBypassReason : null);
       setAgeSessionActive(data.sessionActive === true);
       const diditPending = ['PENDING','PROCESSING','IN_PROGRESS','PENDING_REVIEW','CREATING','RESUBMITTED'].includes(String(data.providerStatus ?? data.status));
-      setAgeStatus(data.providerVerified === true ? 'COMPLETE'
-        : diditPending && data.diditPilotEligible === true ? 'PENDING'
-        : verified ? 'COMPLETE'
+      setAgeStatus(verified ? 'COMPLETE'
         : diditPending ? 'PENDING'
         : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
-      // Existing temporary private-beta access remains valid until the separate mandatory
-      // age-gate rollout. A REAL provider-approved account must first acknowledge the
-      // current notice; no new paid check is needed merely to acknowledge an update.
-      const mayEnter = verified && (data.temporaryBypass === true || data.providerVerified !== true || noticeAccepted);
-      if (mayEnter) setAgeStage('app');
-      else if (verified && data.providerVerified === true) setAgeStage('assurance');
+      // Once approved, only the current privacy notice can be outstanding:
+      // never ask an approved member to repeat their ID check.
+      const mayEnter = verified && noticeAccepted;
+      setAgeStage(mayEnter ? 'app' : 'assurance');
       return mayEnter;
     } catch (error) {
       console.warn('Nightjar could not refresh the age-verification status', error);
       setAgeVerified(false);
+      setAgeStage('assurance');
       setAgeStatusError('Nightjar could not confirm your verification status. Please retry instead of repeating an ID check.');
       return false;
     }
@@ -4500,16 +4499,16 @@ function App() {
     );
   }
 
-  if (ageStage === 'assurance' && !rolePicker) {
+  if (ageStage === 'assurance') {
     return (
       <main className="access-shell">
-        <div className="access-card assurance-card">
-          <button className="back-button" onClick={() => setAgeStage('gate')}><ChevronRight size={15} className="rotate-back" /> Back</button>
+        <div className="access-card assurance-card" role="dialog" aria-modal="true" aria-labelledby="nightjar-verification-title">
+          <button className="back-button" type="button" onClick={() => void signOut()}>Sign out</button>
           <div className="verification-badge"><LockKeyhole size={17} /> AGE ASSURANCE</div>
           <p className="eyebrow">SECURE ACCESS</p>
-          <h1>Verify once. Then listen.</h1>
+          <h1 id="nightjar-verification-title">Verify once. Then listen.</h1>
           <p className="access-lede">
-            Nightjar uses an independent age-assurance provider to confirm that an account meets the 18+ threshold before adult catalogue access is granted.
+            To enter NightJar, every member must have an approved 18+ age-verification result. Once Didit approves your account, you will not have to verify again unless that approval is formally revoked.
           </p>
           <div className="verification-panel">
             <div className="verification-icon"><ShieldCheck size={23} /></div>
@@ -4539,7 +4538,7 @@ function App() {
           </div>
           {DIDIT_VERIFICATION_PAUSED && <section className="nj-didit-privacy-check" role="status" aria-live="polite">
             <h2>Verify securely with Didit</h2>
-            <p>The previous age-check route remains paused. The updated account-linked check below lets eligible Nightjar members complete verification themselves without a prior administrator invitation.</p>
+            <p>Age verification is required to continue. Our secure account-linked Didit check is available below. If you already started a check, resume or recover that result instead of beginning another.</p>
             <p>Verification never starts automatically. You must read the privacy notice and explicitly agree before Didit can request your ID or liveness check.</p>
             <p>Adult catalogue access still requires approved 18+ evidence or separately authorised temporary private-beta access.</p>
           </section>}

@@ -15,7 +15,7 @@ const code = backend.slice(start,end);
 const publicStarter=backend.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0]||'';
 
 assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'public pause stays enabled');
-assert.match(backend,/const TESTING_AGE_ASSURANCE_BYPASS = true/,'private beta unchanged');
+assert.match(backend,/const TESTING_AGE_ASSURANCE_BYPASS = false/,'temporary beta age bypass is disabled after verified-18+ rollout');
 assert.match(publicStarter,/if \(DIDIT_VERIFICATION_PAUSED && !controlledAdminTest\)/,
  'global public starter remains blocked');
 assert.match(code,/isMegDiditMaintenanceMember\(identity\)/,'server identifies the specifically authorised member');

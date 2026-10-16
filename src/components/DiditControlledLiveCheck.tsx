@@ -29,7 +29,7 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
       const result=await nightjarDiditControlled.status();
       setStatus(result);
       setLaunchUrl(isSafeDiditLink(result.launchUrl) ? result.launchUrl : null);
-      if(result.authorised) {
+      if(result.authorised || result.providerVerified) {
         const agreements=await nightjarLegal.status();
         setLegalAccepted(agreements.documents.some(document=>
           document.id==='age_assurance_notice' &&
@@ -64,6 +64,25 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
     } catch(cause) {
       setError(cause instanceof Error ? cause.message : 'Could not safely recover the existing Didit decision. Please contact support.');
     } finally {setPending(false);}
+  };
+
+  // Approved identities may only need to acknowledge an updated notice.
+  // This records legal acknowledgement; it never launches a Didit session.
+  const acceptApprovedNotice=async()=>{
+    if (pending || !status?.providerVerified || !legalAcknowledged || legalAccepted) return;
+    setPending(true); setError('');
+    try {
+      await nightjarLegal.accept([{
+        id:'age_assurance_notice',
+        version:NIGHTJAR_AGE_NOTICE_VERSION,
+        accepted:true,
+      }], 'didit-approved-account-notice-update');
+      setLegalAccepted(true);
+      setMessage('Your updated privacy notice has been acknowledged. No repeat ID check is needed.');
+      onVerified?.();
+    } catch(cause) {
+      setError(cause instanceof Error ? cause.message : 'Nightjar could not save the updated notice. Please retry.');
+    } finally { setPending(false); }
   };
 
   const begin=async()=>{
@@ -102,7 +121,17 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
     <span className="mini-label"><ShieldCheck size={16} aria-hidden="true"/> YOUR ACCOUNT · LIVE ID VERIFICATION</span>
     <h2>Verify your identity with Didit</h2>
     {alreadyVerified ? <>
-      <p><CheckCircle2 size={17} aria-hidden="true"/> Nightjar has securely recorded your permanent Didit <strong>Verified 18+</strong> result.</p>
+      <p><CheckCircle2 size={17} aria-hidden="true"/> Nightjar has securely recorded your permanent Didit <strong>Verified 18+</strong> result. Your identity check will not be repeated.</p>
+      {!legalAccepted && <>
+        <p>The age-verification privacy notice has been updated. Please read and acknowledge the <a href="/legal/age-verification" target="_blank" rel="noopener noreferrer">current notice <ExternalLink size={12}/></a> to continue. <strong>No new Didit check will be started.</strong></p>
+        <label className="nj-didit-reuse-consent">
+          <input type="checkbox" checked={legalAcknowledged} disabled={pending} onChange={e=>setLegalAcknowledged(e.target.checked)}/>
+          <span>I have read and acknowledge the current age-verification privacy notice.</span>
+        </label>
+        <button className="primary-button" type="button" disabled={pending || !legalAcknowledged} onClick={()=>void acceptApprovedNotice()}>
+          <CheckCircle2 size={16} aria-hidden="true"/> {pending ? 'Saving acknowledgement…' : 'Acknowledge notice and enter NightJar'}
+        </button>
+      </>}
     </> : <>
       <p>{status.selfServiceEnabled
           ? 'You can verify your age directly from your Nightjar account. No earlier Didit approval request or administrator selection is needed. Only you can choose to start the ID and liveness check.'

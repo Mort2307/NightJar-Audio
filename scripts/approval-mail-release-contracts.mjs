@@ -15,7 +15,7 @@ assert.match(workflow, /inputs\[scope\]=functions:selected/);
 assert.match(workflow, /gh run watch "\$BACKEND_RUN_ID"/);
 assert.match(workflow, /Release approval mail functions before Hosting/);
 assert.match(backend, /const CLOSED_BETA = true;/);
-assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = true;/);
+assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = false;/);
 
 assert.match(writer, /submitForNightJarReview/);
 assert.match(writer, /await nightjarScripts\.updateRights\(script\.id/);
