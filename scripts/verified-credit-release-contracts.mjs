@@ -11,6 +11,7 @@ const rules=read('firestore.rules');
 const indexes=JSON.parse(read('firestore.indexes.json'));
 const hosting=read('.github/workflows/firebase-hosting-merge.yml');
 const domain=read('src/platform/verified-credit.ts');
+const backendWorkflow=read('.github/workflows/firebase-backend-deploy.yml');
 const requirePattern=(source,pattern,label)=>assert.match(source,pattern,label);
 for(const [pattern,label] of [
   [/tx\.create\(lock/, 'atomic slot lock'],
@@ -58,4 +59,5 @@ for(const key of want) assert.ok(actual.includes(key),'Missing composite index '
 requirePattern(hosting,/Deploy verified credits indexes and functions before Hosting/,'release must deploy credits backend-first');
 requirePattern(hosting,/deploy_credit_batch 'firestore:indexes'/,'release indexes before callables');
 requirePattern(hosting,/deploy_credit_batch 'functions:selected'/,'release callables before hosting');
+requirePattern(backendWorkflow,/firestore-index-preservation-guard\\.mjs/,'prevent deletion of existing production indexes');
 console.log('Nightjar verified-credit release contract PASS: identity, permissions, notifications, navigation, pagination, indexes, backend-first release.');

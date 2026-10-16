@@ -129,6 +129,14 @@ jobs:
             jq -e '(.result // []) | any(.[]; .projectId == "nightjar-audio")' >/dev/null
           echo "Firebase CLI authenticated to nightjar-audio via keyless OIDC."
 
+      - name: Protect existing Firestore indexes from deletion
+        if: ${{ inputs.scope == 'firestore:indexes' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          firebase firestore:indexes --project nightjar-audio --json > "$RUNNER_TEMP/nightjar-remote-indexes.json"
+          node scripts/firestore-index-preservation-guard.mjs "$RUNNER_TEMP/nightjar-remote-indexes.json" firestore.indexes.json
+
       - name: Propose conservative release batches (read-only)
         if: ${{ inputs.scope == 'plan' }}
         env:
