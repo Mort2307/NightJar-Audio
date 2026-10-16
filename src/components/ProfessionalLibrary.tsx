@@ -14,6 +14,8 @@ export type LibraryProfile = {
   headline?: string | null;
   bio?: string | null;
   nightjarTeam?: boolean;
+  /** Server-derived approval; never inferred from release credits or profile claims. */
+  approvedProfessionalRoles?: LibraryRole[];
   followerCount?: number;
   avatarUrl?: string | null;
   avatarInitials?: string | null;
@@ -100,7 +102,7 @@ function PersonCard({
     <button type="button" className="nj-pro-library-person-top nj-directory-identity-trigger" aria-label={'Open '+person.name+' public profile'} onClick={()=>onOpen(person.userId,category)}><div className="nj-pro-library-person-avatar">
       {person.avatarUrl ? <img src={person.avatarUrl} alt="" loading="lazy" decoding="async"/>
         : <span>{person.avatarInitials || person.name.slice(0,2).toUpperCase()}</span>}
-      {!person.nightjarTeam && category!=='listener' && belongsToLibraryCategory(person,category) &&
+      {!person.nightjarTeam && Array.isArray(person.approvedProfessionalRoles) && person.approvedProfessionalRoles.length > 0 &&
         <span className="nj-pro-library-official-moon" aria-label="Official NightJar Creator — approved professional" title="Official NightJar Creator"><Moon size={13} aria-hidden="true"/></span>}
     </div><div className="nj-pro-library-person-title"><div className="nj-pro-library-person-role"><Icon size={13}/>{person.nightjarTeam ? 'Nightjar Team' : roleName[category]}</div>
       <h3>{person.name}</h3><small>{person.handle ? '@'+person.handle.replace(/^@/,'') : 'Nightjar member'}</small>
