@@ -64,22 +64,14 @@ assert.match(app, /Read Nightjar's Age Verification/, 'user can read the actual 
 assert.match(legalPage, /age_assurance_notice/, 'legal document shows correct age notice effective date');
 
 
-const pauseStarter = index.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0] ?? '';
-assert.match(index, /const DIDIT_VERIFICATION_PAUSED = true/, 'live start kill switch is enabled');
-assert.match(pauseStarter, /if \(DIDIT_VERIFICATION_PAUSED && !controlledAdminTest\) throw new HttpsError\('failed-precondition'/, 'backend rejects all ordinary and cached clients during pause');
-assert.match(pauseStarter, /DIDIT_VERIFICATION_PAUSED && identity.admin && requestedControlledAdminTest/, 'maintenance exception is restricted to explicit server-authenticated administrator test');
-assert.match(pauseStarter, /transaction.create\(testGuard,/, 'maintenance test claim is transactional and one-use globally');
-assert.match(pauseStarter, /await requireCurrentLegalAcceptance\(identity.uid, 'age_assurance_notice'\)/, 'live admin test requires persisted privacy notice acknowledgement');
-assert.match(app, /nightjarAge.start\(adminPilot && DIDIT_VERIFICATION_PAUSED\)/, 'public and cached app clients never signal test bypass');
-assert.match(app, /!ageDiditPermission \|\| \(!ageNoticeAccepted && !ageNoticeAcknowledged\)/, 'admin test requires explicit consent and acknowledgement');
-assert.match(ageClient, /controlledAdminTest \? \{ controlledAdminTest: true \} : \{\}/, 'admin test flag is opt-in, never default');
-assert.ok(pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest)') >= 0 && pauseStarter.indexOf('if (DIDIT_VERIFICATION_PAUSED && !controlledAdminTest)') < pauseStarter.indexOf('return startDiditSession'), 'pause check precedes provider creation');
-assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client can read pause status');
-assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'app visibly pauses verification');
-assert.match(app, /Verify securely with Didit/, 'age gate offers secure account-linked replacement');
-assert.match(app, /<DiditControlledLiveCheck onVerified=/, 'unverified accounts can start direct Didit at the gate');
-assert.match(app, /!DIDIT_VERIFICATION_PAUSED && agePilotEligible/, 'member pilot suppressed');
-assert.match(app, /DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot"/, 'only one-shot admin maintenance controls replace regular pilot');
-assert.match(app, /!DIDIT_VERIFICATION_PAUSED && <section className="panel nj-didit-pilot"/, 'regular admin/member pilots remain hidden while maintenance switch is active');
+const publicStarter = index.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0] ?? '';
+assert.match(index, /const DIDIT_VERIFICATION_PAUSED = false/, 'public Didit start is enabled');
+assert.match(index, /const DIDIT_LIVE_PILOT_ADMINS_ONLY = false/, 'pilot-only restriction is disabled');
+assert.match(publicStarter, /if \(diditPass\(record\)\) return \{ verified: true/, 'already-approved members do not restart ID verification');
+assert.match(publicStarter, /await requireCurrentLegalAcceptance\(identity.uid, 'age_assurance_notice'\)/, 'privacy acknowledgement is required before any new session');
+assert.match(publicStarter, /return startDiditSession\(identity.uid\)/, 'session is bound to signed-in account');
+assert.match(app, /const DIDIT_VERIFICATION_PAUSED = false/, 'frontend shows normal verification route');
+assert.match(app, /Verify securely with Didit/, 'mandatory age gate offers secure verification');
+assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client receives authoritative verification status');
 
-console.log('Nightjar Didit public pause, single controlled administrator test and existing pilot contracts PASS (source level).');
+console.log('Nightjar Didit mandatory public verification and legacy pilot security contracts PASS (source level).');
