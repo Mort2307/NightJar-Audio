@@ -116,7 +116,10 @@ export function buildVerifiedCreditCallables(
       tx.create(auditRef(id),{actorUserId:identity.uid,event:'admin_'+decision,at:FieldValue.serverTimestamp(),reason:clean(input.reason,600)});
       if (state === 'rejected' || state === 'revoked') {
         const lockId = createHash('sha256').update([data.releaseId,data.contributorSlotId].join('|')).digest('hex');
-        tx.delete(getFirestore().collection('verifiedCreditLocks').doc(lockId));
+        const lockRef = getFirestore().collection('verifiedCreditLocks').doc(lockId);
+        // A stale review must never release a lock now owned by a different claim.
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists && lockSnap.get('claimId') === id) tx.delete(lockRef);
       }
     });
     return {state:decision === 'approve'?'approved':decision === 'revoke'?'revoked':'rejected'};
