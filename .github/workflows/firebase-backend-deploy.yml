@@ -165,7 +165,11 @@ jobs:
         run: |
           set -euo pipefail
           case "$REQUESTED_SCOPE" in
-            functions|firestore:rules|firestore:indexes|storage)
+            functions)
+              # Current named targets only. Never allow Firebase to delete legacy
+              # deployed functions missing from the current source.
+              DEPLOY_SCOPE="$(node scripts/firebase-current-functions-scope.mjs)" ;;
+            firestore:rules|firestore:indexes|storage)
               DEPLOY_SCOPE="$REQUESTED_SCOPE" ;;
             functions:selected)
               IFS=',' read -r -a names <<< "$SELECTED_FUNCTIONS"
