@@ -59,5 +59,5 @@ for(const key of want) assert.ok(actual.includes(key),'Missing composite index '
 requirePattern(hosting,/Deploy verified credits indexes and functions before Hosting/,'release must deploy credits backend-first');
 requirePattern(hosting,/deploy_credit_batch 'firestore:indexes'/,'release indexes before callables');
 requirePattern(hosting,/deploy_credit_batch 'functions:selected'/,'release callables before hosting');
-requirePattern(backendWorkflow,/firestore-index-preservation-guard\\.mjs/,'prevent deletion of existing production indexes');
+assert.ok(backendWorkflow.includes('firestore-index-preservation-guard.mjs'),'prevent deletion of existing production indexes');
 console.log('Nightjar verified-credit release contract PASS: identity, permissions, notifications, navigation, pagination, indexes, backend-first release.');
