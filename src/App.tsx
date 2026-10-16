@@ -5414,7 +5414,7 @@ function App() {
             <div className="page-heading premium-profile-page-heading">
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
               <div className="profile-heading-actions">
-                {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole === 'admin' ? 'listener' : effectiveRole ?? undefined)}>View my public profile</button>
+                {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole === 'admin' ? 'listener' : effectiveRole ?? undefined)}>View my public profile</button>}
                 {user?.userId && <button type="button" className="secondary-button" onClick={()=>setMyConnectionsKind('followers')}>My followers</button>}
                 {user?.userId && <button type="button" className="secondary-button" onClick={()=>setMyConnectionsKind('following')}>My following</button>}
                 {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && (effectiveRole === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) && !demoMode && <button type="button" className="secondary-button" onClick={()=>void shareNightjarProfile({
