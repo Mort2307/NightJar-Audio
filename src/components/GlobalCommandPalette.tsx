@@ -59,7 +59,12 @@ export default function GlobalCommandPalette({ open, onClose, commands }: Props)
     <section ref={paletteRef} tabIndex={-1} className="nj-command-palette" onMouseDown={(event) => event.stopPropagation()}>
       <header className="nj-command-head">
         <Search size={17}/>
-        <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Nightjar, people, releases or tools…" aria-label="Search Nightjar"/>
+        <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => {
+          if (event.key === 'Enter' && results.length > 0 && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            choose(results[0]);
+          }
+        }} placeholder="Search Nightjar, people, releases or tools…" aria-label="Search Nightjar" aria-describedby="nj-command-search-hint"/>
         <kbd>ESC</kbd>
         <button className="icon-button" onClick={onClose} aria-label="Close search"><X size={16}/></button>
       </header>
@@ -72,7 +77,7 @@ export default function GlobalCommandPalette({ open, onClose, commands }: Props)
         </button>)}
         {!results.length && <div className="nj-command-empty"><Search size={20}/><strong>No Nightjar matches.</strong><span>Try a person, release, tag, role or tool name.</span></div>}
       </div>
-      <footer><span>Ctrl / ⌘ + K</span><span>Search is limited to content your current account can access.</span></footer>
+      <footer><span id="nj-command-search-hint">Enter opens the top match · Esc closes</span><span>Ctrl / ⌘ + K</span><span>Search is limited to content your current account can access.</span></footer>
     </section>
   </div>;
 }
