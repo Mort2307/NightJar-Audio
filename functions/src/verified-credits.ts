@@ -4,9 +4,9 @@ import { randomUUID, createHash } from 'node:crypto';
 
 type Identity = { uid: string; admin: boolean };
 type Request = { auth?: { uid: string; token: Record<string, unknown> } | null };
-type ClaimState = 'awaiting_uploader' | 'uploader_confirmed' | 'uploader_disputed' | 'uploader_unsure' | 'admin_review' | 'approved' | 'rejected' | 'revoked';
+type ClaimState = 'awaiting_member' | 'awaiting_uploader' | 'uploader_confirmed' | 'uploader_disputed' | 'uploader_unsure' | 'admin_review' | 'approved' | 'rejected' | 'revoked';
 const roles = new Set(['Voice Actor','Writer','Audio Editor','Producer','Director','Sound Designer','Cover Artist','Composer','Other']);
-const activeStates = new Set<ClaimState>(['awaiting_uploader','uploader_confirmed','uploader_disputed','uploader_unsure','admin_review','approved']);
+const activeStates = new Set<ClaimState>(['awaiting_member','awaiting_uploader','uploader_confirmed','uploader_disputed','uploader_unsure','admin_review','approved']);
 const clean = (v: unknown, max = 160) => String(v ?? '').trim().slice(0,max);
 const creditRef = (id: string) => getFirestore().collection('verifiedCreditClaims').doc(id);
 const auditRef = (id: string) => creditRef(id).collection('audit').doc();
@@ -134,6 +134,60 @@ export function buildVerifiedCreditCallables(
     return {state:decision === 'approve'?'approved':decision === 'revoke'?'revoked':decision === 'resolve_appeal'?'appeal_resolved':'rejected'};
   });
 
+  const inviteCreditedContributor = onCall({ region:'europe-west2' }, async request => {
+    const identity = await requireActive(request);
+    await requireAgeVerified(identity.uid);
+    const input = (request.data ?? {}) as Record<string,unknown>;
+    const releaseId = requireInput(input.releaseId,'release');
+    const contributorSlotId = requireInput(input.contributorSlotId,'contributor slot');
+    const invitedUserId = requireInput(input.invitedUserId,'member account');
+    if (invitedUserId === identity.uid) throw new HttpsError('failed-precondition','Uploader self-invitations require independent corroboration.');
+    const db = getFirestore();
+    const releaseSnap = await db.collection('releases').doc(releaseId).get();
+    const release = releaseSnap.data();
+    if (!release || release.status !== 'released' || release.creatorUserId !== identity.uid) throw new HttpsError('permission-denied','Only the published release uploader can invite a contributor.');
+    const slot = (Array.isArray(release.contributors) ? release.contributors : []).find((item:any,i:number) => (clean(item?.slotId)||String(i)) === contributorSlotId);
+    if (!slot || !roles.has(slot.role)) throw new HttpsError('invalid-argument','Contributor slot not found.');
+    const member = await db.collection('accounts').doc(invitedUserId).get();
+    if (!member.exists) throw new HttpsError('not-found','Member account not found.');
+    const id = 'claim_'+randomUUID(), ref = creditRef(id), now = FieldValue.serverTimestamp();
+    const lock = db.collection('verifiedCreditLocks').doc(createHash('sha256').update([releaseId,contributorSlotId].join('|')).digest('hex'));
+    await db.runTransaction(async tx => {
+      const existing = await tx.get(lock);
+      if (existing.exists) throw new HttpsError('already-exists','This contributor slot already has an active credit request.');
+      tx.create(lock,{claimId:id,releaseId,contributorSlotId,claimantUserId:invitedUserId,createdAt:now});
+      tx.create(ref,{releaseId,contributorSlotId,claimantUserId:invitedUserId,uploaderUserId:identity.uid,releaseRole:slot.role,creditName:clean(slot.name,100),source:'uploader_invitation',state:'awaiting_member',createdAt:now,updatedAt:now});
+      tx.create(auditRef(id),{actorUserId:identity.uid,event:'uploader_invitation',at:now});
+    });
+    return {claimId:id,state:'awaiting_member'};
+  });
+
+  const respondToCreditInvitation = onCall({ region:'europe-west2' }, async request => {
+    const identity = await requireActive(request);
+    await requireAgeVerified(identity.uid);
+    const input = (request.data ?? {}) as Record<string,unknown>;
+    const id = requireInput(input.claimId,'claim');
+    const decision = clean(input.decision,24);
+    if (!['accept','decline'].includes(decision)) throw new HttpsError('invalid-argument','Invalid invitation response.');
+    const ref = creditRef(id);
+    await getFirestore().runTransaction(async tx => {
+      const snap = await tx.get(ref), data = snap.data();
+      if (!data || data.claimantUserId !== identity.uid || data.source !== 'uploader_invitation') throw new HttpsError('permission-denied','Only the invited member can respond.');
+      if (data.state !== 'awaiting_member') throw new HttpsError('failed-precondition','Invitation is no longer pending.');
+      const state = decision === 'accept' ? 'uploader_confirmed' : 'rejected';
+      let ownedLockRef: FirebaseFirestore.DocumentReference | null = null;
+      if (decision === 'decline') {
+        const lockRef = getFirestore().collection('verifiedCreditLocks').doc(createHash('sha256').update([data.releaseId,data.contributorSlotId].join('|')).digest('hex'));
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists && lockSnap.get('claimId') === id) ownedLockRef = lockRef;
+      }
+      tx.update(ref,{state,memberRespondedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+      tx.create(auditRef(id),{actorUserId:identity.uid,event:'member_'+decision+'_invitation',at:FieldValue.serverTimestamp()});
+      if (ownedLockRef) tx.delete(ownedLockRef);
+    });
+    return {state:decision === 'accept'?'uploader_confirmed':'rejected'};
+  });
+
   const appealCreditClaim = onCall({ region:'europe-west2' }, async request => {
     const identity = await requireActive(request);
     await requireAgeVerified(identity.uid);
@@ -205,5 +259,5 @@ export function buildVerifiedCreditCallables(
     return {claims:page.map(doc=>output(doc.id,doc.data())),nextCursor:snapshot.docs.length>50 ? page[page.length-1].id : null};
   });
 
-  return {claimMyReleaseCredit,respondToCreditClaim,adminReviewCreditClaim,appealCreditClaim,listMyCreditClaims,adminListCreditClaims};
+  return {claimMyReleaseCredit,inviteCreditedContributor,respondToCreditInvitation,respondToCreditClaim,adminReviewCreditClaim,appealCreditClaim,listMyCreditClaims,adminListCreditClaims};
 }
