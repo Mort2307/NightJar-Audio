@@ -31,7 +31,7 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
       // The Didit status endpoint requires current platform Terms and Privacy acceptance.
       // Legal status is intentionally accessible before that account middleware.
       const agreements=await nightjarLegal.status();
-      const missing=agreements.documents.filter(document=>document.requiredForAccount && !document.accepted);
+      const missing=agreements.documents.filter(document=>(document.id==='platform_terms' || document.id==='privacy_notice') && !document.accepted);
       setRequiredAgreements(missing);
       if(missing.length){setStatus(null);setLoaded(true);return;}
       const result=await nightjarDiditControlled.status();
@@ -45,7 +45,19 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
       }
       if (result.providerVerified) { setMessage('Nightjar has confirmed your permanent Didit Verified 18+ result.'); onVerified?.(); }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not check your account verification status.');
+      const detail=cause instanceof Error ? cause.message : 'Could not check your account verification status.';
+      if(/Terms of Use and Privacy Notice|mandatory_agreement_required/i.test(detail)){
+        try{
+          const agreements=await nightjarLegal.status();
+          const platform=agreements.documents.filter(document=>document.id==='platform_terms' || document.id==='privacy_notice');
+          // A legacy account mirror may be stale even if the legal ledger says accepted.
+          // Ask the member to explicitly reaffirm the current documents; the existing
+          // acceptance callable atomically repairs the mirror.
+          setRequiredAgreements(platform);
+          setStatus(null);
+          setError('');
+        }catch{setError(detail);}
+      }else{setError(detail);}
     } finally { setPending(false);setLoaded(true); }
   };
   useEffect(()=>{void refresh();},[]);
@@ -133,7 +145,7 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
   };
 
   if(loaded && requiredAgreements.length)return <section className="panel nj-didit-controlled-panel" aria-label="Required Nightjar agreements">
-    <h2>Review your Nightjar agreements</h2>
+    <h2>Before Didit: two quick acknowledgements</h2>
     <p>Before you can verify your age, please review and accept the current Terms of Use and Privacy Notice. Accepting these documents will not start a Didit session or incur a verification charge.</p>
     {requiredAgreements.map(doc=><label key={doc.id} className="nj-didit-reuse-consent">
       <input type="checkbox" checked={acceptedAgreements.includes(doc.id)} disabled={pending} onChange={event=>setAcceptedAgreements(current=>event.target.checked?[...current,doc.id]:current.filter(id=>id!==doc.id))}/>
