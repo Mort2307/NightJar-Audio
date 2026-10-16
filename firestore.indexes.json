@@ -27,6 +27,16 @@
       "fieldPath": "retentionUntil",
       "ttl": true,
       "indexes": []
+    },
+    {
+      "collectionGroup": "follows",
+      "fieldPath": "targetUserId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
     }
   ]
 }
