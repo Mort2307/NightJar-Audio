@@ -207,6 +207,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
     ? profile.approvedProfessionalRoles.filter((role:unknown) => ['creator','writer','editor','artist'].includes(String(role)))
     : [];
   const hasNightjarApproval = !profile?.nightjarTeam && approvedProfessionalRoles.length > 0;
+  const isCreditedListener = !hasNightjarApproval && Array.isArray(profile?.verifiedCredits) && profile.verifiedCredits.length > 0;
   const roleDetails = profile?.roleProfiles && typeof profile.roleProfiles === 'object' && profile.roleProfiles[profileRole]
     ? profile.roleProfiles[profileRole]
     : profile ?? {};
@@ -275,7 +276,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           </div>
           <span className="nj-profile-avatar-frame">
             <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
-            {hasNightjarApproval && <details className="nj-official-creator-badge">
+            {isCreditedListener && <span className="nj-credited-listener-label" title="Verified release contribution; not official professional onboarding">🎧 Credited Listener</span>}
+             {hasNightjarApproval && <details className="nj-official-creator-badge">
               <summary aria-label="NightJar-approved professional — badge details" title="NightJar-approved professional"><Moon size={18} aria-hidden="true"/></summary>
               <span role="note">Official NightJar-approved professional: {approvedProfessionalRoles.map((role:string)=>roleLabel(role)).join(', ')}. Badge eligibility comes from NightJar onboarding approval, not release credits or profile claims.</span>
             </details>}
