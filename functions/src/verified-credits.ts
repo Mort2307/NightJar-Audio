@@ -89,13 +89,19 @@ export function buildVerifiedCreditCallables(
     const input = (request.data ?? {}) as Record<string,unknown>;
     const id = requireInput(input.claimId,'claim');
     const decision = clean(input.decision,24);
-    if (!['approve','reject','revoke'].includes(decision)) throw new HttpsError('invalid-argument','Invalid decision.');
+    if (!['approve','reject','revoke','resolve_appeal'].includes(decision)) throw new HttpsError('invalid-argument','Invalid decision.');
     if (decision !== 'approve' && !clean(input.reason,600)) throw new HttpsError('invalid-argument','A review reason is required for rejection or revocation.');
     const ref = creditRef(id);
     await getFirestore().runTransaction(async tx => {
       const snap = await tx.get(ref), data = snap.data();
       if (!data) throw new HttpsError('not-found','Credit claim not found.');
       if ([data.claimantUserId,data.uploaderUserId].includes(identity.uid)) throw new HttpsError('permission-denied','An independent administrator must review this claim.');
+      if (decision === 'resolve_appeal') {
+        if (data.appealPending !== true || !['rejected','revoked'].includes(data.state)) throw new HttpsError('failed-precondition','No pending appeal to resolve.');
+        tx.update(ref,{appealPending:false,appealResolvedAt:FieldValue.serverTimestamp(),appealResolvedByAdminUserId:identity.uid,appealResolution:clean(input.reason,600),updatedAt:FieldValue.serverTimestamp()});
+        tx.create(auditRef(id),{actorUserId:identity.uid,event:'admin_resolve_appeal',reason:clean(input.reason,600),at:FieldValue.serverTimestamp()});
+        return;
+      }
       if (decision === 'approve' && data.state !== 'uploader_confirmed') throw new HttpsError('failed-precondition','Uploader confirmation required.');
       if (decision === 'approve') {
         const release = await tx.get(getFirestore().collection('releases').doc(data.releaseId));
@@ -125,7 +131,7 @@ export function buildVerifiedCreditCallables(
       tx.create(auditRef(id),{actorUserId:identity.uid,event:'admin_'+decision,at:FieldValue.serverTimestamp(),reason:clean(input.reason,600)});
       if (ownedLockRef) tx.delete(ownedLockRef);
     });
-    return {state:decision === 'approve'?'approved':decision === 'revoke'?'revoked':'rejected'};
+    return {state:decision === 'approve'?'approved':decision === 'revoke'?'revoked':decision === 'resolve_appeal'?'appeal_resolved':'rejected'};
   });
 
   const appealCreditClaim = onCall({ region:'europe-west2' }, async request => {
