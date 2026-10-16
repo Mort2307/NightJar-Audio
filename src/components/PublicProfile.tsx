@@ -408,8 +408,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         {profileRole === 'listener' && <section className="role-public-professional listener-public-professional">
           <div className="role-public-professional-head"><div><span className="mini-label">LISTENER SIGNATURE</span><h3>A curated member profile, not a behavioural dossier.</h3><p>This space is made from information the Listener deliberately chose to share. Private listening history, favourites, completion data and library contents are not exposed.</p></div><Headphones size={19}/></div>
           <div className="role-public-fact-grid">
-            <div><span>Followers</span><strong>{profile.followerCount ?? 0}</strong></div>
-            <div><span>Following</span><strong>{profile.followingCount ?? 0}</strong></div>
+            <button type="button" className="nj-role-metric-link" onClick={()=>onOpenConnections(profile.userId,'followers',profile.displayName)} aria-label="View followers"><span>Followers</span><strong>{profile.followerCount ?? 0}</strong></button>
+            <button type="button" className="nj-role-metric-link" onClick={()=>onOpenConnections(profile.userId,'following',profile.displayName)} aria-label="View following"><span>Following</span><strong>{profile.followingCount ?? 0}</strong></button>
             <div><span>Public playlists</span><strong>{profile.publicPlaylists?.length ?? 0}</strong></div>
             <div><span>Shared interests</span><strong>{(profile.favouriteTags?.length ?? 0)+(profile.favouriteCategories?.length ?? 0)}</strong></div>
           </div>
