@@ -114,9 +114,11 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
     }finally{setPending(false);}
   };
 
-  if(!loaded || !status || (!status.authorised && status.state==='none'))return null;
+  if(!loaded)return <section className="panel nj-didit-controlled-panel" role="status"><p>Checking your secure Didit verification options…</p></section>;
+  if(!status)return <section className="panel nj-didit-controlled-panel" role="alert"><h2>Didit verification connection unavailable</h2><p>Nightjar could not load your verification options. Your existing approval has not been changed. Do not start another ID check.</p>{error && <p>{error}</p>}<button className="secondary-button" type="button" disabled={pending} onClick={()=>void refresh()}>Retry verification connection</button></section>;
   const alreadyVerified=status.providerVerified;
   const canStart=status.authorised && !alreadyVerified && !launchUrl;
+  const noEntryRoute=!alreadyVerified && !canStart && !launchUrl && status.state==='none';
   return <section className="panel nj-didit-controlled-panel" aria-label="My one-time live Didit identity verification">
     <span className="mini-label"><ShieldCheck size={16} aria-hidden="true"/> YOUR ACCOUNT · LIVE ID VERIFICATION</span>
     <h2>Verify your identity with Didit</h2>
@@ -153,7 +155,8 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
       {launchUrl && <><a href={launchUrl} target="_blank" rel="noopener noreferrer" className="primary-button">
         <ExternalLink size={16} aria-hidden="true"/> Open secure Didit verification
       </a><p role="status"><strong>After Didit approves you:</strong> Return to this Nightjar tab. You can close the Didit tab manually; Nightjar will check your approval without starting another ID session. If your status has not updated yet, tap “Refresh verification status” below.</p></>}
-      {!canStart && !launchUrl && <p><strong>Check already claimed.</strong> Nightjar will not start another paid session. Contact support if your verification link is missing.</p>}
+      {noEntryRoute && <p role="alert"><strong>Verification unavailable:</strong> Nightjar has not enabled your account’s Didit start route. Please contact Nightjar support; do not repeatedly try to start a paid check.</p>}
+      {!noEntryRoute && !canStart && !launchUrl && <p><strong>Check already claimed or awaiting review.</strong> Nightjar will not start another paid session. Contact support if your verification link is missing.</p>}
       <p>Complete the check in Didit, return to Nightjar and tap Refresh verification status. An approved provider decision must be received and validated before you become Verified 18+.</p>
     </>}
     {!alreadyVerified && !canStart && <button className="primary-button" type="button" disabled={pending} onClick={()=>void recover()}>
