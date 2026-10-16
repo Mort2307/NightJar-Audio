@@ -16,6 +16,12 @@ export const CREDIT_CLAIM_STATES = [
 ] as const;
 export type CreditClaimState = typeof CREDIT_CLAIM_STATES[number];
 
+export const RELEASE_CREDIT_ROLES = [
+  'Voice Actor', 'Writer', 'Audio Editor', 'Producer', 'Director',
+  'Sound Designer', 'Cover Artist', 'Composer', 'Other',
+] as const;
+export type ReleaseCreditRole = typeof RELEASE_CREDIT_ROLES[number];
+
 export type CreditClaimSource = 'member_claim' | 'uploader_invitation';
 export type CreditClaimActor = 'contributor' | 'uploader' | 'admin';
 export type CreditClaimEvent =
@@ -33,6 +39,8 @@ export interface VerifiedCreditClaim {
   claimantUserId: string;
   uploaderUserId: string;
   profession: CreditProfession;
+  /** Exact published attribution; never collapse specialist credits into generic roles. */
+  releaseRole?: ReleaseCreditRole;
   source: CreditClaimSource;
   state: CreditClaimState;
   createdAt: string;
@@ -41,6 +49,10 @@ export interface VerifiedCreditClaim {
   approvedByAdminUserId?: string;
   approvedAt?: string;
   revokedAt?: string;
+  /** A confirmed uploader is not sufficient proof without independent admin approval. */
+  uploaderConfirmedAt?: string;
+  /** Optional public-safe reason; confidential evidence belongs in restricted records. */
+  reviewReason?: string;
 }
 
 type Transition = { from: CreditClaimState[]; event: CreditClaimEvent; actor: CreditClaimActor; to: CreditClaimState };
@@ -97,4 +109,36 @@ export function creditProfessionFromReleaseRole(role: string): CreditProfession 
     case 'cover artist': return 'artist';
     default: return null;
   }
+}
+
+/** Account type is derived from verified credits, never from unreviewed release metadata. */
+export type CreditedAccountKind = 'listener' | 'credited_listener' | 'official_professional';
+export function creditedAccountKind(
+  claims: readonly VerifiedCreditClaim[],
+  userId: string,
+  approvedProfessionalRoles: readonly string[],
+): CreditedAccountKind {
+  if (approvedProfessionalRoles.some(role => ['creator', 'writer', 'editor', 'artist'].includes(role))) {
+    return 'official_professional';
+  }
+  return creditedProfessions(claims, userId).length ? 'credited_listener' : 'listener';
+}
+
+/** True only for an independent reviewer; self-confirmation cannot establish identity. */
+export function canIndependentlyReviewCredit(
+  claim: Pick<VerifiedCreditClaim, 'claimantUserId' | 'uploaderUserId'>,
+  reviewerUserId: string,
+): boolean {
+  return Boolean(reviewerUserId) && reviewerUserId !== claim.claimantUserId && reviewerUserId !== claim.uploaderUserId;
+}
+
+/** A member may have many legitimate credits but only one active claim per release slot. */
+export function hasActiveDuplicateCreditClaim(
+  claims: readonly VerifiedCreditClaim[],
+  candidate: Pick<VerifiedCreditClaim, 'releaseId' | 'contributorSlotId' | 'claimantUserId'>,
+): boolean {
+  return claims.some(claim => claim.releaseId === candidate.releaseId &&
+    claim.contributorSlotId === candidate.contributorSlotId &&
+    claim.claimantUserId === candidate.claimantUserId &&
+    !['rejected', 'revoked'].includes(claim.state));
 }
