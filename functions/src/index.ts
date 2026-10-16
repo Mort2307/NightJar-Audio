@@ -9476,6 +9476,10 @@ const normaliseReleaseContributors = (value: unknown) => {
   return value.slice(0, 24).map((item: any) => {
     const role = cleanText(item?.role, 48);
     return {
+      // Server-issued immutable contributor slot reference. Legacy credits use
+      // their original zero-based position until a controlled migration.
+      slotId: /^[a-f0-9-]{36}$/i.test(String(item?.slotId ?? ''))
+        ? String(item.slotId) : randomUUID(),
       userId: cleanText(item?.userId, 160) || null,
       name: cleanText(item?.name, 100),
       role: allowedRoles.has(role) ? role : 'Other',
