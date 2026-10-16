@@ -126,12 +126,34 @@ export function buildVerifiedCreditCallables(
     const identity = await requireActive(request);
     await requireAgeVerified(identity.uid);
     const db = getFirestore();
+    const input = (request.data ?? {}) as Record<string,unknown>;
+    const cursor = clean(input.cursor,160);
+    if (cursor && (cursor.includes('/') || !/^[A-Za-z0-9_-]+$/.test(cursor))) throw new HttpsError('invalid-argument','Invalid credit cursor.');
+    // Separate claimant/uploader streams keep each query scoped to the caller.
+    // Fetch one extra row from each stream to detect whether another page exists.
+    const scoped = (field:'claimantUserId'|'uploaderUserId') => {
+      let query = db.collection('verifiedCreditClaims').where(field,'==',identity.uid).orderBy('createdAt','desc').limit(51);
+      return query;
+    };
+    // Cursor is an opaque claim ID; require that it belongs to this caller.
+    let after: FirebaseFirestore.DocumentSnapshot | null = null;
+    if (cursor) {
+      const snap = await creditRef(cursor).get();
+      if (!snap.exists || !snap.get('createdAt') ||
+          (snap.get('claimantUserId') !== identity.uid && snap.get('uploaderUserId') !== identity.uid)) {
+        throw new HttpsError('invalid-argument','Credit cursor is unavailable.');
+      }
+      after = snap;
+    }
     const [mine,uploads] = await Promise.all([
-      db.collection('verifiedCreditClaims').where('claimantUserId','==',identity.uid).limit(100).get(),
-      db.collection('verifiedCreditClaims').where('uploaderUserId','==',identity.uid).limit(100).get(),
+      (after ? scoped('claimantUserId').startAfter(after) : scoped('claimantUserId')).get(),
+      (after ? scoped('uploaderUserId').startAfter(after) : scoped('uploaderUserId')).get(),
     ]);
-    const unique = new Map([...mine.docs,...uploads.docs].map(doc => [doc.id,output(doc.id,doc.data())]));
-    return {claims:[...unique.values()]};
+    const unique = new Map([...mine.docs,...uploads.docs].map(doc => [doc.id,doc]));
+    const ordered = [...unique.values()].sort((a,b) =>
+      (b.get('createdAt')?.toMillis?.() ?? 0) - (a.get('createdAt')?.toMillis?.() ?? 0) || b.id.localeCompare(a.id));
+    const page = ordered.slice(0,50);
+    return {claims:page.map(doc=>output(doc.id,doc.data())),nextCursor:ordered.length>50 ? page[page.length-1].id : null};
   });
 
   const adminListCreditClaims = onCall({ region:'europe-west2' }, async request => {
