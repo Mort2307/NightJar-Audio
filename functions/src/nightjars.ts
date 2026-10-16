@@ -5,7 +5,7 @@ import { diditPass } from './didit';
 
 const db = () => getFirestore();
 const REGION = 'europe-west2';
-const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
+const TESTING_AGE_ASSURANCE_BYPASS = false; // Mandatory approved 18+ Didit access, including gifts.
 const GIFT_CLEARANCE_DAYS = 7;
 const ELIGIBLE_RECIPIENT_ROLES = new Set(['creator', 'writer', 'editor', 'artist']);
 const professionalRolesFor = (data: Record<string, any>) => {
