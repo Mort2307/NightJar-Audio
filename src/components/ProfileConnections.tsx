@@ -9,10 +9,11 @@ type Props = {
   onClose: () => void;
   onOpenProfile: (userId: string, role?: string) => void;
   demoMode?: boolean;
+  embedded?: boolean;
 };
 const titleFor = (kind: Kind) => kind === 'followers' ? 'Followers' : 'Following';
 
-export default function ProfileConnections({userId,kind,onClose,onOpenProfile,demoMode=false}:Props) {
+export default function ProfileConnections({userId,kind,onClose,onOpenProfile,demoMode=false,embedded=false}:Props) {
   const [data,setData] = useState<PublicConnectionResult|null>(null);
   const [loading,setLoading] = useState(!demoMode);
   const [error,setError] = useState('');
@@ -28,14 +29,14 @@ export default function ProfileConnections({userId,kind,onClose,onOpenProfile,de
     return ()=>{current=false;};
   },[userId,kind,demoMode,reload]);
 
-  return <section className="nj-connection-sheet" aria-labelledby="nj-connection-sheet-title" aria-busy={loading}>
-    <header>
+  return <section className="nj-connection-sheet" aria-labelledby={embedded ? undefined : 'nj-connection-sheet-title'} aria-label={embedded ? (kind==='followers'?'Followers list':'Following list') : undefined} aria-busy={loading}>
+    {!embedded && <header>
       <span className="nj-connection-heading"><Users size={18} aria-hidden="true"/><span>
         <small>THE NIGHTJAR COMMUNITY</small>
         <strong id="nj-connection-sheet-title">{titleFor(kind)}</strong>
       </span></span>
       <button className="nj-connection-close" type="button" onClick={onClose} aria-label="Close connections"><X size={18}/></button>
-    </header>
+    </header>}
     {loading && <p role="status" className="nj-connection-state">Finding publicly visible members…</p>}
     {error && <div className="nj-connection-state" role="status">
       <p>{error}</p>
@@ -56,6 +57,6 @@ export default function ProfileConnections({userId,kind,onClose,onOpenProfile,de
       </div> : <p className="nj-connection-state">No publicly visible members to display here yet.</p>}
       {data.hasMore && <p className="nj-connection-note"><Heart size={13}/> Showing a selection of publicly visible connections. More may exist.</p>}
     </>}
-    <button type="button" className="nj-connection-footer" onClick={onClose}>Return to profile <ChevronDown size={15} aria-hidden="true"/></button>
+    {!embedded && <button type="button" className="nj-connection-footer" onClick={onClose}>Return to profile <ChevronDown size={15} aria-hidden="true"/></button>}
   </section>;
 }

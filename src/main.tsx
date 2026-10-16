@@ -7,6 +7,7 @@ import './styles/midnight-gold.css';
 import './styles/midnight-gold-cinema.css';
 import './styles/midnight-gold-refinement.css';
 import './styles/nightjar-velvet-interaction.css';
+import './styles/nightjar-connections-page.css';
 import './styles/vision-access.css';
 import App from './App';
 import { nightjarTheme } from './platform/nightjar-theme';

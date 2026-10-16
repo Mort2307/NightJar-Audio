@@ -1,0 +1,216 @@
+/* NightJar Midnight Gold — standalone Followers & Following destination.
+   A full page, NOT an expandable card inside a public profile.
+   All content is still privacy-filtered by the existing callable. */
+.nj-connections-page-backdrop {
+  position:fixed;
+  inset:0;
+  z-index:260;
+  overflow:hidden;
+  background:#080706;
+  color:#f5eee4;
+}
+.nj-connections-page {
+  height:100dvh;
+  width:100%;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  background:
+    radial-gradient(ellipse 70% 30% at 76% -10%,rgba(190,125,55,.16),transparent),
+    linear-gradient(170deg,#14100c 0%,#080706 38%,#090807 100%);
+  scrollbar-color:#967448 #090807;
+  outline:none;
+}
+.nj-connections-page-top {
+  position:sticky;
+  top:0;
+  z-index:6;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  min-height:64px;
+  padding:10px max(16px,env(safe-area-inset-left));
+  background:rgba(9,8,7,.96);
+  border-bottom:1px solid rgba(222,178,105,.2);
+  backdrop-filter:blur(16px);
+}
+.nj-connections-page-top button {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-width:44px;
+  min-height:44px;
+  padding:8px 11px;
+  cursor:pointer;
+  background:transparent;
+  border:1px solid transparent;
+  border-radius:12px;
+  color:#efd8b2;
+  font:600 12px/1.3 system-ui,sans-serif;
+}
+.nj-connections-page-top button:is(:hover,:focus-visible) {
+  border-color:rgba(222,178,105,.65);
+  background:rgba(213,172,108,.1);
+}
+.nj-connections-page-brand {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:#e6c28b;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.24em;
+}
+.nj-connections-page-content {
+  width:min(100%,760px);
+  margin:0 auto;
+  padding:clamp(20px,4vw,42px) clamp(16px,3vw,28px) max(80px,calc(36px + env(safe-area-inset-bottom)));
+}
+.nj-connections-page-heading {
+  display:grid;
+  gap:8px;
+  margin:0 0 24px;
+}
+.nj-connections-page-kicker {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font:700 10px/1.4 system-ui,sans-serif;
+  letter-spacing:.17em;
+  color:#e3bb80;
+}
+.nj-connections-page-heading h1 {
+  font:400 clamp(38px,7vw,58px)/1.05 Georgia,'Times New Roman',serif;
+  letter-spacing:-.035em;
+  color:#f6e9d5;
+  margin:0;
+}
+.nj-connections-page-heading p {
+  color:#c9b9a3;
+  margin:0;
+  font-size:14px;
+  line-height:1.7;
+}
+.nj-connections-page-heading p strong {
+  color:#f1dbb7;
+  font-weight:600;
+}
+.nj-connections-page-tabs {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:3px;
+  padding:4px;
+  margin-bottom:20px;
+  border:1px solid rgba(222,178,105,.28);
+  border-radius:15px;
+  background:#14110e;
+}
+.nj-connections-page-tabs button {
+  min-height:48px;
+  border:0;
+  border-radius:11px;
+  background:transparent;
+  color:#bcad98;
+  font:600 14px/1.4 system-ui,sans-serif;
+  cursor:pointer;
+}
+.nj-connections-page-tabs button[aria-selected="true"] {
+  background:linear-gradient(120deg,#efd09d,#c79a5f);
+  color:#150e08;
+  box-shadow:0 7px 25px rgba(0,0,0,.26);
+}
+.nj-connections-page-tabs button:focus-visible {
+  outline:3px solid #eed19f;
+  outline-offset:2px;
+}
+.nj-connections-page #nj-connections-list {outline:none;}
+.nj-connections-page #nj-connections-list:focus-visible {
+  outline:2px solid #e6c28b;
+  outline-offset:3px;
+  border-radius:14px;
+}
+.nj-connections-page .nj-connection-sheet {
+  display:block;
+  margin:0;
+  padding:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+}
+.nj-connections-page .nj-connection-description {
+  margin:0 0 16px;
+  color:#bfb09b;
+  font-size:12px;
+  line-height:1.6;
+}
+.nj-connections-page .nj-connection-people {
+  display:grid;
+  gap:10px;
+  max-height:none;
+  overflow:visible;
+}
+.nj-connections-page .nj-connection-person {
+  min-height:78px;
+  grid-template-columns:54px minmax(0,1fr) 20px;
+  gap:15px;
+  padding:12px 15px;
+  border-radius:14px;
+  background:linear-gradient(135deg,#201811,#0e0c0a 86%);
+  border:1px solid rgba(223,179,111,.29);
+  box-shadow:inset 0 1px rgba(241,218,179,.06),0 9px 28px rgba(0,0,0,.2);
+}
+.nj-connections-page .nj-connection-avatar {width:54px;height:54px;}
+.nj-connections-page .nj-connection-person-copy strong {
+  font:400 clamp(19px,3vw,22px)/1.18 Georgia,'Times New Roman',serif;
+}
+.nj-connections-page .nj-connection-person-copy small {
+  font-size:12px;
+  color:#cfbba0;
+}
+.nj-connections-page .nj-connection-state {
+  min-height:120px;
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px;
+  padding:28px 12px;
+  border:1px solid rgba(220,178,108,.22);
+  border-radius:14px;
+  background:rgba(26,20,15,.7);
+}
+.nj-connections-page .nj-connection-note {
+  margin:14px 0;
+  font-size:12px;
+  color:#d8c3a4;
+}
+@media(max-width:520px) {
+  .nj-connections-page-top {min-height:60px;padding-inline:12px;}
+  .nj-connections-page-top button {padding:7px 8px;}
+  .nj-connections-page-brand {font-size:10px;letter-spacing:.16em;}
+  .nj-connections-page-content {padding:25px 16px calc(48px + env(safe-area-inset-bottom));}
+  .nj-connections-page-heading {margin-bottom:19px;}
+  .nj-connections-page .nj-connection-person {min-height:72px;padding:10px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .nj-connections-page * {transition:none!important;scroll-behavior:auto!important;}
+}
+/* Override only the presentation, never Vision Access user selections. */
+:root[data-nightjar-vision] .nj-connections-page-backdrop,
+:root[data-nightjar-vision] .nj-connections-page {
+  background:var(--bg);
+  color:var(--ivory);
+}
+:root[data-nightjar-vision] .nj-connections-page :is(.nj-connection-person,.nj-connections-page-tabs,.nj-connection-state) {
+  background:var(--panel);
+  border:2px solid var(--line);
+}
+:root[data-nightjar-vision] .nj-connections-page :is(h1,p,strong,small,.nj-connections-page-brand,.nj-connections-page-kicker),
+:root[data-nightjar-vision] .nj-connections-page-top button,
+:root[data-nightjar-vision] .nj-connections-page-tabs button {
+  color:var(--ivory);
+}
+:root[data-nightjar-vision] .nj-connections-page-tabs button[aria-selected="true"] {
+  background:var(--ivory);
+  color:var(--bg);
+}
