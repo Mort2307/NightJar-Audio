@@ -9,6 +9,7 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
   const [error,setError] = useState('');
   const [releaseId,setReleaseId] = useState('');
   const [slotId,setSlotId] = useState('');
+  const [reviewReasons,setReviewReasons] = useState<Record<string,string>>({});
   const refresh = useCallback(async()=>{
     setLoading(true);setError('');
     try {setClaims(await (administrator ? verifiedCreditApi.adminClaims() : verifiedCreditApi.myClaims()));}
@@ -44,9 +45,10 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
               onClick={()=>void act(item.id,()=>verifiedCreditApi.uploaderResponse(item.id,decision))}>{decision}</button>)}
           </div>}
         {administrator&&<div className="nj-credit-actions">
+          {!['rejected','revoked'].includes(item.state)&&<label>Review reason (required for rejection or revocation)<input maxLength={600} value={reviewReasons[item.id]??''} onChange={event=>setReviewReasons(current=>({...current,[item.id]:event.target.value}))} placeholder="Explain the decision" /></label>}
           {item.state==='uploader_confirmed'&&<button type="button" disabled={busy!==null} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'approve'))}>Approve</button>}
-          {!['approved','rejected','revoked'].includes(item.state)&&<button type="button" disabled={busy!==null} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'reject'))}>Reject</button>}
-          {item.state==='approved'&&<button type="button" disabled={busy!==null} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'revoke'))}>Revoke</button>}
+          {!['approved','rejected','revoked'].includes(item.state)&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'reject',reviewReasons[item.id].trim()))}>Reject</button>}
+          {item.state==='approved'&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'revoke',reviewReasons[item.id].trim()))}>Revoke</button>}
         </div>}
       </article>)}</div>}
   </section>;
