@@ -12,18 +12,17 @@ const platformFiles=fs.readdirSync(platformDir).filter((name)=>name.endsWith('.t
 const exported=new Set(
   [...functionsSource.matchAll(/export\s+const\s+([A-Za-z0-9_]+)\s*=\s*onCall\b/g)].map((match)=>match[1]),
 );
-// Recognise named handlers returned by an explicitly exported callable factory.
-// Both the factory's declaration and each handler's onCall declaration must exist.
-for (const match of functionsSource.matchAll(/export\s+const\s*\{([^}]+)\}\s*=\s*(build[A-Za-z0-9_]+)\s*\(/g)) {
-  const [, members, factory] = match;
-  if (!new RegExp('export\\s+function\\s+' + factory + '\\b').test(functionsSource)) continue;
-  for (const member of members.split(',')) {
-    const name = member.trim();
+// Factory-exported callable handlers: require a real exported factory,
+// a real onCall definition, and an explicit export from the index module.
+const verifiedCreditFactory = functionSources.find(source =>
+  source.includes('export function buildVerifiedCreditCallables(')) ?? '';
+const indexSource = fs.readFileSync(path.join(functionsDir,'index.ts'),'utf8');
+const verifiedCreditExports = indexSource.match(/export\s+const\s*\{([^}]+)\}\s*=\s*buildVerifiedCreditCallables\s*\(/);
+if (verifiedCreditExports) {
+  for (const name of verifiedCreditExports[1].split(',').map(value=>value.trim())) {
     if (/^[A-Za-z_$][\\w$]*$/.test(name) &&
-        new RegExp('const\\s+' + name + '\\s*=\\s*onCall\\s*\\(').test(functionsSource) &&
-        new RegExp('return\\s*\\{[^}]*\\b' + name + '\\b').test(functionsSource)) {
-      exported.add(name);
-    }
+        verifiedCreditFactory.includes('const '+name+' = onCall(') &&
+        verifiedCreditFactory.includes(name)) exported.add(name);
   }
 }
 
