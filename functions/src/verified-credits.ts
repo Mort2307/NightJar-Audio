@@ -137,8 +137,19 @@ export function buildVerifiedCreditCallables(
   const adminListCreditClaims = onCall({ region:'europe-west2' }, async request => {
     const admin = requireAdmin(request);
     await requireAgeVerified(admin.uid);
-    const snapshot = await getFirestore().collection('verifiedCreditClaims').orderBy('createdAt','desc').limit(100).get();
-    return {claims:snapshot.docs.map(doc=>output(doc.id,doc.data()))};
+    const input = (request.data ?? {}) as Record<string,unknown>;
+    const cursor = clean(input.cursor,160);
+    const db = getFirestore();
+    let query = db.collection('verifiedCreditClaims').orderBy('createdAt','desc').limit(51);
+    if (cursor) {
+      if (cursor.includes('/')) throw new HttpsError('invalid-argument','Invalid queue cursor.');
+      const previous = await db.collection('verifiedCreditClaims').doc(cursor).get();
+      if (!previous.exists || !previous.get('createdAt')) throw new HttpsError('invalid-argument','Queue cursor has expired.');
+      query = query.startAfter(previous);
+    }
+    const snapshot = await query.get();
+    const page = snapshot.docs.slice(0,50);
+    return {claims:page.map(doc=>output(doc.id,doc.data())),nextCursor:snapshot.docs.length>50 ? page[page.length-1].id : null};
   });
 
   return {claimMyReleaseCredit,respondToCreditClaim,adminReviewCreditClaim,listMyCreditClaims,adminListCreditClaims};
