@@ -2061,6 +2061,16 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
 
+  // Public credit attribution is derived exclusively from independent admin approvals.
+  // Never treat contributor.userId in uploader-supplied release metadata as verification.
+  const verifiedCreditDocs = await db.collection('verifiedCreditClaims')
+    .where('claimantUserId', '==', userId).limit(100).get();
+  const verifiedCredits = verifiedCreditDocs.docs
+    .filter(doc => {
+      const credit = doc.data();
+      return credit.state === 'approved' && Boolean(credit.approvedByAdminUserId && credit.approvedAt);
+    })
+    .map(doc => ({ id:doc.id, releaseId:doc.data().releaseId, releaseRole:doc.data().releaseRole }));
   const professionalRoles = professionalRolesForAccount(accountData ?? {});
   const activePublicRole = cleanText(accountData?.role, 30);
   const role = activePublicRole === 'listener' || professionalRoles.includes(activePublicRole as AccountRole)
@@ -2184,6 +2194,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       // Professional approval originates from account privileges, never
       // release credits or self-authored profile fields. Applies to ALL tabs.
       approvedProfessionalRoles: professionalRoles,
+      verifiedCredits,
       bio: data.bio ?? null,
       welcomeMessage: data.welcomeMessage ?? null,
       socialLinks: publicSocialLinks,
