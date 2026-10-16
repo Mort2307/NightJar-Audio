@@ -107,6 +107,14 @@ export function buildVerifiedCreditCallables(
       if (decision === 'revoke' && data.state !== 'approved') throw new HttpsError('failed-precondition','Only approved claims can be revoked.');
       if (decision === 'reject' && (!activeStates.has(data.state) || data.state === 'approved')) throw new HttpsError('failed-precondition','Claim is not pending.');
       const state:ClaimState = decision === 'approve' ? 'approved' : decision === 'revoke' ? 'revoked' : 'rejected';
+      let ownedLockRef: FirebaseFirestore.DocumentReference | null = null;
+      if (state === 'rejected' || state === 'revoked') {
+        const lockId = createHash('sha256').update([data.releaseId,data.contributorSlotId].join('|')).digest('hex');
+        const lockRef = getFirestore().collection('verifiedCreditLocks').doc(lockId);
+        // Firestore transactions require every read before the first write.
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists && lockSnap.get('claimId') === id) ownedLockRef = lockRef;
+      }
       tx.update(ref,{
         state,updatedAt:FieldValue.serverTimestamp(),
         ...(state==='approved'?{approvedByAdminUserId:identity.uid,approvedAt:FieldValue.serverTimestamp()}:{}),
@@ -114,13 +122,7 @@ export function buildVerifiedCreditCallables(
         reviewReason:clean(input.reason,600),
       });
       tx.create(auditRef(id),{actorUserId:identity.uid,event:'admin_'+decision,at:FieldValue.serverTimestamp(),reason:clean(input.reason,600)});
-      if (state === 'rejected' || state === 'revoked') {
-        const lockId = createHash('sha256').update([data.releaseId,data.contributorSlotId].join('|')).digest('hex');
-        const lockRef = getFirestore().collection('verifiedCreditLocks').doc(lockId);
-        // A stale review must never release a lock now owned by a different claim.
-        const lockSnap = await tx.get(lockRef);
-        if (lockSnap.exists && lockSnap.get('claimId') === id) tx.delete(lockRef);
-      }
+      if (ownedLockRef) tx.delete(ownedLockRef);
     });
     return {state:decision === 'approve'?'approved':decision === 'revoke'?'revoked':'rejected'};
   });
