@@ -73,5 +73,7 @@ jobs:
       - run: npm ci --no-fund && npm --prefix functions ci --no-fund
       - name: Validate release authorization and routing contracts
         run: node scripts/verified-credit-release-contracts.mjs
-      - name: Test Firestore rules and transaction contention in isolated emulators
-        run: npx --yes firebase-tools@15.33.0 emulators:exec --project demo-nightjar-credit-ci --only firestore,auth 'node scripts/verified-credit-firestore-emulator.mjs'
+      - name: Compile real credit callable handlers for emulator acceptance
+        run: npm --prefix functions run build
+      - name: Test Firestore rules, transaction contention and credit lifecycle in isolated emulators
+        run: npx --yes firebase-tools@15.33.0 emulators:exec --project demo-nightjar-credit-ci --only firestore,auth 'node scripts/verified-credit-firestore-emulator.mjs && node scripts/verified-credit-callable-emulator.mjs'
