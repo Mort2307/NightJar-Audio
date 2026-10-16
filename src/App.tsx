@@ -6351,7 +6351,10 @@ function ReleaseCoverVisual({ artworkUrl, brandLogoUrl }: { artworkUrl?: string 
 function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, onRead, onFavourite, onReaction, onCommunity, reason, brandLogoUrl, highlighted = false }: { highlighted?: boolean; track: Track; playing: boolean; favourite: boolean; reaction: ReleaseReaction; canReact: boolean; onPlay: (track: Track) => void; onRead: (track: Track) => void; onFavourite: () => void; onReaction: (reaction: Exclude<ReleaseReaction,null>) => void; onCommunity: () => void; reason?: string; brandLogoUrl: string }) {
   return <article id={"nightjar-release-" + track.id} className={highlighted ? "track-card nightjar-notification-target" : "track-card"}>
     <div className="track-cover release-cover">
-      <ReleaseCoverVisual artworkUrl={track.artworkUrl} brandLogoUrl={brandLogoUrl} />
+      <button type="button" className="nj-release-cover-trigger" disabled={!track.audioAvailable && !track.audioUrl}
+        aria-label={playing ? 'Pause '+track.title : 'Listen to '+track.title} onClick={()=>onPlay(track)}>
+        <ReleaseCoverVisual artworkUrl={track.artworkUrl} brandLogoUrl={brandLogoUrl}/>
+      </button>
       <span className="track-index">{track.category}</span>
       <button className="cover-play" disabled={!track.audioAvailable && !track.audioUrl} onClick={() => onPlay(track)} aria-label={!track.audioAvailable && !track.audioUrl ? 'Audio not connected' : playing ? 'Pause ' + track.title : 'Play ' + track.title}>
         {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
