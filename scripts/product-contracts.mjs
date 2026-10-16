@@ -89,7 +89,7 @@ for (const destination of [
 ]) {
   if (!app.includes(destination)) fail('Dashboard metric lacks route to ' + destination);
 }
-if (!app.includes("setMyConnectionsKind('following')")) fail('Following dashboard tile must open the actual public connection list.');
+if (!app.includes("setConnectionsPage({userId:user.userId,kind:'following'")) fail('Following dashboard tile must open the dedicated public connection page.');
 if (!app.includes("openAdminWorkspace('security')") || !read('src/components/AdminSecurityAlerts.tsx').includes('id="admin-security-alerts"')) fail('Admin security metric must navigate to the focused security workpage with a real anchor.');
 if (!["selectTab('portfolio')", "selectTab('collaborations')", "selectTab('profile')", "selectTab('projects')"]
   .every((call) => editorStudio.includes(call))) fail('Editor top tiles must open their relevant tabs.');
