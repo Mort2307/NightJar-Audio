@@ -29,7 +29,7 @@ export default function ProfileConnections({userId,kind,onClose,onOpenProfile,de
     return ()=>{current=false;};
   },[userId,kind,demoMode,reload]);
 
-  return <section className="nj-connection-sheet" aria-labelledby="nj-connection-sheet-title" aria-busy={loading}>
+  return <section className="nj-connection-sheet" aria-labelledby={embedded ? undefined : 'nj-connection-sheet-title'} aria-label={embedded ? (kind==='followers'?'Followers list':'Following list') : undefined} aria-busy={loading}>
     {!embedded && <header>
       <span className="nj-connection-heading"><Users size={18} aria-hidden="true"/><span>
         <small>THE NIGHTJAR COMMUNITY</small>
