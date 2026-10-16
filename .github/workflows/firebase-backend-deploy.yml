@@ -15,6 +15,7 @@ on:
           - plan
           - audio-eq-cors
           - functions:selected
+          - didit:reconcile
           - admin-attention
           - functions
           - firestore:rules
@@ -152,7 +153,7 @@ jobs:
         run: npm ci --no-fund && npm run validate
 
       - name: Install, check and build backend
-        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend' }}
+        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'didit:reconcile' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend' }}
         run: |
           npm --prefix functions ci --no-fund
           npm --prefix functions run check
@@ -185,6 +186,10 @@ jobs:
                 targets+=("functions:$name")
               done
               DEPLOY_SCOPE="$(IFS=,; echo "${targets[*]}")" ;;
+            didit:reconcile)
+              # Safe recovery: reconciliation and status only. No new chargeable Didit sessions.
+              targets=(functions:ageStatus functions:reconcileMyDiditVerification functions:adminReconcileDiditApproval functions:adminDiditDiagnostics functions:myDiditControlledCheck)
+              DEPLOY_SCOPE="$(IFS=,; echo "${targets[*]}")" ;;
             admin-attention)
               # Deliberately fixed set of owner-only callables and event listeners.
               # Never deploy other backend functions from this release preset.
@@ -197,7 +202,7 @@ jobs:
           echo "Nightjar project=nightjar-audio; scope=$DEPLOY_SCOPE; commit=$GITHUB_SHA"
           date +%s > "$RUNNER_TEMP/nightjar-deploy-start"
           trap 'date +%s > "$RUNNER_TEMP/nightjar-deploy-end"' EXIT
-          if [[ "$REQUESTED_SCOPE" == "functions:selected" ]]; then
+          if [[ "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" ]]; then
             # Reuse the existing OIDC-authorized workflow. Keep batches small
             # and never retry non-quota failures automatically.
             batch_size=5
