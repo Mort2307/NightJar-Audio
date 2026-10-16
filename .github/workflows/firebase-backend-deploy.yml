@@ -81,6 +81,7 @@ jobs:
           fi
 
       - name: Checkout the production branch
+        id: checkout
         uses: actions/checkout@v5
         with:
           persist-credentials: false
@@ -273,13 +274,13 @@ jobs:
         run: node scripts/firebase-backend-verify.mjs
 
       - name: Write sanitized release report
-        if: always()
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
         env:
           NIGHTJAR_JOB_OUTCOME: ${{ job.status }}
         run: node scripts/firebase-backend-report.mjs
 
       - name: Upload sanitized deployment report
-        if: always()
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
         uses: actions/upload-artifact@v6
         with:
           name: nightjar-backend-release-${{ github.run_id }}-${{ github.run_attempt }}
