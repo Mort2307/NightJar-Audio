@@ -28,8 +28,8 @@ initializeApp();
 const db = getFirestore();
 const REGION = 'europe-west2';
 // Emergency reversible stop: no new Didit sessions until live-session creation is repaired.
-const DIDIT_VERIFICATION_PAUSED = true;
-const DIDIT_LIVE_PILOT_ADMINS_ONLY = true; // Closed beta: billable age sessions are admin-only.
+const DIDIT_VERIFICATION_PAUSED = false; // Public self-service Didit age verification enabled; existing approved accounts remain verified.
+const DIDIT_LIVE_PILOT_ADMINS_ONLY = false; // All authenticated, unverified members may begin the standard mandatory age check.
 const TESTING_AGE_ASSURANCE_BYPASS = false; // Mandatory verified-18+ rollout: private tester bypass no longer grants adult access.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
@@ -6800,7 +6800,7 @@ export const ageStatus = onCall({
     // The actual provider decision is separate from temporary test access.
     providerVerified: persistentlyVerified,
     providerStatus: String(data.status ?? 'NOT_STARTED'),
-    livePilotAvailable: !DIDIT_VERIFICATION_PAUSED && pilotAccess && diditConfigured() && diditMode() === 'live',
+    livePilotAvailable: !DIDIT_VERIFICATION_PAUSED && diditConfigured() && diditMode() === 'live',
     verificationPaused: DIDIT_VERIFICATION_PAUSED,
     controlledAdminTestClaimed,
     ageThreshold: 18,
