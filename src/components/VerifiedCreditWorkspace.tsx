@@ -28,6 +28,7 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
     {!administrator && <form onSubmit={event=>{event.preventDefault();void act('new',()=>verifiedCreditApi.claim(releaseId.trim(),slotId.trim()).then(()=>{setReleaseId('');setSlotId('');}));}}>
       <label>Published release ID <input required maxLength={160} value={releaseId} onChange={e=>setReleaseId(e.target.value)} /></label>
       <label>Contributor slot ID <input required maxLength={160} value={slotId} onChange={e=>setSlotId(e.target.value)} /></label>
+      <small>For existing releases, slot IDs are numbered from 0 in the order contributors appear. A direct credit action on each release will replace this manual entry.</small>
       <button type="submit" disabled={busy!==null}>I'm credited</button>
     </form>}
     {error && <p role="alert">{error}</p>}
