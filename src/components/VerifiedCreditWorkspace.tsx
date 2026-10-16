@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { verifiedCreditApi, type CreditClaim } from '../platform/firebase-verified-credits';
 
-type Props = { administrator?: boolean; onNotice?: (message:string)=>void };
-export default function VerifiedCreditWorkspace({administrator=false,onNotice}:Props) {
+type Props = { currentUserId:string; administrator?: boolean; onNotice?: (message:string)=>void };
+export default function VerifiedCreditWorkspace({currentUserId,administrator=false,onNotice}:Props) {
   const [claims,setClaims] = useState<CreditClaim[]>([]);
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState<string|null>(null);
@@ -36,8 +36,8 @@ export default function VerifiedCreditWorkspace({administrator=false,onNotice}:P
       <div className="nj-credit-claim-list">{claims.map(item=><article className="panel" key={item.id}>
         <strong>{item.releaseRole}</strong> <span>{item.state.replaceAll('_',' ')}</span>
         <small>Release: {item.releaseId} · Slot: {item.contributorSlotId}</small>
-        {!administrator&&item.state==='awaiting_uploader'&&<p>Awaiting the release uploader's decision.</p>}
-        {!administrator&&item.state==='awaiting_uploader'&&
+        {!administrator&&item.claimantUserId===currentUserId&&item.state==='awaiting_uploader'&&<p>Awaiting the release uploader's decision.</p>}
+        {!administrator&&item.uploaderUserId===currentUserId&&item.state==='awaiting_uploader'&&
           <div className="nj-credit-actions">
             {(['confirm','dispute','unsure'] as const).map(decision=><button key={decision} type="button" disabled={busy!==null}
               onClick={()=>void act(item.id,()=>verifiedCreditApi.uploaderResponse(item.id,decision))}>{decision}</button>)}
