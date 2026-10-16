@@ -1,0 +1,29 @@
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { firebaseApp } from './firebase-auth';
+
+const functions = getFunctions(firebaseApp, 'europe-west2');
+export type CreditClaim = {
+  id: string;
+  releaseId: string;
+  contributorSlotId: string;
+  claimantUserId: string;
+  uploaderUserId: string;
+  releaseRole: string;
+  state: 'awaiting_uploader' | 'uploader_confirmed' | 'uploader_disputed' | 'uploader_unsure' | 'admin_review' | 'approved' | 'rejected' | 'revoked';
+  source: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+const mine = httpsCallable<void,{claims:CreditClaim[]}>(functions,'listMyCreditClaims');
+const admin = httpsCallable<void,{claims:CreditClaim[]}>(functions,'adminListCreditClaims');
+const claim = httpsCallable<{releaseId:string;contributorSlotId:string},{claimId:string;state:string}>(functions,'claimMyReleaseCredit');
+const respond = httpsCallable<{claimId:string;decision:'confirm'|'dispute'|'unsure'},{state:string}>(functions,'respondToCreditClaim');
+const review = httpsCallable<{claimId:string;decision:'approve'|'reject'|'revoke';reason?:string},{state:string}>(functions,'adminReviewCreditClaim');
+
+export const verifiedCreditApi = {
+  async myClaims() { return (await mine()).data.claims; },
+  async adminClaims() { return (await admin()).data.claims; },
+  async claim(releaseId:string,contributorSlotId:string) { return (await claim({releaseId,contributorSlotId})).data; },
+  async uploaderResponse(claimId:string,decision:'confirm'|'dispute'|'unsure') { return (await respond({claimId,decision})).data; },
+  async adminDecision(claimId:string,decision:'approve'|'reject'|'revoke',reason?:string) { return (await review({claimId,decision,reason})).data; },
+};
