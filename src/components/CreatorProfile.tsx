@@ -7,7 +7,6 @@ import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 import { nightjarReferrals } from '../platform/firebase-referrals';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
 import { VoiceCallingCardPublic } from './VoiceCallingCard';
-import ProfileConnections from './ProfileConnections';
 
 type CreatorProfileData = {
   userId: string;
@@ -42,7 +41,7 @@ type Props = {
   creatorUserId: string | null;
   followingIds: string[];
   onToggleFollow: (creatorUserId: string) => Promise<void>;
-  onOpenConnectedProfile?: (userId:string, role?:string)=>void;
+  onOpenConnections: (userId:string,kind:'followers'|'following',displayName:string)=>void;
   onPlayRelease: (release: any) => void;
   onClose: () => void;
   notify: (message: string) => void;
@@ -56,11 +55,10 @@ type Props = {
   demoMode?: boolean;
 };
 
-export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onOpenConnectedProfile, onPlayRelease, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false }: Props) {
+export default function CreatorProfile({ creatorUserId, followingIds, onToggleFollow, onOpenConnections, onPlayRelease, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [connectionKind,setConnectionKind] = useState<'followers'|'following'|null>(null);
 
   useDialogFocusTrap(dialogRef, { onEscape: onClose });
   useEffect(()=>{
@@ -138,12 +136,11 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
             <span className="nj-legacy-official-moon" aria-label="Official NightJar creator approved through onboarding" title="Official NightJar creator"><Moon size={17} aria-hidden="true"/></span>
           </span><div className="nj-cinema-legacy-identity"><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button>{canMessage && onMessage && <button className="secondary-button" onClick={()=>onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}</div></div>
         <div className="public-profile-metrics">
-          <button type="button" className="nj-profile-metric-button" aria-label={'View followers of '+profile.name} aria-expanded={connectionKind==='followers'} onClick={()=>setConnectionKind(current=>current==='followers'?null:'followers')}><strong>{profile.followers ?? 0}</strong><span>Followers</span></button>
-          <button type="button" className="nj-profile-metric-button" aria-label={'View profiles followed by '+profile.name} aria-expanded={connectionKind==='following'} onClick={()=>setConnectionKind(current=>current==='following'?null:'following')}><strong>{profile.followingCount ?? 0}</strong><span>Following</span></button>
+          <button type="button" className="nj-profile-metric-button" aria-label={'View followers of '+profile.name}  onClick={()=>onOpenConnections(profile.userId,'followers',profile.name)}><strong>{profile.followers ?? 0}</strong><span>Followers</span></button>
+          <button type="button" className="nj-profile-metric-button" aria-label={'View profiles followed by '+profile.name}  onClick={()=>onOpenConnections(profile.userId,'following',profile.name)}><strong>{profile.followingCount ?? 0}</strong><span>Following</span></button>
           <div><span>Released work</span><strong>{profile.releases?.length ?? 0}</strong></div>
           <div><span>Collaborations</span><CollaborationHistoryButton userId={profile.userId} displayName={profile.name} count={profile.completedCollaborations ?? 0} demoMode={demoMode} compact /></div>
         </div>
-        {connectionKind && <ProfileConnections userId={profile.userId} kind={connectionKind} demoMode={demoMode} onClose={()=>setConnectionKind(null)} onOpenProfile={(id,role)=>{setConnectionKind(null);onOpenConnectedProfile?.(id,role);}}/>}
         {!!profile.activityBadges?.length && <div className="profile-activity-badges public-profile-badges">{profile.activityBadges.map((badge)=><span key={badge.id} title={badge.detail}><ShieldCheck size={12}/>{badge.label}</span>)}</div>}
         {profile.welcomeMessage && <p className="creator-profile-welcome">{profile.welcomeMessage}</p>}{profile.bio && <p className="creator-profile-bio">{profile.bio}</p>}
         <VoiceCallingCardPublic creatorUserId={profile.userId} onPlayRelease={onPlayRelease} demoMode={demoMode} />
