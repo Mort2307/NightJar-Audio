@@ -36,6 +36,10 @@ assert.match(connections,/aria-busy=\{loading\}/);
 assert.match(directory,/nj-directory-identity-trigger/);
 assert.match(spotlight,/nj-spotlight-portrait-trigger/);
 assert.match(app,/nj-release-cover-trigger/);
+assert.match(app,/setMyConnectionsKind\('followers'\)/,'profile owner can open followers');
+assert.match(app,/setMyConnectionsKind\('following'\)/,'profile owner can open following');
+assert.match(server,/userId !== identity\.uid/,'owners can see own follows without exposing private accounts');
+
 assert.match(css,/prefers-reduced-motion/);
 assert.match(css,/data-nightjar-vision/);
 assert.match(main,/nightjar-velvet-interaction\.css/);
