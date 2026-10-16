@@ -29,7 +29,7 @@ const REGION = 'europe-west2';
 // Emergency reversible stop: no new Didit sessions until live-session creation is repaired.
 const DIDIT_VERIFICATION_PAUSED = true;
 const DIDIT_LIVE_PILOT_ADMINS_ONLY = true; // Closed beta: billable age sessions are admin-only.
-const TESTING_AGE_ASSURANCE_BYPASS = true; // TESTING ONLY — must be false before public launch.
+const TESTING_AGE_ASSURANCE_BYPASS = false; // Mandatory verified-18+ rollout: private tester bypass no longer grants adult access.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
 const NIGHTJAR_GMAIL_CLIENT_ID = defineSecret('NIGHTJAR_GMAIL_CLIENT_ID');
