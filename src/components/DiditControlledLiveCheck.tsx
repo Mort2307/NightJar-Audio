@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, ExternalLink, LockKeyhole, RefreshCw, ShieldCheck } from 'lucide-react';
 import { nightjarDiditControlled, type DiditControlledStatus } from '../platform/firebase-didit-controlled';
-import { nightjarLegal } from '../platform/firebase-legal';
+import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from '../legal/nightjarLegal';
 
 const isSafeDiditLink = (link: string | undefined | null) => {
@@ -13,6 +13,8 @@ const isSafeDiditLink = (link: string | undefined | null) => {
 };
 
 export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: () => void } = {}) {
+  const [requiredAgreements,setRequiredAgreements]=useState<LegalAgreementStatus[]>([]);
+  const [acceptedAgreements,setAcceptedAgreements]=useState<string[]>([]);
   const [status,setStatus]=useState<DiditControlledStatus|null>(null);
   const [legalAccepted,setLegalAccepted]=useState(false);
   const [legalAcknowledged,setLegalAcknowledged]=useState(false);
@@ -26,6 +28,12 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
   const refresh=async()=>{
     setPending(true);setError('');
     try {
+      // The Didit status endpoint requires current platform Terms and Privacy acceptance.
+      // Legal status is intentionally accessible before that account middleware.
+      const agreements=await nightjarLegal.status();
+      const missing=agreements.documents.filter(document=>document.requiredForAccount && !document.accepted);
+      setRequiredAgreements(missing);
+      if(missing.length){setStatus(null);setLoaded(true);return;}
       const result=await nightjarDiditControlled.status();
       setStatus(result);
       setLaunchUrl(isSafeDiditLink(result.launchUrl) ? result.launchUrl : null);
@@ -41,6 +49,16 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
     } finally { setPending(false);setLoaded(true); }
   };
   useEffect(()=>{void refresh();},[]);
+  const acceptRequiredAgreements=async()=>{
+    if(pending || !requiredAgreements.length || requiredAgreements.some(doc=>!acceptedAgreements.includes(doc.id)))return;
+    setPending(true);setError('');
+    try{
+      await nightjarLegal.accept(requiredAgreements.map(doc=>({id:doc.id,version:doc.version,accepted:true as const})), 'didit-gate-current-platform-agreements');
+      setRequiredAgreements([]);setAcceptedAgreements([]);
+    }catch(cause){setError(cause instanceof Error?cause.message:'Could not save legal acknowledgements.');setPending(false);return;}
+    setPending(false);
+    await refresh();
+  };
 
   // This is a READ of the existing Didit decision, not a new ID session.
   // The backend uses the signed-in account's stored session; no pasted IDs.
@@ -114,6 +132,16 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
     }finally{setPending(false);}
   };
 
+  if(loaded && requiredAgreements.length)return <section className="panel nj-didit-controlled-panel" aria-label="Required Nightjar agreements">
+    <h2>Review your Nightjar agreements</h2>
+    <p>Before you can verify your age, please review and accept the current Terms of Use and Privacy Notice. Accepting these documents will not start a Didit session or incur a verification charge.</p>
+    {requiredAgreements.map(doc=><label key={doc.id} className="nj-didit-reuse-consent">
+      <input type="checkbox" checked={acceptedAgreements.includes(doc.id)} disabled={pending} onChange={event=>setAcceptedAgreements(current=>event.target.checked?[...current,doc.id]:current.filter(id=>id!==doc.id))}/>
+      <span>I have read and accept the <a href={doc.path} target="_blank" rel="noopener noreferrer">{doc.title} (version {doc.version}) <ExternalLink size={12}/></a>.</span>
+    </label>)}
+    <button className="primary-button" type="button" disabled={pending || requiredAgreements.some(doc=>!acceptedAgreements.includes(doc.id))} onClick={()=>void acceptRequiredAgreements()}>{pending?'Saving agreements…':'Accept agreements and continue to Didit'}</button>
+    {error && <p role="alert" className="nj-didit-reuse-error">{error}</p>}
+  </section>;
   if(!loaded)return <section className="panel nj-didit-controlled-panel" role="status"><p>Checking your secure Didit verification options…</p></section>;
   if(!status)return <section className="panel nj-didit-controlled-panel" role="alert"><h2>Didit verification connection unavailable</h2><p>Nightjar could not load your verification options. Your existing approval has not been changed. Do not start another ID check.</p>{error && <p>{error}</p>}<button className="secondary-button" type="button" disabled={pending} onClick={()=>void refresh()}>Retry verification connection</button></section>;
   const alreadyVerified=status.providerVerified;
