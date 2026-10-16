@@ -38,7 +38,7 @@ for (const [marker,label] of [
 requireMarker(backend, 'diditPass(data)', 'Protected audio checks Didit status');
 requireMarker(backend, 'startDiditSession(identity.uid)', 'Didit session callable');
 requireMarker(backend, "requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice')", 'The server must require recorded notice acknowledgement before beginning Didit');
-requireMarker(backend, 'DIDIT_LIVE_PILOT_ADMINS_ONLY = true', 'Live Didit remains restricted to approved pilot accounts');
+requireMarker(backend, 'DIDIT_LIVE_PILOT_ADMINS_ONLY = false', 'All unverified members can begin the live Didit flow');
 requireMarker(backend, "DIDIT_LIVE_PILOT_ADMINS_ONLY && !identity.admin && !individuallyApprovedPilot", 'Only admins or explicitly enrolled pilot members can launch Didit');
 requireMarker(backend, "export const adminSetDiditPilotAccess", 'Authenticated administrator controls Didit pilot cohort');
 requireMarker(backend, "diditPilotEnabled: enabled", 'Pilot enrolment is stored on the correct Firebase account');
