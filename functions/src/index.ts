@@ -1999,6 +1999,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         userId: doc.id,
         role,
         roles: nightjarTeam ? ['listener'] : ['listener', ...professionalRoles],
+        approvedProfessionalRoles: nightjarTeam ? [] : professionalRoles,
         nightjarTeam,
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
