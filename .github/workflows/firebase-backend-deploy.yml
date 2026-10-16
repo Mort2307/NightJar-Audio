@@ -197,8 +197,37 @@ jobs:
           echo "Nightjar project=nightjar-audio; scope=$DEPLOY_SCOPE; commit=$GITHUB_SHA"
           date +%s > "$RUNNER_TEMP/nightjar-deploy-start"
           trap 'date +%s > "$RUNNER_TEMP/nightjar-deploy-end"' EXIT
-          firebase deploy --only "$DEPLOY_SCOPE" --project nightjar-audio --non-interactive 2>&1 \
-            | tee "$RUNNER_TEMP/nightjar-deploy.log"
+          if [[ "$REQUESTED_SCOPE" == "functions:selected" ]]; then
+            # Reuse the existing OIDC-authorized workflow. Keep batches small
+            # and never retry non-quota failures automatically.
+            batch_size=5
+            : > "$RUNNER_TEMP/nightjar-deploy.log"
+            for ((i=0; i<${#targets[@]}; i+=batch_size)); do
+              batch=("${targets[@]:i:batch_size}")
+              batch_scope="$(IFS=,; echo "${batch[*]}")"
+              attempt=0
+              while true; do
+                attempt=$((attempt+1))
+                if firebase deploy --only "$batch_scope" --project nightjar-audio --non-interactive > "$RUNNER_TEMP/nightjar-batch.log" 2>&1; then
+                  cat "$RUNNER_TEMP/nightjar-batch.log" | tee -a "$RUNNER_TEMP/nightjar-deploy.log"
+                  break
+                fi
+                cat "$RUNNER_TEMP/nightjar-batch.log" | tee -a "$RUNNER_TEMP/nightjar-deploy.log"
+                if grep -Eiq 'HTTP Error: 429|Quota exceeded|RESOURCE_EXHAUSTED' "$RUNNER_TEMP/nightjar-batch.log" && ((attempt < 5)); then
+                  delay=$((60 * (2 ** (attempt-1)) + RANDOM % 30))
+                  echo "::warning::Quota exceeded; retrying after ${delay}s"
+                  sleep "$delay"
+                else
+                  echo "::error::Batch $((i/batch_size+1)) failed; stopping release."
+                  exit 1
+                fi
+              done
+              if ((i+batch_size < ${#targets[@]})); then sleep 90; fi
+            done
+          else
+            firebase deploy --only "$DEPLOY_SCOPE" --project nightjar-audio --non-interactive 2>&1 \
+              | tee "$RUNNER_TEMP/nightjar-deploy.log"
+          fi
 
       # Workload Identity Federation is deliberately restricted to THIS
       # backend workflow's GitHub OIDC subject. The old standalone EQ workflow
