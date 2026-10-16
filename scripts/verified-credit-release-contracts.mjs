@@ -60,6 +60,9 @@ requirePattern(hosting,/Deploy verified credits indexes and functions before Hos
 requirePattern(hosting,/deploy_credit_batch 'firestore:indexes'/,'release indexes before callables');
 requirePattern(hosting,/deploy_credit_batch 'functions:selected'/,'release callables before hosting');
 assert.ok(backendWorkflow.includes('firestore-index-preservation-guard.mjs'),'prevent deletion of existing production indexes');
+assert.match(backendWorkflow,/REQUESTED_SCOPE\" == \"functions\" \|\|/,'full policy change must be released using scoped batches');
+assert.match(backendWorkflow,/batch_size=10/,'all-functions release uses small verified batches');
+assert.match(backendWorkflow,/read -r -a targets <<< \"\$DEPLOY_SCOPE\"/,'full functions deploy enumerates exact non-deleting targets');
 // The Github PR preview workflow runs on main; CI must explicitly parse the
 // PR version of the production workflow or malformed YAML can go unnoticed.
 const diditStage=hosting.slice(hosting.indexOf('name: Enforce mandatory approved Didit access before Hosting'),

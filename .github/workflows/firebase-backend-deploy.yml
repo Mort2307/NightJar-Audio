@@ -178,7 +178,10 @@ jobs:
             functions)
               # Current named targets only. Never allow Firebase to delete legacy
               # deployed functions missing from the current source.
-              DEPLOY_SCOPE="$(node scripts/firebase-current-functions-scope.mjs)" ;;
+              DEPLOY_SCOPE="$(node scripts/firebase-current-functions-scope.mjs)"
+              # Enumerate exact named targets once; never run one oversized,
+              # quota-heavy deploy for the full (294+) function inventory.
+              IFS=',' read -r -a targets <<< "$DEPLOY_SCOPE" ;;
             firestore:rules|firestore:indexes|storage)
               DEPLOY_SCOPE="$REQUESTED_SCOPE" ;;
             functions:selected)
@@ -216,10 +219,11 @@ jobs:
           echo "Nightjar project=nightjar-audio; scope=$DEPLOY_SCOPE; commit=$GITHUB_SHA"
           date +%s > "$RUNNER_TEMP/nightjar-deploy-start"
           trap 'date +%s > "$RUNNER_TEMP/nightjar-deploy-end"' EXIT
-          if [[ "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" || "$REQUESTED_SCOPE" == "didit:testers" ]]; then
+          if [[ "$REQUESTED_SCOPE" == "functions" || "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" || "$REQUESTED_SCOPE" == "didit:testers" ]]; then
             # Reuse the existing OIDC-authorized workflow. Keep batches small
             # and never retry non-quota failures automatically.
             batch_size=5
+            if [[ "$REQUESTED_SCOPE" == "functions" ]]; then batch_size=10; fi
             : > "$RUNNER_TEMP/nightjar-deploy.log"
             for ((i=0; i<${#targets[@]}; i+=batch_size)); do
               batch=("${targets[@]:i:batch_size}")
@@ -241,7 +245,9 @@ jobs:
                   exit 1
                 fi
               done
-              if ((i+batch_size < ${#targets[@]})); then sleep 90; fi
+              if ((i+batch_size < ${#targets[@]})); then
+              if [[ "$REQUESTED_SCOPE" == "functions" ]]; then sleep 20; else sleep 90; fi
+            fi
             done
           else
             firebase deploy --only "$DEPLOY_SCOPE" --project nightjar-audio --non-interactive 2>&1 \
