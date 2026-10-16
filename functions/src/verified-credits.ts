@@ -89,6 +89,7 @@ export function buildVerifiedCreditCallables(
     const id = requireInput(input.claimId,'claim');
     const decision = clean(input.decision,24);
     if (!['approve','reject','revoke'].includes(decision)) throw new HttpsError('invalid-argument','Invalid decision.');
+    if (decision !== 'approve' && !clean(input.reason,600)) throw new HttpsError('invalid-argument','A review reason is required for rejection or revocation.');
     const ref = creditRef(id);
     await getFirestore().runTransaction(async tx => {
       const snap = await tx.get(ref), data = snap.data();
