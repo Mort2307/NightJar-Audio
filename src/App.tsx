@@ -157,7 +157,7 @@ const EditorShowcaseModeration = lazy(() => import('./components/EditorShowcaseM
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'calendar' | 'settings';
 type AgeStage = 'gate' | 'assurance' | 'app';
 // Set to false only after the live Didit flow is repaired and tested.
-const DIDIT_VERIFICATION_PAUSED = true;
+const DIDIT_VERIFICATION_PAUSED = false; // Public standard Didit entry is available to every unverified member.
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type TestingMode = 'off' | 'demo' | 'simulation' | 'live';
