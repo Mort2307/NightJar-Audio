@@ -68,8 +68,7 @@ export function PersonalisedHome({userId, editable, children, onNavigate}: {
   return <HomeContext.Provider value={ctx}>
     <section className="page-wrap nj-animate nj-personal-home" aria-label="Your Nightjar home">
       <div className="nj-personal-home-toolbar">
-        <div><span className="mini-label">YOUR NIGHTJAR</span><strong>Made for your listening mood.</strong>
-          <small>Spotlights always lead. Arrange everything else your way.</small></div>
+        <div><span className="mini-label">YOUR NIGHTJAR</span><strong>Made for your listening mood.</strong></div>
         {editable && <button type="button" className="secondary-button" aria-expanded={editing} aria-controls="nj-home-layout-editor" onClick={()=>setEditing(v=>!v)}>
           <Settings2 size={16}/> {editing?'Done arranging':'Customise home'}
         </button>}
@@ -91,7 +90,7 @@ export function PersonalisedHome({userId, editable, children, onNavigate}: {
         <button type="button" onClick={()=>onNavigate('library')}><LayoutGrid size={16}/> My library</button>
         <button type="button" onClick={()=>{
           window.dispatchEvent(new CustomEvent('nightjar:open-home-section',{detail:'catalogue'}));
-          window.setTimeout(()=>document.getElementById('nightjar-home-catalogue')?.scrollIntoView({behavior:'smooth',block:'start'}),40);
+          window.setTimeout(()=>document.getElementById('nightjar-home-catalogue')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}),40);
         }}>Browse audio</button>
         <button type="button" onClick={()=>onNavigate('creators')}>Find creators</button>
       </nav>
