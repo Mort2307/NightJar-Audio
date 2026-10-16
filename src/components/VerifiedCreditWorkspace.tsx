@@ -11,6 +11,9 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
   const [error,setError] = useState('');
   const [releaseId,setReleaseId] = useState('');
   const [slotId,setSlotId] = useState('');
+  const [inviteReleaseId,setInviteReleaseId] = useState('');
+  const [inviteSlotId,setInviteSlotId] = useState('');
+  const [inviteUserId,setInviteUserId] = useState('');
   const [catalogue,setCatalogue] = useState<Array<{id:string;title:string;contributors?:Array<{slotId?:string;name:string;role:string}>}>>([]);
   const [catalogueLoading,setCatalogueLoading] = useState(false);
   const [reviewReasons,setReviewReasons] = useState<Record<string,string>>({});
@@ -71,12 +74,26 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
       <button type="submit" disabled={busy!==null||!releaseId.trim()||!slotId.trim()}>Request credit verification</button>
       <small>The release uploader must confirm your contribution before an independent NightJar administrator can approve it. A credit does not grant publishing privileges.</small>
     </form>}
+    {!administrator && <details className="nj-credit-invitations"><summary>Invite a credited contributor (release uploader)</summary>
+      <form onSubmit={event=>{event.preventDefault();void act('invite',()=>verifiedCreditApi.invite(inviteReleaseId.trim(),inviteSlotId.trim(),inviteUserId.trim()).then(()=>{setInviteReleaseId('');setInviteSlotId('');setInviteUserId('');}));}}>
+        <label>Published release reference<input required maxLength={160} value={inviteReleaseId} onChange={event=>setInviteReleaseId(event.target.value)} /></label>
+        <label>Contributor slot reference<input required maxLength={160} value={inviteSlotId} onChange={event=>setInviteSlotId(event.target.value)} /></label>
+        <label>NightJar member account ID<input required maxLength={160} value={inviteUserId} onChange={event=>setInviteUserId(event.target.value)} /></label>
+        <button type="submit" disabled={busy!==null}>Send credit invitation</button>
+        <small>Only the release uploader can invite a member. The invited member must accept before an independent administrator can approve the credit.</small>
+      </form>
+    </details>}
     {error && <p role="alert">{error}</p>}
     <button type="button" className="secondary-button" onClick={()=>void refresh()} disabled={loading||busy!==null}>Refresh credits</button>
     {loading?<p role="status">Loading credits…</p>:claims.length===0?<p>No credit claims to review yet.</p>:
       <div className="nj-credit-claim-list">{claims.map(item=><article className="panel" key={item.id}>
         <strong>{item.releaseRole}</strong> <span>{item.state.replaceAll('_',' ')}</span>
         <small>Release: {item.releaseId} · Slot: {item.contributorSlotId}</small>
+        {!administrator&&item.claimantUserId===currentUserId&&item.state==='awaiting_member'&&
+          <div className="nj-credit-actions"><p>The release uploader has invited you to claim this credit.</p>
+            <button type="button" disabled={busy!==null} onClick={()=>void act(item.id,()=>verifiedCreditApi.invitationResponse(item.id,'accept'))}>Accept credit invitation</button>
+            <button type="button" disabled={busy!==null} onClick={()=>void act(item.id,()=>verifiedCreditApi.invitationResponse(item.id,'decline'))}>Decline</button>
+          </div>}
         {!administrator&&item.claimantUserId===currentUserId&&item.state==='awaiting_uploader'&&<p>Awaiting the release uploader's decision.</p>}
         {!administrator&&item.claimantUserId===currentUserId&&['rejected','revoked'].includes(item.state)&&
           (item.appealPending ? <p>Appeal submitted for independent review.</p> :
