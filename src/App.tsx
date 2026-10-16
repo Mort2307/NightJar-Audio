@@ -117,6 +117,7 @@ const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipelin
 const CreatorListeningInsights = lazy(() => import('./components/CreatorListeningInsights'));
 const CreatorLivePreviewOverview = lazy(() => import('./components/CreatorLivePreviewOverview'));
 const CreatorProfile = lazy(() => import('./components/CreatorProfile'));
+const ProfileConnections = lazy(() => import('./components/ProfileConnections'));
 const ContentModeration = lazy(() => import('./components/ContentModeration'));
 const PersonalCalendar = lazy(() => import('./components/PersonalCalendar'));
 const NightjarOnboarding = lazy(() => import('./components/NightjarOnboarding'));
@@ -530,6 +531,7 @@ function App() {
   const toastTimer = useRef<number | null>(null);
   const [favouriteReleaseIds, setFavouriteReleaseIds] = useState<string[]>([]);
   const [followingProfileIds, setFollowingProfileIds] = useState<string[]>([]);
+  const [myConnectionsKind,setMyConnectionsKind] = useState<'followers'|'following'|null>(null);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [mandatoryAgreementReady, setMandatoryAgreementReady] = useState(false);
   const [suspensionNotice, setSuspensionNotice] = useState<{reason:string;caseId:string}|null>(null);
@@ -5412,7 +5414,9 @@ function App() {
             <div className="page-heading premium-profile-page-heading">
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
               <div className="profile-heading-actions">
-                {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole === 'admin' ? 'listener' : effectiveRole ?? undefined)}>View my public profile</button>}
+                {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole === 'admin' ? 'listener' : effectiveRole ?? undefined)}>View my public profile</button>
+                {user?.userId && <button type="button" className="secondary-button" onClick={()=>setMyConnectionsKind('followers')}>My followers</button>}
+                {user?.userId && <button type="button" className="secondary-button" onClick={()=>setMyConnectionsKind('following')}>My following</button>}
                 {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && (effectiveRole === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) && !demoMode && <button type="button" className="secondary-button" onClick={()=>void shareNightjarProfile({
                   url:publicProfileUrl(window.location.origin,user.userId,effectiveRole === 'admin' ? 'listener' : effectiveRole as ShareableProfileRole),
                   name:String(profile.displayName || user.name || 'Nightjar creator'),
@@ -5431,12 +5435,13 @@ function App() {
                 metrics={[
                   {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness',destination:'your profile',onClick:()=>document.querySelector('.premium-user-profile')?.scrollIntoView({behavior:'smooth',block:'start'})},
                   {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases',destination:'your library',onClick:()=>navigate('library')},
-                  {label:'Following',value:followingProfileIds.length,detail:'Public profiles',destination:'the professional directory',onClick:()=>navigate('creators')},
+                  {label:'Following',value:followingProfileIds.length,detail:'Profiles you follow',destination:'your following list',onClick:()=>setMyConnectionsKind('following')},
                   {label:'Updates',value:notificationUnreadCount,detail:'Unread activity',destination:'notifications',onClick:()=>{setNotificationsOpen(true);window.scrollTo({top:0,behavior:'smooth'});}},
                 ]}
               />
             )}
 
+            {myConnectionsKind && user?.userId && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Opening connections" />}><div className="nj-profile-self-connections"><ProfileConnections userId={user.userId} kind={myConnectionsKind} demoMode={demoMode} onClose={()=>setMyConnectionsKind(null)} onOpenProfile={(targetId,role)=>{setMyConnectionsKind(null);openPublicProfile(targetId,role);}}/></div></Suspense>}
             {!DIDIT_VERIFICATION_PAUSED && agePilotEligible && effectiveRole !== 'admin' && <section className="nj-didit-member-pilot" aria-label="Voluntary identity verification pilot">
               <div className="nj-didit-member-pilot-heading">
                 <ShieldCheck size={22} aria-hidden="true"/>
