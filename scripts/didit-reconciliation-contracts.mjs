@@ -40,7 +40,7 @@ assert.match(control, /window\.confirm\(/,'owner must explicitly opt in before a
 assert.match(control, /Recover my existing Didit approval/,'owner control must be labelled clearly');
 assert.doesNotMatch(control,/nightjarAge\.start\(/,'dashboard must not open an ID session');
 assert.match(workflow, /\[nightjar-didit-reconciliation-release\]/,'backend-first deploy guard is required');
-assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'do not reopen public age verification');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = false/,'standard account-bound age verification is enabled');
 // All-member read-only recovery shares the established authenticated provider
 // evidence path, without allowing a member to select another account/session.
 const memberStart=backend.indexOf('export const reconcileMyDiditVerification = onCall');
