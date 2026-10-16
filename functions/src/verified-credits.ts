@@ -27,9 +27,11 @@ const requireInput = (value: unknown, field: string) => {
 export function buildVerifiedCreditCallables(
   requireActive: (request: Request) => Promise<Identity>,
   requireAdmin: (request: Request) => Identity,
+  requireAgeVerified: (uid: string) => Promise<unknown>,
 ) {
   const claimMyReleaseCredit = onCall({ region:'europe-west2' }, async request => {
     const identity = await requireActive(request);
+    await requireAgeVerified(identity.uid);
     const input = (request.data ?? {}) as Record<string, unknown>;
     const releaseId = requireInput(input.releaseId,'release');
     const contributorSlotId = requireInput(input.contributorSlotId,'contributor slot');
@@ -81,6 +83,7 @@ export function buildVerifiedCreditCallables(
 
   const adminReviewCreditClaim = onCall({ region:'europe-west2' }, async request => {
     const identity = requireAdmin(request);
+    await requireAgeVerified(identity.uid);
     const input = (request.data ?? {}) as Record<string,unknown>;
     const id = requireInput(input.claimId,'claim');
     const decision = clean(input.decision,24);
@@ -129,7 +132,8 @@ export function buildVerifiedCreditCallables(
   });
 
   const adminListCreditClaims = onCall({ region:'europe-west2' }, async request => {
-    requireAdmin(request);
+    const admin = requireAdmin(request);
+    await requireAgeVerified(admin.uid);
     const snapshot = await getFirestore().collection('verifiedCreditClaims').limit(100).get();
     return {claims:snapshot.docs.map(doc=>output(doc.id,doc.data()))};
   });
