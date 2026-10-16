@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ExternalLink, LockKeyhole, RefreshCw, ShieldCheck } from 'lucide-react';
 import { nightjarDiditControlled, type DiditControlledStatus } from '../platform/firebase-didit-controlled';
 import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
@@ -13,6 +13,8 @@ const isSafeDiditLink = (link: string | undefined | null) => {
 };
 
 export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: () => void } = {}) {
+  const continuationRef=useRef<HTMLElement|null>(null);
+  const focusAfterAgreementRef=useRef(false);
   const [requiredAgreements,setRequiredAgreements]=useState<LegalAgreementStatus[]>([]);
   const [acceptedAgreements,setAcceptedAgreements]=useState<string[]>([]);
   const [status,setStatus]=useState<DiditControlledStatus|null>(null);
@@ -61,11 +63,20 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
     } finally { setPending(false);setLoaded(true); }
   };
   useEffect(()=>{void refresh();},[]);
+  useEffect(()=>{
+    if(!focusAfterAgreementRef.current || pending || requiredAgreements.length || !status)return;
+    focusAfterAgreementRef.current=false;
+    const target=continuationRef.current;
+    if(!target)return;
+    target.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+    target.focus({preventScroll:true});
+  },[pending,requiredAgreements,status]);
   const acceptRequiredAgreements=async()=>{
     if(pending || !requiredAgreements.length || requiredAgreements.some(doc=>!acceptedAgreements.includes(doc.id)))return;
     setPending(true);setError('');
     try{
       await nightjarLegal.accept(requiredAgreements.map(doc=>({id:doc.id,version:doc.version,accepted:true as const})), 'didit-gate-current-platform-agreements');
+      focusAfterAgreementRef.current=true;
       setRequiredAgreements([]);setAcceptedAgreements([]);
     }catch(cause){setError(cause instanceof Error?cause.message:'Could not save legal acknowledgements.');setPending(false);return;}
     setPending(false);
@@ -159,7 +170,7 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
   const alreadyVerified=status.providerVerified;
   const canStart=status.authorised && !alreadyVerified && !launchUrl;
   const noEntryRoute=!alreadyVerified && !canStart && !launchUrl && status.state==='none';
-  return <section className="panel nj-didit-controlled-panel" aria-label="My one-time live Didit identity verification">
+  return <section ref={continuationRef} tabIndex={-1} className="panel nj-didit-controlled-panel" aria-label="My one-time live Didit identity verification">
     <span className="mini-label"><ShieldCheck size={16} aria-hidden="true"/> YOUR ACCOUNT · LIVE ID VERIFICATION</span>
     <h2>Verify your identity with Didit</h2>
     {alreadyVerified ? <>
