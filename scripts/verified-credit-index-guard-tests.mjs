@@ -63,6 +63,25 @@ try {
   assert.equal(spawnSync(process.execPath,
     ['scripts/firestore-index-preservation-guard.mjs',overlapRemote,overlapResult],{encoding:'utf8'}).status,0,
     'Final additive candidate must pass production preservation guard');
+  // Preservation guard must allow an ADDITIVE mode but reject any loss of
+  // a previously deployed mode or an existing TTL retention policy.
+  const missingModeResult=join(base,'removed-mode.json');
+  writeFileSync(missingModeResult,JSON.stringify({indexes:[],fieldOverrides:[{
+    collectionGroup:'follows',fieldPath:'targetUserId',ttl:true,
+    indexes:[{queryScope:'COLLECTION_GROUP',order:'ASCENDING'}],
+  }]}));
+  assert.notEqual(spawnSync(process.execPath,
+    ['scripts/firestore-index-preservation-guard.mjs',overlapRemote,missingModeResult],
+    {encoding:'utf8'}).status,0,'Guard must reject removal of existing collection scope');
+  const missingTtlResult=join(base,'removed-ttl.json');
+  writeFileSync(missingTtlResult,JSON.stringify({indexes:[],fieldOverrides:[{
+    collectionGroup:'follows',fieldPath:'targetUserId',
+    indexes:[{queryScope:'COLLECTION',order:'DESCENDING'}],
+  }]}));
+  assert.notEqual(spawnSync(process.execPath,
+    ['scripts/firestore-index-preservation-guard.mjs',overlapRemote,missingTtlResult],
+    {encoding:'utf8'}).status,0,'Guard must reject removal of active production TTL');
+
   const unknownTtl=join(base,'unknown-ttl.json');
   writeFileSync(unknownTtl,JSON.stringify({result:{indexes:[],fieldOverrides:[{
     collectionGroup:'follows',fieldPath:'targetUserId',ttl:{unexpected:'yes'},indexes:[],
