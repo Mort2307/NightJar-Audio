@@ -2399,7 +2399,7 @@ export const listPublicProfileConnections = onCall({ region: REGION }, async (re
   const subjectPublic = subjectData.role === 'admin'
     ? subjectProfile.data()?.adminCommunityVisible === true
     : subjectProfile.data()?.publicProfile !== false;
-  if (!subjectAccount.exists || subjectData.status !== 'active' || !subjectProfile.exists || !subjectPublic) {
+  if (!subjectAccount.exists || subjectData.status !== 'active' || !subjectProfile.exists || (!subjectPublic && userId !== identity.uid)) {
     throw new HttpsError('not-found', 'This Nightjar profile is not publicly available.');
   }
 
