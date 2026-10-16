@@ -21,8 +21,8 @@ for (const section of ['platform_terms','privacy_notice','professional_terms']) 
 }
 assert.match(documentPage, /legalDocumentForPath/, 'Full legal documents must be readable individually');
 assert.ok(!hub.includes('docs/legal/'), 'Unapproved commercial drafts must never appear as accepted beta terms');
-assert.ok(backend.includes('const TESTING_AGE_ASSURANCE_BYPASS = true;'),
-  'Approved private-beta tester bypass must remain enabled');
+assert.ok(backend.includes('const TESTING_AGE_ASSURANCE_BYPASS = false;'),
+  'Temporary private-beta access must not bypass mandatory live Didit verification');
 assert.ok(backend.includes('const CLOSED_BETA = true;'),
   'Private beta must remain closed to unapproved public signups');
 assert.ok(backend.includes('DIDIT_LIVE_PILOT_ADMINS_ONLY = true'),
