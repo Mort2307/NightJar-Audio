@@ -254,3 +254,23 @@
 :root[data-nightjar-vision] .nj-connection-person-copy :is(strong,small),
 :root[data-nightjar-vision] .nj-connection-description,
 :root[data-nightjar-vision] .nj-connection-heading :is(small,strong) {color:var(--ivory);}
+
+/* Account dashboard uses the same social sheet, even for the member's own
+   private profile, without exposing that profile to other members. */
+.nj-profile-self-connections {
+  width:100%;
+  max-width:780px;
+  margin:12px 0 22px;
+}
+.nj-profile-self-connections .nj-connection-sheet {
+  display:grid;
+  gap:12px;
+  padding:clamp(13px,2vw,20px);
+  border:1px solid rgba(222,176,104,.42);
+  border-radius:16px;
+  background:radial-gradient(ellipse at 90% -10%,rgba(224,162,84,.15),transparent 50%),#110f0d;
+}
+:root[data-nightjar-vision] .nj-profile-self-connections .nj-connection-sheet {
+  background:var(--panel);
+  border:2px solid var(--line);
+}
