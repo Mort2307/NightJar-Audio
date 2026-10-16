@@ -23,6 +23,9 @@ const spotlightStateCall = httpsCallable<void, { date: string; spotlights: any[]
 const communityStateCall = httpsCallable<void, { follows: { targetUserId?: string; creatorUserId?: string; targetRole?: string | null }[]; favourites: { releaseId: string }[] }>(functions, 'communityState');
 const setCreatorFollowCall = httpsCallable<{ creatorUserId: string; following: boolean }, { creatorUserId: string; following: boolean }>(functions, 'setCreatorFollow');
 const setProfileFollowCall = httpsCallable<{ targetUserId: string; following: boolean }, { targetUserId: string; targetRole: string | null; following: boolean }>(functions, 'setProfileFollow');
+export type PublicConnection = { userId:string; name:string; handle?:string|null; avatarUrl?:string|null; initials?:string|null; role:string; official:boolean };
+export type PublicConnectionResult = { userId:string; kind:'followers'|'following'; people:PublicConnection[]; sampled:number; hasMore:boolean; publicOnly:true };
+const listPublicProfileConnectionsCall = httpsCallable<{ userId:string;kind:'followers'|'following' }, PublicConnectionResult>(functions,'listPublicProfileConnections');
 const setFavouriteReleaseCall = httpsCallable<{ releaseId: string; favourite: boolean }, { releaseId: string; favourite: boolean }>(functions, 'setFavouriteRelease');
 
 export const nightjarCommunity = {
@@ -89,6 +92,10 @@ export const nightjarCommunity = {
 
   async setCreatorFollow(creatorUserId: string, following: boolean) {
     return (await setCreatorFollowCall({ creatorUserId, following })).data;
+  },
+
+  async listPublicProfileConnections(userId:string, kind:'followers'|'following') {
+    return repairMojibakeDisplayData((await listPublicProfileConnectionsCall({ userId, kind })).data);
   },
 
   async setProfileFollow(targetUserId: string, following: boolean) {
