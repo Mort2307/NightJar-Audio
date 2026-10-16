@@ -12,17 +12,16 @@ const platformFiles=fs.readdirSync(platformDir).filter((name)=>name.endsWith('.t
 const exported=new Set(
   [...functionsSource.matchAll(/export\s+const\s+([A-Za-z0-9_]+)\s*=\s*onCall\b/g)].map((match)=>match[1]),
 );
-// Some Cloud Functions are exported through a typed factory. Only count named
-// properties from a real exported destructuring assignment, and require the
-// factory source to define those properties as actual onCall handlers.
+// Recognise named handlers returned by an explicitly exported callable factory.
+// Both the factory's declaration and each handler's onCall declaration must exist.
 for (const match of functionsSource.matchAll(/export\s+const\s*\{([^}]+)\}\s*=\s*(build[A-Za-z0-9_]+)\s*\(/g)) {
   const [, members, factory] = match;
-  const factorySource = functionsSource.match(new RegExp('(?:export\\s+)?(?:const|function)\\s+' + factory + '\\b'));
-  if (!factorySource) continue;
+  if (!new RegExp('export\\s+function\\s+' + factory + '\\b').test(functionsSource)) continue;
   for (const member of members.split(',')) {
     const name = member.trim();
     if (/^[A-Za-z_$][\\w$]*$/.test(name) &&
-        new RegExp('\\b' + name + '\\s*:\\s*onCall\\s*\\(').test(functionsSource)) {
+        new RegExp('const\\s+' + name + '\\s*=\\s*onCall\\s*\\(').test(functionsSource) &&
+        new RegExp('return\\s*\\{[^}]*\\b' + name + '\\b').test(functionsSource)) {
       exported.add(name);
     }
   }
