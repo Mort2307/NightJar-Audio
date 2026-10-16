@@ -16,6 +16,7 @@ const output = (id: string, data: Record<string, any>) => ({
   releaseRole:data.releaseRole, state:data.state, source:data.source,
   createdAt:data.createdAt?.toDate?.()?.toISOString?.() ?? null,
   updatedAt:data.updatedAt?.toDate?.()?.toISOString?.() ?? null,
+  appealPending:data.appealPending === true,
 });
 const requireInput = (value: unknown, field: string) => {
   const result = clean(value);
@@ -127,6 +128,25 @@ export function buildVerifiedCreditCallables(
     return {state:decision === 'approve'?'approved':decision === 'revoke'?'revoked':'rejected'};
   });
 
+  const appealCreditClaim = onCall({ region:'europe-west2' }, async request => {
+    const identity = await requireActive(request);
+    await requireAgeVerified(identity.uid);
+    const input = (request.data ?? {}) as Record<string,unknown>;
+    const id = requireInput(input.claimId,'claim');
+    const reason = clean(input.reason,600);
+    if (reason.length < 10) throw new HttpsError('invalid-argument','Explain the appeal in at least 10 characters.');
+    const ref = creditRef(id);
+    await getFirestore().runTransaction(async tx => {
+      const snap = await tx.get(ref), data = snap.data();
+      if (!data || data.claimantUserId !== identity.uid) throw new HttpsError('permission-denied','Only the credited member can appeal.');
+      if (!['rejected','revoked'].includes(data.state)) throw new HttpsError('failed-precondition','Only rejected or revoked claims can be appealed.');
+      if (data.appealPending === true) throw new HttpsError('already-exists','An appeal is already awaiting review.');
+      tx.update(ref,{appealPending:true,appealReason:reason,appealedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+      tx.create(auditRef(id),{actorUserId:identity.uid,event:'member_appeal',reason,at:FieldValue.serverTimestamp()});
+    });
+    return {appealPending:true};
+  });
+
   const listMyCreditClaims = onCall({ region:'europe-west2' }, async request => {
     const identity = await requireActive(request);
     await requireAgeVerified(identity.uid);
@@ -179,5 +199,5 @@ export function buildVerifiedCreditCallables(
     return {claims:page.map(doc=>output(doc.id,doc.data())),nextCursor:snapshot.docs.length>50 ? page[page.length-1].id : null};
   });
 
-  return {claimMyReleaseCredit,respondToCreditClaim,adminReviewCreditClaim,listMyCreditClaims,adminListCreditClaims};
+  return {claimMyReleaseCredit,respondToCreditClaim,adminReviewCreditClaim,appealCreditClaim,listMyCreditClaims,adminListCreditClaims};
 }
