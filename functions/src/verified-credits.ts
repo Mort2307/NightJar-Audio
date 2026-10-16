@@ -45,13 +45,13 @@ export function buildVerifiedCreditCallables(
     const id = 'claim_'+randomUUID();
     const ref = creditRef(id);
     const now = FieldValue.serverTimestamp();
-    // Deterministic lock ensures one active claimant per release slot.
+    // One lock per release slot prevents conflicting approved claimants.
     const lock = getFirestore().collection('verifiedCreditLocks').doc(
-      createHash('sha256').update([releaseId,contributorSlotId,identity.uid].join('|')).digest('hex')
+      createHash('sha256').update([releaseId,contributorSlotId].join('|')).digest('hex')
     );
     await getFirestore().runTransaction(async tx => {
       const existing = await tx.get(lock);
-      if (existing.exists) throw new HttpsError('already-exists','This credit has already been claimed.');
+      if (existing.exists) throw new HttpsError('already-exists','This credit slot already has an active claim. Ask the uploader or an administrator to resolve it.');
       tx.create(lock,{claimId:id,releaseId,contributorSlotId,claimantUserId:identity.uid,createdAt:now});
       tx.create(ref,{
         releaseId,contributorSlotId,claimantUserId:identity.uid,uploaderUserId:release.creatorUserId,
@@ -113,7 +113,7 @@ export function buildVerifiedCreditCallables(
       });
       tx.create(auditRef(id),{actorUserId:identity.uid,event:'admin_'+decision,at:FieldValue.serverTimestamp(),reason:clean(input.reason,600)});
       if (state === 'rejected' || state === 'revoked') {
-        const lockId = createHash('sha256').update([data.releaseId,data.contributorSlotId,data.claimantUserId].join('|')).digest('hex');
+        const lockId = createHash('sha256').update([data.releaseId,data.contributorSlotId].join('|')).digest('hex');
         tx.delete(getFirestore().collection('verifiedCreditLocks').doc(lockId));
       }
     });
