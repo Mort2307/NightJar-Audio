@@ -1,6 +1,6 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 type Identity = { uid: string; admin: boolean };
 type Request = { auth?: { uid: string; token: Record<string, unknown> } | null };
@@ -45,7 +45,7 @@ export function buildVerifiedCreditCallables(
     const now = FieldValue.serverTimestamp();
     // Deterministic lock ensures one active claimant per release slot.
     const lock = getFirestore().collection('verifiedCreditLocks').doc(
-      require('node:crypto').createHash('sha256').update([releaseId,contributorSlotId,identity.uid].join('|')).digest('hex')
+      createHash('sha256').update([releaseId,contributorSlotId,identity.uid].join('|')).digest('hex')
     );
     await getFirestore().runTransaction(async tx => {
       const existing = await tx.get(lock);
