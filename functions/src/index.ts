@@ -13647,6 +13647,6 @@ export const myProductionTimeline = onCall({ region: REGION }, async (request) =
 
 // Verified credit workflow uses the same account and administrator identity gates.
 export const {
-  claimMyReleaseCredit, respondToCreditClaim, adminReviewCreditClaim,
+  claimMyReleaseCredit, respondToCreditClaim, adminReviewCreditClaim, appealCreditClaim,
   listMyCreditClaims, adminListCreditClaims,
 } = buildVerifiedCreditCallables(requireActiveIdentity, requireAdminIdentity, requireAgeVerified);
