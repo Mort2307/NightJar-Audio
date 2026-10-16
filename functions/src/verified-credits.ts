@@ -152,7 +152,7 @@ export function buildVerifiedCreditCallables(
     const slot = (Array.isArray(release.contributors) ? release.contributors : []).find((item:any,i:number) => (clean(item?.slotId)||String(i)) === contributorSlotId);
     if (!slot || !roles.has(slot.role)) throw new HttpsError('invalid-argument','Contributor slot not found.');
     const member = await db.collection('accounts').doc(invitedUserId).get();
-    if (!member.exists) throw new HttpsError('not-found','Member account not found.');
+    if (!member.exists || member.get('accountStatus') === 'suspended' || member.get('status') === 'suspended') throw new HttpsError('not-found','Eligible member account not found.');
     const id = 'claim_'+randomUUID(), ref = creditRef(id), now = FieldValue.serverTimestamp();
     const lock = db.collection('verifiedCreditLocks').doc(createHash('sha256').update([releaseId,contributorSlotId].join('|')).digest('hex'));
     await db.runTransaction(async tx => {
