@@ -567,6 +567,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <span>{profileRole === 'writer' ? (profile.publishedWorkCount ?? 0) + ' published scripts' : 'Audio Editor'}</span>
             <strong>{profile.creditedReleaseCount ?? 0} credited release{profile.creditedReleaseCount === 1 ? '' : 's'}</strong>
           </div>}
+          {profileRole === 'listener' && !!roleCreditedReleases.length && <div className="public-credit-list" aria-label="Verified credited releases">
+            <span className="mini-label">🎧 VERIFIED RELEASE CREDITS</span>
+            {roleCreditedReleases.slice(0,12).map((release:any)=><article key={'listener-credit-'+release.id}>
+              <div><strong>{release.title}</strong><span>{release.creatorName ?? 'NightJar creator'}</span></div>
+              <div className="track-credit-line">{(profile.verifiedCredits ?? []).filter((credit:any)=>credit.releaseId===release.id).map((credit:any)=><span key={credit.id}>{credit.releaseRole}</span>)}</div>
+              {onCommunityRelease && <button type="button" className="ghost-button" onClick={()=>onCommunityRelease(release)}>Open release</button>}
+            </article>)}
+          </div>}
           {(profileRole === 'writer' || profileRole === 'editor') && !!roleCreditedReleases.length && <div className="public-credit-list">
             {roleCreditedReleases.slice(0,12).map((release:any)=><article key={release.id}>
               <div><strong>{release.title}</strong><span>{release.creatorName ?? 'Nightjar creator'}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
