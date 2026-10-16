@@ -18,7 +18,7 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
     setLoading(true);setError('');
     try {
       if (administrator) { const page = await verifiedCreditApi.adminClaims();setClaims(page.claims);setNextCursor(page.nextCursor); }
-      else {setClaims(await verifiedCreditApi.myClaims());setNextCursor(null);}
+      else {const page = await verifiedCreditApi.myClaims();setClaims(page.claims);setNextCursor(page.nextCursor);}
     }
     catch(e) {setError(e instanceof Error?e.message:'Could not load credit claims.');}
     finally {setLoading(false);}
@@ -33,9 +33,9 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
     return ()=>{active=false;};
   },[administrator]);
   const loadMore = async () => {
-    if (!administrator || !nextCursor || busy) return;
+    if (!nextCursor || busy) return;
     setBusy('next-page');setError('');
-    try {const page = await verifiedCreditApi.adminClaims(nextCursor);
+    try {const page = await (administrator ? verifiedCreditApi.adminClaims(nextCursor) : verifiedCreditApi.myClaims(nextCursor));
       setClaims(previous=>[...new Map([...previous,...page.claims].map(item=>[item.id,item])).values()]);
       setNextCursor(page.nextCursor);
     } catch(e) {setError(e instanceof Error?e.message:'Could not load more claims.');}
@@ -88,6 +88,6 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
           {!['approved','rejected','revoked'].includes(item.state)&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'reject',reviewReasons[item.id].trim()))}>Reject</button>}
           {item.state==='approved'&&<button type="button" disabled={busy!==null||!reviewReasons[item.id]?.trim()} onClick={()=>void act(item.id,()=>verifiedCreditApi.adminDecision(item.id,'revoke',reviewReasons[item.id].trim()))}>Revoke</button>}
         </div>}
-      </article>)}{administrator&&nextCursor&&<button type="button" className="secondary-button" disabled={busy!==null} onClick={()=>void loadMore()}>Load more claims</button>}</div>}
+      </article>)}{nextCursor&&<button type="button" className="secondary-button" disabled={busy!==null} onClick={()=>void loadMore()}>Load more claims</button>}</div>}
   </section>;
 }
