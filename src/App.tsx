@@ -5434,7 +5434,7 @@ function App() {
                 metrics={[
                   {label:'Profile',value:profileCompletion + '%',detail:'Public identity completeness',destination:'your profile',onClick:()=>document.querySelector('.premium-user-profile')?.scrollIntoView({behavior:'smooth',block:'start'})},
                   {label:'Favourites',value:favouriteReleaseIds.length,detail:'Saved releases',destination:'your library',onClick:()=>navigate('library')},
-                  {label:'Following',value:followingProfileIds.length,detail:'Profiles you follow',destination:'your following list',onClick:()=>setMyConnectionsKind('following')},
+                  {label:'Following',value:followingProfileIds.length,detail:'Profiles you follow',destination:'your following list',onClick:()=>user?.userId&&setConnectionsPage({userId:user.userId,kind:'following',displayName:String(profile.displayName || user.name || 'Nightjar member')})},
                   {label:'Updates',value:notificationUnreadCount,detail:'Unread activity',destination:'notifications',onClick:()=>{setNotificationsOpen(true);window.scrollTo({top:0,behavior:'smooth'});}},
                 ]}
               />
