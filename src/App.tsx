@@ -4525,10 +4525,10 @@ function App() {
                       ? 'A verification session is in progress. Finish it and return to Nightjar; the account state will update automatically.'
                       : ageConfigured
                         ? `Secure ${ageEnvironment} provider connected and ready for a verification session.`
-                        : 'Verification integration is ready; provider credentials still need to be added.'}
+                        : 'Complete the required agreements below to unlock secure Didit verification.'}
               </span>
             </div>
-            <span className="status-pill">{ageTemporaryBypass ? 'TEST ACCESS' : ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'PROVIDER READY' : 'SETUP REQUIRED'}</span>
+            <span className="status-pill">{ageTemporaryBypass ? 'TEST ACCESS' : ageVerified ? 'VERIFIED' : ageStatus === 'PENDING' ? 'PENDING' : ageConfigured ? 'PROVIDER READY' : 'AWAITING VERIFICATION'}</span>
           </div>
           <div className="verification-list">
             {ageTemporaryBypass
