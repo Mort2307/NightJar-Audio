@@ -21,7 +21,7 @@ for (const statement of source.statements) {
           ts.isIdentifier(declaration.initializer.expression) &&
           declaration.initializer.expression.text === 'buildVerifiedCreditCallables') {
         const creditSource = readFileSync('functions/src/verified-credits.ts', 'utf8');
-        const required = ['claimMyReleaseCredit','inviteCreditedContributor','respondToCreditInvitation','respondToCreditClaim','adminReviewCreditClaim','appealCreditClaim','listMyCreditClaims','adminListCreditClaims'];
+        const required = ['claimMyReleaseCredit','inviteCreditedContributor','respondToCreditInvitation','respondToCreditClaim','adminReviewCreditClaim','appealCreditClaim','getCreditClaim','listMyCreditClaims','adminListCreditClaims'];
         const exported = declaration.name.elements.map(element => {
           if (!ts.isIdentifier(element.name) || element.propertyName || element.initializer || element.dotDotDotToken)
             throw new Error('Unsupported verified-credit factory export binding');
