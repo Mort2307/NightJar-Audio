@@ -20,7 +20,7 @@ const admin = httpsCallable<{cursor?:string},{claims:CreditClaim[];nextCursor:st
 const claim = httpsCallable<{releaseId:string;contributorSlotId:string},{claimId:string;state:string}>(functions,'claimMyReleaseCredit');
 const respond = httpsCallable<{claimId:string;decision:'confirm'|'dispute'|'unsure'},{state:string}>(functions,'respondToCreditClaim');
 const appeal = httpsCallable<{claimId:string;reason:string},{appealPending:boolean}>(functions,'appealCreditClaim');
-const review = httpsCallable<{claimId:string;decision:'approve'|'reject'|'revoke';reason?:string},{state:string}>(functions,'adminReviewCreditClaim');
+const review = httpsCallable<{claimId:string;decision:'approve'|'reject'|'revoke'|'resolve_appeal';reason?:string},{state:string}>(functions,'adminReviewCreditClaim');
 
 export const verifiedCreditApi = {
   async myClaims(cursor?:string) { return (await mine({cursor})).data; },
