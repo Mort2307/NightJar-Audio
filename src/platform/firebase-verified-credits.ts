@@ -28,5 +28,5 @@ export const verifiedCreditApi = {
   async claim(releaseId:string,contributorSlotId:string) { return (await claim({releaseId,contributorSlotId})).data; },
   async uploaderResponse(claimId:string,decision:'confirm'|'dispute'|'unsure') { return (await respond({claimId,decision})).data; },
   async appeal(claimId:string,reason:string) { return (await appeal({claimId,reason})).data; },
-  async adminDecision(claimId:string,decision:'approve'|'reject'|'revoke',reason?:string) { return (await review({claimId,decision,reason})).data; },
+  async adminDecision(claimId:string,decision:'approve'|'reject'|'revoke'|'resolve_appeal',reason?:string) { return (await review({claimId,decision,reason})).data; },
 };
