@@ -15,8 +15,8 @@ assert.match(tabs, /id: 'launch', label: 'Launch'/, 'existing Launch tile must r
 assert.match(app, /adminWorkspace === 'didit'/, 'Didit controls have their own workspace');
 assert.match(app, /<AdminDiditControlCentre/, 'owner result is prominent, not hidden behind a test permission checkbox');
 assert.match(app, /onOpenDidit=\{\(\) => openAdminWorkspace\('didit'\)\}/, 'Launch readiness links to Didit workspace');
-assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'ordinary client verification must remain paused');
-assert.match(functions, /const DIDIT_VERIFICATION_PAUSED = true/, 'new live provider sessions remain disabled on backend');
+assert.match(app, /const DIDIT_VERIFICATION_PAUSED = false/, 'ordinary clients must receive the standard mandatory verification flow');
+assert.match(functions, /const DIDIT_VERIFICATION_PAUSED = false/, 'new account-bound verification sessions are enabled on backend');
 assert.ok(diagnostics,'a read-only admin diagnostic API must be exported');
 assert.match(diagnostics, /requireAdminIdentity\(request\)/, 'backend diagnostics require server-authorised admin');
 assert.match(diagnostics, /doc\(identity.uid\)/, 'backend diagnostics are confined to the caller own account');
