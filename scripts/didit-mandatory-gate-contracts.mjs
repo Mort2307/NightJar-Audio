@@ -7,10 +7,14 @@ const read = path => fs.readFileSync(path, 'utf8');
 const app = read('src/App.tsx');
 const panel = read('src/components/DiditControlledLiveCheck.tsx');
 const backend = read('functions/src/index.ts');
+const nightjars = read('functions/src/nightjars.ts');
 const didit = read('functions/src/didit.ts');
 const workflow = read('.github/workflows/firebase-hosting-merge.yml');
 
 assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'private-beta bypass must not admit unverified adults');
+assert.match(nightjars, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'gift and token endpoints must not bypass Didit');
+const backendWorkflow = read('.github/workflows/firebase-backend-deploy.yml');
+assert.match(backendWorkflow, /DEPLOY_SCOPE="\\$\\(node scripts\\/firebase-current-functions-scope\\.mjs\\)"/, 'all-functions release must use explicit non-deleting targets');
 assert.match(backend, /const DIDIT_VERIFICATION_PAUSED = true/, 'legacy public session starter remains disabled');
 assert.match(backend, /const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true/, 'approved safe self-service check remains available to members');
 assert.match(backend, /const persistentVerified = diditPass\(data\)/, 'adult backend checks durable provider evidence');
