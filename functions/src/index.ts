@@ -12,6 +12,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
 import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision } from './didit';
 import { hasPaidEntitlement } from './entitlements';
+import { buildVerifiedCreditCallables } from './verified-credits';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -27,8 +28,8 @@ initializeApp();
 const db = getFirestore();
 const REGION = 'europe-west2';
 // Emergency reversible stop: no new Didit sessions until live-session creation is repaired.
-const DIDIT_VERIFICATION_PAUSED = true;
-const DIDIT_LIVE_PILOT_ADMINS_ONLY = true; // Closed beta: billable age sessions are admin-only.
+const DIDIT_VERIFICATION_PAUSED = false; // Public self-service Didit age verification enabled; existing approved accounts remain verified.
+const DIDIT_LIVE_PILOT_ADMINS_ONLY = false; // All authenticated, unverified members may begin the standard mandatory age check.
 const TESTING_AGE_ASSURANCE_BYPASS = false; // Mandatory verified-18+ rollout: private tester bypass no longer grants adult access.
 const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
 const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
@@ -1963,9 +1964,13 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
   for (const release of releases.docs) {
     const creatorUserId = cleanText(release.data().creatorUserId, 160);
     if (creatorUserId) releaseCountByCreator.set(creatorUserId, (releaseCountByCreator.get(creatorUserId) ?? 0) + 1);
-    for (const credit of normaliseReleaseContributors(release.data().contributors)) {
-      if (credit.userId) creditCountByUser.set(credit.userId, (creditCountByUser.get(credit.userId) ?? 0) + 1);
-    }
+  }
+  // Only independently approved credit claims contribute to public directory totals.
+  const approvedCreditSnapshot = await db.collection('verifiedCreditClaims').where('state', '==', 'approved').limit(1000).get();
+  for (const claim of approvedCreditSnapshot.docs) {
+    const credit = claim.data();
+    const uid = cleanText(credit.claimantUserId, 160);
+    if (uid && credit.approvedByAdminUserId && credit.approvedAt) creditCountByUser.set(uid, (creditCountByUser.get(uid) ?? 0) + 1);
   }
 
   const publishedScriptsByWriter = new Map<string, number>();
@@ -1999,6 +2004,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         userId: doc.id,
         role,
         roles: nightjarTeam ? ['listener'] : ['listener', ...professionalRoles],
+        approvedProfessionalRoles: nightjarTeam ? [] : professionalRoles,
         nightjarTeam,
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
@@ -2059,6 +2065,17 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
   }
 
+  // Public credit attribution is derived exclusively from independent admin approvals.
+  // Never treat contributor.userId in uploader-supplied release metadata as verification.
+  const verifiedCreditDocs = await db.collection('verifiedCreditClaims')
+    .where('claimantUserId', '==', userId).where('state','==','approved')
+    .orderBy('approvedAt','desc').limit(100).get();
+  const verifiedCredits = verifiedCreditDocs.docs
+    .filter(doc => {
+      const credit = doc.data();
+      return credit.state === 'approved' && Boolean(credit.approvedByAdminUserId && credit.approvedAt);
+    })
+    .map(doc => ({ id:doc.id, releaseId:doc.data().releaseId, releaseRole:doc.data().releaseRole }));
   const professionalRoles = professionalRolesForAccount(accountData ?? {});
   const activePublicRole = cleanText(accountData?.role, 30);
   const role = activePublicRole === 'listener' || professionalRoles.includes(activePublicRole as AccountRole)
@@ -2090,12 +2107,15 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     publishedWorkCount = scripts.docs.filter((doc) => ['Approved','Published'].includes(String(doc.data().status))).length;
   }
 
-  if (professionalRoles.includes('writer') || professionalRoles.includes('editor')) {
-    const releases = await db.collection('releases').where('status', '==', 'released').limit(500).get();
-    creditedReleases = releases.docs
-      .filter((doc) => normaliseReleaseContributors(doc.data().contributors).some((credit) => credit.userId === userId))
-      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
-      .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
+  // Public credited releases must have a verified claim, not merely an uploader
+  // supplied userId. This also makes listener credits visible without role promotion.
+  if (verifiedCredits.length) {
+    const approvedReleaseIds = [...new Set(verifiedCredits.map(credit => String(credit.releaseId)))].slice(0,100);
+    const creditedDocs = await Promise.all(approvedReleaseIds.map(id => releaseRef(id).get()));
+    creditedReleases = creditedDocs
+      .filter(doc => doc.exists && doc.data()?.status === 'released')
+      .map(doc => decorateReleaseAccess(doc.data() ?? {}, doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+      .sort((a,b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
   const publicRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
@@ -2142,12 +2162,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       ? orderForRole(creditedReleases, role)
       : [];
   const creditedReleasesByRole = {
-    writer: creditedReleases.filter((release: any) =>
-      (release.contributors ?? []).some((credit: any) =>
-        credit.userId === userId && releaseCreditMatchesProfileRole(credit.role, 'writer'))),
-    editor: creditedReleases.filter((release: any) =>
-      (release.contributors ?? []).some((credit: any) =>
-        credit.userId === userId && releaseCreditMatchesProfileRole(credit.role, 'editor'))),
+    writer: creditedReleases.filter(release => verifiedCredits.some(credit =>
+      credit.releaseId === release.id && releaseCreditMatchesProfileRole(credit.releaseRole, 'writer'))),
+    editor: creditedReleases.filter(release => verifiedCredits.some(credit =>
+      credit.releaseId === release.id && releaseCreditMatchesProfileRole(credit.releaseRole, 'editor'))),
   };
   const featuredWorkByRole = {
     creator: orderForRole(creatorReleases, 'creator'),
@@ -2182,6 +2200,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       // Professional approval originates from account privileges, never
       // release credits or self-authored profile fields. Applies to ALL tabs.
       approvedProfessionalRoles: professionalRoles,
+      verifiedCredits,
       bio: data.bio ?? null,
       welcomeMessage: data.welcomeMessage ?? null,
       socialLinks: publicSocialLinks,
@@ -5366,7 +5385,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     mood: cleanText(input.mood, 80),
     tags: cleanStringList(input.tags, 24),
     tropes: cleanStringList(input.tropes, 24),
-    contributors: normaliseReleaseContributors(input.contributors),
+    contributors: normaliseReleaseContributors(input.contributors, [], true),
     contentRating: cleanReleaseContentRating(input.contentRating),
     seriesTitle: cleanText(input.seriesTitle, 160) || null,
     episodeNumber: cleanEpisodeNumber(input.episodeNumber),
@@ -5424,7 +5443,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     mood: cleanText(input.mood ?? current.mood, 80),
     tags: Array.isArray(input.tags) ? cleanStringList(input.tags, 24) : (current.tags ?? []),
     tropes: Array.isArray(input.tropes) ? cleanStringList(input.tropes, 24) : (current.tropes ?? []),
-    contributors: Array.isArray(input.contributors) ? normaliseReleaseContributors(input.contributors) : normaliseReleaseContributors(current.contributors),
+    contributors: Array.isArray(input.contributors) ? normaliseReleaseContributors(input.contributors, current.contributors, true) : normaliseReleaseContributors(current.contributors, current.contributors),
     contentRating: typeof input.contentRating !== 'undefined' ? cleanReleaseContentRating(input.contentRating) : cleanReleaseContentRating(current.contentRating),
     seriesTitle: typeof input.seriesTitle !== 'undefined' ? cleanText(input.seriesTitle, 160) || null : current.seriesTitle ?? null,
     episodeNumber: typeof input.episodeNumber !== 'undefined' ? cleanEpisodeNumber(input.episodeNumber) : cleanEpisodeNumber(current.episodeNumber),
@@ -6782,7 +6801,7 @@ export const ageStatus = onCall({
     // The actual provider decision is separate from temporary test access.
     providerVerified: persistentlyVerified,
     providerStatus: String(data.status ?? 'NOT_STARTED'),
-    livePilotAvailable: !DIDIT_VERIFICATION_PAUSED && pilotAccess && diditConfigured() && diditMode() === 'live',
+    livePilotAvailable: !DIDIT_VERIFICATION_PAUSED && diditConfigured() && diditMode() === 'live',
     verificationPaused: DIDIT_VERIFICATION_PAUSED,
     controlledAdminTestClaimed,
     ageThreshold: 18,
@@ -9454,15 +9473,20 @@ const cleanEpisodeNumber = (value: unknown) => {
   return Number.isFinite(number) ? Math.max(0, Math.min(10000, Math.round(number))) : null;
 };
 
-const normaliseReleaseContributors = (value: unknown) => {
+const normaliseReleaseContributors = (value: unknown, existing: unknown = [], assignSlotIds = false) => {
   if (!Array.isArray(value)) return [];
   const allowedRoles = new Set([
     'Voice Actor', 'Writer', 'Audio Editor', 'Producer', 'Director',
     'Sound Designer', 'Cover Artist', 'Composer', 'Other',
   ]);
-  return value.slice(0, 24).map((item: any) => {
+  const previous = Array.isArray(existing) ? existing : [];
+  return value.slice(0, 24).map((item: any, index: number) => {
     const role = cleanText(item?.role, 48);
     return {
+      // Server-issued immutable contributor slot reference. Legacy credits use
+      // their original zero-based position until a controlled migration.
+      slotId: previous[index] && previous[index].name === cleanText(item?.name,100) && previous[index].role === (allowedRoles.has(role) ? role : 'Other') && /^[a-f0-9-]{36}$/i.test(String(previous[index].slotId ?? ''))
+        ? previous[index].slotId : assignSlotIds ? randomUUID() : (cleanText(item?.slotId, 80) || String(index)),
       userId: cleanText(item?.userId, 160) || null,
       name: cleanText(item?.name, 100),
       role: allowedRoles.has(role) ? role : 'Other',
@@ -13621,3 +13645,21 @@ export const myProductionTimeline = onCall({ region: REGION }, async (request) =
       updatedAt: toIso(doc.data().updatedAt), createdAt: toIso(doc.data().createdAt) })),
   ].sort((a,b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')));
   return { entries: entries.slice(0,200) };});
+
+// Verified credit workflow uses the same account and administrator identity gates.
+export const {
+  claimMyReleaseCredit, inviteCreditedContributor, respondToCreditInvitation, respondToCreditClaim, adminReviewCreditClaim, appealCreditClaim,
+  getCreditClaim, listMyCreditClaims, adminListCreditClaims,
+} = buildVerifiedCreditCallables(
+  requireActiveIdentity, requireAdminIdentity, requireAgeVerified,
+  createNotification,
+  async () => {
+    // Official administrators only: the contributor or uploader can never
+    // independently approve their own claim through this notification queue.
+    const accounts = await db.collection('accounts').where('role','==','admin').limit(50).get();
+    return accounts.docs.filter(doc => {
+      const account = doc.data();
+      return ADMIN_EMAILS.has(cleanEmail(account.email)) && account.status === 'active';
+    }).map(doc => doc.id);
+  },
+);

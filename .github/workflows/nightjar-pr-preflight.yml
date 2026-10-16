@@ -1,0 +1,79 @@
+# Read-only pull-request checks. This workflow never accesses production credentials,
+# deploys Firebase resources, or invokes paid identity-verification sessions.
+name: NightJar PR preflight
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightjar-pr-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend contracts and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Parse production workflows as YAML before allowing merge
+        run: |
+          ruby -r yaml -e 'ARGV.each { |path| YAML.parse_file(path); puts "Valid workflow YAML: #{path}" }' .github/workflows/firebase-hosting-merge.yml .github/workflows/firebase-backend-deploy.yml
+      - run: npm ci --no-fund
+      - run: npm run validate
+
+  backend:
+    name: Cloud Functions typecheck and build (no deploy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm run check
+      - run: npm run build
+      - run: npm run audit:guard
+
+  credit-security:
+    name: Verified credits emulator security (no deploy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-fund && npm --prefix functions ci --no-fund
+      - name: Validate release authorization and routing contracts
+        run: node scripts/verified-credit-release-contracts.mjs
+      - name: Compile real credit callable handlers for emulator acceptance
+        run: npm --prefix functions run build
+      - name: Test Firestore rules, transaction contention and credit lifecycle in isolated emulators
+        run: npx --yes firebase-tools@15.33.0 emulators:exec --project demo-nightjar-credit-ci --only firestore,auth 'node scripts/verified-credit-firestore-emulator.mjs && node scripts/verified-credit-callable-emulator.mjs'

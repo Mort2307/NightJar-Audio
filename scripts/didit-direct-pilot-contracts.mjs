@@ -17,8 +17,8 @@ const status = code.slice(code.indexOf('export const myDiditControlledCheck = on
   code.indexOf('export const startMyDiditControlledCheck = onCall'));
 const start = code.slice(code.indexOf('export const startMyDiditControlledCheck = onCall'));
 
-assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'legacy public starter remains paused');
-assert.match(app,/const DIDIT_VERIFICATION_PAUSED = true/,'legacy age-gate starter remains paused');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = false/,'standard public starter is enabled with mandatory age assurance');
+assert.match(app,/const DIDIT_VERIFICATION_PAUSED = false/,'standard mandatory age-gate starter is enabled');
 assert.match(code,/const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true/,'new account-level option is explicitly enabled');
 assert.match(code,/const accountDiditSelfServiceEligible = \(\) =>/,'account-wide eligibility helper is defined');
 assert.doesNotMatch(code,/megan\.wright666|directDiditPilotAccount|identity\.admin && identity\.email/,

@@ -12,6 +12,19 @@ const platformFiles=fs.readdirSync(platformDir).filter((name)=>name.endsWith('.t
 const exported=new Set(
   [...functionsSource.matchAll(/export\s+const\s+([A-Za-z0-9_]+)\s*=\s*onCall\b/g)].map((match)=>match[1]),
 );
+// Factory-exported callable handlers: require a real exported factory,
+// a real onCall definition, and an explicit export from the index module.
+const verifiedCreditFactory = functionSources.find(source =>
+  source.includes('export function buildVerifiedCreditCallables(')) ?? '';
+const indexSource = fs.readFileSync(path.join(functionsDir,'index.ts'),'utf8');
+const verifiedCreditExports = indexSource.match(/export\s+const\s*\{([^}]+)\}\s*=\s*buildVerifiedCreditCallables\s*\(/);
+if (verifiedCreditExports) {
+  for (const name of verifiedCreditExports[1].split(',').map(value=>value.trim())) {
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) &&
+        verifiedCreditFactory.includes('const '+name+' = onCall(') &&
+        verifiedCreditFactory.includes(name)) exported.add(name);
+  }
+}
 
 const referenced=[];
 for(const file of platformFiles){

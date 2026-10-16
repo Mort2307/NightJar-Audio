@@ -129,6 +129,24 @@ jobs:
             jq -e '(.result // []) | any(.[]; .projectId == "nightjar-audio")' >/dev/null
           echo "Firebase CLI authenticated to nightjar-audio via keyless OIDC."
 
+      - name: Protect existing Firestore indexes from deletion
+        if: ${{ inputs.scope == 'firestore:indexes' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          firebase firestore:indexes --project nightjar-audio --json > "$RUNNER_TEMP/nightjar-remote-indexes.json"
+          # Add only requested indexes; preserve EVERY existing composite index,
+          # single-field override and TTL retention policy. No destructive sync.
+          cp firestore.indexes.json "$RUNNER_TEMP/nightjar-repository-indexes.json"
+          node scripts/prepare-safe-firestore-indexes.mjs \
+            "$RUNNER_TEMP/nightjar-remote-indexes.json" \
+            "$RUNNER_TEMP/nightjar-repository-indexes.json" \
+            "$RUNNER_TEMP/nightjar-union-indexes.json"
+          node scripts/firestore-index-preservation-guard.mjs \
+            "$RUNNER_TEMP/nightjar-remote-indexes.json" \
+            "$RUNNER_TEMP/nightjar-union-indexes.json"
+          cp "$RUNNER_TEMP/nightjar-union-indexes.json" firestore.indexes.json
+
       - name: Propose conservative release batches (read-only)
         if: ${{ inputs.scope == 'plan' }}
         env:
@@ -170,7 +188,10 @@ jobs:
             functions)
               # Current named targets only. Never allow Firebase to delete legacy
               # deployed functions missing from the current source.
-              DEPLOY_SCOPE="$(node scripts/firebase-current-functions-scope.mjs)" ;;
+              DEPLOY_SCOPE="$(node scripts/firebase-current-functions-scope.mjs)"
+              # Enumerate exact named targets once; never run one oversized,
+              # quota-heavy deploy for the full (294+) function inventory.
+              IFS=',' read -r -a targets <<< "$DEPLOY_SCOPE" ;;
             firestore:rules|firestore:indexes|storage)
               DEPLOY_SCOPE="$REQUESTED_SCOPE" ;;
             functions:selected)
@@ -208,10 +229,11 @@ jobs:
           echo "Nightjar project=nightjar-audio; scope=$DEPLOY_SCOPE; commit=$GITHUB_SHA"
           date +%s > "$RUNNER_TEMP/nightjar-deploy-start"
           trap 'date +%s > "$RUNNER_TEMP/nightjar-deploy-end"' EXIT
-          if [[ "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" || "$REQUESTED_SCOPE" == "didit:testers" ]]; then
+          if [[ "$REQUESTED_SCOPE" == "functions" || "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" || "$REQUESTED_SCOPE" == "didit:testers" ]]; then
             # Reuse the existing OIDC-authorized workflow. Keep batches small
             # and never retry non-quota failures automatically.
             batch_size=5
+            if [[ "$REQUESTED_SCOPE" == "functions" ]]; then batch_size=10; fi
             : > "$RUNNER_TEMP/nightjar-deploy.log"
             for ((i=0; i<${#targets[@]}; i+=batch_size)); do
               batch=("${targets[@]:i:batch_size}")
@@ -233,7 +255,9 @@ jobs:
                   exit 1
                 fi
               done
-              if ((i+batch_size < ${#targets[@]})); then sleep 90; fi
+              if ((i+batch_size < ${#targets[@]})); then
+              if [[ "$REQUESTED_SCOPE" == "functions" ]]; then sleep 20; else sleep 90; fi
+            fi
             done
           else
             firebase deploy --only "$DEPLOY_SCOPE" --project nightjar-audio --non-interactive 2>&1 \
@@ -270,6 +294,38 @@ jobs:
           echo "### Nightjar EQ audio CORS" >> "$GITHUB_STEP_SUMMARY"
           echo "Approved Hosting origins can request signed audio through browser CORS." >> "$GITHUB_STEP_SUMMARY"
           echo "This does not grant public Storage access or change signed URL expiry." >> "$GITHUB_STEP_SUMMARY"
+
+      # Firebase accepts index creation requests before composite indexes finish
+      # building. Block the next (index-dependent) Cloud Functions batch until
+      # the exact three verified-credit query indexes report READY.
+      - name: Prepare Cloud SDK for credit index readiness
+        if: ${{ success() && inputs.scope == 'firestore:indexes' }}
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: nightjar-audio
+
+      - name: Require READY verified-credit indexes
+        if: ${{ success() && inputs.scope == 'firestore:indexes' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            gcloud firestore indexes composite list \
+              --database='(default)' --project=nightjar-audio \
+              --format=json > "$RUNNER_TEMP/nightjar-credit-index-states.json"
+            if node scripts/verified-credit-index-readiness.mjs \
+              "$RUNNER_TEMP/nightjar-credit-index-states.json" \
+              "$RUNNER_TEMP/nightjar-repository-indexes.json"; then
+              ready=1
+              break
+            fi
+            sleep 20
+          done
+          if [[ "$ready" != '1' ]]; then
+            echo "::error::New credit indexes are not READY. Block Cloud Functions and Hosting until Firestore completes building them."
+            exit 1
+          fi
 
       # Post-deploy verification is read-only. No webhooks, scheduled jobs,
       # auth callables, email sends, age checks, payments or write APIs are invoked.

@@ -55,7 +55,7 @@ assert.match(profile, /id="nj-cinema-work"/, 'Work tab has a real scroll target'
 assert.match(profile, /id="nj-cinema-about"/, 'About tab has a real scroll target');
 assert.match(profile, /id="nj-cinema-collaborate"/, 'Collaborate tab has a real scroll target');
 assert.match(profile, /release\.artworkUrl/, 'Real approved catalogue artwork is used');
-assert.match(directory, /belongsToLibraryCategory\(person,category\)/, 'Directory verified crescent must be restricted to approved professional membership');
+assert.match(directory, /Array\.isArray\(person\.approvedProfessionalRoles\) && person\.approvedProfessionalRoles\.length > 0/, 'Directory verified crescent must require server-approved professional membership');
 assert.match(cinema, /data-nightjar-vision/, 'Alternate low-vision palettes must remain usable');
 
 // Third-pass production polish: structural consistency from the October mobile recording.
