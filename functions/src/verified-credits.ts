@@ -65,6 +65,7 @@ export function buildVerifiedCreditCallables(
 
   const respondToCreditClaim = onCall({ region:'europe-west2' }, async request => {
     const identity = await requireActive(request);
+    await requireAgeVerified(identity.uid);
     const input = (request.data ?? {}) as Record<string, unknown>;
     const id = requireInput(input.claimId,'claim');
     const decision = clean(input.decision,24);
@@ -103,7 +104,7 @@ export function buildVerifiedCreditCallables(
         }
       }
       if (decision === 'revoke' && data.state !== 'approved') throw new HttpsError('failed-precondition','Only approved claims can be revoked.');
-      if (decision === 'reject' && !activeStates.has(data.state)) throw new HttpsError('failed-precondition','Claim is not pending.');
+      if (decision === 'reject' && (!activeStates.has(data.state) || data.state === 'approved')) throw new HttpsError('failed-precondition','Claim is not pending.');
       const state:ClaimState = decision === 'approve' ? 'approved' : decision === 'revoke' ? 'revoked' : 'rejected';
       tx.update(ref,{
         state,updatedAt:FieldValue.serverTimestamp(),
@@ -122,6 +123,7 @@ export function buildVerifiedCreditCallables(
 
   const listMyCreditClaims = onCall({ region:'europe-west2' }, async request => {
     const identity = await requireActive(request);
+    await requireAgeVerified(identity.uid);
     const db = getFirestore();
     const [mine,uploads] = await Promise.all([
       db.collection('verifiedCreditClaims').where('claimantUserId','==',identity.uid).limit(100).get(),
@@ -134,7 +136,7 @@ export function buildVerifiedCreditCallables(
   const adminListCreditClaims = onCall({ region:'europe-west2' }, async request => {
     const admin = requireAdmin(request);
     await requireAgeVerified(admin.uid);
-    const snapshot = await getFirestore().collection('verifiedCreditClaims').limit(100).get();
+    const snapshot = await getFirestore().collection('verifiedCreditClaims').orderBy('createdAt','desc').limit(100).get();
     return {claims:snapshot.docs.map(doc=>output(doc.id,doc.data()))};
   });
 
