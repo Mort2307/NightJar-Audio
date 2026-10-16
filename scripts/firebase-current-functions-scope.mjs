@@ -15,6 +15,25 @@ const hasExport = node => node.modifiers?.some(modifier =>
 for (const statement of source.statements) {
   if (ts.isVariableStatement(statement) && hasExport(statement)) {
     for (const declaration of statement.declarationList.declarations) {
+      // Credit callables are exported by a named factory rather than directly
+      // invoking onCall. Explicitly enumerate only its audited named handlers.
+      if (ts.isObjectBindingPattern(declaration.name) && ts.isCallExpression(declaration.initializer) &&
+          ts.isIdentifier(declaration.initializer.expression) &&
+          declaration.initializer.expression.text === 'buildVerifiedCreditCallables') {
+        const creditSource = readFileSync('functions/src/verified-credits.ts', 'utf8');
+        const required = ['claimMyReleaseCredit','respondToCreditClaim','adminReviewCreditClaim','listMyCreditClaims','adminListCreditClaims'];
+        const exported = declaration.name.elements.map(element => {
+          if (!ts.isIdentifier(element.name) || element.propertyName || element.initializer || element.dotDotDotToken)
+            throw new Error('Unsupported verified-credit factory export binding');
+          return element.name.text;
+        });
+        if (exported.length !== required.length || required.some(name => !exported.includes(name) ||
+            !creditSource.includes('const '+name+' = onCall('))) {
+          throw new Error('Verified-credit callable factory export has changed; review deploy scope');
+        }
+        names.push(...exported);
+        continue;
+      }
       if (!ts.isIdentifier(declaration.name) || !ts.isCallExpression(declaration.initializer)) {
         throw new Error('Unsupported top-level Cloud Function export in ' + filename);
       }
