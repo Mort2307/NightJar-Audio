@@ -103,8 +103,11 @@ export function buildVerifiedCreditCallables(
         return;
       }
       if (decision === 'approve' && data.state !== 'uploader_confirmed') throw new HttpsError('failed-precondition','Uploader confirmation required.');
+      // Every Firestore transaction read must precede its first write.
+      let approvedRelease: FirebaseFirestore.DocumentSnapshot | null = null;
+      if (decision === 'approve') approvedRelease = await tx.get(getFirestore().collection('releases').doc(data.releaseId));
       if (decision === 'approve') {
-        const release = await tx.get(getFirestore().collection('releases').doc(data.releaseId));
+        const release = approvedRelease!;
         const releaseData = release.data();
         const slot = (Array.isArray(releaseData?.contributors) ? releaseData.contributors : []).find((item:any,i:number) => (clean(item?.slotId) || String(i)) === data.contributorSlotId);
         if (!releaseData || releaseData.status !== 'released' || releaseData.creatorUserId !== data.uploaderUserId || !slot || slot.role !== data.releaseRole || clean(slot.name,100) !== data.creditName) {
