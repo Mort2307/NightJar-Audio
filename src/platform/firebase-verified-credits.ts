@@ -14,14 +14,14 @@ export type CreditClaim = {
   createdAt: string | null;
   updatedAt: string | null;
 };
-const mine = httpsCallable<void,{claims:CreditClaim[]}>(functions,'listMyCreditClaims');
+const mine = httpsCallable<{cursor?:string},{claims:CreditClaim[];nextCursor:string|null}>(functions,'listMyCreditClaims');
 const admin = httpsCallable<{cursor?:string},{claims:CreditClaim[];nextCursor:string|null}>(functions,'adminListCreditClaims');
 const claim = httpsCallable<{releaseId:string;contributorSlotId:string},{claimId:string;state:string}>(functions,'claimMyReleaseCredit');
 const respond = httpsCallable<{claimId:string;decision:'confirm'|'dispute'|'unsure'},{state:string}>(functions,'respondToCreditClaim');
 const review = httpsCallable<{claimId:string;decision:'approve'|'reject'|'revoke';reason?:string},{state:string}>(functions,'adminReviewCreditClaim');
 
 export const verifiedCreditApi = {
-  async myClaims() { return (await mine()).data.claims; },
+  async myClaims(cursor?:string) { return (await mine({cursor})).data; },
   async adminClaims(cursor?:string) { return (await admin({cursor})).data; },
   async claim(releaseId:string,contributorSlotId:string) { return (await claim({releaseId,contributorSlotId})).data; },
   async uploaderResponse(claimId:string,decision:'confirm'|'dispute'|'unsure') { return (await respond({claimId,decision})).data; },
