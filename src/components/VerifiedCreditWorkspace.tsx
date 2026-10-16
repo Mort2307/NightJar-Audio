@@ -14,6 +14,7 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
   const [catalogue,setCatalogue] = useState<Array<{id:string;title:string;contributors?:Array<{slotId?:string;name:string;role:string}>}>>([]);
   const [catalogueLoading,setCatalogueLoading] = useState(false);
   const [reviewReasons,setReviewReasons] = useState<Record<string,string>>({});
+  const [appealReasons,setAppealReasons] = useState<Record<string,string>>({});
   const refresh = useCallback(async()=>{
     setLoading(true);setError('');
     try {
@@ -77,6 +78,12 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
         <strong>{item.releaseRole}</strong> <span>{item.state.replaceAll('_',' ')}</span>
         <small>Release: {item.releaseId} · Slot: {item.contributorSlotId}</small>
         {!administrator&&item.claimantUserId===currentUserId&&item.state==='awaiting_uploader'&&<p>Awaiting the release uploader's decision.</p>}
+        {!administrator&&item.claimantUserId===currentUserId&&['rejected','revoked'].includes(item.state)&&
+          (item.appealPending ? <p>Appeal submitted for independent review.</p> :
+            <div className="nj-credit-actions"><label>Request a credit decision review
+              <input maxLength={600} value={appealReasons[item.id]??''} onChange={event=>setAppealReasons(current=>({...current,[item.id]:event.target.value}))} placeholder="Explain the correction or supporting evidence" />
+            </label><button type="button" disabled={busy!==null||(appealReasons[item.id]?.trim().length??0)<10} onClick={()=>void act(item.id,()=>verifiedCreditApi.appeal(item.id,appealReasons[item.id].trim()))}>Submit appeal</button></div>)}
+        {administrator&&item.appealPending&&<p role="status">Member appeal awaiting independent review.</p>}
         {!administrator&&item.uploaderUserId===currentUserId&&item.state==='awaiting_uploader'&&
           <div className="nj-credit-actions">
             {(['confirm','dispute','unsure'] as const).map(decision=><button key={decision} type="button" disabled={busy!==null}
