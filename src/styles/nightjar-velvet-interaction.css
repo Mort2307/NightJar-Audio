@@ -1,0 +1,256 @@
+/* NightJar / Midnight Gold · Velvet Interaction
+   Sensual editorial pacing without excessive glitter, blur, or gold noise.
+   Functional interactions are semantic buttons, never click handlers on text-only decorations.
+   Vision Access independently controls accessible palettes and motion. */
+
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) {
+  --nj-velvet-black:#080706;
+  --nj-velvet-ink:#120e0b;
+  --nj-velvet-taupe:#cec0a9;
+  --nj-velvet-gold:#e1be85;
+  --nj-velvet-edge:rgba(224,180,109,.3);
+  --nj-velvet-glint:rgba(247,209,147,.08);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) body {
+  background:
+    radial-gradient(ellipse 80% 25% at 80% -12%,rgba(192,112,45,.11),transparent 70%),
+    #080706;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-personal-home,.nj-pro-library,.nj-listener-discovery,.premium-public-profile,
+  .creator-profile-modal,.nj-settings-master-disclosure
+) {
+  text-rendering:optimizeLegibility;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .section-head h2,.section-head h3,.nj-spotlight-story h3,
+  .nj-personal-home-toolbar strong,.premium-public-profile .creator-profile-hero h3
+) {
+  font-family:Georgia,'Times New Roman',serif;
+  font-weight:400;
+  letter-spacing:-.022em;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
+  .nj-spotlight-card,.track-card,.nj-pro-library-person,.featured-card
+) {
+  background:
+    linear-gradient(125deg,rgba(223,176,106,.045),transparent 36%),
+    linear-gradient(152deg,#1a1410,#0a0908 87%);
+  border-color:rgba(223,176,106,.28);
+  box-shadow:inset 0 1px rgba(255,232,185,.055),0 14px 37px rgba(0,0,0,.3);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-profile-cover {
+  background:
+    radial-gradient(ellipse at 80% 18%,rgba(213,134,58,.33),transparent 44%),
+    linear-gradient(125deg,#090807 13%,#2b190f 74%,#120c08);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-cover-words em {
+  color:#faebd6;
+  font-size:clamp(26px,4.8vw,47px);
+  text-shadow:0 2px 28px rgba(0,0,0,.85);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-cinema-cover-words small {
+  color:#edc788;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .premium-public-profile .nj-profile-avatar-frame>.creator-profile-avatar {
+  box-shadow:0 0 0 4px #080706,0 0 0 5px rgba(230,186,114,.65),0 18px 45px #000c;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(.primary-button,.nj-spotlight-card-actions .primary-button) {
+  color:#160e07;
+  background:linear-gradient(115deg,#efce96 5%,#d7a66b 67%,#c59353);
+  box-shadow:inset 0 1px rgba(255,255,255,.35),0 8px 23px rgba(0,0,0,.29);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(.secondary-button,.ghost-button) {
+  background:rgba(12,10,9,.83);
+  border-color:rgba(220,173,102,.3);
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(.secondary-button,.ghost-button,.nj-profile-metric-button):hover:not(:disabled) {
+  border-color:rgba(246,203,132,.69);
+}
+
+/* Public profile statistic buttons mirror existing metric tiles visually.
+   Followers & Following reveal a real, privacy-filtered people list;
+   Release and Collaboration stats navigate to the actual profile section. */
+.premium-public-profile .public-profile-metrics>.nj-profile-metric-button,
+.nj-cinema-creator-legacy .public-profile-metrics>.nj-profile-metric-button {
+  border:0;
+  border-left:1px solid rgba(214,175,108,.2);
+  background:transparent;
+  color:inherit;
+  cursor:pointer;
+  min-height:61px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  justify-content:center;
+  align-items:center;
+  padding:6px 4px;
+  min-width:0;
+  border-radius:0;
+  font:inherit;
+  text-align:center;
+  transition:background .18s ease,color .18s ease;
+}
+.premium-public-profile .public-profile-metrics>.nj-profile-metric-button:first-child,
+.nj-cinema-creator-legacy .public-profile-metrics>.nj-profile-metric-button:first-child {border-left:0;}
+.premium-public-profile .public-profile-metrics>.nj-profile-metric-button strong,
+.nj-cinema-creator-legacy .public-profile-metrics>.nj-profile-metric-button strong {
+  margin:0;
+  font:400 clamp(20px,2.6vw,28px)/1.1 Georgia,serif;
+  color:#f4e8d6;
+}
+.premium-public-profile .public-profile-metrics>.nj-profile-metric-button span,
+.nj-cinema-creator-legacy .public-profile-metrics>.nj-profile-metric-button span {
+  font-size:clamp(10px,1.3vw,12px);
+  line-height:1.35;
+  color:#d0baa0;
+  overflow-wrap:anywhere;
+}
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .public-profile-metrics>.nj-profile-metric-button:is(:hover,:focus-visible,[aria-expanded="true"]) {
+  background:rgba(226,188,128,.11);
+  color:#f5d9a8;
+}
+.public-profile-metrics>.nj-profile-metric-button:focus-visible {
+  outline:2px solid #f2d6a7;
+  outline-offset:-3px;
+}
+
+/* An accessible in-profile social sheet keeps focus/context; never a nested
+   modal that fights the existing Nightjar focus trap. */
+.premium-public-profile .nj-connection-sheet,
+.nj-cinema-creator-legacy .nj-connection-sheet {
+  min-width:0;
+  display:grid;
+  gap:12px;
+  padding:15px;
+  margin:8px 0 12px;
+  border:1px solid rgba(222,176,104,.42);
+  border-radius:16px;
+  background:radial-gradient(ellipse at 93% -16%,rgba(224,162,84,.15),transparent 50%),#110f0d;
+  box-shadow:0 16px 44px rgba(0,0,0,.3);
+}
+.premium-public-profile .nj-connection-sheet {order:2;}
+.nj-cinema-creator-legacy .nj-connection-sheet {order:2;}
+.nj-connection-sheet>header {
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.nj-connection-heading {
+  display:flex;align-items:center;gap:12px;min-width:0;
+  color:#e5bb7d;
+}
+.nj-connection-heading>span {display:grid;gap:3px;}
+.nj-connection-heading small {font:700 10px/1.3 system-ui,sans-serif;letter-spacing:.12em;}
+.nj-connection-heading strong {font:400 26px/1.15 Georgia,serif;color:#f7ebd9;}
+.nj-connection-close {display:grid;place-items:center;width:44px;height:44px;flex:none;border-radius:50%;border:1px solid rgba(222,176,104,.3);background:#16120f;color:#f5e6cf;cursor:pointer;}
+.nj-connection-description,.nj-connection-state,.nj-connection-note {margin:0;color:#d1c1aa;font-size:13px;line-height:1.55;}
+.nj-connection-state {display:grid;gap:10px;padding:17px 5px;}
+.nj-connection-state p {margin:0;}
+.nj-connection-state button {justify-self:start;}
+.nj-connection-people {display:grid;gap:6px;max-height:min(46dvh,380px);overflow-y:auto;overscroll-behavior:contain;}
+.nj-connection-person {
+  display:grid;
+  grid-template-columns:47px minmax(0,1fr) 18px;
+  align-items:center;
+  gap:11px;
+  width:100%;
+  min-height:66px;
+  padding:8px 11px;
+  border:1px solid rgba(222,176,104,.18);
+  border-radius:12px;
+  color:#f1e8dd;
+  background:rgba(27,22,17,.85);
+  text-align:left;
+  cursor:pointer;
+}
+.nj-connection-person:is(:hover,:focus-visible) {outline:2px solid #e4bc81;outline-offset:-2px;background:#2b2118;}
+.nj-connection-avatar {display:grid;place-items:center;width:47px;height:47px;border:1px solid #d9b476;border-radius:50%;overflow:hidden;color:#f3dec0;background:#2c2117;}
+.nj-connection-avatar img {width:100%;height:100%;object-fit:cover;}
+.nj-connection-person-copy {display:grid;gap:4px;min-width:0;}
+.nj-connection-person-copy strong {display:flex;align-items:center;gap:6px;font:400 17px/1.2 Georgia,serif;overflow-wrap:anywhere;}
+.nj-connection-person-copy strong svg {flex:none;color:#e6c187;}
+.nj-connection-person-copy small {color:#bfac90;font-size:12px;line-height:1.3;overflow-wrap:anywhere;}
+.nj-connection-person>svg {color:#d9b476;}
+.nj-connection-note {display:flex;gap:8px;align-items:center;font-size:11px;}
+.nj-connection-footer {
+  min-height:43px;display:flex;justify-content:center;align-items:center;gap:8px;
+  border:1px solid rgba(222,176,104,.27);border-radius:11px;
+  color:#ead0a6;background:rgba(12,10,8,.9);font-size:13px;cursor:pointer;
+}
+.nj-connection-footer:focus-visible,.nj-connection-close:focus-visible {outline:2px solid #edcb91;outline-offset:2px;}
+
+/* Larger intentional hit areas, not invisible click handlers over unrelated content. */
+.nj-directory-identity-trigger {
+  display:flex;
+  align-items:center;
+  width:100%;
+  min-height:72px;
+  padding:0;
+  margin:0;
+  color:inherit;
+  background:transparent;
+  border:0;
+  text-align:left;
+  cursor:pointer;
+}
+.nj-directory-identity-trigger:focus-visible {
+  outline:2px solid #efd1a3;outline-offset:4px;border-radius:12px;
+}
+.nj-directory-identity-trigger:is(:hover,:focus-visible) .nj-pro-library-person-title h3 {color:#eecb92;}
+.nj-spotlight-portrait-trigger {
+  display:grid;place-items:center;
+  width:100%;padding:0;
+  border:0;border-radius:0;
+  cursor:pointer;
+  color:inherit;
+  text-align:inherit;
+}
+.nj-spotlight-portrait-trigger:disabled {cursor:default;}
+.nj-spotlight-portrait-trigger:focus-visible {outline:3px solid #e7c38c;outline-offset:-3px;}
+.nj-spotlight-portrait-trigger .nj-spotlight-portrait-stamp {pointer-events:none;}
+.nj-release-cover-trigger {
+  position:absolute;inset:0;
+  z-index:1;
+  padding:0;margin:0;
+  border:0;
+  border-radius:inherit;
+  background:transparent;
+  cursor:pointer;
+}
+.nj-release-cover-trigger:disabled {cursor:not-allowed;}
+.nj-release-cover-trigger:focus-visible {outline:3px solid #ebc68d;outline-offset:-4px;}
+.track-cover .track-index {pointer-events:none;}
+.track-cover .cover-play {z-index:4;}
+@media(hover:hover) and (prefers-reduced-motion:no-preference) {
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-release-cover-trigger:hover .release-cover-media {
+    filter:brightness(1.1) saturate(.96);
+  }
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-portrait-trigger:hover .nj-spotlight-portrait-img {
+    transform:scale(1.015);
+  }
+}
+@media(max-width:420px) {
+  .premium-public-profile .public-profile-metrics>.nj-profile-metric-button,
+  .nj-cinema-creator-legacy .public-profile-metrics>.nj-profile-metric-button {
+    min-height:58px;
+    padding-inline:2px;
+  }
+  .nj-connection-sheet {padding:12px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .public-profile-metrics>.nj-profile-metric-button,
+  .nj-release-cover-trigger .release-cover-media,.nj-spotlight-portrait-trigger .nj-spotlight-portrait-img {
+    transition:none!important;transform:none!important;
+  }
+}
+:root[data-nightjar-vision] .nj-connection-sheet {
+  background:var(--panel)!important;
+  border:2px solid var(--line)!important;
+}
+:root[data-nightjar-vision] .nj-connection-sheet :is(.nj-connection-person,.nj-connection-footer,.nj-connection-close) {
+  background:var(--panel);
+  color:var(--ivory);
+  border:1px solid var(--line);
+}
+:root[data-nightjar-vision] .nj-connection-person-copy :is(strong,small),
+:root[data-nightjar-vision] .nj-connection-description,
+:root[data-nightjar-vision] .nj-connection-heading :is(small,strong) {color:var(--ivory);}
