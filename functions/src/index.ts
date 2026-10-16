@@ -2380,6 +2380,71 @@ const persistProfileFollow = async (
   });
 };
 
+// On-demand social discovery only. Never return email addresses, hidden members,
+// inactive accounts or follow documents. Limit fan-out and reads per tap.
+export const listPublicProfileConnections = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as { userId?: unknown; kind?: unknown };
+  const userId = cleanText(input.userId, 160);
+  const kind = String(input.kind ?? '');
+  if (!userId || !['followers','following'].includes(kind)) {
+    throw new HttpsError('invalid-argument', 'Choose a Nightjar profile and Followers or Following.');
+  }
+  const [subjectAccount, subjectProfile] = await Promise.all([
+    accountRef(userId).get(),
+    profileRef(userId).get(),
+  ]);
+  const subjectData = subjectAccount.data() ?? {};
+  const subjectPublic = subjectData.role === 'admin'
+    ? subjectProfile.data()?.adminCommunityVisible === true
+    : subjectProfile.data()?.publicProfile !== false;
+  if (!subjectAccount.exists || subjectData.status !== 'active' || !subjectProfile.exists || !subjectPublic) {
+    throw new HttpsError('not-found', 'This Nightjar profile is not publicly available.');
+  }
+
+  const limit = 40;
+  // The reverse lookup has an explicit collection-group index in firestore.indexes.json.
+  // Do not scan accounts: one user tap must never read the whole audience.
+  const edges = kind === 'followers'
+    ? await db.collectionGroup('follows').where('targetUserId', '==', userId).limit(limit).get()
+    : await accountRef(userId).collection('follows').limit(limit).get();
+  const ids = Array.from(new Set(edges.docs.map((doc) =>
+    kind === 'followers' ? doc.ref.parent.parent?.id ?? '' : doc.id,
+  ).filter(Boolean))).filter((id) => id !== userId);
+
+  const people = (await Promise.all(ids.map(async (id) => {
+    const [account, memberProfile] = await Promise.all([accountRef(id).get(), profileRef(id).get()]);
+    const member = account.data() ?? {};
+    const publicData = memberProfile.data() ?? {};
+    if (!account.exists || member.status !== 'active' || !memberProfile.exists) return null;
+    if (member.role === 'admin' ? publicData.adminCommunityVisible !== true : publicData.publicProfile === false) return null;
+    const roles = professionalRolesForAccount(member);
+    const activeRole = cleanText(member.role, 30);
+    const role = member.role === 'admin' ? 'listener' :
+      (['listener','creator','writer','editor','artist'].includes(activeRole) ? activeRole : (roles[0] ?? 'listener'));
+    return {
+      userId:id,
+      name:cleanText(publicData.displayName || 'Nightjar member', 120),
+      handle:cleanText(publicData.handle, 60) || null,
+      avatarUrl:publicData.avatarStatus === 'approved' ? validPublicUrl(publicData.avatarUrl) : null,
+      initials:cleanText(publicData.avatarInitials, 5) || null,
+      role,
+      official:member.role !== 'admin' && roles.length > 0,
+    };
+  }))).filter((person): person is NonNullable<typeof person> => person !== null);
+
+  return {
+    kind,
+    userId,
+    people,
+    sampled:edges.size,
+    hasMore:edges.size === limit,
+    // Counts remain aggregate metrics; only public identities can appear here.
+    publicOnly:true,
+  };
+});
+
 export const setProfileFollow = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const input = (request.data ?? {}) as { targetUserId?: unknown; following?: unknown };
