@@ -1964,9 +1964,13 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
   for (const release of releases.docs) {
     const creatorUserId = cleanText(release.data().creatorUserId, 160);
     if (creatorUserId) releaseCountByCreator.set(creatorUserId, (releaseCountByCreator.get(creatorUserId) ?? 0) + 1);
-    for (const credit of normaliseReleaseContributors(release.data().contributors)) {
-      if (credit.userId) creditCountByUser.set(credit.userId, (creditCountByUser.get(credit.userId) ?? 0) + 1);
-    }
+  }
+  // Only independently approved credit claims contribute to public directory totals.
+  const approvedCreditSnapshot = await db.collection('verifiedCreditClaims').where('state', '==', 'approved').limit(1000).get();
+  for (const claim of approvedCreditSnapshot.docs) {
+    const credit = claim.data();
+    const uid = cleanText(credit.claimantUserId, 160);
+    if (uid && credit.approvedByAdminUserId && credit.approvedAt) creditCountByUser.set(uid, (creditCountByUser.get(uid) ?? 0) + 1);
   }
 
   const publishedScriptsByWriter = new Map<string, number>();
@@ -5379,7 +5383,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     mood: cleanText(input.mood, 80),
     tags: cleanStringList(input.tags, 24),
     tropes: cleanStringList(input.tropes, 24),
-    contributors: normaliseReleaseContributors(input.contributors),
+    contributors: normaliseReleaseContributors(input.contributors, [], true),
     contentRating: cleanReleaseContentRating(input.contentRating),
     seriesTitle: cleanText(input.seriesTitle, 160) || null,
     episodeNumber: cleanEpisodeNumber(input.episodeNumber),
@@ -5437,7 +5441,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     mood: cleanText(input.mood ?? current.mood, 80),
     tags: Array.isArray(input.tags) ? cleanStringList(input.tags, 24) : (current.tags ?? []),
     tropes: Array.isArray(input.tropes) ? cleanStringList(input.tropes, 24) : (current.tropes ?? []),
-    contributors: Array.isArray(input.contributors) ? normaliseReleaseContributors(input.contributors, current.contributors) : normaliseReleaseContributors(current.contributors, current.contributors),
+    contributors: Array.isArray(input.contributors) ? normaliseReleaseContributors(input.contributors, current.contributors, true) : normaliseReleaseContributors(current.contributors, current.contributors),
     contentRating: typeof input.contentRating !== 'undefined' ? cleanReleaseContentRating(input.contentRating) : cleanReleaseContentRating(current.contentRating),
     seriesTitle: typeof input.seriesTitle !== 'undefined' ? cleanText(input.seriesTitle, 160) || null : current.seriesTitle ?? null,
     episodeNumber: typeof input.episodeNumber !== 'undefined' ? cleanEpisodeNumber(input.episodeNumber) : cleanEpisodeNumber(current.episodeNumber),
@@ -9467,7 +9471,7 @@ const cleanEpisodeNumber = (value: unknown) => {
   return Number.isFinite(number) ? Math.max(0, Math.min(10000, Math.round(number))) : null;
 };
 
-const normaliseReleaseContributors = (value: unknown, existing: unknown = []) => {
+const normaliseReleaseContributors = (value: unknown, existing: unknown = [], assignSlotIds = false) => {
   if (!Array.isArray(value)) return [];
   const allowedRoles = new Set([
     'Voice Actor', 'Writer', 'Audio Editor', 'Producer', 'Director',
@@ -9480,7 +9484,7 @@ const normaliseReleaseContributors = (value: unknown, existing: unknown = []) =>
       // Server-issued immutable contributor slot reference. Legacy credits use
       // their original zero-based position until a controlled migration.
       slotId: previous[index] && previous[index].name === cleanText(item?.name,100) && previous[index].role === (allowedRoles.has(role) ? role : 'Other') && /^[a-f0-9-]{36}$/i.test(String(previous[index].slotId ?? ''))
-        ? previous[index].slotId : randomUUID(),
+        ? previous[index].slotId : assignSlotIds ? randomUUID() : (cleanText(item?.slotId, 80) || String(index)),
       userId: cleanText(item?.userId, 160) || null,
       name: cleanText(item?.name, 100),
       role: allowedRoles.has(role) ? role : 'Other',
