@@ -67,5 +67,5 @@ assert.match(member,/Administrator approval means the request can proceed, not t
   'member cannot confuse review decision with provider approval');
 assert.doesNotMatch(block,/tx\.set\(ageRef|status:\s*'COMPLETE'|verified:\s*true|startDiditSession\(/,
   'approval may never mark an account age-verified or start a paid provider session');
-assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'public Didit checks remain stopped');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = false/,'standard mandatory Didit verification is enabled; historic reuse enquiries cannot grant a pass');
 console.log('Nightjar Didit existing-KYC member consent, triage and no-paid-session security contracts PASS.');

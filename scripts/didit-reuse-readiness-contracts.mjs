@@ -13,7 +13,7 @@ assert.match(code,/export const adminInspectDiditReuseWorkflow = onCall/,'workfl
 assert.match(code,/export const adminBindExistingDiditSource = onCall/,'read-only original session evidence inspection exists');
 assert.match(code,/export const adminDiditReuseReadiness = onCall/,'admins can check provider readiness');
 assert.match(code,/requireAdminIdentity\(request\)/,'all functions require server-authorised admin');
-assert.match(code,/DIDIT_VERIFICATION_PAUSED/,'public verification pause is mandatory');
+assert.match(code,/!DIDIT_VERIFICATION_PAUSED/,'legacy reuse preparation is disabled once normal verification is enabled');
 assert.match(code,/method: 'GET'/,'provider lookups are always read-only');
 assert.match(code,/v3\/workflows\//,'provider workflow is fetched from official API');
 assert.match(code,/v3\/session\//,'provider original approval is fetched from official API');
@@ -42,5 +42,5 @@ assert.match(admin,/Inspect workflow settings · no paid check/,'workflow inspec
 assert.match(admin,/Check original approval · no new ID check/,'original session verification clearly never starts a new check');
 assert.match(admin,/secure biometric ownership confirmation and account binding are still required/,'no implied age pass');
 assert.match(control,/<AdminDiditReuseReadiness \/>/,'admin control centre contains provider readiness');
-assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'public Didit verification stays disabled');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = false/,'normal account-bound Didit verification is enabled');
 console.log('Didit source evidence, zero-cost reuse workflow and fail-closed launch-readiness contracts PASS.');

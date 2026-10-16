@@ -38,7 +38,7 @@ assert.match(status,/previous\.uid === identity\.uid/,'resume URL must be bound 
 assert.match(status,/return \{[\s\S]*?authorised, state: status, providerVerified/,'members see real authorised state');
 
 assert.match(launch,/requireActiveIdentity\(request\)/,'start requires verified signed-in account');
-assert.match(launch,/DIDIT_VERIFICATION_PAUSED/,'one-use exception works only while public Didit is paused');
+assert.match(launch,/!DIDIT_VERIFICATION_PAUSED/,'legacy one-use endpoint is closed while standard verification is active');
 assert.match(launch,/diditMode\(\) !== 'live'/,'never mislabel sandbox');
 assert.match(launch,/explicitConsent !== true/,'member separately confirms a real check');
 assert.match(launch,/await requireCurrentLegalAcceptance\(identity\.uid, 'age_assurance_notice'\)/,'server-stored notice acknowledgement required');
@@ -53,10 +53,10 @@ assert.match(launch,/throw new HttpsError\('unavailable'/,'provider errors requi
 assert.doesNotMatch(launch,/tx\.set\(ageRef|status:\s*'COMPLETE'|testMode:\s*true|console\.(log|error)/,
   'pilot cannot fabricate age confirmation or log identity data');
 assert.match(didit,/uid !== payload\.vendorData/,'Didit webhook still binds signed approval to account UID');
-assert.match(index,/const DIDIT_VERIFICATION_PAUSED = true/,'global kill switch remains active');
-assert.match(app,/const DIDIT_VERIFICATION_PAUSED = true/,'public UI remains paused');
+assert.match(index,/const DIDIT_VERIFICATION_PAUSED = false/,'standard age verification is enabled, without lifting one-use safeguards');
+assert.match(app,/const DIDIT_VERIFICATION_PAUSED = false/,'mandatory user-facing verification is available');
 assert.match(app,/if \(DIDIT_VERIFICATION_PAUSED && !\(adminPilot && role === 'admin'\)\)/,
-  'normal members cannot evade the public UI pause');
+  'a future emergency pause still blocks ordinary users');
 assert.match(settings,/<DiditControlledLiveCheck \/>/,'one-use check shows in Settings');
 assert.ok(settings.indexOf('<DiditControlledLiveCheck />') < settings.indexOf('nj-settings-master-disclosure'),
   'invitation must appear at the top of Settings and not behind nested dropdowns');
@@ -73,4 +73,4 @@ assert.match(client,/adminAuthoriseDiditControlledCheck/,'typed grant callable e
 assert.match(client,/myDiditControlledCheck/,'typed status callable exists');
 assert.match(client,/startMyDiditControlledCheck/,'typed start callable exists');
 assert.match(workflow,/\[nightjar-didit-controlled-check-release\]/,'backend-first deploy is mandatory');
-console.log('One-use account-bound Didit normal live check, durable charge guard, UX and public pause contracts PASS.');
+console.log('Legacy one-use Didit maintenance safeguards and mandatory public verification contracts PASS.');

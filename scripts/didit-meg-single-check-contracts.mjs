@@ -14,10 +14,10 @@ assert.ok(start>0 && end>start,'one-shot maintenance pilot isolated from public 
 const code = backend.slice(start,end);
 const publicStarter=backend.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0]||'';
 
-assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'public pause stays enabled');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = false/,'standard user-wide Didit path is open');
 assert.match(backend,/const TESTING_AGE_ASSURANCE_BYPASS = false/,'temporary beta age bypass is disabled after verified-18+ rollout');
 assert.match(publicStarter,/if \(DIDIT_VERIFICATION_PAUSED && !controlledAdminTest\)/,
- 'global public starter remains blocked');
+ 'emergency maintenance pause guard remains in place but is currently off');
 assert.match(code,/isMegDiditMaintenanceMember\(identity\)/,'server identifies the specifically authorised member');
 assert.match(code,/identity\.admin && cleanEmail\(identity\.email\) === MEG_DIDIT_MAINTENANCE_EMAIL/,
  'email + admin role are authenticated server-side, not user-supplied');
@@ -62,4 +62,4 @@ assert.match(settings,/administrator && !simulationMode && email\?\.trim\(\)\.to
  'maintenance UI is limited to an administrator account');
 assert.match(settings,/<ControlledSingleMemberDiditCheck\/>/,'pilot control is in the member own Settings');
 assert.match(workflow,/\[nightjar-meg-didit-single-release\]/,'backend-first gated deploy protects new UI');
-console.log('Controlled one-use signed-in Meg Didit check: consent, global pause, durable charge guard and account-binding PASS.');
+console.log('Legacy controlled Didit single-check guarded off during normal rollout; consent, durable charge guard and account-binding PASS.');
