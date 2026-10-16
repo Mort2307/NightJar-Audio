@@ -96,6 +96,7 @@ import { MEMBER_PAYMENT_FEATURES_ENABLED } from './platform/nightjar-financial-v
 import NightjarFinancePreview from './components/NightjarFinancePreview';
 import NightjarSettings from './components/NightjarSettings';
 import AdminWorkspaceTabs, { type AdminWorkspace } from './components/AdminWorkspaceTabs';
+import VerifiedCreditWorkspace from './components/VerifiedCreditWorkspace';
 import AdminDiditControlCentre from './components/AdminDiditControlCentre';
 import SecurityEvidenceReview, { type SecurityEvidenceReviewData } from './components/SecurityEvidenceReview';
 import AdminSecurityAlerts from './components/AdminSecurityAlerts';
@@ -5408,6 +5409,8 @@ function App() {
           />
         )}
 
+        {view === 'profile' && !profileRolesPage && user?.userId && !simulationMode && !demoMode && <details className="page-wrap nj-credit-workspace-disclosure"><summary>🎧 My credited releases</summary><VerifiedCreditWorkspace currentUserId={user.userId} onNotice={notify}/></details>}
+
         {view === 'profile' && !profileRolesPage && (
           <section className="page-section profile-page premium-profile-page">
             <div className="page-heading premium-profile-page-heading">
@@ -5743,6 +5746,7 @@ function App() {
               pendingImages={imageModeration.length}
               openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
             />
+            {adminWorkspace === 'content' && user?.userId && <details className="nj-credit-workspace-disclosure"><summary>🎧 Credited account review</summary><VerifiedCreditWorkspace currentUserId={user.userId} administrator onNotice={notify}/></details>}
             {adminWorkspace === 'assistance' && <AdminAssistance initialEmail={assistancePrefillEmail} onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
             {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
