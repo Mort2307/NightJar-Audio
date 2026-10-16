@@ -12,6 +12,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
 import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision } from './didit';
 import { hasPaidEntitlement } from './entitlements';
+import { buildVerifiedCreditCallables } from './verified-credits';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -13622,3 +13623,9 @@ export const myProductionTimeline = onCall({ region: REGION }, async (request) =
       updatedAt: toIso(doc.data().updatedAt), createdAt: toIso(doc.data().createdAt) })),
   ].sort((a,b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')));
   return { entries: entries.slice(0,200) };});
+
+// Verified credit workflow uses the same account and administrator identity gates.
+export const {
+  claimMyReleaseCredit, respondToCreditClaim, adminReviewCreditClaim,
+  listMyCreditClaims, adminListCreditClaims,
+} = buildVerifiedCreditCallables(requireActiveIdentity, requireAdminIdentity);
