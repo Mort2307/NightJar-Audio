@@ -968,6 +968,42 @@ jobs:
           deploy_single_batch 'functions:selected' 'listPublicProfileConnections'
           echo "Public connections index and the single callable are deployed; safe to publish UI."
 
+      # Review-safe timed captions require the protected callable endpoints
+      # to be live before frontend controls become visible. No AI services.
+      - name: Deploy reviewed manual transcript sync before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-manual-transcript-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          grep -q 'export const getReleaseSyncAudioUrl = onCall' functions/src/index.ts
+          grep -q 'export const saveSyncedReleaseTranscript = onCall' functions/src/index.ts
+          node scripts/transcript-sync-contracts.mjs
+          deploy_batch() {
+            local names="$1" start id
+            start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+              -f ref=main -f 'inputs[scope]=functions:selected' \
+              -f "inputs[function_names]=$names" -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+            id=""
+            for attempt in $(seq 1 48); do
+              id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+                | jq -r --arg head "${GITHUB_SHA}" --arg start "$start" \
+                  '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+              if [[ -n "$id" ]]; then break; fi
+              sleep 10
+            done
+            if [[ -z "$id" ]]; then
+              echo "::error::Transcript backend batch $names not found; Hosting blocked."
+              exit 1
+            fi
+            gh run watch "$id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          }
+          deploy_batch 'getReleaseSyncAudioUrl,saveSyncedReleaseTranscript'
+          deploy_batch 'finalizeReleaseAudio'
+          echo "Age-gated manual transcript backend is live before Hosting."
+
       - name: Deploy Hosting live
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
