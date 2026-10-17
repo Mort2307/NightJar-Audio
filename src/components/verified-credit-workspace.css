@@ -1,0 +1,161 @@
+/* NightJar credited-release UX: Midnight Gold, accessible touch-first controls.
+   Scoped to the credit workspace to avoid affecting existing studios. */
+.nj-verified-credits{
+  --credit-gold:#e0bb80;
+  --credit-soft:#a99a8b;
+  --credit-line:rgba(225,187,127,.31);
+  --credit-bg:rgba(22,19,20,.92);
+  display:grid;
+  gap:clamp(16px,3vw,24px);
+  width:100%;
+  min-width:0;
+  max-width:1040px;
+  margin:0 auto;
+  padding:clamp(12px,2vw,26px) 0 max(28px,env(safe-area-inset-bottom));
+  color:#f4eee7;
+  overflow-wrap:anywhere;
+}
+.nj-verified-credits *, .nj-verified-credits *::before, .nj-verified-credits *::after{box-sizing:border-box}
+.nj-verified-credits .nj-credit-heading {display:grid;gap:10px;padding:0 4px}
+.nj-verified-credits .nj-credit-heading h2 {font-size:clamp(1.42rem,4vw,2rem);line-height:1.22;margin:0}
+.nj-verified-credits .nj-credit-heading p {color:#b7aa9e;font-size:.98rem;line-height:1.6;max-width:66ch;margin:0}
+.nj-verified-credits .nj-credit-card,.nj-verified-credits .nj-credit-guide {
+  min-width:0;width:100%;padding:clamp(16px,3vw,28px);
+  background:linear-gradient(150deg,rgba(36,28,28,.97),var(--credit-bg));
+  border:1px solid var(--credit-line);border-radius:22px;
+  box-shadow:0 18px 45px rgba(0,0,0,.24);
+}
+.nj-verified-credits .nj-credit-card-head {display:flex;align-items:flex-start;gap:14px;margin-bottom:22px}
+.nj-verified-credits .nj-credit-step{
+  flex:0 0 auto;min-width:40px;height:40px;display:inline-grid;place-items:center;
+  border:1px solid var(--credit-line);border-radius:12px;background:rgba(224,187,128,.12);
+  font-size:.9rem;font-weight:700;color:var(--credit-gold);letter-spacing:.06em
+}
+.nj-verified-credits .nj-credit-card-head>div {min-width:0}
+.nj-verified-credits .nj-credit-card-head h3 {font-size:clamp(1.16rem,3vw,1.46rem);line-height:1.3;margin:0 0 6px}
+.nj-verified-credits .nj-credit-card-head p,
+.nj-verified-credits .nj-credit-helper {color:#b9aba0;line-height:1.55;font-size:.89rem;margin:0}
+.nj-verified-credits .nj-credit-form,.nj-verified-credits .nj-credit-fields {display:grid;gap:12px;min-width:0}
+.nj-verified-credits .nj-credit-form {gap:18px}
+.nj-verified-credits .nj-credit-fields>label {
+  display:block;font-size:.98rem;line-height:1.4;font-weight:650;margin:10px 0 0;color:#f5eee5
+}
+.nj-verified-credits .nj-credit-required{color:var(--credit-gold)}
+.nj-verified-credits .nj-credit-optional{font-size:.78rem;line-height:1.5;color:#b6a797;font-weight:400}
+.nj-verified-credits input:not([type=checkbox]),
+.nj-verified-credits select,.nj-verified-credits textarea {
+  display:block;min-width:0;width:100%;min-height:52px;margin:0;padding:12px 18px;
+  font:inherit;font-size:1rem;line-height:1.45;color:#fff7ed;
+  border:1.5px solid rgba(224,187,128,.53);border-radius:12px;
+  background:#131112;box-shadow:0 0 0 1px rgba(0,0,0,.12);
+}
+.nj-verified-credits input::placeholder,.nj-verified-credits textarea::placeholder {color:#b1a79e}
+.nj-verified-credits textarea{min-height:95px;resize:vertical}
+.nj-verified-credits select{
+  appearance:none;-webkit-appearance:none;
+  padding-right:52px;background-color:#131112;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e0bb80' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position:right 17px center;background-size:22px;background-repeat:no-repeat;
+}
+.nj-verified-credits select:disabled {opacity:.62;border-style:dashed;cursor:not-allowed}
+.nj-verified-credits option {color:#f5eee7;background:#171315}
+.nj-verified-credits input:focus-visible,.nj-verified-credits select:focus-visible,
+.nj-verified-credits textarea:focus-visible,.nj-verified-credits button:focus-visible,
+.nj-verified-credits summary:focus-visible {outline:3px solid #ffe0a6;outline-offset:3px}
+.nj-verified-credits button {min-width:0;min-height:48px;font:inherit;line-height:1.4;white-space:normal;cursor:pointer}
+.nj-verified-credits button:disabled{opacity:.56;cursor:not-allowed}
+.nj-verified-credits .nj-credit-primary{
+  width:100%;padding:15px 18px;font-weight:760;font-size:1rem;
+  color:#21160e;background:linear-gradient(120deg,#f0cb93,#c39b61);
+  border:1px solid #f0cb93;border-radius:13px;
+  box-shadow:0 5px 24px rgba(199,153,89,.18);
+}
+.nj-verified-credits .nj-credit-switch{
+  width:max-content;max-width:100%;text-align:left;min-height:44px;
+  padding:6px 0;background:transparent;border:0;color:#e9c99d;
+  text-decoration:underline;text-underline-offset:4px;font-size:.91rem
+}
+.nj-verified-credits .nj-credit-expand,.nj-verified-credits .nj-credit-refresh{
+  width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  text-align:left;padding:12px 17px;border:1px solid var(--credit-line);
+  border-radius:12px;color:#f9e6cb;background:#201b1a;font-weight:680;
+}
+.nj-verified-credits .nj-credit-expand[aria-expanded=true]{margin-bottom:20px;background:#2c211d}
+.nj-verified-credits .nj-credit-chevron{
+  display:inline-block;flex:0 0 auto;width:12px;height:12px;
+  border-right:2px solid var(--credit-gold);border-bottom:2px solid var(--credit-gold);
+  transform:rotate(45deg);transition:transform .18s ease;margin-right:4px
+}
+.nj-verified-credits [aria-expanded=true] .nj-credit-chevron,
+.nj-verified-credits details[open]>summary .nj-credit-chevron{transform:rotate(225deg)}
+.nj-verified-credits .nj-credit-feedback{border-radius:12px;padding:15px 18px;margin:0;line-height:1.5;border:1px solid}
+.nj-verified-credits .nj-credit-success,.nj-verified-credits .nj-credit-chosen{color:#d0eacf}
+.nj-verified-credits .nj-credit-success{background:#16251c;border-color:#4d8d65}
+.nj-verified-credits .nj-credit-error{color:#ffdbd7;background:#341c1e;border-color:#b65e65}
+.nj-verified-credits .nj-credit-chosen {font-size:.88rem;line-height:1.5;margin:0}
+.nj-verified-credits .nj-credit-claim-list {display:grid;gap:15px;margin-top:17px}
+.nj-verified-credits .nj-credit-claim{
+  min-width:0;padding:16px;border:1px solid rgba(224,187,128,.23);border-radius:16px;background:#171416;
+  display:grid;gap:12px
+}
+.nj-verified-credits .nj-credit-claim[data-focused=true]{border-color:#f0cb93;box-shadow:0 0 0 2px rgba(224,187,128,.28)}
+.nj-verified-credits .nj-credit-claim-top{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+.nj-verified-credits .nj-credit-state{padding:6px 10px;border-radius:20px;background:#33271f;color:#f2ca93;font-size:.8rem;text-transform:capitalize}
+.nj-verified-credits .nj-credit-claim-ref{font-size:.82rem;color:#b7aba1;line-height:1.5}
+.nj-verified-credits .nj-credit-actions {display:grid;gap:12px;min-width:0}
+.nj-verified-credits .nj-credit-actions p{line-height:1.52;margin:0}
+.nj-verified-credits .nj-credit-actions button{
+  padding:11px 15px;border:1px solid var(--credit-line);border-radius:11px;
+  color:#f8e7cc;background:#2a211d;font-weight:670;text-align:center
+}
+.nj-verified-credits .nj-credit-actions .nj-credit-danger{color:#f2c7c7;border-color:rgba(226,134,134,.54);background:#291c1e}
+.nj-verified-credits .nj-credit-empty{padding:16px 4px;color:#c8bcb0}
+.nj-verified-credits .nj-credit-empty p{margin:6px 0 0}
+.nj-verified-credits .nj-credit-guide{padding:0;overflow:hidden}
+.nj-verified-credits .nj-credit-guide>summary {
+  cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;
+  gap:15px;padding:19px 22px;font-weight:700;color:#f8e8cc;line-height:1.4
+}
+.nj-verified-credits .nj-credit-guide>summary::-webkit-details-marker{display:none}
+.nj-verified-credits .nj-credit-guide-body{padding:4px 22px 20px;line-height:1.56}
+.nj-verified-credits .nj-credit-guide-body ol{display:grid;gap:12px;padding-left:24px}
+.nj-verified-credits .nj-credit-guide-body li span{display:block;color:#bfb2a5}
+.nj-verified-credits .nj-credit-member-results{
+  display:grid;gap:6px;max-height:240px;overflow:auto;border:1px solid var(--credit-line);
+  border-radius:12px;background:#120f10;padding:8px;
+}
+.nj-verified-credits .nj-credit-member-results button{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;
+  text-align:left;padding:10px 12px;border:1px solid transparent;border-radius:9px;
+  background:rgba(255,255,255,.035);color:#eee7dd;font-weight:500
+}
+.nj-verified-credits .nj-credit-member-results button[aria-pressed=true]{
+  border-color:var(--credit-gold);background:rgba(224,187,128,.14)
+}
+.nj-verified-credits .nj-credit-member-results small{font-size:.81rem;color:#c6ad8e}
+.nj-credit-workspace-disclosure{min-width:0;width:100%;margin-block:16px 30px}
+.nj-credit-workspace-disclosure>summary{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  cursor:pointer;min-height:56px;margin:0;padding:16px 20px;
+  border:1px solid rgba(224,187,128,.55);border-radius:15px;
+  background:#221b1a;color:#f5e3c9;font-weight:700;
+}
+.nj-credit-workspace-disclosure>summary::after{content:'⌄';font-size:1.2rem;color:#e0bb80}
+.nj-credit-workspace-disclosure[open]>summary::after{content:'⌃'}
+.nj-credit-workspace-disclosure[open]>summary{margin-bottom:16px}
+@media(max-width:560px){
+  .nj-verified-credits{gap:15px}
+  .nj-verified-credits .nj-credit-card{padding:16px;border-radius:16px}
+  .nj-verified-credits .nj-credit-card-head{gap:10px}
+  .nj-verified-credits .nj-credit-step{min-width:36px;height:36px}
+  .nj-verified-credits .nj-credit-form,.nj-verified-credits .nj-credit-fields{gap:11px}
+  .nj-verified-credits .nj-credit-claim-top{align-items:flex-start}
+  .nj-credit-workspace-disclosure{padding-inline:0}
+}
+@media(prefers-reduced-motion:reduce){
+  .nj-verified-credits .nj-credit-chevron{transition:none}
+}
+@media(forced-colors:active){
+  .nj-verified-credits input,.nj-verified-credits select,.nj-verified-credits textarea,
+  .nj-verified-credits button,.nj-verified-credits .nj-credit-card{border:1px solid ButtonText}
+}
