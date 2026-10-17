@@ -39,7 +39,16 @@ assert.ok(!ui.includes('simulationMode') && !ui.includes('mockCreditApi'),
 // professional approval, ID bypass, or a self-validating release credit.
 const app=fs.readFileSync('src/App.tsx','utf8');
 const account=fs.readFileSync('src/components/AccountPortal.tsx','utf8');
-assert.ok(app.includes('nj-you-credit-shortcut'),'Credits must have a visible entry on main You page');
+const you=fs.readFileSync('src/components/NightjarSettings.tsx','utf8');
+const mobile=fs.readFileSync('src/components/MobileNavigation.tsx','utf8');
+assert.ok(you.includes('nj-you-credit-shortcut')&&you.includes('onCredits')&&you.includes('Open credited releases'),
+  'Actual mobile You hub (NightjarSettings), not profile editor, must expose the credit shortcut');
+assert.ok(mobile.includes("label: 'You'")&&mobile.includes("view: 'settings'"),
+  'Mobile You navigation currently opens settings: credits must live there');
+assert.ok(app.includes('onCredits={user?.userId && !simulationMode && !demoMode ? openCreditedReleases : undefined}'),
+  'The live You hub must link to the authenticated credited-releases route');
+assert.ok(!app.includes('<section className="nj-you-credit-shortcut"'),
+  'Do not leave the credit shortcut embedded on Edit Profile instead of You');
 assert.ok(app.includes("setCreditWorkspaceOpen(true)") && app.includes("'/profile/credits'"),
   'Credits must open on a dedicated You subpage');
 assert.ok(!app.includes('<details className="page-wrap nj-credit-workspace-disclosure"'),

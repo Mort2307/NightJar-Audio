@@ -5451,6 +5451,7 @@ function App() {
             simulationMode={demoMode}
             notify={notify}
             onProfile={() => { navigate('profile'); void loadProfile(); }}
+            onCredits={user?.userId && !simulationMode && !demoMode ? openCreditedReleases : undefined}
             onCalendar={() => navigate('calendar')}
             onRoles={openMyRoles}
             onProtection={() => { navigate('protection'); void loadProtection(); }}
@@ -5485,19 +5486,6 @@ function App() {
                 {(!canAdmin || interactiveRoleTest) && <button type="button" className="primary-button" onClick={openMyRoles}><ShieldCheck size={16} /> My Roles · Apply or switch</button>}
               </div>
             </div>
-
-            {user?.userId && !simulationMode && !demoMode && (
-              <section className="nj-you-credit-shortcut" aria-label="Contributor credits and invitations">
-                <div>
-                  <span className="mini-label">YOUR NIGHTJAR · CREDITS</span>
-                  <h2>Credited releases and invitations</h2>
-                  <p>Claim genuine contributions, invite collaborators — including people who have not joined NightJar — and follow independent approval decisions.</p>
-                </div>
-                <button type="button" className="primary-button" onClick={openCreditedReleases}>
-                  <Headphones size={17} aria-hidden="true"/> Open credited releases <ArrowRight size={16} aria-hidden="true"/>
-                </button>
-              </section>
-            )}
 
             {effectiveRole === 'listener' && !liveRolePreview && (
               <RoleDashboard
