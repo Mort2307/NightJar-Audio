@@ -24,7 +24,7 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Parse YAML without running deployments
-        run: ruby -r yaml -e 'ARGV.each { |f| YAML.parse_file(f); puts "VALID #{f}" }' .github/workflows/firebase-hosting-merge.yml .github/workflows/nightjar-quality-candidate-ci.yml
+        run: ruby -r yaml -e 'ARGV.each { |f| YAML.parse_file(f); puts f }' .github/workflows/firebase-hosting-merge.yml .github/workflows/nightjar-quality-candidate-ci.yml
       - run: npm ci --no-fund
       - run: npm run validate
   functions:
