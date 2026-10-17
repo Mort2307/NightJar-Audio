@@ -33,3 +33,15 @@
 .nj-writer-optional-art>summary::-webkit-details-marker{display:none}
 .nj-writer-optional-art>.writer-initial-artwork{margin:0 12px 12px}
 @media(max-width:600px){.nj-writer-essential-steps{gap:14px}.nj-writer-advanced-rights .rights-grid{padding:13px}.nj-writer-create-steps{display:grid;grid-template-columns:1fr}}
+
+.nj-writer-simple-step{display:grid;gap:5px;margin:15px 0;padding:16px;border:1px solid rgba(224,187,128,.48);border-radius:13px;background:#2a201d;color:#f4dfbf;line-height:1.5}
+.nj-writer-simple-step span{color:#d3c4b6;font-size:.93rem}
+.nj-writer-create-label{display:flex;gap:8px;flex-wrap:wrap;color:#f0dfcd;font-weight:700}
+.nj-writer-create-label small{color:#bbaa99;font-weight:400}
+.nj-writer-secondary-actions{max-width:100%;border:1px solid rgba(224,187,128,.24);border-radius:10px}
+.nj-writer-secondary-actions summary{cursor:pointer;padding:12px 13px;min-height:46px;color:#e7c499;list-style:none}
+.nj-writer-secondary-actions summary::-webkit-details-marker{display:none}
+.nj-writer-secondary-actions[open] summary{border-bottom:1px solid rgba(224,187,128,.2)}
+.nj-writer-secondary-actions>div{display:flex;flex-wrap:wrap;gap:10px;padding:12px}
+.nj-writer-secondary-actions:focus-within{outline:2px solid #ffe0ac;outline-offset:3px}
+@media(max-width:650px){.nj-writer-secondary-actions{width:100%}.nj-writer-secondary-actions>div button{flex:1 1 130px}}

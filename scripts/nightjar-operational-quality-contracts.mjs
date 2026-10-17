@@ -56,7 +56,7 @@ const writerStyles=file('src/components/writer-submission-guide.css');
 const controlledDidit=file('src/platform/firebase-didit-controlled.ts');
 requireText(app,"I've finished Didit — sync my existing approval");
 requireText(app,"nightjarDiditControlled.reconcile()");
-requireText(app,"const recoverCompletedDiditDecision = async () => {");
+requireText(app,"const recoverCompletedDiditDecision = async (silent = false) => {");
 requireText(app,"No new verification has been started");
 requireText(app,"Checking your NightJar access and current privacy notice");
 requireText(controlledDidit,"reconcileMyDiditVerification");
@@ -68,6 +68,13 @@ requireText(writerRights,"script.sourceFile?.fileName");
 requireText(writerStyles,".nj-writer-essential-steps");
 requireText(app,"nj-writer-create-steps");
 requireText(app,"nj-writer-optional-art");
+requireText(app,'nj-writer-simple-step');
+requireText(app,'nj-writer-secondary-actions');
+requireText(app,'Didit approved you, but NightJar hasn\'t updated?');
+requireText(app,"document.addEventListener('visibilitychange',checkExisting)");
+requireText(app,'diditRecoveryLock.current');
+requireText(app,'now-diditLastSafeCheck.current<45000');
+requireText(backendIndex,"'PENDING','PROCESSING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'");
 assert.ok(!app.includes('Approved QA accounts can use restricted temporary test access until the production age-assurance provider is live'),
   'Old beta verification notice must not remain in the entry page');
 assert.ok(!app.includes('Testing build: age assurance is not globally bypassed.'),

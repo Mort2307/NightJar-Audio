@@ -7390,7 +7390,7 @@ export const reconcileMyDiditVerification = onCall({
   if (diditPass(age)) return { verified: true, outcome: 'already_verified' };
   const sessionId = cleanText(age.sessionId, 128);
   if (!sessionId || age.provider !== 'didit' || age.environment !== 'live' ||
-      !['PENDING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(String(age.status))) {
+      !['PENDING','PROCESSING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(String(age.status))) {
     return { verified: false, outcome: 'no_reconcilable_session' };
   }
   const sessionRef = db.collection('diditSessions').doc(sessionId);
