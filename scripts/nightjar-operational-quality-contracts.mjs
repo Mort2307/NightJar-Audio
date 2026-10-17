@@ -51,4 +51,32 @@ requireText(ci,'npm run validate');
 requireText(ci,'npm run build');
 requireText(ci,'nightjar-quality-callable-emulator.mjs');
 requireText(file('scripts/nightjar-quality-callable-emulator.mjs'),'buildNightjarQualityCallables');
+const writerRights=file('src/components/WriterRightsPanel.tsx');
+const writerStyles=file('src/components/writer-submission-guide.css');
+const controlledDidit=file('src/platform/firebase-didit-controlled.ts');
+requireText(app,"I've finished Didit — sync my existing approval");
+requireText(app,"nightjarDiditControlled.reconcile()");
+requireText(app,"const recoverCompletedDiditDecision = async () => {");
+requireText(app,"No new verification has been started");
+requireText(app,"Checking your NightJar access and current privacy notice");
+requireText(controlledDidit,"reconcileMyDiditVerification");
+requireText(writerRights,"JUST THREE ESSENTIALS");
+requireText(writerRights,"Required declarations · 2 to complete");
+requireText(writerRights,"nj-writer-advanced-rights");
+requireText(writerRights,"!rights.ownershipAttested || !rights.contributorPermissionsConfirmed");
+requireText(writerRights,"script.sourceFile?.fileName");
+requireText(writerStyles,".nj-writer-essential-steps");
+requireText(app,"nj-writer-create-steps");
+requireText(app,"nj-writer-optional-art");
+assert.ok(!app.includes('Approved QA accounts can use restricted temporary test access until the production age-assurance provider is live'),
+  'Old beta verification notice must not remain in the entry page');
+assert.ok(!app.includes('Testing build: age assurance is not globally bypassed.'),
+  'Old beta bypass account copy must not remain in the entry page');
+// Recovery can inspect the existing provider decision but must never start a paid check.
+const recoveryHandler=app.slice(
+  app.indexOf('const recoverCompletedDiditDecision = async'),
+  app.indexOf('const beginAgeVerificationFromGate = async')
+);
+assert.ok(!recoveryHandler.includes('openAgeCheck(') && !recoveryHandler.includes('nightjarAge.start('),
+  'Recovery handler must never create a new Didit session');
 console.log('PASS: NightJar operational release candidates, mandatory live Didit, human acceptance, private feedback, manual sync and backend-first cost guard.');

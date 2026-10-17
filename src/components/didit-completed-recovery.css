@@ -1,0 +1,8 @@
+.nj-didit-completed-recovery{display:grid;gap:13px;margin:18px 0;padding:17px 18px;border:1.5px solid rgba(224,187,128,.59);border-radius:16px;background:linear-gradient(135deg,rgba(50,37,31,.95),rgba(24,21,23,.92))}
+.nj-didit-completed-recovery strong{color:#f3d09e;font-size:1.02rem;line-height:1.4}
+.nj-didit-completed-recovery p{color:#e1d1c0;font-size:.93rem;line-height:1.56;margin:6px 0 0}
+.nj-didit-completed-recovery .secondary-button{min-height:52px;max-width:100%;font-weight:720;white-space:normal;text-align:center;justify-content:center;border:1px solid rgba(224,187,128,.55)}
+.nj-didit-completed-recovery .nj-didit-recovery-message{border-left:3px solid #e0bb80;padding:7px 12px;margin:0;background:rgba(224,187,128,.08);color:#f5e6d1}
+.nj-didit-completed-recovery button:focus-visible{outline:3px solid #ffe0a7;outline-offset:3px}
+@media(max-width:560px){.nj-didit-completed-recovery{padding:15px;border-radius:13px}}
+@media(prefers-reduced-motion:reduce){.nj-didit-completed-recovery *{scroll-behavior:auto}}
