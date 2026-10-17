@@ -1,0 +1,47 @@
+/* NightJar Writer Studio: a two-stage submission journey with optional advanced rights. */
+.nj-writer-essential-steps{display:grid;gap:18px;margin:20px 0;padding:clamp(16px,3vw,25px);border:1px solid rgba(230,191,128,.55);border-radius:18px;background:linear-gradient(145deg,rgba(43,31,29,.96),rgba(23,19,20,.93));}
+.nj-writer-steps-heading{display:grid;gap:8px}
+.nj-writer-steps-heading h3{font-size:clamp(1.15rem,3.4vw,1.42rem);margin:0;line-height:1.3}
+.nj-writer-steps-heading p{margin:0;max-width:70ch;color:#d6c9bd;font-size:.95rem;line-height:1.57}
+.nj-writer-essential-checklist{margin:0;padding:0;list-style:none;display:grid;gap:9px}
+.nj-writer-essential-checklist li{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid rgba(224,187,128,.25);background:rgba(16,14,15,.55);border-radius:11px;min-width:0}
+.nj-writer-essential-checklist li>span{display:grid;place-items:center;width:29px;height:29px;flex:none;border:1px solid rgba(224,187,128,.5);border-radius:50%;color:#f1c78e;font-weight:720}
+.nj-writer-essential-checklist li.complete>span{color:#d1e7c9;border-color:#618a67;background:rgba(88,132,89,.16)}
+.nj-writer-essential-checklist li>div{min-width:0;display:grid;gap:3px}
+.nj-writer-essential-checklist strong{color:#f5e8db;font-size:.95rem}
+.nj-writer-essential-checklist small{font-size:.87rem;line-height:1.48;color:#c8b7a8}
+.nj-writer-required-declarations{display:grid;gap:12px;border:1px solid rgba(230,191,128,.33);padding:14px;border-radius:13px}
+.nj-writer-required-declarations>strong{color:#f2d0a2}
+.nj-writer-required-declarations .rights-check{min-height:52px;display:flex;gap:12px;align-items:flex-start;margin:0;padding:12px;background:#181416;border:1px solid rgba(224,187,128,.28);border-radius:10px;line-height:1.55}
+.nj-writer-required-declarations .rights-check input{flex:none;width:21px;height:21px;margin:2px 0 0;accent-color:#dbb276}
+.nj-writer-essential-submit{display:grid;gap:9px}
+.nj-writer-essential-submit .primary-button{min-height:52px;width:100%;justify-content:center;font-weight:700}
+.nj-writer-essential-submit>p{font-size:.9rem;color:#c5b6a9;line-height:1.52;margin:0}
+.nj-writer-advanced-rights{margin:18px 0;border:1px solid rgba(225,187,129,.32);border-radius:16px;background:#1d1719}
+.nj-writer-advanced-rights>summary{display:flex;align-items:center;justify-content:space-between;gap:15px;min-height:64px;padding:17px 19px;list-style:none;cursor:pointer}
+.nj-writer-advanced-rights>summary::-webkit-details-marker{display:none}
+.nj-writer-advanced-rights>summary>span:first-child{display:grid;gap:5px}
+.nj-writer-advanced-rights>summary strong{font-size:.99rem;color:#f0d2a2}
+.nj-writer-advanced-rights>summary small{font-size:.86rem;line-height:1.45;color:#bfae9e}
+.nj-writer-advanced-rights[open]>summary{border-bottom:1px solid rgba(225,187,129,.22)}
+.nj-writer-advanced-rights .rights-grid{padding:18px;margin:0}
+.nj-writer-advanced-rights :is(input,select,textarea,summary):focus-visible,.nj-writer-essential-steps :is(input,button):focus-visible{outline:3px solid #ffe2b5;outline-offset:3px}
+.nj-writer-create-steps{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0 18px}
+.nj-writer-create-steps span{display:inline-flex;align-items:center;min-height:34px;padding:7px 11px;border:1px solid rgba(224,187,128,.36);border-radius:20px;background:#251f1f;color:#f0dac1;font-size:.85rem;font-weight:650}
+.nj-writer-optional-art{margin:16px 0;border:1px solid rgba(224,187,128,.28);border-radius:12px;padding:0}
+.nj-writer-optional-art>summary{cursor:pointer;padding:14px 16px;list-style:none;color:#e1c197;font-weight:660}
+.nj-writer-optional-art>summary::-webkit-details-marker{display:none}
+.nj-writer-optional-art>.writer-initial-artwork{margin:0 12px 12px}
+@media(max-width:600px){.nj-writer-essential-steps{gap:14px}.nj-writer-advanced-rights .rights-grid{padding:13px}.nj-writer-create-steps{display:grid;grid-template-columns:1fr}}
+
+.nj-writer-simple-step{display:grid;gap:5px;margin:15px 0;padding:16px;border:1px solid rgba(224,187,128,.48);border-radius:13px;background:#2a201d;color:#f4dfbf;line-height:1.5}
+.nj-writer-simple-step span{color:#d3c4b6;font-size:.93rem}
+.nj-writer-create-label{display:flex;gap:8px;flex-wrap:wrap;color:#f0dfcd;font-weight:700}
+.nj-writer-create-label small{color:#bbaa99;font-weight:400}
+.nj-writer-secondary-actions{max-width:100%;border:1px solid rgba(224,187,128,.24);border-radius:10px}
+.nj-writer-secondary-actions summary{cursor:pointer;padding:12px 13px;min-height:46px;color:#e7c499;list-style:none}
+.nj-writer-secondary-actions summary::-webkit-details-marker{display:none}
+.nj-writer-secondary-actions[open] summary{border-bottom:1px solid rgba(224,187,128,.2)}
+.nj-writer-secondary-actions>div{display:flex;flex-wrap:wrap;gap:10px;padding:12px}
+.nj-writer-secondary-actions:focus-within{outline:2px solid #ffe0ac;outline-offset:3px}
+@media(max-width:650px){.nj-writer-secondary-actions{width:100%}.nj-writer-secondary-actions>div button{flex:1 1 130px}}

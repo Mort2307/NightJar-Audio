@@ -8,6 +8,7 @@ import { nightjarAudioFileProblem } from '../platform/audio-upload';
 import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import ContextHelp from './ContextHelp';
+import ManualTranscriptSync from './ManualTranscriptSync';
 import './creator-workflow.css';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
@@ -748,6 +749,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
                 {' · '}{String(current.transcriptText ?? '').length.toLocaleString('en-GB')}/120,000 characters
               </small>
             </label>
+
+            <ManualTranscriptSync key={'transcript-sync-'+current.id}
+              initialText={current.transcriptText??''}
+              label="Sync transcript manually to audio"
+              onApply={text=>setRelease({transcriptText:text,transcriptAccessibilityReviewed:false})}/>
 
             <label className="release-transcript-confirm">
               <input

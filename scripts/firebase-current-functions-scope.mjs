@@ -34,6 +34,26 @@ for (const statement of source.statements) {
         names.push(...exported);
         continue;
       }
+      // Explicitly audited private feedback and human-QA factory. This
+      // cannot silently change scope or add unreviewed named exports.
+      if (ts.isObjectBindingPattern(declaration.name) && ts.isCallExpression(declaration.initializer) &&
+          ts.isIdentifier(declaration.initializer.expression) &&
+          declaration.initializer.expression.text === 'buildNightjarQualityCallables') {
+        const qualitySource = readFileSync('functions/src/nightjar-quality.ts','utf8');
+        const required = ['submitTesterFeedback','adminListTesterFeedback','adminReviewTesterFeedback',
+          'adminGetQualityAcceptance','adminRecordQualityCheck'];
+        const exported=declaration.name.elements.map(element=>{
+          if(!ts.isIdentifier(element.name)||element.propertyName||element.initializer||element.dotDotDotToken)
+            throw new Error('Unsupported Nightjar quality factory export binding');
+          return element.name.text;
+        });
+        if(exported.length!==required.length||required.some(name=>
+          !exported.includes(name)||!qualitySource.includes('const '+name+'=onCall('))) {
+          throw new Error('Nightjar Quality Centre callable scope changed: human security review required');
+        }
+        names.push(...exported);
+        continue;
+      }
       if (!ts.isIdentifier(declaration.name) || !ts.isCallExpression(declaration.initializer)) {
         throw new Error('Unsupported top-level Cloud Function export in ' + filename);
       }

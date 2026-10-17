@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileKey2, Save, ShieldCheck } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import ContextHelp from './ContextHelp';
+import './writer-submission-guide.css';
 import { parseListingTags } from '../platform/listing-tags';
 
 type Props = {
@@ -161,10 +162,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
         : ['Submitted','Under review'].includes(String(script.status ?? ''))
           ? 'Submitted to NightJar. Your protected manuscript is awaiting an administrator decision; an Audio Editor is not required.'
           : 'Your manuscript is a private draft until you confirm the permissions below and submit. Saving or uploading alone does not send it for review.'}</p>
-      {['Draft','Revision requested','Rejected'].includes(String(script.status ?? 'Draft')) &&
-        <button type="button" className="primary-button" disabled={saving || submitting} onClick={() => void submitForNightJarReview()}>
-          <ShieldCheck size={15}/>{submitting ? 'Submitting securely…' : 'Confirm rights & submit for NightJar review'}
-        </button>}
+
       {['Approved','Published'].includes(String(script.status ?? '')) &&
         (marketplace.visibility !== 'marketplace' || !String(marketplace.synopsis ?? '').trim()) &&
         <button type="button" className="primary-button" disabled={saving || submitting} onClick={() => void save(true)}>
@@ -173,7 +171,48 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       <small>Editor involvement is optional. NightJar cannot publish a full manuscript through this listing control.</small>
     </div>
 
-    <div className="rights-grid">
+    <section className="nj-writer-essential-steps" aria-label="Required steps before manuscript submission">
+      <div className="nj-writer-steps-heading">
+        <span className="mini-label">JUST THREE ESSENTIALS</span>
+        <h3>Ready to send your script for review?</h3>
+        <p>You're not expected to fill in every box. Only the manuscript and the two declarations below are needed to submit privately to NightJar. The extra licensing and marketplace settings are optional.</p>
+      </div>
+      <ol className="nj-writer-essential-checklist">
+        <li className={String(script.content??'').trim()||script.sourceFile?.fileName?'complete':'needs-action'}>
+          <span aria-hidden="true">{String(script.content??'').trim()||script.sourceFile?.fileName?'✓':'1'}</span>
+          <div><strong>Manuscript uploaded or written</strong><small>{String(script.content??'').trim()||script.sourceFile?.fileName?'Manuscript attached — ready.':'Write your manuscript or choose an existing TXT, Word or PDF file in Writer Studio first.'}</small></div>
+        </li>
+        <li className={rights.ownershipAttested?'complete':'needs-action'}>
+          <span aria-hidden="true">{rights.ownershipAttested?'✓':'2'}</span>
+          <div><strong>Confirm your copyright authority</strong><small>Required — tick only if you wrote the work or hold the rights necessary for this submission.</small></div>
+        </li>
+        <li className={rights.contributorPermissionsConfirmed?'complete':'needs-action'}>
+          <span aria-hidden="true">{rights.contributorPermissionsConfirmed?'✓':'3'}</span>
+          <div><strong>Confirm contributor permissions</strong><small>Required — confirm that you have permission for any other person's protected contribution included in the work.</small></div>
+        </li>
+      </ol>
+      <div className="nj-writer-required-declarations" id="writer-rights-attest">
+        <strong>Required declarations · 2 to complete</strong>
+              <label className="rights-check research-span-two"><input type="checkbox" checked={rights.ownershipAttested === true} onChange={(e) => setRights((r) => ({ ...r, ownershipAttested: e.target.checked }))}/><span><strong>Ownership / authority confirmed</strong> <ContextHelp topic="rights-confirmation"/> — I wrote this manuscript or otherwise control the rights needed to submit and license it through the selected Nightjar workflow.</span></label>
+              <label className="rights-check research-span-two"><input type="checkbox" checked={rights.contributorPermissionsConfirmed === true} onChange={(e) => setRights((r) => ({ ...r, contributorPermissionsConfirmed: e.target.checked }))}/><span><strong>Contributor permissions confirmed</strong> <ContextHelp topic="rights-confirmation"/> — where another person’s protected contribution appears, I have the permission required for the use I am proposing.</span></label>
+      </div>
+      {['Draft','Revision requested','Rejected'].includes(String(script.status ?? 'Draft')) && <div className="nj-writer-essential-submit">
+        <button type="button" className="primary-button"
+          disabled={saving || submitting || !Boolean(String(script.content??'').trim()||script.sourceFile?.fileName) || !rights.ownershipAttested || !rights.contributorPermissionsConfirmed}
+          onClick={()=>void submitForNightJarReview()}>
+          <ShieldCheck size={15}/>{submitting?'Submitting securely…':'Submit privately for NightJar review'}
+        </button>
+        <p>{Boolean(String(script.content??'').trim()||script.sourceFile?.fileName) && rights.ownershipAttested && rights.contributorPermissionsConfirmed
+          ? 'All three essentials are ready. An administrator will review your script before anything can be published.'
+          : 'Submission remains unavailable until all three essentials above are complete. Your draft can still be saved safely.'}</p>
+      </div>}
+    </section>
+
+    <details className="nj-writer-advanced-rights" aria-label="Optional licensing and creator marketplace choices">
+      <summary>
+        <span><strong>Optional · Advanced rights, pricing and creator marketplace</strong><small>Choose these only when relevant. You can keep the defaults and edit them later.</small></span><span aria-hidden="true">⌄</span>
+      </summary>
+      <div className="rights-grid">
       <label><span className="nj-term-label">Copyright owner <ContextHelp topic="copyright"/></span><input value={rights.copyrightOwner} onChange={(e) => setRights((r) => ({ ...r, copyrightOwner: e.target.value }))}/></label>
       <label><span className="nj-term-label">Licence type <ContextHelp topic="licence-choice"/></span><select value={rights.licenceType} onChange={(e) => setRights((r) => ({ ...r, licenceType: e.target.value }))}><option value="none">No licence agreed</option><option value="non-exclusive">Non-exclusive</option><option value="exclusive">Exclusive</option></select></label>
       <label><span className="nj-term-label">Licence length <ContextHelp topic="licence-term"/></span><input value={rights.licenceLength ?? ''} onChange={(e) => setRights((r) => ({ ...r, licenceLength: e.target.value }))} placeholder="e.g. 12 months"/></label>
@@ -189,12 +228,13 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       <label className="rights-check"><input type="checkbox" checked={rights.castingApprovalRequired} onChange={(e) => setRights((r) => ({ ...r, castingApprovalRequired: e.target.checked }))}/> Casting approval required</label>
       <label className="rights-check"><input type="checkbox" checked={rights.finalAudioApprovalRequired} onChange={(e) => setRights((r) => ({ ...r, finalAudioApprovalRequired: e.target.checked }))}/> Final audio approval required</label>
       <label className="rights-check"><input type="checkbox" checked={rights.commercialUse} onChange={(e) => setRights((r) => ({ ...r, commercialUse: e.target.checked }))}/> <span className="nj-term-label">Commercial use included in licence <ContextHelp topic="commercial-use"/></span></label>
-      <label className="rights-check research-span-two" id="writer-rights-attest"><input type="checkbox" checked={rights.ownershipAttested === true} onChange={(e) => setRights((r) => ({ ...r, ownershipAttested: e.target.checked }))}/><span><strong>Ownership / authority confirmed</strong> <ContextHelp topic="rights-confirmation"/> — I wrote this manuscript or otherwise control the rights needed to submit and license it through the selected Nightjar workflow.</span></label>
-      <label className="rights-check research-span-two"><input type="checkbox" checked={rights.contributorPermissionsConfirmed === true} onChange={(e) => setRights((r) => ({ ...r, contributorPermissionsConfirmed: e.target.checked }))}/><span><strong>Contributor permissions confirmed</strong> <ContextHelp topic="rights-confirmation"/> — where another person’s protected contribution appears, I have the permission required for the use I am proposing.</span></label>
+
+
       <label className="rights-check"><input type="checkbox" checked={marketplace.collaborationWanted} onChange={(e) => setMarketplace((m: any) => ({ ...m, collaborationWanted: e.target.checked }))}/> Open to creator collaboration</label>
       <label className="rights-check"><input type="checkbox" checked={marketplace.editorWanted} onChange={(e) => setMarketplace((m: any) => ({ ...m, editorWanted: e.target.checked }))}/> Looking for Audio Editor</label>
       <label className="research-span-two"><span className="nj-term-label">Withdrawal terms <ContextHelp topic="withdrawal-terms"/></span><textarea value={rights.withdrawalTerms ?? ''} onChange={(e) => setRights((r) => ({ ...r, withdrawalTerms: e.target.value }))} placeholder="Agreed conditions under which the licence may be withdrawn."/></label>
-    </div>
+      </div>
+    </details>
 
     <div className="rights-ai-lock"><ShieldCheck size={16}/><div><strong>AI training permission: OFF</strong><span>Protected manuscripts are not made available for AI training through this control.</span></div></div>
     <button className="primary-button" disabled={saving} onClick={() => void save()}><Save size={14}/> {saving ? 'Saving…' : 'Save rights & listing'}</button>

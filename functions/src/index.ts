@@ -13,6 +13,7 @@ import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo,
 import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision } from './didit';
 import { hasPaidEntitlement } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
+import { buildNightjarQualityCallables } from './nightjar-quality';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -7389,7 +7390,7 @@ export const reconcileMyDiditVerification = onCall({
   if (diditPass(age)) return { verified: true, outcome: 'already_verified' };
   const sessionId = cleanText(age.sessionId, 128);
   if (!sessionId || age.provider !== 'didit' || age.environment !== 'live' ||
-      !['PENDING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(String(age.status))) {
+      !['PENDING','PROCESSING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(String(age.status))) {
     return { verified: false, outcome: 'no_reconcilable_session' };
   }
   const sessionRef = db.collection('diditSessions').doc(sessionId);
@@ -13663,3 +13664,11 @@ export const {
     }).map(doc => doc.id);
   },
 );
+
+// NightJar Quality Centre: authenticated feedback and independently observed
+// release acceptance. These records never grant professional roles, allow
+// commerce, disable Didit or override the closed-beta gate.
+export const {
+  submitTesterFeedback,adminListTesterFeedback,adminReviewTesterFeedback,
+  adminGetQualityAcceptance,adminRecordQualityCheck,
+} = buildNightjarQualityCallables(requireActiveIdentity,requireAdminIdentity,requireAgeVerified);

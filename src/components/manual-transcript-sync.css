@@ -1,0 +1,24 @@
+.nj-manual-sync{margin:18px 0;border:1px solid rgba(224,187,128,.4);border-radius:17px;background:linear-gradient(145deg,#261e1e,#151315);color:#f5ebdf;min-width:0}
+.nj-manual-sync-toggle{display:flex;align-items:center;gap:12px;width:100%;min-height:66px;padding:15px 18px;text-align:left;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.nj-manual-sync-toggle>span:nth-child(2){display:grid;gap:3px;flex:1}.nj-manual-sync-toggle small{color:#c5b3a2;line-height:1.45}
+.nj-manual-sync-body{display:grid;gap:12px;padding:0 18px 20px}
+.nj-manual-sync-body p{color:#c8baad;line-height:1.5;margin:7px 0}
+.nj-manual-sync-body label{font-weight:650;font-size:.9rem}
+.nj-manual-sync-body textarea,.nj-manual-sync-body input:not([type=file]){
+ width:100%;min-width:0;min-height:48px;padding:12px;border:1.5px solid rgba(224,187,128,.57);
+ border-radius:10px;background:#151315;color:#f9eee0;font:inherit
+}
+.nj-manual-sync-body textarea{resize:vertical;min-height:110px}
+.nj-manual-sync-body input[type=file]{font:inherit;max-width:100%;color:#eacdab;padding:8px 0}
+.nj-manual-sync-body audio{width:100%;min-height:54px}
+.nj-manual-sync-meta{display:flex;gap:7px;align-items:center}
+.nj-manual-sync-stamper{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+.nj-manual-sync-stamper label{grid-column:1/-1}
+.nj-manual-sync-rows{display:grid;gap:8px;max-height:280px;overflow-y:auto;padding-right:5px}
+.nj-manual-sync-rows>div{display:grid;grid-template-columns:minmax(0,1fr) 92px auto;gap:8px;align-items:center;padding:10px;background:#191618;border:1px solid rgba(224,187,128,.21);border-radius:10px}
+.nj-manual-sync-rows>div.active{border-color:#d8b17b}
+.nj-manual-sync-rows label{overflow-wrap:anywhere;line-height:1.35}
+.nj-manual-sync-body button{min-height:44px}
+.nj-manual-sync-body .nj-manual-sync-message{color:#e9c58e}
+.nj-manual-sync :is(button,input,textarea):focus-visible{outline:3px solid #ffe2ab;outline-offset:3px}
+@media(max-width:650px){.nj-manual-sync-rows>div{grid-template-columns:minmax(0,1fr) auto}.nj-manual-sync-rows>div label{grid-column:1/-1}.nj-manual-sync-stamper{grid-template-columns:1fr}}

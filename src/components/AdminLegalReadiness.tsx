@@ -8,7 +8,7 @@ const rows = [
   { status:'blocker', title:'UK solicitor review', detail:'Review consumer/subscription terms, creator contracts, IP licences, liability wording, withdrawal/cancellation rights and adult-content platform terms.' },
   { status:'blocker', title:'Privacy records and processor schedule', detail:'Finalise lawful bases, processors, retention periods, international transfers, data-subject request procedure and breach procedure.' },
   { status:'blocker', title:'Online Safety Act scope and children-access assessment', detail:'Document Nightjar’s service classification, risk assessment duties, content controls and highly effective age-assurance placement before public launch.' },
-  { status:'blocker', title:'Production age assurance evidence', detail:'Replace temporary tester bypass with the production provider and retain the required effectiveness/privacy records.' },
+  { status:'blocker', title:'Production age assurance evidence', detail:'Live Didit is in use and the testing bypass is disabled in source. Retain real-device, signed-callback, rejection, privacy and policy evidence before opening a public adult service.' },
   { status:'blocker', title:'Paid-service consumer flow', detail:'Before taking subscriptions, validate pricing disclosure, renewal/cancellation/refund wording and payment-provider terms for Nightjar’s content model.' },
 ] as const;
 
