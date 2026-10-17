@@ -5601,6 +5601,10 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
     audioStoragePath: storagePath,
     audioContentType: contentType,
     audioByteSize: size,
+    // Replacing a recording invalidates old timed captions until re-reviewed.
+    transcriptText: cleanReleaseTranscript(current.transcriptText).replace(/^\[(?:\d{1,2}:)?\d{1,3}:\d{2}\]\s*/gm, ''),
+    transcriptAccessibilityReviewed: false,
+    transcriptSyncSource: null,
     durationMinutes: typeof input.durationMinutes === 'number' ? Math.max(0, Math.min(1440, input.durationMinutes)) : current.durationMinutes ?? 0,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
@@ -5784,6 +5788,86 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
     expires: Date.now() + 15 * 60 * 1000,
   });
   return { releaseId, url, expiresInSeconds: 900, accessReason:access.reason };
+});
+
+export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  const data = (await releaseRef(releaseId).get()).data();
+  if (!data || !data.audioStoragePath || ['removed', 'removing'].includes(String(data.status))) {
+    throw new HttpsError('not-found', 'Recording not found.');
+  }
+  if (!identity.admin) {
+    const creator = await requireAccountRole(request, ['creator']);
+    await requireAgeVerified(creator.uid);
+    if (data.creatorUserId !== creator.uid || !['draft', 'rejected'].includes(String(data.status))) {
+      throw new HttpsError('permission-denied', 'Only the owner can synchronise an editable recording.');
+    }
+  }
+  const [url] = await getStorage().bucket().file(String(data.audioStoragePath)).getSignedUrl({
+    action: 'read',
+    expires: Date.now() + 10 * 60 * 1000,
+  });
+  return { releaseId, url, expiresInSeconds: 600 };
+});
+
+// Human-set timestamps are saved only after reviewing against the recording.
+// The original writer script is not processed by a transcription engine.
+export const saveSyncedReleaseTranscript = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const releaseId = cleanText(input.releaseId, 160);
+  const rawTranscript = String(input.transcript ?? '');
+  const transcript = cleanReleaseTranscript(rawTranscript);
+  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  if (!transcript || rawTranscript.length > 120000 || input.accuracyConfirmed !== true) {
+    throw new HttpsError('invalid-argument', 'Review the complete timed transcript and confirm accuracy before saving.');
+  }
+  const timedLines = transcript.split('\n').filter((line) => line.trim());
+  if (timedLines.length > 6000 || !timedLines.length) {
+    throw new HttpsError('invalid-argument', 'The transcript contains too many timed lines.');
+  }
+  let previous = -1;
+  for (const line of timedLines) {
+    const match = line.match(/^\[((?:\d{1,2}:)?\d{1,3}:\d{2})\]\s+(.+)$/);
+    if (!match) throw new HttpsError('invalid-argument', 'Each nonempty line must start with a timestamp such as [01:23].');
+    const segments = match[1].split(':').map(Number);
+    if (segments.some((n) => !Number.isFinite(n)) || segments.at(-1)! >= 60 || (segments.length === 3 && segments[1] >= 60)) {
+      throw new HttpsError('invalid-argument', 'A transcript timestamp is invalid.');
+    }
+    const seconds = segments.reduce((acc, n) => acc * 60 + n, 0);
+    if (seconds < previous) throw new HttpsError('invalid-argument', 'Transcript timestamps must be chronological.');
+    previous = seconds;
+  }
+  if (!identity.admin) {
+    const creator = await requireAccountRole(request, ['creator']);
+    await requireAgeVerified(creator.uid);
+  }
+  const ref = releaseRef(releaseId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || !data.audioStoragePath || ['removed', 'removing'].includes(String(data.status))) {
+    throw new HttpsError('not-found', 'Attached audio not found.');
+  }
+  if (!identity.admin && (data.creatorUserId !== identity.uid || !['draft', 'rejected'].includes(String(data.status)))) {
+    throw new HttpsError('permission-denied', 'Only the owner can edit a draft transcript. Submitted releases must be reviewed by Nightjar.');
+  }
+  await ref.set({
+    transcriptText: transcript,
+    transcriptLanguage: cleanTranscriptLanguage(input.language),
+    transcriptAccessibilityReviewed: true,
+    transcriptSyncSource: 'manual_timing_reviewed',
+    transcriptSyncedBy: identity.uid,
+    transcriptSyncedByAdmin: identity.admin === true,
+    transcriptSyncedAt: FieldValue.serverTimestamp(),
+    transcriptUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  const saved = await ref.get();
+  return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
 
 export const getReleaseTranscript = onCall({ region: REGION }, async (request) => {
