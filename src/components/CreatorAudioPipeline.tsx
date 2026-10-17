@@ -9,6 +9,7 @@ import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import ContextHelp from './ContextHelp';
 import ManualTranscriptSync from './ManualTranscriptSync';
+import TranscriptSyncTool from './TranscriptSyncTool';
 import './creator-workflow.css';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
@@ -750,10 +751,32 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               </small>
             </label>
 
-            <ManualTranscriptSync key={'transcript-sync-'+current.id}
-              initialText={current.transcriptText??''}
-              label="Sync transcript manually to audio"
-              onApply={text=>setRelease({transcriptText:text,transcriptAccessibilityReviewed:false})}/>
+            {current.audioAvailable === true && ['draft', 'rejected'].includes(String(current.status ?? '').toLowerCase())
+              ? <TranscriptSyncTool
+                  key={'private-transcript-sync-'+current.id}
+                  releaseId={current.id}
+                  audioAvailable={current.audioAvailable === true}
+                  transcriptText={current.transcriptText}
+                  language={current.transcriptLanguage}
+                  simulationMode={simulationMode}
+                  onSaved={async saved => {
+                    setSelectedRelease(prior => prior?.id === current.id ? {
+                      ...prior,
+                      transcriptText: saved.transcriptText,
+                      transcriptLanguage: saved.transcriptLanguage,
+                      transcriptAccessibilityReviewed: saved.transcriptAccessibilityReviewed,
+                      transcriptAvailable: saved.transcriptAvailable,
+                      transcriptWordCount: saved.transcriptWordCount,
+                    } : prior);
+                    await onRefresh().catch(() => {});
+                    notify('Timed transcript saved to your release.');
+                  }}
+                />
+              : <ManualTranscriptSync key={'transcript-sync-'+current.id}
+                  initialText={current.transcriptText??''}
+                  label="Sync transcript manually to local audio"
+                  onApply={text=>setRelease({transcriptText:text,transcriptAccessibilityReviewed:false})}/>}
+
 
             <label className="release-transcript-confirm">
               <input
