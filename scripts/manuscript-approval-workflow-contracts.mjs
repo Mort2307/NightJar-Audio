@@ -64,6 +64,8 @@ assert.match(app, /Review rights & submit/);
 const rightsPanel = readFileSync('src/components/WriterRightsPanel.tsx', 'utf8');
 assert.match(rightsPanel, /Submit privately for NightJar review/);
 assert.match(rightsPanel, /submitManuscript\(\)/);
+assert.doesNotMatch(rightsPanel, /rights-ai-lock|AI training permission: OFF|Nightjar keeps AI-training permission off/);
+assert.match(rightsPanel, /aiTrainingAllowed: false/, 'AI-training permission must remain hard-disabled in persisted rights');
 assert.match(rightsPanel, /nightjarScripts.updateRights\(script.id/);
 assert.match(rightsPanel, /List approved script for creators/);
 assert.match(app, /result.script\?\.status !== 'Submitted'/);
