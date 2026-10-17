@@ -13,8 +13,8 @@ const {buildNightjarQualityCallables}=fromFunctions('./lib/nightjar-quality.js')
 const project='demo-nightjar-quality-ci';
 if(!process.env.FIRESTORE_EMULATOR_HOST||!process.env.FIREBASE_AUTH_EMULATOR_HOST)
   throw new Error('Refusing quality-handler tests without isolated Auth and Firestore emulators.');
-const serverApp=initializeApp({projectId:project},'quality-server');
-const db=getFirestore(serverApp);
+const serverApp=initializeApp({projectId:project});
+const db=getFirestore();
 const webApp=clientApp({projectId:project,apiKey:'demo-quality',authDomain:project+'.firebaseapp.com'},'quality-client');
 const auth=getAuth(webApp);
 connectAuthEmulator(auth,'http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST,{disableWarnings:true});
