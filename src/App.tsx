@@ -484,6 +484,10 @@ const EMPTY_PROFILE = { displayName: '', handle: '', headline: '', headerImageMo
 function App() {
   const [view, setView] = useState<View>(() => { const value = window.location.pathname.replace(/^\/+|\/+$/g, ''); const topLevel = value.split('/')[0]; return (['discover','library','creators','creator','writer','editor','artist','messages','admin','protection','profile','calendar','settings'].includes(topLevel) ? topLevel : 'discover') as View; });
   const [profileRolesPage, setProfileRolesPage] = useState(() => /^\/profile\/roles\/?$/.test(window.location.pathname));
+  const [creditWorkspaceOpen,setCreditWorkspaceOpen] = useState(() =>
+    /^\/profile\/credits\/?$/.test(window.location.pathname) ||
+    (window.location.pathname === '/profile' && new URLSearchParams(window.location.search).has('credits')));
+
   const [creditFocusClaimId, setCreditFocusClaimId] = useState<string | null>(() => {
     const id = new URLSearchParams(window.location.search).get('credits');
     return id && /^claim_[a-zA-Z0-9-]{16,80}$/.test(id) ? id : null;
@@ -1127,6 +1131,7 @@ function App() {
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
       const topLevel = value.split('/')[0];
       setProfileRolesPage(value === 'profile/roles');
+      setCreditWorkspaceOpen(value === 'profile/credits' || (value === 'profile' && Boolean(credit)));
       if (topLevel === 'admin') {
         setSimulationMode(false);
         setPreviewRole(null);
@@ -1412,6 +1417,7 @@ function App() {
   const navigate = (nextView: View) => {
     if (nextView === 'admin') setAdminWorkspace('overview');
     setProfileRolesPage(false);
+    setCreditWorkspaceOpen(false);
     setAdminPanel(null);
     setAdminPeopleRole(null);
     setLiveRoleMenuOpen(false);
@@ -1423,6 +1429,17 @@ function App() {
     const path = nextView === 'discover' ? '/discover' : '/' + nextView;
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
     setView(nextView);
+    setMenuOpen(false);
+    scrollNightjarToTop();
+  };
+
+  const openCreditedReleases = () => {
+    setCreditWorkspaceOpen(true);
+    setProfileRolesPage(false);
+    setView('profile');
+    if (window.location.pathname !== '/profile/credits' || window.location.search) {
+      window.history.pushState({}, '', '/profile/credits');
+    }
     setMenuOpen(false);
     scrollNightjarToTop();
   };
@@ -1524,9 +1541,10 @@ function App() {
       const creditId = target.searchParams.get('credits');
       if (creditId && /^claim_[a-zA-Z0-9-]{16,80}$/.test(creditId)) {
         if (target.pathname === '/profile') {
-          setCreditFocusClaimId(creditId);
           navigate('profile');
-          window.history.replaceState({}, '', target.pathname + target.search);
+          setCreditWorkspaceOpen(true);
+          setCreditFocusClaimId(creditId);
+          window.history.replaceState({}, '', '/profile/credits' + target.search);
           return;
         }
         if (target.pathname === '/admin/workspace/content' && canAdmin) {
@@ -2387,7 +2405,13 @@ function App() {
   };
 
   const signIn = async () => {
-    window.location.assign('/account?entry=signin');
+    // A public contributor invitation survives sign-in without putting account
+    // permissions, role flags or age verification into the URL.
+    const current = new URLSearchParams(window.location.search);
+    const route = window.location.pathname === '/profile/credits'
+      && current.has('creditRelease') && current.has('creditSlot')
+      ? '/profile/credits?' + current.toString() : '';
+    window.location.assign('/account?entry=signin' + (route ? '&returnTo=' + encodeURIComponent(route) : ''));
   };
 
   const signOut = async () => {
@@ -5435,9 +5459,16 @@ function App() {
           />
         )}
 
-        {view === 'profile' && !profileRolesPage && user?.userId && !simulationMode && !demoMode && <details className="page-wrap nj-credit-workspace-disclosure" open={Boolean(creditFocusClaimId)}><summary>🎧 My credited releases</summary><VerifiedCreditWorkspace currentUserId={user.userId} focusedClaimId={creditFocusClaimId} onNotice={notify}/></details>}
+        {view === 'profile' && !profileRolesPage && creditWorkspaceOpen && user?.userId && !simulationMode && !demoMode && (
+          <section className="page-wrap nj-credit-standalone" aria-label="Your NightJar credits and invitations">
+            <button type="button" className="nj-credit-back" onClick={()=>navigate('profile')}>
+              <ArrowLeft size={17} aria-hidden="true"/> Back to You
+            </button>
+            <VerifiedCreditWorkspace currentUserId={user.userId} focusedClaimId={creditFocusClaimId} onNotice={notify}/>
+          </section>
+        )}
 
-        {view === 'profile' && !profileRolesPage && (
+        {view === 'profile' && !profileRolesPage && !creditWorkspaceOpen && (
           <section className="page-section profile-page premium-profile-page">
             <div className="page-heading premium-profile-page-heading">
               <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
@@ -5454,6 +5485,19 @@ function App() {
                 {(!canAdmin || interactiveRoleTest) && <button type="button" className="primary-button" onClick={openMyRoles}><ShieldCheck size={16} /> My Roles · Apply or switch</button>}
               </div>
             </div>
+
+            {user?.userId && !simulationMode && !demoMode && (
+              <section className="nj-you-credit-shortcut" aria-label="Contributor credits and invitations">
+                <div>
+                  <span className="mini-label">YOUR NIGHTJAR · CREDITS</span>
+                  <h2>Credited releases and invitations</h2>
+                  <p>Claim genuine contributions, invite collaborators — including people who have not joined NightJar — and follow independent approval decisions.</p>
+                </div>
+                <button type="button" className="primary-button" onClick={openCreditedReleases}>
+                  <Headphones size={17} aria-hidden="true"/> Open credited releases <ArrowRight size={16} aria-hidden="true"/>
+                </button>
+              </section>
+            )}
 
             {effectiveRole === 'listener' && !liveRolePreview && (
               <RoleDashboard

@@ -41,7 +41,7 @@ if (listenerHome < 0 || listenerHero < listenerHome || app.slice(listenerHome, l
   fail('Listener Home must open with the premium audio hero, not account statistics.');
 } else pass('Listener Home puts listening discovery before account statistics.');
 
-const listenerProfile = app.indexOf("{view === 'profile' && !profileRolesPage && (");
+const listenerProfile = app.indexOf("{view === 'profile' && !profileRolesPage && !creditWorkspaceOpen && (");
 const listenerProfileEnd = app.indexOf("{view === 'profile' && profileRolesPage && (", listenerProfile);
 if (listenerProfile < 0 || listenerProfileEnd < listenerProfile ||
     !app.slice(listenerProfile, listenerProfileEnd).includes('title="Your Nightjar at a glance."') ||
