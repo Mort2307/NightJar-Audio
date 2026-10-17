@@ -12,13 +12,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: nightjar-branch-inventory-\${{ github.ref }}
+  group: nightjar-branch-inventory-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   branch-inventory:
     # Never run untrusted fork code on this exhaustive repo scan.
-    if: \${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -46,9 +46,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nightjar-branch-reconciliation-\${{ github.run_id }}
+          name: nightjar-branch-reconciliation-${{ github.run_id }}
           path: |
-            \${{ runner.temp }}/nightjar-branch-audit.json
-            \${{ runner.temp }}/nightjar-branch-audit.md
+            ${{ runner.temp }}/nightjar-branch-audit.json
+            ${{ runner.temp }}/nightjar-branch-audit.md
           if-no-files-found: warn
           retention-days: 14
