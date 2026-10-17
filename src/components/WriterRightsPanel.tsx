@@ -149,7 +149,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
 
   return <section className="research-panel writer-rights-panel" id="writer-rights-review">
     <div className="research-panel-head">
-      <div><span className="mini-label">RIGHTS & LICENSING</span><h2>Your work stays attributable to you.</h2><p>Record the terms that matter before a manuscript moves into production. Nightjar keeps AI-training permission off.</p></div>
+      <div><span className="mini-label">RIGHTS & LICENSING</span><h2>Your work stays attributable to you.</h2><p>Record the licensing and approval terms that matter before a manuscript moves into production.</p></div>
       <FileKey2 size={22}/>
     </div>
 
@@ -236,7 +236,6 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       </div>
     </details>
 
-    <div className="rights-ai-lock"><ShieldCheck size={16}/><div><strong>AI training permission: OFF</strong><span>Protected manuscripts are not made available for AI training through this control.</span></div></div>
     <button className="primary-button" disabled={saving} onClick={() => void save()}><Save size={14}/> {saving ? 'Saving…' : 'Save rights & listing'}</button>
   </section>;
 }
