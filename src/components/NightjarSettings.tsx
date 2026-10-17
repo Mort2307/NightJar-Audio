@@ -13,6 +13,7 @@ import AdminAudioUploadTest from './AdminAudioUploadTest';
 import NightjarFinancePreview from './NightjarFinancePreview';
 import ContextHelp from './ContextHelp';
 import './nightjar-settings-compact.css';
+import TesterFeedbackForm from './TesterFeedbackForm';
 
 type Props = {
   email?: string | null;
@@ -57,6 +58,8 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <AppUpdateControl compact/>
         <a className="nj-settings-update-repair" href="/recover.html">Still not seeing updates? Repair this app <ArrowRight size={14} aria-hidden="true"/></a>
       </section>
+
+      {!simulationMode && <TesterFeedbackForm/>}
 
       <div className="nj-settings-grid">
         <section className="panel nj-settings-section" aria-labelledby="nj-settings-account">

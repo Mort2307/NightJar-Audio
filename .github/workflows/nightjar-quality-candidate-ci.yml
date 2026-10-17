@@ -1,0 +1,67 @@
+# NO production deployments, PR previews, paid Didit calls or external provider writes.
+# This candidate-branch workflow is build/test only.
+name: NightJar quality candidate CI — NO production deployments
+on:
+  push:
+    branches:
+      - feature/nightjar-operational-excellence-20261017
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nightjar-quality-candidate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Parse YAML without running deployments
+        run: ruby -r yaml -e 'ARGV.each { |f| YAML.parse_file(f); puts "VALID #{f}" }' .github/workflows/firebase-hosting-merge.yml .github/workflows/nightjar-quality-candidate-ci.yml
+      - run: npm ci --no-fund
+      - run: npm run validate
+  functions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm run check
+      - run: npm run build
+      - run: npm run audit:guard
+  emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-fund && npm --prefix functions ci --no-fund
+      - run: npm --prefix functions run build
+      - name: Test credit account permissions and claim locks in isolated emulators
+        run: npx --yes firebase-tools@15.33.0 emulators:exec --project demo-nightjar-quality-ci --only firestore,auth 'node scripts/verified-credit-firestore-emulator.mjs && node scripts/verified-credit-callable-emulator.mjs'

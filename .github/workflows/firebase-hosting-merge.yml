@@ -80,6 +80,43 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Member lockout callable, session checks, role restrictions and alert suspension deployed."
 
+      # Private feedback and human acceptance must go live backend-first.
+      # This scope is skipped for UI-only changes.
+      - name: Deploy Quality Centre callables before Hosting
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          force_quality="${{ contains(github.event.head_commit.message, '[nightjar-quality-backend-release]') }}"
+          if ! grep -Eq '^(functions/src/nightjar-quality.ts|src/platform/firebase-quality.ts)$' <<< "$changed" && [[ "$force_quality" != 'true' ]]; then
+            echo "No Quality Centre backend change; skip Cloud Functions."
+            exit 0
+          fi
+          test -f functions/src/nightjar-quality.ts
+          grep -q 'buildNightjarQualityCallables' functions/src/index.ts
+          node scripts/nightjar-operational-quality-contracts.mjs
+          start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=submitTesterFeedback,adminListTesterFeedback,adminReviewTesterFeedback,adminGetQualityAcceptance,adminRecordQualityCheck' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          id=""
+          for attempt in $(seq 1 48); do
+            id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "$start" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$id" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$id" ]]; then
+            echo "::error::Quality Centre backend did not start; Hosting blocked."
+            exit 1
+          fi
+          gh run watch "$id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+
       # Single explicitly consented live normal Didit check for one named
       # administrator. Deploy only the two new guarded functions, then Hosting.
       # Existing public pause, signed webhook and admin maintenance lock remain.
@@ -219,7 +256,7 @@ jobs:
           set -euo pipefail
           changed="$(git diff --name-only HEAD^ HEAD)"
           force_credit="${{ contains(github.event.head_commit.message, '[nightjar-credit-release]') }}"
-          if ! grep -Eq '^(functions/src/verified-credits.ts|src/platform/firebase-verified-credits.ts|src/components/VerifiedCreditWorkspace.tsx|src/platform/verified-credit.ts|firestore.indexes.json|src/App.tsx)$' <<< "$changed" && [[ "$force_credit" != 'true' ]]; then
+          if ! grep -Eq '^(functions/src/verified-credits.ts|src/platform/firebase-verified-credits.ts|firestore.indexes.json)$' <<< "$changed" && [[ "$force_credit" != 'true' ]]; then
             echo "No verified-credit changes in this revision."
             exit 0
           fi
@@ -249,7 +286,11 @@ jobs:
             fi
             gh run watch "$run_id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           }
-          deploy_credit_batch 'firestore:indexes'
+          if grep -Eq '^firestore.indexes.json$' <<< "$changed" || [[ "$force_credit" == 'true' ]]; then
+            deploy_credit_batch 'firestore:indexes'
+          else
+            echo "No Firestore index changes: preserving current production indexes without redeployment."
+          fi
           deploy_credit_batch 'functions:selected' 'claimMyReleaseCredit,inviteCreditedContributor,respondToCreditInvitation,respondToCreditClaim,adminReviewCreditClaim,appealCreditClaim,getCreditClaim,listMyCreditClaims,adminListCreditClaims,getPublicProfile,listNotifications'
           echo "Verified-credit index and Cloud Functions deployment passed before Hosting."
 

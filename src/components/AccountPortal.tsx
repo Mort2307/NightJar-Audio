@@ -213,7 +213,7 @@ export default function AccountPortal() {
       void loadAccount(identity, true);
     }}/>}
     {authReady && identity?.emailVerified && !agreementsOutstanding && <section className="account-backend-card">
-      <div className="account-testing-notice"><ShieldCheck size={14}/><span><strong>TESTING BUILD</strong> Age assurance is temporarily disabled for controlled QA. Email verification and protected backend permissions remain active.</span></div>
+      <div className="account-testing-notice"><ShieldCheck size={14}/><span><strong>18+ VERIFICATION REQUIRED</strong> NightJar uses live Didit verification for protected adult access. An existing approved result is securely reused. Signing in does not automatically start a new ID check.</span></div>
       <div className="account-backend-heading">
         <ShieldCheck size={19} />
         <div>

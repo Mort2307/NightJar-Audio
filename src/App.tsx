@@ -146,6 +146,8 @@ const RoleProfileExtension = lazy(() => import('./components/RoleProfileExtensio
 const EditorStudio = lazy(() => import('./components/EditorStudio'));
 const AdminFinanceSimulator = lazy(() => import('./components/AdminFinanceSimulator'));
 const AdminReleaseReadiness = lazy(() => import('./components/AdminReleaseReadiness'));
+const AdminQualityCentre = lazy(() => import('./components/AdminQualityCentre'));
+const ManualTranscriptSync = lazy(() => import('./components/ManualTranscriptSync'));
 const AdminLegalReadiness = lazy(() => import('./components/AdminLegalReadiness'));
 const AdminCommunications = lazy(() => import('./components/AdminCommunications'));
 const AdminLiveMarketplacePreview = lazy(() => import('./components/AdminLiveMarketplacePreview'));
@@ -5786,6 +5788,7 @@ function App() {
               onOpenMessages={()=>navigate('messages')}
               onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }}
             />
+            <ManualTranscriptSync label="Audio Editor · Manual transcript sync workshop"/>
           </Suspense>
         )}
 
@@ -5819,6 +5822,14 @@ function App() {
               actions={adminActions}
               loading={adminOverviewLoading}
             />}
+            {adminWorkspace === 'overview' && <Suspense fallback={<NightjarSkeleton variant="cards" count={2} label="Opening Quality Centre" />}>
+              <AdminQualityCentre pendingApplications={applicationGroups.pending.length}
+                pendingImages={imageModeration.length}
+                openAlerts={securityAlerts.filter((item:any)=>item.status==='open').length}/>
+            </Suspense>}
+            {adminWorkspace === 'content' && <Suspense fallback={<NightjarSkeleton variant="cards" count={1} label="Opening transcript workshop" />}>
+              <ManualTranscriptSync label="Admin · Private transcript sync workshop"/>
+            </Suspense>}
             {adminWorkspace === 'launch' && <>
             <Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Checking release readiness" />}>
               <AdminReleaseReadiness

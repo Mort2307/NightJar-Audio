@@ -89,15 +89,15 @@ export default function AdminReleaseReadiness({
       id: 'bypass',
       label: 'Temporary age bypass',
       detail: testing?.temporaryAgeBypassEnabled === true
-        ? 'Private-beta bypass remains enabled. Keep it while the invited tester pilot is running.'
+        ? 'Private-beta bypass remains enabled. This is not appropriate for mandatory production ID verification; investigate immediately.'
         : testing?.temporaryAgeBypassEnabled === false
           ? 'Testing bypass is disabled in the current backend.'
           : 'The deployed backend has not reported its temporary bypass state.',
       state: testing?.temporaryAgeBypassEnabled === false ? 'pass' : 'blocker',
       next: [
-        'Keep the existing allowlisted tester bypass during the Didit pilot—do not interrupt ongoing testing.',
-        'After live signed Didit approval, under-18 rejection, revocation and cross-device persistence are proven, review every remaining temporary-access account.',
-        'For an approved public release only, remove the backend TESTING_AGE_ASSURANCE_BYPASS flag, validate with non-verified accounts and deploy the reviewed Functions.',
+        'Confirm the deployed backend still reports the mandatory Didit gate and the temporary age bypass remains disabled.',
+        'Verify a genuinely unapproved account is blocked and that an existing live Didit approval is reused after refresh or re-login; no new billable session is needed.',
+        'The source-level TESTING_AGE_ASSURANCE_BYPASS flag is already false; do not re-enable it or restart completed age checks.',
         'Never offer an admin button that silently disables age-safety rules for all users.',
       ],
       actionLabel: 'Open Didit pilot and verification controls',

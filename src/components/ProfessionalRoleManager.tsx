@@ -480,7 +480,19 @@ export default function ProfessionalRoleManager({
           {busy ? 'Saving agreement…' : 'Accept professional terms'}
         </button>
       </div>}
-      {state.applicationStatus === 'rejected' && <p className="panel-note">Your previous professional application was not approved. You can apply again for any available role.</p>}
+      <section className="nj-professional-application-journey" aria-label="Your professional application progress">
+        <h3>How professional approval works</h3>
+        <ol>
+          <li><strong>1. Verified adult account</strong><span>NightJar requires an approved live 18+ verification. Credit invitations or professional applications cannot skip it.</span></li>
+          <li><strong>2. Current professional agreement</strong><span>{missingProfessionalTerms.length ? 'Review and accept the current Professional & Content Terms before applying.' : 'Professional agreements are up to date, or not currently required for your existing role.'}</span></li>
+          <li><strong>3. Application and evidence</strong><span>{state.pendingProfessionalRoles.length ? state.pendingProfessionalRoles.map(role=>labels[role]).join(', ')+' awaiting independent NightJar review.' : state.applicationStatus==='rejected' ? 'The last application was not approved. Review feedback from NightJar and submit a revised application if eligible.' : 'Choose the professions you actually work in and supply genuine experience and portfolio evidence.'}</span></li>
+          <li><strong>4. Administrator decision</strong><span>{state.approvedProfessionalRoles.length ? state.approvedProfessionalRoles.map(role=>labels[role]).join(', ')+' approved; only these roles can access their professional tools.' : 'NightJar will explicitly approve or reject each role. Submitting an application never opens its workspace or awards the gold moon.'}</span></li>
+        </ol>
+        <p>No automatic acceptance or guaranteed review time. You can continue listening while an application is being reviewed, and check your status here at any time.</p>
+      </section>
+      {state.applicationStatus === 'rejected' && <div className="professional-terms-upgrade" role="status">
+        <strong>Application not approved</strong><p>Your last professional application was declined. Your Listener account and any other approved roles remain available. You can update your evidence and reapply for an eligible role; contact NightJar support if you need the decision explained.</p>
+      </div>}
 
       <div className="professional-role-list">
         <div className="professional-role-row">
