@@ -26,6 +26,17 @@ if (verifiedCreditExports) {
   }
 }
 
+// Quality Centre callables use the same guarded module-factory pattern.
+const qualityFactory = functionSources.find(source =>
+  source.includes('export const buildNightjarQualityCallables = (')) ?? '';
+const qualityExports=indexSource.match(/export\s+const\s*\{([^}]+)\}\s*=\s*buildNightjarQualityCallables\s*\(/);
+if(qualityExports) {
+  for(const name of qualityExports[1].split(',').map(value=>value.trim())) {
+    if(/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) &&
+       new RegExp('const\\s+'+name+'\\s*=\\s*onCall\\b').test(qualityFactory)) exported.add(name);
+  }
+}
+
 const referenced=[];
 for(const file of platformFiles){
   const source=fs.readFileSync(path.join(platformDir,file),'utf8');
