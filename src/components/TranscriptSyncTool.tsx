@@ -62,6 +62,7 @@ export default function TranscriptSyncTool({
   isAdmin = false, simulationMode = false, onSaved,
 }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const resumeSeconds = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,6 +90,20 @@ export default function TranscriptSyncTool({
       setNotice('Press Play, then Mark current line when each sentence begins. No AI or automatic speech processing is used.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not open the private audio recording.');
+    } finally { setLoading(false); }
+  };
+
+  const refreshAudio = async () => {
+    if (loading || !open) return;
+    setLoading(true); setError('');
+    const previousPosition = audioRef.current?.currentTime ?? 0;
+    try {
+      const playback = await nightjarCatalogue.syncAudioUrl(releaseId);
+      resumeSeconds.current = Number.isFinite(previousPosition) ? previousPosition : 0;
+      setSourceUrl(playback.url);
+      setNotice('Protected audio link refreshed. Your transcript lines and timing marks have been preserved.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not renew your authorised audio link.');
     } finally { setLoading(false); }
   };
 
@@ -163,9 +178,21 @@ export default function TranscriptSyncTool({
     {error && <p className="nj-audio-review-error" role="alert">{error}</p>}
     {open && <section className="nj-transcript-sync-review" aria-label="Manual transcript synchronisation">
       <strong><Play size={16} aria-hidden="true"/> Play recording and mark lines</strong>
-      <audio ref={audioRef} controls preload="metadata" src={sourceUrl} aria-label="Private recording for transcript synchronisation"/>
+      <small>This private listening link lasts 10 minutes. If playback or seeking stops during a long recording, refresh it here without losing your work.</small>
+      <audio ref={audioRef} controls preload="metadata" src={sourceUrl} aria-label="Private recording for transcript synchronisation"
+        onLoadedMetadata={event => {
+          const position = resumeSeconds.current;
+          if (position !== null) {
+            const duration = event.currentTarget.duration;
+            event.currentTarget.currentTime = Math.max(0, Number.isFinite(duration) ? Math.min(position, Math.max(0, duration - 0.25)) : position);
+            resumeSeconds.current = null;
+          }
+        }}/>
       <div className="nj-transcript-sync-actions">
         <button type="button" className="secondary-button" onClick={() => offsetTime(-5)}><SkipBack size={15}/> Back 5 seconds</button>
+        <button type="button" className="secondary-button" disabled={loading} onClick={() => void refreshAudio()}>
+          <RotateCcw size={15}/> {loading ? 'Renewing secure link…' : 'Refresh secure audio link'}
+        </button>
         <button type="button" className="secondary-button" onClick={() => markLine(cursor)} disabled={!lines.length}>Mark current line</button>
         <button type="button" className="ghost-button" onClick={() => setCursor((index) => Math.max(0, index - 1))} disabled={cursor === 0}>Previous line</button>
       </div>
