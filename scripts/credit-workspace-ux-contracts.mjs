@@ -35,4 +35,29 @@ check(css,/prefers-reduced-motion/,'Reduced motion accommodation');
 check(css,/:focus-visible/,'Keyboard focus support');
 assert.ok(!ui.includes('simulationMode') && !ui.includes('mockCreditApi'),
   'Never falsely mark simulated flows as real account verification');
+// Off-platform invites are onboarding and claims, NOT account creation,
+// professional approval, ID bypass, or a self-validating release credit.
+const app=fs.readFileSync('src/App.tsx','utf8');
+const account=fs.readFileSync('src/components/AccountPortal.tsx','utf8');
+assert.ok(app.includes('nj-you-credit-shortcut'),'Credits must have a visible entry on main You page');
+assert.ok(app.includes("setCreditWorkspaceOpen(true)") && app.includes("'/profile/credits'"),
+  'Credits must open on a dedicated You subpage');
+assert.ok(!app.includes('<details className="page-wrap nj-credit-workspace-disclosure"'),
+  'Credit workspace must not remain embedded in profile editor');
+for(const phrase of ['Contributor not on NightJar?','Copy invitation link',
+  'No email is sent automatically','join as a member and claim','This link grants no role or gold moon']){
+  assert.ok(ui.includes(phrase),'Missing off-platform invitation safeguards: '+phrase);
+}
+assert.ok(ui.includes('nightjar-audio.web.app/profile/credits?creditRelease=') &&
+    ui.includes("encodeURIComponent(inviteSlotId.trim())"),'Shareable invite must contain only release and slot references');
+assert.ok(!ui.includes('assignProfessionalRole') && !ui.includes('approvedProfessionalRoles:'),
+  'Credit onboarding must not silently grant official creator status');
+assert.ok(account.includes("destination.pathname !== '/profile/credits'") &&
+  account.includes("['creditRelease','creditSlot']") &&
+  account.includes('creditContinue ?? accountDestination(nextAccount)'),
+  'Post sign-in invite continuation must be tightly allowlisted, not an open redirect');
+assert.ok(app.includes("'/account?entry=signin'")&&app.includes('returnTo='),
+  'An off-platform referral should survive normal account sign-in');
+assert.ok(css.includes('.nj-you-credit-shortcut') && css.includes('.nj-credit-outside-invite'),
+  'Main You launch and off-platform invite styling required');
 console.log('PASS: credit workspace selectors, independent review, clear actions, accessible styling, manual fallback and honest real-account test guide.');

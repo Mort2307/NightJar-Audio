@@ -13,8 +13,16 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState<string|null>(null);
   const [error,setError] = useState('');
-  const [releaseId,setReleaseId] = useState('');
-  const [slotId,setSlotId] = useState('');
+  const [releaseId,setReleaseId] = useState(()=>{
+    const query=new URLSearchParams(window.location.search);
+    const id=query.get('creditRelease')??'';
+    return /^[A-Za-z0-9_-]{1,160}$/.test(id)?id:'';
+  });
+  const [slotId,setSlotId] = useState(()=>{
+    const query=new URLSearchParams(window.location.search);
+    const id=query.get('creditSlot')??'';
+    return /^[A-Za-z0-9_-]{1,160}$/.test(id)?id:'';
+  });
   const [inviteReleaseId,setInviteReleaseId] = useState('');
   const [inviteSlotId,setInviteSlotId] = useState('');
   const [inviteUserId,setInviteUserId] = useState('');
@@ -28,6 +36,14 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
   const [memberQuery,setMemberQuery] = useState('');
   const [inviteMemberManual,setInviteMemberManual] = useState(false);
   const [success,setSuccess] = useState('');
+  const [shareExternalOpen,setShareExternalOpen] = useState(false);
+  const [externalCopyStatus,setExternalCopyStatus] = useState('');
+  const [externalClaimLink] = useState(()=>{
+    const query = new URLSearchParams(window.location.search);
+    const release=query.get('creditRelease')??'',slot=query.get('creditSlot')??'';
+    return /^[A-Za-z0-9_-]{1,160}$/.test(release) && /^[A-Za-z0-9_-]{1,160}$/.test(slot)
+      ? {release,slot} : null;
+  });
   const [catalogueLoading,setCatalogueLoading] = useState(false);
   const [reviewReasons,setReviewReasons] = useState<Record<string,string>>({});
   const [appealReasons,setAppealReasons] = useState<Record<string,string>>({});
@@ -71,12 +87,34 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
     return ()=>{active=false;};
   },[administrator,showInvite,currentUserId]);
   const chosenRelease = catalogue.find(release=>release.id===releaseId);
+  // A valid link can arrive before catalogue loads; old release references
+  // remain editable, but we never silently submit or approve the claim.
+  useEffect(()=>{
+    if(!externalClaimLink||catalogueLoading) return;
+    if(!catalogue.some(item=>item.id===externalClaimLink.release)) setClaimManual(true);
+  },[catalogue,catalogueLoading,externalClaimLink]);
   const ownedReleases = catalogue.filter(release=>!release.creatorUserId||release.creatorUserId===currentUserId);
   const invitationRelease = ownedReleases.find(release=>release.id===inviteReleaseId);
   const matchingPeople = memberQuery.trim().length < 2 ? [] : people.filter(member=>
     [member.displayName,member.name,member.handle].some(value=>String(value??'').toLowerCase().includes(memberQuery.trim().toLowerCase()))).slice(0,25);
   const claimComplete = Boolean(releaseId.trim()&&slotId.trim());
   const inviteComplete = Boolean(inviteReleaseId.trim()&&inviteSlotId.trim()&&inviteUserId.trim());
+  // An external invitation is a public signup-and-claim deep link, not a
+  // verified identity or a bearer credential. No backend account or claims
+  // are created merely by generating/copying/sharing this link.
+  const offPlatformLink = inviteReleaseId.trim()&&inviteSlotId.trim()
+    ? 'https://nightjar-audio.web.app/profile/credits?creditRelease='+
+      encodeURIComponent(inviteReleaseId.trim())+'&creditSlot='+encodeURIComponent(inviteSlotId.trim())
+    : '';
+  const copyOffPlatformLink = async () => {
+    if(!offPlatformLink)return;
+    try {
+      await navigator.clipboard.writeText(offPlatformLink);
+      setExternalCopyStatus('Invitation link copied. Share it privately with the contributor.');
+    } catch {
+      setExternalCopyStatus('Select and copy the link from the field below.');
+    }
+  };
   const loadMore = async () => {
     if (!nextCursor || busy) return;
     setBusy('next-page');setError('');
@@ -114,6 +152,10 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
         <p className="nj-credit-helper">Mark checks 4–8 and 10 as PASS only after you witness the corresponding account-to-account result, not simply because a button is visible.</p>
       </div>
     </details>}
+    {!administrator && externalClaimLink && <div className="nj-credit-feedback nj-credit-invite-arrived" role="status">
+      <strong>You've received a contributor invitation link.</strong>
+      <p>Check that the release and contribution below are genuinely yours. You must sign in, complete NightJar's normal 18+ verification, and <strong>request</strong> a credit. The uploader and an independent administrator must approve it. This link grants no role or gold moon.</p>
+    </div>}
     {!administrator && <section className="nj-credit-card" aria-labelledby="nj-credit-request-title">
       <div className="nj-credit-card-head"><span className="nj-credit-step">01</span><div><h3 id="nj-credit-request-title">Claim a release credit</h3><p>Find a published release and select the credit showing your name and contribution.</p></div></div>
       <form className="nj-credit-form" onSubmit={event=>{
@@ -191,6 +233,23 @@ export default function VerifiedCreditWorkspace({currentUserId,administrator=fal
         <button type="submit" className="nj-credit-primary" disabled={busy!==null||!inviteComplete}>{busy==='invite'?'Sending invitation…':'Send credit invitation'}</button>
         <p className="nj-credit-helper">Only the release uploader can invite. The member must explicitly accept. An independent NightJar administrator makes the final decision.</p>
       </form>}
+      <div className="nj-credit-outside-invite">
+        <div>
+          <strong>Contributor not on NightJar?</strong>
+          <p>Share an invitation to join as a member and claim this specific credit. They do not become an official NightJar Creator, Writer, Editor or Artist through the invitation.</p>
+        </div>
+        <button type="button" className="nj-credit-expand" aria-expanded={shareExternalOpen} aria-controls="nj-credit-share-outside" onClick={()=>{setShareExternalOpen(v=>!v);setShowInvite(true);}}>
+          {shareExternalOpen?'Hide off-platform invitation':'Invite someone outside NightJar'} <span className="nj-credit-chevron" aria-hidden="true"/>
+        </button>
+        {shareExternalOpen && <div id="nj-credit-share-outside" className="nj-credit-form">
+          <p className="nj-credit-helper">First select <strong>your published release and contribution</strong> in the invitation form above. You do not need their NightJar account ID or their email address.</p>
+          <label htmlFor="nj-credit-share-link">Private invitation link</label>
+          <input id="nj-credit-share-link" readOnly value={offPlatformLink} placeholder="Choose a release and contribution above to generate a link" onFocus={event=>event.currentTarget.select()} aria-describedby="nj-credit-share-explainer"/>
+          <button type="button" className="nj-credit-primary" disabled={!offPlatformLink} onClick={()=>void copyOffPlatformLink()}>Copy invitation link</button>
+          {externalCopyStatus&&<p role="status" className="nj-credit-chosen">{externalCopyStatus}</p>}
+          <p id="nj-credit-share-explainer" className="nj-credit-helper">No email is sent automatically. Share the link yourself. It does not reserve the credit, bypass beta access/Didit, approve attribution or award the official gold moon. Once the invited adult joins and verifies, they can request the credit, which still requires your confirmation and independent admin approval.</p>
+        </div>}
+      </div>
     </section>}
     {error&&<p role="alert" className="nj-credit-feedback nj-credit-error">{error}</p>}
     {success&&<p role="status" className="nj-credit-feedback nj-credit-success">{success}</p>}

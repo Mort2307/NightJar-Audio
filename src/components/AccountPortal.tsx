@@ -20,8 +20,26 @@ const accountDestination = (account: NightjarAccountIdentity) => {
   return null;
 };
 
+// Only a contributor claim deep-link may override the normal account home.
+// No arbitrary external URL, auth result, email or role may be supplied here.
+const invitedCreditDestination = (raw: string | null) => {
+  if (!raw || raw.length > 520) return null;
+  try {
+    const destination = new URL(raw, 'https://nightjar-audio.web.app');
+    if (destination.origin !== 'https://nightjar-audio.web.app' ||
+        destination.pathname !== '/profile/credits') return null;
+    const params = destination.searchParams;
+    const release = params.get('creditRelease'),slot = params.get('creditSlot');
+    if (!release || !slot || !/^[A-Za-z0-9_-]{1,160}$/.test(release) ||
+        !/^[A-Za-z0-9_-]{1,160}$/.test(slot)) return null;
+    if ([...params.keys()].some(key=>!['creditRelease','creditSlot'].includes(key))) return null;
+    return '/profile/credits?creditRelease='+encodeURIComponent(release)+'&creditSlot='+encodeURIComponent(slot);
+  } catch { return null; }
+};
+
 export default function AccountPortal() {
   const [explicitSignIn] = useState(() => new URLSearchParams(window.location.search).get('entry') === 'signin');
+  const [creditContinue] = useState(() => invitedCreditDestination(new URLSearchParams(window.location.search).get('returnTo')));
   const [identity, setIdentity] = useState<NightjarIdentity | null>(() => nightjarAuth.current());
   const [authReady, setAuthReady] = useState(false);
   const [account, setAccount] = useState<NightjarAccountIdentity | null>(null);
@@ -87,7 +105,7 @@ export default function AccountPortal() {
 
 
       if (request.enterApp) {
-        const destination = accountDestination(nextAccount);
+        const destination = creditContinue ?? accountDestination(nextAccount);
         if (destination) {
           setAccountProgress('Opening your Nightjar workspace…');
           markPasswordAuthenticated(nextIdentity.userId);
@@ -158,7 +176,7 @@ export default function AccountPortal() {
       await nightjarAccount.chooseRole(role, sessionStorage.getItem('nightjar.creatorReferralCode') ?? '');
       const nextAccount = await nightjarAccount.identity();
       setAccount(nextAccount);
-      const destination = accountDestination(nextAccount);
+      const destination = creditContinue ?? accountDestination(nextAccount);
       if (destination) window.location.replace(destination);
     } catch {
       setMessage('Nightjar could not save that account role.');

@@ -159,3 +159,35 @@
   .nj-verified-credits input,.nj-verified-credits select,.nj-verified-credits textarea,
   .nj-verified-credits button,.nj-verified-credits .nj-credit-card{border:1px solid ButtonText}
 }
+
+/* Main You dashboard: credit workflows are not embedded in editable fields. */
+.nj-you-credit-shortcut{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
+  gap:18px;margin:16px 0 24px;padding:clamp(18px,3vw,28px);
+  border-radius:20px;border:1px solid rgba(224,187,128,.39);
+  background:linear-gradient(145deg,rgba(46,34,28,.91),rgba(18,16,18,.94));
+}
+.nj-you-credit-shortcut>div{flex:1 1 280px;min-width:0;display:grid;gap:7px}
+.nj-you-credit-shortcut h2{font-size:clamp(1.2rem,3vw,1.48rem);line-height:1.3;margin:0}
+.nj-you-credit-shortcut p{font-size:.94rem;line-height:1.55;color:#c7b7aa;margin:0}
+.nj-you-credit-shortcut .primary-button{min-height:48px;display:flex;gap:10px;align-items:center;justify-content:center}
+.nj-credit-standalone{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+.nj-credit-standalone .nj-credit-back{display:flex;align-items:center;gap:9px;
+  min-height:48px;margin-bottom:16px;padding:11px 15px;border:1px solid rgba(224,187,128,.45);
+  border-radius:11px;background:#21191a;color:#f0d2a2;font-weight:700}
+.nj-verified-credits .nj-credit-outside-invite{
+  display:grid;gap:14px;min-width:0;margin-top:24px;padding-top:24px;
+  border-top:1px solid var(--credit-line)
+}
+.nj-verified-credits .nj-credit-outside-invite strong{font-size:1.06rem}
+.nj-verified-credits .nj-credit-outside-invite p{font-size:.9rem;line-height:1.55;color:#c8b7ab;margin:7px 0 0}
+.nj-verified-credits .nj-credit-outside-invite label{font-size:.96rem;font-weight:700}
+.nj-verified-credits .nj-credit-invite-arrived{display:grid;gap:7px;
+  padding:18px 20px;border:1px solid rgba(224,187,128,.55);
+  border-radius:14px;background:rgba(224,187,128,.09)}
+.nj-verified-credits .nj-credit-invite-arrived strong{color:#f6d49b}
+.nj-verified-credits .nj-credit-invite-arrived p{margin:0;line-height:1.6;color:#dfd2c5}
+@media(max-width:560px){
+  .nj-you-credit-shortcut{padding:18px}
+  .nj-you-credit-shortcut .primary-button{width:100%}
+}

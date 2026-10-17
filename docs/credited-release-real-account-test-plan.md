@@ -9,8 +9,8 @@
 - Do not put account UIDs, real identity details, API tokens or evidence documents into public GitHub issues.
 
 ## UI locations (current release)
-- Member: **You/Profile → My credited releases → Claim a release credit**.
-- Uploader: **You/Profile → My credited releases → Invite a contributor → Open invitation form**.
+- Member: **You → Credited releases and invitations → Claim a release credit** (dedicated page; not in the profile editor).
+- Uploader: **You → Credited releases and invitations → Invite a contributor → Open invitation form**. Use the off-platform share link when the contributor has no NightJar account.
 - Administrator: **Admin → Content → Credited account review**.
 - Affected member: **You/Profile → Your credit requests and invitations** or a direct notification link.
 
@@ -34,3 +34,11 @@ If there is no safe staging environment or agreed credited release, record **NOT
 
 ## Evidence record
 Record role (A/B/C only), platform (Android APK/PWA, iOS web or desktop), date, observed result, and PASS/FAIL/NOT VERIFIED. Share redacted screenshots if needed. Never store sensitive identity-verification or user documents in this file.
+
+## External contributors who have not joined NightJar
+- The uploader selects the **published release and credited slot** and uses **Invite someone outside NightJar → Copy invitation link**. The uploader privately shares that link; NightJar does not automatically send an email or pay for invitation delivery.
+- The link contains only the published release and contributor slot reference. It is **not** a signed legal attribution record, an account, a guarantee that the recipient is the person named on the release, a beta-access override, a Didit pass or an official professional-creator application.
+- The recipient uses NightJar's normal sign-up, legal agreements and mandatory 18+ provider check; existing valid approvals are reused where applicable. The invite route is preserved through account sign-in and preselects the release/slot **without automatically submitting**.
+- **Closed beta remains enforced**. If the recipient has not been admitted to the beta, an owner must authorise beta account access separately; share links do not bypass enrollment controls. Never mark the off-platform path accepted until an eligible outside user completes it.
+- Upon requesting a credit, the uploader confirms and an independent administrator makes the final verified-credit decision. A legitimate verified credit may display **Credited Listener** without granting rights to publish, invoice creators, or display the official NightJar gold moon.
+- Becoming an approved professional **Creator, Writer, Editor or Artist** remains a completely separate application and administrator-onboarding process. Never infer status from an external invitation or a release contributor field.
