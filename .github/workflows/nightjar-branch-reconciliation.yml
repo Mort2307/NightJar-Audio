@@ -1,0 +1,54 @@
+name: NightJar historical branch reconciliation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/branch-reconciliation-audit.mjs'
+      - '.github/workflows/nightjar-branch-reconciliation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightjar-branch-inventory-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch-inventory:
+    # Never run untrusted fork code on this exhaustive repo scan.
+    if: \${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Fetch complete history for all remote branches
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Synchronise branch references (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          git rev-parse --verify refs/remotes/origin/main
+          echo "Remote heads: $(git for-each-ref --format='%(refname)' refs/remotes/origin | wc -l)"
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check audit implementation syntax
+        run: node --check scripts/branch-reconciliation-audit.mjs
+      - name: Audit every remote branch against main
+        run: node scripts/branch-reconciliation-audit.mjs
+      - name: Preserve comprehensive branch inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightjar-branch-reconciliation-\${{ github.run_id }}
+          path: |
+            \${{ runner.temp }}/nightjar-branch-audit.json
+            \${{ runner.temp }}/nightjar-branch-audit.md
+          if-no-files-found: warn
+          retention-days: 14
