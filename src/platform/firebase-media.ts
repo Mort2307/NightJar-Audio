@@ -20,7 +20,32 @@ const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status:
 const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string }>(functions, 'removeOwnedImageAsset');
 const removeAvatarCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileAvatar');
 const removeBannerCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileBanner');
-const brandingCall = httpsCallable<void, { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null }>(functions, 'getBranding');
+type BrandingInfo = { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null };
+const brandingCall = httpsCallable<void, BrandingInfo>(functions, 'getBranding');
+
+// Cache ONLY public branding metadata; never cache protected artwork, moderation,
+// account data, verification decisions or signed resources.
+const BRANDING_CACHE_MS = 90_000;
+let brandingCache: { value: BrandingInfo; until: number } | null = null;
+let brandingRequest: Promise<BrandingInfo> | null = null;
+let brandingGeneration = 0;
+const invalidateBranding = () => {
+  brandingGeneration += 1;
+  brandingCache = null;
+  brandingRequest = null;
+};
+const announceBrandingChange = () => {
+  invalidateBranding();
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event('nightjar:branding-changed'));
+  try { window.localStorage.setItem('nightjar.branding.version', String(Date.now())); } catch { /* Private mode may block storage. */ }
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener('nightjar:branding-changed', invalidateBranding);
+  window.addEventListener('storage', event => {
+    if (event.key === 'nightjar.branding.version') invalidateBranding();
+  });
+}
 const syncBrandIconsCall = httpsCallable<{
   icon192DataUrl: string;
   icon512DataUrl: string;
@@ -42,7 +67,9 @@ export const nightjarMedia = {
   },
 
   async moderate(assetId: string, decision: 'approved' | 'rejected', note?: string, safetyConfirmed = false) {
-    return (await moderateCall({ assetId, decision, note, safetyConfirmed })).data;
+    const result = (await moderateCall({ assetId, decision, note, safetyConfirmed })).data;
+    announceBrandingChange();
+    return result;
   },
 
   async status(assetId: string) {
@@ -61,15 +88,31 @@ export const nightjarMedia = {
     return (await removeBannerCall()).data;
   },
 
-  async getBranding() {
-    return (await brandingCall()).data;
+  async getBranding(forceRefresh = false): Promise<BrandingInfo> {
+    if (forceRefresh) invalidateBranding();
+    if (brandingCache && brandingCache.until > Date.now()) return brandingCache.value;
+    if (brandingRequest) return brandingRequest;
+    const generation = brandingGeneration;
+    const pending = brandingCall().then(response => {
+      if (generation === brandingGeneration) {
+        brandingCache = { value: response.data, until: Date.now() + BRANDING_CACHE_MS };
+      }
+      return response.data;
+    });
+    brandingRequest = pending;
+    try { return await pending; }
+    finally { if (brandingRequest === pending) brandingRequest = null; }
   },
 
   async syncBrandIcons(input: { icon192DataUrl: string; icon512DataUrl: string; maskable512DataUrl: string }) {
-    return (await syncBrandIconsCall(input)).data;
+    const result = (await syncBrandIconsCall(input)).data;
+    announceBrandingChange();
+    return result;
   },
 
   async removeBrandLogo() {
-    return (await removeBrandLogoCall()).data;
+    const result = (await removeBrandLogoCall()).data;
+    announceBrandingChange();
+    return result;
   },
 };
