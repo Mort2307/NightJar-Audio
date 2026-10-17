@@ -27,7 +27,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, onA
         ? { view: 'editor', label: 'Editor', accessibleLabel: 'Editor Studio', icon: FileText }
         : { view: 'artist', label: 'Artist', accessibleLabel: 'Artist Studio', icon: Brush };
 
-  const settings: Item = { view: 'settings', label: 'You', accessibleLabel: 'Your profile, settings and account', icon: Settings2 };
+  const settings: Item = { view: 'settings', label: 'You', accessibleLabel: 'Your credits, profile, settings and account', icon: Settings2 };
   const search: Item = { label: 'Search', icon: Search, search: true };
 
   // Exactly five unique destinations. Previously Admin appeared twice, and

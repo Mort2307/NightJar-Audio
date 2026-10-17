@@ -1,4 +1,4 @@
-import { Accessibility, ArrowRight, Bell, CalendarDays, Download, ChevronDown, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Accessibility, ArrowRight, Bell, Headphones, CalendarDays, Download, ChevronDown, FileText, LockKeyhole, LogOut, Palette, Settings2, ShieldCheck, UserCircle2 } from 'lucide-react';
 import AccessibilityPreferences from './AccessibilityPreferences';
 import HelpGlossary from './HelpGlossary';
 import { VisionAccessControls } from './VisionAccess';
@@ -19,6 +19,7 @@ type Props = {
   administrator: boolean;
   simulationMode: boolean;
   onProfile: () => void;
+  onCredits?: () => void;
   onCalendar: () => void;
   onRoles: () => void;
   onProtection: () => void;
@@ -27,7 +28,7 @@ type Props = {
   notify: (message: string) => void;
 };
 
-export default function NightjarSettings({ email, administrator, simulationMode, onProfile, onCalendar, onRoles, onProtection, onAdmin, onSignOut, notify }: Props) {
+export default function NightjarSettings({ email, administrator, simulationMode, onProfile, onCredits, onCalendar, onRoles, onProtection, onAdmin, onSignOut, notify }: Props) {
   return (
     <section className="page-section nj-settings-page" aria-labelledby="nightjar-settings-title">
       <div className="nj-settings-heading">
@@ -35,6 +36,17 @@ export default function NightjarSettings({ email, administrator, simulationMode,
         <h1 id="nightjar-settings-title">Your Nightjar.</h1>
         <p>Your profile, security, preferences and app tools in one place. Open only the sections you need.</p>
       </div>
+
+      {onCredits && <section className="nj-you-credit-shortcut" aria-label="Credited releases and contributor invitations">
+        <div>
+          <span className="mini-label">YOUR NIGHTJAR · RELEASE CREDITS</span>
+          <h2>Credited releases and invitations</h2>
+          <p>Claim your contribution, invite collaborators on or off NightJar and follow independent credit approval decisions.</p>
+        </div>
+        <button type="button" className="primary-button" onClick={onCredits}>
+          <Headphones size={17} aria-hidden="true"/> Open credited releases <ArrowRight size={16} aria-hidden="true"/>
+        </button>
+      </section>}
 
       <section className="panel nj-member-update-quick-access" aria-label="Update Nightjar on this device">
         <div className="nj-settings-section-head"><Download size={19} aria-hidden="true"/><div>
