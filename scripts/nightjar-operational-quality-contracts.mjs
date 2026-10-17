@@ -49,4 +49,6 @@ assert.ok(!workflow.includes('src/components/VerifiedCreditWorkspace.tsx|src/pla
 requireText(ci,'NO production deployments');
 requireText(ci,'npm run validate');
 requireText(ci,'npm run build');
+requireText(ci,'nightjar-quality-callable-emulator.mjs');
+requireText(file('scripts/nightjar-quality-callable-emulator.mjs'),'buildNightjarQualityCallables');
 console.log('PASS: NightJar operational release candidates, mandatory live Didit, human acceptance, private feedback, manual sync and backend-first cost guard.');

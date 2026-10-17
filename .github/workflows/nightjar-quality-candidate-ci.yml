@@ -64,4 +64,4 @@ jobs:
       - run: npm ci --no-fund && npm --prefix functions ci --no-fund
       - run: npm --prefix functions run build
       - name: Test credit account permissions and claim locks in isolated emulators
-        run: npx --yes firebase-tools@15.33.0 emulators:exec --project demo-nightjar-quality-ci --only firestore,auth 'node scripts/verified-credit-firestore-emulator.mjs && node scripts/verified-credit-callable-emulator.mjs'
+        run: npx --yes firebase-tools@15.33.0 emulators:exec --project demo-nightjar-quality-ci --only firestore,auth 'node scripts/verified-credit-firestore-emulator.mjs && node scripts/verified-credit-callable-emulator.mjs && node scripts/nightjar-quality-callable-emulator.mjs'
