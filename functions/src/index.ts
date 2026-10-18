@@ -13592,6 +13592,9 @@ export const reviewNightjarTeamFeedback = onCall({region:REGION},async(request)=
 // Low-cost listener experience additions. Reads are on demand; no scheduled
 // fan-out, external API, or extra queue infrastructure is involved.
 const momentMarksFor = (uid: string) => accountRef(uid).collection('momentMarks');
+// All saves and removals lock this private per-account quota document in a
+// transaction. A query-only count cannot prevent two simultaneous inserts.
+const momentMarksQuotaFor = (uid: string) => accountRef(uid).collection('privateSettings').doc('momentMarksQuota');
 const safeListeningBoundaries = (input: Record<string, unknown>) => ({
   excludedRatings: cleanStringList(input.excludedRatings, 4).filter((value) =>
     ['sfw','suggestive','adult','explicit'].includes(value)),
@@ -13647,15 +13650,27 @@ export const saveMomentMark = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('not-found','This release is no longer available.');
   }
   const collection = momentMarksFor(identity.uid);
-  const existing = await collection.limit(60).get();
-  if (existing.size >= 60) throw new HttpsError('resource-exhausted','You can save up to 60 moments. Remove one to add another.');
+  const quotaRef = momentMarksQuotaFor(identity.uid);
   const doc = collection.doc();
-  await doc.set({
-    releaseId, positionSeconds: Math.round(seconds * 10) / 10,
-    label: cleanText(input.label, 80) || 'Saved moment',
-    createdAt: FieldValue.serverTimestamp(),
+  // Two simultaneous devices must compete on the same quota reference.
+  // Bootstrap from existing marks for accounts created before this fix.
+  return db.runTransaction(async (tx) => {
+    const quota = await tx.get(quotaRef);
+    const count = quota.exists
+      ? quota.data()?.count
+      : (await tx.get(collection.limit(61))).size;
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new HttpsError('failed-precondition','Saved moment quota needs review.');
+    }
+    if (count >= 60) throw new HttpsError('resource-exhausted','You can save up to 60 moments. Remove one to add another.');
+    tx.create(doc, {
+      releaseId, positionSeconds: Math.round(seconds * 10) / 10,
+      label: cleanText(input.label, 80) || 'Saved moment',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(quotaRef, { count: count + 1, updatedAt: FieldValue.serverTimestamp() });
+    return { saved: true, markId: doc.id };
   });
-  return { saved: true, markId: doc.id };
 });
 
 export const deleteMomentMark = onCall({ region: REGION }, async (request) => {
@@ -13663,8 +13678,23 @@ export const deleteMomentMark = onCall({ region: REGION }, async (request) => {
   await requireAgeVerified(identity.uid);
   const markId = cleanText((request.data as { markId?: unknown } | undefined)?.markId, 160);
   if (!markId || markId.includes('/')) throw new HttpsError('invalid-argument','Moment identifier is required.');
-  await momentMarksFor(identity.uid).doc(markId).delete();
-  return { deleted: true };
+  const collection = momentMarksFor(identity.uid);
+  const quotaRef = momentMarksQuotaFor(identity.uid);
+  return db.runTransaction(async (tx) => {
+    const doc = collection.doc(markId);
+    const existing = await tx.get(doc);
+    if (!existing.exists) return { deleted: true };
+    const quota = await tx.get(quotaRef);
+    const count = quota.exists
+      ? quota.data()?.count
+      : (await tx.get(collection.limit(61))).size;
+    if (!Number.isSafeInteger(count) || count < 1) {
+      throw new HttpsError('failed-precondition','Saved moment quota needs review.');
+    }
+    tx.delete(doc);
+    tx.set(quotaRef, { count: count - 1, updatedAt: FieldValue.serverTimestamp() });
+    return { deleted: true };
+  });
 });
 
 // VA Calling Cards deliberately feature an already moderated and published
