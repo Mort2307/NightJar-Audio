@@ -14,6 +14,8 @@ assert.match(change,/revision !== expectedRevision/);
 assert.match(change,/release_metadata_conflict/);
 assert.match(change,/metadataRevision: revision \+ 1/);
 assert.match(change,/tx\.set\(ref, update/);
+assert.match(change,/tagsChanged = Array\.isArray\(input\.tags\)/, 'Autosave must not scan tag usage for unchanged tags');
+assert.match(change,/if \(tagsChanged\) await syncCreatorCustomTagUsage\(identity\.uid\)/, 'Avoid unrelated Firestore tag fan-out on every text edit');
 assert.ok(!change.includes('await ref.set(update'), 'Release metadata must not bypass transactional revision checks');
 assert.match(component,/const persistReleaseMetadata = async/);
 assert.match(component,/expectedMetadataRevision:known\.revision/);
