@@ -4670,7 +4670,7 @@ export const publishScheduledReleases = onSchedule({
     await createNotification(released.creatorUserId,{
       type:'content',subtype:'release',title:'Your scheduled recording is live',
       message:'“'+released.title+'” has reached its chosen publication time and is now published.',
-      releaseId:doc.id,dedupeKey:'scheduled-live-'+doc.id,
+      releaseId:doc.id,dedupeKey:'scheduled-live-'+doc.id,oncePerKey:true,
     }).catch((error)=>console.warn('Scheduled release notification failed',error));
   }
   console.info('Nightjar scheduled publication sweep',{considered:due.size,published});
@@ -6342,11 +6342,30 @@ const createNotification = async (userId: string, payload: Record<string, unknow
     : accountRef(userId).collection('notifications').doc();
   const persistedPayload = { ...safePayload } as Record<string, unknown>;
   delete persistedPayload.dedupeKey;
-  await ref.set({
-    ...persistedPayload,
-    read: false,
-    createdAt: FieldValue.serverTimestamp(),
-  }, { merge: Boolean(dedupeKey) });
+  delete persistedPayload.oncePerKey;
+  // Opt-in exactly-once persistence for immutable event notifications only.
+  // Coalesced notifications (e.g. repeat Listener reactions) keep their
+  // current behaviour and are not silently suppressed.
+  const oncePerKey=dedupeKey && payload.oncePerKey===true;
+  if(oncePerKey){
+    const created=await db.runTransaction(async tx=>{
+      const existing=await tx.get(ref);
+      if(existing.exists)return false;
+      tx.create(ref,{
+        ...persistedPayload,
+        read:false,
+        createdAt:FieldValue.serverTimestamp(),
+      });
+      return true;
+    });
+    if(!created)return; // Do not reset read status or re-send push.
+  }else{
+    await ref.set({
+      ...persistedPayload,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    }, { merge: Boolean(dedupeKey) });
+  }
 
   await deliverPushNotification(userId, safePayload, displayMode, ref.id).catch((error) => {
     console.warn('Nightjar push delivery failed', {
@@ -8624,7 +8643,7 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
         ? result.marketplaceVisible ? 'Your manuscript synopsis is now listed in the Creator Script Marketplace. The full manuscript remains protected.' : 'Your manuscript is approved. Open Writer Studio to choose Marketplace visibility and add a synopsis when you want creators to discover it.'
         : note,
       scriptId,
-      dedupeKey:'writer-script-review:'+scriptId+':'+reviewEventRef.id,
+      dedupeKey:'writer-script-review:'+scriptId+':'+reviewEventRef.id,oncePerKey:true,
     }).catch((error)=>console.warn('Script review notification failed',error));
   }
   const saved = await ref.get();
