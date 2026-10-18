@@ -13,6 +13,32 @@ const editorReview = api.slice(api.indexOf('export const reviewEditorScript ='),
 const listing = api.slice(api.indexOf('export const listScriptMarketplace ='), api.indexOf('export const expressScriptInterest ='));
 
 assert.match(submit, /status: 'Submitted'/);
+const writerEdit = api.slice(api.indexOf('export const updateWriterScript ='), api.indexOf('export const deleteWriterScript ='));
+assert.match(writerEdit, /Number\(input\.expectedRevision\)/,
+  'manuscript updates must carry account revisions');
+assert.match(writerEdit, /db\.runTransaction\(async \(transaction\) =>/,
+  'manuscript content writes must be atomic');
+assert.match(writerEdit, /currentRevision !== expectedRevision/,
+  'stale edits from a second device must be rejected');
+assert.match(writerEdit, /manuscript_revision_conflict/,
+  'conflict errors must be explicit and never contain protected manuscript text');
+assert.match(writerEdit, /contentRevision: currentRevision \+ 1/,
+  'successful text writes increment the account revision');
+assert.match(api, /contentRevision: Math\.max\(0, Number\(data\.contentRevision \?\? 0\)\)/,
+  'writers must receive server revision');
+assert.match(submit, /db\.runTransaction\(async \(tx\) =>/,
+  'submit status and edit lock must be atomic');
+assert.match(app, /expectedRevision: Number\(writerSelected\.contentRevision \?\? 0\)/,
+  'Writer Studio must save against its last acknowledged revision');
+assert.match(app, /writerAutoSavePaused/,
+  'offline writer drafts must pause repeated automatic writes');
+assert.match(app, /modifiedDuringSave/,
+  'in-flight saves must not clobber newer keystrokes');
+assert.match(app, /Review latest account revision/,
+  'writers must have an explicit conflict resolution control');
+assert.match(app, /beforeunload/,
+  'an unsynced manuscript warns when leaving the tab');
+
 assert.match(submit, /rights\.ownershipAttested !== true \|\| rights\.contributorPermissionsConfirmed !== true/);
 assert.match(api, /where\('status', 'in', \['Submitted','Under review'\]\)/, 'Submitted and assigned scripts count toward admin actions');
 assert.match(api, /count:scriptQueue\.docs\.length, label:'manuscript awaiting admin review'/);
