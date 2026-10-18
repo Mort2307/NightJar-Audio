@@ -36,6 +36,7 @@ This checklist complements [release acceptance](nightjar-release-acceptance.md) 
 | S1 | Account isolation and permissions | Listener cannot access Writer/Editor/Artist private documents, moderation, callable writes, protected audio or admin logs | NOT RUN |
 | S2 | Takedown/access revocation | Moderator removes/suspends content or account; stale clients and signed media URLs cannot restore unauthorised access | NOT RUN |
 | S3 | Release and cost telemetry | Confirm no unintended new paid API, unbounded document scan, duplicate push fan-out or unexpected scheduled job | NOT RUN |
+| N1 | Notification dedupe, read state and retries | Simulate repeated identical reviewer events against same approved account while notifications are opened/read; exactly one inbox item is persisted, Read status stays unchanged, and a duplicate event does not trigger another FCM push; an initial FCM failure does not erase the inbox entry | NOT RUN |
 | M6 | Concurrent Editor showcase moderation | Use two authorized Admin accounts to approve/request changes on the same pending showcase simultaneously; exactly one decision commits with its reason and owner notification. Confirm second action is rejected as stale | NOT RUN |
 | S6 | Backend Admin queue pagination | With more than 60 private release records and more than 30 pending moderation submissions, load further batches and confirm every owned recording remains available, counts are honest, no duplicates, and non-Admin calls are rejected | NOT RUN |
 | S5 | Admin moderation pages on mobile | With 20+ test audio uploads and 15+ test manuscripts, page through both queues at 200% text on phone and desktop; confirm bounded visible rows, disabled page boundaries and cleared selection/preview on page switch | NOT RUN |
@@ -52,3 +53,6 @@ This checklist complements [release acceptance](nightjar-release-acceptance.md) 
 
 ### Media retention after replacement — 18 October 2026
 The finalizers no longer delete displaced private audio during a possibly ambiguous concurrent update. Orphan reporting and safe, verified later cleanup remain separate acceptance work; do not claim partial transfer resume or storage reclamation.
+
+### Notification delivery scope — 18 October 2026
+Critical moderation and release-submission callables use creation-only notification dedupe after targeted backend deployment. Firebase in-app persistence remains authoritative; push delivery is best effort, not a guarantee of handset display. Other callables and retryable FCM failures remain subject to separate observability and acceptance; no paid fan-out queue introduced.
