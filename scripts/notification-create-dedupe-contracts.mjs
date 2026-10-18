@@ -12,6 +12,13 @@ assert.match(body,/if \(prior\.exists\) return false/,'Duplicate must not create
 assert.match(body,/tx\.create\(ref, fresh\)/,'First event is create-only');
 assert.match(body,/if \(!newlyCreated\) return/,'Duplicate must skip push and preserve read status');
 assert.match(body,/read: false/,'First new notification is unread');
-assert.doesNotMatch(body,/merge: Boolean\(dedupeKey\)/,'Never rewrite an existing notification');
+assert.match(body,/const oncePerKey=Boolean\(dedupeKey\) && payload\.oncePerKey===true/,'Immutable notifications opt in');
+assert.match(body,/await ref\.set\(fresh,\{merge:Boolean\(dedupeKey\)\}\)/,'Repeatable events retain coalesced notification behaviour');
+assert.match(body,/delete persistedPayload\.oncePerKey/,'Do not persist internal dedupe policy');
+assert.match(backend,/dedupeKey:'writer-script-review:'\+scriptId\+':'\+reviewEventRef\.id,oncePerKey:true/);
+assert.match(backend,/dedupeKey:'scheduled-live-'\+doc\.id,oncePerKey:true/);
+assert.doesNotMatch(backend,/dedupeKey:'release-reaction:'[^\n]*oncePerKey:true/,'Repeated reactions must still notify');
+assert.doesNotMatch(backend,/dedupeKey:'new-signin-device:'[^\n]*oncePerKey:true/,'Subsequent sign-in security notifications must remain available');
+assert.doesNotMatch(backend,/dedupeKey: 'release-submitted-'[^\n]*oncePerKey:true/,'Resubmissions after changes must not be permanently suppressed');
 assert.ok(body.indexOf('if (!newlyCreated) return') < body.indexOf('await deliverPushNotification('),'Push must occur only after successful unique insert');
-console.log('Idempotent notification save, read-state preservation and push dedupe validated.');
+console.log('Opt-in immutable notification dedupe and repeatable event behaviour validated.');

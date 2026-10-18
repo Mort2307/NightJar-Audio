@@ -107,8 +107,8 @@ jobs:
 
       # Keep the moderation decision and its reason atomic before any
       # updated Administration UI/release reaches Hosting.
-      # Critical review notification insertions must be idempotent before
-      # releasing workflow UI. Avoid duplicate pushes and unread resets.
+      # Only immutable review and scheduled-publication events opt in to
+      # create-once dedupe; repeated account and Listener events remain live.
       - name: Deploy moderation notification dedupe before Hosting
         if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-notification-dedupe-release]') }}
         shell: bash
@@ -120,7 +120,7 @@ jobs:
           START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
             -f ref=main -f 'inputs[scope]=functions:selected' \
-            -f 'inputs[function_names]=moderateRelease,moderateEditorPortfolioItem,adminReviewWriterScript,moderateImageAsset,submitReleaseForModeration' \
+            -f 'inputs[function_names]=moderateRelease,moderateEditorPortfolioItem,adminReviewWriterScript,moderateImageAsset,submitReleaseForModeration,publishScheduledReleases' \
             -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
           RUN_ID=""
           for attempt in $(seq 1 48); do
