@@ -13,3 +13,13 @@
 .manuscript-admin-reader-text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.8;font-size:clamp(.93rem,1.3vw,1.08rem);max-width:78ch;margin:0 auto;-webkit-user-select:none;user-select:none}
 .manuscript-admin-reader-pdf{display:block;width:100%;height:100%;min-height:380px;border:0;background:#fff}
 @media(max-width:600px){.manuscript-admin-reader-overlay{padding:0}.manuscript-admin-reader{height:100dvh;border-radius:0}.manuscript-admin-reader-head>button,.manuscript-admin-reader-foot>button{width:100%;justify-content:center}.manuscript-admin-reader-pdf{min-height:66dvh}}
+
+
+.manuscript-review-pagination {
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem;
+  padding:0.75rem 0; margin-top:0.5rem;
+}
+.manuscript-review-pagination span {font-size:0.875rem;text-align:center;}
+@media(max-width:640px) {
+  .manuscript-review-pagination {justify-content:center;}
+}
