@@ -8430,6 +8430,9 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
     throw new HttpsError('invalid-argument', 'Explain the requested changes or rejection to the Writer.');
   }
   const ref = scriptRef(scriptId);
+  // The review status AND the Writer-visible reason must either commit
+  // together or not at all. No queued fan-out or scheduled billing needed.
+  const reviewEventRef = ref.collection('reviewThread').doc();
   const result = await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const data = snapshot.data();
@@ -8454,16 +8457,17 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
       reviewedAt:FieldValue.serverTimestamp(),
       updatedAt:FieldValue.serverTimestamp(),
     }, {merge:true});
+    transaction.create(reviewEventRef, {
+      kind:'decision', visibility:'writer', authorUserId:admin.uid,
+      authorLabel:'NightJar Team',
+      body: decision === 'approved' ? (note || 'NightJar approved the submitted manuscript.')
+        : note || (decision === 'changes' ? 'NightJar requested changes.' : 'NightJar rejected this manuscript.'),
+      decision,createdAt:FieldValue.serverTimestamp(),
+    });
     return {writerUserId:String(data.writerUserId ?? ''),title:cleanText(data.title,180),nextStatus,marketplaceVisible};
   });
-  // Review decisions become durable, writer-visible events in the same thread
-  // as clarification messages; the decision is never lost in a free-text field.
-  await ref.collection('reviewThread').add({
-    kind:'decision', visibility:'writer', authorUserId:admin.uid, authorLabel:'NightJar Team',
-    body: decision === 'approved' ? (note || 'NightJar approved the submitted manuscript.')
-      : note || (decision === 'changes' ? 'NightJar requested changes.' : 'NightJar rejected this manuscript.'),
-    decision,createdAt:FieldValue.serverTimestamp(),
-  }).catch(error=>console.warn('Manuscript review timeline entry failed',error));
+  // The protected review-thread decision was already written atomically with
+  // the script. A notification is supplemental, never its source of truth.
   if (result.writerUserId) {
     await createNotification(result.writerUserId, {
       type:'editorial', subtype:'script_review',
@@ -8472,6 +8476,7 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
         ? result.marketplaceVisible ? 'Your manuscript synopsis is now listed in the Creator Script Marketplace. The full manuscript remains protected.' : 'Your manuscript is approved. Open Writer Studio to choose Marketplace visibility and add a synopsis when you want creators to discover it.'
         : note,
       scriptId,
+      dedupeKey:'writer-script-review:'+scriptId+':'+reviewEventRef.id,
     }).catch((error)=>console.warn('Script review notification failed',error));
   }
   const saved = await ref.get();
