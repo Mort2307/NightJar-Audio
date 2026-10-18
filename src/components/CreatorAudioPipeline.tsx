@@ -550,7 +550,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       setDraft({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
       if (next) { setSelectedRelease(next); setWorkflowStep('prepare'); setSubmissionConfirmed(false); }
       await onRefresh();
-      notify('Release draft created.');
+      notify(data.reused ? 'Recovered the existing private release draft; no duplicate was created.' : 'Release draft created.');
     } catch { notify('Release draft could not be created.'); }
   };
 
