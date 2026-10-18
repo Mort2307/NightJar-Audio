@@ -53,8 +53,8 @@ const transcriptCall = httpsCallable<{ releaseId: string }, {
   accessibilityReviewed: boolean;
   accessReason: 'admin' | 'credited_work' | 'subscription';
 }>(functions, 'getReleaseTranscript');
-const moderationQueueCall = httpsCallable<void, { releases: any[] }>(functions, 'releaseModerationQueue');
-const audioLibraryCall = httpsCallable<void, { releases: any[]; totalInspected: number; truncated: boolean }>(functions, 'adminReleaseAudioLibrary');
+const moderationQueueCall = httpsCallable<{cursor?:string}, { releases: any[]; nextCursor:string|null }>(functions, 'releaseModerationQueue');
+const audioLibraryCall = httpsCallable<{cursor?:string}, { releases: any[]; totalInspected: number; nextCursor:string|null; truncated: boolean }>(functions, 'adminReleaseAudioLibrary');
 const adminPreviewCall = httpsCallable<{ releaseId: string }, { releaseId: string; url: string; expiresInSeconds: number }>(functions, 'getAdminReleasePreviewUrl');
 const moderateReleaseCall = httpsCallable<{ releaseId: string; decision: 'approved' | 'changes' | 'rejected'; note?: string; nightjarOriginal?: boolean; originalCommissionConfirmed?: boolean }, { release: any }>(functions, 'moderateRelease');
 const recommendationsCall = httpsCallable<{ intent?: string }, { recommendations: any[]; model: any }>(functions, 'recommendations');
@@ -197,12 +197,12 @@ export const nightjarCatalogue = {
     return (await saveSyncedTranscriptCall({ releaseId, transcript, language, accuracyConfirmed })).data;
   },
 
-  async moderationQueue() {
-    return repairMojibakeDisplayData((await moderationQueueCall()).data);
+  async moderationQueue(cursor?:string) {
+    return repairMojibakeDisplayData((await moderationQueueCall(cursor?{cursor}:{})).data);
   },
 
-  async adminAudioLibrary() {
-    return repairMojibakeDisplayData((await audioLibraryCall()).data);
+  async adminAudioLibrary(cursor?:string) {
+    return repairMojibakeDisplayData((await audioLibraryCall(cursor?{cursor}:{})).data);
   },
 
   async adminPreview(releaseId: string) {
