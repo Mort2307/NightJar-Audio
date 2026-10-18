@@ -29,7 +29,7 @@ const createCall = httpsCallable<{
   humanCreatedAttestation: true;
   rightsConfirmed: true;
   contributorPermissionsConfirmed: true;
-}, { item: ArtistPortfolioItem }>(functions, 'createArtistPortfolioItem');
+}, { item: ArtistPortfolioItem; reused?: boolean }>(functions, 'createArtistPortfolioItem');
 
 const listMineCall = httpsCallable<void, { items: ArtistPortfolioItem[] }>(functions, 'myArtistPortfolio');
 const removeCall = httpsCallable<{ itemId: string }, { removed: boolean; itemId: string }>(functions, 'removeArtistPortfolioItem');
