@@ -7,7 +7,7 @@ export type CreatorMetadataFields = {
   contributors?: {userId?: string | null; name:string; role:string}[];
   contentRating?: 'sfw' | 'suggestive' | 'adult' | 'explicit'; seriesTitle?: string | null; episodeNumber?: number | null;
   productionNote?: string | null;
-  releaseDistribution?: string;
+  releaseDistribution?: 'standard' | 'nightjar_first';
   scheduledAt?: string | null; scheduledLocal?: string | null; scheduledTimeZone?: string | null;
   transcriptText?: string; transcriptLanguage?: string;
 };
@@ -25,7 +25,7 @@ export function creatorEditableMetadata(source: CreatorMetadataFields) {
     seriesTitle: source.seriesTitle ?? null,
     episodeNumber: source.episodeNumber ?? null,
     productionNote: source.productionNote ?? null,
-    releaseDistribution: source.releaseDistribution ?? 'standard',
+    releaseDistribution: source.releaseDistribution ?? ('standard' as const),
     scheduledAt: source.scheduledAt ?? null,
     scheduledLocal: source.scheduledLocal ?? null,
     scheduledTimeZone: source.scheduledTimeZone ?? null,
