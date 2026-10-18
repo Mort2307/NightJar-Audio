@@ -11,8 +11,8 @@ This checklist complements [release acceptance](nightjar-release-acceptance.md) 
 | U3 | Creator app reload after transfer | Return to same signed-in UID on same browser, verify pending reference is still available, and server rejects references from other accounts | NOT RUN |
 | U4 | Creator failed bytes transfer | Break network **before** Storage confirms completion; no fake recovery or confirmed attachment appears; user can select original file again | NOT RUN |
 | U5 | Creator invalid/too-large file | Unsupported MIME, 0-byte and >25 MiB audio must be rejected by client and backend/storage rules | NOT RUN |
-| U6 | Editor audio finalize | Approved Editor uploads authorised before/after slot; repeat exact finalize request and lose response; attached private audio remains intact | NOT RUN |
-| U7 | Artwork submission | Writer, VA and Artist submit owned artwork; no duplicate public listing or moderation bypass after retry | NOT RUN |
+| U6 | Editor audio finalize | Approved Editor uploads authorised before/after slot; interrupt after private item creation, reopen the draft, use Resume upload, and ensure confirmed slots are not reuploaded or duplicated; repeat finalize after lost response | NOT RUN |
+| U7 | Artwork submission | Writer, VA and Artist submit owned artwork; for Artist interrupt after private record creation, reopen the draft and use Resume image upload with the original file reselected; an already pending image must not create another moderation request or public listing | NOT RUN |
 | A1 | Writer saved manuscripts, iPad | Portrait and landscape: grid shows private titles, statuses and versions; tap title opens full editor, back returns to library | NOT RUN |
 | A2 | Writer mobile/desktop access | Android/iPhone and desktop at 200% text: large tap targets, focus, grid search, status clarity and retained manuscript selection | NOT RUN |
 | A3 | Writer cloud autosave | Edit private draft, wait for **Saved** acknowledgement, reopen on another signed-in device and confirm text/version | NOT RUN |
