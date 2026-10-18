@@ -197,7 +197,14 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           const data = await nightjarCatalogue.dashboard();
           remote = (data.releases as Release[] | undefined)?.find((entry) => entry.id === requested.id);
         } catch { /* preserve the local editor; nothing is marked saved */ }
-        if (remote && creatorMetadataSignature(remote) === savedSignature) {
+        if (remote && Number(remote.metadataRevision ?? 0) > known.revision &&
+            creatorMetadataSignature(remote) === savedSignature &&
+            (!explicit || (
+              remote.rightsConfirmed === (requested.rightsConfirmed === true) &&
+              remote.contributorPermissionsConfirmed === (requested.contributorPermissionsConfirmed === true) &&
+              remote.transcriptAccessibilityReviewed === (requested.transcriptAccessibilityReviewed === true) &&
+              remote.releaseDistributionConfirmed === (requested.releaseDistributionConfirmed === true)
+            ))) {
           acceptSavedVersion(remote);
           setSelectedRelease(previous=>previous?.id===remote!.id
             ? {...previous,metadataRevision:remote!.metadataRevision} : previous);
@@ -303,6 +310,15 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         return;
       }
     }
+    const server = releases.find(item => item.id === current?.id);
+    if (current && server && current.id !== release.id && (
+      current.rightsConfirmed !== server.rightsConfirmed ||
+      current.contributorPermissionsConfirmed !== server.contributorPermissionsConfirmed ||
+      current.transcriptAccessibilityReviewed !== server.transcriptAccessibilityReviewed ||
+      current.releaseDistributionConfirmed !== server.releaseDistributionConfirmed
+    )) {
+      if (!window.confirm('Rights, distribution and transcript accuracy declarations are not autosaved. Leaving now may discard unsaved confirmations. Select Cancel to use Save changes first.')) return;
+    }
     acceptSavedVersion(release);
     setMetadataConflict(null);
     setMetadataStatus('saved');
@@ -402,6 +418,21 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const setRelease = (patch: Partial<Release>) => setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
   const metadataSignature = current ? creatorMetadataSignature(current) : '';
+  const baselineForCurrent = current ? metadataBaseline.current.get(current.id) : null;
+  const unsyncedNow = Boolean(current?.status === 'draft' && (
+    metadataStatus === 'offline' || metadataStatus === 'conflict' ||
+    metadataStatus === 'saving' || metadataStatus === 'unsaved' ||
+    (baselineForCurrent && metadataSignature !== baselineForCurrent.signature)
+  ));
+  useEffect(() => {
+    if (!unsyncedNow) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload',warn);
+    return () => window.removeEventListener('beforeunload',warn);
+  }, [unsyncedNow]);
   useEffect(() => {
     if (!current || current.status !== 'draft' || simulationMode) return;
     const base = metadataBaseline.current.get(current.id);
