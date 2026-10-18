@@ -39,6 +39,24 @@ const app = fs.readFileSync('src/App.tsx','utf8');
 const styles = fs.readFileSync('src/styles/product-system.css','utf8');
 assert.match(catalogue,/uploadBytesResumable\(fileRef, file/, 'Creator uploads must stream observable Firebase Storage progress');
 assert.match(catalogue,/onProgress\?\.\('verifying', 100\)/, 'Transfer completion must not imply server verification succeeded');
+// A network timeout can happen after the backend has written its Firestore
+// attachment. Never delete that same Storage object from a failed response.
+const finalizeStart = functions.indexOf('export const finalizeReleaseAudio = onCall');
+const finalizeEnd = functions.indexOf('export const ', finalizeStart + 15);
+const finalizeHandler = functions.slice(finalizeStart, finalizeEnd);
+assert.match(finalizeHandler, /const alreadyAttached = current\.audioStoragePath === storagePath/);
+assert.match(finalizeHandler, /if \(alreadyAttached\) \{\s*return \{ release: releaseOwnerPayload\(current, releaseId\) \};/,
+  'a retry of the same attached file must not rewrite data or invalidate a timed transcript');
+assert.match(finalizeHandler, /const \[exists\] = await file\.exists\(\)/,
+  'an idempotent status must not claim success for a missing Storage object');
+assert.match(catalogue, /\['functions\/unavailable','functions\/deadline-exceeded','functions\/internal'\]\.includes\(code\)/,
+  'only transient callable failures trigger one safe re-finalization of the same upload path');
+assert.match(catalogue, /try \{ return \(await finalize\(\)\)\.data; \}/,
+  'transient response-loss recovery must use the same backend finalize callable');
+assert.doesNotMatch(catalogue, /deleteObject\(fileRef\)/,
+  'never delete a potentially attached recording due to an ambiguous callable response');
+assert.match(support, /The private file was retained/, 'finalization errors must not falsely claim deletion or attachment');
+
 assert.match(creator,/role="progressbar"/, 'Creator needs persistent transfer progress');
 assert.match(creator,/Audio saved and verified in your private release/, 'Creator must see verified private-attachment status');
 assert.match(creator,/This is NOT sent for approval yet/, 'Creator must not confuse upload with moderation submission');
