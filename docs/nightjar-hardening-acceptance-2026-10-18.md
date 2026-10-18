@@ -35,6 +35,7 @@ This checklist complements [release acceptance](nightjar-release-acceptance.md) 
 | S1 | Account isolation and permissions | Listener cannot access Writer/Editor/Artist private documents, moderation, callable writes, protected audio or admin logs | NOT RUN |
 | S2 | Takedown/access revocation | Moderator removes/suspends content or account; stale clients and signed media URLs cannot restore unauthorised access | NOT RUN |
 | S3 | Release and cost telemetry | Confirm no unintended new paid API, unbounded document scan, duplicate push fan-out or unexpected scheduled job | NOT RUN |
+| S5 | Admin moderation pages on mobile | With 20+ test audio uploads and 15+ test manuscripts, page through both queues at 200% text on phone and desktop; confirm bounded visible rows, disabled page boundaries and cleared selection/preview on page switch | NOT RUN |
 | S4 | Mobile accessibility | 200% text, screenreader, keyboard, focus after error, reduced motion, 44+ px targets and contrast presets | NOT RUN |
 
 ## Execution and sign-off
