@@ -103,6 +103,17 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
           contributorPermissionsConfirmed:true,
         });
         itemId = created.item.id;
+        if (created.reused && (created.item.pendingImageAssetId || created.item.imageUrl || created.item.status !== 'draft')) {
+          setRetryItemId(null);
+          setDraftClearSignal(value => value + 1);
+          setTitle('');setDescription('');setTags('');setCommissionType('');
+          setFile(null);setFileInputNonce(value => value + 1);
+          setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+          setFormOpen(false);
+          await load();
+          notify('Your original artwork record already exists. No duplicate image submission was created.');
+          return;
+        }
         setRetryItemId(itemId);
       }
       const dataUrl = await readFileDataUrl(file);
