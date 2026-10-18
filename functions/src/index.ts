@@ -6342,12 +6342,25 @@ const createNotification = async (userId: string, payload: Record<string, unknow
     : accountRef(userId).collection('notifications').doc();
   const persistedPayload = { ...safePayload } as Record<string, unknown>;
   delete persistedPayload.dedupeKey;
-  await ref.set({
+  const fresh = {
     ...persistedPayload,
     read: false,
     createdAt: FieldValue.serverTimestamp(),
-  }, { merge: Boolean(dedupeKey) });
+  };
+  // Retrying the same event must not reset a member's Read status or
+  // re-send a push. Competing producers must agree on a single first writer.
+  const newlyCreated = dedupeKey
+    ? await db.runTransaction(async (tx) => {
+      const prior = await tx.get(ref);
+      if (prior.exists) return false;
+      tx.create(ref, fresh);
+      return true;
+    })
+    : await ref.set(fresh).then(() => true);
+  if (!newlyCreated) return;
 
+  // Persistence is the delivery guarantee. Push is an optional best-effort
+  // alert; transient FCM failure cannot roll back a recorded inbox item.
   await deliverPushNotification(userId, safePayload, displayMode, ref.id).catch((error) => {
     console.warn('Nightjar push delivery failed', {
       userId,
