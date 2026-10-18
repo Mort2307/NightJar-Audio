@@ -84,6 +84,10 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         if (existing.pendingImageAssetId || existing.imageUrl) {
           setRetryItemId(null);
           setDraftClearSignal(value => value + 1);
+          setTitle('');setDescription('');setTags('');setCommissionType('');
+          setFile(null);setFileInputNonce(value => value + 1);
+          setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+          setFormOpen(false);
           await load();
           notify('Artwork is already with moderation. No duplicate was submitted.');
           return;
