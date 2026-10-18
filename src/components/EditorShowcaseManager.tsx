@@ -83,6 +83,17 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
           clientPermissionNote:permissionNote.trim(),
         });
         itemId = created.item.id;
+        if (created.reused && (created.item.status === 'pending_review' || created.item.status === 'published')) {
+          setRetryItemId(null);
+          setDraftClearSignal(value => value + 1);
+          setTitle('');setDescription('');setServices('');setTechniques('');setPermissionNote('');
+          setBeforeFile(null);setAfterFile(null);setFileInputNonce(value => value + 1);
+          setRightsConfirmed(false);setPermissionsConfirmed(false);
+          await load();
+          notify('Your original showcase has already reached moderation. No duplicate was created.');
+          return;
+        }
+        existing = created.item;
         setRetryItemId(itemId);
       }
       // The server remains authoritative about which private slot is attached.

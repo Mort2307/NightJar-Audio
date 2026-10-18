@@ -1,3 +1,4 @@
+import { pendingPrivateCreateId, clearPrivateCreateId } from './client-create-idempotency';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { firebaseApp } from './firebase-auth';
 
@@ -21,6 +22,7 @@ export type ArtistPortfolioItem = {
 };
 
 const createCall = httpsCallable<{
+  clientRequestId?: string;
   title: string;
   description?: string;
   tags?: string[];
@@ -28,14 +30,17 @@ const createCall = httpsCallable<{
   humanCreatedAttestation: true;
   rightsConfirmed: true;
   contributorPermissionsConfirmed: true;
-}, { item: ArtistPortfolioItem }>(functions, 'createArtistPortfolioItem');
+}, { item: ArtistPortfolioItem; reused?: boolean }>(functions, 'createArtistPortfolioItem');
 
 const listMineCall = httpsCallable<void, { items: ArtistPortfolioItem[] }>(functions, 'myArtistPortfolio');
 const removeCall = httpsCallable<{ itemId: string }, { removed: boolean; itemId: string }>(functions, 'removeArtistPortfolioItem');
 
 export const nightjarArtists = {
   async createItem(input: { title: string; description?: string; tags?: string[]; commissionType?: string; humanCreatedAttestation: true; rightsConfirmed: true; contributorPermissionsConfirmed: true }) {
-    return (await createCall(input)).data;
+    const clientRequestId=pendingPrivateCreateId('artist-artwork');
+    const data=(await createCall({...input,clientRequestId})).data;
+    clearPrivateCreateId('artist-artwork',clientRequestId);
+    return data;
   },
   async mine() {
     return (await listMineCall()).data;
