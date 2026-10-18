@@ -59,6 +59,9 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
         if (existing.status === 'pending_review' || existing.status === 'published') {
           setRetryItemId(null);
           setDraftClearSignal(value => value + 1);
+          setTitle('');setDescription('');setServices('');setTechniques('');setPermissionNote('');
+          setBeforeFile(null);setAfterFile(null);setFileInputNonce(value => value + 1);
+          setRightsConfirmed(false);setPermissionsConfirmed(false);
           await load();
           notify('Showcase was already submitted. No duplicate has been created.');
           return;
