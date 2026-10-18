@@ -4828,14 +4828,14 @@ function App() {
 
   const persistDirectoryViews = async (views: SavedDirectoryView[]): Promise<boolean> => {
     const uid = user?.userId;
-    if (!uid || !ageVerified || directoryViewsSync !== 'ready' || directoryViewsBusyRef.current) {
-      notify('Saved views are still syncing. Wait for Nightjar to finish or retry the connection.');
-      return false;
-    }
-    if (demoMode) {
+    if (demoMode && uid) {
       setSavedDirectoryViews(views);
       try { window.localStorage.setItem('nightjar.directory.views:' + uid, JSON.stringify(views)); } catch {}
       return true;
+    }
+    if (!uid || !ageVerified || directoryViewsSync !== 'ready' || directoryViewsBusyRef.current) {
+      notify('Saved views are still syncing. Wait for Nightjar to finish or retry the connection.');
+      return false;
     }
     directoryViewsBusyRef.current = true;
     setDirectoryViewsSync('saving');
