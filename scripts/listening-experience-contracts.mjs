@@ -32,6 +32,21 @@ assert.match(backend,/voiceCallingCardReleaseId/);
 assert.match(backend,/momentMarksFor\(identity\.uid\)/);
 assert.match(backend,/privateSettings'\)\.doc\('listening'/);
 assert.match(backend,/\.limit\(60\)/);
+// The quota is shared between devices and both mutations must be atomic.
+assert.match(backend,/const momentMarksQuotaFor = \(uid: string\)/);
+for (const name of ['saveMomentMark','deleteMomentMark']) {
+  const start = backend.indexOf('export const ' + name + ' = onCall');
+  const end = backend.indexOf('export const ', start + 13);
+  const handler = backend.slice(start, end < 0 ? undefined : end);
+  assert.match(handler,/return db\.runTransaction\(async \(tx\) => \{/,
+    name + ' must use a Firestore transaction');
+  assert.match(handler,/await tx\.get\(quotaRef\)/,
+    name + ' must read the shared account quota before writing');
+  assert.match(handler,/tx\.set\(quotaRef, \{ count: count [+-] 1/,
+    name + ' must update the quota atomically');
+}
+assert.doesNotMatch(backend.slice(backend.indexOf('export const saveMomentMark = onCall'), backend.indexOf('export const deleteMomentMark = onCall')),/await collection\.limit\(60\)\.get\(\)/,
+  'query-only quota checks can race between devices');
 assert.match(backend,/return \{ entries: entries\.slice\(0,200\) \}/);
 assert.match(discovery,/DEFAULT_LISTENING_BOUNDARIES/);
 assert.match(discovery,/hiddenByBoundaries/);
