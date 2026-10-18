@@ -5647,87 +5647,101 @@ export const adminVerifyAudioUpload = onCall({ region: REGION }, async (request)
   }
 });
 
+// Remember recently superseded Storage paths so a late response/retry from a
+// previous upload cannot silently restore a removed or replaced recording.
+const retiredReleaseAudioPaths=(data:Record<string,unknown>, previous:string)=>{
+  const retired=Array.isArray(data.retiredAudioPaths)
+    ? data.retiredAudioPaths.filter(value=>typeof value==='string' && value.startsWith('release-audio/')).slice(-31) as string[]
+    : [];
+  return previous?[...retired.filter(item=>item!==previous),previous].slice(-32):retired;
+};
+
 export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const storagePath = cleanText(input.storagePath, 500);
   if (!releaseId || !storagePath) throw new HttpsError('invalid-argument', 'Release audio is incomplete.');
-
   const expectedPrefix = `release-audio/${identity.uid}/${releaseId}/`;
   if (!storagePath.startsWith(expectedPrefix)) throw new HttpsError('permission-denied', 'Audio upload path is invalid.');
-
-  const ref = releaseRef(releaseId);
-  const snapshot = await ref.get();
-  const current = snapshot.data();
-  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  // An ambiguous callable timeout can occur AFTER the first attempt attached
-  // this same private recording. Repeating that exact path must be harmless,
-  // without clearing timed transcripts or deleting other uploaded audio.
-  const alreadyAttached = current.audioStoragePath === storagePath
-    && Number(current.audioByteSize ?? 0) > 0
-    && Boolean(current.audioContentType);
-  if (!alreadyAttached && ['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) {
-    throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
-  }
 
   const file = getStorage().bucket().file(storagePath);
   const [exists] = await file.exists();
   if (!exists) throw new HttpsError('not-found', 'Uploaded audio was not found.');
-  if (alreadyAttached) {
-    return { release: releaseOwnerPayload(current, releaseId) };
-  }
   const [metadata] = await file.getMetadata();
   const size = Number(metadata.size ?? 0);
   const contentType = String(metadata.contentType ?? '');
   const allowed = ['audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/x-m4a','audio/ogg','audio/webm'];
   if (!allowed.includes(contentType) || !size || size > 25 * 1024 * 1024) {
-    try { await file.delete({ ignoreNotFound: true }); } catch { /* validation failure remains authoritative */ }
+    // Never delete from a non-transactional read; a second device may be
+    // committing this path. An orphan must be audited before safe disposal.
     throw new HttpsError('invalid-argument', 'Uploaded audio is not a supported Nightjar audio file.');
   }
 
-  const oldPath = cleanText(current.audioStoragePath, 500);
-  await ref.set({
-    audioStoragePath: storagePath,
-    audioContentType: contentType,
-    audioByteSize: size,
-    // Replacing a recording invalidates old timed captions until re-reviewed.
-    transcriptText: cleanReleaseTranscript(current.transcriptText).replace(/^\[(?:\d{1,2}:)?\d{1,3}:\d{2}\]\s*/gm, ''),
-    transcriptAccessibilityReviewed: false,
-    transcriptSyncSource: null,
-    durationMinutes: typeof input.durationMinutes === 'number' ? Math.max(0, Math.min(1440, input.durationMinutes)) : current.durationMinutes ?? 0,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  const ref = releaseRef(releaseId);
+  const result = await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const current = snap.data();
+    if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
+    const attached = current.audioStoragePath === storagePath
+      && Number(current.audioByteSize ?? 0)>0 && Boolean(current.audioContentType);
+    if(attached) return {alreadyAttached:true, oldPath:''};
+    if(retiredReleaseAudioPaths(current,'').includes(storagePath)) {
+      throw new HttpsError('failed-precondition','This upload was superseded by newer audio. Reopen the private release before uploading again.');
+    }
+    if(['released','scheduled','removed','removing','pending_review'].includes(String(current.status))){
+      throw new HttpsError('failed-precondition','Submitted or removed audio cannot be replaced.');
+    }
 
-  if (oldPath && oldPath !== storagePath) {
-    try { await getStorage().bucket().file(oldPath).delete({ ignoreNotFound: true }); } catch { /* replacement is already valid */ }
+    const oldPath=cleanText(current.audioStoragePath,500);
+    tx.set(ref,{
+      audioStoragePath:storagePath,
+      audioContentType:contentType,
+      audioByteSize:size,
+      retiredAudioPaths:retiredReleaseAudioPaths(current,oldPath && oldPath!==storagePath ? oldPath : ''),
+      // Replacing audio invalidates timed captions until the Creator reviews them.
+      transcriptText:cleanReleaseTranscript(current.transcriptText).replace(/^\\[(?:\\d{1,2}:)?\\d{1,3}:\\d{2}\\]\\s*/gm,''),
+      transcriptAccessibilityReviewed:false,
+      transcriptSyncSource:null,
+      durationMinutes:typeof input.durationMinutes==='number'
+        ?Math.max(0,Math.min(1440,input.durationMinutes)):current.durationMinutes??0,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return {alreadyAttached:false, oldPath:oldPath!==storagePath?oldPath:''};
+  });
+  if(result.oldPath){
+    // Only delete paths that the same transaction permanently retired.
+    // A late retry is denied if it attempts to attach that retired object.
+    await getStorage().bucket().file(result.oldPath).delete({ignoreNotFound:true}).catch(error=>
+      console.warn('Superseded audio cleanup deferred',error instanceof Error?error.message:String(error)));
   }
-
-  const saved = await ref.get();
-  return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
+  const saved=await ref.get();
+  return {release:releaseOwnerPayload(saved.data()??{},releaseId)};
 });
 
 export const removeReleaseAudio = onCall({ region: REGION }, async (request) => {
-  const identity = await requireAccountRole(request, ['creator']);
-  const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
-  const ref = releaseRef(releaseId);
-  const snapshot = await ref.get();
-  const current = snapshot.data();
-  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
-
-  const path = cleanText(current.audioStoragePath, 500);
-  if (path) {
-    try { await getStorage().bucket().file(path).delete({ ignoreNotFound: true }); } catch { /* record is still cleared */ }
-  }
-  await ref.set({
-    audioStoragePath: null,
-    audioContentType: null,
-    audioByteSize: null,
-    durationMinutes: 0,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { removed: true };
+  const identity=await requireAccountRole(request,['creator']);
+  const releaseId=cleanText((request.data as {releaseId?:unknown}|undefined)?.releaseId,160);
+  const ref=releaseRef(releaseId);
+  const path=await db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    const current=snap.data();
+    if(!current || current.creatorUserId!==identity.uid)throw new HttpsError('not-found','Release not found.');
+    if(['released','scheduled','removed','removing','pending_review'].includes(String(current.status))){
+      throw new HttpsError('failed-precondition','Submitted or removed audio cannot be edited.');
+    }
+    const oldPath=cleanText(current.audioStoragePath,500);
+    if(!oldPath)return '';
+    tx.set(ref,{
+      audioStoragePath:null,audioContentType:null,audioByteSize:null,
+      retiredAudioPaths:retiredReleaseAudioPaths(current,oldPath),
+      durationMinutes:0,updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return oldPath;
+  });
+  if(path)await getStorage().bucket().file(path).delete({ignoreNotFound:true}).catch(error=>
+    console.warn('Removed draft audio cleanup deferred',error instanceof Error?error.message:String(error)));
+  return {removed:true};
 });
 
 export const submitReleaseForModeration = onCall({ region: REGION }, async (request) => {
