@@ -1,6 +1,7 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getStorage, ref, uploadBytes } from 'firebase/storage';
 import { firebaseApp, firebaseAuth } from './firebase-auth';
+import { pendingPrivateCreateId, clearPrivateCreateId } from './client-create-idempotency';
 import { nightjarAudioContentType, nightjarAudioFileProblem, nightjarAudioUploadFailure } from './audio-upload';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
@@ -46,7 +47,10 @@ export const nightjarEditorPortfolio = {
     contributorPermissionsConfirmed: true;
     clientPermissionNote?: string;
   }) {
-    return (await createCall(input)).data;
+    const clientRequestId=pendingPrivateCreateId('editor-showcase');
+    const data=(await createCall({...input,clientRequestId})).data;
+    clearPrivateCreateId('editor-showcase',clientRequestId);
+    return data;
   },
 
   async mine() {
