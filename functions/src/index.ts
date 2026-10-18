@@ -5444,6 +5444,7 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
 
   const ref = releaseRef(releaseId);
+  let tagsChanged = false;
   const expectedRevision = typeof input.expectedMetadataRevision === 'undefined'
     ? null : Number(input.expectedMetadataRevision);
   if (expectedRevision !== null && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) {
@@ -5457,6 +5458,8 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
       throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
     }
     const revision = Math.max(0, Math.floor(Number(current.metadataRevision ?? 0)));
+    tagsChanged = Array.isArray(input.tags) &&
+      JSON.stringify(cleanStringList(input.tags,24)) !== JSON.stringify(cleanStringList(current.tags,24));
     if (expectedRevision !== null && revision !== expectedRevision) {
       throw new HttpsError('aborted', 'Release metadata changed on another device. Review the newer version before saving.', {code:'release_metadata_conflict'});
     }
@@ -5499,7 +5502,9 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     };
     tx.set(ref, update, { merge: true });
   });
-  await syncCreatorCustomTagUsage(identity.uid);
+  // Expensive multi-collection tag census runs only when the selected tags
+  // change, never on ordinary title/description/credits autosave edits.
+  if (tagsChanged) await syncCreatorCustomTagUsage(identity.uid);
   const saved = await ref.get();
   return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
