@@ -16,6 +16,7 @@ This checklist complements [release acceptance](nightjar-release-acceptance.md) 
 | U4 | Creator failed bytes transfer | Break network **before** Storage confirms completion; no fake recovery or confirmed attachment appears; user can select original file again | NOT RUN |
 | U5 | Creator invalid/too-large file | Unsupported MIME, 0-byte and >25 MiB audio must be rejected by client and backend/storage rules | NOT RUN |
 | U6 | Editor audio finalize | Approved Editor uploads authorised before/after slot; interrupt after private item creation, reopen the draft, use Resume upload, and ensure confirmed slots are not reuploaded or duplicated; repeat finalize after lost response | NOT RUN |
+| U9 | Concurrent Creator / Editor audio finalization | On the same draft, complete two distinct private transfers concurrently from separate sessions; first accepted upload wins, later stale attach is rejected, no submitted media replaced, and no displaced private bytes deleted during ambiguous finalisation | NOT RUN |
 | U8 | Lost private record-creation response | For Creator, Artist and Editor on one approved account, drop the response after Firestore creation, retry from the same browser/device and verify exactly the original record is returned; a foreign UID may not reuse the record | NOT RUN |
 | U7 | Artwork submission | Writer, VA and Artist submit owned artwork; for Artist interrupt after private record creation, reopen the draft and use Resume image upload with the original file reselected; an already pending image must not create another moderation request or public listing | NOT RUN |
 | A1 | Writer saved manuscripts, iPad | Portrait and landscape: grid shows private titles, statuses and versions; tap title opens full editor, back returns to library | NOT RUN |
@@ -47,3 +48,6 @@ This checklist complements [release acceptance](nightjar-release-acceptance.md) 
 - Release: record Firebase Hosting and any specifically selected deployed function names; confirm live version matches main.
 - Go/no-go: any critical role/age/access, cross-device data loss, missing uploaded file, or misleading submission state is a **blocker**. Do not record a PASS until an actual device/account performed the scenario.
 - Current status: no human/device checks in this document have been performed or certified. Automated checks must also be independently reviewed before declaring all five hardening jobs complete.
+
+### 18 October safety note: displaced private media
+Finalizing replacement audio now uses a server transaction that rechecks status and owner. Older attachments are deliberately **not deleted** as a side effect of finalization. Their storage cleanup remains a separate **NOT RUN** audit/removal workflow: no automatic deletion until their unreferenced status and age are verified server-side. Incomplete transfers and orphaned bytes are not claimed recovered or cleaned.
