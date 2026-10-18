@@ -46,6 +46,36 @@ jobs:
       - name: Install and validate
         run: npm ci --no-fund && npm run validate
 
+      # Keep the moderation decision and its reason atomic before any
+      # updated Administration UI/release reaches Hosting.
+      - name: Deploy atomic Editor moderation before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-editor-review-atomic-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/editor-moderation-atomic-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=moderateEditorPortfolioItem' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          RUN_ID=""
+          for attempt in $(seq 1 48); do
+            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "$START_TIME" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::error::Editor moderation backend deployment missing. Hosting blocked."
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Atomic Editor moderation backend verified before Hosting."
+
       # A lost create response may follow a successful Firestore commit.
       # Ship owner-verified idempotent creates before the new client receipts.
       - name: Deploy private create idempotency before Hosting
