@@ -5,7 +5,7 @@ export type CreatorMetadataFields = {
   title?: string; description?: string; category?: string; genre?: string; mood?: string;
   tags?: string[]; tropes?: string[];
   contributors?: {userId?: string | null; name:string; role:string}[];
-  contentRating?: string; seriesTitle?: string | null; episodeNumber?: number | null;
+  contentRating?: 'sfw' | 'suggestive' | 'adult' | 'explicit'; seriesTitle?: string | null; episodeNumber?: number | null;
   productionNote?: string | null;
   releaseDistribution?: string;
   scheduledAt?: string | null; scheduledLocal?: string | null; scheduledTimeZone?: string | null;
@@ -21,7 +21,7 @@ export function creatorEditableMetadata(source: CreatorMetadataFields) {
     tags: source.tags ?? [],
     tropes: source.tropes ?? [],
     contributors: source.contributors ?? [],
-    contentRating: source.contentRating ?? 'adult',
+    contentRating: source.contentRating ?? ('adult' as const),
     seriesTitle: source.seriesTitle ?? null,
     episodeNumber: source.episodeNumber ?? null,
     productionNote: source.productionNote ?? null,
