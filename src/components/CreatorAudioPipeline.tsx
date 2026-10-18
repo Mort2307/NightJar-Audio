@@ -93,6 +93,8 @@ const readAudioDurationMinutes = (file: File) => new Promise<number | null>((res
 
 export default function CreatorAudioPipeline({ releases, accountStatus, canPublish, onRefresh, notify, simulationMode = false, onSimulationChange, focusReleaseId, onSubmitted, onDeleted }: Props) {
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+  const createInFlight = useRef(false);
   const [workflowStep, setWorkflowStep] = useState<'prepare' | 'review'>('prepare');
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
   const [audioBusy, setAudioBusy] = useState(false);
@@ -512,8 +514,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   }, [simulationMode, current?.id, current?.pendingArtworkAssetId, current?.pendingArtworkStatus]);
 
   const createDraft = async () => {
+    if (createInFlight.current) return;
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator release tools unlock after your professional account is approved.');
     if (!draft.title.trim()) return notify('Give the release a title first.');
+    createInFlight.current = true;
+    setCreatingDraft(true);
     try {
       if (simulationMode) {
         setWorkflowStep('prepare');
@@ -551,7 +556,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       if (next) { setSelectedRelease(next); setWorkflowStep('prepare'); setSubmissionConfirmed(false); }
       await onRefresh();
       notify(data.reused ? 'Recovered the existing private release draft; no duplicate was created.' : 'Release draft created.');
-    } catch { notify('Release draft could not be created.'); }
+    } catch { notify('Release draft could not be confirmed. Reopen your private drafts and retry the same operation if needed.'); }
+    finally { createInFlight.current=false;setCreatingDraft(false); }
   };
 
   const uploadAsset = async (file: File, kind: 'audio' | 'artwork') => {
@@ -771,7 +777,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
-          <button className="primary-button" disabled={!canPublish || accountStatus === 'pending_review'} onClick={() => void createDraft()}><UploadCloud size={14} /> {accountStatus === 'pending_review' ? 'Approval required' : 'Create & upload'}</button>
+          <button className="primary-button" disabled={creatingDraft || !canPublish || accountStatus === 'pending_review'} onClick={() => void createDraft()}><UploadCloud size={14} /> {creatingDraft ? 'Creating private draft…' : accountStatus === 'pending_review' ? 'Approval required' : 'Create & upload'}</button>
         </div>
       </aside>
 
