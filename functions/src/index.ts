@@ -987,14 +987,20 @@ const PROFILE_DRAFT_ROLE_FIELDS = new Set([
   'editorTurnaround','editorExperienceYears','editorSkillLevels',
   'artistMediums','artistDeliveryFormats','artistTurnaround','artistSoftware','listenerCommunityStyle',
 ]);
+// Studio metadata drafts are private account-owned working copies, not submissions.
+// Never retain selected File blobs or legal attestations across devices.
+const STUDIO_DRAFT_FIELDS:Record<string,Set<string>>={
+  'form-editor-showcase':new Set(['title','description','services','techniques','permissionNote']),
+  'form-artist-portfolio':new Set(['title','description','tags','commissionType']),
+};
 const profileDraftScope = (raw:unknown) => {
   const scope=cleanText(raw,40);
-  if(scope==='onboarding'||/^profile-(listener|creator|writer|editor|artist|admin)$/.test(scope))return scope;
+  if(scope==='onboarding'||/^profile-(listener|creator|writer|editor|artist|admin)$/.test(scope)||Object.prototype.hasOwnProperty.call(STUDIO_DRAFT_FIELDS,scope))return scope;
   throw new HttpsError('invalid-argument','Unknown Nightjar profile draft.');
 };
 const scopedProfileDraftRef=(uid:string,scope:string)=>profileRef(uid).collection('workingDrafts').doc(scope);
 const assertProfileDraftAccess=async(uid:string,scope:string)=>{
-  const role=scope.startsWith('profile-')?scope.slice(8):'listener';
+  const role=scope.startsWith('profile-')?scope.slice(8):scope==='form-editor-showcase'?'editor':scope==='form-artist-portfolio'?'artist':'listener';
   if(role==='listener'||scope==='onboarding')return;
   const account=await accountRef(uid).get();
   if(role==='admin'){
@@ -1008,7 +1014,7 @@ const assertProfileDraftAccess=async(uid:string,scope:string)=>{
 const profileDraftData=(raw:unknown,scope:string)=>{
   if(!raw || typeof raw!=='object' || Array.isArray(raw))throw new HttpsError('invalid-argument','A profile draft object is required.');
   const result:Record<string,unknown>={};
-  const validFields=scope==='onboarding'?PROFILE_DRAFT_SHARED_FIELDS:new Set([...PROFILE_DRAFT_SHARED_FIELDS,...PROFILE_DRAFT_ROLE_FIELDS]);
+  const validFields=STUDIO_DRAFT_FIELDS[scope]??(scope==='onboarding'?PROFILE_DRAFT_SHARED_FIELDS:new Set([...PROFILE_DRAFT_SHARED_FIELDS,...PROFILE_DRAFT_ROLE_FIELDS]));
   for(const [key,value] of Object.entries(raw as Record<string,unknown>)){
     if(key==='stepIndex'&&scope==='onboarding'){
       result.stepIndex=Math.max(0,Math.min(2,Math.floor(Number(value)||0)));
@@ -1016,7 +1022,7 @@ const profileDraftData=(raw:unknown,scope:string)=>{
     }
     if(!validFields.has(key))continue;
     if(value===null||typeof value==='boolean'||typeof value==='string'||typeof value==='number'){
-      if(typeof value==='string' && value.length>3000)throw new HttpsError('invalid-argument','Profile draft field is too long.');
+      if(typeof value==='string' && value.length>(scope.startsWith('form-')?1500:3000))throw new HttpsError('invalid-argument','Working draft field is too long.');
       result[key]=value;
     }else if(Array.isArray(value)){
       if(value.length>40 || value.some(item=>typeof item!=='string'||item.length>180))throw new HttpsError('invalid-argument','Profile draft selection is too large.');
@@ -1042,6 +1048,7 @@ const profileDraftSnapshot=(data:Record<string,any>|undefined)=>{
 export const getMyProfileWorkingDraft=onCall({region:REGION},async(request)=>{
   const identity=await requireActiveIdentity(request);
   const scope=profileDraftScope((request.data as Record<string,unknown>|undefined)?.scope);
+  if(scope.startsWith('form-'))await requireAgeVerified(identity.uid);
   await assertProfileDraftAccess(identity.uid,scope);
   const snap=await scopedProfileDraftRef(identity.uid,scope).get();
   return {scope,...profileDraftSnapshot(snap.data())};
@@ -1050,6 +1057,7 @@ export const saveMyProfileWorkingDraft=onCall({region:REGION},async(request)=>{
   const identity=await requireActiveIdentity(request);
   const input=(request.data??{}) as Record<string,unknown>;
   const scope=profileDraftScope(input.scope);
+  if(scope.startsWith('form-'))await requireAgeVerified(identity.uid);
   await assertProfileDraftAccess(identity.uid,scope);
   const expectedRevision=Number(input.expectedRevision);
   if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)
@@ -1072,6 +1080,7 @@ export const clearMyProfileWorkingDraft=onCall({region:REGION},async(request)=>{
   const identity=await requireActiveIdentity(request);
   const input=(request.data??{}) as Record<string,unknown>;
   const scope=profileDraftScope(input.scope);
+  if(scope.startsWith('form-'))await requireAgeVerified(identity.uid);
   await assertProfileDraftAccess(identity.uid,scope);
   const expectedRevision=Number(input.expectedRevision);
   if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)
