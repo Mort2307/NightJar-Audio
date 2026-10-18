@@ -4670,7 +4670,7 @@ export const publishScheduledReleases = onSchedule({
     await createNotification(released.creatorUserId,{
       type:'content',subtype:'release',title:'Your scheduled recording is live',
       message:'“'+released.title+'” has reached its chosen publication time and is now published.',
-      releaseId:doc.id,dedupeKey:'scheduled-live-'+doc.id,
+      releaseId:doc.id,dedupeKey:'scheduled-live-'+doc.id,oncePerKey:true,
     }).catch((error)=>console.warn('Scheduled release notification failed',error));
   }
   console.info('Nightjar scheduled publication sweep',{considered:due.size,published});
@@ -6342,6 +6342,8 @@ const createNotification = async (userId: string, payload: Record<string, unknow
     : accountRef(userId).collection('notifications').doc();
   const persistedPayload = { ...safePayload } as Record<string, unknown>;
   delete persistedPayload.dedupeKey;
+  delete persistedPayload.oncePerKey;
+  const oncePerKey=Boolean(dedupeKey) && payload.oncePerKey===true;
   const fresh = {
     ...persistedPayload,
     read: false,
@@ -6349,14 +6351,16 @@ const createNotification = async (userId: string, payload: Record<string, unknow
   };
   // Retrying the same event must not reset a member's Read status or
   // re-send a push. Competing producers must agree on a single first writer.
-  const newlyCreated = dedupeKey
+  // Only immutable event IDs are once-only. Repeated sign-ins, reactions,
+  // moderation cycles and Creator resubmissions must remain able to notify.
+  const newlyCreated = oncePerKey
     ? await db.runTransaction(async (tx) => {
       const prior = await tx.get(ref);
       if (prior.exists) return false;
       tx.create(ref, fresh);
       return true;
     })
-    : await ref.set(fresh).then(() => true);
+    : await ref.set(fresh,{merge:Boolean(dedupeKey)}).then(() => true);
   if (!newlyCreated) return;
 
   // Persistence is the delivery guarantee. Push is an optional best-effort
@@ -8637,7 +8641,7 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
         ? result.marketplaceVisible ? 'Your manuscript synopsis is now listed in the Creator Script Marketplace. The full manuscript remains protected.' : 'Your manuscript is approved. Open Writer Studio to choose Marketplace visibility and add a synopsis when you want creators to discover it.'
         : note,
       scriptId,
-      dedupeKey:'writer-script-review:'+scriptId+':'+reviewEventRef.id,
+      dedupeKey:'writer-script-review:'+scriptId+':'+reviewEventRef.id,oncePerKey:true,
     }).catch((error)=>console.warn('Script review notification failed',error));
   }
   const saved = await ref.get();
