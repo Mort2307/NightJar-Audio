@@ -5582,11 +5582,22 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
   const snapshot = await ref.get();
   const current = snapshot.data();
   if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
+  // An ambiguous callable timeout can occur AFTER the first attempt attached
+  // this same private recording. Repeating that exact path must be harmless,
+  // without clearing timed transcripts or deleting other uploaded audio.
+  const alreadyAttached = current.audioStoragePath === storagePath
+    && Number(current.audioByteSize ?? 0) > 0
+    && Boolean(current.audioContentType);
+  if (!alreadyAttached && ['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) {
+    throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be replaced.');
+  }
 
   const file = getStorage().bucket().file(storagePath);
   const [exists] = await file.exists();
   if (!exists) throw new HttpsError('not-found', 'Uploaded audio was not found.');
+  if (alreadyAttached) {
+    return { release: releaseOwnerPayload(current, releaseId) };
+  }
   const [metadata] = await file.getMetadata();
   const size = Number(metadata.size ?? 0);
   const contentType = String(metadata.contentType ?? '');
