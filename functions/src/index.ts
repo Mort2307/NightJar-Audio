@@ -3806,19 +3806,30 @@ export const finalizeEditorPortfolioAudio = onCall({ region: REGION }, async (re
     throw new HttpsError('invalid-argument', 'Use MP3, WAV, M4A, OGG or WebM showcase audio up to 20 MB.');
   }
 
-  const oldPath = cleanText(data[pathField], 600);
-  await ref.set({
-    [pathField]: storagePath,
-    [slot === 'before' ? 'beforeAudioContentType' : 'afterAudioContentType']: contentType,
-    [slot === 'before' ? 'beforeAudioByteSize' : 'afterAudioByteSize']: size,
-    status: ['changes','rejected'].includes(String(data.status)) ? 'draft' : data.status ?? 'draft',
-    moderationNote: null,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge:true });
-
-  if (oldPath && oldPath !== storagePath) {
-    await getStorage().bucket().file(oldPath).delete({ ignoreNotFound:true }).catch(() => undefined);
-  }
+  // A concurrent moderation decision or device edit cannot be overridden by
+  // a stale finalizer. Re-read owner, slot and status in one transaction.
+  await db.runTransaction(async transaction => {
+    const fresh = await transaction.get(ref);
+    const live = fresh.data();
+    if(!live || live.ownerUserId !== identity.uid) throw new HttpsError('not-found','Showcase was not found.');
+    if(live[pathField] === storagePath && Number(live[byteField] ?? 0)>0) return;
+    if(live[pathField] !== data[pathField]) {
+      throw new HttpsError('aborted','This audio slot changed on another device. Refresh before retrying.');
+    }
+    if(!['draft','changes','rejected'].includes(String(live.status ?? 'draft'))) {
+      throw new HttpsError('failed-precondition','This showcase can no longer be edited.');
+    }
+    transaction.set(ref,{
+      [pathField]:storagePath,
+      [slot === 'before' ? 'beforeAudioContentType' : 'afterAudioContentType']:contentType,
+      [byteField]:size,
+      status:['changes','rejected'].includes(String(live.status)) ? 'draft' : live.status ?? 'draft',
+      moderationNote:null,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+  });
+  // Keep displaced private bytes until audited cleanup confirms the old
+  // path is unreferenced; never delete during an ambiguous finalize.
   const saved = await ref.get();
   return { item: editorPortfolioPayload(saved.data() ?? {}, itemId) };
 });
@@ -5686,23 +5697,34 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
     throw new HttpsError('invalid-argument', 'Uploaded audio is not a supported Nightjar audio file.');
   }
 
-  const oldPath = cleanText(current.audioStoragePath, 500);
-  await ref.set({
-    audioStoragePath: storagePath,
-    audioContentType: contentType,
-    audioByteSize: size,
-    // Replacing a recording invalidates old timed captions until re-reviewed.
-    transcriptText: cleanReleaseTranscript(current.transcriptText).replace(/^\[(?:\d{1,2}:)?\d{1,3}:\d{2}\]\s*/gm, ''),
-    transcriptAccessibilityReviewed: false,
-    transcriptSyncSource: null,
-    durationMinutes: typeof input.durationMinutes === 'number' ? Math.max(0, Math.min(1440, input.durationMinutes)) : current.durationMinutes ?? 0,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  if (oldPath && oldPath !== storagePath) {
-    try { await getStorage().bucket().file(oldPath).delete({ ignoreNotFound: true }); } catch { /* replacement is already valid */ }
-  }
-
+  // Status and attachment must be compared in the same transaction. A
+  // second device may not overwrite a newer file or replace submitted audio.
+  await db.runTransaction(async transaction => {
+    const live = await transaction.get(ref);
+    const latest = live.data();
+    if (!latest || latest.creatorUserId !== identity.uid) throw new HttpsError('not-found','Release not found.');
+    if (latest.audioStoragePath === storagePath && Number(latest.audioByteSize ?? 0) > 0) return;
+    if (latest.audioStoragePath !== current.audioStoragePath) {
+      throw new HttpsError('aborted','Another upload changed the attached recording. Refresh before retrying.');
+    }
+    if (['released','scheduled','removed','removing','pending_review'].includes(String(latest.status))) {
+      throw new HttpsError('failed-precondition','Submitted or removed audio cannot be replaced.');
+    }
+    transaction.set(ref,{
+      audioStoragePath:storagePath,
+      audioContentType:contentType,
+      audioByteSize:size,
+      transcriptText:cleanReleaseTranscript(latest.transcriptText).replace(/^\[(?:\d{1,2}:)?\d{1,3}:\d{2}\]\s*/gm,''),
+      transcriptAccessibilityReviewed:false,
+      transcriptSyncSource:null,
+      durationMinutes:typeof input.durationMinutes === 'number'
+        ? Math.max(0,Math.min(1440,input.durationMinutes)) : latest.durationMinutes ?? 0,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+  });
+  // Do not delete displaced private audio during finalization. A response
+  // loss or concurrent edit may race deletion. A separate audited cleanup
+  // must prove the storage object is no longer referenced.
   const saved = await ref.get();
   return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });
