@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { nightjarCatalogue } from '../platform/firebase-catalogue';
+import { nightjarCatalogue, type PrivateAudioAudit } from '../platform/firebase-catalogue';
 import TranscriptSyncTool from './TranscriptSyncTool';
 import { demoCreatorDashboard, demoTracks } from '../demo/nightjarDemo';
 import { readDemo, writeDemo } from '../demo/demoSession';
@@ -29,6 +29,9 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
   const [selected, setSelected] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [privateAudit,setPrivateAudit] = useState<PrivateAudioAudit|null>(null);
+  const [privateAuditBusy,setPrivateAuditBusy] = useState(false);
+  const [privateAuditError,setPrivateAuditError] = useState('');
   const [nightjarOriginal, setNightjarOriginal] = useState(false);
   const [originalCommissionConfirmed, setOriginalCommissionConfirmed] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -108,6 +111,8 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
     let cancelled = false;
     setPreviewUrl(null);
     setPreviewError('');
+    setPrivateAudit(null);
+    setPrivateAuditError('');
     setPreviewLoading(false);
     setNightjarOriginal(selected?.nightjarOriginal === true);
     setOriginalCommissionConfirmed(false);
@@ -189,6 +194,15 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
     } finally { setRemoving(false); }
   };
 
+  const auditSelectedAudio = async () => {
+    if(!selected?.id || demoMode || privateAuditBusy)return;
+    setPrivateAudit(null);
+    setPrivateAuditError('');
+    setPrivateAuditBusy(true);
+    try { setPrivateAudit(await nightjarCatalogue.adminAuditPrivateAudio(selected.id)); }
+    catch(error){ setPrivateAuditError(error instanceof Error?error.message:'Storage investigation is unavailable.'); }
+    finally {setPrivateAuditBusy(false);}
+  };
   const visibleAudio = auditMode === 'pending' ? queue : audioLibrary;
   const PAGE_SIZE=20;
   const lastQueuePage=Math.max(0,Math.ceil(visibleAudio.length/PAGE_SIZE)-1);
@@ -227,6 +241,26 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
           </div>}
         </aside>
         <article className="moderation-preview">{selected ? <><div className="moderation-preview-head"><div><span className="mini-label">{selected.category || 'AUDIO'}</span><h3>{selected.title}</h3><p>By {selected.creatorName || 'Nightjar creator'} · {selected.creatorHandle ? '@' + selected.creatorHandle.replace(/^@/, '') : 'handle not set'}</p></div>{previewLoading && <p role="status">Opening signed, private Nightjar audio preview…</p>}{previewError && <p role="alert" className="nj-audio-review-error">{previewError}</p>}{previewUrl && <audio key={selected.id} className="moderation-audio" controls src={previewUrl} preload="none" />}{!selected.audioAvailable && <p>No verified audio is attached to this release.</p>}</div><div className="moderation-copy"><div className={selected.status === 'pending_review' ? 'nj-audio-review-state pending' : 'nj-audio-review-state'}><strong>{selected.status === 'pending_review' ? 'Submitted · ready for moderation review' : selected.status === 'draft' ? 'Private draft · NOT submitted for moderation' : selected.status === 'released' ? 'Approved · live in Nightjar catalogue' : 'Not currently awaiting moderation'}</strong><span>Updated: {formatted(selected.updatedAt)}{selected.submittedAt ? ' · Submitted: ' + formatted(selected.submittedAt) : ''}{selected.audioByteSize ? ' · Audio ' + (selected.audioByteSize / (1024 * 1024)).toFixed(2) + ' MB' : ''}</span></div><p>{selected.description || 'No description.'}</p><div className="nj-admin-release-plan"><strong>Creator publication preference</strong><span>{formattedScheduled(selected)}</span><small>{selected.scheduledAt ? 'Approval now will schedule publication, not make the recording public.' : 'Approval will publish immediately.'}</small></div>{selected.releaseDistribution && selected.releaseDistribution !== 'standard' && <p className="nj-admin-release-distribution"><strong>Creator-declared label:</strong> First on NightJar <small>This debut label does not restrict other publishing. Nightjar Original is only for commissioned and paid-for productions.</small></p>}{selected.productionNote && <p><strong>Behind the scenes:</strong> {selected.productionNote}</p>}
+          {!demoMode && <section className="nj-release-private-audio-audit" aria-label="Private audio storage audit">
+            <h4>Private audio attachment audit</h4>
+            <p>Inspect this release's private Storage objects for unlinked or abandoned transfers. This is read-only and does not remove any file.</p>
+            <button type="button" className="secondary-button" disabled={privateAuditBusy} onClick={()=>void auditSelectedAudio()}>
+              {privateAuditBusy?'Inspecting private Storage…':'Inspect unlinked audio'}
+            </button>
+            {privateAuditError && <p role="alert">{privateAuditError}</p>}
+            {privateAudit && <div role="status" aria-live="polite">
+              <p>Inspected {privateAudit.inspected} objects. {privateAudit.items.filter(item=>item.reviewState==='aged_unattached').length} aged, unattached candidates require further review. No files have been deleted.</p>
+              {privateAudit.moreUninspected && <p>Additional files were not inspected in this bounded audit. This is not a full bucket inventory.</p>}
+              {privateAudit.items.filter(item=>!item.attached).map(item=><p key={item.storagePath} className="nj-audio-review-help">
+                <strong>{item.reviewState==='aged_unattached'?'Review candidate':item.reviewState==='recent_unattached'?'Recent unlinked upload':'Uncertain age — investigate'}:</strong>
+                {' '}{item.createdAt?new Date(item.createdAt).toLocaleString('en-GB'):'Unknown creation time'}
+                {' · '}{(item.byteSize/1048576).toFixed(2)} MiB ·
+                <code style={{overflowWrap:'anywhere'}}>{item.storagePath}</code>
+              </p>)}
+              {!privateAudit.items.some(item=>!item.attached) && <p>No unattached Storage objects appeared in this inspected batch.</p>}
+              <small>Age alone never authorises deletion. Verify ownership and outstanding Creator recovery before disposing of private media.</small>
+            </div>}
+          </section>}
           <section className="moderation-transcript-review">
             <div className="moderation-transcript-head">
               <div><span className="mini-label">ACCESSIBILITY TRANSCRIPT</span><strong><BookOpenText size={15}/> Final-release text alternative</strong></div>

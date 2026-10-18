@@ -54,6 +54,12 @@ const transcriptCall = httpsCallable<{ releaseId: string }, {
   accessReason: 'admin' | 'credited_work' | 'subscription';
 }>(functions, 'getReleaseTranscript');
 const moderationQueueCall = httpsCallable<{cursor?:string}, { releases: any[]; nextCursor:string|null }>(functions, 'releaseModerationQueue');
+export type PrivateAudioAudit = {
+  releaseId:string; inspected:number; moreUninspected:boolean; automaticDeletion:false;
+  items:Array<{storagePath:string; attached:boolean; byteSize:number; createdAt:string|null; ageDays:number|null;
+    reviewState:'attached'|'needs_manual_check'|'aged_unattached'|'recent_unattached'}>;
+};
+const privateAudioAuditCall = httpsCallable<{releaseId:string},PrivateAudioAudit>(functions,'adminAuditReleaseAudioStorage');
 const audioLibraryCall = httpsCallable<{cursor?:string}, { releases: any[]; totalInspected: number; nextCursor:string|null; truncated: boolean }>(functions, 'adminReleaseAudioLibrary');
 const adminPreviewCall = httpsCallable<{ releaseId: string }, { releaseId: string; url: string; expiresInSeconds: number }>(functions, 'getAdminReleasePreviewUrl');
 const moderateReleaseCall = httpsCallable<{ releaseId: string; decision: 'approved' | 'changes' | 'rejected'; note?: string; nightjarOriginal?: boolean; originalCommissionConfirmed?: boolean }, { release: any }>(functions, 'moderateRelease');
@@ -203,6 +209,10 @@ export const nightjarCatalogue = {
 
   async adminAudioLibrary(cursor?:string) {
     return repairMojibakeDisplayData((await audioLibraryCall(cursor?{cursor}:{})).data);
+  },
+
+  async adminAuditPrivateAudio(releaseId:string) {
+    return (await privateAudioAuditCall({releaseId})).data;
   },
 
   async adminPreview(releaseId: string) {

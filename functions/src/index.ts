@@ -6063,6 +6063,43 @@ export const adminReleaseAudioLibrary = onCall({ region: REGION }, async (reques
     truncated:false};
 });
 
+// Explicit, read-only orphan investigation. No scheduled bucket sweeps, no
+// automatic deletion and no playable or signed URLs. An unreferenced object is
+// ONLY a candidate for independent review, never proof that deletion is safe.
+export const adminAuditReleaseAudioStorage = onCall({region:REGION},async request=>{
+  requireAdminIdentity(request);
+  const releaseId=cleanText((request.data as Record<string,unknown>|undefined)?.releaseId,160);
+  if(!/^[A-Za-z0-9_-]{1,160}$/.test(releaseId))
+    throw new HttpsError('invalid-argument','Choose a valid release before auditing private audio.');
+  const snap=await releaseRef(releaseId).get();
+  const release=snap.data();
+  if(!release || !release.creatorUserId)throw new HttpsError('not-found','Release not found.');
+  const prefix=`release-audio/${cleanText(release.creatorUserId,160)}/${releaseId}/`;
+  // 31 listed items maximum, 30 inspected/returned. Never enumerate the full
+  // bucket, and do not rely on manually inspecting the first page as complete.
+  const [files,nextQuery]=await getStorage().bucket().getFiles({
+    prefix,maxResults:31,autoPaginate:false,
+  });
+  const items=files.slice(0,30).map(file=>{
+    const metadata=file.metadata??{};
+    const createdMs=Date.parse(String(metadata.timeCreated??''));
+    const ageDays=Number.isFinite(createdMs)?Math.max(0,Math.floor((Date.now()-createdMs)/86400000)):null;
+    const attached=release.audioStoragePath===file.name;
+    return {
+      storagePath:file.name,
+      attached,
+      byteSize:Math.max(0,Number(metadata.size??0)),
+      createdAt:Number.isFinite(createdMs)?new Date(createdMs).toISOString():null,
+      ageDays,
+      reviewState:attached?'attached':ageDays===null?'needs_manual_check'
+        :ageDays>=14?'aged_unattached':'recent_unattached',
+    };
+  });
+  return {releaseId,items,inspected:items.length,
+    moreUninspected:files.length>30||Boolean(nextQuery?.pageToken),
+    automaticDeletion:false};
+});
+
 export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const {cursor,size}=adminReleasePageInput((request.data as Record<string,unknown>|undefined)?.cursor,30);
