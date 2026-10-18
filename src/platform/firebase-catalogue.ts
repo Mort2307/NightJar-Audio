@@ -7,6 +7,29 @@ import { repairMojibakeDisplayData } from './text-integrity';
 const functions = getFunctions(firebaseApp, 'europe-west2');
 const storage = getStorage(firebaseApp);
 
+// Store only an account-bound Storage path after the byte transfer completes.
+// No file contents, auth tokens or playable signed URLs are persisted here.
+// Firebase alone decides whether a recovery attempt may attach the file.
+type PendingAudioFinalize = { storagePath: string; releaseId: string; uid: string; durationMinutes: number | null; startedAt: number };
+const pendingAudioKey = (uid: string, releaseId: string) => 'nightjar.audio.pending-finalize.v1:' + uid + ':' + releaseId;
+const writePendingAudio = (value: PendingAudioFinalize) => {
+  try { window.localStorage.setItem(pendingAudioKey(value.uid, value.releaseId), JSON.stringify(value)); } catch { /* storage may be disabled */ }
+};
+const readPendingAudio = (uid: string, releaseId: string): PendingAudioFinalize | null => {
+  try {
+    const raw = window.localStorage.getItem(pendingAudioKey(uid, releaseId));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as PendingAudioFinalize;
+    if (value.uid !== uid || value.releaseId !== releaseId ||
+      !value.storagePath?.startsWith(`release-audio/${uid}/${releaseId}/`) ||
+      !Number.isFinite(value.startedAt) || Date.now() - value.startedAt > 7 * 24 * 60 * 60 * 1000) return null;
+    return value;
+  } catch { return null; }
+};
+const clearPendingAudio = (uid: string, releaseId: string) => {
+  try { window.localStorage.removeItem(pendingAudioKey(uid, releaseId)); } catch {}
+};
+
 const listCatalogueCall = httpsCallable<{ q?: string; category?: string }, { catalogue: any[] }>(functions, 'listCatalogue');
 const createReleaseCall = httpsCallable<Record<string, unknown>, { release: any }>(functions, 'createRelease');
 const updateReleaseCall = httpsCallable<Record<string, unknown>, { release: any }>(functions, 'updateRelease');
@@ -75,13 +98,18 @@ export const nightjarCatalogue = {
           onProgress?.('uploading', percent);
         }, reject, () => resolve());
       });
+      // The bytes are safely in Storage, but the Firestore attachment may
+      // still fail. Save only the retry reference until the server confirms.
+      writePendingAudio({ uid:user.uid, releaseId, storagePath, durationMinutes:durationMinutes ?? null, startedAt:Date.now() });
       onProgress?.('verifying', 100);
     } catch (error) {
       throw nightjarAudioUploadFailure('STORAGE', error);
     }
     const finalize = () => finalizeAudioCall({ releaseId, storagePath, durationMinutes });
     try {
-      return (await finalize()).data;
+      const result = (await finalize()).data;
+      clearPendingAudio(user.uid, releaseId);
+      return result;
     } catch (error) {
       // A lost callable response is NOT evidence that Firestore failed to
       // attach the upload. The backend accepts a repeat of the exact same
@@ -89,13 +117,45 @@ export const nightjarCatalogue = {
       const code = typeof error === 'object' && error
         ? String((error as {code?:unknown}).code ?? '') : '';
       if (['functions/unavailable','functions/deadline-exceeded','functions/internal'].includes(code)) {
-        try { return (await finalize()).data; }
-        catch (retryError) { error = retryError; }
+        try {
+          const result = (await finalize()).data;
+          clearPendingAudio(user.uid, releaseId);
+          return result;
+        } catch (retryError) { error = retryError; }
       }
       // NEVER delete the private Storage object on an ambiguous finalization
       // result: it might now be referenced by the release and needed for
       // protected playback. Recovery and orphan cleanup must verify the
       // authoritative backend attachment before any destructive operation.
+      throw nightjarAudioUploadFailure('FINALIZE', error);
+    }
+  },
+
+  // A transferred but unconfirmed file can be finalized again after refresh
+  // without uploading the bytes twice. A browser-held path is NEVER proof of
+  // access or success; the authenticated server re-verifies the object.
+  pendingAudio(releaseId: string) {
+    const user = firebaseAuth.currentUser;
+    return user ? readPendingAudio(user.uid, releaseId) : null;
+  },
+
+  async recoverAudio(releaseId: string) {
+    const user = firebaseAuth.currentUser;
+    if (!user) throw new Error('Sign in to recover your private audio attachment.');
+    const pending = readPendingAudio(user.uid, releaseId);
+    if (!pending) throw new Error('No recoverable transferred audio found on this device.');
+    try {
+      const data = (await finalizeAudioCall({
+        releaseId, storagePath:pending.storagePath, durationMinutes:pending.durationMinutes,
+      })).data;
+      if (data.release?.audioAvailable !== true) {
+        throw new Error('Nightjar has not confirmed this recording is attached.');
+      }
+      clearPendingAudio(user.uid, releaseId);
+      return data;
+    } catch (error) {
+      // Preserve the recovery reference. Do not remove the possibly attached
+      // Storage object on a timeout, lost acknowledgement or service failure.
       throw nightjarAudioUploadFailure('FINALIZE', error);
     }
   },
