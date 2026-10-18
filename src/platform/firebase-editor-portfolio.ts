@@ -28,7 +28,7 @@ export type EditorPortfolioItem = {
   moderationNote?: string | null;
 };
 
-const createCall = httpsCallable<Record<string, unknown>, { item: EditorPortfolioItem }>(functions, 'createEditorPortfolioItem');
+const createCall = httpsCallable<Record<string, unknown>, { item: EditorPortfolioItem; reused?: boolean }>(functions, 'createEditorPortfolioItem');
 const mineCall = httpsCallable<void, { items: EditorPortfolioItem[] }>(functions, 'myEditorPortfolio');
 const finalizeCall = httpsCallable<{ itemId: string; slot: 'before' | 'after'; storagePath: string }, { item: EditorPortfolioItem }>(functions, 'finalizeEditorPortfolioAudio');
 const submitCall = httpsCallable<{ itemId: string }, { item: EditorPortfolioItem }>(functions, 'submitEditorPortfolioItem');
