@@ -22,6 +22,7 @@ export type ArtistPortfolioItem = {
 };
 
 const createCall = httpsCallable<{
+  clientRequestId?: string;
   title: string;
   description?: string;
   tags?: string[];
