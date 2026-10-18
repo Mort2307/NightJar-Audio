@@ -11,7 +11,7 @@ for(const [kind,body,owner,pathField] of [
   assert.ok(body.includes('!== identity.uid'),'Authenticated owner enforced for '+kind);
   assert.ok(body.includes('!== current.audioStoragePath')||body.includes('!== data[pathField]'),kind+' must reject stale device');
   assert.match(body,/transaction\.set\(ref/,'No unguarded last-wins writes for '+kind);
-  assert.doesNotMatch(body,/\.delete\(\{ ignoreNotFound: ?true \}\)/,'Old media cleanup must not destructively race a concurrent finalize in '+kind);
+  assert.doesNotMatch(body,/file\(oldPath\)\.delete|const oldPath =/,'Displaced audio must not be deleted during finalize in '+kind);
 }
 assert.match(section('finalizeReleaseAudio','removeReleaseAudio'),/transcriptAccessibilityReviewed:false/);
 assert.match(section('finalizeReleaseAudio','removeReleaseAudio'),/getStorage\(\)\.bucket\(\)\.file\(storagePath\)/);
