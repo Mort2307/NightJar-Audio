@@ -28,6 +28,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [retryItemId, setRetryItemId] = useState<string | null>(null);
   const [draftClearSignal, setDraftClearSignal] = useState(0);
 
   const load = async () => {
@@ -55,12 +56,16 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
     if (!['image/png','image/jpeg','image/webp'].includes(file.type)) return notify('Use PNG, JPG or WebP artwork.');
     if (file.size > 5 * 1024 * 1024) return notify('Portfolio artwork must be 5 MB or smaller.');
     if (demoMode) {
-      setItems((current)=>[{
-        id:'demo-artist-piece-'+Date.now(),ownerUserId:'demo-artist-lena',title:title.trim(),description:description.trim(),tags:tags.split(',').map((tag)=>tag.trim()).filter(Boolean).slice(0,12),commissionType:commissionType.trim()||null,status:'draft',imageUrl:null,imageStatus:null,pendingImageAssetId:'demo-pending-'+Date.now(),pendingImageStatus:'pending',createdAt:new Date().toISOString(),publishedAt:null,updatedAt:new Date().toISOString(),
+      setItems(current => [{
+        id:'demo-artist-piece-'+Date.now(),ownerUserId:'demo-artist-lena',title:title.trim(),description:description.trim(),
+        tags:tags.split(',').map(tag=>tag.trim()).filter(Boolean).slice(0,12),
+        commissionType:commissionType.trim()||null,status:'draft',imageUrl:null,imageStatus:null,
+        pendingImageAssetId:'demo-pending-'+Date.now(),pendingImageStatus:'pending',
+        createdAt:new Date().toISOString(),publishedAt:null,updatedAt:new Date().toISOString(),
       },...current]);
       setDraftClearSignal(value => value + 1);
-      setDraftClearSignal(value => value + 1);
-      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);
+      setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       setFormOpen(false);
       notify('Simulation: artwork entered the fictional image-moderation queue.');
       return;
@@ -68,29 +73,51 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
 
     setBusy(true);
     try {
-      const created = await nightjarArtists.createItem({
-        title:title.trim(),
-        description:description.trim(),
-        tags:tags.split(',').map((tag)=>tag.trim()).filter(Boolean).slice(0,12),
-        commissionType:commissionType.trim(),
-        humanCreatedAttestation:true,
-        rightsConfirmed:true,
-        contributorPermissionsConfirmed:true,
-      });
+      // Retry with the existing account-owned private item. A lost response to
+      // submitImage can still mean the image is already awaiting moderation.
+      let itemId = retryItemId;
+      if (itemId) {
+        const mine = (await nightjarArtists.mine()).items ?? [];
+        const existing = mine.find(item => item.id === itemId);
+        if (!existing || existing.status !== 'draft') throw new Error('Artwork draft is no longer available.');
+        if (existing.pendingImageAssetId || existing.imageUrl) {
+          setRetryItemId(null);
+          setDraftClearSignal(value => value + 1);
+          await load();
+          notify('Artwork is already with moderation. No duplicate was submitted.');
+          return;
+        }
+      } else {
+        const created = await nightjarArtists.createItem({
+          title:title.trim(),
+          description:description.trim(),
+          tags:tags.split(',').map(tag=>tag.trim()).filter(Boolean).slice(0,12),
+          commissionType:commissionType.trim(),
+          humanCreatedAttestation:true,
+          rightsConfirmed:true,
+          contributorPermissionsConfirmed:true,
+        });
+        itemId = created.item.id;
+        setRetryItemId(itemId);
+      }
       const dataUrl = await readFileDataUrl(file);
       await nightjarMedia.submitImage({
         kind:'artist_portfolio',
-        targetId:created.item.id,
+        targetId:itemId!,
         dataUrl,
         contentType:file.type,
         fileName:file.name,
       });
-      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+      setRetryItemId(null);
+      setDraftClearSignal(value => value + 1);
+      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);
+      setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       await load();
       setFormOpen(false);
       notify('Artwork submitted. It stays private until an administrator approves the image.');
     } catch {
-      notify('Artist portfolio artwork could not be submitted.');
+      await load();
+      notify('Upload could not be confirmed. If the private draft appears below, choose Resume image upload rather than creating another piece.');
     } finally {
       setBusy(false);
     }
@@ -128,6 +155,15 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       }} />
     <button type="button" className="secondary-button nj-artist-artwork-toggle" aria-expanded={formOpen} onClick={()=>setFormOpen(current=>!current)}><ImagePlus size={16}/>{formOpen?'Close upload form':'Add new artwork'}<ChevronDown size={15}/></button>
+    {retryItemId && <div className="admin-note">
+      <strong>Recovering an existing private artwork draft</strong>
+      <span>Re-select the image and reconfirm permissions. This reuses the original record.</span>
+      <button type="button" className="ghost-button" disabled={busy} onClick={() => {
+        setRetryItemId(null);setTitle('');setDescription('');setTags('');setCommissionType('');
+        setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+        setDraftClearSignal(value => value + 1);
+      }}>Start a separate artwork</button>
+    </div>}
     {formOpen && <div className="artist-portfolio-form">
       <label>Artwork title<input maxLength={120} value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="e.g. Neon After Midnight"/></label>
       <label>Commission type<input maxLength={80} value={commissionType} onChange={(e)=>setCommissionType(e.target.value)} placeholder="Cover artwork, character portrait…"/></label>
@@ -145,6 +181,12 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       {items.map((item)=><article key={item.id} className="artist-portfolio-card">
         <div className="artist-portfolio-image">{item.imageUrl?<img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/>:<div><ImagePlus size={22}/><span>{item.pendingImageStatus==='pending'?'Awaiting image approval':item.pendingImageStatus==='rejected'?'Image rejected':'No public image yet'}</span></div>}</div>
         <div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}<p>{item.description}</p>{!!item.tags?.length&&<div className="creator-profile-tags">{item.tags.map((tag)=><span key={tag}>{tag}</span>)}</div>}<em>{item.status==='published'?'Public':'Private / moderation pending'}</em></div>
+        {item.status==='draft' && !item.pendingImageAssetId && !item.imageUrl && <button type="button" className="secondary-button" disabled={busy} onClick={() => {
+          setRetryItemId(item.id);setTitle(item.title);setDescription(item.description);
+          setTags((item.tags ?? []).join(', '));setCommissionType(item.commissionType ?? '');
+          setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+          setFormOpen(true);
+        }}>Resume image upload</button>}
         <button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={14}/> Remove</button>
       </article>)}
       {!items.length&&<div className="people-empty"><ImagePlus size={18}/><strong>No portfolio pieces yet</strong><span>Add a few strong examples so VA Creators, Writers and Audio Editors can understand your visual style.</span></div>}
