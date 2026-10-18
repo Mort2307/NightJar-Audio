@@ -51,11 +51,30 @@ assert.match(finalizeHandler, /const \[exists\] = await file\.exists\(\)/,
   'an idempotent status must not claim success for a missing Storage object');
 assert.match(catalogue, /\['functions\/unavailable','functions\/deadline-exceeded','functions\/internal'\]\.includes\(code\)/,
   'only transient callable failures trigger one safe re-finalization of the same upload path');
-assert.match(catalogue, /try \{ return \(await finalize\(\)\)\.data; \}/,
-  'transient response-loss recovery must use the same backend finalize callable');
+assert.match(catalogue, /try \{\s*const result = \(await finalize\(\)\)\.data;\s*clearPendingAudio\(user\.uid, releaseId\);\s*return result;/,
+  'transient response-loss recovery must retry the same backend finalize and clear a confirmed recovery reference');
 assert.doesNotMatch(catalogue, /deleteObject\(fileRef\)/,
   'never delete a potentially attached recording due to an ambiguous callable response');
 assert.match(support, /The private file was retained/, 'finalization errors must not falsely claim deletion or attachment');
+const editorFinalize = functions.slice(functions.indexOf('export const finalizeEditorPortfolioAudio = onCall'),
+  functions.indexOf('export const ', functions.indexOf('export const finalizeEditorPortfolioAudio = onCall') + 20));
+assert.match(editorFinalize, /const alreadyAttached = data\[pathField\] === storagePath/);
+assert.match(editorFinalize, /if \(alreadyAttached\) return \{ item: editorPortfolioPayload\(data, itemId\) \}/);
+assert.doesNotMatch(portfolio, /deleteObject\(fileRef\)/,
+  'an uncertain editor upload response cannot delete a now-attached file');
+assert.match(portfolio, /try \{ return \(await finalize\(\)\)\.data; \}/,
+  'editor retries the same private path after a transient response loss');
+assert.match(catalogue, /writePendingAudio\(\{ uid:user\.uid, releaseId, storagePath/,
+  'creator saves a minimal pending transfer reference after Storage confirms bytes');
+assert.match(catalogue, /async recoverAudio\(releaseId: string\)/);
+assert.match(catalogue, /readPendingAudio\(user\.uid, releaseId\)/);
+assert.match(catalogue, /clearPendingAudio\(user\.uid, releaseId\)/);
+assert.match(creator, /Recover uploaded recording/,
+  'creator can retry finalizing existing private bytes after a refresh');
+assert.match(creator, /nightjarCatalogue\.recoverAudio\(current\.id\)/);
+assert.doesNotMatch(catalogue, /localStorage\.setItem\([^\n]*(file|dataUrl|signedUrl)/,
+  'recovery must not persist audio bytes, signed URLs or access tokens');
+
 
 assert.match(creator,/role="progressbar"/, 'Creator needs persistent transfer progress');
 assert.match(creator,/Audio saved and verified in your private release/, 'Creator must see verified private-attachment status');

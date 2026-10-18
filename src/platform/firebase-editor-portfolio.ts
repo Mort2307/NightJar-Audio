@@ -1,5 +1,5 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { deleteObject, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { getStorage, ref, uploadBytes } from 'firebase/storage';
 import { firebaseApp, firebaseAuth } from './firebase-auth';
 import { nightjarAudioContentType, nightjarAudioFileProblem, nightjarAudioUploadFailure } from './audio-upload';
 
@@ -67,10 +67,16 @@ export const nightjarEditorPortfolio = {
     } catch (error) {
       throw nightjarAudioUploadFailure('STORAGE', error);
     }
-    try {
-      return (await finalizeCall({ itemId, slot, storagePath })).data;
-    } catch (error) {
-      try { await deleteObject(fileRef); } catch { /* backend validation is authoritative */ }
+    const finalize = () => finalizeCall({ itemId, slot, storagePath });
+    try { return (await finalize()).data; }
+    catch (error) {
+      const code = typeof error === 'object' && error ? String((error as {code?:unknown}).code ?? '') : '';
+      if (['functions/unavailable','functions/deadline-exceeded','functions/internal'].includes(code)) {
+        try { return (await finalize()).data; }
+        catch (retryError) { error = retryError; }
+      }
+      // A missing callable response may follow a successful Firestore attach.
+      // Never destroy private audio whose owner/status has not been rechecked.
       throw nightjarAudioUploadFailure('FINALIZE', error);
     }
   },
