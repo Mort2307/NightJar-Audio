@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue, type QueryDocumentSnapshot, type DocumentReference } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, FieldPath, type QueryDocumentSnapshot, type DocumentReference } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
@@ -6011,33 +6011,45 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
 // deliberately includes audio connected to drafts and returned-for-changes
 // releases, so a creator upload is visible before final submission.
 // Only metadata is listed; listening uses the existing admin-signed URL.
+// Server-bounded Admin reads: a cursor represents a document ID, never a
+// signed URL or a permission token. Sorting by stable ID avoids a composite
+// Firestore index and works with pre-existing private audio records.
+const adminReleasePageInput=(raw:unknown,size:number)=>{
+  const value=cleanText(raw,160);
+  if(value && !/^[A-Za-z0-9_-]{1,160}$/.test(value))
+    throw new HttpsError('invalid-argument','Invalid release page cursor.');
+  return {cursor:value, size};
+};
 export const adminReleaseAudioLibrary = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const snapshot = await db.collection('releases').limit(1000).get();
-  const releases = snapshot.docs
-    .filter((doc) => Boolean(doc.data().audioStoragePath))
-    .map((doc) => {
-      const data = doc.data();
-      return {
-        ...releaseOwnerPayload(data, doc.id),
-        audioByteSize: Math.max(0, Number(data.audioByteSize ?? 0)),
-        audioContentType: cleanText(data.audioContentType, 100) || null,
-        submittedAt: toIso(data.submittedAt),
-        moderatedAt: toIso(data.moderatedAt),
-      };
-    })
-    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
-  return {
-    releases,
-    totalInspected: snapshot.size,
-    truncated: snapshot.size >= 1000,
-  };
+  const {cursor,size}=adminReleasePageInput((request.data as Record<string,unknown>|undefined)?.cursor,60);
+  let query=db.collection('releases').orderBy(FieldPath.documentId()).limit(size+1);
+  if(cursor)query=query.startAfter(cursor);
+  const snapshot=await query.get();
+  const docs=snapshot.docs.slice(0,size);
+  const releases=docs.filter(doc=>Boolean(doc.data().audioStoragePath)).map(doc=>{
+    const data=doc.data();
+    return {...releaseOwnerPayload(data,doc.id),
+      audioByteSize:Math.max(0,Number(data.audioByteSize??0)),
+      audioContentType:cleanText(data.audioContentType,100)||null,
+      submittedAt:toIso(data.submittedAt),
+      moderatedAt:toIso(data.moderatedAt),
+    };
+  });
+  return {releases,totalInspected:docs.length,
+    nextCursor:snapshot.size>size && docs.length ? docs[docs.length-1].id : null,
+    truncated:false};
 });
 
 export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const snapshot = await db.collection('releases').where('status', '==', 'pending_review').limit(100).get();
-  return { releases: snapshot.docs.map((doc) => releaseOwnerPayload(doc.data(), doc.id)) };
+  const {cursor,size}=adminReleasePageInput((request.data as Record<string,unknown>|undefined)?.cursor,30);
+  let query=db.collection('releases').where('status','==','pending_review').orderBy(FieldPath.documentId()).limit(size+1);
+  if(cursor)query=query.startAfter(cursor);
+  const snapshot=await query.get();
+  const docs=snapshot.docs.slice(0,size);
+  return {releases:docs.map(doc=>releaseOwnerPayload(doc.data(),doc.id)),
+    nextCursor:snapshot.size>size && docs.length ? docs[docs.length-1].id : null};
 });
 
 const notificationRouteFor = (payload: Record<string, unknown>) => {

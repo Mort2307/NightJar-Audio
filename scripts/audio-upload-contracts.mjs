@@ -83,9 +83,9 @@ assert.match(creator,/const saved = await persistReleaseMetadata\(latestRelease\
 assert.match(creator,/submitted\.release\?\.status !== 'pending_review'/, 'Submit must verify moderation status from the server');
 assert.match(creator,/From your recording to Nightjar/, 'Release flow shows four clear steps');
 assert.match(functions,/export const adminReleaseAudioLibrary = onCall/, 'An admin-only all-audio library is required');
-assert.match(functions,/requireAdminIdentity\(request\);[\s\S]{0,130}const snapshot = await db\.collection\('releases'\)\.limit\(1000\)/, 'Audio library enforces admin identity');
-assert.match(functions,/\.filter\(\(doc\) => Boolean\(doc\.data\(\)\.audioStoragePath\)\)/, 'Only attached verified release audio is included in the admin library');
-assert.match(catalogue,/adminAudioLibrary\(\)/, 'Client can fetch owner-only audio attachments');
+assert.match(functions,/export const adminReleaseAudioLibrary = onCall[\s\S]{0,160}requireAdminIdentity\(request\)/, 'Audio library enforces admin identity');
+assert.match(functions,/\.filter\(doc=>Boolean\(doc\.data\(\)\.audioStoragePath\)\)/, 'Only attached verified release audio is included in the admin library');
+assert.match(catalogue,/adminAudioLibrary\(cursor\?:string\)/, 'Client can fetch owner-only audio attachments');
 assert.match(moderation,/All attached audio \(/, 'Admin can see saved draft audio separately from submissions');
 assert.match(moderation,/Awaiting moderation \(/, 'Admin can switch to submission queue');
 assert.match(moderation,/nightjarCatalogue\.adminPreview\(selected\.id\)/, 'Admin can actually listen using a protected signed URL');

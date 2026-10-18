@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const src=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
+const s=src('functions/src/index.ts'),c=src('src/platform/firebase-catalogue.ts'),ui=src('src/components/ContentModeration.tsx');
+const admin=s.slice(s.indexOf('export const adminReleaseAudioLibrary = onCall'),s.indexOf('const notificationRouteFor'));
+assert.match(s,/import \{[^\n]*FieldPath/);
+for(const [endpoint,bound] of [['adminReleaseAudioLibrary',60],['releaseModerationQueue',30]]){
+ const start=admin.indexOf('export const '+endpoint+' = onCall');
+ const end=admin.indexOf('\n});',start)+4;
+ const body=admin.slice(start,end);
+ assert.match(body,/requireAdminIdentity\(request\)/);
+ assert.ok(body.includes('adminReleasePageInput('),endpoint+' validates cursor');
+ assert.ok(body.includes('orderBy(FieldPath.documentId())'),endpoint+' stable page order');
+ assert.match(body,/\.limit\(size\+1\)/);
+ assert.match(body,/if\(cursor\)query=query\.startAfter\(cursor\)/);
+ assert.match(body,/nextCursor:snapshot\.size>size/);
+ assert.ok(body.includes(','+bound+')'),endpoint+' bound');
+ assert.ok(!body.includes('limit(1000)'),endpoint+' cannot retrieve unbounded legacy window');
+}
+assert.match(admin,/\.filter\(doc=>Boolean\(doc\.data\(\)\.audioStoragePath\)\)/);
+assert.match(c,/adminAudioLibrary\(cursor\?:string\)/);
+assert.match(c,/moderationQueue\(cursor\?:string\)/);
+assert.match(ui,/const loadMore = async/);
+assert.match(ui,/setLibraryCursor\(page\.nextCursor\?\?null\)/);
+assert.match(ui,/setPendingCursor\(page\.nextCursor\?\?null\)/);
+assert.match(ui,/Load more attached audio/);
+assert.match(ui,/Load more moderation submissions/);
+assert.match(ui,/Set\(previous\.map\(\(release:any\)=>release\.id\)\)/);
+assert.match(ui,/aria-live="polite"/);
+console.log('Admin queue access control, bounded cursor reads and progressive UI verified.');

@@ -19,7 +19,10 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
   const [audioLibrary, setAudioLibrary] = useState<any[]>([]);
   const [auditMode, setAuditMode] = useState<'all' | 'pending'>('all');
   const [queuePage, setQueuePage] = useState(0);
-  const [libraryTruncated, setLibraryTruncated] = useState(false);
+  const [libraryCursor, setLibraryCursor] = useState<string|null>(null);
+  const [pendingCursor, setPendingCursor] = useState<string|null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [inspectedCount, setInspectedCount] = useState(0);
   const [loadError, setLoadError] = useState('');
   const [previewError, setPreviewError] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -47,7 +50,9 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
           .filter((release: any) => release.audioAvailable === true)
           .map((release: any) => ({...release,creatorName:'Aria Vale',creatorHandle:'ariavale'}));
         setAudioLibrary(demoAttached);
-        setLibraryTruncated(false);
+        setLibraryCursor(null);
+        setPendingCursor(null);
+        setInspectedCount(demoAttached.length);
         setSelected(null);
         return;
       }
@@ -57,13 +62,44 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
       ]);
       setQueue(pending.releases ?? []);
       setAudioLibrary(audit.releases ?? []);
-      setLibraryTruncated(audit.truncated === true);
+      setPendingCursor(pending.nextCursor ?? null);
+      setLibraryCursor(audit.nextCursor ?? null);
+      setInspectedCount(audit.totalInspected ?? (audit.releases ?? []).length);
+      setQueuePage(0);
       setSelected((prior:any)=>prior ? (audit.releases ?? []).find((item:any)=>item.id===prior.id) ?? (pending.releases ?? []).find((item:any)=>item.id===prior.id) ?? null : null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Unable to load real audio attachments.');
       notify('Nightjar could not load the live audio review library.');
     }
     finally { setLoading(false); }
+  };
+
+  const loadMore = async () => {
+    if (loading || loadingMore || demoMode) return;
+    const next = auditMode === 'pending' ? pendingCursor : libraryCursor;
+    if (!next) return;
+    setLoadingMore(true);
+    setLoadError('');
+    try {
+      if (auditMode === 'pending') {
+        const page = await nightjarCatalogue.moderationQueue(next);
+        setQueue(previous=>{
+          const found=new Set(previous.map((release:any)=>release.id));
+          return [...previous,...(page.releases??[]).filter((release:any)=>!found.has(release.id))];
+        });
+        setPendingCursor(page.nextCursor??null);
+      } else {
+        const page = await nightjarCatalogue.adminAudioLibrary(next);
+        setAudioLibrary(previous=>{
+          const found=new Set(previous.map((release:any)=>release.id));
+          return [...previous,...(page.releases??[]).filter((release:any)=>!found.has(release.id))];
+        });
+        setLibraryCursor(page.nextCursor??null);
+        setInspectedCount(value=>value+(page.totalInspected??0));
+      }
+    } catch(error) {
+      setLoadError(error instanceof Error?error.message:'Additional records could not be loaded.');
+    } finally { setLoadingMore(false); }
   };
 
   useEffect(() => { if (open) void load(); }, [open, demoMode]);
@@ -174,14 +210,22 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
         <button type="button" className="ghost-button" disabled={loading} onClick={()=>void load()}>Refresh uploads</button>
       </div>
       {auditMode === 'all' && <p className="nj-audio-review-help">An uploaded recording is initially just a private draft attachment. It enters the approval queue only when the Creator submits their completed release. You can inspect both stages here.</p>}
-      {libraryTruncated && <p className="nj-audio-review-help">Showing the most recent matches from the first 1,000 release records. Additional records may require a more specific audit.</p>}
+      {auditMode === 'all' && <p className="nj-audio-review-help">Loaded {audioLibrary.length} private audio records from {inspectedCount} inspected releases. Browse older records with Load more; previously loaded records remain available here.</p>}
       {loadError && <p role="alert" className="nj-audio-review-error">{loadError}</p>}
       <div className="moderation-layout">
         <aside className="moderation-queue">{loading ? <div className="people-empty">Loading live audio records…</div> : visibleAudio.length ? displayedAudio.map((release) => <button key={release.id} className={selected?.id === release.id ? 'moderation-item active' : 'moderation-item'} onClick={() => setSelected(release)}><FileAudio size={16} /><span><strong>{release.title || 'Untitled release'}</strong><small>{release.creatorName || 'Creator'} · {release.category || 'Audio'}</small><small className={release.status === 'pending_review' ? 'nj-audio-review-queue-status pending' : 'nj-audio-review-queue-status'}>{release.status === 'scheduled' ? 'APPROVED · AWAITING RELEASE TIME' : release.status === 'pending_review' ? 'AWAITING MODERATION' : release.status === 'draft' ? 'DRAFT · AUDIO ATTACHED' : String(release.status ?? 'Unknown').replaceAll('_',' ').toUpperCase()}</small></span></button>) : <div className="people-empty"><Check size={18}/><strong>{auditMode === 'pending' ? 'No releases awaiting moderation' : 'No attached audio records found'}</strong><span>{auditMode === 'pending' ? 'Audio attached to a private draft will be listed under All attached audio.' : 'Check that a creator completed Firebase audio verification, then refresh.'}</span></div>}{visibleAudio.length>PAGE_SIZE && !loading && <nav className="moderation-queue-pagination" aria-label="Audio review pages">
           <button type="button" className="secondary-button" disabled={safeQueuePage===0} onClick={()=>pageTo(safeQueuePage-1)}>Previous page</button>
           <span role="status" aria-live="polite">Page {safeQueuePage+1} of {lastQueuePage+1} · {visibleAudio.length} recordings</span>
           <button type="button" className="secondary-button" disabled={safeQueuePage===lastQueuePage} onClick={()=>pageTo(safeQueuePage+1)}>Next page</button>
-        </nav>}</aside>
+        </nav>}
+        {!demoMode && (auditMode === 'pending' ? pendingCursor : libraryCursor) && !loading &&
+          <div className="moderation-queue-pagination">
+            <button type="button" className="secondary-button" disabled={loadingMore} onClick={()=>void loadMore()}>
+              {loadingMore ? 'Loading next records…' : auditMode === 'pending' ? 'Load more moderation submissions' : 'Load more attached audio'}
+            </button>
+            <span role="status" aria-live="polite">Older records available · loaded so far: {visibleAudio.length}</span>
+          </div>}
+        </aside>
         <article className="moderation-preview">{selected ? <><div className="moderation-preview-head"><div><span className="mini-label">{selected.category || 'AUDIO'}</span><h3>{selected.title}</h3><p>By {selected.creatorName || 'Nightjar creator'} · {selected.creatorHandle ? '@' + selected.creatorHandle.replace(/^@/, '') : 'handle not set'}</p></div>{previewLoading && <p role="status">Opening signed, private Nightjar audio preview…</p>}{previewError && <p role="alert" className="nj-audio-review-error">{previewError}</p>}{previewUrl && <audio key={selected.id} className="moderation-audio" controls src={previewUrl} preload="none" />}{!selected.audioAvailable && <p>No verified audio is attached to this release.</p>}</div><div className="moderation-copy"><div className={selected.status === 'pending_review' ? 'nj-audio-review-state pending' : 'nj-audio-review-state'}><strong>{selected.status === 'pending_review' ? 'Submitted · ready for moderation review' : selected.status === 'draft' ? 'Private draft · NOT submitted for moderation' : selected.status === 'released' ? 'Approved · live in Nightjar catalogue' : 'Not currently awaiting moderation'}</strong><span>Updated: {formatted(selected.updatedAt)}{selected.submittedAt ? ' · Submitted: ' + formatted(selected.submittedAt) : ''}{selected.audioByteSize ? ' · Audio ' + (selected.audioByteSize / (1024 * 1024)).toFixed(2) + ' MB' : ''}</span></div><p>{selected.description || 'No description.'}</p><div className="nj-admin-release-plan"><strong>Creator publication preference</strong><span>{formattedScheduled(selected)}</span><small>{selected.scheduledAt ? 'Approval now will schedule publication, not make the recording public.' : 'Approval will publish immediately.'}</small></div>{selected.releaseDistribution && selected.releaseDistribution !== 'standard' && <p className="nj-admin-release-distribution"><strong>Creator-declared label:</strong> First on NightJar <small>This debut label does not restrict other publishing. Nightjar Original is only for commissioned and paid-for productions.</small></p>}{selected.productionNote && <p><strong>Behind the scenes:</strong> {selected.productionNote}</p>}
           <section className="moderation-transcript-review">
             <div className="moderation-transcript-head">
