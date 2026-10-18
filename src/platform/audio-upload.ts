@@ -89,12 +89,14 @@ export const nightjarAudioUploadFailure = (stage: NightjarAudioUploadStage, orig
     'functions/failed-precondition': 'Nightjar could not attach this recording to the current draft. Check its status and your role approval.',
     'functions/not-found': 'Nightjar could not find the editable draft or uploaded file when finishing the upload.',
     'functions/invalid-argument': 'Nightjar rejected the audio metadata. Confirm you selected a supported format.',
-    'functions/unavailable': 'Nightjar could not reach the audio finalisation service. Retry when your connection is stable.',
+    'functions/unavailable': 'The transfer finished, but Nightjar could not confirm attachment. Your private file was retained. Reopen this draft before uploading another copy.',
+    'functions/deadline-exceeded': 'Nightjar timed out while confirming this audio attachment. Your private file was retained. Reopen the draft to check its status.',
+    'functions/internal': 'Nightjar could not confirm the audio attachment. The private file was not deleted. Reopen this draft or contact the Nightjar team.'
   };
   const message = messages[code] ?? (
     stage === 'STORAGE'
       ? 'The private file transfer failed. Please send Nightjar the diagnostic shown below.'
-      : 'The recording transferred, but Nightjar could not attach it to the draft. Please send Nightjar the diagnostic shown below.'
+      : 'The recording transferred, but Nightjar could not confirm its attachment. The private file was retained; check the draft before attempting another upload.'
   );
   return new NightjarAudioUploadError(stage, code, `${message} (Audio ${stage} / ${code})`);
 };
