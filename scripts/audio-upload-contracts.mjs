@@ -51,8 +51,8 @@ assert.match(finalizeHandler, /const \[exists\] = await file\.exists\(\)/,
   'an idempotent status must not claim success for a missing Storage object');
 assert.match(catalogue, /\['functions\/unavailable','functions\/deadline-exceeded','functions\/internal'\]\.includes\(code\)/,
   'only transient callable failures trigger one safe re-finalization of the same upload path');
-assert.match(catalogue, /try \{ return \(await finalize\(\)\)\.data; \}/,
-  'transient response-loss recovery must use the same backend finalize callable');
+assert.match(catalogue, /try \{\s*const result = \(await finalize\(\)\)\.data;\s*clearPendingAudio\(user\.uid, releaseId\);\s*return result;/,
+  'transient response-loss recovery must retry the same backend finalize and clear a confirmed recovery reference');
 assert.doesNotMatch(catalogue, /deleteObject\(fileRef\)/,
   'never delete a potentially attached recording due to an ambiguous callable response');
 assert.match(support, /The private file was retained/, 'finalization errors must not falsely claim deletion or attachment');
