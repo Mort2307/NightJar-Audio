@@ -8177,30 +8177,28 @@ export const submitWriterScript = onCall({ region: REGION }, async (request) => 
   await requireProfessionalLegalTerms(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
-  const snapshot = await ref.get();
-  const data = snapshot.data();
-  if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
-  if (!cleanText(data.content, 200000) && !cleanText(data.originalUpload?.storagePath, 500)) {
-    throw new HttpsError('failed-precondition', 'Add manuscript content or upload a source manuscript before submitting.');
-  }
-  const rights = normaliseScriptRights(data.rights);
-  if (rights.ownershipAttested !== true || rights.contributorPermissionsConfirmed !== true) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Confirm manuscript ownership/authority and any contributor permissions in Rights & Licensing before submitting.',
-      { code:'content_rights_attestation_required' },
-    );
-  }
-  if (!['Draft','Revision requested','Rejected'].includes(String(data.status ?? 'Draft'))) {
-    throw new HttpsError('failed-precondition', 'This manuscript is already in editorial workflow.');
-  }
-
-  await ref.set({
-    status: 'Submitted',
-    submittedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const data = snapshot.data();
+    if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+    if (!cleanText(data.content, 200000) && !cleanText(data.originalUpload?.storagePath, 500)) {
+      throw new HttpsError('failed-precondition', 'Add manuscript content or upload a source manuscript before submitting.');
+    }
+    const rights = normaliseScriptRights(data.rights);
+    if (rights.ownershipAttested !== true || rights.contributorPermissionsConfirmed !== true) {
+      throw new HttpsError('failed-precondition',
+        'Confirm manuscript ownership/authority and any contributor permissions in Rights & Licensing before submitting.',
+        { code:'content_rights_attestation_required' });
+    }
+    if (!['Draft','Revision requested','Rejected'].includes(String(data.status ?? 'Draft'))) {
+      throw new HttpsError('failed-precondition', 'This manuscript is already in editorial workflow.');
+    }
+    tx.set(ref, {
+      status: 'Submitted',
+      submittedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
   const saved = await ref.get();
   return { script: scriptPayload(saved.data() ?? {}, scriptId, true) };
 });
