@@ -3740,15 +3740,18 @@ export const finalizeEditorPortfolioAudio = onCall({ region: REGION }, async (re
   if (!itemId || !['before','after'].includes(slot) || !storagePath) throw new HttpsError('invalid-argument', 'Editor showcase audio upload is incomplete.');
 
   const { ref, data } = await requireEditorPortfolioOwner(identity, itemId);
-  if (!['draft','changes','rejected'].includes(String(data.status ?? 'draft'))) {
-    throw new HttpsError('failed-precondition', 'This showcase item cannot be edited while moderation is active or after publication.');
-  }
   const expectedPrefix = `editor-showcase/${identity.uid}/${itemId}/${slot}/`;
   if (!storagePath.startsWith(expectedPrefix)) throw new HttpsError('permission-denied', 'Editor showcase upload path is invalid.');
-
+  const pathField = slot === 'before' ? 'beforeAudioStoragePath' : 'afterAudioStoragePath';
+  const byteField = slot === 'before' ? 'beforeAudioByteSize' : 'afterAudioByteSize';
+  const alreadyAttached = data[pathField] === storagePath && Number(data[byteField] ?? 0) > 0;
+  if (!alreadyAttached && !['draft','changes','rejected'].includes(String(data.status ?? 'draft'))) {
+    throw new HttpsError('failed-precondition', 'This showcase item cannot be edited while moderation is active or after publication.');
+  }
   const file = getStorage().bucket().file(storagePath);
   const [exists] = await file.exists();
   if (!exists) throw new HttpsError('not-found', 'Uploaded showcase audio was not found.');
+  if (alreadyAttached) return { item: editorPortfolioPayload(data, itemId) };
   const [metadata] = await file.getMetadata();
   const size = Number(metadata.size ?? 0);
   const contentType = String(metadata.contentType ?? '');
@@ -3758,7 +3761,6 @@ export const finalizeEditorPortfolioAudio = onCall({ region: REGION }, async (re
     throw new HttpsError('invalid-argument', 'Use MP3, WAV, M4A, OGG or WebM showcase audio up to 20 MB.');
   }
 
-  const pathField = slot === 'before' ? 'beforeAudioStoragePath' : 'afterAudioStoragePath';
   const oldPath = cleanText(data[pathField], 600);
   await ref.set({
     [pathField]: storagePath,
