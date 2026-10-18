@@ -1,6 +1,7 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getStorage, ref, uploadBytesResumable } from 'firebase/storage';
 import { firebaseApp, firebaseAuth } from './firebase-auth';
+import { pendingPrivateCreateId, clearPrivateCreateId } from './client-create-idempotency';
 import { nightjarAudioContentType, nightjarAudioFileProblem, nightjarAudioUploadFailure } from './audio-upload';
 import { repairMojibakeDisplayData } from './text-integrity';
 
@@ -65,7 +66,11 @@ export const nightjarCatalogue = {
   },
 
   async create(input: Record<string, unknown>) {
-    return (await createReleaseCall(input)).data;
+    const clientRequestId=pendingPrivateCreateId('creator-release');
+    const data=(await createReleaseCall({...input,clientRequestId})).data;
+    // On a lost reply, retain this ID for safe retry of the SAME operation.
+    clearPrivateCreateId('creator-release',clientRequestId);
+    return data;
   },
 
   async update(releaseId: string, input: Record<string, unknown>) {
