@@ -1,5 +1,5 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { deleteObject, getStorage, ref, uploadBytesResumable } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable } from 'firebase/storage';
 import { firebaseApp, firebaseAuth } from './firebase-auth';
 import { nightjarAudioContentType, nightjarAudioFileProblem, nightjarAudioUploadFailure } from './audio-upload';
 import { repairMojibakeDisplayData } from './text-integrity';
@@ -79,10 +79,23 @@ export const nightjarCatalogue = {
     } catch (error) {
       throw nightjarAudioUploadFailure('STORAGE', error);
     }
+    const finalize = () => finalizeAudioCall({ releaseId, storagePath, durationMinutes });
     try {
-      return (await finalizeAudioCall({ releaseId, storagePath, durationMinutes })).data;
+      return (await finalize()).data;
     } catch (error) {
-      try { await deleteObject(fileRef); } catch { /* backend validation is authoritative */ }
+      // A lost callable response is NOT evidence that Firestore failed to
+      // attach the upload. The backend accepts a repeat of the exact same
+      // verified storage path without rewriting the release.
+      const code = typeof error === 'object' && error
+        ? String((error as {code?:unknown}).code ?? '') : '';
+      if (['functions/unavailable','functions/deadline-exceeded','functions/internal'].includes(code)) {
+        try { return (await finalize()).data; }
+        catch (retryError) { error = retryError; }
+      }
+      // NEVER delete the private Storage object on an ambiguous finalization
+      // result: it might now be referenced by the release and needed for
+      // protected playback. Recovery and orphan cleanup must verify the
+      // authoritative backend attachment before any destructive operation.
       throw nightjarAudioUploadFailure('FINALIZE', error);
     }
   },
