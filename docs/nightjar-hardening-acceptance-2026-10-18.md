@@ -6,6 +6,10 @@ This checklist complements [release acceptance](nightjar-release-acceptance.md) 
 
 | ID | Area / expected behaviour | Safe testing procedure | Outcome |
 | --- | --- | --- | --- |
+| C1 | Creator metadata autosave on phone and PC | On an approved Creator account edit private release title, tags, description, credits and schedule; confirm account Saved indicator, reload and compare on another device | NOT RUN |
+| C2 | Creator concurrent edits conflict | Open one draft on phone and desktop, edit from both, verify stale device cannot replace later saved metadata silently; verify both conflict choices | NOT RUN |
+| C3 | Creator offline and lost response | Disconnect during metadata save; ensure no false Saved indicator, restore connection and retry; simulate lost response after server commit and verify canonical revision is reconciled | NOT RUN |
+| C4 | Creator permissions and submission | Confirm title/credits/schedule can autosave but file bytes, rights attestations and transcript accuracy declarations cannot be implicitly asserted; submitting requires canonical metadata acknowledgement and protected rights | NOT RUN |
 | U1 | Creator upload, successful path | Approved VA selects owned test audio; transfer reaches Storage, server confirms attached; moderation remains separate | NOT RUN |
 | U2 | Creator lost finalize response | Simulate a network/drop response after successful Storage upload; reopen same draft; **Recover uploaded recording** verifies same path with no re-upload or deletion | NOT RUN |
 | U3 | Creator app reload after transfer | Return to same signed-in UID on same browser, verify pending reference is still available, and server rejects references from other accounts | NOT RUN |
