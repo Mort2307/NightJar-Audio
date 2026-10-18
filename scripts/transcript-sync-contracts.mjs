@@ -29,7 +29,7 @@ assert.match(backend, /export const saveSyncedReleaseTranscript/);
 assert.match(backend, /requireAccountRole\(request, \['creator'\]\)/);
 assert.match(backend, /data\.creatorUserId !== identity\.uid/);
 assert.match(backend, /transcriptAccessibilityReviewed: true/);
-assert.match(backend, /transcriptAccessibilityReviewed: false/);
+assert.match(backend, /transcriptAccessibilityReviewed:\s*false/);
 assert.match(backend, /transcriptSyncSource: 'manual_timing_reviewed'/);
 assert.match(player, /const timedTranscript =/);
 assert.match(player, /transcriptFollowPlayback/);
