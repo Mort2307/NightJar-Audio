@@ -51,7 +51,7 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
       } else {
         if (draft.payload) restore.current(saved);
         synced.current = draft.payload ? signature(saved) : isEmpty(current.current) ? signature(current.current) : '{}';
-        setStatus('saved');
+        setStatus(draft.payload || isEmpty(current.current) ? 'saved' : 'pending');
         conflict.current = false;
       }
       setReady(true);
@@ -114,7 +114,7 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
       } else {
         if (draft.payload) restore.current(saved);
         synced.current = draft.payload ? signature(saved) : isEmpty(current.current) ? signature(current.current) : '{}';
-        setStatus('saved');
+        setStatus(draft.payload || isEmpty(current.current) ? 'saved' : 'pending');
         conflict.current = false;
       }
       setReady(true);
