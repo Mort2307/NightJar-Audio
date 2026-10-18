@@ -7913,6 +7913,9 @@ const scriptPayload = (data: Record<string, any>, id: string, includeContent = t
   status: data.status ?? 'Draft',
   access: data.access ?? 'Private',
   version: Number(data.version ?? 1),
+  // Independent from manuscript snapshot/version history. Every live text edit
+  // requires this revision to prevent cross-device lost updates.
+  contentRevision: Math.max(0, Number(data.contentRevision ?? 0)),
   writerUserId: data.writerUserId ?? null,
   editorUserId: data.editorUserId ?? null,
   lastEditorialComment: data.lastEditorialComment ?? null,
@@ -8072,18 +8075,37 @@ export const updateWriterScript = onCall({ region: REGION }, async (request) => 
   const identity = await requireAccountRole(request, ['writer']);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
-  const ref = scriptRef(scriptId);
-  const snapshot = await ref.get();
-  const data = snapshot.data();
-  if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
-  if (!['Draft','Revision requested','Rejected'].includes(String(data.status ?? 'Draft'))) {
-    throw new HttpsError('failed-precondition', 'This manuscript is currently locked for editorial review.');
+  const expectedRevision = Number(input.expectedRevision);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new HttpsError('invalid-argument', 'The saved manuscript revision is required.');
   }
-  await ref.set({
-    title: cleanText(input.title ?? data.title, 180) || 'Untitled manuscript',
-    content: cleanText(input.content ?? data.content, 200000),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  const ref = scriptRef(scriptId);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.data();
+    if (!data || data.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+    if (!['Draft','Revision requested','Rejected'].includes(String(data.status ?? 'Draft'))) {
+      throw new HttpsError('failed-precondition', 'This manuscript is currently locked for administrator review.');
+    }
+    const currentRevision = Math.max(0, Number(data.contentRevision ?? 0));
+    if (currentRevision !== expectedRevision) {
+      // Return a marker, not the protected contents, in errors and logs.
+      // Writers can explicitly fetch their latest private source to compare.
+      throw new HttpsError('aborted',
+        'This manuscript changed on another device. Your edits have NOT overwritten it. Review the latest version before saving again.',
+        { code: 'manuscript_revision_conflict', currentRevision });
+    }
+    const title = cleanText(input.title ?? data.title, 180) || 'Untitled manuscript';
+    const content = cleanText(input.content ?? data.content, 200000);
+    // Do not burn revisions for a repeated save of the same content. This also
+    // lets a response-loss retry return the previously saved revision.
+    if (title === data.title && content === (data.content ?? '')) return;
+    transaction.set(ref, {
+      title, content,
+      contentRevision: currentRevision + 1,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
   const saved = await ref.get();
   return { script: scriptPayload(saved.data() ?? {}, scriptId, true) };
 });
