@@ -3855,25 +3855,35 @@ export const moderateEditorPortfolioItem = onCall({ region: REGION }, async (req
   const note=cleanText(input.note,1200);
   if(!['approved','changes','rejected'].includes(decision)) throw new HttpsError('invalid-argument','Invalid moderation decision.');
   const ref=db.collection('editorPortfolio').doc(itemId);
-  const snapshot=await ref.get();
-  const data=snapshot.data();
-  if(!data || data.status!=='pending_review') throw new HttpsError('failed-precondition','Editor showcase item is not awaiting moderation.');
-  const status=decision==='approved'?'published':decision==='changes'?'changes':'rejected';
-  await ref.set({
-    status,
-    moderationNote:note||null,
-    moderatedBy:admin.uid,
-    moderatedAt:FieldValue.serverTimestamp(),
-    publishedAt:decision==='approved'?FieldValue.serverTimestamp():data.publishedAt??null,
-    updatedAt:FieldValue.serverTimestamp(),
-  },{merge:true});
-  if(data.ownerUserId){
-    await createNotification(String(data.ownerUserId),{
+  // Two Administrators may act at once. Only one decision can consume a
+  // pending review, so neither the final status nor its reason can race.
+  const result=await db.runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    const data=snapshot.data();
+    if(!data || data.status!=='pending_review'){
+      throw new HttpsError('failed-precondition','Editor showcase has already been reviewed or withdrawn.');
+    }
+    const status=decision==='approved'?'published':decision==='changes'?'changes':'rejected';
+    transaction.set(ref,{
+      status,
+      moderationNote:note||null,
+      moderatedBy:admin.uid,
+      moderatedAt:FieldValue.serverTimestamp(),
+      publishedAt:decision==='approved'?FieldValue.serverTimestamp():data.publishedAt??null,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return {ownerUserId:String(data.ownerUserId??''),status};
+  });
+  // A failed push/email is not a failed moderation decision. In-app state is
+  // canonical, and the stable key prevents a repeated secondary notification.
+  if(result.ownerUserId){
+    await createNotification(result.ownerUserId,{
       type:'content',subtype:'editor_portfolio',
       title:decision==='approved'?'Your Editor showcase is live':decision==='changes'?'Changes requested for your Editor showcase':'Your Editor showcase was not approved',
       message:decision==='approved'?'Your approved audio showcase is now visible on your public Audio Editor profile.':note||'Open Editor Studio to review the moderation result.',
       portfolioItemId:itemId,
-    });
+      dedupeKey:'editor-portfolio-review:'+itemId+':'+result.status,
+    }).catch(error=>console.warn('Editor showcase review notification failed',error));
   }
   const saved=await ref.get();
   return { item:editorPortfolioPayload(saved.data() ?? {},itemId) };
