@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileAudio, LoaderCircle, Send, ShieldCheck, Trash2, UploadCloud } from 'lucide-react';
 import { nightjarEditorPortfolio, type EditorPortfolioItem } from '../platform/firebase-editor-portfolio';
 import { nightjarAudioFileProblem } from '../platform/audio-upload';
+import StudioFormDraftSync from './StudioFormDraftSync';
 
 type Props = { notify: (message: string) => void; demoMode?: boolean };
 
@@ -19,6 +20,7 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
   const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
   const [permissionNote, setPermissionNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [draftClearSignal, setDraftClearSignal] = useState(0);
 
   const load = async () => {
     if (demoMode) {
@@ -59,6 +61,7 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       if (beforeFile) await nightjarEditorPortfolio.upload(created.item.id,'before',beforeFile);
       await nightjarEditorPortfolio.upload(created.item.id,'after',afterFile);
       await nightjarEditorPortfolio.submit(created.item.id);
+      setDraftClearSignal(value => value + 1);
       setTitle('');setDescription('');setServices('');setTechniques('');setBeforeFile(null);setAfterFile(null);setRightsConfirmed(false);setPermissionsConfirmed(false);setPermissionNote('');
       await load();
       notify('Editor showcase submitted for moderation.');
@@ -83,6 +86,17 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
     </div>
 
     <div className="editor-showcase-form">
+      <div className="editor-showcase-wide">
+        <StudioFormDraftSync scope="form-editor-showcase" demoMode={demoMode} clearSignal={draftClearSignal}
+          value={{title,description,services,techniques,permissionNote}}
+          onRestore={draft => {
+            setTitle(draft.title ?? '');setDescription(draft.description ?? '');
+            setServices(draft.services ?? '');setTechniques(draft.techniques ?? '');
+            setPermissionNote(draft.permissionNote ?? '');
+            // Consent is always renewed for each submission.
+            setRightsConfirmed(false);setPermissionsConfirmed(false);
+          }} />
+      </div>
       <label>Showcase title<input maxLength={140} value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="e.g. Dialogue restoration · before & after"/></label>
       <label>Services<input value={services} onChange={(e)=>setServices(e.target.value)} placeholder="Dialogue editing, restoration, mixing"/></label>
       <label className="editor-showcase-wide">Description<textarea maxLength={1200} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Explain the problem, your approach and what changed."/></label>
