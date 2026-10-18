@@ -32,7 +32,7 @@ const clearPendingAudio = (uid: string, releaseId: string) => {
 };
 
 const listCatalogueCall = httpsCallable<{ q?: string; category?: string }, { catalogue: any[] }>(functions, 'listCatalogue');
-const createReleaseCall = httpsCallable<Record<string, unknown>, { release: any }>(functions, 'createRelease');
+const createReleaseCall = httpsCallable<Record<string, unknown>, { release: any; reused?: boolean }>(functions, 'createRelease');
 const updateReleaseCall = httpsCallable<Record<string, unknown>, { release: any }>(functions, 'updateRelease');
 const deleteReleaseCall = httpsCallable<{ releaseId: string }, { deleted: boolean }>(functions, 'deleteRelease');
 const adminRemoveReleaseCall = httpsCallable<{ releaseId: string }, { deleted: boolean }>(functions, 'adminRemoveRelease');
