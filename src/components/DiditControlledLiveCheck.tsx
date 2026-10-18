@@ -63,6 +63,27 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
     } finally { setPending(false);setLoaded(true); }
   };
   useEffect(()=>{void refresh();},[]);
+  const lastReturnRefreshRef = useRef(0);
+  // Returning from Didit should automatically re-read the signed-in member's
+  // Nightjar verification status. This is deliberately STATUS-ONLY:
+  // no new paid session, no automatic reconciliation/provider API request.
+  // Focus and visibilitychange may fire together, so throttle the check.
+  useEffect(() => {
+    if (!loaded || status?.providerVerified || requiredAgreements.length) return;
+    const refreshOnReturn = () => {
+      if (document.visibilityState !== 'visible' || pending) return;
+      const now = Date.now();
+      if (now - lastReturnRefreshRef.current < 15000) return;
+      lastReturnRefreshRef.current = now;
+      void refresh();
+    };
+    window.addEventListener('focus', refreshOnReturn);
+    document.addEventListener('visibilitychange', refreshOnReturn);
+    return () => {
+      window.removeEventListener('focus', refreshOnReturn);
+      document.removeEventListener('visibilitychange', refreshOnReturn);
+    };
+  }, [loaded, pending, requiredAgreements.length, status?.providerVerified]);
   useEffect(()=>{
     if(!focusAfterAgreementRef.current || pending || requiredAgreements.length || !status)return;
     focusAfterAgreementRef.current=false;
@@ -205,7 +226,7 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
       </>}
       {launchUrl && <><a href={launchUrl} target="_blank" rel="noopener noreferrer" className="primary-button">
         <ExternalLink size={16} aria-hidden="true"/> Open secure Didit verification
-      </a><p role="status"><strong>After Didit approves you:</strong> Return to this Nightjar tab. You can close the Didit tab manually; Nightjar will check your approval without starting another ID session. If your status has not updated yet, tap “Refresh verification status” below.</p></>}
+      </a><p role="status"><strong>After Didit approves you:</strong> Return to this Nightjar tab. Nightjar will automatically check for your existing approval, without starting another ID session. If the result is still being processed, tap “Refresh verification status” below or use the completed-result recovery option.</p></>}
       {noEntryRoute && <p role="alert"><strong>Verification unavailable:</strong> Nightjar has not enabled your account’s Didit start route. Please contact Nightjar support; do not repeatedly try to start a paid check.</p>}
       {!noEntryRoute && !canStart && !launchUrl && <p><strong>Check already claimed or awaiting review.</strong> Nightjar will not start another paid session. Contact support if your verification link is missing.</p>}
       <p>Complete the check in Didit, return to Nightjar and tap Refresh verification status. An approved provider decision must be received and validated before you become Verified 18+.</p>
