@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, type QueryDocumentSnapshot, type DocumentReference } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
@@ -3549,7 +3549,7 @@ const privateCreateRequestId=(input:Record<string,unknown>):string|null=>{
   return value;
 };
 const savePrivateRecordOnce=async (
-  ref:FirebaseFirestore.DocumentReference,
+  ref:DocumentReference,
   record:Record<string,unknown>,
   ownerKey:string,
   uid:string,
