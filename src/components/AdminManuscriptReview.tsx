@@ -25,6 +25,7 @@ export default function AdminManuscriptReview({
   scripts, loading, demoMode, onRefresh, onReview, notify, simulationMode=false, onMessageWriter,
 }: Props) {
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
+  const [queuePage, setQueuePage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<any | null>(null);
   const [sourceFile, setSourceFile] = useState<{ fileName: string; url: string; expiresAt: string } | null>(null);
@@ -37,6 +38,15 @@ export default function AdminManuscriptReview({
   const pending = useMemo(() => scripts.filter((item) => pendingStatus(item.status)), [scripts]);
   const history = useMemo(() => scripts.filter((item) => !pendingStatus(item.status)), [scripts]);
   const shown = tab === 'pending' ? pending : history;
+  const PAGE_SIZE=15;
+  const queueLastPage=Math.max(0,Math.ceil(shown.length/PAGE_SIZE)-1);
+  const safeQueuePage=Math.min(queuePage,queueLastPage);
+  const visibleRows=shown.slice(safeQueuePage*PAGE_SIZE,(safeQueuePage+1)*PAGE_SIZE);
+  const changeQueuePage=(page:number)=>{
+    setQueuePage(Math.max(0,Math.min(page,queueLastPage)));
+    setSelectedId(null);
+    setViewerOpen(false);
+  };
   const selected = scripts.find((item) => item.id === selectedId) ?? null;
   const isPending = !!selected && pendingStatus(selected.status);
   const marketplaceRequested = selected?.marketplace?.visibility === 'marketplace';
@@ -111,17 +121,22 @@ export default function AdminManuscriptReview({
       <button className="secondary-button" disabled={loading} onClick={() => void onRefresh()}><RefreshCw size={15}/>{loading ? 'Loading…' : 'Refresh queue'}</button>
     </div>
     <div className="manuscript-review-tabs" role="group" aria-label="Manuscript queue filter">
-      <button className={tab === 'pending' ? 'primary-button' : 'secondary-button'} aria-pressed={tab === 'pending'} onClick={() => { setTab('pending'); setSelectedId(null); }}>Awaiting admin review ({pending.length})</button>
-      <button className={tab === 'history' ? 'primary-button' : 'secondary-button'} aria-pressed={tab === 'history'} onClick={() => { setTab('history'); setSelectedId(null); }}>Decision history & drafts ({history.length})</button>
+      <button className={tab === 'pending' ? 'primary-button' : 'secondary-button'} aria-pressed={tab === 'pending'} onClick={() => { setTab('pending'); setQueuePage(0); setSelectedId(null); }}>Awaiting admin review ({pending.length})</button>
+      <button className={tab === 'history' ? 'primary-button' : 'secondary-button'} aria-pressed={tab === 'history'} onClick={() => { setTab('history'); setQueuePage(0); setSelectedId(null); }}>Decision history & drafts ({history.length})</button>
     </div>
     {loading ? <div className="people-empty"><Clock3 size={20}/><strong>Loading manuscripts…</strong></div>
       : shown.length === 0 ? <div className="people-empty"><CheckCircle2 size={20}/><strong>{tab === 'pending' ? 'No manuscripts awaiting a decision' : 'No draft or reviewed manuscripts'}</strong><span>{tab === 'pending' ? 'All existing submitted scripts, including previously editor-assigned records, remain here until an admin decision.' : 'Previous decisions and drafts are separate from the actionable queue.'}</span></div>
-      : <div className="manuscript-review-list">{shown.map((item) =>
+      : <div className="manuscript-review-list">{visibleRows.map((item) =>
         <article className={'manuscript-review-item' + (selectedId === item.id ? ' selected' : '')} key={item.id}>
           <div><strong>{item.title || 'Untitled manuscript'}</strong><span>{item.status} · version {item.version ?? 1} · {item.marketplace?.visibility === 'marketplace' ? 'Marketplace requested' : 'Private / other visibility'}</span>
           {item.lastEditorialComment && <small>Previous note: {item.lastEditorialComment}</small>}</div>
           <button className="secondary-button" aria-expanded={selectedId === item.id} onClick={() => { if (selectedId === item.id) { setSelectedId(null); setViewerOpen(false); } else { setSelectedId(item.id); void openPreview(item); } }}>{selectedId === item.id ? 'Close' : pendingStatus(item.status) ? 'Review manuscript' : 'View record'} <ArrowRight size={14}/></button>
         </article>)}</div>}
+    {shown.length > PAGE_SIZE && !loading && <nav className="manuscript-review-pagination" aria-label="Manuscript review pages">
+      <button type="button" className="secondary-button" disabled={safeQueuePage===0} onClick={()=>changeQueuePage(safeQueuePage-1)}>Previous page</button>
+      <span role="status" aria-live="polite">Page {safeQueuePage+1} of {queueLastPage+1} · {shown.length} records</span>
+      <button type="button" className="secondary-button" disabled={safeQueuePage===queueLastPage} onClick={()=>changeQueuePage(safeQueuePage+1)}>Next page</button>
+    </nav>}
     {selected && <div className="manuscript-review-detail" aria-label="Selected manuscript review">
       <div className="manuscript-review-detail-head">
         <div><span className="mini-label">{isPending ? 'AWAITING A DECISION' : 'MANUSCRIPT RECORD'}</span><h3>{selected.title}</h3><p>{selected.status} · {marketplaceRequested ? 'Writer requested marketplace publication' : 'Writer has not selected marketplace visibility'}</p></div>

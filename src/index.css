@@ -11607,3 +11607,11 @@ textarea:focus-visible,
 :root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .public-role-profile {order:5}
 :root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-body>:not(.creator-profile-hero,.public-profile-metrics,.nj-cinema-profile-tabs,.creator-profile-releases,.nj-public-profile-about,.public-role-profile) {order:6}
 @media(max-width:700px){:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-body {padding:0 15px 25px}:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .nj-cinema-profile-cover {margin-inline:-15px;height:175px}:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile .creator-profile-hero.nj-cinema-profile-hero {grid-template-columns:90px minmax(0,1fr);gap:8px 12px}}
+
+
+/* Admin audio moderation list uses bounded DOM pages on narrow screens. */
+.moderation-queue-pagination {
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
+  gap:0.625rem; padding:0.75rem 0;
+}
+.moderation-queue-pagination span {font-size:0.875rem;text-align:center;min-width:8rem;}
