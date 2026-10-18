@@ -36,6 +36,7 @@ This checklist complements [release acceptance](nightjar-release-acceptance.md) 
 | S2 | Takedown/access revocation | Moderator removes/suspends content or account; stale clients and signed media URLs cannot restore unauthorised access | NOT RUN |
 | S3 | Release and cost telemetry | Confirm no unintended new paid API, unbounded document scan, duplicate push fan-out or unexpected scheduled job | NOT RUN |
 | M6 | Concurrent Editor showcase moderation | Use two authorized Admin accounts to approve/request changes on the same pending showcase simultaneously; exactly one decision commits with its reason and owner notification. Confirm second action is rejected as stale | NOT RUN |
+| S6 | Backend Admin queue pagination | With more than 60 private release records and more than 30 pending moderation submissions, load further batches and confirm every owned recording remains available, counts are honest, no duplicates, and non-Admin calls are rejected | NOT RUN |
 | S5 | Admin moderation pages on mobile | With 20+ test audio uploads and 15+ test manuscripts, page through both queues at 200% text on phone and desktop; confirm bounded visible rows, disabled page boundaries and cleared selection/preview on page switch | NOT RUN |
 | S4 | Mobile accessibility | 200% text, screenreader, keyboard, focus after error, reduced motion, 44+ px targets and contrast presets | NOT RUN |
 
