@@ -50,7 +50,7 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
         setStatus('conflict');
       } else {
         if (draft.payload) restore.current(saved);
-        synced.current = draft.payload ? signature(saved) : signature(current.current);
+        synced.current = draft.payload ? signature(saved) : isEmpty(current.current) ? signature(current.current) : '{}';
         setStatus('saved');
         conflict.current = false;
       }
@@ -101,6 +101,8 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
   useEffect(() => {
     if (demoMode) { setStatus('demo'); return; }
     let disposed = false;
+    clearing.current = false;
+    setReady(false);
     void nightjarProfileDrafts.get(scope).then(draft => {
       if (disposed) return;
       revision.current = draft.revision;
@@ -111,7 +113,7 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
         setStatus('conflict');
       } else {
         if (draft.payload) restore.current(saved);
-        synced.current = draft.payload ? signature(saved) : signature(current.current);
+        synced.current = draft.payload ? signature(saved) : isEmpty(current.current) ? signature(current.current) : '{}';
         setStatus('saved');
         conflict.current = false;
       }
