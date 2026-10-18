@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const backend=readFileSync(new URL('../functions/src/index.ts',import.meta.url),'utf8');
+const start=backend.indexOf('const createNotification = async');
+const end=backend.indexOf('\n};',start);
+assert.ok(start>=0 && end>start,'Notification helper must exist');
+const body=backend.slice(start,end);
+assert.match(body,/const dedupeKey = cleanText\(payload\.dedupeKey, 240\)/);
+assert.match(body,/db\.runTransaction\(async \(tx\) =>/,'Duplicate events must have an atomic create-if-absent');
+assert.match(body,/const prior = await tx\.get\(ref\)/,'Check persisted inbox before pushing again');
+assert.match(body,/if \(prior\.exists\) return false/,'Duplicate must not create notification or push');
+assert.match(body,/tx\.create\(ref, fresh\)/,'First event is create-only');
+assert.match(body,/if \(!newlyCreated\) return/,'Duplicate must skip push and preserve read status');
+assert.match(body,/read: false/,'First new notification is unread');
+assert.doesNotMatch(body,/merge: Boolean\(dedupeKey\)/,'Never rewrite an existing notification');
+assert.ok(body.indexOf('if (!newlyCreated) return') < body.indexOf('await deliverPushNotification('),'Push must occur only after successful unique insert');
+console.log('Idempotent notification save, read-state preservation and push dedupe validated.');
