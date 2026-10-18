@@ -96,6 +96,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [audioStage, setAudioStage] = useState<'idle' | 'uploading' | 'verifying' | 'saved' | 'error'>('idle');
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioFileLabel, setAudioFileLabel] = useState('');
+  const [audioRecoveryAvailable,setAudioRecoveryAvailable] = useState(false);
   const [audioFeedback, setAudioFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -135,6 +136,34 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     const refreshed = releases.find((release) => release.id === selectedRelease.id);
     if (refreshed && refreshed.status !== 'draft') setSelectedRelease((prior) => prior?.id === refreshed.id && JSON.stringify(prior) !== JSON.stringify(refreshed) ? refreshed : prior);
   }, [releases, selectedRelease?.id, selectedRelease?.status]);
+
+  useEffect(() => {
+    // A refresh can interrupt the final callable after Storage accepted the
+    // bytes. Check only the current authenticated account's local reference.
+    setAudioRecoveryAvailable(!simulationMode && !!selectedRelease?.id &&
+      selectedRelease.audioAvailable !== true &&
+      !!nightjarCatalogue.pendingAudio(selectedRelease.id));
+  }, [simulationMode, selectedRelease?.id, selectedRelease?.audioAvailable, audioStage]);
+
+  const recoverAudioUpload = async () => {
+    if (!current?.id || audioBusy || submitting || current.audioAvailable) return;
+    setAudioBusy(true);
+    setAudioStage('verifying');
+    setAudioFeedback('Checking the already transferred private audio on Nightjar. No new upload is starting.');
+    try {
+      const data = await nightjarCatalogue.recoverAudio(current.id);
+      if (data.release?.audioAvailable !== true) throw new Error('Nightjar did not confirm the audio attachment.');
+      setSelectedRelease(data.release);
+      setAudioRecoveryAvailable(false);
+      setAudioStage('saved');
+      setAudioFeedback('Previously uploaded audio recovered and confirmed on your private release. It is NOT submitted for approval yet.');
+      await onRefresh().catch(() => {});
+      notify('Your previously transferred recording is now attached. No second upload was needed.');
+    } catch (error) {
+      setAudioStage('error');
+      setAudioFeedback(error instanceof Error ? error.message : 'Recovery is not confirmed. Your previously transferred file has not been deleted.');
+    } finally { setAudioBusy(false); }
+  };
 
   const chooseRelease = (release: Release) => {
     setSelectedRelease(release);
@@ -402,6 +431,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       setSelectedRelease(data.release);
       setAudioStage('saved');
       setAudioProgress(100);
+      setAudioRecoveryAvailable(false);
       setAudioFeedback('Audio saved and verified in your private release. This is NOT sent for approval yet. Complete the details and press Submit to moderation.');
       await onRefresh().catch(() => { /* confirmed upload must remain visible */ });
       notify('Audio successfully uploaded and verified. Next: submit the completed release for moderation.');
@@ -602,6 +632,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <div className="asset-drop asset-drop-moderated nj-audio-attachment"><Music2 size={19} /><strong>{audioBusy ? audioStage === 'verifying' ? 'Verifying saved audio…' : 'Uploading your audio…' : current.audioAvailable ? 'Audio connected to this draft' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · private until approved</span>
               <label className="secondary-button upload-label">{audioBusy ? 'Upload in progress' : current.audioAvailable ? 'Replace this audio' : 'Choose audio to upload'}<input type="file" hidden disabled={audioBusy || current.status === 'pending_review' || current.status === 'released' || submitting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
               {audioFileLabel && <strong className="nj-audio-file-label">{audioFileLabel}</strong>}
+              {audioRecoveryAvailable && !current.audioAvailable && <div role="status" className="nj-audio-feedback"><strong>Recover transferred audio</strong><p>Nightjar retained a private upload that was not yet confirmed as attached. You can check it without selecting or transferring the file again.</p><button type="button" className="secondary-button" disabled={audioBusy} onClick={()=>void recoverAudioUpload()}>{audioBusy ? 'Checking private upload…' : 'Recover uploaded recording'}</button></div>}
               {audioBusy && <div className="nj-audio-upload-progress" role="progressbar" aria-label="Audio upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={audioProgress}><span style={{width:audioProgress + '%'}}/></div>}
               {audioBusy && <small className="nj-audio-percent">{audioStage === 'verifying' ? 'Transfer 100% · awaiting server verification' : audioProgress + '% transferred'}</small>}
               {(audioFeedback || current.audioAvailable) && <div className={audioStage === 'error' ? 'nj-audio-feedback error' : audioStage === 'saved' || current.audioAvailable ? 'nj-audio-feedback success' : 'nj-audio-feedback'} role="status">{audioFeedback || 'Private audio confirmed. This release is not publicly available until moderation approval.'}</div>}
