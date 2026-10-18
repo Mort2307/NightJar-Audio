@@ -12,6 +12,7 @@ import ContextHelp from './ContextHelp';
 import ManualTranscriptSync from './ManualTranscriptSync';
 import TranscriptSyncTool from './TranscriptSyncTool';
 import './creator-workflow.css';
+import './cloud-profile-draft.css';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type Release = {
