@@ -3538,6 +3538,41 @@ export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
 });
 
 
+// Repeat creation with the same account-scoped UUID after a lost callable
+// response. The UUID is a receipt, never a permission or identity credential.
+const privateCreateRequestId=(input:Record<string,unknown>):string|null=>{
+  if(input.clientRequestId == null || input.clientRequestId === '')return null;
+  const value=input.clientRequestId;
+  if(typeof value!=='string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)){
+    throw new HttpsError('invalid-argument','Private creation request identifier is invalid.');
+  }
+  return value;
+};
+const savePrivateRecordOnce=async (
+  ref:FirebaseFirestore.DocumentReference,
+  record:Record<string,unknown>,
+  ownerKey:string,
+  uid:string,
+  requestId:string|null,
+  quotaExceeded=false,
+) => {
+  if(!requestId) {
+    if(quotaExceeded)throw new HttpsError('resource-exhausted','Portfolio limit reached.');
+    await ref.set(record);
+    return false;
+  }
+  return db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    if(snap.exists){
+      if(snap.data()?.[ownerKey]!==uid)throw new HttpsError('permission-denied','Private draft is owned by another member.');
+      return true;
+    }
+    if(quotaExceeded)throw new HttpsError('resource-exhausted','Portfolio limit reached.');
+    tx.set(ref,record);
+    return false;
+  });
+};
+
 const artistPortfolioPayload = (data: Record<string, any>, id: string) => ({
   id,
   ownerUserId: cleanText(data.ownerUserId, 160),
@@ -3574,12 +3609,10 @@ export const createArtistPortfolioItem = onCall({ region: REGION }, async (reque
   if (!humanCreatedAttestation) throw new HttpsError('failed-precondition', 'Artist portfolio submissions must be your own human-created artwork, not AI-generated imagery.');
 
   const existing = await db.collection('artistPortfolio').where('ownerUserId','==',identity.uid).limit(40).get();
-  if (existing.docs.filter((doc)=>doc.data()?.status !== 'removed').length >= 24) {
-    throw new HttpsError('resource-exhausted', 'Artist portfolios can contain up to 24 active pieces.');
-  }
-
-  const ref = db.collection('artistPortfolio').doc();
-  await ref.set({
+  const clientRequestId=privateCreateRequestId(input);
+  const ref=clientRequestId?db.collection('artistPortfolio').doc(clientRequestId):db.collection('artistPortfolio').doc();
+  const quotaExceeded=existing.docs.filter((doc)=>doc.data()?.status!=='removed').length>=24;
+  const record={
     ownerUserId:identity.uid,
     title,
     description,
@@ -3598,9 +3631,10 @@ export const createArtistPortfolioItem = onCall({ region: REGION }, async (reque
     pendingImageStatus:null,
     createdAt:FieldValue.serverTimestamp(),
     updatedAt:FieldValue.serverTimestamp(),
-  });
+  };
+  const reused=await savePrivateRecordOnce(ref,record,'ownerUserId',identity.uid,clientRequestId,quotaExceeded);
   const saved = await ref.get();
-  return { item:artistPortfolioPayload(saved.data() ?? {}, ref.id) };
+  return { item:artistPortfolioPayload(saved.data() ?? {}, ref.id), reused };
 });
 
 export const myArtistPortfolio = onCall({ region: REGION }, async (request) => {
@@ -3705,7 +3739,8 @@ export const createEditorPortfolioItem = onCall({ region: REGION }, async (reque
   if (input.rightsConfirmed !== true || input.contributorPermissionsConfirmed !== true) {
     throw new HttpsError('failed-precondition', 'Confirm ownership/rights and contributor/client permission before uploading showcase audio.');
   }
-  const ref = db.collection('editorPortfolio').doc();
+  const clientRequestId=privateCreateRequestId(input);
+  const ref=clientRequestId?db.collection('editorPortfolio').doc(clientRequestId):db.collection('editorPortfolio').doc();
   const record = {
     ownerUserId: identity.uid,
     title,
@@ -3726,8 +3761,9 @@ export const createEditorPortfolioItem = onCall({ region: REGION }, async (reque
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  await ref.set(record);
-  return { item: editorPortfolioPayload(record, ref.id) };
+  const reused=await savePrivateRecordOnce(ref,record,'ownerUserId',identity.uid,clientRequestId);
+  const saved=await ref.get();
+  return { item: editorPortfolioPayload(saved.data() ?? record, ref.id), reused };
 });
 
 export const myEditorPortfolio = onCall({ region: REGION }, async (request) => {
@@ -5386,7 +5422,8 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
   const title = cleanText(input.title, 160);
   if (!title) throw new HttpsError('invalid-argument', 'Give the release a title first.');
 
-  const ref = db.collection('releases').doc();
+  const clientRequestId=privateCreateRequestId(input);
+  const ref=clientRequestId?db.collection('releases').doc(clientRequestId):db.collection('releases').doc();
   const record = {
     creatorUserId: identity.uid,
     creatorName: profileData.displayName ?? identity.email.split('@')[0],
@@ -5431,10 +5468,10 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  await ref.set(record);
-  await syncCreatorCustomTagUsage(identity.uid);
+  const reused=await savePrivateRecordOnce(ref,record,'creatorUserId',identity.uid,clientRequestId);
+  if(!reused)await syncCreatorCustomTagUsage(identity.uid);
   const saved = await ref.get();
-  return { release: releaseOwnerPayload(saved.data() ?? record, ref.id) };
+  return { release: releaseOwnerPayload(saved.data() ?? record, ref.id), reused };
 });
 
 export const updateRelease = onCall({ region: REGION }, async (request) => {
