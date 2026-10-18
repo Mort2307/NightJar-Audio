@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ImagePlus, LoaderCircle, Trash2, ChevronDown } from 'lucide-react';
 import { nightjarArtists, type ArtistPortfolioItem } from '../platform/firebase-artists';
 import { nightjarMedia } from '../platform/firebase-media';
+import StudioFormDraftSync from './StudioFormDraftSync';
 
 type Props = {
   notify: (message: string) => void;
@@ -27,6 +28,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [draftClearSignal, setDraftClearSignal] = useState(0);
 
   const load = async () => {
     if (demoMode) {
@@ -56,6 +58,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       setItems((current)=>[{
         id:'demo-artist-piece-'+Date.now(),ownerUserId:'demo-artist-lena',title:title.trim(),description:description.trim(),tags:tags.split(',').map((tag)=>tag.trim()).filter(Boolean).slice(0,12),commissionType:commissionType.trim()||null,status:'draft',imageUrl:null,imageStatus:null,pendingImageAssetId:'demo-pending-'+Date.now(),pendingImageStatus:'pending',createdAt:new Date().toISOString(),publishedAt:null,updatedAt:new Date().toISOString(),
       },...current]);
+      setDraftClearSignal(value => value + 1);
+      setDraftClearSignal(value => value + 1);
       setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       setFormOpen(false);
       notify('Simulation: artwork entered the fictional image-moderation queue.');
@@ -118,6 +122,16 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
 
     <button type="button" className="secondary-button nj-artist-artwork-toggle" aria-expanded={formOpen} onClick={()=>setFormOpen(current=>!current)}><ImagePlus size={16}/>{formOpen?'Close upload form':'Add new artwork'}<ChevronDown size={15}/></button>
     {formOpen && <div className="artist-portfolio-form">
+      <div className="artist-form-wide">
+        <StudioFormDraftSync scope="form-artist-portfolio" demoMode={demoMode} clearSignal={draftClearSignal}
+          value={{title,description,tags,commissionType}}
+          onRestore={draft => {
+            setTitle(draft.title ?? '');setDescription(draft.description ?? '');
+            setTags(draft.tags ?? '');setCommissionType(draft.commissionType ?? '');
+            // Neither file bytes nor permission attestations are persisted.
+            setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+          }} />
+      </div>
       <label>Artwork title<input maxLength={120} value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="e.g. Neon After Midnight"/></label>
       <label>Commission type<input maxLength={80} value={commissionType} onChange={(e)=>setCommissionType(e.target.value)} placeholder="Cover artwork, character portrait…"/></label>
       <label className="artist-form-wide">Description<textarea maxLength={600} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="A short public note about the piece, style or brief."/></label>
