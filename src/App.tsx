@@ -28,6 +28,7 @@ import { nightjarDiditControlled } from './platform/firebase-didit-controlled';
 import { nightjarLegal } from './platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
+import WriterManuscriptGrid from './components/WriterManuscriptGrid';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarAuthSecurity, type AuthenticationSecurityEvent } from './platform/firebase-auth-security';
 import { nightjarReviews } from './platform/firebase-reviews';
@@ -736,7 +737,15 @@ function App() {
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerNewArtworkFile, setWriterNewArtworkFile] = useState<File | null>(null);
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
+  const [writerEditDirty,setWriterEditDirty] = useState(false);
+  const [writerSaveConflict,setWriterSaveConflict] = useState(false);
+  const [writerDetailOpen,setWriterDetailOpen] = useState(false);
+  const [writerSaving,setWriterSaving] = useState(false);
+  const [writerAutoSavePaused,setWriterAutoSavePaused] = useState(false);
   const [writerSelected, setWriterSelected] = useState<any | null>(null);
+  const latestWriterSelectedRef = useRef<any | null>(null);
+  latestWriterSelectedRef.current = writerSelected;
+  const writerSaveInFlightRef = useRef(false);
   const [editorQueue, setEditorQueue] = useState<any[]>([]);
   const [editorSelected, setEditorSelected] = useState<any | null>(null);
   const [, setProtectedScripts] = useState<any[]>([]);
@@ -4379,20 +4388,76 @@ function App() {
   };
 
   const saveWriterScript = async () => {
-    if (!writerSelected) return;
+    if (!writerSelected || writerSaveInFlightRef.current || writerSaveConflict) return;
+    writerSaveInFlightRef.current = true;
+    const snapshot = { id: writerSelected.id, title: writerSelected.title, content: writerSelected.content ?? '' };
+    setWriterSaving(true);
     try {
       if (simulationMode) {
         setWriterScripts((items) => { const updated = items.map((item) => item.id === writerSelected.id ? writerSelected : item); writeDemo('writerScripts', updated); return updated; });
+        setWriterEditDirty(false);
         notify('Simulation: script saved locally.');
         return;
       }
-      const data = await nightjarScripts.update(writerSelected.id, writerSelected);
-      setWriterSelected(data.script ?? writerSelected);
+      const data = await nightjarScripts.update(writerSelected.id, {
+        title:writerSelected.title, content:writerSelected.content ?? '',
+        expectedRevision: Number(writerSelected.contentRevision ?? 0),
+      });
+      const latest = latestWriterSelectedRef.current;
+      const modifiedDuringSave = latest?.id === snapshot.id
+        && (latest.title !== snapshot.title || (latest.content ?? '') !== snapshot.content);
+      // A later keystroke must NEVER be replaced by the older response.
+      setWriterSelected((current:any) => {
+        if (current?.id !== snapshot.id) return current;
+        return modifiedDuringSave ? { ...current, contentRevision:data.script.contentRevision } : data.script;
+      });
+      setWriterEditDirty(modifiedDuringSave);
+      setWriterAutoSavePaused(false);
       await loadWriterScripts();
-      notify('Script saved.');
-    } catch {
-      notify('Script could not be saved.');
-    }
+      if (!modifiedDuringSave) notify('Manuscript saved to your account.');
+    } catch (error) {
+      if (String((error as {code?:unknown})?.code ?? '').includes('aborted')) {
+        setWriterSaveConflict(true);
+        notify('This manuscript has newer changes on another device. Your current edits remain visible; compare before replacing them.');
+      } else notify(error instanceof Error ? error.message : 'Manuscript could not be saved. Your edits remain in this editor.');
+      setWriterAutoSavePaused(true);
+    } finally { writerSaveInFlightRef.current = false; setWriterSaving(false); }
+  };
+
+  // Debounced cloud autosave. Failed saves pause automatic attempts until the
+  // member chooses Retry; otherwise an offline tab could generate repeated
+  // failing writes for every keystroke.
+  useEffect(() => {
+    if (!writerEditDirty || writerSaveConflict || writerSaving || writerAutoSavePaused ||
+      !writerSelected?.id || !['Draft','Revision requested','Rejected'].includes(String(writerSelected.status)) ||
+      demoMode || !ageVerified || !user?.userId) return;
+    const timer = window.setTimeout(() => { void saveWriterScript(); }, 1600);
+    return () => window.clearTimeout(timer);
+  }, [writerSelected?.id, writerSelected?.title, writerSelected?.content,
+    writerSelected?.contentRevision, writerEditDirty, writerSaveConflict,
+    writerSaving, writerAutoSavePaused, demoMode, ageVerified, user?.userId]);
+
+  useEffect(() => {
+    if (!writerEditDirty) return;
+    const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [writerEditDirty]);
+
+  const reloadWriterScriptFromAccount = async () => {
+    if (!writerSelected || writerSaving) return;
+    if (writerEditDirty && !window.confirm('Load the latest cloud manuscript? This discards the unsaved text in this editor.')) return;
+    try {
+      const result = await nightjarScripts.writerScripts();
+      const latest = result.scripts.find((item:any) => item.id === writerSelected.id);
+      if (!latest) { notify('This manuscript is no longer available to your account.'); return; }
+      setWriterSelected(latest);
+      setWriterScripts(result.scripts);
+      setWriterSaveConflict(false);
+      setWriterEditDirty(false);
+      setWriterAutoSavePaused(false);
+      notify('Latest protected manuscript loaded. You can now continue editing.');
+    } catch { notify('Could not load the latest manuscript. Keep this editor open and retry.'); }
   };
 
   const createWriterVersion = async () => {
@@ -4455,21 +4520,28 @@ function App() {
       }
       // Always persist unsaved title/text edits from the Writer Studio first.
       // The Rights panel has already persisted the Writer's attestations.
-      await nightjarScripts.update(writerSelected.id, {
+      if (writerSaveConflict) throw new Error('Resolve the manuscript version conflict before submitting.');
+      const updated = await nightjarScripts.update(writerSelected.id, {
         title: writerSelected.title,
         content: writerSelected.content ?? '',
+        expectedRevision: Number(writerSelected.contentRevision ?? 0),
       });
+      // Only submit after the canonical Writer revision is confirmed.
+      setWriterSelected(updated.script);
       const result = await nightjarScripts.submit(writerSelected.id);
       if (result.script?.status !== 'Submitted') {
         notify('NightJar did not confirm submission. Check your manuscript status before retrying.');
         return false;
       }
       setWriterSelected(result.script);
+      setWriterEditDirty(false);
+      setWriterSaveConflict(false);
       await loadWriterScripts();
       notify('Manuscript submitted directly to NightJar administrators. Your full work remains private.');
       return true;
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'Submission could not be completed. Review the saved manuscript and rights declarations.');
+      if (String((error as {code?:unknown})?.code ?? '').includes('aborted')) setWriterSaveConflict(true);
+      notify(error instanceof Error ? error.message : 'Submission could not be completed. Your manuscript edits remain available.');
       return false;
     }
   };
@@ -5841,6 +5913,7 @@ function App() {
         {view === 'writer' && effectiveRole === 'writer' && !liveRolePreview && (
           <section className="page-wrap role-studio-page">
             <div className="page-heading"><div><p className="eyebrow"><FileText size={14}/> WRITER STUDIO</p><h1>Write it. Protect it.</h1><p>Private manuscripts, protected uploads and direct NightJar administrator review for marketplace submissions.</p></div></div>
+            {!writerDetailOpen && <>
             <RoleDashboard
               eyebrow="WRITER COMMAND CENTRE"
               title="Your writing workflow."
@@ -5907,16 +5980,36 @@ function App() {
             <div className="nj-writer-simple-step" role="status"><strong>Next: choose your manuscript in the library below.</strong>
               <span>Tap <strong>Review rights &amp; submit</strong> on the selected manuscript. Only two required permissions need ticking. You can leave the optional settings alone.</span>
             </div>
-            <div className="writer-layout"><aside className="writer-library">{writerScripts.map((script:any)=><button key={script.id} className={writerSelected?.id===script.id?'library-item active':'library-item'} onClick={()=>{setWriterSelected(script); void loadWriterPermissions(script.id);}}><span>{script.status}</span><strong>{script.title}</strong><em>v{script.version}</em></button>)}{!writerScripts.length&&<div className="people-empty"><FileText size={18}/><strong>No manuscripts yet.</strong><span>Create a script to begin.</span></div>}</aside>{writerSelected?<article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} readOnly={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onChange={e=>setWriterSelected({...writerSelected,title:e.target.value})}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div>{writerSelected.sourceFile&&<div className="writer-source-file"><div><Upload size={15}/><span><strong>{writerSelected.sourceFile.fileName}</strong><small>{Math.max(1,Math.round(Number(writerSelected.sourceFile.sizeBytes??0)/1024))} KB · protected source upload</small></span></div><span className="status-pill">PRIVATE SOURCE</span></div>}<textarea className="script-editor" value={writerSelected.content??''} readOnly={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onChange={e=>setWriterSelected({...writerSelected,content:e.target.value})} placeholder={writerSelected.sourceFile?'Optional editable text copy. Your uploaded source manuscript remains the protected original.':'Begin writing…'}/>{['Submitted','Under review'].includes(String(writerSelected.status)) && <p className="writer-submission-status"><ShieldCheck size={16}/> Submitted to NightJar for admin review. Your manuscript is protected while you wait; no Audio Editor assignment is required.</p>}{['Revision requested','Rejected'].includes(String(writerSelected.status)) && writerSelected.lastEditorialComment && <p className="writer-submission-status"><FileText size={16}/> Review feedback: {writerSelected.lastEditorialComment}</p>}<div className="editor-actions"><button className="secondary-button" disabled={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>void saveWriterScript()}>Save</button><details className="nj-writer-secondary-actions"><summary>Optional · versions and sharing</summary><div>
+            </>}
+            <div className="writer-layout">
+              {!writerDetailOpen
+                ? <WriterManuscriptGrid scripts={writerScripts} onOpen={(script)=>{
+                    setWriterSelected(script); setWriterEditDirty(false);
+                    setWriterSaveConflict(false); setWriterAutoSavePaused(false);
+                    setWriterDetailOpen(true); void loadWriterPermissions(script.id);
+                    window.requestAnimationFrame(()=>document.getElementById('writer-manuscript-detail')?.scrollIntoView({behavior:'auto',block:'start'}));
+                  }}/>
+                : <section className="nj-writer-detail-page" id="writer-manuscript-detail" aria-label="Manuscript details and editing">
+                    <div className="nj-writer-detail-head">
+                      <div><span className="mini-label">PRIVATE MANUSCRIPT</span><h2>{writerSelected?.title || 'My manuscript'}</h2><span className="nj-writer-manuscript-status is-draft">{writerSelected?.status || 'Draft'}</span></div>
+                      <button className="secondary-button nj-writer-detail-back" type="button" onClick={()=>{
+                        if(writerEditDirty && !window.confirm('This manuscript still has unsaved changes. Leave these details and discard the unsaved edits?'))return;
+                        setWriterDetailOpen(false); setWriterEditDirty(false);setWriterSaveConflict(false);setWriterAutoSavePaused(false);
+                        window.requestAnimationFrame(()=>document.getElementById('writer-manuscript-library')?.scrollIntoView({behavior:'auto',block:'start'}));
+                      }}><ArrowLeft size={17}/> Back to manuscripts</button>
+                    </div>
+                    {writerSelected ? <article className="writer-editor-card"><div className="editor-toolbar"><div><span className="mini-label">MANUSCRIPT</span><input value={writerSelected.title??''} readOnly={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onChange={e=>{setWriterSelected({...writerSelected,title:e.target.value});setWriterEditDirty(true);}}/></div><span className="status-pill">{writerSelected.status} · v{writerSelected.version}</span></div>{writerSelected.sourceFile&&<div className="writer-source-file"><div><Upload size={15}/><span><strong>{writerSelected.sourceFile.fileName}</strong><small>{Math.max(1,Math.round(Number(writerSelected.sourceFile.sizeBytes??0)/1024))} KB · protected source upload</small></span></div><span className="status-pill">PRIVATE SOURCE</span></div>}<textarea className="script-editor" value={writerSelected.content??''} readOnly={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onChange={e=>{setWriterSelected({...writerSelected,content:e.target.value});setWriterEditDirty(true);}} placeholder={writerSelected.sourceFile?'Optional editable text copy. Your uploaded source manuscript remains the protected original.':'Begin writing…'}/>{['Submitted','Under review'].includes(String(writerSelected.status)) && <p className="writer-submission-status"><ShieldCheck size={16}/> Submitted to NightJar for admin review. Your manuscript is protected while you wait; no Audio Editor assignment is required.</p>}{['Revision requested','Rejected'].includes(String(writerSelected.status)) && writerSelected.lastEditorialComment && <p className="writer-submission-status"><FileText size={16}/> Review feedback: {writerSelected.lastEditorialComment}</p>}{writerSaveConflict && <p role="alert" className="writer-submission-status"><ShieldAlert size={16}/> A newer manuscript revision exists on another device. Your unsaved text is still in this editor. Copy it elsewhere if needed before reloading. <button className="secondary-button" onClick={()=>void reloadWriterScriptFromAccount()}>Review latest account revision</button></p>}{writerEditDirty && !writerSaveConflict && <p role="status">{writerAutoSavePaused ? 'Automatic saving paused after an error. Your changes remain here; retry saving when connected.' : writerSaving ? 'Saving your manuscript to NightJar…' : 'Unsaved manuscript changes · automatic account save shortly.'}</p>}<div className="editor-actions"><button className="secondary-button" disabled={writerSaving || writerSaveConflict || !['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>void saveWriterScript()}>{writerSaving?'Saving…':'Save manuscript'}</button><details className="nj-writer-secondary-actions"><summary>Optional · versions and sharing</summary><div>
               <button className="secondary-button" onClick={()=>void createWriterVersion()}>Record version</button>
               <button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button>
             </div></details><button className="primary-button" disabled={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>{window.dispatchEvent(new CustomEvent('nightjar:open-workspace-section',{detail:'writer-rights'}));window.setTimeout(()=>document.getElementById('writer-rights-review')?.scrollIntoView({behavior:'smooth',block:'start'}),50);}}>{['Submitted','Under review'].includes(String(writerSelected.status)) ? 'Awaiting admin review' : ['Approved','Published'].includes(String(writerSelected.status)) ? 'Approved by NightJar' : 'Review rights & submit'}</button><details className="nj-writer-secondary-actions"><summary>Optional · reader and draft management</summary><div>
               <button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>
               {['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}
-            </div></details></div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article>:<div className="writer-editor-card"><div className="people-empty"><FileText size={18}/><strong>Select a manuscript.</strong><span>Choose a live script from your library.</span></div></div>}</div>
-            {writerSelected && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-artwork" title="Manuscript artwork" summary="Optional cover art and approvals"><Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading manuscript artwork controls" />}><WriterScriptArtwork key={'writer-artwork-' + String(writerSelected.id)} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
-            {writerSelected && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-rights" title="Script rights and submission" summary="Licence terms and review" defaultOpen><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights controls" />}><WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} submitManuscript={submitWriterScript} /></Suspense></WorkspaceSection>}
-            {writerSelected && String(writerSelected.status)!=='Draft' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-review" title="Review conversation" summary="Comments and manuscript feedback" defaultOpen><Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading NightJar review conversation" />}><ManuscriptReviewConversation key={'writer-review-thread-'+String(writerSelected.id)} scriptId={String(writerSelected.id)} audience="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
+            </div></details></div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article> : <p role="status">Choose a manuscript from your library.</p>}
+                  </section>}
+            </div>
+            {writerDetailOpen && writerSelected && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-artwork" title="Manuscript artwork" summary="Optional cover art and approvals"><Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading manuscript artwork controls" />}><WriterScriptArtwork key={'writer-artwork-' + String(writerSelected.id)} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
+            {writerDetailOpen && writerSelected && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-rights" title="Script rights and submission" summary="Licence terms and review" defaultOpen><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights controls" />}><WriterRightsPanel key={'writer-rights-' + demoSessionKey + '-' + String(writerSelected?.id ?? '')} script={writerSelected} onUpdated={(next)=>{setWriterSelected(next); setWriterScripts((items:any[])=>{const updated=items.map((item:any)=>item.id===next.id?next:item); if(simulationMode) writeDemo('writerScripts',updated); return updated;});}} notify={notify} simulationMode={simulationMode} submitManuscript={submitWriterScript} /></Suspense></WorkspaceSection>}
+            {writerDetailOpen && writerSelected && String(writerSelected.status)!=='Draft' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-review" title="Review conversation" summary="Comments and manuscript feedback" defaultOpen><Suspense fallback={<NightjarSkeleton variant="list" count={1} label="Loading NightJar review conversation" />}><ManuscriptReviewConversation key={'writer-review-thread-'+String(writerSelected.id)} scriptId={String(writerSelected.id)} audience="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
             <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-negotiations" title="Rights discussions" summary="Licence planning and protected collaboration"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer rights negotiations" />}><ScriptLicenceWorkspace role="writer" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense></WorkspaceSection>
             <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="writer-collaborations" title="Collaborations" summary="Projects and creative partnerships"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Writer collaborations" />}><CollaborationHub key={'writer-collab-' + demoSessionKey} role="writer" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense></WorkspaceSection>
           </section>
