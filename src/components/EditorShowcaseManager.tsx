@@ -55,7 +55,15 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       let existing: EditorPortfolioItem | undefined;
       if (itemId) {
         existing = ((await nightjarEditorPortfolio.mine()).items ?? []).find(item => item.id === itemId);
-        if (!existing || existing.status !== 'draft') throw new Error('The private showcase draft is no longer editable.');
+        if (!existing) throw new Error('The private showcase draft is no longer available.');
+        if (existing.status === 'pending_review' || existing.status === 'published') {
+          setRetryItemId(null);
+          setDraftClearSignal(value => value + 1);
+          await load();
+          notify('Showcase was already submitted. No duplicate has been created.');
+          return;
+        }
+        if (!['draft','changes','rejected'].includes(existing.status)) throw new Error('This showcase can no longer be edited.');
       }
       if (!existing?.afterAudioAvailable && !afterFile) {
         notify('Select the finished / after audio sample to continue this private draft.');
@@ -94,6 +102,27 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       await load();
       const detail = error instanceof Error ? error.message : '';
       notify((detail ? detail + ' ' : '') + 'If a private draft is listed below, choose Resume upload rather than creating another item.');
+    } finally { setBusy(false); }
+  };
+
+  const submitExisting = async (itemId: string) => {
+    if (demoMode || busy) return;
+    setBusy(true);
+    try {
+      const current = ((await nightjarEditorPortfolio.mine()).items ?? []).find(item => item.id === itemId);
+      if (!current) throw new Error('Showcase draft no longer exists.');
+      if (current.status === 'pending_review' || current.status === 'published') {
+        notify('Showcase is already submitted; no duplicate created.');
+      } else if (current.status === 'draft' && current.afterAudioAvailable) {
+        await nightjarEditorPortfolio.submit(itemId);
+        notify('Showcase submitted for moderation.');
+      } else {
+        throw new Error('The showcase requires a finished audio sample before submission.');
+      }
+      await load();
+    } catch {
+      await load();
+      notify('Submission could not be confirmed. Check the private showcase status before trying again.');
     } finally { setBusy(false); }
   };
 
@@ -155,7 +184,7 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
           setPermissionNote(item.clientPermissionNote??'');
           setBeforeFile(null);setAfterFile(null);setFileInputNonce(value=>value+1);
           setRightsConfirmed(false);setPermissionsConfirmed(false);
-        }}>Resume upload</button>}{item.status==='draft'&&item.afterAudioAvailable&&<button className="secondary-button" onClick={()=>void nightjarEditorPortfolio.submit(item.id).then(load).then(()=>notify('Showcase submitted for moderation.'))}><Send size={13}/> Submit</button>}{item.status!=='pending_review'&&<button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={13}/> Remove</button>}</div>
+        }}>Resume upload</button>}{item.status==='draft'&&item.afterAudioAvailable&&<button className="secondary-button" disabled={busy} onClick={()=>void submitExisting(item.id)}><Send size={13}/> Submit</button>}{item.status!=='pending_review'&&<button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={13}/> Remove</button>}</div>
       </article>)}
       {!items.length&&<div className="people-empty"><FileAudio size={17}/><strong>No showcase samples yet.</strong><span>Add finished work or a before/after comparison alongside your verified Nightjar credits.</span></div>}
     </div>
