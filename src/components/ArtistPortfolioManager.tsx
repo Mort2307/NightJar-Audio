@@ -29,6 +29,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [retryItemId, setRetryItemId] = useState<string | null>(null);
+  const [fileInputNonce, setFileInputNonce] = useState(0);
   const [draftClearSignal, setDraftClearSignal] = useState(0);
 
   const load = async () => {
@@ -64,7 +65,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         createdAt:new Date().toISOString(),publishedAt:null,updatedAt:new Date().toISOString(),
       },...current]);
       setDraftClearSignal(value => value + 1);
-      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);
+      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setFileInputNonce(value => value + 1);
       setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       setFormOpen(false);
       notify('Simulation: artwork entered the fictional image-moderation queue.');
@@ -110,7 +111,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       });
       setRetryItemId(null);
       setDraftClearSignal(value => value + 1);
-      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);
+      setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setFileInputNonce(value => value + 1);
       setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
       await load();
       setFormOpen(false);
@@ -160,7 +161,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <span>Re-select the image and reconfirm permissions. This reuses the original record.</span>
       <button type="button" className="ghost-button" disabled={busy} onClick={() => {
         setRetryItemId(null);setTitle('');setDescription('');setTags('');setCommissionType('');
-        setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+        setFile(null);setFileInputNonce(value => value + 1);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
         setDraftClearSignal(value => value + 1);
       }}>Start a separate artwork</button>
     </div>}
@@ -169,7 +170,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <label>Commission type<input maxLength={80} value={commissionType} onChange={(e)=>setCommissionType(e.target.value)} placeholder="Cover artwork, character portrait…"/></label>
       <label className="artist-form-wide">Description<textarea maxLength={600} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="A short public note about the piece, style or brief."/></label>
       <label>Tags<input value={tags} onChange={(e)=>setTags(e.target.value)} placeholder="Atmospheric, fantasy, painterly"/></label>
-      <label>Artwork image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e)=>setFile(e.target.files?.[0] ?? null)}/></label>
+      <label>Artwork image<input key={fileInputNonce} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e)=>setFile(e.target.files?.[0] ?? null)}/></label>
       <label className="nightjar-anonymous-toggle artist-form-wide"><input type="checkbox" checked={humanCreated} onChange={(e)=>setHumanCreated(e.target.checked)}/><span>I confirm this is my own human-created artwork and is not AI-generated.</span></label>
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={rightsConfirmed} onChange={(e)=>setRightsConfirmed(e.target.checked)}/><span>I own or control the rights needed to display this artwork publicly on Nightjar.</span></label>
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have any required client, subject, model or collaborator permission for this public portfolio use.</span></label>
@@ -184,7 +185,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         {item.status==='draft' && !item.pendingImageAssetId && !item.imageUrl && <button type="button" className="secondary-button" disabled={busy} onClick={() => {
           setRetryItemId(item.id);setTitle(item.title);setDescription(item.description);
           setTags((item.tags ?? []).join(', '));setCommissionType(item.commissionType ?? '');
-          setFile(null);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
+          setFile(null);setFileInputNonce(value => value + 1);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
           setFormOpen(true);
         }}>Resume image upload</button>}
         <button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={14}/> Remove</button>
