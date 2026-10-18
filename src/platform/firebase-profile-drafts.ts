@@ -1,7 +1,8 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { firebaseApp } from './firebase-auth';
 
-export type ProfileDraftScope='onboarding'|'profile-listener'|'profile-creator'|'profile-writer'|'profile-editor'|'profile-artist'|'profile-admin';
+export type StudioDraftScope = 'form-editor-showcase' | 'form-artist-portfolio';
+export type ProfileDraftScope='onboarding'|'profile-listener'|'profile-creator'|'profile-writer'|'profile-editor'|'profile-artist'|'profile-admin'|StudioDraftScope;
 export type CloudProfileDraft={
   scope:ProfileDraftScope;
   revision:number;
