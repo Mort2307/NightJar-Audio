@@ -38,6 +38,15 @@ const acknowledgement=panel.slice(panel.indexOf('const acceptApprovedNotice=asyn
 assert.doesNotMatch(acknowledgement, /nightjarDiditControlled\.start\(|nightjarAge\.start\(/,
   'notice acknowledgement cannot launch a second paid check');
 assert.match(panel, /Check my completed Didit result · no new ID check/, 'existing result can be reconciled without a second session');
+const automaticReturnBlock=panel.slice(panel.indexOf('// Returning from Didit should automatically'),panel.indexOf('const acceptRequiredAgreements=async'));
+assert.match(automaticReturnBlock,/addEventListener\('focus', refreshOnReturn\)/,'returning to the Nightjar tab should refresh the existing status');
+assert.match(automaticReturnBlock,/addEventListener\('visibilitychange', refreshOnReturn\)/,'mobile app resume should refresh existing status');
+assert.match(automaticReturnBlock,/document\.visibilityState !== 'visible'/,'background activity cannot trigger status calls');
+assert.match(automaticReturnBlock,/lastReturnRefreshRef\.current < 15000/,'dual tab focus events are rate-limited');
+assert.match(automaticReturnBlock,/void refresh\(\)/,'return only reads the current account status');
+assert.doesNotMatch(automaticReturnBlock, /nightjarDiditControlled\.(start|reconcile)\(|nightjarAge\.start\(/,
+  'automatic return must neither create a paid ID session nor recover a provider decision without user action');
+
 assert.match(backend, /tx\.create\(grantRef, \{/, 'one-use account claim is durable and race-safe');
 assert.match(workflow, /\[nightjar-didit-mandatory-gate-release\]/, 'production backend-first release must be explicitly tagged');
 const deploy=workflow.slice(workflow.indexOf('name: Enforce mandatory approved Didit access before Hosting'),
