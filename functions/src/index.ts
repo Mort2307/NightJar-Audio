@@ -13589,6 +13589,70 @@ export const reviewNightjarTeamFeedback = onCall({region:REGION},async(request)=
   return {reviewed:true};
 });
 
+// User-owned directory shortcuts. The backend is authoritative; the first
+// account write may migrate up to eight browser-only shortcuts from older clients.
+// Optimistic revisions prevent a stale phone from overwriting edits on desktop.
+type SavedDirectoryView = {
+  id: string; name: string; query: string;
+  role: 'all' | 'creator' | 'writer' | 'editor' | 'artist' | 'listener';
+  tag: string; availability: string;
+};
+const savedDirectoryViewsFor = (uid: string) => accountRef(uid).collection('privateSettings').doc('directoryViews');
+const normaliseDirectoryViews = (raw: unknown): SavedDirectoryView[] => {
+  if (!Array.isArray(raw) || raw.length > 8) {
+    throw new HttpsError('invalid-argument', 'You may save up to eight directory views.');
+  }
+  const seen = new Set<string>();
+  return raw.map((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new HttpsError('invalid-argument', 'Invalid saved directory view.');
+    }
+    const item = entry as Record<string, unknown>;
+    const id = cleanText(item.id, 80);
+    const name = cleanText(item.name, 160);
+    const query = cleanText(item.query, 120);
+    const role = cleanText(item.role, 16) || 'all';
+    const tag = cleanText(item.tag, 100) || 'all';
+    const availability = cleanText(item.availability, 100) || 'all';
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id) || !name || seen.has(id)
+      || !['all','creator','writer','editor','artist','listener'].includes(role)) {
+      throw new HttpsError('invalid-argument', 'Invalid or duplicate saved directory view.');
+    }
+    seen.add(id);
+    return { id, name, query, role: role as SavedDirectoryView['role'], tag, availability };
+  });
+};
+const directoryViewsSnapshot = (data: Record<string, any> | undefined) => ({
+  revision: Math.max(0, Number(data?.revision ?? 0)),
+  views: Array.isArray(data?.views) ? data.views as SavedDirectoryView[] : [],
+});
+export const getMyDirectoryViews = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const document = await savedDirectoryViewsFor(identity.uid).get();
+  return directoryViewsSnapshot(document.data());
+});
+export const saveMyDirectoryViews = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const expectedRevision = Number(input.expectedRevision);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new HttpsError('invalid-argument', 'Invalid saved-view version.');
+  }
+  const views = normaliseDirectoryViews(input.views);
+  const reference = savedDirectoryViewsFor(identity.uid);
+  return db.runTransaction(async (tx) => {
+    const current = directoryViewsSnapshot((await tx.get(reference)).data());
+    if (current.revision !== expectedRevision) return { saved: false, ...current };
+    const revision = expectedRevision + 1;
+    tx.set(reference, {
+      ownerUserId: identity.uid, views, revision, updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { saved: true, revision, views };
+  });
+});
+
 // Low-cost listener experience additions. Reads are on demand; no scheduled
 // fan-out, external API, or extra queue infrastructure is involved.
 const momentMarksFor = (uid: string) => accountRef(uid).collection('momentMarks');

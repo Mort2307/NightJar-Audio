@@ -12,6 +12,7 @@ import { classifyProfessionalApplications, filterProfessionalApplicationsByRole,
 import { nightjarCatalogue } from './platform/firebase-catalogue';
 import { nightjarListening } from './platform/firebase-listening';
 import { nightjarExperience, type ListeningBoundaries } from './platform/firebase-experience';
+import { nightjarDirectoryViews, legacyDirectoryViews, type SavedDirectoryView } from './platform/firebase-directory-views';
 import { DEFAULT_LISTENING_BOUNDARIES, hiddenByBoundaries, matchesListeningMood, type MoodFilter } from './platform/listening-discovery';
 import ListeningDiscoveryControls from './components/ListeningDiscoveryControls';
 import CreatorProductionTimeline from './components/CreatorProductionTimeline';
@@ -684,7 +685,12 @@ function App() {
   const [directoryRoleFilter, setDirectoryRoleFilter] = useState<'all' | 'creator' | 'writer' | 'editor' | 'artist' | 'listener'>('all');
   const [directoryTagFilter, setDirectoryTagFilter] = useState('all');
   const [directoryAvailabilityFilter, setDirectoryAvailabilityFilter] = useState('all');
-  const [savedDirectoryViews, setSavedDirectoryViews] = useState<any[]>([]);
+  const [savedDirectoryViews, setSavedDirectoryViews] = useState<SavedDirectoryView[]>([]);
+  const [directoryViewsSync, setDirectoryViewsSync] = useState<'loading' | 'ready' | 'saving' | 'error' | 'conflict'>('loading');
+  const [directoryViewsRetryNonce, setDirectoryViewsRetryNonce] = useState(0);
+  const directoryViewsRevisionRef = useRef(0);
+  const directoryViewsAccountRef = useRef<string | null>(null);
+  const directoryViewsBusyRef = useRef(false);
   const [creatorSpotlightList, setCreatorSpotlightList] = useState<Spotlight[]>([]);
   const [writerSpotlightList, setWriterSpotlightList] = useState<Spotlight[]>([]);
   const [editorSpotlightList, setEditorSpotlightList] = useState<Spotlight[]>([]);
@@ -879,17 +885,48 @@ function App() {
   }, [profileDirty]);
 
   useEffect(() => {
-    if (!user?.userId) {
-      setSavedDirectoryViews([]);
-      return;
-    }
-    try {
-      const stored = window.localStorage.getItem('nightjar.directory.views:' + user.userId);
-      setSavedDirectoryViews(stored ? JSON.parse(stored) : []);
-    } catch {
-      setSavedDirectoryViews([]);
-    }
-  }, [user?.userId]);
+    const uid = user?.userId ?? null;
+    directoryViewsAccountRef.current = uid;
+    directoryViewsRevisionRef.current = 0;
+    directoryViewsBusyRef.current = false;
+    setSavedDirectoryViews([]);
+    setDirectoryViewsSync('loading');
+    if (!uid) return;
+
+    const key = 'nightjar.directory.views:' + uid;
+    let legacy: SavedDirectoryView[] = [];
+    try { legacy = legacyDirectoryViews(JSON.parse(window.localStorage.getItem(key) || '[]')); } catch {}
+    // Show existing browser-only views during initial cloud read, without
+    // presenting them as synced or permitting edits until the server responds.
+    setSavedDirectoryViews(legacy);
+    if (demoMode) { setDirectoryViewsSync('ready'); return; }
+    if (!ageVerified) return;
+
+    let cancelled = false;
+    void (async () => {
+      const remote = await nightjarDirectoryViews.get();
+      if (cancelled) return;
+      let current = remote;
+      if (remote.revision === 0 && legacy.length) {
+        // One-time migration: never re-import stale local views when the user
+        // intentionally removed the last cloud view on a different device.
+        setDirectoryViewsSync('saving');
+        current = await nightjarDirectoryViews.save(legacy, 0);
+        if (cancelled) return;
+      }
+      directoryViewsRevisionRef.current = current.revision;
+      setSavedDirectoryViews(current.views);
+      if ('saved' in current && current.saved === false) {
+        setDirectoryViewsSync('conflict');
+        return;
+      }
+      try { window.localStorage.setItem(key, JSON.stringify(current.views)); } catch {}
+      setDirectoryViewsSync('ready');
+    })().catch(() => {
+      if (!cancelled) setDirectoryViewsSync('error');
+    });
+    return () => { cancelled = true; };
+  }, [user?.userId, ageVerified, demoMode, directoryViewsRetryNonce]);
 
   // listCatalogue only supplies released entries; don't expose private drafts here.
   // Keep featured first, then browse all playable public releases without changing audio playback.
@@ -4789,37 +4826,69 @@ function App() {
   };
   const adminOnly = canAdmin && !simulationMode && !liveRolePreview;
 
-  const persistDirectoryViews = (views:any[]) => {
-    setSavedDirectoryViews(views);
-    if (!user?.userId) return;
-    try { window.localStorage.setItem('nightjar.directory.views:' + user.userId, JSON.stringify(views)); } catch { /* local preference storage is optional */ }
+  const persistDirectoryViews = async (views: SavedDirectoryView[]): Promise<boolean> => {
+    const uid = user?.userId;
+    if (demoMode && uid) {
+      setSavedDirectoryViews(views);
+      try { window.localStorage.setItem('nightjar.directory.views:' + uid, JSON.stringify(views)); } catch {}
+      return true;
+    }
+    if (!uid || !ageVerified || directoryViewsSync !== 'ready' || directoryViewsBusyRef.current) {
+      notify('Saved views are still syncing. Wait for Nightjar to finish or retry the connection.');
+      return false;
+    }
+    directoryViewsBusyRef.current = true;
+    setDirectoryViewsSync('saving');
+    try {
+      const result = await nightjarDirectoryViews.save(views, directoryViewsRevisionRef.current);
+      if (directoryViewsAccountRef.current !== uid) return false;
+      directoryViewsRevisionRef.current = result.revision;
+      setSavedDirectoryViews(result.views);
+      if (!result.saved) {
+        setDirectoryViewsSync('conflict');
+        notify('Saved views changed on another device. Nightjar loaded the newer account version; review and try again.');
+        return false;
+      }
+      try { window.localStorage.setItem('nightjar.directory.views:' + uid, JSON.stringify(result.views)); } catch {}
+      setDirectoryViewsSync('ready');
+      return true;
+    } catch {
+      if (directoryViewsAccountRef.current === uid) {
+        setDirectoryViewsSync('error');
+        notify('Nightjar could not save this view to your account. Your current filters are unchanged; retry when connected.');
+      }
+      return false;
+    } finally {
+      directoryViewsBusyRef.current = false;
+    }
   };
-  const saveDirectoryView = () => {
+  const saveDirectoryView = async () => {
     const parts = [
       directoryRoleFilter !== 'all' ? roleMeta[directoryRoleFilter].label : 'All roles',
       directoryTagFilter !== 'all' ? directoryTagFilter : '',
       directoryAvailabilityFilter !== 'all' ? directoryAvailabilityFilter : '',
       directoryQuery.trim() ? '“' + directoryQuery.trim() + '”' : '',
     ].filter(Boolean);
-    const next = {
-      id:'view-' + Date.now().toString(36),
-      name:parts.join(' · '),
-      query:directoryQuery,
+    const next: SavedDirectoryView = {
+      id:'view-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+      name:parts.join(' · ').slice(0, 160),
+      query:directoryQuery.slice(0, 120),
       role:directoryRoleFilter,
-      tag:directoryTagFilter,
-      availability:directoryAvailabilityFilter,
+      tag:directoryTagFilter.slice(0, 100),
+      availability:directoryAvailabilityFilter.slice(0, 100),
     };
-    persistDirectoryViews([next,...savedDirectoryViews].slice(0,8));
-    notify('Directory view saved on this device.');
+    const saved = await persistDirectoryViews([next,...savedDirectoryViews].slice(0,8));
+    if (saved) notify(demoMode ? 'Saved locally for this preview.' : 'Directory view saved to your Nightjar account.');
   };
-  const applyDirectoryView = (saved:any) => {
+  const applyDirectoryView = (saved: SavedDirectoryView) => {
     setDirectoryQuery(saved.query ?? '');
     setDirectoryRoleFilter(saved.role ?? 'all');
     setDirectoryTagFilter(saved.tag ?? 'all');
     setDirectoryAvailabilityFilter(saved.availability ?? 'all');
   };
-  const deleteDirectoryView = (id:string) => {
-    persistDirectoryViews(savedDirectoryViews.filter((item:any)=>item.id !== id));
+  const deleteDirectoryView = async (id: string) => {
+    const deleted = await persistDirectoryViews(savedDirectoryViews.filter((item) => item.id !== id));
+    if (deleted) notify('Saved directory view removed.');
   };
   const clearDirectoryFilters = () => {
     setDirectoryQuery('');
@@ -5353,11 +5422,12 @@ function App() {
             </Suspense>
             <div className="nj-directory-viewbar">
               <div className="nj-directory-view-actions">
-                {!liveRolePreview && <button className="secondary-button" onClick={saveDirectoryView}>Save view</button>}
+                {!liveRolePreview && <button className="secondary-button" disabled={directoryViewsSync !== 'ready'} onClick={()=>void saveDirectoryView()}>Save view</button>}
                 <button data-nj-preview-safe="true" className="ghost-button" onClick={clearDirectoryFilters}>Clear filters</button>
-                {!liveRolePreview && <span>Saved views stay on this signed-in account’s browser only.</span>}
+                {!liveRolePreview && <span role="status">{demoMode ? 'Preview views stay on this device.' : directoryViewsSync === 'ready' ? 'Saved views sync with your Nightjar account across devices.' : directoryViewsSync === 'saving' ? 'Syncing saved views to Nightjar…' : directoryViewsSync === 'loading' ? 'Loading your account’s saved views…' : directoryViewsSync === 'conflict' ? 'Saved views changed on another device. Review the updated list before saving.' : 'Saved-view sync unavailable. Your current filters are unchanged.'}</span>}
+                {!liveRolePreview && (directoryViewsSync === 'error' || directoryViewsSync === 'conflict') && <button className="ghost-button" onClick={()=>setDirectoryViewsRetryNonce((count)=>count+1)}>Retry view sync</button>}
               </div>
-              {!liveRolePreview && !!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
+              {!liveRolePreview && !!savedDirectoryViews.length && <div className="nj-directory-saved-views">{savedDirectoryViews.map((saved:any)=><span key={saved.id}><button onClick={()=>applyDirectoryView(saved)}>{saved.name}</button><button aria-label={'Delete saved view ' + saved.name} onClick={()=>void deleteDirectoryView(saved.id)}>×</button></span>)}</div>}
             </div>
 
             {effectiveRole==='listener'&&<Suspense fallback={<NightjarSkeleton variant="cards" count={3} label="Finding Nightjar creators and released work" />}>
