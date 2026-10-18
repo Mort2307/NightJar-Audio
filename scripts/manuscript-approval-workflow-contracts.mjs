@@ -50,6 +50,15 @@ assert.match(alerts, /Manuscript awaiting NightJar approval/);
 assert.match(adminReview, /requireAdminIdentity\(request\)/);
 assert.match(adminReview, /\['Submitted','Under review'\]/);
 assert.match(adminReview, /transaction\.set\(ref, \{/);
+assert.match(adminReview, /const reviewEventRef = ref\.collection\('reviewThread'\)\.doc\(\)/,
+  'create one durable Writer-visible decision ID outside transaction retries');
+assert.match(adminReview, /transaction\.create\(reviewEventRef, \{/,
+  'Writer-visible review reason must commit in the same transaction as decision status');
+assert.doesNotMatch(adminReview, /await ref\.collection\('reviewThread'\)\.add\(/,
+  'best-effort post-commit writes must not silently lose the Writer reason');
+assert.match(adminReview, /dedupeKey:'writer-script-review:'\+scriptId\+':'\+reviewEventRef\.id/,
+  'supplemental notification must be idempotent for the accepted decision');
+
 assert.match(adminReview, /status:nextStatus/);
 assert.match(adminReview, /listing\.visibility === 'marketplace' && Boolean\(listing\.synopsis\.trim\(\)\)/);
 assert.doesNotMatch(adminReview, /transaction\.set\(ref,\s*\{[^}]*marketplace:/);
