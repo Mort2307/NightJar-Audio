@@ -13,7 +13,7 @@ assert.match(artist,/Resume image upload/);
 assert.match(artist,/setRetryItemId\(itemId\)/);
 assert.match(artist,/setDraftClearSignal\(value => value \+ 1\)/);
 assert.match(editor,/let itemId = retryItemId/);
-assert.match(editor,/existing\.afterAudioAvailable/);
+assert.match(editor,/existing\?\.afterAudioAvailable/);
 assert.match(editor,/existing\?\.beforeAudioAvailable/);
 assert.match(editor,/nightjarEditorPortfolio\.mine\(\)/);
 assert.match(editor,/Resume upload/);
