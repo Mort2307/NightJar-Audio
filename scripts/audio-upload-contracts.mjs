@@ -79,7 +79,7 @@ assert.doesNotMatch(catalogue, /localStorage\.setItem\([^\n]*(file|dataUrl|signe
 assert.match(creator,/role="progressbar"/, 'Creator needs persistent transfer progress');
 assert.match(creator,/Audio saved and verified in your private release/, 'Creator must see verified private-attachment status');
 assert.match(creator,/This is NOT sent for approval yet/, 'Creator must not confuse upload with moderation submission');
-assert.match(creator,/const saved = await nightjarCatalogue\.update\(current\.id/, 'Submit must persist unsaved metadata before backend validation');
+assert.match(creator,/const saved = await persistReleaseMetadata\(latestRelease\.current\?\.id === current\.id \? latestRelease\.current : current,true\)/, 'Submit must persist revision-checked metadata before backend validation');
 assert.match(creator,/submitted\.release\?\.status !== 'pending_review'/, 'Submit must verify moderation status from the server');
 assert.match(creator,/From your recording to Nightjar/, 'Release flow shows four clear steps');
 assert.match(functions,/export const adminReleaseAudioLibrary = onCall/, 'An admin-only all-audio library is required');

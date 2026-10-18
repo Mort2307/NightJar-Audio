@@ -46,6 +46,36 @@ jobs:
       - name: Install and validate
         run: npm ci --no-fund && npm run validate
 
+      # Deploy transactional metadata compare-and-swap before enabling
+      # Creator autosave. A failed backend verification blocks Hosting.
+      - name: Deploy Creator metadata CAS before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-creator-autosave-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/creator-release-autosave-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=updateRelease,createRelease,creatorDashboard' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          RUN_ID=""
+          for attempt in $(seq 1 48); do
+            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::error::Creator metadata backend deployment not found. Hosting blocked."
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Transactional Creator metadata endpoints deployed before Hosting."
+
       # An account form draft must never be exposed by Hosting before the
       # exact role-gated and revision-checked callables are live.
       # Tagged once on the merge commit; no added queue or paid infrastructure.

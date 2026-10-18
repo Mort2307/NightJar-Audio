@@ -5343,6 +5343,7 @@ const releaseOwnerPayload = (data: Record<string, unknown>, id: string) => ({
   rightsAttestedAt: toIso(data.rightsAttestedAt),
   transcriptText: cleanReleaseTranscript(data.transcriptText),
   transcriptUpdatedAt: toIso(data.transcriptUpdatedAt),
+  metadataRevision: Math.max(0, Math.floor(Number(data.metadataRevision ?? 0))),
 });
 
 const releaseSearchText = (data: Record<string, unknown>) => [
@@ -5426,6 +5427,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     scheduledLocal: null,
     moderationNote: null,
     version: 1,
+    metadataRevision: 0,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -5442,12 +5444,27 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
 
   const ref = releaseRef(releaseId);
-  const snapshot = await ref.get();
-  const current = snapshot.data();
-  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
+  let tagsChanged = false;
+  const expectedRevision = typeof input.expectedMetadataRevision === 'undefined'
+    ? null : Number(input.expectedMetadataRevision);
+  if (expectedRevision !== null && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) {
+    throw new HttpsError('invalid-argument', 'Expected release metadata revision is invalid.');
+  }
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const current = snapshot.data();
+    if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
+    if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) {
+      throw new HttpsError('failed-precondition', 'Submitted or removed releases cannot be edited.');
+    }
+    const revision = Math.max(0, Math.floor(Number(current.metadataRevision ?? 0)));
+    tagsChanged = Array.isArray(input.tags) &&
+      JSON.stringify(cleanStringList(input.tags,24)) !== JSON.stringify(cleanStringList(current.tags,24));
+    if (expectedRevision !== null && revision !== expectedRevision) {
+      throw new HttpsError('aborted', 'Release metadata changed on another device. Review the newer version before saving.', {code:'release_metadata_conflict'});
+    }
 
-  const update = {
+    const update = {
     title: cleanText(input.title ?? current.title, 160),
     description: cleanText(input.description ?? current.description, 3000),
     category: cleanText(input.category ?? current.category, 80),
@@ -5480,10 +5497,14 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
     durationMinutes: typeof input.durationMinutes === 'number' && Number.isFinite(input.durationMinutes)
       ? Math.max(0, Math.min(1440, input.durationMinutes))
       : current.durationMinutes ?? 0,
+    metadataRevision: revision + 1,
     updatedAt: FieldValue.serverTimestamp(),
-  };
-  await ref.set(update, { merge: true });
-  await syncCreatorCustomTagUsage(identity.uid);
+    };
+    tx.set(ref, update, { merge: true });
+  });
+  // Expensive multi-collection tag census runs only when the selected tags
+  // change, never on ordinary title/description/credits autosave edits.
+  if (tagsChanged) await syncCreatorCustomTagUsage(identity.uid);
   const saved = await ref.get();
   return { release: releaseOwnerPayload(saved.data() ?? {}, releaseId) };
 });

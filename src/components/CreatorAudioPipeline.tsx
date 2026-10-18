@@ -5,12 +5,14 @@ import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { BookOpenText, Check, ImagePlus, Mic2, Music2, Send, UploadCloud } from 'lucide-react';
 import { nightjarAudioFileProblem } from '../platform/audio-upload';
+import { creatorEditableMetadata, creatorMetadataSignature } from '../platform/creator-release-metadata';
 import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import ContextHelp from './ContextHelp';
 import ManualTranscriptSync from './ManualTranscriptSync';
 import TranscriptSyncTool from './TranscriptSyncTool';
 import './creator-workflow.css';
+import './cloud-profile-draft.css';
 import { PROFILE_TAG_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type Release = {
@@ -50,6 +52,7 @@ type Release = {
   transcriptAvailable?: boolean;
   transcriptWordCount?: number;
   transcriptAccessibilityReviewed?: boolean;
+  metadataRevision?: number;
 };
 
 type Props = {
@@ -106,6 +109,138 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [artBusy, setArtBusy] = useState(false);
   const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
   const [promotedTagOptions, setPromotedTagOptions] = useState<string[]>([]);
+  const [metadataStatus, setMetadataStatus] = useState<'saved'|'unsaved'|'saving'|'offline'|'conflict'>('saved');
+  const [metadataConflict, setMetadataConflict] = useState<Release | null>(null);
+  const metadataBaseline = useRef(new Map<string,{signature:string;revision:number}>());
+  const metadataInFlight = useRef<Promise<boolean> | null>(null);
+  const latestRelease = useRef<Release | null>(null);
+  latestRelease.current = selectedRelease;
+
+  const acceptSavedVersion = (release: Release) => {
+    metadataBaseline.current.set(release.id,{
+      signature:creatorMetadataSignature(release),
+      revision:Math.max(0,Number(release.metadataRevision ?? 0)),
+    });
+  };
+
+  const applyServerRelease = (release: Release) => {
+    setSelectedRelease((previous) => {
+      if (previous?.id !== release.id) return previous;
+      const saved = metadataBaseline.current.get(release.id);
+      if (saved && creatorMetadataSignature(previous) !== saved.signature) {
+        // Media finalization may complete while a member is still typing.
+        // Preserve their unsaved fields and unsubmitted declarations.
+        return {...release,...creatorEditableMetadata(previous),
+          rightsConfirmed:previous.rightsConfirmed,
+          contributorPermissionsConfirmed:previous.contributorPermissionsConfirmed,
+          transcriptAccessibilityReviewed:previous.transcriptAccessibilityReviewed,
+          releaseDistributionConfirmed:previous.releaseDistributionConfirmed,
+        };
+      }
+      acceptSavedVersion(release);
+      return release;
+    });
+  };
+
+  const persistReleaseMetadata = async (requested: Release, explicit = false): Promise<boolean> => {
+    if (simulationMode) return true;
+    if (metadataConflict) return false;
+    if (metadataInFlight.current) {
+      if (!await metadataInFlight.current) return false;
+      if (latestRelease.current?.id === requested.id) requested = latestRelease.current;
+    }
+    if (requested.status !== 'draft') return false;
+    const baseline = metadataBaseline.current.get(requested.id);
+    if (!baseline) {
+      // The initially rendered item came from the private account dashboard.
+      acceptSavedVersion(requested);
+      if (!explicit) return true;
+    }
+    const known = metadataBaseline.current.get(requested.id)!;
+    const savedSignature = creatorMetadataSignature(requested);
+    if (!explicit && savedSignature === known.signature) return true;
+    setMetadataStatus('saving');
+    const task = (async () => {
+      try {
+        const response = await nightjarCatalogue.update(requested.id,{
+          ...creatorEditableMetadata(requested),
+          expectedMetadataRevision:known.revision,
+          ...(explicit ? {
+            rightsConfirmed:requested.rightsConfirmed === true,
+            contributorPermissionsConfirmed:requested.contributorPermissionsConfirmed === true,
+            transcriptAccessibilityReviewed:requested.transcriptAccessibilityReviewed === true,
+            releaseDistributionConfirmed:requested.releaseDistributionConfirmed === true,
+          } : {
+            // Editing transcript text invalidates prior accuracy approval.
+            ...(requested.transcriptAccessibilityReviewed === false ? {transcriptAccessibilityReviewed:false} : {}),
+            ...(requested.releaseDistribution === 'standard' ? {releaseDistributionConfirmed:false} : {}),
+          }),
+        });
+        const canonical = response.release as Release;
+        if (!canonical?.id) throw new Error('Nightjar did not acknowledge the metadata save.');
+        metadataBaseline.current.set(requested.id,{
+          signature:savedSignature,
+          revision:Number(canonical.metadataRevision ?? known.revision + 1),
+        });
+        setSelectedRelease((previous) => previous?.id === requested.id
+          ? {...previous, metadataRevision:canonical.metadataRevision}
+          : previous);
+        if (latestRelease.current?.id === requested.id) {
+          setMetadataStatus(creatorMetadataSignature(latestRelease.current) === savedSignature ? 'saved' : 'unsaved');
+        }
+        return true;
+      } catch (error) {
+        // A lost callable response can follow a successful commit. Re-read
+        // canonical state instead of blindly retrying and overwriting it.
+        let remote:Release|undefined;
+        try {
+          const data = await nightjarCatalogue.dashboard();
+          remote = (data.releases as Release[] | undefined)?.find((entry) => entry.id === requested.id);
+        } catch { /* preserve the local editor; nothing is marked saved */ }
+        if (remote && Number(remote.metadataRevision ?? 0) > known.revision &&
+            creatorMetadataSignature(remote) === savedSignature &&
+            (!explicit || (
+              remote.rightsConfirmed === (requested.rightsConfirmed === true) &&
+              remote.contributorPermissionsConfirmed === (requested.contributorPermissionsConfirmed === true) &&
+              remote.transcriptAccessibilityReviewed === (requested.transcriptAccessibilityReviewed === true) &&
+              remote.releaseDistributionConfirmed === (requested.releaseDistributionConfirmed === true)
+            ))) {
+          acceptSavedVersion(remote);
+          setSelectedRelease(previous=>previous?.id===remote!.id
+            ? {...previous,metadataRevision:remote!.metadataRevision} : previous);
+          setMetadataStatus(creatorMetadataSignature(latestRelease.current ?? requested) === savedSignature ? 'saved' : 'unsaved');
+          return true;
+        }
+        if (remote && Number(remote.metadataRevision ?? 0) !== known.revision) {
+          setMetadataConflict(remote);
+          setMetadataStatus('conflict');
+        } else {
+          setMetadataStatus('offline');
+          if (explicit) notify(error instanceof Error ? error.message : 'Nightjar could not confirm that the release details were saved.');
+        }
+        return false;
+      }
+    })();
+    metadataInFlight.current = task;
+    try { return await task; }
+    finally { if (metadataInFlight.current === task) metadataInFlight.current = null; }
+  };
+
+  const chooseLatestRelease = () => {
+    if (!metadataConflict) return;
+    acceptSavedVersion(metadataConflict);
+    setSelectedRelease(metadataConflict);
+    setMetadataConflict(null);
+    setMetadataStatus('saved');
+  };
+  const keepCurrentRelease = () => {
+    if (!metadataConflict) return;
+    acceptSavedVersion(metadataConflict);
+    setSelectedRelease(previous=>previous?.id===metadataConflict.id
+      ? {...previous,metadataRevision:metadataConflict.metadataRevision} : previous);
+    setMetadataConflict(null);
+    setMetadataStatus('unsaved');
+  };
 
   const current = selectedRelease ?? null;
   // Show existing drafts immediately instead of leaving creators in an empty editor.
@@ -114,6 +249,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     let lastOpened = '';
     try { lastOpened = window.sessionStorage.getItem(lastOpenedKey) ?? ''; } catch { /* private storage may be unavailable */ }
     const next = releases.find((item) => item.id === focusReleaseId) ?? releases.find((item) => item.id === lastOpened) ?? releases.find((item) => item.status === 'draft') ?? releases[0];
+    acceptSavedVersion(next);
     setSelectedRelease(next);
     setWorkflowStep(next.status === 'draft' ? 'prepare' : 'review');
   }, [releases, selectedRelease, focusReleaseId]);
@@ -123,6 +259,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     const match = releases.find((release) => release.id === focusReleaseId);
     if (match) {
       handledFocus.current = focusReleaseId;
+      acceptSavedVersion(match);
       setSelectedRelease(match);
       setWorkflowStep('review');
       try { window.sessionStorage.setItem(lastOpenedKey, match.id); } catch {}
@@ -153,7 +290,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     try {
       const data = await nightjarCatalogue.recoverAudio(current.id);
       if (data.release?.audioAvailable !== true) throw new Error('Nightjar did not confirm the audio attachment.');
-      setSelectedRelease(data.release);
+      applyServerRelease(data.release);
       setAudioRecoveryAvailable(false);
       setAudioStage('saved');
       setAudioFeedback('Previously uploaded audio recovered and confirmed on your private release. It is NOT submitted for approval yet.');
@@ -165,7 +302,26 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     } finally { setAudioBusy(false); }
   };
 
-  const chooseRelease = (release: Release) => {
+  const chooseRelease = async (release: Release) => {
+    if (current?.id && current.id !== release.id && current.status === 'draft' &&
+        creatorMetadataSignature(current) !== metadataBaseline.current.get(current.id)?.signature) {
+      if (!await persistReleaseMetadata(current)) {
+        notify('Your current release has unsynced changes. Resolve the save before switching recordings.');
+        return;
+      }
+    }
+    const server = releases.find(item => item.id === current?.id);
+    if (current && server && current.id !== release.id && (
+      current.rightsConfirmed !== server.rightsConfirmed ||
+      current.contributorPermissionsConfirmed !== server.contributorPermissionsConfirmed ||
+      current.transcriptAccessibilityReviewed !== server.transcriptAccessibilityReviewed ||
+      current.releaseDistributionConfirmed !== server.releaseDistributionConfirmed
+    )) {
+      if (!window.confirm('Rights, distribution and transcript accuracy declarations are not autosaved. Leaving now may discard unsaved confirmations. Select Cancel to use Save changes first.')) return;
+    }
+    acceptSavedVersion(release);
+    setMetadataConflict(null);
+    setMetadataStatus('saved');
     setSelectedRelease(release);
     try { window.sessionStorage.setItem(lastOpenedKey, release.id); } catch {}
     setWorkflowStep(release.status === 'draft' ? 'prepare' : 'review');
@@ -261,6 +417,39 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   };
 
   const setRelease = (patch: Partial<Release>) => setSelectedRelease((value) => value ? ({ ...value, ...patch }) : value);
+  const metadataSignature = current ? creatorMetadataSignature(current) : '';
+  const baselineForCurrent = current ? metadataBaseline.current.get(current.id) : null;
+  const unsyncedNow = Boolean(current?.status === 'draft' && (
+    metadataStatus === 'offline' || metadataStatus === 'conflict' ||
+    metadataStatus === 'saving' || metadataStatus === 'unsaved' ||
+    (baselineForCurrent && metadataSignature !== baselineForCurrent.signature)
+  ));
+  useEffect(() => {
+    if (!unsyncedNow) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload',warn);
+    return () => window.removeEventListener('beforeunload',warn);
+  }, [unsyncedNow]);
+  useEffect(() => {
+    if (!current || current.status !== 'draft' || simulationMode) return;
+    const base = metadataBaseline.current.get(current.id);
+    if (!base) { acceptSavedVersion(current);setMetadataStatus('saved');return; }
+    if (metadataConflict) return;
+    if (metadataSignature === base.signature) {
+      if (!metadataInFlight.current) setMetadataStatus('saved');
+      return;
+    }
+    setMetadataStatus('unsaved');
+    // No extra scheduled infrastructure: only one debounced callable per edit burst.
+    const timer = window.setTimeout(() => {
+      const latest = latestRelease.current;
+      if (latest?.id === current.id) void persistReleaseMetadata(latest);
+    }, 1700);
+    return () => window.clearTimeout(timer);
+  }, [current?.id,current?.status,metadataSignature,simulationMode,metadataConflict]);
 
   const updateContributor = (index: number, patch: Partial<{ name: string; role: string; userId?: string | null }>) => {
     if (!current) return;
@@ -407,11 +596,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           contentType: file.type,
           fileName: file.name,
         });
-        setSelectedRelease({
-          ...current,
-          pendingArtworkAssetId: image.assetId,
-          pendingArtworkStatus: 'pending',
-        });
+        setSelectedRelease(previous=>previous?.id===current.id ? {...previous,pendingArtworkAssetId:image.assetId,pendingArtworkStatus:'pending'} : previous);
         await onRefresh();
         notify(current.artworkUrl
           ? 'Replacement artwork submitted for administrator approval. Your current approved artwork stays live until the replacement is approved.'
@@ -428,7 +613,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           : 'Transfer finished. Nightjar is verifying and attaching the file to your saved release.');
       });
       if (data.release?.audioAvailable !== true) throw new Error('Nightjar did not confirm that the audio was attached to your release.');
-      setSelectedRelease(data.release);
+      applyServerRelease(data.release);
       setAudioStage('saved');
       setAudioProgress(100);
       setAudioRecoveryAvailable(false);
@@ -527,20 +712,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
   const saveMetadata = async () => {
     if (!current?.id) return;
-    try {
-      if (simulationMode) {
-        notify('Simulation: release metadata saved locally.');
-        return;
-      }
-      const data = await nightjarCatalogue.update(current.id, {
-        ...current,
-        tags: current.tags ?? [],
-        tropes: current.tropes ?? [],
-      });
-      setSelectedRelease(data.release ?? current);
-      await onRefresh();
-      notify('Release metadata saved.');
-    } catch { notify('Release metadata could not be saved.'); }
+    if (simulationMode) return notify('Simulation: release metadata saved locally.');
+    const saved = await persistReleaseMetadata(current,true);
+    if (!saved) return notify('Release details are not confirmed saved. Check the save status before leaving.');
+    await onRefresh().catch(() => {});
+    notify('Release details saved to your account.');
   };
 
   const submit = async () => {
@@ -560,13 +736,13 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       // Persist unsaved title, optional transcript, label and rights edits BEFORE the
       // server reviews the submission. Previously the UI could show complete
       // data while submit() still saw stale draft fields on Firestore.
-      const saved = await nightjarCatalogue.update(current.id, {
-        ...current, tags: current.tags ?? [], tropes: current.tropes ?? [],
-      });
-      setSelectedRelease(saved.release ?? current);
+      const saved = await persistReleaseMetadata(latestRelease.current?.id === current.id ? latestRelease.current : current,true);
+      if (!saved) throw new Error('Release details are not saved. Resolve the sync status before submitting.');
       const submitted = await nightjarCatalogue.submit(current.id);
       if (submitted.release?.status !== 'pending_review') throw new Error('Nightjar did not confirm this submission reached moderation.');
       setSelectedRelease(submitted.release);
+      acceptSavedVersion(submitted.release);
+      setMetadataStatus('saved');
       try { window.sessionStorage.setItem(lastOpenedKey, current.id); } catch {}
       setWorkflowStep('review');
       setSubmissionConfirmed(true);
@@ -591,7 +767,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     <div className="creator-pipeline-grid">
       <aside className="pipeline-library">
-        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'rejected' ? 'Rejected · Review feedback' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
+        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => void chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'rejected' ? 'Rejected · Review feedback' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
@@ -861,11 +1037,26 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               <button type="button" className="primary-button" disabled={!complete || audioBusy || submitting || !canPublish || accountStatus === 'pending_review'} onClick={() => void submit()}><Send size={16}/> {submitting ? 'Sending to moderators…' : 'Submit for Review'}</button>
             </div>}
           </section>}
+          {current.status === 'draft' && !simulationMode && <div className="nj-cloud-profile-draft" role="status" aria-live="polite">
+            <span>{metadataStatus === 'saved' ? 'Release details saved to your account · available on other devices'
+              : metadataStatus === 'saving' ? 'Saving release details to Nightjar…'
+              : metadataStatus === 'unsaved' ? 'Release details changed · awaiting cloud save'
+              : metadataStatus === 'conflict' ? 'This release was edited on another device. Choose which version to keep.'
+              : 'Release details NOT confirmed saved. Reconnect and retry before leaving.'}</span>
+            {metadataStatus === 'conflict' && <div className="nj-cloud-draft-choices">
+              <button type="button" className="secondary-button" onClick={chooseLatestRelease}>Load latest account version</button>
+              <button type="button" className="ghost-button" onClick={keepCurrentRelease}>Keep my edits and retry</button>
+            </div>}
+            {metadataStatus === 'offline' && <button type="button" className="ghost-button" onClick={()=>void persistReleaseMetadata(current)}>
+              Retry saving details
+            </button>}
+            <small>Only release text, credits and scheduling autosave. Media transfers and rights/accuracy confirmations are separate; confirm those when submitting.</small>
+          </div>}
           <div className="nj-work-removal">
             <div><strong>Remove this recording</strong><small>You control your work. Remove drafts, submissions or published recordings whenever you choose. Removal cannot be undone.</small></div>
             <button className="ghost-button nj-work-remove-button" type="button" disabled={removing || submitting || audioBusy} onClick={() => void removeRelease()}>{removing ? 'Removing recording…' : 'Remove recording'}</button>
           </div>
-          {workflowStep === 'prepare' && !submittedOrPublished && <div className="pipeline-footer"><span>Save changes before leaving this release.</span><div><button className="ghost-button" type="button" onClick={() => void removeRelease()} disabled={removing}>{removing ? 'Removing…' : 'Remove draft'}</button><button className="secondary-button" type="button" onClick={() => void saveMetadata()}>Save changes</button><button className="primary-button" type="button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={14}/> Continue to Review →</button></div></div>}
+          {workflowStep === 'prepare' && !submittedOrPublished && <div className="pipeline-footer"><span>Release details autosave privately. Rights and transcript accuracy confirmations are saved on explicit Save or Submit.</span><div><button className="ghost-button" type="button" onClick={() => void removeRelease()} disabled={removing}>{removing ? 'Removing…' : 'Remove draft'}</button><button className="secondary-button" type="button" onClick={() => void saveMetadata()}>Save changes</button><button className="primary-button" type="button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={14}/> Continue to Review →</button></div></div>}
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Choose a recording.</strong><span>Select a saved recording above, or create one with a title.</span></div>}
       </div>
     </div>
