@@ -12,6 +12,29 @@ const storage = getStorage(firebaseApp);
 // No file contents, auth tokens or playable signed URLs are persisted here.
 // Firebase alone decides whether a recovery attempt may attach the file.
 type PendingAudioFinalize = { storagePath: string; releaseId: string; uid: string; durationMinutes: number | null; startedAt: number };
+// Firebase Web Storage can continue an interrupted resumable task while its
+// tab lives, but a new tab cannot reconstruct the previous upload session or
+// the local File bytes. Retain only a short-lived, UID-scoped hint to offer
+// honest re-selection after a reload; NEVER mark partial bytes as complete.
+type InterruptedAudioTransfer = { uid: string; releaseId: string; startedAt: number };
+const interruptedAudioKey = (uid:string,releaseId:string) => 'nightjar.audio.transfer-incomplete.v1:'+uid+':'+releaseId;
+const writeInterruptedAudio = (value:InterruptedAudioTransfer) => {
+  try { window.localStorage.setItem(interruptedAudioKey(value.uid,value.releaseId),JSON.stringify(value)); } catch {}
+};
+const clearInterruptedAudio = (uid:string,releaseId:string) => {
+  try { window.localStorage.removeItem(interruptedAudioKey(uid,releaseId)); } catch {}
+};
+const readInterruptedAudio = (uid:string,releaseId:string) => {
+  try {
+    const raw=window.localStorage.getItem(interruptedAudioKey(uid,releaseId));
+    if(!raw)return false;
+    const value=JSON.parse(raw) as InterruptedAudioTransfer;
+    const valid=value.uid===uid && value.releaseId===releaseId && Number.isFinite(value.startedAt)
+      && value.startedAt<=Date.now() && Date.now()-value.startedAt<7*24*60*60*1000;
+    if(!valid)clearInterruptedAudio(uid,releaseId);
+    return valid;
+  }catch{return false;}
+};
 const pendingAudioKey = (uid: string, releaseId: string) => 'nightjar.audio.pending-finalize.v1:' + uid + ':' + releaseId;
 const writePendingAudio = (value: PendingAudioFinalize) => {
   try { window.localStorage.setItem(pendingAudioKey(value.uid, value.releaseId), JSON.stringify(value)); } catch { /* storage may be disabled */ }
@@ -100,6 +123,10 @@ export const nightjarCatalogue = {
     if (problem) throw new Error(problem);
     const contentType = nightjarAudioContentType(file)!;
     const fileRef = ref(storage, storagePath);
+    if(readPendingAudio(user.uid,releaseId)) {
+      throw new Error('A previous transfer is awaiting safe finalisation. Choose Recover uploaded recording before uploading again.');
+    }
+    writeInterruptedAudio({uid:user.uid,releaseId,startedAt:Date.now()});
     try {
       onProgress?.('uploading', 0);
       await new Promise<void>((resolve, reject) => {
@@ -112,6 +139,7 @@ export const nightjarCatalogue = {
       // The bytes are safely in Storage, but the Firestore attachment may
       // still fail. Save only the retry reference until the server confirms.
       writePendingAudio({ uid:user.uid, releaseId, storagePath, durationMinutes:durationMinutes ?? null, startedAt:Date.now() });
+      clearInterruptedAudio(user.uid,releaseId);
       onProgress?.('verifying', 100);
     } catch (error) {
       throw nightjarAudioUploadFailure('STORAGE', error);
@@ -150,6 +178,15 @@ export const nightjarCatalogue = {
     return user ? readPendingAudio(user.uid, releaseId) : null;
   },
 
+  // If a transfer did not reach Storage completion, bytes are NOT recoverable
+  // across browser restarts. Invite original-file re-selection, never a fake
+  // Resume of a lost File or Firebase resumable upload session.
+  interruptedAudio(releaseId:string) {
+    const user=firebaseAuth.currentUser;
+    return Boolean(user && !readPendingAudio(user.uid,releaseId)
+      && readInterruptedAudio(user.uid,releaseId));
+  },
+
   async recoverAudio(releaseId: string) {
     const user = firebaseAuth.currentUser;
     if (!user) throw new Error('Sign in to recover your private audio attachment.');
@@ -163,6 +200,7 @@ export const nightjarCatalogue = {
         throw new Error('Nightjar has not confirmed this recording is attached.');
       }
       clearPendingAudio(user.uid, releaseId);
+      clearInterruptedAudio(user.uid,releaseId);
       return data;
     } catch (error) {
       // Preserve the recovery reference. Do not remove the possibly attached
