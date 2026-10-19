@@ -143,8 +143,12 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
   const remove = async (itemId: string) => {
     if (demoMode) return setItems((value)=>value.filter((item)=>item.id!==itemId));
     setBusy(true);
-    try { await nightjarEditorPortfolio.remove(itemId); await load(); notify('Editor showcase item removed.'); }
-    catch { notify('Editor showcase item could not be removed.'); }
+    try {
+      const result=await nightjarEditorPortfolio.remove(itemId);
+      await load();
+      notify(result.removed === true ? 'Editor showcase and private audio removed.' : 'Editor showcase is no longer public. Private audio cleanup is pending; use Retry cleanup to finish.');
+    }
+    catch { notify('Editor showcase removal could not be confirmed. Refresh before retrying.'); }
     finally { setBusy(false); }
   };
 
@@ -198,7 +202,7 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
           setPermissionNote(item.clientPermissionNote??'');
           setBeforeFile(null);setAfterFile(null);setFileInputNonce(value=>value+1);
           setRightsConfirmed(false);setPermissionsConfirmed(false);
-        }}>Resume upload</button>}{item.status==='draft'&&item.afterAudioAvailable&&<button className="secondary-button" disabled={busy} onClick={()=>void submitExisting(item.id)}><Send size={13}/> Submit</button>}{item.status!=='pending_review'&&<button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={13}/> Remove</button>}</div>
+        }}>Resume upload</button>}{item.status==='draft'&&item.afterAudioAvailable&&<button className="secondary-button" disabled={busy} onClick={()=>void submitExisting(item.id)}><Send size={13}/> Submit</button>}{item.status!=='pending_review'&&<button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={13}/> {item.status==='removing'?'Retry cleanup':'Remove'}</button>}</div>
       </article>)}
       {!items.length&&<div className="people-empty"><FileAudio size={17}/><strong>No showcase samples yet.</strong><span>Add finished work or a before/after comparison alongside your verified Nightjar credits.</span></div>}
     </div>
