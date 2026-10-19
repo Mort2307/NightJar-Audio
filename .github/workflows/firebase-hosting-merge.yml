@@ -106,6 +106,28 @@ jobs:
           gh run watch "$BACKEND_RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Contributor thank-you backend verified before Hosting."
 
+      # Protect private Creator and Editor audio by retiring canonical state
+      # before Storage deletion. All interdependent callables ship together.
+      - name: Deploy safe media removal before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-safe-media-removal-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/private-media-removal-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" -f ref=main -f 'inputs[scope]=functions:selected' -f 'inputs[function_names]=removeReleaseAudio,finalizeReleaseAudio,creatorDashboard,removeEditorPortfolioItem,finalizeEditorPortfolioAudio,getEditorPortfolioAudioUrl' -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          RUN_ID=""
+          for attempt in $(seq 1 48); do
+            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$RUN_ID" ]]; then echo "::error::Safe media removal backend dispatch was not found. Hosting blocked."; exit 1; fi
+          gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Creator and Editor safe media removal functions deployed before Hosting."
+
       # Deploy paged Admin release queries before exposing cursor-enabled UI.
       - name: Deploy bounded Admin queues before Hosting
         if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-admin-bounded-release]') }}
