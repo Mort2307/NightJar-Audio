@@ -3306,6 +3306,8 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
   }
 
   if (asset.ownerUserId) {
+    const artistThankYou = asset.kind === 'artist_portfolio'
+      ? await approvedWorkThankYou(String(asset.ownerUserId), 'artwork', null) : null;
     await createNotification(String(asset.ownerUserId), {
       type: 'image_moderation',
       subtype: 'approved',
@@ -3320,11 +3322,12 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
             ? 'Portfolio artwork approved'
             : asset.kind === 'social_avatar' ? 'Social profile picture approved'
             : 'Nightjar image approved',
-      message: asset.kind === 'release_artwork'
+      message: artistThankYou ?? (asset.kind === 'release_artwork'
         ? 'Your artwork passed Nightjar image moderation and is now available to the release.'
         : asset.kind === 'script_artwork'
           ? 'Your manuscript artwork has been approved and is now visible wherever your script is listed.'
-          : 'Your image passed Nightjar moderation and is now approved for use.',
+          : 'Your image passed Nightjar moderation and is now approved for use.'),
+      approvedWorkThankYou:Boolean(artistThankYou),
       assetId,
       imageKind: asset.kind,
       targetId: asset.targetId ?? null,
@@ -3883,15 +3886,18 @@ export const moderateEditorPortfolioItem = onCall({ region: REGION }, async (req
       publishedAt:decision==='approved'?FieldValue.serverTimestamp():data.publishedAt??null,
       updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
-    return {ownerUserId:String(data.ownerUserId??''),status};
+    return {ownerUserId:String(data.ownerUserId??''),status,workTitle:cleanText(data.title,140)};
   });
   // A failed push/email is not a failed moderation decision. In-app state is
   // canonical, and the stable key prevents a repeated secondary notification.
   if(result.ownerUserId){
+    const thankYou = decision === 'approved'
+      ? await approvedWorkThankYou(result.ownerUserId, 'editor', result.workTitle) : null;
     await createNotification(result.ownerUserId,{
       type:'content',subtype:'editor_portfolio',
       title:decision==='approved'?'Your Editor showcase is live':decision==='changes'?'Changes requested for your Editor showcase':'Your Editor showcase was not approved',
-      message:decision==='approved'?'Your approved audio showcase is now visible on your public Audio Editor profile.':note||'Open Editor Studio to review the moderation result.',
+      message:thankYou ?? (note||'Open Editor Studio to review the moderation result.'),
+      approvedWorkThankYou:Boolean(thankYou),
       portfolioItemId:itemId,
       dedupeKey:'editor-portfolio-review:'+itemId+':'+result.status,
     }).catch(error=>console.warn('Editor showcase review notification failed',error));
@@ -6340,7 +6346,10 @@ const createNotification = async (userId: string, payload: Record<string, unknow
   const ref = dedupeKey
     ? accountRef(userId).collection('notifications').doc(createHash('sha256').update(dedupeKey).digest('hex').slice(0, 40))
     : accountRef(userId).collection('notifications').doc();
-  const persistedPayload = { ...safePayload } as Record<string, unknown>;
+  // The lock-screen push stays discreet; the signed-in member can read the
+  // full congratulations in their private NightJar notification inbox.
+  const persistedPayload = { ...(payload.approvedWorkThankYou === true ? payload : safePayload) } as Record<string, unknown>;
+  delete persistedPayload.approvedWorkThankYou;
   delete persistedPayload.dedupeKey;
   delete persistedPayload.oncePerKey;
   const oncePerKey=Boolean(dedupeKey) && payload.oncePerKey===true;
@@ -6374,6 +6383,50 @@ const createNotification = async (userId: string, payload: Record<string, unknow
   });
 };
 
+
+// Personal appreciation is composed only after a successful Admin approval.
+// Names come from the member's chosen NightJar profile/account, never from an
+// email address, identity documents, an AI service or a guessed legal name.
+const approvedWorkThankYou = async (
+  userId: string,
+  kind: 'audio' | 'manuscript' | 'editor' | 'artwork',
+  titleValue: unknown,
+  scheduled = false,
+) => {
+  let chosenName = '';
+  try {
+    const [profile, account] = await Promise.all([profileRef(userId).get(), accountRef(userId).get()]);
+    chosenName = cleanText(profile.data()?.displayName, 80)
+      || cleanText(account.data()?.displayName, 80)
+      || cleanText(profile.data()?.handle, 40).replace(/^@/, '');
+  } catch (error) {
+    console.warn('NightJar approval greeting name unavailable', error instanceof Error ? error.message : 'Unknown read error');
+  }
+  chosenName = chosenName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const title = cleanText(titleValue, 140).replace(/[\r\n\t]+/g, ' ');
+  const work = title ? '“' + title + '”' : 'your work';
+  const progress = kind === 'audio'
+    ? (scheduled
+      ? 'Your release has been approved and is scheduled for the date you selected. It will remain private until publication.'
+      : 'Your release is approved and is now available to eligible NightJar listeners.')
+    : kind === 'manuscript'
+      ? 'Your manuscript has been approved. Its protected contents and your chosen Marketplace visibility remain under your control.'
+      : kind === 'editor'
+        ? 'Your approved Audio Editor showcase is now visible on your professional profile.'
+        : 'Your approved artwork is now ready for your Artist portfolio.';
+  return [
+    chosenName ? 'Hi ' + chosenName + ',' : 'Hello,',
+    '',
+    'Thank you for trusting NightJar with ' + work + '. We really appreciate the time, care and creativity you put into sharing it with our community.',
+    '',
+    progress,
+    '',
+    'We are glad you are helping shape NightJar.',
+    '',
+    'With appreciation,',
+    'The NightJar Team',
+  ].join('\n');
+};
 
 // Moderation feedback is a genuine administrator-authored message using the same
 // conversation collection as Nightjar's Inbox. It can be replied to normally.
@@ -6456,6 +6509,8 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
   });
 
   if (data.creatorUserId) {
+    const thankYou = decision === 'approved'
+      ? await approvedWorkThankYou(String(data.creatorUserId), 'audio', data.title, scheduled) : null;
     await createNotification(String(data.creatorUserId), {
       type: 'content',
       subtype: 'release',
@@ -6464,17 +6519,18 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
         : decision === 'changes'
           ? 'Changes requested for your release'
           : 'Your release was not approved',
-      message: decision === 'approved'
+      message: thankYou ?? (decision === 'approved'
         ? scheduled ? 'Your release is approved and will stay private until the date and time you selected.' : 'Your release has passed Nightjar moderation and is available to age-verified listeners.'
         : decision === 'changes'
           ? 'Nightjar moderation requested changes before this release can be published.'
-          : 'Your release was not approved for publication. Open Creator Studio to review the moderation note.',
+          : 'Your release was not approved for publication. Open Creator Studio to review the moderation note.'),
+      approvedWorkThankYou:Boolean(thankYou),
       releaseId,
       moderationNote: note || null,
     }).catch((error) => console.warn('Moderation notification failed',error));
     const dateLine = scheduled ? 'It is scheduled for '+String(data.scheduledLocal)+' ('+String(data.scheduledTimeZone)+').' : '';
     const body = decision === 'approved'
-      ? 'Nightjar has approved “'+cleanText(data.title,160)+'”. '+(scheduled ? dateLine+' Your release will not be visible until that time.' : 'It is now published.')+(note ? '\n\nNote: '+note : '')
+      ? (thankYou ?? 'Your release has been approved.') + (scheduled ? '\n\n' + dateLine : '') + (note ? '\n\nNote: '+note : '')
       : decision === 'changes'
         ? 'Nightjar has reviewed “'+cleanText(data.title,160)+'” and requested changes:\n\n'+note+'\n\nYou can update your draft and resubmit it for review.'
         : 'Nightjar could not approve “'+cleanText(data.title,160)+'”. Reason:\n\n'+note+'\n\nReply here if you need clarification.';
@@ -8634,12 +8690,15 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
   // The protected review-thread decision was already written atomically with
   // the script. A notification is supplemental, never its source of truth.
   if (result.writerUserId) {
+    const thankYou = decision === 'approved'
+      ? await approvedWorkThankYou(result.writerUserId, 'manuscript', result.title) : null;
     await createNotification(result.writerUserId, {
       type:'editorial', subtype:'script_review',
       title:result.nextStatus === 'Approved' ? 'Your manuscript has been approved' : result.nextStatus === 'Revision requested' ? 'Nightjar has requested manuscript changes' : 'Nightjar manuscript review completed',
-      message:result.nextStatus === 'Approved'
+      message:thankYou ?? (result.nextStatus === 'Approved'
         ? result.marketplaceVisible ? 'Your manuscript synopsis is now listed in the Creator Script Marketplace. The full manuscript remains protected.' : 'Your manuscript is approved. Open Writer Studio to choose Marketplace visibility and add a synopsis when you want creators to discover it.'
-        : note,
+        : note),
+      approvedWorkThankYou:Boolean(thankYou),
       scriptId,
       dedupeKey:'writer-script-review:'+scriptId+':'+reviewEventRef.id,oncePerKey:true,
     }).catch((error)=>console.warn('Script review notification failed',error));
