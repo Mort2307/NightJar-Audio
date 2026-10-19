@@ -1561,18 +1561,20 @@ export const deleteMySocialLink = onCall({region:REGION},async(request)=>{
       if(!snap.exists)return;
       if(snap.data()?.status!=='removing')
         throw new HttpsError('aborted','Social link changed during removal.');
-      for(const photo of retired.photos){
-        const imageRef=db.collection('imageAssets').doc(photo.id);
-        const asset=await transaction.get(imageRef);
-        if(asset.exists){
-          if(asset.data()?.ownerUserId!==identity.uid || asset.data()?.kind!=='social_avatar' ||
-              String(asset.data()?.targetId??'')!==id || asset.data()?.status!=='removing')
-            throw new HttpsError('aborted','Social image changed during cleanup.');
-          transaction.set(imageRef,{
-            status:'removed',publicUrl:null,storageRemovalPendingPath:null,
-            removedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
-          },{merge:true});
-        }
+      const imageRefs=retired.photos.map(photo=>db.collection('imageAssets').doc(photo.id));
+      const imageSnapshots=await Promise.all(imageRefs.map(imageRef=>transaction.get(imageRef)));
+      for(let i=0;i<retired.photos.length;i++){
+        const asset=imageSnapshots[i];
+        if(asset.exists && (
+          asset.data()?.ownerUserId!==identity.uid || asset.data()?.kind!=='social_avatar' ||
+          String(asset.data()?.targetId??'')!==id || asset.data()?.status!=='removing'
+        ))throw new HttpsError('aborted','Social image changed during cleanup.');
+      }
+      for(let i=0;i<imageRefs.length;i++){
+        if(imageSnapshots[i].exists)transaction.set(imageRefs[i],{
+          status:'removed',publicUrl:null,storageRemovalPendingPath:null,
+          removedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
       }
       transaction.set(profileRef(identity.uid).collection('deletedSocialLinkIds').doc(id),{
         deletedAt:FieldValue.serverTimestamp(),
