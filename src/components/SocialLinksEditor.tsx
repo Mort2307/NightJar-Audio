@@ -146,6 +146,7 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
                 <button type="button" className="ghost-button" disabled={disabled||busyId===row.id} aria-label={'Remove '+row.platform+' link'} onClick={()=>void remove(row)}><Trash2 size={15}/>{row.removalPending?' Retry cleanup':''}</button>
               </div>}
           {row.removalPending&&<small role="status">This link is hidden. Private image deletion is pending; use Retry cleanup.</small>}
+          {!row.removalPending&&row.photoCleanupPending&&<div role="status" className="nj-social-photo-tools"><small>Previous private photo cleanup needs finishing.</small><button type="button" className="secondary-button" disabled={disabled||busyId===row.id} onClick={()=>void save({...row,editing:false})}>Retry previous photo cleanup</button></div>
           {!row.draft&&!row.removalPending&&<div className="nj-social-photo-tools">
             <label className="nj-social-photo-upload"><ImagePlus size={13}/>{row.photoUrl?'Replace social profile photo':'Add actual social profile photo'}
               <input type="file" hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif"
