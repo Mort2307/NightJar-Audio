@@ -1464,6 +1464,7 @@ const socialLinkPayload = (id:string, data:Record<string,any>) => ({
   photoStatus:data.pendingPhotoStatus==='pending' ? 'pending' : data.pendingPhotoStatus==='rejected' ? 'rejected' : data.photoStatus==='approved' ? 'approved' : null,
   pendingPhotoAssetId:cleanText(data.pendingPhotoAssetId,160)||null,
   removalPending:data.status==='removing',
+  photoCleanupPending:Array.isArray(data.photoCleanupPendingIds)&&data.photoCleanupPendingIds.length>0,
 });
 
 export const listMySocialLinks = onCall({region:REGION},async(request)=>{
@@ -1477,35 +1478,76 @@ export const saveMySocialLink = onCall({region:REGION},async(request)=>{
   const input=(request.data??{}) as Record<string,unknown>;
   const result=validatedSocialUrl(input.url);
   const id=cleanText(input.id,120);
-  if (id && !/^[a-zA-Z0-9_-]{5,120}$/.test(id)) throw new HttpsError('invalid-argument','Social link identifier is invalid.');
+  if(id && !/^[a-zA-Z0-9_-]{5,120}$/.test(id))
+    throw new HttpsError('invalid-argument','Social link identifier is invalid.');
   const collection=socialLinkCollection(identity.uid);
   const ref=id ? collection.doc(id) : collection.doc();
-  const snapshot=await ref.get();
-  if(snapshot.data()?.status==='removing')throw new HttpsError('failed-precondition','Finish removal before editing this social link.');
-  if(id && (await profileRef(identity.uid).collection('deletedSocialLinkIds').doc(id).get()).exists)
-    throw new HttpsError('failed-precondition','This deleted social link ID cannot be reused. Add a fresh link instead.');
-  if (!snapshot.exists) {
+  if(!id){
     const count=await collection.count().get();
-    if (count.data().count>=12) throw new HttpsError('resource-exhausted','You can save up to 12 social links.');
+    if(count.data().count>=12)
+      throw new HttpsError('resource-exhausted','You can save up to 12 social links.');
   }
-  const accountChanged = snapshot.exists && snapshot.data()?.url !== result.url;
-  if(accountChanged){
-    // Never carry a person's picture across to a different social account URL.
-    // Revoke image access before allowing the new link to appear publicly.
-    for(const value of [snapshot.data()?.photoAssetId,snapshot.data()?.pendingPhotoAssetId]){
-      const assetId=cleanText(value,160);
-      if(!assetId)continue;
-      const asset=await db.collection('imageAssets').doc(assetId).get();
-      if(asset.exists && asset.data()?.ownerUserId===identity.uid && asset.data()?.kind==='social_avatar'){
-        await asset.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-        await clearAssetFile(asset.data()??{});
-      }
+  // A different device may be deleting this link as we edit its URL. The
+  // save, tombstone and image retirement must have one serialised outcome.
+  const cleanup=await db.runTransaction(async transaction=>{
+    const snap=await transaction.get(ref);
+    const tombstone=await transaction.get(profileRef(identity.uid).collection('deletedSocialLinkIds').doc(ref.id));
+    if(tombstone.exists || snap.data()?.status==='removing')
+      throw new HttpsError('failed-precondition','This social link is being removed. Add a new link after cleanup.');
+    if(!snap.exists && id)
+      throw new HttpsError('failed-precondition','This saved link no longer exists. Add another social link.');
+    const link=snap.data()??{};
+    const changed=snap.exists && link.url!==result.url;
+    const priorIds=Array.isArray(link.photoCleanupPendingIds)?link.photoCleanupPendingIds.slice(0,8)
+      .map((x:unknown)=>cleanText(x,160)).filter(Boolean):[];
+    if(Array.isArray(link.photoCleanupPendingIds) && link.photoCleanupPendingIds.length>8)
+      throw new HttpsError('failed-precondition','Private social image cleanup needs administrator review.');
+    const ids=[...new Set([...priorIds,...(changed?[link.photoAssetId,link.pendingPhotoAssetId]:[])
+      .map(x=>cleanText(x,160)).filter(Boolean)])];
+    if(ids.length>8)
+      throw new HttpsError('failed-precondition','Finish private image cleanup before another account change.');
+    const refs=ids.map(x=>db.collection('imageAssets').doc(x));
+    const snaps=await Promise.all(refs.map(imageRef=>transaction.get(imageRef)));
+    const photos:Array<{id:string;path:string}>=[];
+    for(let i=0;i<ids.length;i++){
+      const asset=snaps[i].data();
+      if(!asset)continue;
+      if(asset.ownerUserId!==identity.uid || asset.kind!=='social_avatar' ||
+         String(asset.targetId??'')!==ref.id)
+        throw new HttpsError('failed-precondition','Social image ownership requires an administrator review.');
+      const path=cleanText(asset.storageRemovalPendingPath || asset.storagePath,500);
+      if(path && !['png','jpg','webp'].some(ext=>path==='pending-images/'+identity.uid+'/'+ids[i]+'.'+ext))
+        throw new HttpsError('failed-precondition','Social image path requires administrator review.');
+      photos.push({id:ids[i],path});
+    }
+    for(const photo of photos)transaction.set(db.collection('imageAssets').doc(photo.id),{
+      status:'removing',publicUrl:null,storageRemovalPendingPath:photo.path||null,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    transaction.set(ref,{
+      url:result.url,platform:result.platform,updatedAt:FieldValue.serverTimestamp(),
+      photoCleanupPendingIds:photos.map(photo=>photo.id),
+      ...(changed?{photoAssetId:null,photoUrl:null,photoStatus:null,pendingPhotoAssetId:null,pendingPhotoStatus:null}:{}),
+      ...(snap.exists?{}:{createdAt:FieldValue.serverTimestamp()}),
+    },{merge:true});
+    return photos;
+  });
+  for(const photo of cleanup){
+    try{
+      if(photo.path)await getStorage().bucket().file(photo.path).delete({ignoreNotFound:true});
+      await db.collection('imageAssets').doc(photo.id).update({
+        status:'removed',publicUrl:null,storageRemovalPendingPath:null,
+        updatedAt:FieldValue.serverTimestamp(),
+      });
+      // update(), not set(), prevents recreating a concurrently removed link.
+      await ref.update({photoCleanupPendingIds:FieldValue.arrayRemove(photo.id)});
+    }catch(error){
+      console.warn('Social URL change image cleanup pending',ref.id,error instanceof Error?error.message:'Private cleanup error');
     }
   }
-  await ref.set({url:result.url,platform:result.platform,updatedAt:FieldValue.serverTimestamp(),
-    ...(accountChanged?{photoAssetId:null,photoUrl:null,photoStatus:null,pendingPhotoAssetId:null,pendingPhotoStatus:null}:{}),
-    ...(snapshot.exists?{}:{createdAt:FieldValue.serverTimestamp()})},{merge:true});
   const saved=await ref.get();
+  if(!saved.exists || saved.data()?.status==='removing')
+    throw new HttpsError('failed-precondition','Social link was removed on another device. Refresh your links.');
   return {link:socialLinkPayload(ref.id,saved.data()??{})};
 });
 
@@ -1522,7 +1564,10 @@ export const deleteMySocialLink = onCall({region:REGION},async(request)=>{
     const snap=await transaction.get(ref);
     const link=snap.data();
     if(!link)return {gone:true,photos:[] as Array<{id:string;path:string}>};
-    const ids=[...new Set([link.photoAssetId,link.pendingPhotoAssetId]
+    const pendingIds=Array.isArray(link.photoCleanupPendingIds)?link.photoCleanupPendingIds.slice(0,8):[];
+    if(Array.isArray(link.photoCleanupPendingIds)&&link.photoCleanupPendingIds.length>8)
+      throw new HttpsError('failed-precondition','Too many incomplete social image removals.');
+    const ids=[...new Set([link.photoAssetId,link.pendingPhotoAssetId,...pendingIds]
       .map(value=>cleanText(value,160)).filter(Boolean))];
     const assetDocs=await Promise.all(ids.map(id=>transaction.get(db.collection('imageAssets').doc(id))));
     const photos: Array<{id:string;path:string}>=[];
