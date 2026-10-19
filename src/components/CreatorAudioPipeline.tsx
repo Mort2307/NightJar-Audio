@@ -26,6 +26,7 @@ type Release = {
   tropes?: string[];
   durationMinutes?: number;
   audioAvailable?: boolean;
+  audioCleanupPending?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
   artworkAssetId?: string | null;
@@ -680,14 +681,19 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         notify('Simulation: audio removed locally.');
         return;
       }
-      await nightjarCatalogue.removeAudio(current.id);
-      setSelectedRelease({ ...current, audioAvailable: false, audioUrl: null, durationMinutes: 0 });
-      await onRefresh();
-      setAudioStage('idle');
+      const result=await nightjarCatalogue.removeAudio(current.id);
+      if(result.removed !== true) throw new Error('Nightjar could not confirm the audio was detached.');
+      setSelectedRelease({ ...current, audioAvailable: false, audioUrl: null, durationMinutes: 0, audioCleanupPending: result.pendingCleanup });
+      await onRefresh().catch(() => {});
+      setAudioStage(result.pendingCleanup?'error':'idle');
       setAudioProgress(0);
       setAudioFileLabel('');
-      setAudioFeedback('Audio removed from this release.');
-      notify('Release audio removed.');
+      setAudioFeedback(result.pendingCleanup
+        ? 'Audio is detached from the release but permanent Storage deletion is pending. Use Retry private audio cleanup to finish.'
+        : 'Audio removed and private Storage deletion confirmed.');
+      notify(result.pendingCleanup
+        ? 'Private audio is unavailable, but file cleanup still needs retrying.'
+        : 'Private release audio deleted and confirmed.');
     } catch { notify('Release audio could not be removed.'); }
     finally { setAudioBusy(false); }
   };
@@ -821,6 +827,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <div className="asset-drop asset-drop-moderated nj-audio-attachment"><Music2 size={19} /><strong>{audioBusy ? audioStage === 'verifying' ? 'Verifying saved audio…' : 'Uploading your audio…' : current.audioAvailable ? 'Audio connected to this draft' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · private until approved</span>
               <label className="secondary-button upload-label">{audioBusy ? 'Upload in progress' : current.audioAvailable ? 'Replace this audio' : 'Choose audio to upload'}<input type="file" hidden disabled={audioBusy || current.status === 'pending_review' || current.status === 'released' || submitting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
               {audioFileLabel && <strong className="nj-audio-file-label">{audioFileLabel}</strong>}
+              {current.audioCleanupPending && !current.audioAvailable && <div role="status" className="nj-audio-feedback"><strong>Private audio cleanup pending</strong><p>The recording is detached and cannot be played. Storage deletion has not been confirmed.</p><button type="button" className="secondary-button" disabled={audioBusy} onClick={()=>void removeAudio()}>{audioBusy?'Checking cleanup…':'Retry private audio cleanup'}</button></div>}
               {audioTransferInterrupted && !audioRecoveryAvailable && !current.audioAvailable && !audioBusy && <div role="status" className="nj-audio-feedback"><strong>Transfer interrupted before completion</strong><p>The browser cannot recover partial audio bytes after a restart. Select your original recording again using Choose audio to upload. No file has been submitted for moderation; your draft remains saved.</p></div>}
               {audioRecoveryAvailable && !current.audioAvailable && <div role="status" className="nj-audio-feedback"><strong>Recover transferred audio</strong><p>Nightjar retained a private upload that was not yet confirmed as attached. You can check it without selecting or transferring the file again.</p><button type="button" className="secondary-button" disabled={audioBusy} onClick={()=>void recoverAudioUpload()}>{audioBusy ? 'Checking private upload…' : 'Recover uploaded recording'}</button></div>}
               {audioBusy && <div className="nj-audio-upload-progress" role="progressbar" aria-label="Audio upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={audioProgress}><span style={{width:audioProgress + '%'}}/></div>}
