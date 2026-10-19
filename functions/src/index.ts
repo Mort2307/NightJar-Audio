@@ -3355,101 +3355,101 @@ export const getImageAssetStatus = onCall({ region: REGION }, async (request) =>
 });
 
 export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) => {
-  const identity = await requireActiveIdentity(request);
-  const assetId = cleanText((request.data as { assetId?: unknown } | undefined)?.assetId, 160);
-  if (!assetId) throw new HttpsError('invalid-argument', 'Image asset is required.');
-
-  const ref = db.collection('imageAssets').doc(assetId);
-  const snapshot = await ref.get();
-  const asset = snapshot.data();
-  if (!asset) throw new HttpsError('not-found', 'Image record not found.');
-  let manuscriptAuthor = false;
-  if (asset.kind === 'script_artwork' && asset.targetId) {
-    const manuscript = await db.collection('scripts').doc(String(asset.targetId)).get();
-    manuscriptAuthor = manuscript.exists
-      && manuscript.data()?.writerUserId === identity.uid
-      && [manuscript.data()?.artworkAssetId, manuscript.data()?.pendingArtworkAssetId].includes(assetId);
-  }
-  if (!identity.admin && asset.ownerUserId !== identity.uid && !manuscriptAuthor) {
-    throw new HttpsError('permission-denied', 'You cannot remove this image.');
-  }
-
-  await clearAssetFile(asset);
-  await ref.set({
-    status: 'removed',
-    publicUrl: null,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  if(asset.kind==='social_avatar' && asset.targetId){
-    const ref=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
-    const link=await ref.get();
-    if(link.exists){
-      const next:Record<string,unknown>={updatedAt:FieldValue.serverTimestamp()};
-      if(link.data()?.photoAssetId===assetId){next.photoAssetId=null;next.photoUrl=null;next.photoStatus=null;}
-      if(link.data()?.pendingPhotoAssetId===assetId){next.pendingPhotoAssetId=null;next.pendingPhotoStatus=null;}
-      if(Object.keys(next).length>1)await ref.set(next,{merge:true});
+  const identity=await requireActiveIdentity(request);
+  const assetId=cleanText((request.data as {assetId?:unknown}|undefined)?.assetId,160);
+  if(!/^[a-zA-Z0-9_-]{1,160}$/.test(assetId))
+    throw new HttpsError('invalid-argument','Choose a valid image asset.');
+  const ref=db.collection('imageAssets').doc(assetId);
+  // The asset and its current parent reference MUST be retired atomically.
+  // No Storage deletion is attempted before this transaction succeeds.
+  const retirement=await db.runTransaction(async transaction=>{
+    const snap=await transaction.get(ref);
+    const asset=snap.data();
+    if(!asset)throw new HttpsError('not-found','Image record not found.');
+    const owner=cleanText(asset.ownerUserId,160);
+    const kind=cleanText(asset.kind,40);
+    const target=cleanText(asset.targetId,160);
+    if(kind==='brand_logo' && !identity.admin)
+      throw new HttpsError('permission-denied','Only a Nightjar Administrator can remove branding.');
+    const targetRef = kind==='script_artwork' && target ? db.collection('scripts').doc(target)
+      : kind==='release_artwork' && target ? db.collection('releases').doc(target)
+      : kind==='artist_portfolio' && target ? db.collection('artistPortfolio').doc(target)
+      : kind==='social_avatar' && target ? socialLinkCollection(owner).doc(target)
+      : kind==='profile_avatar' || kind==='profile_banner' ? profileRef(owner)
+      : kind==='brand_logo' ? db.collection('settings').doc('branding') : null;
+    const targetSnapshot=targetRef ? await transaction.get(targetRef) : null;
+    const linked=targetSnapshot?.data()??{};
+    const scriptAuthor=kind==='script_artwork' && linked.writerUserId===identity.uid
+      && [linked.artworkAssetId,linked.pendingArtworkAssetId].includes(assetId);
+    if(!identity.admin && owner!==identity.uid && !scriptAuthor)
+      throw new HttpsError('permission-denied','You cannot remove this image.');
+    // Never delete untrusted or cross-member Storage objects. All user assets
+    // are saved by submitImageAsset using this exact owner + assetId prefix.
+    const storagePath=cleanText(asset.storageRemovalPendingPath || asset.storagePath,500);
+    const allowedPrefix='pending-images/'+owner+'/'+assetId+'.';
+    if(storagePath && !['png','jpg','webp'].some(ext=>storagePath===allowedPrefix+ext))
+      throw new HttpsError('failed-precondition','Image Storage path requires administrator investigation.');
+    if(asset.status==='removed' && !asset.storageRemovalPendingPath)
+      return {done:true,path:''};
+    const next:Record<string,unknown>={updatedAt:FieldValue.serverTimestamp()};
+    if(kind==='profile_avatar'){
+      if(linked.avatarAssetId===assetId)Object.assign(next,{avatarAssetId:null,avatarUrl:null,avatarStatus:null});
+      if(linked.pendingAvatarAssetId===assetId)Object.assign(next,{pendingAvatarAssetId:null,pendingAvatarStatus:null});
+    }else if(kind==='profile_banner'){
+      if(linked.bannerAssetId===assetId)Object.assign(next,{bannerAssetId:null,bannerUrl:null,bannerStatus:null});
+      if(linked.pendingBannerAssetId===assetId)Object.assign(next,{pendingBannerAssetId:null,pendingBannerStatus:null});
+    }else if(kind==='brand_logo'){
+      if(linked.logoAssetId===assetId)Object.assign(next,{logoAssetId:null,logoUrl:null,logoStatus:null});
+      if(linked.pendingLogoAssetId===assetId)Object.assign(next,{pendingLogoAssetId:null,pendingLogoStatus:null});
+    }else if(kind==='social_avatar'){
+      if(linked.photoAssetId===assetId)Object.assign(next,{photoAssetId:null,photoUrl:null,photoStatus:null});
+      if(linked.pendingPhotoAssetId===assetId)Object.assign(next,{pendingPhotoAssetId:null,pendingPhotoStatus:null});
+    }else if(kind==='artist_portfolio'){
+      if(linked.imageAssetId===assetId)Object.assign(next,{imageAssetId:null,imageUrl:null,imageStatus:null,status:'draft'});
+      if(linked.pendingImageAssetId===assetId)Object.assign(next,{pendingImageAssetId:null,pendingImageStatus:null});
+    }else if(kind==='release_artwork'){
+      if(linked.artworkAssetId===assetId)Object.assign(next,{artworkAssetId:null,artworkUrl:null,artworkStatus:null});
+      if(linked.pendingArtworkAssetId===assetId)Object.assign(next,{pendingArtworkAssetId:null,pendingArtworkStatus:null});
+    }else if(kind==='script_artwork'){
+      if(linked.artworkAssetId===assetId)Object.assign(next,{artworkAssetId:null,artworkUrl:null,artworkStatus:null});
+      if(linked.pendingArtworkAssetId===assetId)Object.assign(next,{pendingArtworkAssetId:null,pendingArtworkStatus:null});
+    }
+    if(targetRef && targetSnapshot?.exists && Object.keys(next).length>1)
+      transaction.set(targetRef,next,{merge:true});
+    transaction.set(ref,{
+      status:'removing',publicUrl:null,storageRemovalPendingPath:storagePath || null,
+      removalStartedAt:asset.removalStartedAt??FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return {done:false,path:storagePath};
+  });
+  if(retirement.done)return {removed:true,assetId,pendingCleanup:false};
+  if(retirement.path){
+    try {await getStorage().bucket().file(retirement.path).delete({ignoreNotFound:true});}
+    catch(error){
+      console.warn('Private image cleanup pending',assetId,error instanceof Error?error.message:'Unknown Storage error');
+      return {removed:false,assetId,pendingCleanup:true};
     }
   }
-
-  if (asset.kind === 'artist_portfolio' && asset.targetId) {
-    const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
-    const portfolio = await portfolioRef.get();
-    if (portfolio.exists) {
-      const update: Record<string, unknown> = { updatedAt:FieldValue.serverTimestamp() };
-      if (portfolio.data()?.pendingImageAssetId === assetId) {
-        update.pendingImageAssetId = null;
-        update.pendingImageStatus = null;
-      }
-      if (portfolio.data()?.imageAssetId === assetId) {
-        update.imageAssetId = null;
-        update.imageUrl = null;
-        update.imageStatus = null;
-        update.status = 'draft';
-      }
-      await portfolioRef.set(update, { merge:true });
-    }
+  try{
+    await db.runTransaction(async transaction=>{
+      const latest=await transaction.get(ref);
+      if(!latest.exists)return;
+      const data=latest.data()??{};
+      if(data.status==='removed' && !data.storageRemovalPendingPath)return;
+      if(data.status!=='removing' || cleanText(data.storageRemovalPendingPath,500)!==retirement.path)
+        throw new HttpsError('aborted','Image removal changed. Refresh before retrying.');
+      transaction.set(ref,{
+        status:'removed',publicUrl:null,storageRemovalPendingPath:null,
+        removedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+    });
+    return {removed:true,assetId,pendingCleanup:false};
+  }catch(error){
+    console.warn('Private image removal record cleanup pending',assetId,error instanceof Error?error.message:'Unknown Firestore error');
+    return {removed:false,assetId,pendingCleanup:true};
   }
-
-  if (asset.kind === 'release_artwork' && asset.targetId) {
-    const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
-    const release = await releaseRefForArtwork.get();
-    if (release.exists) {
-      const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
-      if (release.data()?.pendingArtworkAssetId === assetId) {
-        update.pendingArtworkAssetId = null;
-        update.pendingArtworkStatus = null;
-      }
-      if (release.data()?.artworkAssetId === assetId) {
-        update.artworkAssetId = null;
-        update.artworkUrl = null;
-        update.artworkStatus = null;
-      }
-      if (Object.keys(update).length > 1) await releaseRefForArtwork.set(update, { merge: true });
-    }
-  }
-
-  if (asset.kind === 'script_artwork' && asset.targetId) {
-    const scriptRefForArtwork = db.collection('scripts').doc(String(asset.targetId));
-    const script = await scriptRefForArtwork.get();
-    if (script.exists) {
-      const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
-      if (script.data()?.pendingArtworkAssetId === assetId) {
-        update.pendingArtworkAssetId = null;
-        update.pendingArtworkStatus = null;
-      }
-      if (script.data()?.artworkAssetId === assetId) {
-        update.artworkAssetId = null;
-        update.artworkUrl = null;
-        update.artworkStatus = null;
-      }
-      if (Object.keys(update).length > 1) await scriptRefForArtwork.set(update,{merge:true});
-    }
-  }
-
-  return { removed: true, assetId };
 });
-
 export const removeProfileAvatar = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const profile = await profileRef(identity.uid).get();
