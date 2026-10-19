@@ -3106,7 +3106,7 @@ export const moderateImageAsset = onCall({region:REGION},async request=>{
       const previousPath=cleanText(old.storagePath,500);
       if(!previousPath || ['png','jpg','webp'].some(ext=>previousPath==='pending-images/'+owner+'/'+oldId+'.'+ext)){
         transaction.set(oldRef,{
-          status:'removing',publicUrl:null,storageRemovalPendingPath:previousPath||null,
+          status:previousPath?'removing':'removed',publicUrl:null,storageRemovalPendingPath:previousPath||null,
           updatedAt:FieldValue.serverTimestamp(),
         },{merge:true});
         if(previousPath)cleanup.push({id:oldId,path:previousPath,finalStatus:'removed'});
