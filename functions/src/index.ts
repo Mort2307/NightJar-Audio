@@ -1103,10 +1103,13 @@ export const getMyProfile = onCall({ region: REGION }, async (request) => {
   ]);
   if (!snapshot.exists) return { profile:null };
   const data = snapshot.data() ?? {};
+  const {avatarRemovalPending,bannerRemovalPending,...safeProfileData}=data;
   const activeRole = identity.admin ? 'admin' : cleanText(accountSnapshot.data()?.role, 30) || 'listener';
   return {
     profile: {
-      ...data,
+      ...safeProfileData,
+      avatarCleanupPending:Array.isArray(avatarRemovalPending) && avatarRemovalPending.length>0,
+      bannerCleanupPending:Array.isArray(bannerRemovalPending) && bannerRemovalPending.length>0,
       ...roleProfileSlice(data, activeRole),
       activeRole,
       roles: identity.admin ? ['admin'] : ['listener', ...professionalRolesForAccount(accountSnapshot.data() ?? {})],
