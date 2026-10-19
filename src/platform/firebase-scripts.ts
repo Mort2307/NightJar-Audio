@@ -23,7 +23,7 @@ const adminScriptsCall = httpsCallable<void, { scripts: any[] }>(functions, 'adm
 const adminScriptPreviewCall = httpsCallable<{ scriptId: string }, { script: any; sourceFile: { fileName: string; url: string; expiresAt: string } | null; sourcePreview: {format:'text'|'pdf'|'unavailable'; text?:string; truncated?:boolean; message?:string} }>(functions, 'getAdminScriptReview');
 const reviewThreadCall = httpsCallable<{ scriptId: string }, { entries: any[]; scriptId: string }>(functions, 'listManuscriptReviewThread');
 const postReviewEntryCall = httpsCallable<{ scriptId: string; body: string; visibility: 'internal'|'writer' }, { entry: any }>(functions, 'postManuscriptReviewEntry');
-const adminReviewScriptCall = httpsCallable<{ scriptId: string; decision: 'approved' | 'changes' | 'rejected'; note: string }, { script: any; marketplaceVisible: boolean }>(functions, 'adminReviewWriterScript');
+const adminReviewScriptCall = httpsCallable<{ scriptId: string; decision: 'approved' | 'changes' | 'rejected'; note: string; sourceReviewed: boolean }, { script: any; marketplaceVisible: boolean }>(functions, 'adminReviewWriterScript');
 const assignEditorCall = httpsCallable<{ scriptId: string; editorUserId: string }, { script: any }>(functions, 'adminAssignEditor');
 const protectedCatalogueCall = httpsCallable<void, { scripts: any[] }>(functions, 'listProtectedScripts');
 const openProtectedCall = httpsCallable<{ scriptId: string }, any>(functions, 'openProtectedScript');
@@ -90,8 +90,8 @@ export const nightjarScripts = {
     return repairMojibakeDisplayData((await adminScriptPreviewCall({ scriptId })).data);
   },
 
-  async adminReviewScript(scriptId: string, decision: 'approved' | 'changes' | 'rejected', note = '') {
-    return (await adminReviewScriptCall({ scriptId, decision, note })).data;
+  async adminReviewScript(scriptId: string, decision: 'approved' | 'changes' | 'rejected', note = '', sourceReviewed = false) {
+    return (await adminReviewScriptCall({ scriptId, decision, note, sourceReviewed })).data;
   },
 
   async assignEditor(scriptId: string, editorUserId: string) {
