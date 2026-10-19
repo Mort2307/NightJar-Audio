@@ -282,15 +282,15 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     // A refresh can interrupt the final callable after Storage accepted the
     // bytes. Check only the current authenticated account's local reference.
     setAudioRecoveryAvailable(!simulationMode && !!selectedRelease?.id &&
-      selectedRelease.audioAvailable !== true &&
+      selectedRelease.audioAvailable !== true && !selectedRelease.audioCleanupPending &&
       !!nightjarCatalogue.pendingAudio(selectedRelease.id));
     setAudioTransferInterrupted(!simulationMode && !!selectedRelease?.id &&
-      selectedRelease.audioAvailable !== true &&
+      selectedRelease.audioAvailable !== true && !selectedRelease.audioCleanupPending &&
       nightjarCatalogue.interruptedAudio(selectedRelease.id));
-  }, [simulationMode, selectedRelease?.id, selectedRelease?.audioAvailable, audioStage]);
+  }, [simulationMode, selectedRelease?.id, selectedRelease?.audioAvailable, selectedRelease?.audioCleanupPending, audioStage]);
 
   const recoverAudioUpload = async () => {
-    if (!current?.id || audioBusy || submitting || current.audioAvailable) return;
+    if (!current?.id || audioBusy || submitting || current.audioAvailable || current.audioCleanupPending) return;
     setAudioBusy(true);
     setAudioStage('verifying');
     setAudioFeedback('Checking the already transferred private audio on Nightjar. No new upload is starting.');
@@ -567,6 +567,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   };
 
   const uploadAsset = async (file: File, kind: 'audio' | 'artwork') => {
+    if(kind === 'audio' && current?.audioCleanupPending) return notify('Finish the previous private audio cleanup before starting another transfer.');
     const max = kind === 'audio' ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > max) return notify(kind === 'audio' ? 'Audio must be 25 MB or smaller.' : 'Artwork must be 5 MB or smaller.');
     const allowedImage = ['image/png', 'image/jpeg', 'image/webp'];
@@ -825,9 +826,9 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           {workflowStep === 'prepare' && !submittedOrPublished && <>
           <div className="pipeline-assets" id="release-audio">
             <div className="asset-drop asset-drop-moderated nj-audio-attachment"><Music2 size={19} /><strong>{audioBusy ? audioStage === 'verifying' ? 'Verifying saved audio…' : 'Uploading your audio…' : current.audioAvailable ? 'Audio connected to this draft' : 'Attach private audio'}</strong><span>MP3 / WAV / M4A / OGG / WebM · max 25 MB · private until approved</span>
-              <label className="secondary-button upload-label">{audioBusy ? 'Upload in progress' : current.audioAvailable ? 'Replace this audio' : 'Choose audio to upload'}<input type="file" hidden disabled={audioBusy || current.status === 'pending_review' || current.status === 'released' || submitting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
+              <label className="secondary-button upload-label">{audioBusy ? 'Upload in progress' : current.audioCleanupPending ? 'Finish private audio cleanup first' : current.audioAvailable ? 'Replace this audio' : 'Choose audio to upload'}<input type="file" hidden disabled={audioBusy || current.audioCleanupPending === true || current.status === 'pending_review' || current.status === 'released' || submitting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'audio'); event.currentTarget.value = ''; }} /></label>
               {audioFileLabel && <strong className="nj-audio-file-label">{audioFileLabel}</strong>}
-              {current.audioCleanupPending && !current.audioAvailable && <div role="status" className="nj-audio-feedback"><strong>Private audio cleanup pending</strong><p>The recording is detached and cannot be played. Storage deletion has not been confirmed.</p><button type="button" className="secondary-button" disabled={audioBusy} onClick={()=>void removeAudio()}>{audioBusy?'Checking cleanup…':'Retry private audio cleanup'}</button></div>}
+              {current.audioCleanupPending && !current.audioAvailable && <div role="status" className="nj-audio-feedback"><strong>Private audio cleanup pending</strong><p>NightJar has detached the recording and stopped serving it through normal playback. Storage deletion has not been confirmed; previously issued temporary links may remain usable until expiry.</p><button type="button" className="secondary-button" disabled={audioBusy} onClick={()=>void removeAudio()}>{audioBusy?'Checking cleanup…':'Retry private audio cleanup'}</button></div>}
               {audioTransferInterrupted && !audioRecoveryAvailable && !current.audioAvailable && !audioBusy && <div role="status" className="nj-audio-feedback"><strong>Transfer interrupted before completion</strong><p>The browser cannot recover partial audio bytes after a restart. Select your original recording again using Choose audio to upload. No file has been submitted for moderation; your draft remains saved.</p></div>}
               {audioRecoveryAvailable && !current.audioAvailable && <div role="status" className="nj-audio-feedback"><strong>Recover transferred audio</strong><p>Nightjar retained a private upload that was not yet confirmed as attached. You can check it without selecting or transferring the file again.</p><button type="button" className="secondary-button" disabled={audioBusy} onClick={()=>void recoverAudioUpload()}>{audioBusy ? 'Checking private upload…' : 'Recover uploaded recording'}</button></div>}
               {audioBusy && <div className="nj-audio-upload-progress" role="progressbar" aria-label="Audio upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={audioProgress}><span style={{width:audioProgress + '%'}}/></div>}
