@@ -5468,6 +5468,7 @@ const releaseOwnerPayload = (data: Record<string, unknown>, id: string) => ({
   transcriptText: cleanReleaseTranscript(data.transcriptText),
   transcriptUpdatedAt: toIso(data.transcriptUpdatedAt),
   metadataRevision: Math.max(0, Math.floor(Number(data.metadataRevision ?? 0))),
+  audioCleanupPending: Boolean(data.audioRemovalPendingPath),
 });
 
 const releaseSearchText = (data: Record<string, unknown>) => [
@@ -5742,6 +5743,9 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
   // An ambiguous callable timeout can occur AFTER the first attempt attached
   // this same private recording. Repeating that exact path must be harmless,
   // without clearing timed transcripts or deleting other uploaded audio.
+  if (current.audioRemovalPendingPath) {
+    throw new HttpsError('failed-precondition','Finish the previous audio removal before attaching a new recording.');
+  }
   const alreadyAttached = current.audioStoragePath === storagePath
     && Number(current.audioByteSize ?? 0) > 0
     && Boolean(current.audioContentType);
@@ -5768,8 +5772,12 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
   // second device may not overwrite a newer file or replace submitted audio.
   await db.runTransaction(async transaction => {
     const live = await transaction.get(ref);
+    const retiredRef=ref.collection('retiredAudioPaths').doc(createHash('sha256').update(storagePath).digest('hex'));
+    const retired=await transaction.get(retiredRef);
     const latest = live.data();
     if (!latest || latest.creatorUserId !== identity.uid) throw new HttpsError('not-found','Release not found.');
+    if (retired.exists || latest.audioRemovalPendingPath)
+      throw new HttpsError('failed-precondition','This audio path was removed or is awaiting cleanup and cannot be reattached.');
     if (latest.audioStoragePath === storagePath && Number(latest.audioByteSize ?? 0) > 0) return;
     if (latest.audioStoragePath !== current.audioStoragePath) {
       throw new HttpsError('aborted','Another upload changed the attached recording. Refresh before retrying.');
@@ -5799,24 +5807,63 @@ export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) =
 export const removeReleaseAudio = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
+  if(!/^[A-Za-z0-9_-]{1,160}$/.test(releaseId))
+    throw new HttpsError('invalid-argument','Choose a valid private release.');
   const ref = releaseRef(releaseId);
-  const snapshot = await ref.get();
-  const current = snapshot.data();
-  if (!current || current.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
-  if (['released', 'scheduled', 'removed', 'removing', 'pending_review'].includes(String(current.status))) throw new HttpsError('failed-precondition', 'Submitted or removed audio cannot be edited.');
-
-  const path = cleanText(current.audioStoragePath, 500);
-  if (path) {
-    try { await getStorage().bucket().file(path).delete({ ignoreNotFound: true }); } catch { /* record is still cleared */ }
+  // Revoke canonical attachment FIRST, retaining an exact server-side
+  // cleanup receipt. Any Firestore failure leaves active Storage untouched.
+  const removal=await db.runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    const latest=snapshot.data();
+    if(!latest || latest.creatorUserId!==identity.uid)
+      throw new HttpsError('not-found','Release not found.');
+    if(['released','scheduled','removed','removing','pending_review'].includes(String(latest.status)))
+      throw new HttpsError('failed-precondition','Submitted or removed audio cannot be edited.');
+    const pending=cleanText(latest.audioRemovalPendingPath,500);
+    if(pending)return {path:pending};
+    const path=cleanText(latest.audioStoragePath,500);
+    if(!path)return {path:''};
+    if(!path.startsWith(`release-audio/${identity.uid}/${releaseId}/`))
+      throw new HttpsError('failed-precondition','Stored audio path requires an administrator security review.');
+    const retiredRef=ref.collection('retiredAudioPaths').doc(createHash('sha256').update(path).digest('hex'));
+    transaction.set(ref,{
+      audioStoragePath:null,audioContentType:null,audioByteSize:null,
+      durationMinutes:0,transcriptAccessibilityReviewed:false,transcriptSyncSource:null,
+      audioRemovalPendingPath:path,updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    transaction.set(retiredRef,{
+      storagePath:path,ownerUserId:identity.uid,cleanupState:'pending',
+      retiredAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return {path};
+  });
+  if(!removal.path)return {removed:true,pendingCleanup:false,storageDeleted:true};
+  try {
+    await getStorage().bucket().file(removal.path).delete({ignoreNotFound:true});
+  } catch(error) {
+    console.warn('Creator audio cleanup pending',releaseId,error instanceof Error?error.message:'Unknown Storage error');
+    return {removed:true,pendingCleanup:true,storageDeleted:false};
   }
-  await ref.set({
-    audioStoragePath: null,
-    audioContentType: null,
-    audioByteSize: null,
-    durationMinutes: 0,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { removed: true };
+  // A successful delete can still have an ambiguous Firestore acknowledgement.
+  // Retain the receipt so retrying can finalise safely without reattaching
+  // or deleting a replacement recording.
+  try {
+    await db.runTransaction(async transaction=>{
+      const snapshot=await transaction.get(ref);
+      const live=snapshot.data();
+      if(!live || live.creatorUserId!==identity.uid)
+        throw new HttpsError('not-found','Release not found.');
+      if(live.audioRemovalPendingPath!==removal.path)
+        throw new HttpsError('aborted','Another operation changed the removal receipt.');
+      const retiredRef=ref.collection('retiredAudioPaths').doc(createHash('sha256').update(removal.path).digest('hex'));
+      transaction.set(ref,{audioRemovalPendingPath:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      transaction.set(retiredRef,{cleanupState:'deleted',deletedAt:FieldValue.serverTimestamp()},{merge:true});
+    });
+    return {removed:true,pendingCleanup:false,storageDeleted:true};
+  }catch(error){
+    console.warn('Creator audio removal receipt pending',releaseId,error instanceof Error?error.message:'Unknown Firestore error');
+    return {removed:true,pendingCleanup:true,storageDeleted:false};
+  }
 });
 
 export const submitReleaseForModeration = onCall({ region: REGION }, async (request) => {
