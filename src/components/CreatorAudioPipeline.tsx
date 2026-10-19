@@ -701,7 +701,9 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const removeRelease = async () => {
     if (!current?.id || removing || audioBusy || submitting) return;
     const item = current;
-    const warning = item.status === 'released'
+    const warning = item.status === 'removing'
+      ? 'Retry deletion of the already-retired recording and artwork? NightJar will only finish the pending private media cleanup.'
+      : item.status === 'released'
       ? 'Remove this published recording from Nightjar? Listening will stop, and its audio and artwork will be deleted. This cannot be undone.'
       : item.status === 'pending_review'
         ? 'Withdraw and permanently remove this submission from Nightjar review? The uploaded recording will be deleted. This cannot be undone.'
@@ -801,7 +803,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <Check size={28} aria-hidden="true"/>
             <div><span className="mini-label">{removalPending ? 'NIGHTJAR · REMOVAL PENDING' : current.status === 'rejected' ? 'NIGHTJAR · MODERATION DECISION' : current.status === 'scheduled' ? 'NIGHTJAR · APPROVED & SCHEDULED' : current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>
               <h3>{removalPending ? 'Your recording is hidden.' : current.status === 'rejected' ? 'This recording was not approved.' : current.status === 'scheduled' ? 'Approved! Your release is scheduled.' : current.status === 'released' ? 'Your recording is live.' : 'Your recording has been submitted!'}</h3>
-              <p><strong>{current.title}</strong> {removalPending ? 'is no longer publicly accessible. Storage cleanup is still pending; select Remove recording to retry.' : current.status === 'rejected' ? 'was not approved. Review the reason below and reply to the Nightjar moderation conversation if you have questions.' : current.status === 'scheduled' ? 'has passed Nightjar review and is safely waiting for its scheduled publication.' : current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
+              <p><strong>{current.title}</strong> {removalPending ? 'is no longer publicly accessible. Storage cleanup is still pending; select Retry removal cleanup to finish.' : current.status === 'rejected' ? 'was not approved. Review the reason below and reply to the Nightjar moderation conversation if you have questions.' : current.status === 'scheduled' ? 'has passed Nightjar review and is safely waiting for its scheduled publication.' : current.status === 'released' ? 'has been approved and published.' : 'is safely in Nightjar’s moderation queue. You do not need to upload or submit it again.'}</p>
               <small>{submissionConfirmed ? 'Submission confirmed just now · ' : ''}Status: {removalPending ? 'Removal pending' : current.status === 'rejected' ? 'Rejected' : current.status === 'scheduled' ? 'Scheduled · '+scheduleReadable(current) : current.status === 'released' ? 'Published' : 'Awaiting review'}</small>
             </div>
             {current.scheduledAt && current.status !== 'released' && <small className="nj-creator-scheduled-confirmation">{current.status === 'scheduled' ? 'Approved publication date' : 'Requested publication date'}: {scheduleReadable(current)}</small>}
@@ -1075,7 +1077,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           </div>}
           <div className="nj-work-removal">
             <div><strong>Remove this recording</strong><small>You control your work. Remove drafts, submissions or published recordings whenever you choose. Removal cannot be undone.</small></div>
-            <button className="ghost-button nj-work-remove-button" type="button" disabled={removing || submitting || audioBusy} onClick={() => void removeRelease()}>{removing ? 'Removing recording…' : 'Remove recording'}</button>
+            <button className="ghost-button nj-work-remove-button" type="button" disabled={removing || submitting || audioBusy} onClick={() => void removeRelease()}>{removing ? 'Removing recording…' : removalPending ? 'Retry removal cleanup' : 'Remove recording'}</button>
           </div>
           {workflowStep === 'prepare' && !submittedOrPublished && <div className="pipeline-footer"><span>Release details autosave privately. Rights and transcript accuracy confirmations are saved on explicit Save or Submit.</span><div><button className="ghost-button" type="button" onClick={() => void removeRelease()} disabled={removing}>{removing ? 'Removing…' : 'Remove draft'}</button><button className="secondary-button" type="button" onClick={() => void saveMetadata()}>Save changes</button><button className="primary-button" type="button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={14}/> Continue to Review →</button></div></div>}
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Choose a recording.</strong><span>Select a saved recording above, or create one with a title.</span></div>}
