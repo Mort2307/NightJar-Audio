@@ -225,7 +225,7 @@
     filter:brightness(1.1) saturate(.96);
   }
   :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-spotlight-portrait-trigger:hover .nj-spotlight-portrait-img {
-    transform:scale(1.015);
+    filter:brightness(1.045);
   }
 }
 @media(max-width:420px) {
