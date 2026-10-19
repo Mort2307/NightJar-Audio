@@ -1103,10 +1103,13 @@ export const getMyProfile = onCall({ region: REGION }, async (request) => {
   ]);
   if (!snapshot.exists) return { profile:null };
   const data = snapshot.data() ?? {};
+  const {avatarRemovalPending,bannerRemovalPending,...safeProfileData}=data;
   const activeRole = identity.admin ? 'admin' : cleanText(accountSnapshot.data()?.role, 30) || 'listener';
   return {
     profile: {
-      ...data,
+      ...safeProfileData,
+      avatarCleanupPending:Array.isArray(avatarRemovalPending) && avatarRemovalPending.length>0,
+      bannerCleanupPending:Array.isArray(bannerRemovalPending) && bannerRemovalPending.length>0,
       ...roleProfileSlice(data, activeRole),
       activeRole,
       roles: identity.admin ? ['admin'] : ['listener', ...professionalRolesForAccount(accountSnapshot.data() ?? {})],
@@ -3277,51 +3280,94 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
     return {removed:false,assetId,pendingCleanup:true};
   }
 });
-export const removeProfileAvatar = onCall({ region: REGION }, async (request) => {
-  const identity = await requireActiveIdentity(request);
-  const profile = await profileRef(identity.uid).get();
-  const data = profile.data() ?? {};
-  for (const assetId of [data.avatarAssetId, data.pendingAvatarAssetId]) {
-    const cleanId = cleanText(assetId, 160);
-    if (!cleanId) continue;
-    const asset = await db.collection('imageAssets').doc(cleanId).get();
-    if (asset.exists && asset.data()?.ownerUserId === identity.uid) {
-      await clearAssetFile(asset.data() ?? {});
-      await asset.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+// Profile images are removed through a single account-scoped transaction so
+// an Admin approval or upload on a second device cannot reintroduce an image
+// after its current pointer was cleared. Bounded receipts survive lost replies.
+const removeOwnedProfileVisual = async (userId:string,kind:'profile_avatar'|'profile_banner')=>{
+  const ref=profileRef(userId);
+  const avatar=kind==='profile_avatar';
+  const currentField=avatar?'avatarAssetId':'bannerAssetId';
+  const pendingField=avatar?'pendingAvatarAssetId':'pendingBannerAssetId';
+  const receiptField=avatar?'avatarRemovalPending':'bannerRemovalPending';
+  type Receipt={id:string;path:string};
+  const removals=await db.runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    const data=snapshot.data()??{};
+    const stored:Receipt[]=Array.isArray(data[receiptField])?data[receiptField].slice(0,8)
+      .map((value:any)=>({id:cleanText(value?.id,160),path:cleanText(value?.path,500)})):[];
+    if(Array.isArray(data[receiptField])&&data[receiptField].length>8)
+      throw new HttpsError('failed-precondition','Too many incomplete image removals require an administrator investigation.');
+    const ids=[...new Set([data[currentField],data[pendingField],...stored.map(x=>x.id)]
+      .map(value=>cleanText(value,160)).filter(Boolean))];
+    if(ids.length>8)throw new HttpsError('failed-precondition','Profile media cleanup limit exceeded.');
+    const assetRefs=ids.map(id=>db.collection('imageAssets').doc(id));
+    const assetSnaps=await Promise.all(assetRefs.map(item=>transaction.get(item)));
+    const files:Receipt[]=[];
+    for(let i=0;i<ids.length;i++){
+      const item=assetSnaps[i].data();
+      const previous=stored.find(x=>x.id===ids[i]);
+      if(item && (item.ownerUserId!==userId || item.kind!==kind))
+        throw new HttpsError('failed-precondition','Profile image ownership needs a security review.');
+      const path=cleanText(previous?.path||item?.storageRemovalPendingPath||item?.storagePath,500);
+      if(path && !['png','jpg','webp'].some(ext=>path==='pending-images/'+userId+'/'+ids[i]+'.'+ext))
+        throw new HttpsError('failed-precondition','Profile image Storage path requires investigation.');
+      if(path)files.push({id:ids[i],path});
+    }
+    const clear=avatar
+      ?{avatarAssetId:null,avatarUrl:null,avatarStatus:null,pendingAvatarAssetId:null,pendingAvatarStatus:null}
+      :{bannerAssetId:null,bannerUrl:null,bannerStatus:null,pendingBannerAssetId:null,pendingBannerStatus:null};
+    transaction.set(ref,{...clear,[receiptField]:files,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    for(const file of files){
+      const child=db.collection('imageAssets').doc(file.id);
+      if(assetSnaps[ids.indexOf(file.id)].exists)
+        transaction.set(child,{
+          status:'removing',publicUrl:null,storageRemovalPendingPath:file.path,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+    }
+    return files;
+  });
+  let pendingCleanup=false;
+  for(const file of removals){
+    try{
+      await getStorage().bucket().file(file.path).delete({ignoreNotFound:true});
+      const assetRef=db.collection('imageAssets').doc(file.id);
+      await db.runTransaction(async tx=>{
+        const snap=await tx.get(assetRef);
+        if(snap.exists && snap.data()?.storageRemovalPendingPath===file.path)
+          tx.set(assetRef,{status:'removed',publicUrl:null,storageRemovalPendingPath:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      });
+    }catch(error){
+      pendingCleanup=true;
+      console.warn('Private profile media cleanup pending',file.id,error instanceof Error?error.message:'Unknown Storage error');
     }
   }
-  await profileRef(identity.uid).set({
-    avatarAssetId: null,
-    avatarUrl: null,
-    avatarStatus: null,
-    pendingAvatarAssetId: null,
-    pendingAvatarStatus: null,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { removed: true };
+  if(!pendingCleanup){
+    try{
+      await db.runTransaction(async tx=>{
+        const snap=await tx.get(ref);
+        const active:Array<{id:string;path:string}>=Array.isArray(snap.data()?.[receiptField])?snap.data()?.[receiptField]:[];
+        if(active.length!==removals.length||active.some((x,i)=>x.id!==removals[i].id||x.path!==removals[i].path))
+          throw new HttpsError('aborted','A newer profile cleanup is still pending.');
+        tx.set(ref,{[receiptField]:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      });
+    }catch(error){
+      pendingCleanup=true;
+      console.warn('Profile image cleanup receipt still pending',userId,error instanceof Error?error.message:'Unknown Firestore error');
+    }
+  }
+  return {removed:true,pendingCleanup};
+};
+
+export const removeProfileAvatar = onCall({region:REGION},async request=>{
+  const identity=await requireActiveIdentity(request);
+  return removeOwnedProfileVisual(identity.uid,'profile_avatar');
 });
 
-// A cover is independent of the portrait; only the owner can withdraw it.
-export const removeProfileBanner = onCall({region:REGION}, async request => {
-  const identity = await requireActiveIdentity(request);
-  const ref = profileRef(identity.uid);
-  const profile = await ref.get();
-  const data = profile.data() ?? {};
-  for (const raw of [data.bannerAssetId, data.pendingBannerAssetId]) {
-    const assetId = cleanText(raw,160);
-    if (!assetId) continue;
-    const asset = await db.collection('imageAssets').doc(assetId).get();
-    if (asset.exists && asset.data()?.ownerUserId === identity.uid && asset.data()?.kind === 'profile_banner') {
-      await clearAssetFile(asset.data() ?? {});
-      await asset.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-    }
-  }
-  await ref.set({
-    bannerAssetId:null, bannerUrl:null, bannerStatus:null,
-    pendingBannerAssetId:null, pendingBannerStatus:null,
-    updatedAt:FieldValue.serverTimestamp(),
-  },{merge:true});
-  return {removed:true};
+// Profile covers follow the same exact-record, transaction-first lifecycle.
+export const removeProfileBanner = onCall({region:REGION},async request=>{
+  const identity=await requireActiveIdentity(request);
+  return removeOwnedProfileVisual(identity.uid,'profile_banner');
 });
 
 export const getBranding = onCall({ region: REGION }, async () => {

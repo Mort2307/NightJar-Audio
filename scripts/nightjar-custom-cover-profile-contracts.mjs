@@ -19,7 +19,7 @@ assert.match(backend,/decision==='approved' && !current/,'stale cover approval i
 assert.match(backend,/bannerAssetId:assetId,bannerUrl:url,bannerStatus:'approved'/,'only approved cover is published in the parent transaction');
 assert.match(backend,/bannerUrl: data\.bannerStatus === 'approved' \? data\.bannerUrl \?\? null : null/,'nonapproved covers are never exposed publicly');
 assert.match(backend,/export const removeProfileBanner = onCall/,'owners can withdraw their cover');
-assert.match(backend,/asset\.data\(\)\?\.ownerUserId === identity\.uid && asset\.data\(\)\?\.kind === 'profile_banner'/,'removal is owner and kind scoped');
+assert.match(backend,/item\.ownerUserId!==userId \|\| item\.kind!==kind/,'removal is owner and kind scoped');
 assert.match(backend,/\['cinematic','portrait','custom'\]\.includes\(String\(input\.headerImageMode\)\)/,'custom cover choice is saved server side');
 assert.match(backend,/\['cinematic','portrait','custom'\]\.includes\(String\(data\.headerImageMode\)\)/,'custom choice is returned to visitors');
 assert.match(studio,/name="nightjar-profile-cover" value="custom"/,'member can select independent cover');

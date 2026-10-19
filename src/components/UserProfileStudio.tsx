@@ -137,7 +137,8 @@ export default function UserProfileStudio({
           <div>
             <label className="secondary-button upload-label"><ImagePlus size={14}/> {profileImageBusy ? 'Optimising photo…' : profile.avatarUrl ? 'Replace portrait' : 'Add portrait'}<input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file) void onUploadAvatar(file); event.currentTarget.value='';}}/></label>
              <ContextHelp topic="profile-photo"/>
-            {(profile.avatarUrl || profile.pendingAvatarAssetId) && <button className="ghost-button" disabled={profileImageBusy} onClick={()=>void onRemoveAvatar()}>Remove</button>}
+            {(profile.avatarUrl || profile.pendingAvatarAssetId || profile.avatarCleanupPending) && <button className="ghost-button" disabled={profileImageBusy} onClick={()=>void onRemoveAvatar()}>{profile.avatarCleanupPending?'Retry portrait cleanup':'Remove'}</button>}
+            {profile.avatarCleanupPending && <small role="status">Portrait is hidden. Private file deletion needs another attempt.</small>}
             {profile.pendingAvatarStatus === 'pending' && <small>New portrait awaiting moderation.</small>}
             {profile.pendingAvatarStatus === 'rejected' && <small>The submitted portrait was not approved.</small>}
           </div>
@@ -191,8 +192,9 @@ export default function UserProfileStudio({
               <input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden
                 disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0];if(file)void onUploadBanner(file);event.currentTarget.value='';}}/>
             </label>
-            {(profile.bannerUrl || profile.pendingBannerAssetId) && <button type="button" className="ghost-button" disabled={profileImageBusy}
-              onClick={()=>void onRemoveBanner()}>Remove cover</button>}
+            {(profile.bannerUrl || profile.pendingBannerAssetId || profile.bannerCleanupPending) && <button type="button" className="ghost-button" disabled={profileImageBusy}
+              onClick={()=>void onRemoveBanner()}>{profile.bannerCleanupPending?'Retry cover cleanup':'Remove cover'}</button>}
+            {profile.bannerCleanupPending && <small role="status">Cover is hidden. Private file deletion needs another attempt.</small>}
           </div>
           {profile.pendingBannerStatus === 'pending' && <small>Awaiting NightJar moderation; the previous approved cover remains live until approval.</small>}
           {profile.pendingBannerStatus === 'rejected' && <small>This cover wasn't approved. You can choose another image.</small>}

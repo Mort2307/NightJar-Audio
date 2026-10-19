@@ -18,8 +18,8 @@ const pendingPreviewCall = httpsCallable<{ assetId: string }, { assetId: string;
 const moderateCall = httpsCallable<{ assetId: string; decision: 'approved' | 'rejected'; note?: string; safetyConfirmed?: boolean }, { assetId: string; status: string; publicUrl?: string | null }>(functions, 'moderateImageAsset');
 const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status: string; publicUrl: string | null; moderationNote: string | null }>(functions, 'getImageAssetStatus');
 const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string; pendingCleanup: boolean }>(functions, 'removeOwnedImageAsset');
-const removeAvatarCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileAvatar');
-const removeBannerCall = httpsCallable<void, { removed: boolean }>(functions, 'removeProfileBanner');
+const removeAvatarCall = httpsCallable<void, { removed: boolean; pendingCleanup: boolean }>(functions, 'removeProfileAvatar');
+const removeBannerCall = httpsCallable<void, { removed: boolean; pendingCleanup: boolean }>(functions, 'removeProfileBanner');
 type BrandingInfo = { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null };
 const brandingCall = httpsCallable<void, BrandingInfo>(functions, 'getBranding');
 
