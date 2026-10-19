@@ -9,6 +9,7 @@ export type NightjarSocialLink = {
   photoStatus:'approved'|'pending'|'rejected'|null;
   pendingPhotoAssetId?:string|null;
   removalPending?:boolean;
+  photoCleanupPending?:boolean;
 };
 const functions=getFunctions(firebaseApp,'europe-west2');
 const listCall=httpsCallable<void,{links:NightjarSocialLink[]}>(functions,'listMySocialLinks');
