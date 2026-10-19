@@ -3619,12 +3619,15 @@ function App() {
     if (!user || profileImageBusy) return;
     setProfileImageBusy(true);
     try {
-      if (!demoMode) await nightjarMedia.removeProfileBanner();
+      const result=demoMode?{removed:true,pendingCleanup:false}:await nightjarMedia.removeProfileBanner();
+      if(!result.removed)throw new Error('Cover removal could not be confirmed.');
       setProfile((current:any)=>({
         ...current,bannerAssetId:null,bannerUrl:null,bannerStatus:null,
-        pendingBannerAssetId:null,pendingBannerStatus:null,
+        pendingBannerAssetId:null,pendingBannerStatus:null,bannerCleanupPending:result.pendingCleanup,
       }));
-      notify(demoMode?'Simulation: cover removed locally.':'Your cover image has been removed.');
+      notify(demoMode?'Simulation: cover removed locally.':result.pendingCleanup
+        ?'Your cover is hidden. Private file deletion needs retrying under Profile.'
+        :'Your cover and private source image were removed.');
     } catch {notify('Could not remove your cover image.');}
     finally {setProfileImageBusy(false);}
   };
@@ -3637,9 +3640,12 @@ function App() {
         notify('Simulation: profile image removed locally.');
         return;
       }
-      await nightjarMedia.removeProfileAvatar();
-      setProfile((current: any) => ({ ...current, avatarUrl: null, avatarAssetId: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null }));
-      notify('Profile image removed.');
+      const result=await nightjarMedia.removeProfileAvatar();
+      if(!result.removed)throw new Error('Profile image removal was not confirmed.');
+      setProfile((current: any) => ({ ...current, avatarUrl: null, avatarAssetId: null, avatarStatus: null, pendingAvatarAssetId: null, pendingAvatarStatus: null, avatarCleanupPending:result.pendingCleanup }));
+      notify(result.pendingCleanup
+        ?'Your portrait is hidden; private file cleanup needs retrying in Profile.'
+        :'Profile portrait and private image removed.');
     } catch { notify('Profile image could not be removed.'); }
     finally { setProfileImageBusy(false); }
   };
