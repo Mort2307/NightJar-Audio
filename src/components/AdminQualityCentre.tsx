@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Activity, ClipboardCheck, RefreshCw, ShieldAlert } from 'lucide-react';
 import { nightjarQuality, type QualityCheck, type QualityStatus, type TesterFeedback, type FeedbackStatus } from '../platform/firebase-quality';
 import './nightjar-quality.css';
+import { hardeningAcceptance } from '../data/hardening-acceptance';
 
 const acceptance=[
   ['age','1 · Mandatory live Didit'],
@@ -35,6 +36,7 @@ export default function AdminQualityCentre({pendingApplications,pendingImages,op
   const [feedbackMore,setFeedbackMore]=useState(false);
   const [loadError,setLoadError]=useState('');
   const [notice,setNotice]=useState('');
+  const [matrix,setMatrix]=useState<'release'|'hardening'>('release');
   const [selected,setSelected]=useState<string>('credits_member');
   const [decision,setDecision]=useState<QualityStatus>('not_verified');
   const [evidence,setEvidence]=useState('');
@@ -75,9 +77,15 @@ export default function AdminQualityCentre({pendingApplications,pendingImages,op
     }catch(e){setLoadError(e instanceof Error?e.message:'Could not update feedback.');}
     finally{setBusy(false);}
   };
-  const passed=acceptance.filter(([id])=>checks[id]?.status==='pass').length;
-  const failed=acceptance.filter(([id])=>checks[id]?.status==='fail').length;
-  const unverified=acceptance.length-passed-failed;
+  const visibleAcceptance: ReadonlyArray<readonly [string,string]> = matrix === 'hardening'
+    ? hardeningAcceptance.map(item=>[item.id,item.caseId+' · '+item.title] as const)
+    : acceptance;
+  const selectedProcedure = matrix === 'hardening'
+    ? hardeningAcceptance.find(item=>item.id===selected)?.procedure : null;
+  const passed=visibleAcceptance.filter(([id])=>checks[id]?.status==='pass').length;
+  const failed=visibleAcceptance.filter(([id])=>checks[id]?.status==='fail').length;
+  const blocked=visibleAcceptance.filter(([id])=>checks[id]?.status==='blocked').length;
+  const unverified=visibleAcceptance.length-passed-failed-blocked;
   return <section className="panel nj-quality-centre" aria-label="Nightjar quality and release centre">
     <header className="nj-quality-head"><div><span className="mini-label">OWNER OPERATIONS · EVIDENCE FIRST</span>
       <h2><ClipboardCheck size={20}/> Quality &amp; Release Centre</h2>
@@ -96,18 +104,23 @@ export default function AdminQualityCentre({pendingApplications,pendingImages,op
       <div className="nj-quality-toolbar"><h3>Human-verified acceptance</h3>
         <button type="button" className="secondary-button" disabled={busy} onClick={()=>void load()}><RefreshCw size={15}/> Refresh</button>
       </div>
+      <div role="group" aria-label="Acceptance test matrix" className="nj-quality-toolbar">
+        <button type="button" className={matrix==='release'?'primary-button':'secondary-button'} aria-pressed={matrix==='release'} onClick={()=>{setMatrix('release');select('credits_member');}}>Release checks ({acceptance.length})</button>
+        <button type="button" className={matrix==='hardening'?'primary-button':'secondary-button'} aria-pressed={matrix==='hardening'} onClick={()=>{setMatrix('hardening');select(hardeningAcceptance[0].id);}}>Hardening ({hardeningAcceptance.length})</button>
+      </div>
       <p>Unrecorded checks default to NOT VERIFIED. Prior conversational reports are not silently marked PASS. A PASS requires genuine observed evidence and an accountable administrator action.</p>
       {loaded&&<div className="nj-quality-summary" role="status">
-        <span>{passed} verified PASS</span><span>{unverified} not passed / blocked / unverified</span><span>{failed} FAIL</span>
+        <span>{passed} verified PASS</span><span>{unverified} NOT VERIFIED</span><span>{blocked} BLOCKED</span><span>{failed} FAIL</span>
       </div>}
       <div className="nj-quality-checks">
-        {acceptance.map(([id,title])=><button key={id} type="button"
+        {visibleAcceptance.map(([id,title])=><button key={id} type="button"
           className={selected===id?'nj-quality-check active':'nj-quality-check'} onClick={()=>select(id)}>
           <span>{title}</span><strong>{labels[checks[id]?.status??'not_verified']}</strong>
         </button>)}
       </div>
       <div className="nj-quality-review">
-        <h3>{acceptance.find(([id])=>id===selected)?.[1]}</h3>
+        <h3>{visibleAcceptance.find(([id])=>id===selected)?.[1]}</h3>
+        {selectedProcedure&&<p>{selectedProcedure}</p>}
         <label htmlFor="nj-quality-decision">Observed result</label>
         <select id="nj-quality-decision" value={decision} onChange={e=>setDecision(e.target.value as QualityStatus)}>
           <option value="not_verified">NOT VERIFIED</option><option value="pass">PASS</option>
