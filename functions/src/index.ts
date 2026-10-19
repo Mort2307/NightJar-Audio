@@ -5638,49 +5638,85 @@ export const updateRelease = onCall({ region: REGION }, async (request) => {
 // Removal is available to both the owner and Nightjar administrators.
 // Hide the release BEFORE deleting media so failed cleanup cannot expose it.
 const removeOwnedRelease = async (releaseId: string, actorUserId: string, administrator: boolean) => {
-  if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(releaseId))
+    throw new HttpsError('invalid-argument', 'Choose a valid release.');
   const ref = releaseRef(releaseId);
-  const snapshot = await ref.get();
-  const current = snapshot.data();
-  if (!current) throw new HttpsError('not-found', 'Release not found.');
-  if (!administrator && current.creatorUserId !== actorUserId) throw new HttpsError('permission-denied', 'You can only remove your own releases.');
-
-  if (current.status === 'removed' && !current.audioStoragePath && !current.artworkAssetId && !current.pendingArtworkAssetId) {
-    return { deleted: true };
-  }
-  const ownerUserId = String(current.creatorUserId);
-  const previousStatus = String(current.removalOriginalStatus ?? current.status ?? 'draft');
-  await ref.set({ status: 'removing', removalOriginalStatus: previousStatus, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-
-  // The actual audio file must be deleted, not merely detached from its record.
-  const audioPath = cleanText(current.audioStoragePath, 500);
-  if (audioPath) await getStorage().bucket().file(audioPath).delete({ ignoreNotFound: true });
-  for (const value of [current.artworkAssetId, current.pendingArtworkAssetId]) {
-    const assetId = cleanText(value, 160);
-    if (!assetId) continue;
-    const asset = await db.collection('imageAssets').doc(assetId).get();
-    if (asset.exists && asset.data()?.ownerUserId === ownerUserId) {
-      await clearAssetFile(asset.data() ?? {});
-      await asset.ref.set({ status: 'removed', publicUrl: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    }
-  }
-
-  // Preserve minimal provenance for legitimate safety, dispute and financial
-  // reconciliation without keeping the deleted recording or transcript.
-  await db.collection('releaseRemovalAudits').doc(releaseId).set({
-    releaseId, creatorUserId: ownerUserId, removedByUserId: actorUserId,
-    removedByAdmin: administrator, previousStatus,
-    removedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  await ref.set({
-    creatorUserId: ownerUserId,
-    status: 'removed',
-    createdAt: current.createdAt ?? FieldValue.serverTimestamp(),
-    removedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
+  // Capture canonical references and revoke playback in ONE transaction.
+  // A competing audio finalizer or Admin review cannot change the file list
+  // after we decide exactly which objects the member requested to remove.
+  const removal=await db.runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    const data=snapshot.data();
+    if(!data) throw new HttpsError('not-found','Release not found.');
+    if(!administrator && data.creatorUserId!==actorUserId)
+      throw new HttpsError('permission-denied','You can only remove your own releases.');
+    const ownerUserId=String(data.creatorUserId??'');
+    const previousStatus=String(data.removalOriginalStatus??data.status??'draft');
+    if(data.status==='removed' && !data.audioStoragePath && !data.artworkAssetId && !data.pendingArtworkAssetId)
+      return {alreadyDeleted:true,ownerUserId,previousStatus,audioPaths:[] as string[],assetIds:[] as string[],createdAt:data.createdAt,pendingPath:''};
+    const prefix=`release-audio/${ownerUserId}/${releaseId}/`;
+    const audioPaths=[data.audioStoragePath,data.audioRemovalPendingPath].map(value=>cleanText(value,500))
+      .filter(Boolean);
+    if(audioPaths.some(path=>!path.startsWith(prefix)))
+      throw new HttpsError('failed-precondition','Release audio path requires a security review before deletion.');
+    const assetIds=[...new Set([data.artworkAssetId,data.pendingArtworkAssetId].map(value=>cleanText(value,160)).filter(Boolean))];
+    if(data.status!=='removing')
+      transaction.set(ref,{
+        status:'removing',removalOriginalStatus:previousStatus,updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+    return {alreadyDeleted:false,ownerUserId,previousStatus,audioPaths:[...new Set(audioPaths)],assetIds,createdAt:data.createdAt,
+      pendingPath:cleanText(data.audioRemovalPendingPath,500)};
   });
-  await syncCreatorCustomTagUsage(ownerUserId);
-  return { deleted: true };
+  if(removal.alreadyDeleted)return {deleted:true};
+
+  // No destructive operation runs before the above transaction commits.
+  // On any failure the private 'removing' record retains exact paths for
+  // repeat explicit deletion, rather than reporting a false success.
+  for(const path of removal.audioPaths){
+    await getStorage().bucket().file(path).delete({ignoreNotFound:true});
+  }
+  for(const assetId of removal.assetIds){
+    const assetRef=db.collection('imageAssets').doc(assetId);
+    const asset=await assetRef.get();
+    if(!asset.exists)continue;
+    const image=asset.data()??{};
+    if(image.ownerUserId!==removal.ownerUserId || image.kind!=='release_artwork' ||
+       String(image.targetId??'')!==releaseId) {
+      throw new HttpsError('failed-precondition','Linked artwork ownership requires a security review before deletion.');
+    }
+    const imagePath=cleanText(image.storagePath,500);
+    if(imagePath)await getStorage().bucket().file(imagePath).delete({ignoreNotFound:true});
+    await assetRef.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  }
+
+  // Removal provenance and the final removed state are atomic. If Firestore
+  // fails, retrying the same request safely verifies missing files with
+  // ignoreNotFound and commits the tombstone without re-exposing anything.
+  await db.runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    const data=snapshot.data();
+    if(!data || data.creatorUserId!==removal.ownerUserId)
+      throw new HttpsError('not-found','Release changed during removal.');
+    if(data.status==='removed')return;
+    if(data.status!=='removing')
+      throw new HttpsError('aborted','The release changed during removal. Review its status before retry.');
+    transaction.set(db.collection('releaseRemovalAudits').doc(releaseId),{
+      releaseId,creatorUserId:removal.ownerUserId,removedByUserId:actorUserId,
+      removedByAdmin:administrator,previousStatus:removal.previousStatus,
+      removedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    if(removal.pendingPath)transaction.set(
+      ref.collection('retiredAudioPaths').doc(createHash('sha256').update(removal.pendingPath).digest('hex')),
+      {cleanupState:'deleted',deletedAt:FieldValue.serverTimestamp()},{merge:true});
+    transaction.set(ref,{
+      creatorUserId:removal.ownerUserId,status:'removed',
+      createdAt:removal.createdAt??FieldValue.serverTimestamp(),
+      removedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    });
+  });
+  await syncCreatorCustomTagUsage(removal.ownerUserId)
+    .catch(error=>console.warn('Release was removed, but tag usage refresh failed',error));
+  return {deleted:true};
 };
 
 export const deleteRelease = onCall({ region: REGION }, async (request) => {
