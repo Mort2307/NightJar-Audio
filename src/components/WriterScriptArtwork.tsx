@@ -25,6 +25,15 @@ const readImageDataUrl = (file: File) => new Promise<string>((resolve, reject) =
 export default function WriterScriptArtwork({ script, onUpdated, notify, simulationMode = false }: Props) {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState('');
+  const cleanupKey = 'nightjar:manuscript-artwork-cleanup:v1:' + String(script.writerUserId ?? '') + ':' + String(script.id ?? '');
+  const [cleanupAssetId, setCleanupAssetId] = useState(() => {
+    try { return window.localStorage.getItem('nightjar:manuscript-artwork-cleanup:v1:' + String(script.writerUserId ?? '') + ':' + String(script.id ?? '')) ?? ''; }
+    catch { return ''; }
+  });
+  const rememberCleanup = (id:string) => {
+    setCleanupAssetId(id);
+    try { if(id) window.localStorage.setItem(cleanupKey,id); else window.localStorage.removeItem(cleanupKey); } catch {}
+  };
   const approved = script.artworkStatus === 'approved' && !!script.artworkUrl;
   const pendingId = String(script.pendingArtworkAssetId ?? '');
   const pending = !!pendingId && script.pendingArtworkStatus === 'pending';
@@ -104,14 +113,21 @@ export default function WriterScriptArtwork({ script, onUpdated, notify, simulat
     }
   };
 
-  const remove = async (assetId: string, isApproved: boolean) => {
-    if (!window.confirm(isApproved
+  const remove = async (assetId: string, isApproved: boolean, retry=false) => {
+    if (!retry && !window.confirm(isApproved
       ? 'Remove the approved artwork from this manuscript? The script itself will stay published.'
       : 'Cancel this pending artwork submission?')) return;
     setBusy(true);
     setLocalError('');
     try {
-      if (!simulationMode) await nightjarMedia.removeOwnedImage(assetId);
+      const result = simulationMode ? {removed:true,pendingCleanup:false} : await nightjarMedia.removeOwnedImage(assetId);
+      if (result.pendingCleanup) {
+        rememberCleanup(assetId);
+        setLocalError('The artwork is no longer published, but permanent file deletion needs another attempt. Use Retry private artwork cleanup.');
+        return;
+      }
+      if (!result.removed) throw new Error('Artwork removal could not be confirmed. Retry cleanup before uploading another image.');
+      rememberCleanup('');
       onUpdated(isApproved ? {
         ...script,
         artworkAssetId: null,
@@ -146,13 +162,14 @@ export default function WriterScriptArtwork({ script, onUpdated, notify, simulat
           : <div className="writer-script-artwork-placeholder"><ImagePlus size={30} aria-hidden="true"/><span>No approved artwork yet</span></div>}
       </div>
       <div className="writer-script-artwork-controls">
+        {cleanupAssetId && <div className="writer-script-artwork-status pending" role="status"><strong>Private artwork deletion needs finishing.</strong> <button type="button" className="secondary-button" disabled={busy} onClick={()=>void remove(cleanupAssetId,false,true)}>Retry private artwork cleanup</button></div>}
         {approved && <span className="writer-script-artwork-status approved"><CheckCircle2 size={15}/> Approved artwork · visible on script listings</span>}
         {pending && <span className="writer-script-artwork-status pending"><ShieldCheck size={15}/> {approved ? 'Replacement image under review' : 'Image awaiting admin approval'}</span>}
         {!pending && script.pendingArtworkStatus === 'rejected' && <span className="writer-script-artwork-status rejected">Previous image not approved. Choose another.</span>}
         <label className={'secondary-button writer-script-artwork-upload' + (busy ? ' disabled' : '')}>
           <UploadCloud size={16}/>
           {busy ? 'Processing artwork…' : pending ? 'Replace pending image' : approved ? 'Submit replacement image' : 'Add script image'}
-          <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" disabled={busy}
+          <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" disabled={busy || Boolean(cleanupAssetId)}
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.currentTarget.value = '';
