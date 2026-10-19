@@ -15,19 +15,21 @@ const checks = [
   }],
   ['a pending image is linked separately to its manuscript', () => {
     assert.match(backend, /if \(kind === 'script_artwork'\) \{[\s\S]*?pendingArtworkAssetId: assetId,[\s\S]*?pendingArtworkStatus: 'pending'/);
-    assert.match(backend, /script\.data\(\)\?\.pendingArtworkAssetId !== assetId/);
+    assert.match(backend, /parent\[pendingField\]===assetId/);
+    assert.match(backend, /decision==='approved' && !current/);
   }],
   ['rejection leaves current script artwork and editorial status intact', () => {
-    const rejected = backend.slice(backend.indexOf("if (decision === 'rejected')"), backend.indexOf("const url = publicImageUrl(assetId)", backend.indexOf("if (decision === 'rejected')")));
-    assert.match(rejected, /asset\.kind === 'script_artwork'/);
-    assert.match(rejected, /pendingArtworkStatus: 'rejected'/);
-    assert.doesNotMatch(rejected, /artworkUrl: null/);
+    const moderation = backend.slice(backend.indexOf('export const moderateImageAsset = onCall'), backend.indexOf('export const removeOwnedImageAsset = onCall'));
+    assert.match(moderation, /if\(kind==='script_artwork'\)/);
+    assert.match(moderation, /pendingArtworkStatus:'rejected'/);
+    assert.doesNotMatch(moderation, /artworkUrl:null/);
   }],
   ['approval promotes the approved image rather than the manuscript', () => {
-    const approved = backend.slice(backend.indexOf("if (asset.kind === 'script_artwork' && asset.targetId)", backend.indexOf("const url = publicImageUrl(assetId)")), backend.indexOf("if (asset.ownerUserId)", backend.indexOf("const url = publicImageUrl(assetId)")));
-    assert.match(approved, /artworkUrl: url/);
-    assert.match(approved, /artworkStatus: 'approved'/);
-    assert.doesNotMatch(approved, /status: 'Published'|status: 'Approved'/);
+    const approved = backend.slice(backend.indexOf('export const moderateImageAsset = onCall'), backend.indexOf('export const removeOwnedImageAsset = onCall'));
+    assert.match(approved, /kind==='release_artwork'\|\|kind==='script_artwork'/);
+    assert.match(approved, /artworkUrl:url/);
+    assert.match(approved, /artworkStatus:'approved'/);
+    assert.doesNotMatch(approved, /status:'Published'|status:'Approved'/);
   }],
   ['only approved cover artwork is exposed on script metadata and the marketplace', () => {
     assert.match(backend, /artworkUrl: data\.artworkStatus === 'approved' \? data\.artworkUrl \?\? null : null/);
