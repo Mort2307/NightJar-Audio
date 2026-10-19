@@ -1463,6 +1463,7 @@ const socialLinkPayload = (id:string, data:Record<string,any>) => ({
   photoUrl:data.photoStatus==='approved' ? cleanText(data.photoUrl,500)||null : null,
   photoStatus:data.pendingPhotoStatus==='pending' ? 'pending' : data.pendingPhotoStatus==='rejected' ? 'rejected' : data.photoStatus==='approved' ? 'approved' : null,
   pendingPhotoAssetId:cleanText(data.pendingPhotoAssetId,160)||null,
+  removalPending:data.status==='removing',
 });
 
 export const listMySocialLinks = onCall({region:REGION},async(request)=>{
@@ -1480,6 +1481,9 @@ export const saveMySocialLink = onCall({region:REGION},async(request)=>{
   const collection=socialLinkCollection(identity.uid);
   const ref=id ? collection.doc(id) : collection.doc();
   const snapshot=await ref.get();
+  if(snapshot.data()?.status==='removing')throw new HttpsError('failed-precondition','Finish removal before editing this social link.');
+  if(id && (await profileRef(identity.uid).collection('deletedSocialLinkIds').doc(id).get()).exists)
+    throw new HttpsError('failed-precondition','This deleted social link ID cannot be reused. Add a fresh link instead.');
   if (!snapshot.exists) {
     const count=await collection.count().get();
     if (count.data().count>=12) throw new HttpsError('resource-exhausted','You can save up to 12 social links.');
@@ -1508,22 +1512,78 @@ export const saveMySocialLink = onCall({region:REGION},async(request)=>{
 export const deleteMySocialLink = onCall({region:REGION},async(request)=>{
   const identity=await requireActiveIdentity(request);
   const id=cleanText((request.data as Record<string,unknown>|undefined)?.id,120);
-  if(!/^[a-zA-Z0-9_-]{5,120}$/.test(id))throw new HttpsError('invalid-argument','Social link identifier is invalid.');
+  if(!/^[a-zA-Z0-9_-]{5,120}$/.test(id))
+    throw new HttpsError('invalid-argument','Social link identifier is invalid.');
   const ref=socialLinkCollection(identity.uid).doc(id);
-  const snapshot=await ref.get();
-  const link=snapshot.data();
-  if(!link)return {deleted:true};
-  await ref.delete();
-  for (const value of [link.photoAssetId,link.pendingPhotoAssetId]) {
-    const assetId=cleanText(value,160);
-    if(!assetId)continue;
-    const asset=await db.collection('imageAssets').doc(assetId).get();
-    if(asset.exists && asset.data()?.ownerUserId===identity.uid && asset.data()?.kind==='social_avatar') {
-      await asset.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      await clearAssetFile(asset.data()??{});
+  // One account-scoped transaction hides the link AND retires both linked
+  // images before Storage deletion. The pending link retains exact IDs for
+  // owner-initiated retry after Storage/Firestore/network failure.
+  const retired=await db.runTransaction(async transaction=>{
+    const snap=await transaction.get(ref);
+    const link=snap.data();
+    if(!link)return {gone:true,photos:[] as Array<{id:string;path:string}>};
+    const ids=[...new Set([link.photoAssetId,link.pendingPhotoAssetId]
+      .map(value=>cleanText(value,160)).filter(Boolean))];
+    const assetDocs=await Promise.all(ids.map(id=>transaction.get(db.collection('imageAssets').doc(id))));
+    const photos: Array<{id:string;path:string}>=[];
+    for(let i=0;i<assetDocs.length;i++){
+      const data=assetDocs[i].data();
+      if(!data)continue;
+      if(data.ownerUserId!==identity.uid || data.kind!=='social_avatar' ||
+          String(data.targetId??'')!==id)
+        throw new HttpsError('failed-precondition','Social image ownership requires an administrator security review.');
+      const path=cleanText(data.storageRemovalPendingPath || data.storagePath,500);
+      if(path && !['png','jpg','webp'].some(ext=>path==='pending-images/'+identity.uid+'/'+ids[i]+'.'+ext))
+        throw new HttpsError('failed-precondition','Social image Storage path requires an administrator security review.');
+      photos.push({id:ids[i],path});
+    }
+    if(link.status!=='removing')
+      transaction.set(ref,{status:'removing',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    for(const photo of photos)
+      transaction.set(db.collection('imageAssets').doc(photo.id),{
+        status:'removing',publicUrl:null,storageRemovalPendingPath:photo.path||null,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+    return {gone:false,photos};
+  });
+  if(retired.gone)return {deleted:true,pendingCleanup:false};
+  for(const photo of retired.photos){
+    if(!photo.path)continue;
+    try {await getStorage().bucket().file(photo.path).delete({ignoreNotFound:true});}
+    catch(error){
+      console.warn('Social link image cleanup pending',id,error instanceof Error?error.message:'Storage deletion error');
+      return {deleted:false,pendingCleanup:true};
     }
   }
-  return {deleted:true};
+  try{
+    await db.runTransaction(async transaction=>{
+      const snap=await transaction.get(ref);
+      if(!snap.exists)return;
+      if(snap.data()?.status!=='removing')
+        throw new HttpsError('aborted','Social link changed during removal.');
+      for(const photo of retired.photos){
+        const imageRef=db.collection('imageAssets').doc(photo.id);
+        const asset=await transaction.get(imageRef);
+        if(asset.exists){
+          if(asset.data()?.ownerUserId!==identity.uid || asset.data()?.kind!=='social_avatar' ||
+              String(asset.data()?.targetId??'')!==id || asset.data()?.status!=='removing')
+            throw new HttpsError('aborted','Social image changed during cleanup.');
+          transaction.set(imageRef,{
+            status:'removed',publicUrl:null,storageRemovalPendingPath:null,
+            removedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+          },{merge:true});
+        }
+      }
+      transaction.set(profileRef(identity.uid).collection('deletedSocialLinkIds').doc(id),{
+        deletedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      transaction.delete(ref);
+    });
+    return {deleted:true,pendingCleanup:false};
+  }catch(error){
+    console.warn('Social link record cleanup pending',id,error instanceof Error?error.message:'Firestore error');
+    return {deleted:false,pendingCleanup:true};
+  }
 });
 
 // Finishing later must persist across devices and role switches. Store the
@@ -2095,7 +2155,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     ? activePublicRole
     : (professionalRoles[0] ?? 'listener');
   const linksSnapshot = await socialLinkCollection(userId).limit(12).get();
-  const publicSocialLinks = linksSnapshot.docs.map((doc)=>{
+  const publicSocialLinks = linksSnapshot.docs.filter(doc=>doc.data().status!=='removing').map((doc)=>{
     const link=socialLinkPayload(doc.id,doc.data());
     return {id:link.id,url:link.url,platform:link.platform,photoUrl:link.photoUrl};
   });
