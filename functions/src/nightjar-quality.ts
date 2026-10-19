@@ -5,10 +5,16 @@ type Identity = { uid: string; admin: boolean };
 type Request = { auth?: { uid: string; token: Record<string,unknown> } | null };
 type FeedbackStatus = 'new' | 'triaged' | 'in_progress' | 'fixed' | 'closed';
 const statuses = new Set<FeedbackStatus>(['new','triaged','in_progress','fixed','closed']);
+const hardeningQaIds = [
+  'hardening_C1','hardening_C2','hardening_C3','hardening_C4','hardening_U1','hardening_U2','hardening_U3','hardening_U4','hardening_U5','hardening_U6','hardening_U9','hardening_U8',
+  'hardening_U10','hardening_U7','hardening_A1','hardening_A2','hardening_A3','hardening_A4','hardening_A5','hardening_A6','hardening_M1','hardening_M2','hardening_M3','hardening_M4',
+  'hardening_M5','hardening_D1','hardening_D2','hardening_D3','hardening_S1','hardening_S2','hardening_S3','hardening_N1','hardening_M6','hardening_S6','hardening_S5','hardening_S4',
+] as const;
 const qaIds = new Set(['age','existing_verified','legal','credits_member','credits_invitation',
   'credits_confirmation','credits_admin','credits_appeals','official_moon',
   'credited_listener','connections','navigation','notifications','push',
-  'listening','professional','cross_device','payment_provider','legal_signoff']);
+  'listening','professional','cross_device','payment_provider','legal_signoff',
+  ...hardeningQaIds]);
 const qualityStates = new Set(['pass','fail','blocked','not_verified']);
 const clean = (value:unknown,max=500) => String(value??'').trim().slice(0,max);
 const stamp = (value:any):string|null => value?.toDate?.()?.toISOString?.() ?? null;
