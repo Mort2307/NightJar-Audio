@@ -14,7 +14,8 @@ const optimizer=fs.readFileSync('src/platform/profile-image-optimizer.ts','utf8'
 assert.match(backend,/type ModeratedImageKind = 'profile_avatar' \| 'profile_banner'/,'custom banner is a separate moderated asset type');
 assert.match(backend,/kind === 'profile_avatar' \|\| kind === 'profile_banner'\s*\?\s*identity\.uid/,'only the signed-in member may claim a profile cover');
 assert.match(backend,/pendingBannerAssetId:assetId, pendingBannerStatus:'pending'/,'new covers are held for moderation');
-assert.match(backend,/profile\.data\(\)\?\.pendingBannerAssetId !== assetId/,'replaced or withdrawn covers cannot be approved later');
+assert.match(backend,/parent\[pendingField\]===assetId/,'replaced or withdrawn covers cannot be approved later');
+assert.match(backend,/decision==='approved' && !current/,'stale cover approval is blocked in same transaction');
 assert.match(backend,/bannerAssetId:assetId, bannerUrl:url, bannerStatus:'approved'/,'only approved cover is published');
 assert.match(backend,/bannerUrl: data\.bannerStatus === 'approved' \? data\.bannerUrl \?\? null : null/,'nonapproved covers are never exposed publicly');
 assert.match(backend,/export const removeProfileBanner = onCall/,'owners can withdraw their cover');
