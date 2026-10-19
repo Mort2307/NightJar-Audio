@@ -3840,21 +3840,42 @@ export const finalizeEditorPortfolioAudio = onCall({ region: REGION }, async (re
 export const submitEditorPortfolioItem = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['editor']);
   const itemId = cleanText((request.data as Record<string, unknown> | undefined)?.itemId, 160);
-  const { ref, data } = await requireEditorPortfolioOwner(identity, itemId);
-  if (!data.afterAudioStoragePath) throw new HttpsError('failed-precondition', 'Attach the finished/after audio sample before submitting.');
-  if (data.rightsConfirmed !== true || data.contributorPermissionsConfirmed !== true) {
-    throw new HttpsError('failed-precondition', 'Rights and contributor/client permissions must be confirmed.');
+  if (!itemId || !/^[A-Za-z0-9_-]{1,160}$/.test(itemId)) {
+    throw new HttpsError('invalid-argument', 'Choose an Editor showcase draft to submit.');
   }
-  await ref.set({
-    status:'pending_review',
-    submittedAt:FieldValue.serverTimestamp(),
-    moderationNote:null,
-    updatedAt:FieldValue.serverTimestamp(),
-  }, { merge:true });
-  const saved=await ref.get();
-  return { item:editorPortfolioPayload(saved.data() ?? {}, itemId) };
+  const ref = db.collection('editorPortfolio').doc(itemId);
+  // Submission must consume the exact canonical audio/rights state. A stale
+  // browser or concurrent finalizer cannot slip a new attachment between
+  // validation and the moderation transition.
+  const result = await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    const live = snapshot.data();
+    if (!live || live.ownerUserId !== identity.uid) {
+      throw new HttpsError('not-found', 'Editor showcase draft not found.');
+    }
+    // When a callable response was lost after Firestore committed, a retry
+    // returns the already-submitted item without duplicating the transition.
+    if (live.status === 'pending_review') return { reused: true };
+    if (!['draft', 'changes', 'rejected'].includes(String(live.status))) {
+      throw new HttpsError('failed-precondition', 'This Editor showcase has already been reviewed or cannot be resubmitted.');
+    }
+    if (!live.afterAudioStoragePath || Number(live.afterAudioByteSize ?? 0) <= 0) {
+      throw new HttpsError('failed-precondition', 'Attach a verified finished/after audio sample before submitting.');
+    }
+    if (live.rightsConfirmed !== true || live.contributorPermissionsConfirmed !== true) {
+      throw new HttpsError('failed-precondition', 'Rights and contributor/client permissions must be confirmed.');
+    }
+    transaction.set(ref, {
+      status: 'pending_review',
+      submittedAt: FieldValue.serverTimestamp(),
+      moderationNote: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { reused: false };
+  });
+  const saved = await ref.get();
+  return { item: editorPortfolioPayload(saved.data() ?? {}, itemId), reused: result.reused };
 });
-
 export const editorPortfolioModerationQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot=await db.collection('editorPortfolio').where('status','==','pending_review').limit(100).get();
