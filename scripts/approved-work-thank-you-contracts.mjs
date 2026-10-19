@@ -34,6 +34,9 @@ assert.match(notifier, /payload\.approvedWorkThankYou === true \? payload : safe
 assert.match(notifier, /delete persistedPayload\.approvedWorkThankYou/, 'Do not store internal rendering flag');
 assert.match(notifier, /deliverPushNotification\(userId, safePayload, displayMode/, 'Discreet/minimal lock-screen push must remain redacted');
 for(const section of [editor,writer,release,image]) assert.match(section, /approvedWorkThankYou:Boolean\(/, 'Approved content marks its private in-app thank-you');
+const gate = hosting.slice(hosting.indexOf('- name: Deploy personal contributor thank-yous before Hosting'), hosting.indexOf('# Deploy paged Admin release queries'));
+assert.ok(gate.includes('gh api -X POST'), 'Approval gate dispatches an existing targeted deployment');
+assert.doesNotMatch(gate, /\\\\\n/, 'Shell line continuation must contain one backslash, not two');
 assert.match(hosting, /\[nightjar-work-thanks-release\]/, 'Production backend-first release gate is required');
 for (const fn of ['moderateRelease','moderateEditorPortfolioItem','adminReviewWriterScript','moderateImageAsset']) {
   assert.ok(hosting.includes(fn), 'Backend release must select '+fn);
