@@ -11,7 +11,7 @@ type Props = {
   loading: boolean;
   demoMode: boolean;
   onRefresh: () => Promise<void>;
-  onReview: (script: any, decision: Decision, note: string) => Promise<void>;
+  onReview: (script: any, decision: Decision, note: string, sourceReviewed: boolean) => Promise<void>;
   notify: (message: string) => void;
   simulationMode?: boolean;
   onMessageWriter?: (userId:string)=>void;
@@ -33,6 +33,7 @@ export default function AdminManuscriptReview({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [sourcePreview, setSourcePreview] = useState<{ format: 'text' | 'pdf' | 'unavailable'; text?: string; truncated?: boolean; message?: string } | null>(null);
   const [decisionBusy, setDecisionBusy] = useState(false);
+  const [sourceReviewed, setSourceReviewed] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const pending = useMemo(() => scripts.filter((item) => pendingStatus(item.status)), [scripts]);
@@ -53,11 +54,14 @@ export default function AdminManuscriptReview({
   const hasSynopsis = !!String(selected?.marketplace?.synopsis ?? '').trim();
   const rightsReady = selected?.rights?.ownershipAttested === true && selected?.rights?.contributorPermissionsConfirmed === true;
   const hasManuscript = !!String(preview?.content ?? '').trim() || sourcePreview?.format === 'pdf' || (sourcePreview?.format === 'text' && !!String(sourcePreview.text ?? '').trim());
+  const completeSourceReady = sourcePreview?.format === 'pdf' ? Boolean(sourceFile?.url)
+    : sourcePreview?.format === 'text' && sourcePreview.truncated !== true && Boolean(String(sourcePreview.text ?? '').trim());
 
   useEffect(() => {
     setPreview(null);
     setSourceFile(null);
     setSourcePreview(null);
+    setSourceReviewed(false);
     setViewerOpen(false);
     setError('');
     setNote('');
@@ -66,6 +70,7 @@ export default function AdminManuscriptReview({
   const openPreview = async (reviewScript: any = selected) => {
     if (!reviewScript) return;
     setPreviewBusy(true);
+    setSourceReviewed(false);
     setError('');
     try {
       if (demoMode) {
@@ -93,8 +98,8 @@ export default function AdminManuscriptReview({
       setError('Please explain the changes requested or the reason for rejection.');
       return;
     }
-    if (decision === 'approved' && (!rightsReady || !hasManuscript)) {
-      setError('Approval needs confirmed rights and a manuscript source. Ask the Writer to complete these first.');
+    if (decision === 'approved' && (!rightsReady || !hasManuscript || !completeSourceReady || !sourceReviewed)) {
+      setError('Approval needs confirmed rights, a complete protected preview, and your explicit source-review confirmation.');
       return;
     }
     if (decision === 'approved' && marketplaceRequested && !hasSynopsis &&
@@ -102,7 +107,7 @@ export default function AdminManuscriptReview({
     setDecisionBusy(true);
     setError('');
     try {
-      await onReview(selected, decision, note.trim());
+      await onReview(selected, decision, note.trim(), sourceReviewed);
       setSelectedId(null);
       setPreview(null);
       setViewerOpen(false);
@@ -151,9 +156,11 @@ export default function AdminManuscriptReview({
       {marketplaceRequested && !hasSynopsis && <p className="manuscript-review-caution">Marketplace visibility is selected, but the public synopsis is missing. Approval alone will not create a public listing.</p>}
       {isPending && <div className="manuscript-review-decisions">
         <p>Open the protected, read-only in-app viewer before deciding. Administrators may approve or return submissions, but cannot edit a Writer’s manuscript.</p>
+        {completeSourceReady && <label className="rights-check"><input type="checkbox" checked={sourceReviewed} onChange={(event)=>setSourceReviewed(event.target.checked)}/> I opened and reviewed the complete protected manuscript for this submission.</label>}
+        {!completeSourceReady && <p className="manuscript-review-caution">A complete protected text or PDF preview is required to approve. Ask the Writer to replace an unreadable or truncated source.</p>}
         <label>Decision note (required when requesting changes or rejecting)<textarea value={note} maxLength={2000} rows={3} onChange={(event) => setNote(event.target.value)} placeholder="Explain your decision to the Writer…"/></label>
         <div className="manuscript-review-actions">
-          <button className="primary-button" disabled={!preview || !rightsReady || !hasManuscript || sourcePreview?.truncated === true || decisionBusy} onClick={() => void decide('approved')}><CheckCircle2 size={15}/>{decisionBusy ? 'Saving…' : 'Approve manuscript'}</button>
+          <button className="primary-button" disabled={!preview || !rightsReady || !hasManuscript || !completeSourceReady || !sourceReviewed || decisionBusy} onClick={() => void decide('approved')}><CheckCircle2 size={15}/>{decisionBusy ? 'Saving…' : 'Approve manuscript'}</button>
           <button className="secondary-button" disabled={!preview || !note.trim() || decisionBusy} onClick={() => void decide('changes')}>Request changes</button>
           <button className="secondary-button" disabled={!preview || !note.trim() || decisionBusy} onClick={() => void decide('rejected')}>Reject with reason</button>
         </div>
