@@ -29,6 +29,11 @@ assert.match(release, /decision === 'approved'[\s\S]*?approvedWorkThankYou\(Stri
 assert.match(release, /const body = decision === 'approved'[\s\S]*?thankYou/, 'Creator moderation inbox should say thanks too');
 assert.match(image, /asset\.kind === 'artist_portfolio'[\s\S]*?approvedWorkThankYou\(String\(asset\.ownerUserId\), 'artwork'/);
 assert.match(image, /const artistThankYou =/, 'Generic avatar/image approvals do not generate work thank-you');
+const notifier = backend.slice(backend.indexOf('const createNotification = async'),backend.indexOf('// Personal appreciation is composed only after a successful Admin approval.'));
+assert.match(notifier, /payload\.approvedWorkThankYou === true \? payload : safePayload/, 'Signed-in inbox retains personalised thank-you');
+assert.match(notifier, /delete persistedPayload\.approvedWorkThankYou/, 'Do not store internal rendering flag');
+assert.match(notifier, /deliverPushNotification\(userId, safePayload, displayMode/, 'Discreet/minimal lock-screen push must remain redacted');
+for(const section of [editor,writer,release,image]) assert.match(section, /approvedWorkThankYou:Boolean\(/, 'Approved content marks its private in-app thank-you');
 assert.match(hosting, /\[nightjar-work-thanks-release\]/, 'Production backend-first release gate is required');
 for (const fn of ['moderateRelease','moderateEditorPortfolioItem','adminReviewWriterScript','moderateImageAsset']) {
   assert.ok(hosting.includes(fn), 'Backend release must select '+fn);
