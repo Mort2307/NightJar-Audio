@@ -75,4 +75,13 @@ assert.match(polish, /\.nj-mobile-nav/, 'Mobile navigation size and touch target
 assert.match(polish, /data-nightjar-vision/, 'Accessible alternative vision modes remain supported');
 assert.match(polish, /prefers-reduced-motion/, 'Reduced motion remains supported');
 
+// A card may crop its decorative background, but never the member's actual portrait.
+const spotlight = load('src/components/SpotlightExperience.tsx');
+const velvet = load('src/styles/nightjar-velvet-interaction.css');
+assert.match(spotlight, /className="nj-spotlight-portrait-backdrop"[^>]*alt=""/, 'Spotlight blur layer must remain decorative and unannounced');
+assert.match(spotlight, /className="nj-spotlight-portrait-img"[^>]*alt=/, 'Retain one accessible foreground portrait');
+assert.match(productCss, /\.nj-spotlight-portrait-backdrop\s*\{[^}]*object-fit:cover;[^}]*filter:blur\(/, 'The ambient backdrop should fill the card');
+assert.match(productCss, /\.nj-spotlight-portrait-img\s*\{[^}]*object-fit:contain;/, 'Entire Spotlight photo must stay in view');
+assert.doesNotMatch(velvet, /\.nj-spotlight-portrait-trigger:hover \.nj-spotlight-portrait-img\s*\{\s*transform:scale/, 'Hover must not re-crop faces');
+
 console.log('PASS fixed first-place spotlight and themed creator profile hierarchy');
