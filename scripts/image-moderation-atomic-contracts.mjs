@@ -16,7 +16,7 @@ assert.match(fn,/decision==='approved' && !current/,'Stale approval rejected');
 assert.match(fn,/oldSnapshot=oldRef\?await transaction\.get\(oldRef\)/);
 assert.match(fn,/transaction\.set\(ref,moderation,\{merge:true\}\)/);
 assert.match(fn,/if\(current\)transaction\.set\(targetRef,parentUpdate,\{merge:true\}\)/,'Commit asset and parent together');
-assert.match(fn,/status:'removing',publicUrl:null,storageRemovalPendingPath/,'Retire prior approved image before file deletion');
+assert.match(fn,/status:previousPath\?'removing':'removed',publicUrl:null,storageRemovalPendingPath/,'Retire prior approved image before file deletion; metadata-only images finish directly');
 assert.ok(fn.indexOf('await getStorage().bucket().file(entry.path).delete')>fn.indexOf('return {asset:{kind,ownerUserId:owner,targetId:target},cleanup}'),'Private Storage deletion must be after moderation commit');
 assert.match(fn,/status:decision==='approved'\?'approved':'rejected'/);
 assert.match(fn,/moderationPolicy:'no-explicit-imagery-v1'/);
