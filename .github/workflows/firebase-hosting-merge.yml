@@ -87,14 +87,14 @@ jobs:
           set -euo pipefail
           node scripts/approved-work-thank-you-contracts.mjs
           START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \\
-            -f ref=main -f 'inputs[scope]=functions:selected' \\
-            -f 'inputs[function_names]=moderateRelease,moderateEditorPortfolioItem,adminReviewWriterScript,moderateImageAsset' \\
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=moderateRelease,moderateEditorPortfolioItem,adminReviewWriterScript,moderateImageAsset' \
             -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
           BACKEND_RUN_ID=""
           for attempt in $(seq 1 48); do
-            BACKEND_RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \\
-              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \\
+            BACKEND_RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \
                 '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
             if [[ -n "$BACKEND_RUN_ID" ]]; then break; fi
             sleep 10
