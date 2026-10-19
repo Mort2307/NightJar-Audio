@@ -16,7 +16,7 @@ assert.match(backend,/kind === 'profile_avatar' \|\| kind === 'profile_banner'\s
 assert.match(backend,/pendingBannerAssetId:assetId, pendingBannerStatus:'pending'/,'new covers are held for moderation');
 assert.match(backend,/parent\[pendingField\]===assetId/,'replaced or withdrawn covers cannot be approved later');
 assert.match(backend,/decision==='approved' && !current/,'stale cover approval is blocked in same transaction');
-assert.match(backend,/bannerAssetId:assetId, bannerUrl:url, bannerStatus:'approved'/,'only approved cover is published');
+assert.match(backend,/bannerAssetId:assetId,bannerUrl:url,bannerStatus:'approved'/,'only approved cover is published in the parent transaction');
 assert.match(backend,/bannerUrl: data\.bannerStatus === 'approved' \? data\.bannerUrl \?\? null : null/,'nonapproved covers are never exposed publicly');
 assert.match(backend,/export const removeProfileBanner = onCall/,'owners can withdraw their cover');
 assert.match(backend,/asset\.data\(\)\?\.ownerUserId === identity\.uid && asset\.data\(\)\?\.kind === 'profile_banner'/,'removal is owner and kind scoped');
