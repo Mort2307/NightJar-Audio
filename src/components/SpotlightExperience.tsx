@@ -55,7 +55,10 @@ function PersonCard({ person, viewerUserId, followingIds, simulationMode, simula
   return <article className="nj-spotlight-card" data-role={person.kind} id={'spotlight-' + person.kind}>
     <button type="button" className="nj-spotlight-portrait nj-spotlight-portrait-trigger" aria-label={'Open '+person.name+' public profile'} disabled={!canVisit} onClick={()=>{if(person.targetId) onProfile(person.targetId);}}>
       {person.imageUrl && person.publicProfile !== false
-        ? <img className="nj-spotlight-portrait-img" src={person.imageUrl} alt={person.name + ' approved Nightjar profile portrait'} loading="lazy" decoding="async"/>
+        ? <>
+          <img className="nj-spotlight-portrait-backdrop" src={person.imageUrl} alt="" aria-hidden="true" loading="lazy" decoding="async"/>
+          <img className="nj-spotlight-portrait-img" src={person.imageUrl} alt={person.name + ' approved Nightjar profile portrait'} loading="lazy" decoding="async"/>
+        </>
         : <span className="nj-spotlight-monogram" aria-hidden="true">{person.publicProfile === false ? 'NJ' : person.initials || person.name.slice(0,2).toUpperCase()}</span>}
       <div className="nj-spotlight-portrait-stamp"><Icon size={17}/>{role.label}</div>
     </button>
