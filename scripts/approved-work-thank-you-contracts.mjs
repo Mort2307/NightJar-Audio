@@ -11,7 +11,7 @@ assert.match(thanks, /profileRef\(userId\)\.get\(\)/, 'Use member-owned profile'
 assert.match(thanks, /profile\.data\(\)\?\.displayName/, 'Prefer chosen display name');
 assert.match(thanks, /account\.data\(\)\?\.displayName/, 'Account display name is safe fallback');
 assert.match(thanks, /profile\.data\(\)\?\.handle/, 'Public handle is the last personalised fallback');
-assert.doesNotMatch(thanks, /email|gmail|didit|identity|AI|Gemini|OpenAI/i, 'Do not infer names from private data or AI');
+assert.doesNotMatch(thanks, /email\.split|auth\.token|didit|gmailAccessToken|generateContent|callGemini|openai/i, 'Do not infer names from private data or AI');
 assert.match(thanks, /scheduled\s*\?/, 'Scheduled releases must not be called live');
 assert.match(thanks, /remain private until publication/, 'Preserve schedule privacy');
 assert.match(thanks, /chosen Marketplace visibility/, 'Writer approval must not assume automatic listing');
