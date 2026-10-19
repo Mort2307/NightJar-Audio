@@ -3011,332 +3011,159 @@ export const listPendingImages = onCall({ region: REGION }, async (request) => {
   return { assets };
 });
 
-export const moderateImageAsset = onCall({ region: REGION }, async (request) => {
-  const admin = requireAdminIdentity(request);
-  const input = (request.data ?? {}) as Record<string, unknown>;
-  const assetId = cleanText(input.assetId, 160);
-  const decision = cleanText(input.decision, 20);
-  const note = cleanText(input.note, 600);
-  if (!assetId || !['approved', 'rejected'].includes(decision)) {
-    throw new HttpsError('invalid-argument', 'Choose an image and a moderation decision.');
-  }
-  if (decision === 'approved' && input.safetyConfirmed !== true) {
-    throw new HttpsError('failed-precondition', 'Administrator image-safety review must be explicitly confirmed before approval.');
-  }
-
-  const ref = db.collection('imageAssets').doc(assetId);
-  const snapshot = await ref.get();
-  const asset = snapshot.data();
-  if (!asset || asset.status !== 'pending') {
-    throw new HttpsError('failed-precondition', 'This image is no longer pending moderation.');
-  }
-
-  if (decision === 'rejected') {
-    await clearAssetFile(asset);
-    await ref.set({
-      status: 'rejected',
-      moderationNote: note || null,
-      reviewedBy: admin.uid,
-      reviewedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    if (asset.kind === 'profile_avatar') {
-      await profileRef(String(asset.ownerUserId)).set({
-        pendingAvatarAssetId: null,
-        pendingAvatarStatus: 'rejected',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-    } else if (asset.kind === 'profile_banner') {
-      const profile = await profileRef(String(asset.ownerUserId)).get();
-      if (profile.data()?.pendingBannerAssetId === assetId) {
-        await profile.ref.set({pendingBannerAssetId:null,pendingBannerStatus:'rejected',
-          updatedAt:FieldValue.serverTimestamp()}, {merge:true});
+export const moderateImageAsset = onCall({region:REGION},async request=>{
+  const admin=requireAdminIdentity(request);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const assetId=cleanText(input.assetId,160);
+  const decision=cleanText(input.decision,20);
+  const note=cleanText(input.note,600);
+  if(!/^[a-zA-Z0-9_-]{1,160}$/.test(assetId) || !['approved','rejected'].includes(decision))
+    throw new HttpsError('invalid-argument','Choose a pending image and valid decision.');
+  if(decision==='approved' && input.safetyConfirmed!==true)
+    throw new HttpsError('failed-precondition','Administrator image-safety review is required.');
+  const ref=db.collection('imageAssets').doc(assetId);
+  const url=publicImageUrl(assetId);
+  // Admin decision, pending pointer and any previous approved-image retirement
+  // must share a single transaction. Member removal and a second Admin cannot
+  // approve an asset that has been retired while the review page was open.
+  const result=await db.runTransaction(async transaction=>{
+    const imageSnapshot=await transaction.get(ref);
+    const asset=imageSnapshot.data();
+    if(!asset || asset.status!=='pending')
+      throw new HttpsError('failed-precondition','Image was reviewed, removed or replaced. Refresh the queue.');
+    const owner=cleanText(asset.ownerUserId,160);
+    const kind=cleanText(asset.kind,40);
+    const target=cleanText(asset.targetId,160);
+    const targetRef=kind==='profile_avatar'||kind==='profile_banner'?profileRef(owner)
+      :kind==='brand_logo'?db.collection('settings').doc('branding')
+      :kind==='social_avatar'&&target?socialLinkCollection(owner).doc(target)
+      :kind==='artist_portfolio'&&target?db.collection('artistPortfolio').doc(target)
+      :kind==='release_artwork'&&target?db.collection('releases').doc(target)
+      :kind==='script_artwork'&&target?db.collection('scripts').doc(target):null;
+    if(!targetRef)throw new HttpsError('failed-precondition','Image target cannot be verified.');
+    const targetSnapshot=await transaction.get(targetRef);
+    const parent=targetSnapshot.data()??{};
+    const pendingField=kind==='profile_avatar'?'pendingAvatarAssetId'
+      :kind==='profile_banner'?'pendingBannerAssetId'
+      :kind==='brand_logo'?'pendingLogoAssetId'
+      :kind==='social_avatar'?'pendingPhotoAssetId'
+      :kind==='artist_portfolio'?'pendingImageAssetId':'pendingArtworkAssetId';
+    const current=targetSnapshot.exists && parent[pendingField]===assetId
+      && !['removed','removing'].includes(String(parent.status??''));
+    if(decision==='approved' && !current)
+      throw new HttpsError('failed-precondition','Image is no longer the active pending submission. Refresh before reviewing.');
+    if(kind==='artist_portfolio' && current && parent.ownerUserId!==owner)
+      throw new HttpsError('permission-denied','Artist portfolio owner mismatch.');
+    // A verified Nightjar Admin may submit a replacement for another member.
+    // Parent-pending ID identity is authoritative; it was set only through
+    // submitImageAsset after role/ownership checks, including the Admin route.
+    const oldField=kind==='profile_avatar'?'avatarAssetId'
+      :kind==='profile_banner'?'bannerAssetId'
+      :kind==='brand_logo'?'logoAssetId'
+      :kind==='social_avatar'?'photoAssetId'
+      :kind==='artist_portfolio'?'imageAssetId':'artworkAssetId';
+    const oldId=decision==='approved'?cleanText(parent[oldField],160):'';
+    const oldRef=oldId && oldId!==assetId && /^[a-zA-Z0-9_-]{1,160}$/.test(oldId)
+      ? db.collection('imageAssets').doc(oldId):null;
+    const oldSnapshot=oldRef?await transaction.get(oldRef):null;
+    const old=oldSnapshot?.data();
+    const sourcePath=cleanText(asset.storagePath,500);
+    const sourceSafe=!sourcePath||['png','jpg','webp'].some(ext=>sourcePath==='pending-images/'+owner+'/'+assetId+'.'+ext);
+    if(!sourceSafe)throw new HttpsError('failed-precondition','Image source requires a safety investigation.');
+    const moderation={
+      status:decision==='approved'?'approved':'rejected',publicUrl:decision==='approved'?url:null,
+      moderationNote:note||null,reviewedBy:admin.uid,reviewedAt:FieldValue.serverTimestamp(),
+      moderationPolicy:'no-explicit-imagery-v1',safetyConfirmed:decision==='approved',
+      ...(decision==='rejected'?{storageRemovalPendingPath:sourcePath||null}:{}),
+      updatedAt:FieldValue.serverTimestamp(),
+    };
+    const parentUpdate:Record<string,unknown>={updatedAt:FieldValue.serverTimestamp()};
+    if(current){
+      if(decision==='approved'){
+        if(kind==='profile_avatar')Object.assign(parentUpdate,{avatarAssetId:assetId,avatarUrl:url,avatarStatus:'approved',pendingAvatarAssetId:null,pendingAvatarStatus:null});
+        if(kind==='profile_banner')Object.assign(parentUpdate,{bannerAssetId:assetId,bannerUrl:url,bannerStatus:'approved',pendingBannerAssetId:null,pendingBannerStatus:null});
+        if(kind==='brand_logo')Object.assign(parentUpdate,{logoAssetId:assetId,logoUrl:url,logoStatus:'approved',pendingLogoAssetId:null,pendingLogoStatus:null,icon192Path:null,icon512Path:null,maskable512Path:null,iconVersion:null,iconSourceAssetId:null});
+        if(kind==='social_avatar')Object.assign(parentUpdate,{photoAssetId:assetId,photoUrl:url,photoStatus:'approved',pendingPhotoAssetId:null,pendingPhotoStatus:null});
+        if(kind==='artist_portfolio')Object.assign(parentUpdate,{imageAssetId:assetId,imageUrl:url,imageStatus:'approved',pendingImageAssetId:null,pendingImageStatus:null,status:'published',publishedAt:FieldValue.serverTimestamp()});
+        if(kind==='release_artwork'||kind==='script_artwork')Object.assign(parentUpdate,{artworkAssetId:assetId,artworkUrl:url,artworkStatus:'approved',pendingArtworkAssetId:null,pendingArtworkStatus:null});
+      }else{
+        if(kind==='profile_avatar')Object.assign(parentUpdate,{pendingAvatarAssetId:null,pendingAvatarStatus:'rejected'});
+        if(kind==='profile_banner')Object.assign(parentUpdate,{pendingBannerAssetId:null,pendingBannerStatus:'rejected'});
+        if(kind==='brand_logo')Object.assign(parentUpdate,{pendingLogoAssetId:null,pendingLogoStatus:'rejected'});
+        if(kind==='social_avatar')Object.assign(parentUpdate,{pendingPhotoAssetId:null,pendingPhotoStatus:'rejected'});
+        if(kind==='artist_portfolio')Object.assign(parentUpdate,{pendingImageAssetId:null,pendingImageStatus:'rejected',status:'draft'});
+        if(kind==='release_artwork'||kind==='script_artwork')Object.assign(parentUpdate,{pendingArtworkAssetId:null,pendingArtworkStatus:'rejected'});
       }
-    } else if (asset.kind === 'social_avatar' && asset.targetId) {
-      const ref=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
-      const linked=await ref.get();
-      if(linked.exists && linked.data()?.pendingPhotoAssetId===assetId){
-        await ref.set({pendingPhotoAssetId:null,pendingPhotoStatus:'rejected',updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      }
-    } else if (asset.kind === 'brand_logo') {
-      await db.collection('settings').doc('branding').set({
-        pendingLogoAssetId: null,
-        pendingLogoStatus: 'rejected',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-    } else if (asset.kind === 'artist_portfolio' && asset.targetId) {
-      const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
-      const portfolio = await portfolioRef.get();
-      if (portfolio.exists && portfolio.data()?.pendingImageAssetId === assetId) {
-        await portfolioRef.set({
-          pendingImageAssetId:null,
-          pendingImageStatus:'rejected',
-          status:'draft',
+    }
+    // All Firestore reads above, all writes below. A concurrent member
+    // unlink invalidates the review transaction rather than being overwritten.
+    transaction.set(ref,moderation,{merge:true});
+    if(current)transaction.set(targetRef,parentUpdate,{merge:true});
+    const cleanup:Array<{id:string;path:string;finalStatus:'removed'|'rejected'}>=[];
+    if(decision==='rejected' && sourcePath)
+      cleanup.push({id:assetId,path:sourcePath,finalStatus:'rejected'});
+    if(oldRef && old && old.ownerUserId===owner && old.kind===kind){
+      const previousPath=cleanText(old.storagePath,500);
+      if(!previousPath || ['png','jpg','webp'].some(ext=>previousPath==='pending-images/'+owner+'/'+oldId+'.'+ext)){
+        transaction.set(oldRef,{
+          status:previousPath?'removing':'removed',publicUrl:null,storageRemovalPendingPath:previousPath||null,
           updatedAt:FieldValue.serverTimestamp(),
-        }, { merge:true });
-      }
-    } else if (asset.kind === 'release_artwork' && asset.targetId) {
-      const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
-      const release = await releaseRefForArtwork.get();
-      if (release.exists && release.data()?.pendingArtworkAssetId === assetId) {
-        await releaseRefForArtwork.set({
-          pendingArtworkAssetId: null,
-          pendingArtworkStatus: 'rejected',
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        },{merge:true});
+        if(previousPath)cleanup.push({id:oldId,path:previousPath,finalStatus:'removed'});
       }
     }
-
-    if (asset.kind === 'script_artwork' && asset.targetId) {
-      const scriptRefForArtwork = db.collection('scripts').doc(String(asset.targetId));
-      const script = await scriptRefForArtwork.get();
-      if (script.exists && script.data()?.pendingArtworkAssetId === assetId) {
-        await scriptRefForArtwork.set({
-          pendingArtworkAssetId: null,
-          pendingArtworkStatus: 'rejected',
-          updatedAt: FieldValue.serverTimestamp(),
-        }, {merge:true});
-      }
-    }
-
-    if (asset.ownerUserId) {
-      await createNotification(String(asset.ownerUserId), {
-        type: 'image_moderation',
-        subtype: 'rejected',
-        title: asset.kind === 'profile_avatar'
-          ? 'Profile picture not approved'
-          : asset.kind === 'profile_banner' ? 'Profile cover not approved'
-          : asset.kind === 'release_artwork'
-            ? 'Release artwork not approved'
-            : asset.kind === 'script_artwork'
-              ? 'Manuscript artwork not approved'
-            : asset.kind === 'artist_portfolio'
-              ? 'Portfolio artwork not approved'
-              : asset.kind === 'social_avatar' ? 'Social profile picture not approved'
-              : 'Nightjar image not approved',
-        message: note || 'The submitted image was not approved for use on Nightjar. You can remove it or submit a different image.',
-        assetId,
-        imageKind: asset.kind,
-        targetId: asset.targetId ?? null,
+    return {asset:{kind,ownerUserId:owner,targetId:target},cleanup};
+  });
+  // Deletion follows committed moderation. A Storage/Firestore cleanup error
+  // must never undo a decision or pretend privately retained bytes are gone.
+  let pendingCleanup=false;
+  for(const entry of result.cleanup){
+    try{
+      await getStorage().bucket().file(entry.path).delete({ignoreNotFound:true});
+      const cleanupRef=db.collection('imageAssets').doc(entry.id);
+      await db.runTransaction(async transaction=>{
+        const snapshot=await transaction.get(cleanupRef);
+        if(snapshot.data()?.storageRemovalPendingPath===entry.path)
+          transaction.set(cleanupRef,{
+            storageRemovalPendingPath:null,status:entry.finalStatus,
+            updatedAt:FieldValue.serverTimestamp(),
+          },{merge:true});
       });
-    }
-
-    return { assetId, status: 'rejected' };
-  }
-
-  const url = publicImageUrl(assetId);
-  await ref.set({
-    status: 'approved',
-    publicUrl: url,
-    moderationNote: note || null,
-    reviewedBy: admin.uid,
-    moderationPolicy: 'no-explicit-imagery-v1',
-    safetyConfirmed: true,
-    reviewedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  if (asset.kind === 'profile_avatar') {
-    const profile = await profileRef(String(asset.ownerUserId)).get();
-    const previousAssetId = cleanText(profile.data()?.avatarAssetId, 160);
-    await profileRef(String(asset.ownerUserId)).set({
-      avatarAssetId: assetId,
-      avatarUrl: url,
-      avatarStatus: 'approved',
-      pendingAvatarAssetId: null,
-      pendingAvatarStatus: null,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    if (previousAssetId && previousAssetId !== assetId) {
-      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
-      if (previous.exists) {
-        await clearAssetFile(previous.data() ?? {});
-        await previous.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      }
-    }
-  } else if (asset.kind === 'profile_banner') {
-    const profile = await profileRef(String(asset.ownerUserId)).get();
-    // A replaced or withdrawn submission must never become the live cover.
-    if (profile.data()?.pendingBannerAssetId !== assetId) {
-      await ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      await clearAssetFile(asset);
-      throw new HttpsError('failed-precondition', 'This cover was replaced or withdrawn.');
-    }
-    const previousId = cleanText(profile.data()?.bannerAssetId,160);
-    await profile.ref.set({
-      bannerAssetId:assetId, bannerUrl:url, bannerStatus:'approved',
-      pendingBannerAssetId:null, pendingBannerStatus:null,
-      updatedAt:FieldValue.serverTimestamp(),
-    }, {merge:true});
-    if (previousId && previousId !== assetId) {
-      const previous = await db.collection('imageAssets').doc(previousId).get();
-      if (previous.exists && previous.data()?.ownerUserId === asset.ownerUserId &&
-          previous.data()?.kind === 'profile_banner') {
-        await clearAssetFile(previous.data()??{});
-        await previous.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      }
-    }
-  } else if (asset.kind === 'social_avatar' && asset.targetId) {
-    const linkRef=socialLinkCollection(String(asset.ownerUserId)).doc(String(asset.targetId));
-    const link=await linkRef.get();
-    if(!link.exists || link.data()?.pendingPhotoAssetId!==assetId){
-      await ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      await clearAssetFile(asset);
-      throw new HttpsError('failed-precondition','This link no longer needs the submitted photo.');
-    }
-    const old=cleanText(link.data()?.photoAssetId,160);
-    await linkRef.set({
-      photoAssetId:assetId,photoUrl:url,photoStatus:'approved',
-      pendingPhotoAssetId:null,pendingPhotoStatus:null,updatedAt:FieldValue.serverTimestamp(),
-    },{merge:true});
-    if(old && old!==assetId){
-      const prior=await db.collection('imageAssets').doc(old).get();
-      if(prior.exists && prior.data()?.ownerUserId===asset.ownerUserId && prior.data()?.kind==='social_avatar'){
-        await prior.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-        await clearAssetFile(prior.data()??{});
-      }
-    }
-  } else if (asset.kind === 'brand_logo') {
-    const brandingRef = db.collection('settings').doc('branding');
-    const branding = await brandingRef.get();
-    const previousBranding = branding.data() ?? {};
-    const previousAssetId = cleanText(previousBranding.logoAssetId, 160);
-    if (previousAssetId !== assetId) await clearBrandingIconFiles(previousBranding);
-    await brandingRef.set({
-      logoAssetId: assetId,
-      logoUrl: url,
-      logoStatus: 'approved',
-      pendingLogoAssetId: null,
-      pendingLogoStatus: null,
-      icon192Path: null,
-      icon512Path: null,
-      maskable512Path: null,
-      iconVersion: null,
-      iconSourceAssetId: null,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    if (previousAssetId && previousAssetId !== assetId) {
-      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
-      if (previous.exists) {
-        await clearAssetFile(previous.data() ?? {});
-        await previous.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      }
-    }
-  } else if (asset.kind === 'artist_portfolio' && asset.targetId) {
-    const portfolioRef = db.collection('artistPortfolio').doc(String(asset.targetId));
-    const portfolio = await portfolioRef.get();
-    if (!portfolio.exists || portfolio.data()?.ownerUserId !== asset.ownerUserId || portfolio.data()?.pendingImageAssetId !== assetId) {
-      await clearAssetFile(asset);
-      await ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
-      throw new HttpsError('failed-precondition', 'This image is no longer the pending artwork for the Artist portfolio item.');
-    }
-    const previousAssetId = cleanText(portfolio.data()?.imageAssetId, 160);
-    await portfolioRef.set({
-      imageAssetId:assetId,
-      imageUrl:url,
-      imageStatus:'approved',
-      pendingImageAssetId:null,
-      pendingImageStatus:null,
-      status:'published',
-      publishedAt:FieldValue.serverTimestamp(),
-      updatedAt:FieldValue.serverTimestamp(),
-    }, { merge:true });
-    if (previousAssetId && previousAssetId !== assetId) {
-      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
-      if (previous.exists) {
-        await clearAssetFile(previous.data() ?? {});
-        await previous.ref.set({ status:'removed', publicUrl:null, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
-      }
-    }
-  } else if (asset.kind === 'release_artwork' && asset.targetId) {
-    const releaseRefForArtwork = db.collection('releases').doc(String(asset.targetId));
-    const release = await releaseRefForArtwork.get();
-    if (!release.exists || release.data()?.pendingArtworkAssetId !== assetId) {
-      await clearAssetFile(asset);
-      await ref.set({ status: 'removed', publicUrl: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      throw new HttpsError('failed-precondition', 'This artwork is no longer the pending replacement for the release.');
-    }
-    const previousAssetId = cleanText(release.data()?.artworkAssetId, 160);
-    await releaseRefForArtwork.set({
-      artworkAssetId: assetId,
-      artworkUrl: url,
-      artworkStatus: 'approved',
-      pendingArtworkAssetId: null,
-      pendingArtworkStatus: null,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    if (previousAssetId && previousAssetId !== assetId) {
-      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
-      if (previous.exists) {
-        await clearAssetFile(previous.data() ?? {});
-        await previous.ref.set({
-          status: 'removed',
-          publicUrl: null,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
+    }catch(error){
+      pendingCleanup=true;
+      console.warn('Image moderation media cleanup pending',entry.id,error instanceof Error?error.message:'Unknown Storage error');
     }
   }
-
-  if (asset.kind === 'script_artwork' && asset.targetId) {
-    const scriptRefForArtwork = db.collection('scripts').doc(String(asset.targetId));
-    const script = await scriptRefForArtwork.get();
-    if (!script.exists || script.data()?.pendingArtworkAssetId !== assetId) {
-      await clearAssetFile(asset);
-      await ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      throw new HttpsError('failed-precondition', 'This image is no longer the pending manuscript artwork.');
-    }
-    const previousAssetId = cleanText(script.data()?.artworkAssetId, 160);
-    await scriptRefForArtwork.set({
-      artworkAssetId: assetId,
-      artworkUrl: url,
-      artworkStatus: 'approved',
-      pendingArtworkAssetId: null,
-      pendingArtworkStatus: null,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge:true});
-    if (previousAssetId && previousAssetId !== assetId) {
-      const previous = await db.collection('imageAssets').doc(previousAssetId).get();
-      if (previous.exists) {
-        await clearAssetFile(previous.data() ?? {});
-        await previous.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      }
-    }
+  const asset=result.asset;
+  if(asset.ownerUserId){
+    const artistThankYou=decision==='approved' && asset.kind==='artist_portfolio'
+      ?await approvedWorkThankYou(String(asset.ownerUserId),'artwork',null):null;
+    await createNotification(String(asset.ownerUserId),{
+      type:'image_moderation',subtype:decision,
+      title:decision==='approved'
+        ?asset.kind==='artist_portfolio'?'Portfolio artwork approved'
+          :asset.kind==='script_artwork'?'Manuscript artwork approved'
+          :asset.kind==='release_artwork'?'Release artwork approved'
+          :asset.kind==='profile_avatar'?'Profile picture approved'
+          :asset.kind==='profile_banner'?'Profile cover approved'
+          :asset.kind==='social_avatar'?'Social profile picture approved':'Nightjar image approved'
+        :asset.kind==='artist_portfolio'?'Portfolio artwork not approved'
+          :asset.kind==='script_artwork'?'Manuscript artwork not approved'
+          :asset.kind==='release_artwork'?'Release artwork not approved'
+          :asset.kind==='profile_avatar'?'Profile picture not approved'
+          :asset.kind==='profile_banner'?'Profile cover not approved'
+          :asset.kind==='social_avatar'?'Social profile picture not approved':'Nightjar image not approved',
+      message:artistThankYou??(decision==='rejected'?(note||'The submitted image did not pass review. You may submit a different image.')
+        :asset.kind==='release_artwork'?'Your artwork passed Nightjar image moderation and is now available to the release.'
+        :asset.kind==='script_artwork'?'Your manuscript artwork is approved and visible wherever your script is listed.'
+        :'Your image passed Nightjar moderation and is now approved for use.'),
+      approvedWorkThankYou:Boolean(artistThankYou),assetId,
+      imageKind:asset.kind,targetId:asset.targetId||null,
+      dedupeKey:'image-moderation:'+assetId+':'+decision,
+    }).catch(error=>console.warn('Image moderation notification failed',error));
   }
-
-  if (asset.ownerUserId) {
-    const artistThankYou = asset.kind === 'artist_portfolio'
-      ? await approvedWorkThankYou(String(asset.ownerUserId), 'artwork', null) : null;
-    await createNotification(String(asset.ownerUserId), {
-      type: 'image_moderation',
-      subtype: 'approved',
-      title: asset.kind === 'profile_avatar'
-        ? 'Profile picture approved'
-        : asset.kind === 'profile_banner' ? 'Profile cover approved'
-        : asset.kind === 'release_artwork'
-          ? 'Release artwork approved'
-          : asset.kind === 'script_artwork'
-            ? 'Manuscript artwork approved'
-          : asset.kind === 'artist_portfolio'
-            ? 'Portfolio artwork approved'
-            : asset.kind === 'social_avatar' ? 'Social profile picture approved'
-            : 'Nightjar image approved',
-      message: artistThankYou ?? (asset.kind === 'release_artwork'
-        ? 'Your artwork passed Nightjar image moderation and is now available to the release.'
-        : asset.kind === 'script_artwork'
-          ? 'Your manuscript artwork has been approved and is now visible wherever your script is listed.'
-          : 'Your image passed Nightjar moderation and is now approved for use.'),
-      approvedWorkThankYou:Boolean(artistThankYou),
-      assetId,
-      imageKind: asset.kind,
-      targetId: asset.targetId ?? null,
-    });
-  }
-
-  return { assetId, status: 'approved', publicUrl: url };
+  return {assetId,status:decision,...(decision==='approved'?{publicUrl:url}:{}),pendingCleanup};
 });
-
 export const getImageAssetStatus = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const assetId = cleanText((request.data as { assetId?: unknown } | undefined)?.assetId, 160);
