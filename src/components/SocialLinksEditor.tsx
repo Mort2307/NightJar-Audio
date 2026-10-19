@@ -91,13 +91,17 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
   const remove=async(row:EditorRow)=>{
     if(disabled)return;
     if(row.draft){setRows((prev)=>prev.filter((item)=>item.id!==row.id));return;}
-    if(!window.confirm('Remove this social link and its profile picture from your Nightjar profile?'))return;
+    if(!row.removalPending && !window.confirm('Remove this social link and its profile picture from your Nightjar profile?'))return;
     setBusyId(row.id);
     try{
       const removed=await nightjarSocialLinks.remove(row.id);
-      if(!removed)throw new Error('Nightjar could not confirm that the link was removed.');
-      setRows((prev)=>prev.filter((item)=>item.id!==row.id));
-      notify('Social link removed.');
+      if(removed.deleted){
+        setRows((prev)=>prev.filter((item)=>item.id!==row.id));
+        notify('Social link and private photo cleanup confirmed.');
+      }else if(removed.pendingCleanup){
+        edit(row.id,{removalPending:true,photoUrl:null,photoStatus:null});
+        notify('The social link is no longer public. Private photo cleanup is pending; use Retry cleanup.');
+      }else throw new Error('Nightjar could not confirm the link removal.');
     }catch(error){notify(error instanceof Error?error.message:'Social link could not be removed.');}
     finally{setBusyId(null);}
   };
@@ -125,7 +129,7 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
       {rows.map((row)=><div className="nj-social-editor-row" key={row.id}>
         <SocialPicture link={row}/>
         <div className="nj-social-edit-content">
-          {row.editing
+          {row.editing && !row.removalPending
             ? <div className="nj-social-input-line">
                 <input aria-label="Copy and paste your social media link here" type="url" value={row.url}
                   maxLength={500} placeholder="https://your-social-platform.com/your-profile"
@@ -138,10 +142,11 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
                 <a href={row.url} target="_blank" rel="noopener noreferrer nofollow ugc">
                   <strong>{row.platform}</strong><span>{displayUrl(row.url)}</span><ExternalLink size={14}/>
                 </a>
-                <button type="button" className="ghost-button" disabled={disabled||busyId===row.id} onClick={()=>edit(row.id,{editing:true})}>Edit</button>
-                <button type="button" className="ghost-button" disabled={disabled||busyId===row.id} aria-label={'Remove '+row.platform+' link'} onClick={()=>void remove(row)}><Trash2 size={15}/></button>
+                <button type="button" className="ghost-button" disabled={disabled||busyId===row.id||row.removalPending} onClick={()=>edit(row.id,{editing:true})}>Edit</button>
+                <button type="button" className="ghost-button" disabled={disabled||busyId===row.id} aria-label={'Remove '+row.platform+' link'} onClick={()=>void remove(row)}><Trash2 size={15}/>{row.removalPending?' Retry cleanup':''}</button>
               </div>}
-          {!row.draft&&<div className="nj-social-photo-tools">
+          {row.removalPending&&<small role="status">This link is hidden. Private image deletion is pending; use Retry cleanup.</small>}
+          {!row.draft&&!row.removalPending&&<div className="nj-social-photo-tools">
             <label className="nj-social-photo-upload"><ImagePlus size={13}/>{row.photoUrl?'Replace social profile photo':'Add actual social profile photo'}
               <input type="file" hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif"
                 disabled={disabled||busyId===row.id} onChange={(event)=>{const file=event.target.files?.[0];event.currentTarget.value='';if(file)void upload(row,file);}}/>
