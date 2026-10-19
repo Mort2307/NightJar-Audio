@@ -1185,6 +1185,12 @@ function App() {
       setCreditFocusClaimId(credit && /^claim_[a-zA-Z0-9-]{16,80}$/.test(credit) ? credit : null);
       const value = window.location.pathname.replace(/^\/+|\/+$/g, '');
       const topLevel = value.split('/')[0];
+      const routeParams = new URLSearchParams(window.location.search);
+      // Back/forward may intentionally revisit a specific notification link,
+      // but plain Home and other routes must never inherit an older target.
+      const validContentId = (id: string | null) => id && /^[a-zA-Z0-9_-]{1,160}$/.test(id) ? id : null;
+      setFocusedContentScriptId(topLevel === 'discover' ? validContentId(routeParams.get('script')) : null);
+      setFocusedContentReleaseId(topLevel === 'discover' ? validContentId(routeParams.get('release')) : null);
       setProfileRolesPage(value === 'profile/roles');
       setCreditWorkspaceOpen(value === 'profile/credits' || (value === 'profile' && Boolean(credit)));
       if (topLevel === 'admin') {
@@ -1470,6 +1476,12 @@ function App() {
   };
 
   const navigate = (nextView: View) => {
+    // The script/release ID is a *single-purpose* deep-link target, not a
+    // lasting Home scroll preference. Clearing it prevents the marketplace
+    // lazy mount from calling scrollIntoView on every subsequent Home visit.
+    setFocusedContentScriptId(null);
+    setFocusedContentReleaseId(null);
+    openedContentReleaseRef.current = null;
     if (nextView === 'admin') setAdminWorkspace('overview');
     setProfileRolesPage(false);
     setCreditWorkspaceOpen(false);
@@ -1482,7 +1494,9 @@ function App() {
       setRolePicker(false);
     }
     const path = nextView === 'discover' ? '/discover' : '/' + nextView;
-    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    // Also strip a stale ?script= or ?release= query when tapping Home while
+    // already on /discover; pathname-only comparison left the URL unchanged.
+    if (window.location.pathname + window.location.search !== path) window.history.pushState({}, '', path);
     setView(nextView);
     setMenuOpen(false);
     scrollNightjarToTop();
@@ -1622,10 +1636,12 @@ function App() {
           return;
         }
         if (!valid(releaseId) && !valid(scriptId)) return;
+        navigate('discover');
+        // Preserve a target only for this explicit notification/deep-link action,
+        // after ordinary navigation has dropped any unrelated previous target.
         setFocusedContentReleaseId(valid(releaseId));
         setFocusedContentScriptId(valid(scriptId));
         if (valid(releaseId)) openedContentReleaseRef.current = null;
-        navigate('discover');
         window.history.replaceState({}, '', target.pathname + target.search);
         void loadLiveProductData();
         return;

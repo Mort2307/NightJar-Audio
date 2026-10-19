@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, BookOpen, Filter, Search } from 'lucide-react';
 import MarketplaceScriptActions from './MarketplaceScriptActions';
 import ContextHelp from './ContextHelp';
@@ -21,6 +21,7 @@ export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser,
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const jumpedToScriptId = useRef<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -43,11 +44,23 @@ export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser,
   useEffect(() => { void load(); }, [demoMode]);
 
   useEffect(() => {
-    if (loading || !focusScriptId) return;
+    // Direct script links scroll once on arrival. Reloading the marketplace
+    // or re-rendering Home must never repeatedly hijack the member's scroll.
+    if (!focusScriptId) {
+      jumpedToScriptId.current = null;
+      return;
+    }
+    if (loading || jumpedToScriptId.current === focusScriptId) return;
     if (!scripts.some(script => script.id === focusScriptId)) return;
     setQuery('');
     const timer = window.setTimeout(() => {
-      document.getElementById('nightjar-marketplace-script-' + focusScriptId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      const target = document.getElementById('nightjar-marketplace-script-' + focusScriptId);
+      if (!target || jumpedToScriptId.current === focusScriptId) return;
+      jumpedToScriptId.current = focusScriptId;
+      target.scrollIntoView({
+        block: 'center',
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+      });
     }, 180);
     return () => window.clearTimeout(timer);
   }, [loading, scripts, focusScriptId]);
