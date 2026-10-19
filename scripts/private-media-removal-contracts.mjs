@@ -24,6 +24,10 @@ assert.match(read('src/platform/firebase-catalogue.ts'),/pendingCleanup: boolean
 const creator=read('src/components/CreatorAudioPipeline.tsx');
 assert.match(creator,/Retry private audio cleanup/);
 assert.match(creator,/Storage deletion has not been confirmed/);
+assert.match(creator,/kind === 'audio' && current\?\.audioCleanupPending/,'Client blocks new bytes while old deletion is incomplete');
+assert.match(creator,/disabled=\{audioBusy \|\| current\.audioCleanupPending === true/,'File picker disabled until cleanup');
+assert.match(creator,/!selectedRelease\.audioCleanupPending/,'Stale incomplete-upload recovery cannot race with explicit retirement');
+assert.match(creator,/previously issued temporary links may remain usable until expiry/,'Do not promise previously signed links were revoked');
 assert.match(er,/requireAccountRole\(request,\['editor'\]\)/);
 assert.match(er,/db\.runTransaction\(async transaction=>/);
 assert.match(er,/status:'removing'/);
