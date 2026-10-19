@@ -128,6 +128,27 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Creator and Editor safe media removal functions deployed before Hosting."
 
+      # Full Creator/Admin release deletion retires status atomically before
+      # deleting private Storage files. Never expose new UI first.
+      - name: Deploy whole-release safe deletion before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-safe-whole-release-removal]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/full-release-removal-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" -f ref=main -f 'inputs[scope]=functions:selected' -f 'inputs[function_names]=deleteRelease,adminRemoveRelease' -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          RUN_ID=""
+          for attempt in $(seq 1 48); do
+            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$RUN_ID" ]]; then echo "::error::Full-release removal backend dispatch was not found. Hosting blocked."; exit 1; fi
+          gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+
       # Deploy paged Admin release queries before exposing cursor-enabled UI.
       - name: Deploy bounded Admin queues before Hosting
         if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-admin-bounded-release]') }}
