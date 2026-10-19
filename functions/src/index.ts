@@ -6514,8 +6514,11 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
     const thankYou = decision === 'approved'
       ? await approvedWorkThankYou(String(data.creatorUserId), 'audio', data.title, scheduled) : null;
     await createNotification(String(data.creatorUserId), {
-      type: 'content',
-      subtype: 'release',
+      // A creator's own moderation decision is an operational alert, never
+      // a promotional new-release announcement that can be opted out of.
+      // The app's release_submission route opens their Creator workspace.
+      type: 'release_submission',
+      subtype: 'release_review',
       title: decision === 'approved'
         ? scheduled ? 'Approved · Scheduled for publication' : 'Your release is live on Nightjar'
         : decision === 'changes'

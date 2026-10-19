@@ -21,4 +21,9 @@ assert.doesNotMatch(backend,/dedupeKey:'release-reaction:'[^\n]*oncePerKey:true/
 assert.doesNotMatch(backend,/dedupeKey:'new-signin-device:'[^\n]*oncePerKey:true/,'Subsequent sign-in security notifications must remain available');
 assert.doesNotMatch(backend,/dedupeKey: 'release-submitted-'[^\n]*oncePerKey:true/,'Resubmissions after changes must not be permanently suppressed');
 assert.ok(body.indexOf('if (!newlyCreated) return') < body.indexOf('await deliverPushNotification('),'Push must occur only after successful unique insert');
+const moderate = backend.slice(backend.indexOf('export const moderateRelease = onCall'),backend.indexOf('const QUALIFIED_LISTEN_COOLDOWN_MS'));
+assert.match(moderate,/type: 'release_submission',\s*subtype: 'release_review'/,'Moderation is a Creator account alert, not new-release marketing');
+assert.doesNotMatch(moderate,/type: 'content',\s*subtype: 'release'/,'Never suppress a Creator decision due to an opt-out from new release alerts');
+assert.match(backend,/if \(type === 'release_submission'\) return '\/creator'/,'Creator push destination is the right workspace');
+assert.match(body,/type === 'content' && subtype === 'release' \? 'newReleases'/,'Discovery preferences must remain separate from operational Creator decisions');
 console.log('Opt-in immutable notification dedupe and repeatable event behaviour validated.');
