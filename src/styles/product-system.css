@@ -3331,7 +3331,11 @@ textarea {
 .nj-spotlight-card[data-role="editor"] .nj-spotlight-portrait {background:linear-gradient(150deg,#333147,#171321);}
 .nj-spotlight-card[data-role="artist"] .nj-spotlight-portrait {background:linear-gradient(150deg,#573647,#211522);}
 .nj-spotlight-card[data-role="listener"] .nj-spotlight-portrait {background:linear-gradient(150deg,#30324b,#151421);}
-.nj-spotlight-portrait-img {width:100%;height:100%;min-height:100%;object-fit:cover;object-position:center 25%;position:absolute;inset:0;}
+/* Editorial portraits preserve the entire photo; only the decorative, blurred
+   backdrop fills the card. Avoid silently cutting off faces on mobile. */
+.nj-spotlight-portrait-backdrop {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;
+  filter:blur(18px) brightness(.48) saturate(.8);transform:scale(1.08);pointer-events:none;}
+.nj-spotlight-portrait-img {width:100%;height:100%;min-height:0;object-fit:contain;object-position:center;position:absolute;inset:0;z-index:1;}
 .nj-spotlight-monogram {font-family:Georgia,serif;font-size:clamp(55px,8vw,100px);color:#f5e9ed;letter-spacing:-.06em;opacity:.85;}
 .nj-spotlight-portrait-stamp {position:absolute;left:16px;bottom:16px;z-index:3;display:inline-flex;align-items:center;gap:8px;padding:9px 12px;
   background:rgba(15,12,19,.87);border:1px solid rgba(234,208,167,.42);color:var(--nj-sp-gold);font-size:11px;font-weight:800;letter-spacing:.1em;border-radius:9px;backdrop-filter:blur(10px);}
