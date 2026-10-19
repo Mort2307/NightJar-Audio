@@ -30,6 +30,8 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [privateAudit,setPrivateAudit] = useState<PrivateAudioAudit|null>(null);
+  const [auditHistory,setAuditHistory] = useState<(string|null)[]>([null]);
+  const [auditPage,setAuditPage] = useState(0);
   const [privateAuditBusy,setPrivateAuditBusy] = useState(false);
   const [privateAuditError,setPrivateAuditError] = useState('');
   const [nightjarOriginal, setNightjarOriginal] = useState(false);
@@ -112,6 +114,8 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
     setPreviewUrl(null);
     setPreviewError('');
     setPrivateAudit(null);
+    setAuditHistory([null]);
+    setAuditPage(0);
     setPrivateAuditError('');
     setPreviewLoading(false);
     setNightjarOriginal(selected?.nightjarOriginal === true);
@@ -194,13 +198,17 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
     } finally { setRemoving(false); }
   };
 
-  const auditSelectedAudio = async () => {
+  const auditSelectedAudio = async (cursor:string|null=null,direction:'first'|'next'|'back'='first') => {
     if(!selected?.id || demoMode || privateAuditBusy)return;
-    setPrivateAudit(null);
     setPrivateAuditError('');
     setPrivateAuditBusy(true);
-    try { setPrivateAudit(await nightjarCatalogue.adminAuditPrivateAudio(selected.id)); }
-    catch(error){ setPrivateAuditError(error instanceof Error?error.message:'Storage investigation is unavailable.'); }
+    try {
+      const batch=await nightjarCatalogue.adminAuditPrivateAudio(selected.id,cursor??undefined);
+      setPrivateAudit(batch);
+      if(direction==='first'){setAuditHistory([null]);setAuditPage(0);}
+      else if(direction==='next'){setAuditHistory(prior=>[...prior.slice(0,auditPage+1),cursor]);setAuditPage(auditPage+1);}
+      else setAuditPage(Math.max(0,auditPage-1));
+    }catch(error){setPrivateAuditError(error instanceof Error?error.message:'Storage investigation is unavailable.');}
     finally {setPrivateAuditBusy(false);}
   };
   const visibleAudio = auditMode === 'pending' ? queue : audioLibrary;
@@ -250,7 +258,12 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
             {privateAuditError && <p role="alert">{privateAuditError}</p>}
             {privateAudit && <div role="status" aria-live="polite">
               <p>Inspected {privateAudit.inspected} objects. {privateAudit.items.filter(item=>item.reviewState==='aged_unattached').length} aged, unattached candidates require further review. No files have been deleted.</p>
-              {privateAudit.moreUninspected && <p>Additional files were not inspected in this bounded audit. This is not a full bucket inventory.</p>}
+              {privateAudit.moreUninspected && <p>Additional files remain in later pages. This batch is not a full bucket inventory.</p>}
+              <div className="nj-quality-toolbar" aria-label="Private audio audit pages">
+                <button type="button" className="secondary-button" disabled={privateAuditBusy||auditPage===0} onClick={()=>void auditSelectedAudio(auditHistory[auditPage-1]??null,'back')}>Previous 30</button>
+                <span>Batch {auditPage+1}</span>
+                <button type="button" className="secondary-button" disabled={privateAuditBusy||!privateAudit.nextCursor} onClick={()=>void auditSelectedAudio(privateAudit.nextCursor,'next')}>Inspect next 30</button>
+              </div>
               {privateAudit.items.filter(item=>!item.attached).map(item=><p key={item.storagePath} className="nj-audio-review-help">
                 <strong>{item.reviewState==='aged_unattached'?'Review candidate':item.reviewState==='recent_unattached'?'Recent unlinked upload':'Uncertain age — investigate'}:</strong>
                 {' '}{item.createdAt?new Date(item.createdAt).toLocaleString('en-GB'):'Unknown creation time'}

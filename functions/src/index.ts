@@ -6075,16 +6075,17 @@ export const adminReleaseAudioLibrary = onCall({ region: REGION }, async (reques
 export const adminAuditReleaseAudioStorage = onCall({region:REGION},async request=>{
   requireAdminIdentity(request);
   const releaseId=cleanText((request.data as Record<string,unknown>|undefined)?.releaseId,160);
-  if(!/^[A-Za-z0-9_-]{1,160}$/.test(releaseId))
-    throw new HttpsError('invalid-argument','Choose a valid release before auditing private audio.');
+  const cursor=cleanText((request.data as Record<string,unknown>|undefined)?.cursor,2049);
+  if(!/^[A-Za-z0-9_-]{1,160}$/.test(releaseId) || (cursor && (cursor.length>2048 || !/^[A-Za-z0-9+/=_-]+$/.test(cursor))))
+    throw new HttpsError('invalid-argument','Choose a valid release and bounded page cursor before auditing private audio.');
   const snap=await releaseRef(releaseId).get();
   const release=snap.data();
   if(!release || !release.creatorUserId)throw new HttpsError('not-found','Release not found.');
   const prefix=`release-audio/${cleanText(release.creatorUserId,160)}/${releaseId}/`;
-  // 31 listed items maximum, 30 inspected/returned. Never enumerate the full
-  // bucket, and do not rely on manually inspecting the first page as complete.
+  // Each explicit Admin request inspects at most 30 scoped objects. The
+  // provider's own continuation cursor prevents hiding a 31st object.
   const [files,nextQuery]=await getStorage().bucket().getFiles({
-    prefix,maxResults:31,autoPaginate:false,
+    prefix,maxResults:30,autoPaginate:false,...(cursor?{pageToken:cursor}:{}),
   });
   const items=files.slice(0,30).map(file=>{
     const metadata=file.metadata??{};
@@ -6102,7 +6103,8 @@ export const adminAuditReleaseAudioStorage = onCall({region:REGION},async reques
     };
   });
   return {releaseId,items,inspected:items.length,
-    moreUninspected:files.length>30||Boolean(nextQuery?.pageToken),
+    nextCursor:cleanText(nextQuery?.pageToken,2048)||null,
+    moreUninspected:Boolean(nextQuery?.pageToken),
     automaticDeletion:false};
 });
 
