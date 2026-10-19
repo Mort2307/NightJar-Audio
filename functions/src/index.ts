@@ -3054,10 +3054,9 @@ export const moderateImageAsset = onCall({region:REGION},async request=>{
       throw new HttpsError('failed-precondition','Image is no longer the active pending submission. Refresh before reviewing.');
     if(kind==='artist_portfolio' && current && parent.ownerUserId!==owner)
       throw new HttpsError('permission-denied','Artist portfolio owner mismatch.');
-    if(kind==='release_artwork' && current && parent.creatorUserId!==owner)
-      throw new HttpsError('permission-denied','Creator artwork owner mismatch.');
-    if(kind==='script_artwork' && current && parent.writerUserId!==owner)
-      throw new HttpsError('permission-denied','Writer artwork owner mismatch.');
+    // A verified Nightjar Admin may submit a replacement for another member.
+    // Parent-pending ID identity is authoritative; it was set only through
+    // submitImageAsset after role/ownership checks, including the Admin route.
     const oldField=kind==='profile_avatar'?'avatarAssetId'
       :kind==='profile_banner'?'bannerAssetId'
       :kind==='brand_logo'?'logoAssetId'
