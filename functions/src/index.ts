@@ -2735,7 +2735,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   if (kind === 'social_avatar') {
     if(!targetId)throw new HttpsError('invalid-argument','Save the social link before adding its profile photo.');
     const item=await socialLinkCollection(identity.uid).doc(targetId).get();
-    if(!item.exists)throw new HttpsError('not-found','Social profile link not found.');
+    if(!item.exists || item.data()?.status==='removing')throw new HttpsError('not-found','Social profile link not available.');
   }
 
   if (kind === 'artist_portfolio') {
@@ -2847,18 +2847,57 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       updatedAt:FieldValue.serverTimestamp(),
     }, { merge:true });
   } else if (kind === 'social_avatar') {
-    const ref=socialLinkCollection(identity.uid).doc(targetId);
-    const existing=await ref.get();
-    if(!existing.exists)throw new HttpsError('not-found','Social profile link was removed.');
-    const prior=cleanText(existing.data()?.pendingPhotoAssetId,160);
-    if(prior && prior!==assetId){
-      const old=await db.collection('imageAssets').doc(prior).get();
-      if(old.exists && old.data()?.ownerUserId===identity.uid && old.data()?.kind==='social_avatar'){
-        await old.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-        await clearAssetFile(old.data()??{});
+    const linkRef=socialLinkCollection(identity.uid).doc(targetId);
+    // Submitting the picture must not recreate a link retired on another
+    // device. All current-link checks and pending-pointer writes are atomic.
+    const oldPhotos=await db.runTransaction(async transaction=>{
+      const link=await transaction.get(linkRef);
+      if(!link.exists || link.data()?.status==='removing')
+        throw new HttpsError('failed-precondition','This social link is being removed. Refresh before adding a photo.');
+      const saved=link.data()??{};
+      const pending=cleanText(saved.pendingPhotoAssetId,160);
+      const prior=Array.isArray(saved.photoCleanupPendingIds)?saved.photoCleanupPendingIds.slice(0,8)
+        .map((x:unknown)=>cleanText(x,160)).filter(Boolean):[];
+      if(Array.isArray(saved.photoCleanupPendingIds)&&saved.photoCleanupPendingIds.length>8)
+        throw new HttpsError('failed-precondition','Finish previous image cleanup before uploading another photo.');
+      const ids=[...new Set([...prior,...(pending&&pending!==assetId?[pending]:[])])];
+      if(ids.length>8)throw new HttpsError('failed-precondition','Finish previous image cleanup before uploading another photo.');
+      const docs=await Promise.all(ids.map(x=>transaction.get(db.collection('imageAssets').doc(x))));
+      const photos:Array<{id:string;path:string}>=[];
+      for(let i=0;i<ids.length;i++){
+        const old=docs[i].data();
+        if(!old)continue;
+        if(old.ownerUserId!==identity.uid || old.kind!=='social_avatar' ||
+            String(old.targetId??'')!==targetId)
+          throw new HttpsError('failed-precondition','Old social image requires administrator review.');
+        const path=cleanText(old.storageRemovalPendingPath || old.storagePath,500);
+        if(path&&!['png','jpg','webp'].some(ext=>path==='pending-images/'+identity.uid+'/'+ids[i]+'.'+ext))
+          throw new HttpsError('failed-precondition','Old social image path requires administrator review.');
+        photos.push({id:ids[i],path});
+      }
+      for(const photo of photos)transaction.set(db.collection('imageAssets').doc(photo.id),{
+        status:'removing',publicUrl:null,storageRemovalPendingPath:photo.path||null,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      transaction.set(linkRef,{
+        pendingPhotoAssetId:assetId,pendingPhotoStatus:'pending',
+        photoCleanupPendingIds:photos.map(photo=>photo.id),
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      return photos;
+    });
+    for(const photo of oldPhotos){
+      try{
+        if(photo.path)await getStorage().bucket().file(photo.path).delete({ignoreNotFound:true});
+        await db.collection('imageAssets').doc(photo.id).update({
+          status:'removed',publicUrl:null,storageRemovalPendingPath:null,
+          updatedAt:FieldValue.serverTimestamp(),
+        });
+        await linkRef.update({photoCleanupPendingIds:FieldValue.arrayRemove(photo.id)});
+      }catch(error){
+        console.warn('Replaced social photo cleanup pending',targetId,error instanceof Error?error.message:'Private cleanup error');
       }
     }
-    await ref.set({pendingPhotoAssetId:assetId,pendingPhotoStatus:'pending',updatedAt:FieldValue.serverTimestamp()},{merge:true});
   } else if (kind === 'brand_logo') {
     const brandingRef = db.collection('settings').doc('branding');
     const existingBranding = await brandingRef.get();
