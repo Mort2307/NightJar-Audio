@@ -26,4 +26,13 @@ for(const invalid of ['afterFile','beforeFile','file','humanCreated','rightsConf
   const artistScope=backend.slice(backend.indexOf("'form-artist-portfolio':new Set"),backend.indexOf('const profileDraftScope'));
   assert.ok(!artistScope.includes("'"+invalid+"'"), invalid+' must not be persisted to form drafts');
 }
+const catalogue=readFileSync(new URL('../src/platform/firebase-catalogue.ts',import.meta.url),'utf8');
+const creator=readFileSync(new URL('../src/components/CreatorAudioPipeline.tsx',import.meta.url),'utf8');
+assert.match(catalogue,/writeInterruptedAudio\(\{uid:user\.uid,releaseId,startedAt:Date\.now\(\)\}\)/,'Mark only account-scoped incomplete transfer');
+assert.match(catalogue,/writePendingAudio\([\s\S]*?clearInterruptedAudio\(user\.uid,releaseId\)/,'Only Storage completion may replace partial marker with finalize receipt');
+assert.match(catalogue,/if\(readPendingAudio\(user\.uid,releaseId\)\)/,'Never re-upload while the prior bytes await safe finalisation');
+assert.match(catalogue,/interruptedAudio\(releaseId:string\)/,'Expose truthful interrupted transfer state');
+assert.match(creator,/nightjarCatalogue\.interruptedAudio\(selectedRelease\.id\)/,'Restore interrupted state on same signed-in draft');
+assert.match(creator,/browser cannot recover partial audio bytes after a restart/,'Do not invent browser-reload resumability');
+assert.match(creator,/Select your original recording again/,'Give accessible original-file reselect');
 console.log('Artist and Editor interrupted-upload recovery contracts passed');
