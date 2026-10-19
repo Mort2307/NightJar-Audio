@@ -20,7 +20,7 @@ const checks = [
   }],
   ['rejection leaves current script artwork and editorial status intact', () => {
     const moderation = backend.slice(backend.indexOf('export const moderateImageAsset = onCall'), backend.indexOf('export const removeOwnedImageAsset = onCall'));
-    assert.match(moderation, /if\(kind==='script_artwork'\)/);
+    assert.match(moderation, /kind==='release_artwork'\|\|kind==='script_artwork'/);
     assert.match(moderation, /pendingArtworkStatus:'rejected'/);
     assert.doesNotMatch(moderation, /artworkUrl:null/);
   }],
