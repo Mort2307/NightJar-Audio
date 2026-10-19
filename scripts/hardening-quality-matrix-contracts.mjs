@@ -22,7 +22,7 @@ assert.match(backend,/requireAdmin\(request\)/,'Only Admin can read and record a
 assert.match(hosting, /- name: Deploy Quality Centre callables before Hosting/, 'Existing Quality Centre backend-first release gate remains present');
 const gate=hosting.slice(hosting.indexOf('- name: Deploy Quality Centre callables before Hosting'),hosting.indexOf('# Single explicitly consented live normal Didit check'));
 assert.match(gate,/adminGetQualityAcceptance,adminRecordQualityCheck/,'Deploy exact QA callables');
-assert.match(gate,/nightjar-quality\\.ts/,'Deploy backend for changed whitelist');
+assert.ok(gate.includes('nightjar-quality.ts'),'Deploy backend for changed whitelist');
 assert.match(gate,/gh run watch/,'Hosting must wait for backend');
 assert.doesNotMatch(hosting,/Deploy hardening QA acceptance before Hosting/,'Never dispatch duplicate QA deployment');
 console.log('PASS 36 evidence-only hardening acceptance cases, Admin-only persistence and backend-first deployment');
