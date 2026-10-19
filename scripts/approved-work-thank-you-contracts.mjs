@@ -27,7 +27,7 @@ assert.match(editor, /decision === 'approved'[\s\S]*?approvedWorkThankYou\(resul
 assert.match(writer, /decision === 'approved'[\s\S]*?approvedWorkThankYou\(result\.writerUserId, 'manuscript'/);
 assert.match(release, /decision === 'approved'[\s\S]*?approvedWorkThankYou\(String\(data\.creatorUserId\), 'audio', data\.title, scheduled\)/);
 assert.match(release, /const body = decision === 'approved'[\s\S]*?thankYou/, 'Creator moderation inbox should say thanks too');
-assert.match(image, /asset\.kind === 'artist_portfolio'[\s\S]*?approvedWorkThankYou\(String\(asset\.ownerUserId\), 'artwork'/);
+assert.match(image, /asset\.kind==='artist_portfolio'[\s\S]*?approvedWorkThankYou\(String\(asset\.ownerUserId\),'artwork'/,'Artist approval still personally thanks the creator');
 assert.match(image, /const artistThankYou =/, 'Generic avatar/image approvals do not generate work thank-you');
 const notifier = backend.slice(backend.indexOf('const createNotification = async'),backend.indexOf('// Personal appreciation is composed only after a successful Admin approval.'));
 assert.match(notifier, /payload\.approvedWorkThankYou === true \? payload : safePayload/, 'Signed-in inbox retains personalised thank-you');
