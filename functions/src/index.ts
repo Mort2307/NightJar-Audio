@@ -6082,10 +6082,10 @@ export const adminAuditReleaseAudioStorage = onCall({region:REGION},async reques
   const release=snap.data();
   if(!release || !release.creatorUserId)throw new HttpsError('not-found','Release not found.');
   const prefix=`release-audio/${cleanText(release.creatorUserId,160)}/${releaseId}/`;
-  // 31 listed items maximum, 30 inspected/returned. Never enumerate the full
-  // bucket, and do not rely on manually inspecting the first page as complete.
+  // Each explicit Admin request inspects at most 30 scoped objects. The
+  // provider's own continuation cursor prevents hiding a 31st object.
   const [files,nextQuery]=await getStorage().bucket().getFiles({
-    prefix,maxResults:31,autoPaginate:false,...(cursor?{pageToken:cursor}:{}),
+    prefix,maxResults:30,autoPaginate:false,...(cursor?{pageToken:cursor}:{}),
   });
   const items=files.slice(0,30).map(file=>{
     const metadata=file.metadata??{};
@@ -6104,7 +6104,7 @@ export const adminAuditReleaseAudioStorage = onCall({region:REGION},async reques
   });
   return {releaseId,items,inspected:items.length,
     nextCursor:cleanText(nextQuery?.pageToken,2048)||null,
-    moreUninspected:files.length>30||Boolean(nextQuery?.pageToken),
+    moreUninspected:Boolean(nextQuery?.pageToken),
     automaticDeletion:false};
 });
 
