@@ -3327,6 +3327,7 @@ export const moderateImageAsset = onCall({ region: REGION }, async (request) => 
         : asset.kind === 'script_artwork'
           ? 'Your manuscript artwork has been approved and is now visible wherever your script is listed.'
           : 'Your image passed Nightjar moderation and is now approved for use.'),
+      approvedWorkThankYou:Boolean(artistThankYou),
       assetId,
       imageKind: asset.kind,
       targetId: asset.targetId ?? null,
@@ -3896,6 +3897,7 @@ export const moderateEditorPortfolioItem = onCall({ region: REGION }, async (req
       type:'content',subtype:'editor_portfolio',
       title:decision==='approved'?'Your Editor showcase is live':decision==='changes'?'Changes requested for your Editor showcase':'Your Editor showcase was not approved',
       message:thankYou ?? (note||'Open Editor Studio to review the moderation result.'),
+      approvedWorkThankYou:Boolean(thankYou),
       portfolioItemId:itemId,
       dedupeKey:'editor-portfolio-review:'+itemId+':'+result.status,
     }).catch(error=>console.warn('Editor showcase review notification failed',error));
@@ -6344,7 +6346,10 @@ const createNotification = async (userId: string, payload: Record<string, unknow
   const ref = dedupeKey
     ? accountRef(userId).collection('notifications').doc(createHash('sha256').update(dedupeKey).digest('hex').slice(0, 40))
     : accountRef(userId).collection('notifications').doc();
-  const persistedPayload = { ...safePayload } as Record<string, unknown>;
+  // The lock-screen push stays discreet; the signed-in member can read the
+  // full congratulations in their private NightJar notification inbox.
+  const persistedPayload = { ...(payload.approvedWorkThankYou === true ? payload : safePayload) } as Record<string, unknown>;
+  delete persistedPayload.approvedWorkThankYou;
   delete persistedPayload.dedupeKey;
   delete persistedPayload.oncePerKey;
   const oncePerKey=Boolean(dedupeKey) && payload.oncePerKey===true;
@@ -6519,6 +6524,7 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
         : decision === 'changes'
           ? 'Nightjar moderation requested changes before this release can be published.'
           : 'Your release was not approved for publication. Open Creator Studio to review the moderation note.'),
+      approvedWorkThankYou:Boolean(thankYou),
       releaseId,
       moderationNote: note || null,
     }).catch((error) => console.warn('Moderation notification failed',error));
@@ -8692,6 +8698,7 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
       message:thankYou ?? (result.nextStatus === 'Approved'
         ? result.marketplaceVisible ? 'Your manuscript synopsis is now listed in the Creator Script Marketplace. The full manuscript remains protected.' : 'Your manuscript is approved. Open Writer Studio to choose Marketplace visibility and add a synopsis when you want creators to discover it.'
         : note),
+      approvedWorkThankYou:Boolean(thankYou),
       scriptId,
       dedupeKey:'writer-script-review:'+scriptId+':'+reviewEventRef.id,oncePerKey:true,
     }).catch((error)=>console.warn('Script review notification failed',error));
