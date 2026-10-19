@@ -8650,13 +8650,36 @@ export const getAdminScriptReview = onCall({ region: REGION }, async (request) =
   // Markdown, RTF and DOCX previews are returned as read-only text by the
   // authenticated callable. No direct source download link is issued for them.
   if (sourcePath && writerUploadExtension(cleanText(data.originalUpload?.fileName,180)) === 'pdf') {
+    const [exists] = await getStorage().bucket().file(sourcePath).exists();
+    if (!exists) throw new HttpsError('not-found', 'The protected PDF is missing. Ask the Writer to upload a replacement.');
     const expiration = new Date(Date.now()+10*60*1000);
     const [url] = await getStorage().bucket().file(sourcePath).getSignedUrl({action:'read',expires:expiration});
     sourceFile={fileName:cleanText(data.originalUpload?.fileName,180)||'Uploaded manuscript',url,expiresAt:expiration.toISOString()};
   }
   const sourcePreview = sourcePath
     ? await adminSourcePreview(sourcePath, cleanText(data.originalUpload?.fileName,180))
-    : { format:'text' as const, text:cleanText(data.content,200000), truncated:false };
+    : { format:'text' as const, text:cleanText(data.content,200000), truncated:String(data.content ?? '').length>200000 };
+  // A screenshot, queue row or stale Admin tab is NOT a manuscript review.
+  // A complete protected preview must have been issued to this exact Admin
+  // for this exact source revision, within a bounded review window.
+  const previewComplete = sourcePreview.format === 'pdf' ? Boolean(sourceFile?.url)
+    : sourcePreview.format === 'text' && sourcePreview.truncated !== true && Boolean(String(sourcePreview.text ?? '').trim());
+  if (previewComplete && ['Submitted','Under review'].includes(String(data.status ?? ''))) {
+    const ref = scriptRef(scriptId);
+    await db.runTransaction(async transaction => {
+      const latestSnapshot = await transaction.get(ref);
+      const latest = latestSnapshot.data();
+      if (!latest || !['Submitted','Under review'].includes(String(latest.status ?? '')) ||
+          Number(latest.contentRevision ?? 0) !== Number(data.contentRevision ?? 0) ||
+          cleanText(latest.originalUpload?.storagePath,500) !== sourcePath) {
+        throw new HttpsError('aborted','Manuscript changed during preview. Refresh and open the latest source before deciding.');
+      }
+      transaction.set(ref.collection('adminReviewEvidence').doc(admin.uid), {
+        reviewerUserId:admin.uid, contentRevision:Number(data.contentRevision ?? 0),
+        sourcePath, previewIssuedAt:FieldValue.serverTimestamp(),
+      }, {merge:true});
+    });
+  }
   return { script:scriptPayload(data,scriptId,true),sourceFile,sourcePreview };
 });
 
@@ -8670,6 +8693,7 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
   const scriptId = cleanText(input.scriptId, 160);
   const decision = cleanText(input.decision, 30);
   const note = cleanText(input.note, 2000);
+  const sourceReviewed = input.sourceReviewed === true;
   if (!scriptId || !['approved','changes','rejected'].includes(decision)) {
     throw new HttpsError('invalid-argument', 'Select a submitted manuscript and a valid moderation decision.');
   }
@@ -8684,6 +8708,18 @@ export const adminReviewWriterScript = onCall({ region: REGION }, async (request
     const snapshot = await transaction.get(ref);
     const data = snapshot.data();
     if (!data) throw new HttpsError('not-found', 'Manuscript not found.');
+    if (decision === 'approved') {
+      if (!sourceReviewed) throw new HttpsError('failed-precondition','Confirm you reviewed the complete protected manuscript before approval.');
+      const evidence = await transaction.get(ref.collection('adminReviewEvidence').doc(admin.uid));
+      const proof = evidence.data();
+      const issued = proof?.previewIssuedAt?.toMillis?.() ?? 0;
+      if (!proof || proof.reviewerUserId !== admin.uid ||
+          proof.contentRevision !== Number(data.contentRevision ?? 0) ||
+          proof.sourcePath !== cleanText(data.originalUpload?.storagePath,500) ||
+          issued <= 0 || Date.now()-issued > 30*60*1000 || issued>Date.now()+60*1000) {
+        throw new HttpsError('failed-precondition','Open the complete current manuscript in the protected viewer before approving it.');
+      }
+    }
     if (!['Submitted','Under review'].includes(String(data.status ?? ''))) {
       throw new HttpsError('failed-precondition', 'Only submitted manuscripts awaiting a decision can be reviewed.');
     }

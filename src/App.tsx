@@ -3913,7 +3913,7 @@ function App() {
     }
   };
 
-  const reviewAdminManuscript = async (script: any, decision: 'approved' | 'changes' | 'rejected', note: string) => {
+  const reviewAdminManuscript = async (script: any, decision: 'approved' | 'changes' | 'rejected', note: string, sourceReviewed: boolean) => {
     if (!canAdmin || !script?.id) throw new Error('Administrator permission is required.');
     const nextStatus = decision === 'approved' ? 'Approved' : decision === 'changes' ? 'Revision requested' : 'Rejected';
     if (demoMode) {
@@ -3925,7 +3925,7 @@ function App() {
       notify('Demo only: manuscript decision saved locally.');
       return;
     }
-    const response = await nightjarScripts.adminReviewScript(script.id, decision, note);
+    const response = await nightjarScripts.adminReviewScript(script.id, decision, note, sourceReviewed);
     await loadAdminEditorial();
     notify(decision === 'approved' ? (response.marketplaceVisible ? 'Manuscript approved and marketplace listing is now visible.' : 'Manuscript approved. The Writer can set Marketplace visibility and a synopsis to publish its listing.') : decision === 'changes' ? 'Changes requested. The Writer has been notified.' : 'Manuscript rejected with an explanation for the Writer.');
   };

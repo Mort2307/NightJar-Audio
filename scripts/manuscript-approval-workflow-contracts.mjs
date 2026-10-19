@@ -59,6 +59,23 @@ assert.doesNotMatch(adminReview, /await ref\.collection\('reviewThread'\)\.add\(
 assert.match(adminReview, /dedupeKey:'writer-script-review:'\+scriptId\+':'\+reviewEventRef\.id/,
   'supplemental notification must be idempotent for the accepted decision');
 
+const previewFn = api.slice(api.indexOf('export const getAdminScriptReview = onCall'),api.indexOf('export const adminReviewWriterScript = onCall'));
+assert.match(previewFn,/sourcePreview\.format === 'pdf'/,'PDF preview requires a source');
+assert.match(previewFn,/sourcePreview\.truncated !== true/,'Truncated manuscripts are never approved by the preview gate');
+assert.match(previewFn,/\.file\(sourcePath\)\.exists\(\)/,'Reject a missing PDF before issuing a review receipt');
+assert.match(previewFn,/ref\.collection\('adminReviewEvidence'\)\.doc\(admin\.uid\)/,'Bind evidence to the exact reviewer');
+assert.match(previewFn,/transaction\.get\(ref\)/,'Preview evidence checks the current manuscript revision');
+assert.match(previewFn,/contentRevision:Number\(data\.contentRevision \?\? 0\)/);
+assert.match(adminReview,/const sourceReviewed = input\.sourceReviewed === true/,'Admin must explicitly confirm review');
+assert.match(adminReview,/const evidence = await transaction\.get\(ref\.collection\('adminReviewEvidence'\)\.doc\(admin\.uid\)\)/,'Validate proof in same approval transaction');
+assert.match(adminReview,/proof\.contentRevision !== Number\(data\.contentRevision \?\? 0\)/,'Stale manuscript version must not pass');
+assert.match(adminReview,/proof\.sourcePath !== cleanText\(data\.originalUpload\?\.storagePath,500\)/,'Replaced source cannot use old preview evidence');
+assert.match(adminReview,/Date\.now\(\)-issued > 30\*60\*1000/,'Preview expires after thirty minutes');
+assert.match(queue,/I opened and reviewed the complete protected manuscript/,'Require human confirmation from reviewer');
+assert.match(queue,/!completeSourceReady \|\| !sourceReviewed \|\| decisionBusy/,'Approval button blocked until complete source reviewed');
+assert.match(client,/sourceReviewed: boolean/,'Send explicit review acknowledgement to backend');
+assert.match(app,/adminReviewScript\(script\.id, decision, note, sourceReviewed\)/,'Forward acknowledgement through the Admin app');
+
 assert.match(adminReview, /status:nextStatus/);
 assert.match(adminReview, /listing\.visibility === 'marketplace' && Boolean\(listing\.synopsis\.trim\(\)\)/);
 assert.doesNotMatch(adminReview, /transaction\.set\(ref,\s*\{[^}]*marketplace:/);
