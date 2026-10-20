@@ -41,4 +41,13 @@ assert.match(globalCss,/\.artist-portfolio-image img\{width:100%;height:100%;obj
 assert.match(globalCss,/\.public-artist-image img\{display:block;width:100%;height:100%;object-fit:contain/,'Public Artist cards show whole work');
 assert.match(writerCss,/\.writer-script-artwork-preview > img \{[^\n]*object-fit: contain/,'Writer approved art preview is uncropped');
 assert.match(writerCss,/\.script-marketplace \.marketplace-card \.script-marketplace-cover \{[^\n]*object-fit: contain/,'Marketplace cover preserves content');
+
+const playerCss=read('src/components/nightjar-player-premium.css');
+assert.match(globalCss,/\.release-cover-media \{[\s\S]{0,180}?object-fit: contain/,'Release art content card never crops the image');
+assert.match(globalCss,/\.public-artist-featured-grid img \{[\s\S]{0,160}?object-fit:contain/,'Artist featured content shows whole image');
+assert.match(globalCss,/\.nj-creator-live-release-art img \{[^\n]*object-fit:contain/,'Creator release preview shows whole cover');
+assert.match(playerCss,/\.nj-up-cover img\{[^\n]*object-fit:contain/,'Nightjar player artwork shows whole image');
+assert.match(playerCss,/\.nj-mini-player > img \{[^\n]*object-fit:contain/,'Mini player artwork shows whole image');
+assert.match(globalCss,/\.nj-creator-live-avatar img \{[^\n]*object-fit:cover/,'Avatars still use purpose-built circular crops');
+
 console.log('NightJar Creator, Writer and Artist full-image framing and moderated upload contracts PASS.');
