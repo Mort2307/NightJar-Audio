@@ -144,7 +144,7 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
           <button ref={closeRef} type="button" className="ghost-button" aria-label="Cancel photo changes" disabled={busy} onClick={onCancel}><X size={19}/></button>
         </header>
         <p id="nj-frame-hint">Move the picture inside the gold guide. Choose <strong>Show whole picture</strong> to keep everything, or <strong>Fill frame</strong> to crop deliberately. The preview shows what will be submitted for review.</p>
-        <div className={'nj-framing-stage '+(shape==='portrait'?'circle-guide':shape==='artwork'?'is-artwork':'')}
+        <div className={'nj-framing-stage '+(shape==='portrait'?'circle-guide':shape==='banner'?'is-banner':shape==='artwork'?'is-artwork':'')}
           style={{aspectRatio:shape==='banner'?'16 / 7':shape==='artwork'?`${dimensions.width} / ${dimensions.height}`:'1 / 1',
             ...(shape==='artwork'?{width:`min(100%, calc(44dvh * ${dimensions.width/dimensions.height}))`}:{})}}
           role="group" tabIndex={0} aria-label="Photo frame. Drag to move, pinch to zoom, or use arrow keys and sliders."
