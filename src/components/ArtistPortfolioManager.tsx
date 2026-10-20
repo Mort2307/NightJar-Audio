@@ -3,6 +3,7 @@ import { ImagePlus, LoaderCircle, Trash2, ChevronDown } from 'lucide-react';
 import { nightjarArtists, type ArtistPortfolioItem } from '../platform/firebase-artists';
 import { nightjarMedia } from '../platform/firebase-media';
 import StudioFormDraftSync from './StudioFormDraftSync';
+import ImageFramingEditor from './ImageFramingEditor';
 
 type Props = {
   notify: (message: string) => void;
@@ -24,6 +25,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [tags, setTags] = useState('');
   const [commissionType, setCommissionType] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [artFrameFile,setArtFrameFile]=useState<File|null>(null);
   const [humanCreated, setHumanCreated] = useState(false);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
@@ -185,7 +187,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <label>Commission type<input maxLength={80} value={commissionType} onChange={(e)=>setCommissionType(e.target.value)} placeholder="Cover artwork, character portrait…"/></label>
       <label className="artist-form-wide">Description<textarea maxLength={600} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="A short public note about the piece, style or brief."/></label>
       <label>Tags<input value={tags} onChange={(e)=>setTags(e.target.value)} placeholder="Atmospheric, fantasy, painterly"/></label>
-      <label>Artwork image<input key={fileInputNonce} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e)=>setFile(e.target.files?.[0] ?? null)}/></label>
+      <label>Artwork image<input key={fileInputNonce} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e)=>{const selected=e.target.files?.[0];e.currentTarget.value='';if(selected)setArtFrameFile(selected);}}/></label>
+      {file && <p className="artist-form-wide" role="status">Selected framed artwork: {file.name} · ready for review submission</p>}
       <label className="nightjar-anonymous-toggle artist-form-wide"><input type="checkbox" checked={humanCreated} onChange={(e)=>setHumanCreated(e.target.checked)}/><span>I confirm this is my own human-created artwork and is not AI-generated.</span></label>
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={rightsConfirmed} onChange={(e)=>setRightsConfirmed(e.target.checked)}/><span>I own or control the rights needed to display this artwork publicly on Nightjar.</span></label>
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have any required client, subject, model or collaborator permission for this public portfolio use.</span></label>
@@ -207,5 +210,12 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       </article>)}
       {!items.length&&<div className="people-empty"><ImagePlus size={18}/><strong>No portfolio pieces yet</strong><span>Add a few strong examples so VA Creators, Writers and Audio Editors can understand your visual style.</span></div>}
     </div>
+    {artFrameFile && <ImageFramingEditor file={artFrameFile} shape="artwork"
+      onCancel={()=>setArtFrameFile(null)}
+      onApply={framed=>{
+        setFile(framed);
+        setArtFrameFile(null);
+      }}
+    />}
   </article>;
 }
