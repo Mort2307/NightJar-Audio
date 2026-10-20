@@ -2894,21 +2894,53 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     try { await cleanupOwnedSocialPhotos(identity.uid,targetId); }
     catch(error){console.warn('Prior social photo cleanup needs retry',targetId,error instanceof Error?error.message:'Unknown cleanup error');}
   } else if (kind === 'brand_logo') {
-    const brandingRef = db.collection('settings').doc('branding');
-    const existingBranding = await brandingRef.get();
-    const previousPendingId = cleanText(existingBranding.data()?.pendingLogoAssetId, 160);
-    if (previousPendingId && previousPendingId !== assetId) {
-      const previousPending = await db.collection('imageAssets').doc(previousPendingId).get();
-      if (previousPending.exists && previousPending.data()?.status === 'pending') {
-        await clearAssetFile(previousPending.data() ?? {});
-        await previousPending.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    const brandingRef=db.collection('settings').doc('branding');
+    try{
+      await db.runTransaction(async tx=>{
+        const current=await tx.get(brandingRef);
+        const data=current.data()??{};
+        const prior=cleanText(data.pendingLogoAssetId,160);
+        const oldRef=prior&&prior!==assetId?db.collection('imageAssets').doc(prior):null;
+        const old=oldRef?await tx.get(oldRef):null;
+        const image=old?.data();
+        const receipts=brandLogoReceipts(data);
+        if(receipts.length>8)throw new HttpsError('failed-precondition','Old logo cleanup requires investigation.');
+        if(image && image.kind!=='brand_logo')
+          throw new HttpsError('failed-precondition','Previous branding image is invalid.');
+        const oldEntry:BrandLogoRemoval={
+          id:prior,owner:cleanText(image?.ownerUserId,160),
+          path:cleanText(image?.storageRemovalPendingPath||image?.storagePath,500),
+        };
+        const replacing=Boolean(image && image.status==='pending');
+        if(replacing && oldEntry.path&&!safeBrandLogoPath(oldEntry))
+          throw new HttpsError('failed-precondition','Previous logo path requires investigation.');
+        const pending=[...receipts.filter(item=>item.id!==prior),
+          ...(replacing&&oldEntry.path?[oldEntry]:[])];
+        if(pending.length>8)throw new HttpsError('failed-precondition','Too many incomplete branding image removals.');
+        tx.set(brandingRef,{pendingLogoAssetId:assetId,pendingLogoStatus:'pending',
+          brandLogoRemovalPending:pending,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        if(oldRef&&replacing)
+          tx.set(oldRef,{status:oldEntry.path?'removing':'removed',publicUrl:null,
+            storageRemovalPendingPath:oldEntry.path||null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      });
+    }catch(error){
+      // Staged upload was never linked: retire metadata before deleting bytes.
+      await db.collection('imageAssets').doc(assetId).set({
+        status:'removing',publicUrl:null,storageRemovalPendingPath:storagePath,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      try{
+        await getStorage().bucket().file(storagePath).delete({ignoreNotFound:true});
+        await db.collection('imageAssets').doc(assetId).set({
+          status:'removed',storageRemovalPendingPath:null,updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+      }catch(cleanupError){
+        console.warn('Unattached brand image cleanup pending',assetId,cleanupError instanceof Error?cleanupError.message:'Unknown Storage error');
       }
+      throw error;
     }
-    await brandingRef.set({
-      pendingLogoAssetId: assetId,
-      pendingLogoStatus: 'pending',
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    try{await cleanupRetiredBrandLogos();}
+    catch(error){console.warn('Prior pending brand logo cleanup needs retry',error instanceof Error?error.message:'Unknown Storage error');}
   } else if (kind === 'artist_portfolio') {
     const portfolioRef = db.collection('artistPortfolio').doc(targetId);
     const portfolioItem = await portfolioRef.get();
