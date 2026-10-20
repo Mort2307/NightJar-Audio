@@ -2914,7 +2914,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
         const replacing=Boolean(image && image.status==='pending');
         if(replacing && oldEntry.path&&!safeBrandLogoPath(oldEntry))
           throw new HttpsError('failed-precondition','Previous logo path requires investigation.');
-        const pending=[...receipts.filter(item=>item.id!==prior),
+        const pending=[...receipts.filter(item=>!(replacing&&oldEntry.path&&item.id===prior)),
           ...(replacing&&oldEntry.path?[oldEntry]:[])];
         if(pending.length>8)throw new HttpsError('failed-precondition','Too many incomplete branding image removals.');
         tx.set(brandingRef,{pendingLogoAssetId:assetId,pendingLogoStatus:'pending',
@@ -3343,7 +3343,7 @@ export const moderateImageAsset = onCall({region:REGION},async request=>{
             :null;
           if(oldLogo?.path&&!safeBrandLogoPath(oldLogo))
             throw new HttpsError('failed-precondition','Existing logo image requires security review.');
-          const retiredLogos=[...logoReceipts.filter(item=>item.id!==oldId),
+          const retiredLogos=[...logoReceipts.filter(item=>!(oldLogo?.path&&item.id===oldId)),
             ...(oldLogo?.path?[oldLogo]:[])];
           if(retiredLogos.length>8)throw new HttpsError('failed-precondition','Old branding cleanup needs review.');
           Object.assign(parentUpdate,{
@@ -3769,18 +3769,18 @@ export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
       }
     }
   });
-  const [logosPending,iconsPending]=await Promise.all([
+  const results=await Promise.allSettled([
     cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons(),
   ]);
-  return {removed:true,pendingCleanup:logosPending||iconsPending};
+  return {removed:true,pendingCleanup:results.some(result=>result.status==='rejected'||result.value)};
 });
 
 export const retryBrandLogoCleanup = onCall({region:REGION},async(request)=>{
   requireAdminIdentity(request);
-  const [logosPending,iconsPending]=await Promise.all([
+  const results=await Promise.allSettled([
     cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons(),
   ]);
-  return {pendingCleanup:logosPending||iconsPending};
+  return {pendingCleanup:results.some(result=>result.status==='rejected'||result.value)};
 });
 
 export const createArtistPortfolioItem = onCall({ region: REGION }, async (request) => {
