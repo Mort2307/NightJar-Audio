@@ -84,6 +84,6 @@ export async function exportFramedImage(
   }
   if(!blob)throw new Error('This edited image is still over 5 MB. Use a smaller source or a tighter crop.');
   const extension=blob.type==='image/webp'?'.webp':blob.type==='image/png'?'.png':'.jpg';
-  const name=(fileName.replace(/\\.[^.]+$/,'').slice(0,100)||'nightjar-image')+'-framed'+extension;
+  const name=(fileName.replace(/\.[^.]+$/,'').slice(0,100)||'nightjar-image')+'-framed'+extension;
   return new File([blob],name,{type:blob.type,lastModified:Date.now()});
 }
