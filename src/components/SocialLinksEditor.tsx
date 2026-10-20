@@ -55,15 +55,17 @@ export function SocialLinksDisplay({links}:{links?:NightjarSocialLink[]}) {
 
 export default function SocialLinksEditor({notify,simulationMode=false,readOnly=false}:Props) {
   const [rows,setRows]=useState<EditorRow[]>([]);
+  const [cleanupIds,setCleanupIds]=useState<string[]>([]);
   const [loading,setLoading]=useState(true);
   const [busyId,setBusyId]=useState<string|null>(null);
   const disabled=simulationMode||readOnly;
   const refresh=async()=>{
     setLoading(true);
     try {
-      if(simulationMode){setRows([]);return;}
-      const data=await nightjarSocialLinks.list();
-      setRows(data.map((link)=>({...link,editing:false})));
+      if(simulationMode){setRows([]);setCleanupIds([]);return;}
+      const data=await nightjarSocialLinks.listWithCleanup();
+      setRows((data.links??[]).map((link)=>({...link,editing:false})));
+      setCleanupIds(data.cleanupLinkIds??[]);
     }catch(error){notify(error instanceof Error?error.message:'Social links could not be loaded.');}
     finally{setLoading(false);}
   };
@@ -94,11 +96,22 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
     if(!window.confirm('Remove this social link and its profile picture from your Nightjar profile?'))return;
     setBusyId(row.id);
     try{
-      const removed=await nightjarSocialLinks.remove(row.id);
-      if(!removed)throw new Error('Nightjar could not confirm that the link was removed.');
+      const result=await nightjarSocialLinks.removeWithCleanup(row.id);
+      if(!result.deleted)throw new Error('Nightjar could not confirm that the link was removed.');
       setRows((prev)=>prev.filter((item)=>item.id!==row.id));
-      notify('Social link removed.');
+      if(result.pendingCleanup)setCleanupIds(prev=>[...new Set([...prev,row.id])]);
+      notify(result.pendingCleanup?'Social link hidden. Private photo deletion needs retrying below.':'Social link and its linked private photo removed.');
     }catch(error){notify(error instanceof Error?error.message:'Social link could not be removed.');}
+    finally{setBusyId(null);}
+  };
+  const retryCleanup=async(id:string)=>{
+    if(disabled)return;
+    setBusyId(id);
+    try{
+      const result=await nightjarSocialLinks.retryCleanup(id);
+      await refresh();
+      notify(result.pendingCleanup?'Social image cleanup is still incomplete; retry or contact Nightjar support.':'Retired private social photo cleanup completed.');
+    }catch(error){notify(error instanceof Error?error.message:'Social photo cleanup could not be confirmed.');}
     finally{setBusyId(null);}
   };
   const upload=async(row:EditorRow,file:File)=>{
@@ -148,9 +161,11 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
             </label>
             {row.photoStatus==='pending'&&<small>Photo awaiting Nightjar image review · previous approved photo remains visible</small>}
             {row.photoStatus==='rejected'&&<small>The submitted photo was not approved. Upload a different photo.</small>}
+            {row.photoCleanupPending&&<button type="button" className="ghost-button" disabled={disabled||busyId!==null} onClick={()=>void retryCleanup(row.id)}><RefreshCw size={13}/> Retry previous photo cleanup</button>}
           </div>}
         </div>
       </div>)}
+      {cleanupIds.length>0&&<div className="nj-social-editor-note" role="status"><strong>Removed-link photo cleanup pending</strong>{cleanupIds.map(id=><button key={id} type="button" className="ghost-button" disabled={disabled||busyId!==null} onClick={()=>void retryCleanup(id)}><RefreshCw size={13}/> Retry private photo cleanup</button>)}</div>}
       {loading&&<p className="nj-social-editor-note">Loading your links…</p>}
       {!loading&&!rows.length&&<p className="nj-social-editor-note">No social profiles added yet.</p>}
     </div>
