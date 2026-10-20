@@ -4,6 +4,7 @@ import { nightjarSocialLinks, type NightjarSocialLink } from '../platform/fireba
 import { nightjarMedia } from '../platform/firebase-media';
 import { optimiseProfileImage } from '../platform/profile-image-optimizer';
 import ContextHelp from './ContextHelp';
+import ImageFramingEditor from './ImageFramingEditor';
 import './social-profile-links.css';
 
 type EditorRow = NightjarSocialLink & { draft?:boolean; editing?:boolean };
@@ -55,6 +56,7 @@ export function SocialLinksDisplay({links}:{links?:NightjarSocialLink[]}) {
 
 export default function SocialLinksEditor({notify,simulationMode=false,readOnly=false}:Props) {
   const [rows,setRows]=useState<EditorRow[]>([]);
+  const [framingUpload,setFramingUpload]=useState<{row:EditorRow;file:File}|null>(null);
   const [cleanupIds,setCleanupIds]=useState<string[]>([]);
   const [loading,setLoading]=useState(true);
   const [busyId,setBusyId]=useState<string|null>(null);
@@ -157,7 +159,7 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
           {!row.draft&&<div className="nj-social-photo-tools">
             <label className="nj-social-photo-upload"><ImagePlus size={13}/>{row.photoUrl?'Replace social profile photo':'Add actual social profile photo'}
               <input type="file" hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif"
-                disabled={disabled||busyId===row.id} onChange={(event)=>{const file=event.target.files?.[0];event.currentTarget.value='';if(file)void upload(row,file);}}/>
+                disabled={disabled||busyId===row.id} onChange={(event)=>{const file=event.target.files?.[0];event.currentTarget.value='';if(file)setFramingUpload({row,file});}}/>
             </label>
             {row.photoStatus==='pending'&&<small>Photo awaiting Nightjar image review · previous approved photo remains visible</small>}
             {row.photoStatus==='rejected'&&<small>The submitted photo was not approved. Upload a different photo.</small>}
@@ -173,5 +175,12 @@ export default function SocialLinksEditor({notify,simulationMode=false,readOnly=
       <button type="button" className="secondary-button" disabled={disabled||loading||rows.length>=12} onClick={add}><Plus size={17}/> Add another social link</button>
       <button type="button" className="ghost-button" disabled={loading||busyId!==null} onClick={()=>void refresh()}><RefreshCw size={14}/> Refresh photos</button>
     </div>
+    {framingUpload && <ImageFramingEditor file={framingUpload.file} shape="social"
+      onCancel={()=>setFramingUpload(null)}
+      onApply={async framed=>{
+        await upload(framingUpload.row,framed);
+        setFramingUpload(null);
+      }}
+    />}
   </article>;
 }
