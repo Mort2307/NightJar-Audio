@@ -26,7 +26,7 @@
 .nj-up-grip,.nj-up-transcript-resizer span{display:block;width:44px;height:5px;border-radius:100px;background:color-mix(in srgb,var(--up-accent) 38%,transparent);margin:0 auto 16px}
 .nj-up-header{display:grid;grid-template-columns:clamp(86px,25%,154px) minmax(0,1fr) 42px;align-items:center;gap:clamp(12px,3vw,24px)}
 .nj-up-cover{width:100%;aspect-ratio:1;border-radius:18px;overflow:hidden;border:1px solid color-mix(in srgb,var(--up-accent) 40%,transparent);background:var(--up-ink)}
-.nj-up-cover img{width:100%;height:100%;display:block;object-fit:cover}
+.nj-up-cover img{width:100%;height:100%;display:block;object-fit:contain;background:#151119}
 .nj-up-identity{min-width:0}
 .nj-up-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.24em;color:var(--up-accent);font-weight:650}
 .nj-up-identity h2{font:400 clamp(24px,4.4vw,40px)/1.07 Georgia,serif;overflow-wrap:anywhere;letter-spacing:-.025em;margin:9px 0}
@@ -139,7 +139,7 @@
 .nj-up-root.is-minimised .nj-up-scrim { display:none; }
 .nj-up-root.is-minimised .nj-up-sheet { position:absolute; visibility:hidden; pointer-events:none; width:0; height:0; padding:0; margin:0; border:0; overflow:hidden; opacity:0; }
 .nj-mini-player { pointer-events:auto; position:fixed; left:50%; bottom:18px; transform:translateX(-50%); width:min(560px,calc(100vw - 24px)); min-height:70px; display:grid; grid-template-columns:46px minmax(0,1fr) 42px 42px 42px; align-items:center; gap:7px; padding:9px 12px 13px; border:1px solid var(--up-border); border-radius:17px; box-shadow:0 12px 42px rgba(0,0,0,.45); background:var(--up-surface); color:var(--up-text); }
-.nj-mini-player > img { width:46px; height:46px; object-fit:cover; border-radius:9px; background:var(--up-ink); }
+.nj-mini-player > img { width:46px; height:46px; object-fit:contain; border-radius:9px; background:var(--up-ink); }
 .nj-mini-player-info { display:grid; gap:3px; min-width:0; }
 .nj-mini-player-info strong,.nj-mini-player-info small { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .nj-mini-player-info strong { font-size:13px; }
