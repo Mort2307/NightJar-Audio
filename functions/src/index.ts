@@ -3583,6 +3583,53 @@ export const removeProfileBanner = onCall({region:REGION},async request=>{
   return removeOwnedProfileVisual(identity.uid,'profile_banner');
 });
 
+
+type BrandLogoRemoval={id:string;owner:string;path:string};
+const brandLogoReceipts=(data:Record<string,any>):BrandLogoRemoval[] =>
+  Array.isArray(data.brandLogoRemovalPending)?data.brandLogoRemovalPending.map((item:any)=>({
+    id:cleanText(item?.id,160),owner:cleanText(item?.owner,160),path:cleanText(item?.path,500),
+  })):[];
+const safeBrandLogoPath=(entry:BrandLogoRemoval) =>
+  /^[a-zA-Z0-9_-]{1,160}$/.test(entry.id)&&
+  /^[a-zA-Z0-9_-]{1,160}$/.test(entry.owner)&&
+  ['png','jpg','webp'].some(ext=>entry.path==='pending-images/'+entry.owner+'/'+entry.id+'.'+ext);
+
+// Durable, private receipts retain the exact files pending deletion after
+// logo references have been revoked. Never reclaim an active branding asset.
+const cleanupRetiredBrandLogos=async()=>{
+  const ref=db.collection('settings').doc('branding');
+  const snap=await ref.get();
+  const receipts=brandLogoReceipts(snap.data()??{});
+  if(receipts.length>8)return true;
+  let failed=false;
+  for(const receipt of receipts){
+    if(!safeBrandLogoPath(receipt)){failed=true;continue;}
+    try{
+      const current=(await ref.get()).data()??{};
+      if([current.logoAssetId,current.pendingLogoAssetId].includes(receipt.id)){failed=true;continue;}
+      await getStorage().bucket().file(receipt.path).delete({ignoreNotFound:true});
+      const imageRef=db.collection('imageAssets').doc(receipt.id);
+      await db.runTransaction(async tx=>{
+        const latest=await tx.get(ref);
+        const image=await tx.get(imageRef);
+        const data=latest.data()??{};
+        if([data.logoAssetId,data.pendingLogoAssetId].includes(receipt.id))
+          throw new HttpsError('aborted','An active Nightjar logo cannot be deleted.');
+        const next=brandLogoReceipts(data).filter(item=>item.id!==receipt.id||item.path!==receipt.path);
+        if(image.exists && image.data()?.storageRemovalPendingPath===receipt.path)
+          tx.set(imageRef,{status:'removed',publicUrl:null,storageRemovalPendingPath:null,
+            updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        tx.set(ref,{brandLogoRemovalPending:next,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      });
+    }catch(error){
+      failed=true;
+      console.warn('Nightjar old logo cleanup pending',receipt.id,error instanceof Error?error.message:'Unknown Storage error');
+    }
+  }
+  const latest=(await ref.get()).data()??{};
+  return failed || brandLogoReceipts(latest).length>0;
+};
+
 export const getBranding = onCall({ region: REGION }, async () => {
   const snapshot = await db.collection('settings').doc('branding').get();
   const data = snapshot.data() ?? {};
@@ -3592,97 +3639,74 @@ export const getBranding = onCall({ region: REGION }, async () => {
     installIconsReady: Boolean(data.icon192Path && data.icon512Path && data.maskable512Path),
     iconVersion: data.iconVersion ?? null,
     iconCleanupPending: Array.isArray(data.brandIconRemovalPending) && data.brandIconRemovalPending.length > 0,
+    logoCleanupPending: brandLogoReceipts(data).length > 0,
     pendingLogoAssetId: null,
   };
 });
 
-export const retryBrandIconCleanup = onCall({region:REGION},async(request)=>{
-  requireAdminIdentity(request);
-  return {pendingCleanup:await cleanupRetiredBrandIcons()};
-});
-
 export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const ref = db.collection('settings').doc('branding');
-  const snapshot = await ref.get();
-  const data = snapshot.data() ?? {};
-  await clearBrandingIconFiles(data);
-  for (const assetId of [data.logoAssetId, data.pendingLogoAssetId]) {
-    const cleanId = cleanText(assetId, 160);
-    if (!cleanId) continue;
-    const asset = await db.collection('imageAssets').doc(cleanId).get();
-    if (asset.exists) {
-      await clearAssetFile(asset.data() ?? {});
-      await asset.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const ref=db.collection('settings').doc('branding');
+  await db.runTransaction(async tx=>{
+    const snapshot=await tx.get(ref);
+    const data=snapshot.data()??{};
+    const previous=brandLogoReceipts(data);
+    if(previous.length>8)throw new HttpsError('failed-precondition','Too many incomplete logo removals.');
+    const ids=[...new Set([data.logoAssetId,data.pendingLogoAssetId,...previous.map(entry=>entry.id)]
+      .map(item=>cleanText(item,160)).filter(Boolean))];
+    if(ids.length>8||ids.some(id=>!/^[a-zA-Z0-9_-]{1,160}$/.test(id)))
+      throw new HttpsError('failed-precondition','Logo references require investigation.');
+    const assets=ids.map(id=>db.collection('imageAssets').doc(id));
+    const assetSnaps=await Promise.all(assets.map(item=>tx.get(item)));
+    const retired:BrandLogoRemoval[]=[];
+    for(let i=0;i<ids.length;i++){
+      const asset=assetSnaps[i].data();
+      if(asset && asset.kind!=='brand_logo')
+        throw new HttpsError('failed-precondition','Image is not a Nightjar branding asset.');
+      const prior=previous.find(item=>item.id===ids[i]);
+      const entry:BrandLogoRemoval={
+        id:ids[i],
+        owner:cleanText(prior?.owner||asset?.ownerUserId,160),
+        path:cleanText(prior?.path||asset?.storageRemovalPendingPath||asset?.storagePath,500),
+      };
+      if(entry.path&&!safeBrandLogoPath(entry))
+        throw new HttpsError('failed-precondition','Logo Storage path requires investigation.');
+      if(entry.path)retired.push(entry);
     }
-  }
-  await ref.set({
-    logoAssetId: null,
-    logoUrl: null,
-    logoStatus: null,
-    pendingLogoAssetId: null,
-    pendingLogoStatus: null,
-    icon192Path: null,
-    icon512Path: null,
-    maskable512Path: null,
-    iconVersion: null,
-    iconSourceAssetId: null,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { removed: true };
+    const oldIcons=[data.icon192Path,data.icon512Path,data.maskable512Path,
+      ...(Array.isArray(data.brandIconRemovalPending)?data.brandIconRemovalPending:[])]
+      .map(value=>cleanText(value,500)).filter(Boolean);
+    const retiredIcons=[...new Set(oldIcons)];
+    if(retiredIcons.length>12||retiredIcons.some(path=>!safeBrandIconPath(path)))
+      throw new HttpsError('failed-precondition','Brand icon Storage paths require investigation.');
+    tx.set(ref,{
+      logoAssetId:null,logoUrl:null,logoStatus:null,
+      pendingLogoAssetId:null,pendingLogoStatus:null,
+      icon192Path:null,icon512Path:null,maskable512Path:null,
+      iconVersion:null,iconSourceAssetId:null,
+      brandLogoRemovalPending:retired,brandIconRemovalPending:retiredIcons,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    for(let i=0;i<ids.length;i++){
+      if(assetSnaps[i].exists){
+        const path=retired.find(item=>item.id===ids[i])?.path||null;
+        tx.set(assets[i],{status:path?'removing':'removed',publicUrl:null,
+          storageRemovalPendingPath:path,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      }
+    }
+  });
+  const [logosPending,iconsPending]=await Promise.all([
+    cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons(),
+  ]);
+  return {removed:true,pendingCleanup:logosPending||iconsPending};
 });
 
-
-// Repeat creation with the same account-scoped UUID after a lost callable
-// response. The UUID is a receipt, never a permission or identity credential.
-const privateCreateRequestId=(input:Record<string,unknown>):string|null=>{
-  if(input.clientRequestId == null || input.clientRequestId === '')return null;
-  const value=input.clientRequestId;
-  if(typeof value!=='string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)){
-    throw new HttpsError('invalid-argument','Private creation request identifier is invalid.');
-  }
-  return value;
-};
-const savePrivateRecordOnce=async (
-  ref:DocumentReference,
-  record:Record<string,unknown>,
-  ownerKey:string,
-  uid:string,
-  requestId:string|null,
-  quotaExceeded=false,
-) => {
-  if(!requestId) {
-    if(quotaExceeded)throw new HttpsError('resource-exhausted','Portfolio limit reached.');
-    await ref.set(record);
-    return false;
-  }
-  return db.runTransaction(async tx=>{
-    const snap=await tx.get(ref);
-    if(snap.exists){
-      if(snap.data()?.[ownerKey]!==uid)throw new HttpsError('permission-denied','Private draft is owned by another member.');
-      return true;
-    }
-    if(quotaExceeded)throw new HttpsError('resource-exhausted','Portfolio limit reached.');
-    tx.set(ref,record);
-    return false;
-  });
-};
-
-const artistPortfolioPayload = (data: Record<string, any>, id: string) => ({
-  id,
-  ownerUserId: cleanText(data.ownerUserId, 160),
-  title: cleanText(data.title, 120),
-  description: cleanText(data.description, 600),
-  tags: cleanStringList(data.tags, 12),
-  commissionType: cleanText(data.commissionType, 80) || null,
-  status: cleanText(data.status, 30) || 'draft',
-  imageUrl: data.imageStatus === 'approved' ? validPublicUrl(data.imageUrl) : null,
-  imageStatus: cleanText(data.imageStatus, 30) || null,
-  pendingImageAssetId: cleanText(data.pendingImageAssetId, 160) || null,
-  pendingImageStatus: cleanText(data.pendingImageStatus, 30) || null,
-  createdAt: toIso(data.createdAt),
-  publishedAt: toIso(data.publishedAt),
-  updatedAt: toIso(data.updatedAt),
+export const retryBrandLogoCleanup = onCall({region:REGION},async(request)=>{
+  requireAdminIdentity(request);
+  const [logosPending,iconsPending]=await Promise.all([
+    cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons(),
+  ]);
+  return {pendingCleanup:logosPending||iconsPending};
 });
 
 export const createArtistPortfolioItem = onCall({ region: REGION }, async (request) => {
