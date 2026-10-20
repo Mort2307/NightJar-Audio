@@ -36,9 +36,28 @@ export default function AdminInstallBranding({
     try {
       const result = await syncApprovedNightjarIcons();
       await refresh();
-      notify('Nightjar approved installation icons generated (version ' + result.version + '). Test the live manifest before releasing.');
+      notify(result.pendingCleanup
+        ? 'New Nightjar icons are live. Old private icon cleanup needs retrying in Admin branding.'
+        : 'Nightjar approved installation icons generated (version ' + result.version + '). Test the live manifest before releasing.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not generate branded app icons.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const retryCleanup = async () => {
+    if (simulationMode || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await nightjarMedia.retryBrandIconCleanup();
+      await refresh();
+      notify(result.pendingCleanup
+        ? 'Some retired icon files remain; retry or investigate before release.'
+        : 'Retired brand icon files cleaned up successfully.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not retry retired icon cleanup.');
     } finally {
       setBusy(false);
     }
@@ -59,11 +78,14 @@ export default function AdminInstallBranding({
       <div><ShieldCheck size={17}/><strong>Approved logo:</strong> {data.logoStatus === 'approved' ? 'Yes' : 'Not yet'}</div>
       <div><strong>Generated launcher icons:</strong> {data.installIconsReady ? 'Ready' : 'Not generated'}</div>
       <div><strong>Icon version:</strong> {data.iconVersion ?? 'Not generated'}</div>
+      {data.iconCleanupPending && <div role="status"><strong>Old icon cleanup:</strong> Incomplete. Current approved icons remain live.</div>}
     </div>}
     <div className="nj-install-branding-actions">
       <button type="button" className="primary-button"
         disabled={simulationMode || busy || data?.logoStatus !== 'approved'}
         onClick={() => void generate()}>{busy ? 'Generating Nightjar icons…' : 'Generate approved install icons'}</button>
+      {data?.iconCleanupPending && <button type="button" className="secondary-button" disabled={busy || simulationMode}
+        onClick={() => void retryCleanup()}><RefreshCw size={15}/> Retry old icon cleanup</button>}
       <button type="button" className="secondary-button" disabled={busy || simulationMode}
         onClick={() => void refresh()}><RefreshCw size={15}/> Refresh branding status</button>
     </div>

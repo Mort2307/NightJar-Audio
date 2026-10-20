@@ -2933,6 +2933,43 @@ export const brandInstallManifest = onRequest({region:REGION},async(_r,res)=>{
   }
 });
 
+
+const safeBrandIconPath = (path:string) =>
+  /^brand-icons\/[a-zA-Z0-9_-]{1,160}\/[a-zA-Z0-9_-]+-(192|512|maskable-512)\.png$/.test(path);
+
+// A failed deletion leaves a bounded receipt in Firestore; it never rolls back
+// the newly committed live icon pointers or deletes an active image.
+const cleanupRetiredBrandIcons = async () => {
+  const ref=db.collection('settings').doc('branding');
+  const snapshot=await ref.get();
+  const initial=snapshot.data()??{};
+  const paths=Array.isArray(initial.brandIconRemovalPending)?initial.brandIconRemovalPending:[] as string[];
+  if(paths.length>12)return true;
+  let pending=false;
+  for(const value of paths){
+    const path=cleanText(value,500);
+    if(!safeBrandIconPath(path)){pending=true;continue;}
+    try{
+      const current=(await ref.get()).data()??{};
+      if([current.icon192Path,current.icon512Path,current.maskable512Path].includes(path)){pending=true;continue;}
+      await getStorage().bucket().file(path).delete({ignoreNotFound:true});
+      await db.runTransaction(async tx=>{
+        const latest=await tx.get(ref);
+        const data=latest.data()??{};
+        if([data.icon192Path,data.icon512Path,data.maskable512Path].includes(path))
+          throw new HttpsError('aborted','Brand icon was reattached; do not clear its receipt.');
+        const remaining=Array.isArray(data.brandIconRemovalPending)?data.brandIconRemovalPending.filter((item:unknown)=>item!==path):[];
+        tx.set(ref,{brandIconRemovalPending:remaining,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      });
+    }catch(error){
+      pending=true;
+      console.warn('Nightjar retired brand icon cleanup pending',error instanceof Error?error.message:'Unknown Storage error');
+    }
+  }
+  const latest=(await ref.get()).data()??{};
+  return pending || (Array.isArray(latest.brandIconRemovalPending)&&latest.brandIconRemovalPending.length>0);
+};
+
 export const syncBrandIconVariants = onCall({region:REGION},async(request)=>{
   const admin=requireAdminIdentity(request);
   const input=(request.data??{}) as Record<string,unknown>;
@@ -2942,21 +2979,56 @@ export const syncBrandIconVariants = onCall({region:REGION},async(request)=>{
   const ref=db.collection('settings').doc('branding');
   const snap=await ref.get();
   const branding=snap.data()??{};
-  if(branding.logoStatus!=='approved'||!validPublicUrl(branding.logoUrl)) throw new HttpsError('failed-precondition','Approve the Nightjar logo before generating install icons.');
-  await clearBrandingIconFiles(branding);
+  if(branding.logoStatus!=='approved'||!validPublicUrl(branding.logoUrl))
+    throw new HttpsError('failed-precondition','Approve the Nightjar logo before generating install icons.');
   const source=cleanText(branding.logoAssetId,160)||'approved-logo';
   const version=Date.now();
-  const icon192Path=`brand-icons/${source}/${version}-192.png`;
-  const icon512Path=`brand-icons/${source}/${version}-512.png`;
-  const maskable512Path=`brand-icons/${source}/${version}-maskable-512.png`;
+  // Unique filenames mean a concurrent attempt never overwrites or resurrects
+  // a previously retired set, even when two requests share one millisecond.
+  const revision=String(version)+'-'+randomUUID();
+  const icon192Path='brand-icons/'+source+'/'+revision+'-192.png';
+  const icon512Path='brand-icons/'+source+'/'+revision+'-512.png';
+  const maskable512Path='brand-icons/'+source+'/'+revision+'-maskable-512.png';
+  const staging=[icon192Path,icon512Path,maskable512Path];
   const bucket=getStorage().bucket();
-  await Promise.all([
+  const uploads=await Promise.allSettled([
     bucket.file(icon192Path).save(icon192,{resumable:false,contentType:'image/png',metadata:{cacheControl:'no-store,max-age=0'}}),
     bucket.file(icon512Path).save(icon512,{resumable:false,contentType:'image/png',metadata:{cacheControl:'no-store,max-age=0'}}),
     bucket.file(maskable512Path).save(maskable512,{resumable:false,contentType:'image/png',metadata:{cacheControl:'no-store,max-age=0'}}),
   ]);
-  await ref.set({icon192Path,icon512Path,maskable512Path,iconVersion:version,iconSourceAssetId:cleanText(branding.logoAssetId,160)||null,iconsGeneratedBy:admin.uid,iconsGeneratedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
-  return {updated:true,version};
+  if(uploads.some(result=>result.status==='rejected')){
+    await Promise.allSettled(staging.map(path=>bucket.file(path).delete({ignoreNotFound:true})));
+    throw new HttpsError('unavailable','Nightjar could not stage all three icons; existing icons are unchanged.');
+  }
+  try{
+    await db.runTransaction(async tx=>{
+      const current=await tx.get(ref);
+      const data=current.data()??{};
+      if(data.logoStatus!=='approved'||!validPublicUrl(data.logoUrl)||
+        data.logoAssetId!==branding.logoAssetId||
+        ['icon192Path','icon512Path','maskable512Path','iconVersion'].some(field=>data[field]!==branding[field]))
+        throw new HttpsError('aborted','Branding changed during generation. Refresh and try again.');
+      const earlier=Array.isArray(data.brandIconRemovalPending)?data.brandIconRemovalPending:[];
+      const old=[data.icon192Path,data.icon512Path,data.maskable512Path]
+        .map(value=>cleanText(value,500)).filter(Boolean);
+      const retired=[...new Set([...earlier,...old])];
+      if(retired.length>12||retired.some(path=>!safeBrandIconPath(String(path))))
+        throw new HttpsError('failed-precondition','Existing brand icon cleanup requires administrator investigation.');
+      tx.set(ref,{
+        icon192Path,icon512Path,maskable512Path,iconVersion:version,
+        iconSourceAssetId:source,brandIconRemovalPending:retired,
+        iconsGeneratedBy:admin.uid,iconsGeneratedAt:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+    });
+  }catch(error){
+    // New bytes were never made live: only our unique staging paths are safe
+    // to remove after a failed transaction.
+    await Promise.allSettled(staging.map(path=>bucket.file(path).delete({ignoreNotFound:true})));
+    throw error;
+  }
+  const pendingCleanup=await cleanupRetiredBrandIcons();
+  return {updated:true,version,pendingCleanup};
 });
 
 export const getPendingImagePreview = onCall({ region: REGION }, async (request) => {
@@ -3378,8 +3450,14 @@ export const getBranding = onCall({ region: REGION }, async () => {
     logoStatus: data.logoStatus ?? null,
     installIconsReady: Boolean(data.icon192Path && data.icon512Path && data.maskable512Path),
     iconVersion: data.iconVersion ?? null,
+    iconCleanupPending: Array.isArray(data.brandIconRemovalPending) && data.brandIconRemovalPending.length > 0,
     pendingLogoAssetId: null,
   };
+});
+
+export const retryBrandIconCleanup = onCall({region:REGION},async(request)=>{
+  requireAdminIdentity(request);
+  return {pendingCleanup:await cleanupRetiredBrandIcons()};
 });
 
 export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
