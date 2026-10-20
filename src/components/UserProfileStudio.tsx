@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Bell, Check, Heart, ImagePlus, ShieldCheck, Sparkles, Star, UserCircle2 } from 'lucide-react';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
@@ -8,6 +8,7 @@ import SocialLinksEditor from './SocialLinksEditor';
 import ContextHelp from './ContextHelp';
 import LegalAgreementPanel from './LegalAgreementPanel';
 import ProfileSectionBoundary from './ProfileSectionBoundary';
+import ImageFramingEditor from './ImageFramingEditor';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -75,6 +76,7 @@ export default function UserProfileStudio({
   simulationMode=false,
   onOpenEditorStudio,
 }: Props) {
+  const [framingUpload,setFramingUpload]=useState<{file:File;shape:'portrait'|'banner'}|null>(null);
   const handleProblem = nightjarHandleError(profile.handle);
   const suggestedHandle = handleProblem ? suggestNightjarHandle(profile.handle) : '';
   const displayName = String(profile.displayName || userName || userEmail?.split('@')[0] || 'Nightjar member');
@@ -135,7 +137,7 @@ export default function UserProfileStudio({
             {profile.avatarUrl ? <img src={profile.avatarUrl} alt="Approved profile" loading="lazy" decoding="async"/> : initials}
           </span>
           <div>
-            <label className="secondary-button upload-label"><ImagePlus size={14}/> {profileImageBusy ? 'Optimising photo…' : profile.avatarUrl ? 'Replace portrait' : 'Add portrait'}<input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file) void onUploadAvatar(file); event.currentTarget.value='';}}/></label>
+            <label className="secondary-button upload-label"><ImagePlus size={14}/> {profileImageBusy ? 'Optimising photo…' : profile.avatarUrl ? 'Replace portrait' : 'Add portrait'}<input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file)setFramingUpload({file,shape:'portrait'}); event.currentTarget.value='';}}/></label>
              <ContextHelp topic="profile-photo"/>
             {(profile.avatarUrl || profile.pendingAvatarAssetId || profile.avatarCleanupPending) && <button className="ghost-button" disabled={profileImageBusy} onClick={()=>void onRemoveAvatar()}>{profile.avatarCleanupPending?'Retry portrait cleanup':'Remove'}</button>}
             {profile.avatarCleanupPending && <small role="status">Portrait is hidden. Private file deletion needs another attempt.</small>}
@@ -190,7 +192,7 @@ export default function UserProfileStudio({
             <label className="secondary-button upload-label"><ImagePlus size={14}/>
               {profileImageBusy ? 'Preparing cover…' : profile.bannerUrl ? 'Replace cover image' : 'Upload custom cover'}
               <input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden
-                disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0];if(file)void onUploadBanner(file);event.currentTarget.value='';}}/>
+                disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0];if(file)setFramingUpload({file,shape:'banner'});event.currentTarget.value='';}}/>
             </label>
             {(profile.bannerUrl || profile.pendingBannerAssetId || profile.bannerCleanupPending) && <button type="button" className="ghost-button" disabled={profileImageBusy}
               onClick={()=>void onRemoveBanner()}>{profile.bannerCleanupPending?'Retry cover cleanup':'Remove cover'}</button>}
@@ -230,5 +232,16 @@ export default function UserProfileStudio({
       <div><Bell size={15}/><span><strong>{profileDirty ? 'You have unsaved profile changes.' : 'Your profile is saved.'}</strong><small>{profileDirty ? 'Keep shaping it, then save when it feels right.' : 'You can change any of this whenever you want.'}</small></span></div>
       <div>{profileDirty && profileBaseline && <button className="ghost-button" onClick={onRevert} disabled={profileLoading}>Revert</button>}<button className="primary-button" onClick={()=>void onSave()} disabled={profileLoading || !profileDirty}><Check size={14}/>{profileLoading?'Saving…':profileDirty?'Save profile':'Saved'}</button></div>
     </div>
+    {framingUpload && <ImageFramingEditor
+      file={framingUpload.file}
+      shape={framingUpload.shape}
+      onCancel={()=>setFramingUpload(null)}
+      onApply={async framed=>{
+        const file=framed;
+        if(framingUpload.shape==='portrait')await onUploadAvatar(file);
+        else await onUploadBanner(file);
+        setFramingUpload(null);
+      }}
+    />}
   </div>;
 }
