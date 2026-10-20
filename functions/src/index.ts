@@ -3450,8 +3450,14 @@ export const getBranding = onCall({ region: REGION }, async () => {
     logoStatus: data.logoStatus ?? null,
     installIconsReady: Boolean(data.icon192Path && data.icon512Path && data.maskable512Path),
     iconVersion: data.iconVersion ?? null,
+    iconCleanupPending: Array.isArray(data.brandIconRemovalPending) && data.brandIconRemovalPending.length > 0,
     pendingLogoAssetId: null,
   };
+});
+
+export const retryBrandIconCleanup = onCall({region:REGION},async(request)=>{
+  requireAdminIdentity(request);
+  return {pendingCleanup:await cleanupRetiredBrandIcons()};
 });
 
 export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
