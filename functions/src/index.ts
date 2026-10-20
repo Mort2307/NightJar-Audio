@@ -2732,7 +2732,7 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
   if (kind === 'social_avatar') {
     if(!targetId)throw new HttpsError('invalid-argument','Save the social link before adding its profile photo.');
     const item=await socialLinkCollection(identity.uid).doc(targetId).get();
-    if(!item.exists)throw new HttpsError('not-found','Social profile link not found.');
+    if(!item.exists||item.data()?.deleted)throw new HttpsError('not-found','Social profile link not found.');
   }
 
   if (kind === 'artist_portfolio') {
@@ -2845,17 +2845,51 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     }, { merge:true });
   } else if (kind === 'social_avatar') {
     const ref=socialLinkCollection(identity.uid).doc(targetId);
-    const existing=await ref.get();
-    if(!existing.exists)throw new HttpsError('not-found','Social profile link was removed.');
-    const prior=cleanText(existing.data()?.pendingPhotoAssetId,160);
-    if(prior && prior!==assetId){
-      const old=await db.collection('imageAssets').doc(prior).get();
-      if(old.exists && old.data()?.ownerUserId===identity.uid && old.data()?.kind==='social_avatar'){
-        await old.ref.set({status:'removed',publicUrl:null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-        await clearAssetFile(old.data()??{});
+    try {
+      await db.runTransaction(async tx=>{
+        const existing=await tx.get(ref);
+        const link=existing.data();
+        if(!link||link.deleted)throw new HttpsError('not-found','Social profile link was removed.');
+        const prior=cleanText(link.pendingPhotoAssetId,160);
+        const oldRef=prior&&prior!==assetId?db.collection('imageAssets').doc(prior):null;
+        const old=oldRef?await tx.get(oldRef):null;
+        const oldData=old?.data();
+        const receipts=socialPhotoReceipts(link);
+        if(receipts.length>8)throw new HttpsError('failed-precondition','Social photo cleanup needs investigation.');
+        if(oldData && (oldData.ownerUserId!==identity.uid||oldData.kind!=='social_avatar'||oldData.targetId!==targetId))
+          throw new HttpsError('failed-precondition','Existing social photo ownership needs investigation.');
+        const oldPath=oldData&&oldData.status==='pending'?
+          cleanText(oldData.storageRemovalPendingPath||oldData.storagePath,500):'';
+        if(oldPath&&!safeSocialPhotoPath(identity.uid,prior,oldPath))
+          throw new HttpsError('failed-precondition','Existing social photo path requires investigation.');
+        const next=[...receipts.filter(item=>item.id!==prior),
+          ...(oldPath?[{id:prior,path:oldPath}]:[])];
+        if(next.length>8)throw new HttpsError('failed-precondition','Too many incomplete social picture removals.');
+        tx.set(ref,{pendingPhotoAssetId:assetId,pendingPhotoStatus:'pending',
+          photoRemovalPending:next,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        if(oldRef&&oldData&&oldData.status==='pending')
+          tx.set(oldRef,{status:oldPath?'removing':'removed',publicUrl:null,
+            storageRemovalPendingPath:oldPath||null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      });
+      await cleanupOwnedSocialPhotos(identity.uid,targetId);
+    } catch(error) {
+      // Uploaded but not linked: retire this new asset before deleting its
+      // Storage object. A failed cleanup remains private and auditable.
+      await db.collection('imageAssets').doc(assetId).set({
+        status:'removing',publicUrl:null,storageRemovalPendingPath:storagePath,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      try {
+        await getStorage().bucket().file(storagePath).delete({ignoreNotFound:true});
+        await db.collection('imageAssets').doc(assetId).set({
+          status:'removed',storageRemovalPendingPath:null,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+      } catch(cleanupError) {
+        console.warn('Unattached social photo cleanup pending',assetId,cleanupError instanceof Error?cleanupError.message:'Unknown Storage error');
       }
+      throw error;
     }
-    await ref.set({pendingPhotoAssetId:assetId,pendingPhotoStatus:'pending',updatedAt:FieldValue.serverTimestamp()},{merge:true});
   } else if (kind === 'brand_logo') {
     const brandingRef = db.collection('settings').doc('branding');
     const existingBranding = await brandingRef.get();
