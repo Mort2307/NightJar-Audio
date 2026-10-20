@@ -9,6 +9,7 @@ import { creatorEditableMetadata, creatorMetadataSignature } from '../platform/c
 import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import ContextHelp from './ContextHelp';
+import ImageFramingEditor from './ImageFramingEditor';
 import ManualTranscriptSync from './ManualTranscriptSync';
 import TranscriptSyncTool from './TranscriptSyncTool';
 import './creator-workflow.css';
@@ -111,6 +112,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const handledFocus = useRef<string | null>(null);
   const lastOpenedKey = 'nightjar:last-opened-creator-release';
   const [artBusy, setArtBusy] = useState(false);
+  const [artFrameFile,setArtFrameFile]=useState<File|null>(null);
   const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
   const [promotedTagOptions, setPromotedTagOptions] = useState<string[]>([]);
   const [metadataStatus, setMetadataStatus] = useState<'saved'|'unsaved'|'saving'|'offline'|'conflict'>('saved');
@@ -838,7 +840,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               {(audioFeedback || current.audioAvailable) && <div className={audioStage === 'error' ? 'nj-audio-feedback error' : audioStage === 'saved' || current.audioAvailable ? 'nj-audio-feedback success' : 'nj-audio-feedback'} role="status">{audioFeedback || 'Private audio confirmed. This release is not publicly available until moderation approval.'}</div>}
               {current.audioAvailable && <button className="ghost-button" disabled={audioBusy || submitting || current.status === 'pending_review' || current.status === 'released'} onClick={()=>void removeAudio()}>Remove audio</button>}
             </div>
-            <div className="asset-drop asset-drop-moderated"><ImagePlus size={18} /><strong>{artBusy ? 'Working…' : current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Replacement awaiting approval' : 'Artwork awaiting approval' : current.artworkUrl ? 'Replace approved artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB · administrator approval required</span><label className="secondary-button upload-label">{current.artworkUrl || current.pendingArtworkAssetId ? 'Replace' : 'Choose image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file, 'artwork'); event.currentTarget.value = ''; }} /></label>{(current.artworkUrl || current.artworkAssetId || current.pendingArtworkAssetId) && <button className="ghost-button" disabled={artBusy} onClick={()=>void removeArtwork()}>Remove artwork</button>}</div>
+            <div className="asset-drop asset-drop-moderated"><ImagePlus size={18} /><strong>{artBusy ? 'Working…' : current.pendingArtworkStatus === 'pending' ? current.artworkUrl ? 'Replacement awaiting approval' : 'Artwork awaiting approval' : current.artworkUrl ? 'Replace approved artwork' : 'Attach artwork'}</strong><span>PNG / JPG / WebP · max 5 MB · administrator approval required</span><label className="secondary-button upload-label">{current.artworkUrl || current.pendingArtworkAssetId ? 'Replace' : 'Choose image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={artBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) setArtFrameFile(file); event.currentTarget.value = ''; }} /></label>{(current.artworkUrl || current.artworkAssetId || current.pendingArtworkAssetId) && <button className="ghost-button" disabled={artBusy} onClick={()=>void removeArtwork()}>Remove artwork</button>}</div>
           </div>
 
 
@@ -1084,5 +1086,12 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Choose a recording.</strong><span>Select a saved recording above, or create one with a title.</span></div>}
       </div>
     </div>
+    {artFrameFile && <ImageFramingEditor file={artFrameFile} shape="release"
+      onCancel={()=>setArtFrameFile(null)}
+      onApply={async framed=>{
+        await uploadAsset(framed,'artwork');
+        setArtFrameFile(null);
+      }}
+    />}
   </article>;
 }
