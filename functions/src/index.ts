@@ -3704,6 +3704,11 @@ const cleanupRetiredBrandLogos=async()=>{
   return failed || brandLogoReceipts(latest).length>0;
 };
 
+export const retryBrandIconCleanup = onCall({region:REGION},async(request)=>{
+  requireAdminIdentity(request);
+  return {pendingCleanup:await cleanupRetiredBrandIcons()};
+});
+
 export const getBranding = onCall({ region: REGION }, async () => {
   const snapshot = await db.collection('settings').doc('branding').get();
   const data = snapshot.data() ?? {};
@@ -3781,6 +3786,56 @@ export const retryBrandLogoCleanup = onCall({region:REGION},async(request)=>{
     cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons(),
   ]);
   return {pendingCleanup:results.some(result=>result.status==='rejected'||result.value)};
+});
+
+const privateCreateRequestId=(input:Record<string,unknown>):string|null=>{
+  if(input.clientRequestId == null || input.clientRequestId === '')return null;
+  const value=input.clientRequestId;
+  if(typeof value!=='string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)){
+    throw new HttpsError('invalid-argument','Private creation request identifier is invalid.');
+  }
+  return value;
+};
+const savePrivateRecordOnce=async (
+  ref:DocumentReference,
+  record:Record<string,unknown>,
+  ownerKey:string,
+  uid:string,
+  requestId:string|null,
+  quotaExceeded=false,
+) => {
+  if(!requestId) {
+    if(quotaExceeded)throw new HttpsError('resource-exhausted','Portfolio limit reached.');
+    await ref.set(record);
+    return false;
+  }
+  return db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    if(snap.exists){
+      if(snap.data()?.[ownerKey]!==uid)throw new HttpsError('permission-denied','Private draft is owned by another member.');
+      return true;
+    }
+    if(quotaExceeded)throw new HttpsError('resource-exhausted','Portfolio limit reached.');
+    tx.set(ref,record);
+    return false;
+  });
+};
+
+const artistPortfolioPayload = (data: Record<string, any>, id: string) => ({
+  id,
+  ownerUserId: cleanText(data.ownerUserId, 160),
+  title: cleanText(data.title, 120),
+  description: cleanText(data.description, 600),
+  tags: cleanStringList(data.tags, 12),
+  commissionType: cleanText(data.commissionType, 80) || null,
+  status: cleanText(data.status, 30) || 'draft',
+  imageUrl: data.imageStatus === 'approved' ? validPublicUrl(data.imageUrl) : null,
+  imageStatus: cleanText(data.imageStatus, 30) || null,
+  pendingImageAssetId: cleanText(data.pendingImageAssetId, 160) || null,
+  pendingImageStatus: cleanText(data.pendingImageStatus, 30) || null,
+  createdAt: toIso(data.createdAt),
+  publishedAt: toIso(data.publishedAt),
+  updatedAt: toIso(data.updatedAt),
 });
 
 export const createArtistPortfolioItem = onCall({ region: REGION }, async (request) => {
