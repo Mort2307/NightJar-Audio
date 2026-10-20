@@ -29,6 +29,7 @@ import { nightjarLegal } from './platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
 import WriterManuscriptGrid from './components/WriterManuscriptGrid';
+import ImageFramingEditor from './components/ImageFramingEditor';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarAuthSecurity, type AuthenticationSecurityEvent } from './platform/firebase-auth-security';
 import { nightjarReviews } from './platform/firebase-reviews';
@@ -736,6 +737,7 @@ function App() {
 
   const [writerDraftTitle, setWriterDraftTitle] = useState('');
   const [writerNewArtworkFile, setWriterNewArtworkFile] = useState<File | null>(null);
+  const [writerArtFrameFile,setWriterArtFrameFile]=useState<File|null>(null);
   const [writerScripts, setWriterScripts] = useState<any[]>([]);
   const [writerEditDirty,setWriterEditDirty] = useState(false);
   const [writerSaveConflict,setWriterSaveConflict] = useState(false);
@@ -5995,11 +5997,19 @@ function App() {
                         setWriterNewArtworkFile(null);
                         return;
                       }
-                      setWriterNewArtworkFile(file);
+                      if(file)setWriterArtFrameFile(file);
+                      event.currentTarget.value='';
                     }}/>
                   <small>{writerNewArtworkFile ? writerNewArtworkFile.name + ' · will be sent for separate admin approval' : 'Optional · add an image now, or any time after approval and publication.'}</small>
                   </label>
                 </details>
+                {writerArtFrameFile && <ImageFramingEditor file={writerArtFrameFile} shape="script"
+                  onCancel={()=>setWriterArtFrameFile(null)}
+                  onApply={framed=>{
+                    setWriterNewArtworkFile(framed);
+                    setWriterArtFrameFile(null);
+                  }}
+                />}
               </div>
             </div>
             <div className="nj-writer-simple-step" role="status"><strong>Next: choose your manuscript in the library below.</strong>

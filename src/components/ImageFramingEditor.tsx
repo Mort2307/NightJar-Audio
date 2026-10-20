@@ -6,14 +6,22 @@ import './image-framing-editor.css';
 
 type Props={
   file:File;
-  shape:'portrait'|'social'|'banner';
+  shape:'portrait'|'social'|'banner'|'release'|'script'|'artwork';
   onCancel:()=>void;
   onApply:(framed:File)=>Promise<void>|void;
 };
 
 const pictureTypes=['image/jpeg','image/png','image/webp','image/heic','image/heif','image/avif'];
-const displayName={portrait:'Profile portrait',social:'Social profile photo',banner:'Profile cover'};
-const sizeOf=(shape:Props['shape'])=>shape==='banner'?{width:800,height:350}:{width:480,height:480};
+const displayName={portrait:'Profile portrait',social:'Social profile photo',banner:'Profile cover',release:'Release cover artwork',script:'Manuscript cover artwork',artwork:'Artist portfolio artwork'};
+const sizeOf=(shape:Props['shape'],image:HTMLImageElement|null)=>{
+  if(shape==='banner')return {width:800,height:350};
+  if(shape==='artwork'&&image){
+    const scale=480/Math.max(image.naturalWidth,image.naturalHeight);
+    return {width:Math.max(1,Math.round(image.naturalWidth*scale)),
+      height:Math.max(1,Math.round(image.naturalHeight*scale))};
+  }
+  return {width:480,height:480};
+};
 
 export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
   const [framing,setFraming]=useState<ImageFraming>(DEFAULT_IMAGE_FRAMING);
@@ -24,7 +32,7 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
   const closeRef=useRef<HTMLButtonElement|null>(null);
   const pointers=useRef(new Map<number,{x:number;y:number}>());
   const lastDistance=useRef<number|null>(null);
-  const dimensions=sizeOf(shape);
+  const dimensions=sizeOf(shape,image);
 
   useEffect(()=>{
     let active=true;
@@ -59,7 +67,7 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
     const context=canvas.getContext('2d');
     if(!context){setError('This browser cannot display the cropping guide.');return;}
     paintFramedImage(context,image,image.naturalWidth,image.naturalHeight,
-      canvas.width,canvas.height,framing);
+      canvas.width,canvas.height,framing,shape==='artwork'?'transparent':'midnight');
   },[image,framing,dimensions.width,dimensions.height]);
 
   useEffect(()=>{
@@ -113,7 +121,7 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
     if(!image||busy)return;
     setBusy(true);setError('');
     try{
-      const framed=await exportFramedImage(image,framing,shape==='banner'?'banner':'square',file.name);
+      const framed=await exportFramedImage(image,framing,shape==='banner'?'banner':shape==='artwork'?'artwork':'square',file.name);
       await onApply(framed);
     }catch(cause){setError(cause instanceof Error?cause.message:'Image framing could not be completed.');}
     finally{setBusy(false);}
@@ -136,8 +144,9 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
           <button ref={closeRef} type="button" className="ghost-button" aria-label="Cancel photo changes" disabled={busy} onClick={onCancel}><X size={19}/></button>
         </header>
         <p id="nj-frame-hint">Move the picture inside the gold guide. Choose <strong>Show whole picture</strong> to keep everything, or <strong>Fill frame</strong> to crop deliberately. The preview shows what will be submitted for review.</p>
-        <div className={'nj-framing-stage '+(shape==='portrait'?'circle-guide':'')}
-          style={{aspectRatio:shape==='banner'?'16 / 7':'1 / 1'}}
+        <div className={'nj-framing-stage '+(shape==='portrait'?'circle-guide':shape==='banner'?'is-banner':shape==='artwork'?'is-artwork':'')}
+          style={{aspectRatio:shape==='banner'?'16 / 7':shape==='artwork'?`${dimensions.width} / ${dimensions.height}`:'1 / 1',
+            ...(shape==='artwork'?{width:`min(100%, calc(44dvh * ${dimensions.width/dimensions.height}))`}:{})}}
           role="group" tabIndex={0} aria-label="Photo frame. Drag to move, pinch to zoom, or use arrow keys and sliders."
           onKeyDown={keyboardMove} onPointerDown={onPointerDown} onPointerMove={onPointerMove}
           onPointerUp={stopPointer} onPointerCancel={stopPointer} onLostPointerCapture={stopPointer}>
@@ -161,6 +170,7 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
           <label><span>Move up / down</span><input type="range" min="-100" max="100" step="5" value={framing.y}
               disabled={busy||!image||!geometry?.extraY} onChange={e=>setFraming(f=>({...f,y:Number(e.target.value)}))}/></label>
         </div>
+        {shape==='artwork'&&<p className="nj-framing-note">Artist artwork keeps its original proportions and transparency. Zooming can intentionally trim the edges; Reset restores the full composition.</p>}
         {shape==='banner'&&<p className="nj-framing-note">Profile headers vary by screen width. Keep important text and faces inside the centre guide.</p>}
         {shape==='portrait'&&<p className="nj-framing-note">The round gold outline is the avatar's safe area. Corner details may fall outside the circular display.</p>}
         {error&&<p role="alert" className="nj-framing-error">{error}</p>}

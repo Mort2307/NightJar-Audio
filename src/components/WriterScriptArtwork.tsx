@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, ImagePlus, ShieldCheck, Trash2, UploadCloud } from 'lucide-react';
 import { nightjarMedia } from '../platform/firebase-media';
+import ImageFramingEditor from './ImageFramingEditor';
 import './writer-script-artwork.css';
 
 type Props = {
@@ -24,6 +25,7 @@ const readImageDataUrl = (file: File) => new Promise<string>((resolve, reject) =
 
 export default function WriterScriptArtwork({ script, onUpdated, notify, simulationMode = false }: Props) {
   const [busy, setBusy] = useState(false);
+  const [artFrameFile,setArtFrameFile]=useState<File|null>(null);
   const [localError, setLocalError] = useState('');
   const cleanupKey = 'nightjar:manuscript-artwork-cleanup:v1:' + String(script.writerUserId ?? '') + ':' + String(script.id ?? '');
   const [cleanupAssetId, setCleanupAssetId] = useState(() => {
@@ -173,7 +175,7 @@ export default function WriterScriptArtwork({ script, onUpdated, notify, simulat
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.currentTarget.value = '';
-              if (file) void upload(file);
+              if (file) setArtFrameFile(file);
             }}/>
         </label>
         <small>PNG, JPG or WebP · up to 5 MB. Pending artwork stays private; it never holds up the manuscript.</small>
@@ -182,5 +184,12 @@ export default function WriterScriptArtwork({ script, onUpdated, notify, simulat
         {localError && <p className="writer-script-artwork-error" role="alert">{localError}</p>}
       </div>
     </div>
+    {artFrameFile && <ImageFramingEditor file={artFrameFile} shape="script"
+      onCancel={()=>setArtFrameFile(null)}
+      onApply={async framed=>{
+        await upload(framed);
+        setArtFrameFile(null);
+      }}
+    />}
   </section>;
 }
