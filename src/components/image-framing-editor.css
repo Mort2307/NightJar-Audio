@@ -29,3 +29,7 @@
 :root[data-nightjar-vision] .nj-framing-mode button{color:#fff;background:#222;border-color:#fff}
 @media(max-width:480px){.nj-framing-backdrop{padding:7px;align-items:center}.nj-framing-dialog{padding:13px;max-height:calc(100dvh - 14px);gap:9px}.nj-framing-stage{width:min(100%,37dvh)}.nj-framing-stage:not(.circle-guide){width:min(100%,calc(37dvh * 16 / 7))}.nj-framing-actions{justify-content:stretch}.nj-framing-actions button{flex:1;justify-content:center}}
 @media(prefers-reduced-motion:reduce){.nj-framing-stage,.nj-framing-dialog{scroll-behavior:auto;transition:none}}
+
+/* Fine-art preview follows the work's real proportions; never force a 16:7 canvas. */
+.nj-framing-stage.is-artwork{min-height:0;flex-shrink:0}
+@media(max-width:480px){.nj-framing-stage.is-artwork{max-width:100%}}
