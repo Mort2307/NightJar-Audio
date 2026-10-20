@@ -11615,3 +11615,14 @@ textarea:focus-visible,
   gap:0.625rem; padding:0.75rem 0;
 }
 .moderation-queue-pagination span {font-size:0.875rem;text-align:center;min-width:8rem;}
+
+
+/* Member-selected custom headers must show the entire confirmed framed image,
+   including when the public profile cover is wider than the upload preview.
+   The decorative portrait-based header intentionally retains cover behaviour. */
+:root:not([data-nightjar-vision]) .nj-full-profile-route .premium-public-profile
+  .nj-cinema-cover-custom .nj-profile-hero-banner{
+  object-fit:contain;
+  object-position:center center;
+  background:#151119;
+}
