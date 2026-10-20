@@ -3330,7 +3330,30 @@ export const moderateImageAsset = onCall({region:REGION},async request=>{
       if(decision==='approved'){
         if(kind==='profile_avatar')Object.assign(parentUpdate,{avatarAssetId:assetId,avatarUrl:url,avatarStatus:'approved',pendingAvatarAssetId:null,pendingAvatarStatus:null});
         if(kind==='profile_banner')Object.assign(parentUpdate,{bannerAssetId:assetId,bannerUrl:url,bannerStatus:'approved',pendingBannerAssetId:null,pendingBannerStatus:null});
-        if(kind==='brand_logo')Object.assign(parentUpdate,{logoAssetId:assetId,logoUrl:url,logoStatus:'approved',pendingLogoAssetId:null,pendingLogoStatus:null,icon192Path:null,icon512Path:null,maskable512Path:null,iconVersion:null,iconSourceAssetId:null});
+        if(kind==='brand_logo'){
+          const retiredIcons=[...new Set([
+            parent.icon192Path,parent.icon512Path,parent.maskable512Path,
+            ...(Array.isArray(parent.brandIconRemovalPending)?parent.brandIconRemovalPending:[]),
+          ].map(value=>cleanText(value,500)).filter(Boolean))];
+          if(retiredIcons.length>12||retiredIcons.some(path=>!safeBrandIconPath(path)))
+            throw new HttpsError('failed-precondition','Existing brand icon paths require review.');
+          const logoReceipts=brandLogoReceipts(parent);
+          const oldLogo=old&&old.ownerUserId&&old.kind==='brand_logo'&&oldId
+            ?{id:oldId,owner:cleanText(old.ownerUserId,160),path:cleanText(old.storageRemovalPendingPath||old.storagePath,500)}
+            :null;
+          if(oldLogo?.path&&!safeBrandLogoPath(oldLogo))
+            throw new HttpsError('failed-precondition','Existing logo image requires security review.');
+          const retiredLogos=[...logoReceipts.filter(item=>item.id!==oldId),
+            ...(oldLogo?.path?[oldLogo]:[])];
+          if(retiredLogos.length>8)throw new HttpsError('failed-precondition','Old branding cleanup needs review.');
+          Object.assign(parentUpdate,{
+            logoAssetId:assetId,logoUrl:url,logoStatus:'approved',
+            pendingLogoAssetId:null,pendingLogoStatus:null,
+            icon192Path:null,icon512Path:null,maskable512Path:null,
+            iconVersion:null,iconSourceAssetId:null,
+            brandIconRemovalPending:retiredIcons,brandLogoRemovalPending:retiredLogos,
+          });
+        }
         if(kind==='social_avatar')Object.assign(parentUpdate,{photoAssetId:assetId,photoUrl:url,photoStatus:'approved',pendingPhotoAssetId:null,pendingPhotoStatus:null});
         if(kind==='artist_portfolio')Object.assign(parentUpdate,{imageAssetId:assetId,imageUrl:url,imageStatus:'approved',pendingImageAssetId:null,pendingImageStatus:null,status:'published',publishedAt:FieldValue.serverTimestamp()});
         if(kind==='release_artwork'||kind==='script_artwork')Object.assign(parentUpdate,{artworkAssetId:assetId,artworkUrl:url,artworkStatus:'approved',pendingArtworkAssetId:null,pendingArtworkStatus:null});
@@ -3383,6 +3406,11 @@ export const moderateImageAsset = onCall({region:REGION},async request=>{
     }
   }
   const asset=result.asset;
+  if(asset.kind==='brand_logo' && decision==='approved'){
+    // Approval has committed: old icon/logo files may now be reclaimed safely.
+    // A failed Storage cleanup never undoes the current approved branding.
+    await Promise.allSettled([cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons()]);
+  }
   if(asset.ownerUserId){
     const artistThankYou=decision==='approved' && asset.kind==='artist_portfolio'
       ?await approvedWorkThankYou(String(asset.ownerUserId),'artwork',null):null;
