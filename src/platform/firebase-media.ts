@@ -20,7 +20,7 @@ const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status:
 const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string; pendingCleanup: boolean }>(functions, 'removeOwnedImageAsset');
 const removeAvatarCall = httpsCallable<void, { removed: boolean; pendingCleanup: boolean }>(functions, 'removeProfileAvatar');
 const removeBannerCall = httpsCallable<void, { removed: boolean; pendingCleanup: boolean }>(functions, 'removeProfileBanner');
-type BrandingInfo = { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null };
+type BrandingInfo = { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null; iconCleanupPending: boolean };
 const brandingCall = httpsCallable<void, BrandingInfo>(functions, 'getBranding');
 
 // Cache ONLY public branding metadata; never cache protected artwork, moderation,
@@ -50,7 +50,8 @@ const syncBrandIconsCall = httpsCallable<{
   icon192DataUrl: string;
   icon512DataUrl: string;
   maskable512DataUrl: string;
-}, { updated: boolean; version: number }>(functions, 'syncBrandIconVariants');
+}, { updated: boolean; version: number; pendingCleanup: boolean }>(functions, 'syncBrandIconVariants');
+const retryBrandIconCleanupCall = httpsCallable<void, { pendingCleanup: boolean }>(functions, 'retryBrandIconCleanup');
 const removeBrandLogoCall = httpsCallable<void, { removed: boolean }>(functions, 'removeBrandLogo');
 
 export const nightjarMedia = {
@@ -106,6 +107,12 @@ export const nightjarMedia = {
 
   async syncBrandIcons(input: { icon192DataUrl: string; icon512DataUrl: string; maskable512DataUrl: string }) {
     const result = (await syncBrandIconsCall(input)).data;
+    announceBrandingChange();
+    return result;
+  },
+
+  async retryBrandIconCleanup() {
+    const result = (await retryBrandIconCleanupCall()).data;
     announceBrandingChange();
     return result;
   },
