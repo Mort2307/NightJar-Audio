@@ -20,7 +20,7 @@ const statusCall = httpsCallable<{ assetId: string }, { assetId: string; status:
 const removeOwnedImageCall = httpsCallable<{ assetId: string }, { removed: boolean; assetId: string; pendingCleanup: boolean }>(functions, 'removeOwnedImageAsset');
 const removeAvatarCall = httpsCallable<void, { removed: boolean; pendingCleanup: boolean }>(functions, 'removeProfileAvatar');
 const removeBannerCall = httpsCallable<void, { removed: boolean; pendingCleanup: boolean }>(functions, 'removeProfileBanner');
-type BrandingInfo = { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null; iconCleanupPending: boolean };
+type BrandingInfo = { logoUrl: string | null; logoStatus: string | null; installIconsReady: boolean; iconVersion: number | null; iconCleanupPending: boolean; logoCleanupPending: boolean };
 const brandingCall = httpsCallable<void, BrandingInfo>(functions, 'getBranding');
 
 // Cache ONLY public branding metadata; never cache protected artwork, moderation,
@@ -52,7 +52,8 @@ const syncBrandIconsCall = httpsCallable<{
   maskable512DataUrl: string;
 }, { updated: boolean; version: number; pendingCleanup: boolean }>(functions, 'syncBrandIconVariants');
 const retryBrandIconCleanupCall = httpsCallable<void, { pendingCleanup: boolean }>(functions, 'retryBrandIconCleanup');
-const removeBrandLogoCall = httpsCallable<void, { removed: boolean }>(functions, 'removeBrandLogo');
+const removeBrandLogoCall = httpsCallable<void, { removed: boolean; pendingCleanup: boolean }>(functions, 'removeBrandLogo');
+const retryBrandLogoCleanupCall = httpsCallable<void, { pendingCleanup: boolean }>(functions, 'retryBrandLogoCleanup');
 
 export const nightjarMedia = {
   async submitImage(input: { kind: ImageKind; targetId?: string; dataUrl: string; contentType: string; fileName?: string }) {
@@ -113,6 +114,12 @@ export const nightjarMedia = {
 
   async retryBrandIconCleanup() {
     const result = (await retryBrandIconCleanupCall()).data;
+    announceBrandingChange();
+    return result;
+  },
+
+  async retryBrandLogoCleanup() {
+    const result = (await retryBrandLogoCleanupCall()).data;
     announceBrandingChange();
     return result;
   },
