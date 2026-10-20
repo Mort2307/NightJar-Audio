@@ -34,8 +34,9 @@ const upload=api.slice(api.indexOf('export const submitImageAsset = onCall'),api
 assert.match(upload,/const brandingRef=db\.collection\('settings'\)\.doc\('branding'\)/);
 assert.match(upload,/brandLogoRemovalPending:pending/);
 assert.match(upload,/Prior pending brand logo cleanup needs retry/);
-assert.match(upload,/const retiredIcons=\[\.\.\.new Set\(/,'Approval retains displaced icon receipts');
-assert.match(upload,/brandLogoRemovalPending:retiredLogos/,'Approval receipts displaced logo');
+const moderation=api.slice(api.indexOf('export const moderateImageAsset = onCall'),api.indexOf('export const getImageAssetStatus = onCall'));
+assert.match(moderation,/const retiredIcons=\[\.\.\.new Set\(/,'Approval retains displaced icon receipts');
+assert.match(moderation,/brandLogoRemovalPending:retiredLogos/,'Approval receipts displaced logo');
 assert.match(api,/retirement\.kind==='brand_logo'\?await cleanupRetiredBrandIcons/,'Generic asset deletion reclaims logo icons');
 assert.match(client,/retryBrandLogoCleanupCall/);
 assert.match(client,/logoCleanupPending: boolean/);
