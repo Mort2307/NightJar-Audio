@@ -2871,7 +2871,6 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
           tx.set(oldRef,{status:oldPath?'removing':'removed',publicUrl:null,
             storageRemovalPendingPath:oldPath||null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
       });
-      await cleanupOwnedSocialPhotos(identity.uid,targetId);
     } catch(error) {
       // Uploaded but not linked: retire this new asset before deleting its
       // Storage object. A failed cleanup remains private and auditable.
@@ -2890,6 +2889,10 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
       }
       throw error;
     }
+    // Old pending photo cleanup is best-effort after successful attachment;
+    // a cleanup outage must NEVER delete this newly attached upload.
+    try { await cleanupOwnedSocialPhotos(identity.uid,targetId); }
+    catch(error){console.warn('Prior social photo cleanup needs retry',targetId,error instanceof Error?error.message:'Unknown cleanup error');}
   } else if (kind === 'brand_logo') {
     const brandingRef = db.collection('settings').doc('branding');
     const existingBranding = await brandingRef.get();
