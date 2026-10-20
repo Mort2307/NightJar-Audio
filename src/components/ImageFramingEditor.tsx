@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, RefreshCcw, X, ZoomIn } from 'lucide-react';
 import { clampFraming, DEFAULT_IMAGE_FRAMING, exportFramedImage, frameGeometry, paintFramedImage, type ImageFraming } from '../platform/image-framing';
@@ -118,7 +118,7 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
     }catch(cause){setError(cause instanceof Error?cause.message:'Image framing could not be completed.');}
     finally{setBusy(false);}
   };
-  const keyboardMove=(event:React.KeyboardEvent<HTMLDivElement>)=>{
+  const keyboardMove=(event:ReactKeyboardEvent<HTMLDivElement>)=>{
     if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))return;
     event.preventDefault();
     const offset=event.shiftKey?15:5;
