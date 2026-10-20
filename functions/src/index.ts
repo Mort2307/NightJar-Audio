@@ -3493,7 +3493,7 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
     if(storagePath && !['png','jpg','webp'].some(ext=>storagePath===allowedPrefix+ext))
       throw new HttpsError('failed-precondition','Image Storage path requires administrator investigation.');
     if(asset.status==='removed' && !asset.storageRemovalPendingPath)
-      return {done:true,path:''};
+      return {done:true,path:'',kind};
     const next:Record<string,unknown>={updatedAt:FieldValue.serverTimestamp()};
     if(kind==='profile_avatar'){
       if(linked.avatarAssetId===assetId)Object.assign(next,{avatarAssetId:null,avatarUrl:null,avatarStatus:null});
@@ -3502,7 +3502,17 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
       if(linked.bannerAssetId===assetId)Object.assign(next,{bannerAssetId:null,bannerUrl:null,bannerStatus:null});
       if(linked.pendingBannerAssetId===assetId)Object.assign(next,{pendingBannerAssetId:null,pendingBannerStatus:null});
     }else if(kind==='brand_logo'){
-      if(linked.logoAssetId===assetId)Object.assign(next,{logoAssetId:null,logoUrl:null,logoStatus:null});
+      if(linked.logoAssetId===assetId){
+        const oldIcons=[linked.icon192Path,linked.icon512Path,linked.maskable512Path,
+          ...(Array.isArray(linked.brandIconRemovalPending)?linked.brandIconRemovalPending:[])]
+          .map(value=>cleanText(value,500)).filter(Boolean);
+        const retiredIcons=[...new Set(oldIcons)];
+        if(retiredIcons.length>12||retiredIcons.some(path=>!safeBrandIconPath(path)))
+          throw new HttpsError('failed-precondition','Branding icon Storage paths require review.');
+        Object.assign(next,{logoAssetId:null,logoUrl:null,logoStatus:null,
+          icon192Path:null,icon512Path:null,maskable512Path:null,
+          iconVersion:null,iconSourceAssetId:null,brandIconRemovalPending:retiredIcons});
+      }
       if(linked.pendingLogoAssetId===assetId)Object.assign(next,{pendingLogoAssetId:null,pendingLogoStatus:null});
     }else if(kind==='social_avatar'){
       if(linked.photoAssetId===assetId)Object.assign(next,{photoAssetId:null,photoUrl:null,photoStatus:null});
@@ -3524,9 +3534,12 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
       removalStartedAt:asset.removalStartedAt??FieldValue.serverTimestamp(),
       updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
-    return {done:false,path:storagePath};
+    return {done:false,path:storagePath,kind};
   });
-  if(retirement.done)return {removed:true,assetId,pendingCleanup:false};
+  if(retirement.done){
+    const pendingCleanup=retirement.kind==='brand_logo'?await cleanupRetiredBrandIcons():false;
+    return {removed:true,assetId,pendingCleanup};
+  }
   if(retirement.path){
     try {await getStorage().bucket().file(retirement.path).delete({ignoreNotFound:true});}
     catch(error){
@@ -3547,7 +3560,8 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
         removedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
     });
-    return {removed:true,assetId,pendingCleanup:false};
+    const pendingCleanup=retirement.kind==='brand_logo'?await cleanupRetiredBrandIcons():false;
+    return {removed:true,assetId,pendingCleanup};
   }catch(error){
     console.warn('Private image removal record cleanup pending',assetId,error instanceof Error?error.message:'Unknown Firestore error');
     return {removed:false,assetId,pendingCleanup:true};
