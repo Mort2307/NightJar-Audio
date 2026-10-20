@@ -2894,21 +2894,53 @@ export const submitImageAsset = onCall({ region: REGION }, async (request) => {
     try { await cleanupOwnedSocialPhotos(identity.uid,targetId); }
     catch(error){console.warn('Prior social photo cleanup needs retry',targetId,error instanceof Error?error.message:'Unknown cleanup error');}
   } else if (kind === 'brand_logo') {
-    const brandingRef = db.collection('settings').doc('branding');
-    const existingBranding = await brandingRef.get();
-    const previousPendingId = cleanText(existingBranding.data()?.pendingLogoAssetId, 160);
-    if (previousPendingId && previousPendingId !== assetId) {
-      const previousPending = await db.collection('imageAssets').doc(previousPendingId).get();
-      if (previousPending.exists && previousPending.data()?.status === 'pending') {
-        await clearAssetFile(previousPending.data() ?? {});
-        await previousPending.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    const brandingRef=db.collection('settings').doc('branding');
+    try{
+      await db.runTransaction(async tx=>{
+        const current=await tx.get(brandingRef);
+        const data=current.data()??{};
+        const prior=cleanText(data.pendingLogoAssetId,160);
+        const oldRef=prior&&prior!==assetId?db.collection('imageAssets').doc(prior):null;
+        const old=oldRef?await tx.get(oldRef):null;
+        const image=old?.data();
+        const receipts=brandLogoReceipts(data);
+        if(receipts.length>8)throw new HttpsError('failed-precondition','Old logo cleanup requires investigation.');
+        if(image && image.kind!=='brand_logo')
+          throw new HttpsError('failed-precondition','Previous branding image is invalid.');
+        const oldEntry:BrandLogoRemoval={
+          id:prior,owner:cleanText(image?.ownerUserId,160),
+          path:cleanText(image?.storageRemovalPendingPath||image?.storagePath,500),
+        };
+        const replacing=Boolean(image && image.status==='pending');
+        if(replacing && oldEntry.path&&!safeBrandLogoPath(oldEntry))
+          throw new HttpsError('failed-precondition','Previous logo path requires investigation.');
+        const pending=[...receipts.filter(item=>!(replacing&&oldEntry.path&&item.id===prior)),
+          ...(replacing&&oldEntry.path?[oldEntry]:[])];
+        if(pending.length>8)throw new HttpsError('failed-precondition','Too many incomplete branding image removals.');
+        tx.set(brandingRef,{pendingLogoAssetId:assetId,pendingLogoStatus:'pending',
+          brandLogoRemovalPending:pending,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        if(oldRef&&replacing)
+          tx.set(oldRef,{status:oldEntry.path?'removing':'removed',publicUrl:null,
+            storageRemovalPendingPath:oldEntry.path||null,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      });
+    }catch(error){
+      // Staged upload was never linked: retire metadata before deleting bytes.
+      await db.collection('imageAssets').doc(assetId).set({
+        status:'removing',publicUrl:null,storageRemovalPendingPath:storagePath,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      try{
+        await getStorage().bucket().file(storagePath).delete({ignoreNotFound:true});
+        await db.collection('imageAssets').doc(assetId).set({
+          status:'removed',storageRemovalPendingPath:null,updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+      }catch(cleanupError){
+        console.warn('Unattached brand image cleanup pending',assetId,cleanupError instanceof Error?cleanupError.message:'Unknown Storage error');
       }
+      throw error;
     }
-    await brandingRef.set({
-      pendingLogoAssetId: assetId,
-      pendingLogoStatus: 'pending',
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    try{await cleanupRetiredBrandLogos();}
+    catch(error){console.warn('Prior pending brand logo cleanup needs retry',error instanceof Error?error.message:'Unknown Storage error');}
   } else if (kind === 'artist_portfolio') {
     const portfolioRef = db.collection('artistPortfolio').doc(targetId);
     const portfolioItem = await portfolioRef.get();
@@ -3298,7 +3330,30 @@ export const moderateImageAsset = onCall({region:REGION},async request=>{
       if(decision==='approved'){
         if(kind==='profile_avatar')Object.assign(parentUpdate,{avatarAssetId:assetId,avatarUrl:url,avatarStatus:'approved',pendingAvatarAssetId:null,pendingAvatarStatus:null});
         if(kind==='profile_banner')Object.assign(parentUpdate,{bannerAssetId:assetId,bannerUrl:url,bannerStatus:'approved',pendingBannerAssetId:null,pendingBannerStatus:null});
-        if(kind==='brand_logo')Object.assign(parentUpdate,{logoAssetId:assetId,logoUrl:url,logoStatus:'approved',pendingLogoAssetId:null,pendingLogoStatus:null,icon192Path:null,icon512Path:null,maskable512Path:null,iconVersion:null,iconSourceAssetId:null});
+        if(kind==='brand_logo'){
+          const retiredIcons=[...new Set([
+            parent.icon192Path,parent.icon512Path,parent.maskable512Path,
+            ...(Array.isArray(parent.brandIconRemovalPending)?parent.brandIconRemovalPending:[]),
+          ].map(value=>cleanText(value,500)).filter(Boolean))];
+          if(retiredIcons.length>12||retiredIcons.some(path=>!safeBrandIconPath(path)))
+            throw new HttpsError('failed-precondition','Existing brand icon paths require review.');
+          const logoReceipts=brandLogoReceipts(parent);
+          const oldLogo=old&&old.ownerUserId&&old.kind==='brand_logo'&&oldId
+            ?{id:oldId,owner:cleanText(old.ownerUserId,160),path:cleanText(old.storageRemovalPendingPath||old.storagePath,500)}
+            :null;
+          if(oldLogo?.path&&!safeBrandLogoPath(oldLogo))
+            throw new HttpsError('failed-precondition','Existing logo image requires security review.');
+          const retiredLogos=[...logoReceipts.filter(item=>!(oldLogo?.path&&item.id===oldId)),
+            ...(oldLogo?.path?[oldLogo]:[])];
+          if(retiredLogos.length>8)throw new HttpsError('failed-precondition','Old branding cleanup needs review.');
+          Object.assign(parentUpdate,{
+            logoAssetId:assetId,logoUrl:url,logoStatus:'approved',
+            pendingLogoAssetId:null,pendingLogoStatus:null,
+            icon192Path:null,icon512Path:null,maskable512Path:null,
+            iconVersion:null,iconSourceAssetId:null,
+            brandIconRemovalPending:retiredIcons,brandLogoRemovalPending:retiredLogos,
+          });
+        }
         if(kind==='social_avatar')Object.assign(parentUpdate,{photoAssetId:assetId,photoUrl:url,photoStatus:'approved',pendingPhotoAssetId:null,pendingPhotoStatus:null});
         if(kind==='artist_portfolio')Object.assign(parentUpdate,{imageAssetId:assetId,imageUrl:url,imageStatus:'approved',pendingImageAssetId:null,pendingImageStatus:null,status:'published',publishedAt:FieldValue.serverTimestamp()});
         if(kind==='release_artwork'||kind==='script_artwork')Object.assign(parentUpdate,{artworkAssetId:assetId,artworkUrl:url,artworkStatus:'approved',pendingArtworkAssetId:null,pendingArtworkStatus:null});
@@ -3351,6 +3406,11 @@ export const moderateImageAsset = onCall({region:REGION},async request=>{
     }
   }
   const asset=result.asset;
+  if(asset.kind==='brand_logo' && decision==='approved'){
+    // Approval has committed: old icon/logo files may now be reclaimed safely.
+    // A failed Storage cleanup never undoes the current approved branding.
+    await Promise.allSettled([cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons()]);
+  }
   if(asset.ownerUserId){
     const artistThankYou=decision==='approved' && asset.kind==='artist_portfolio'
       ?await approvedWorkThankYou(String(asset.ownerUserId),'artwork',null):null;
@@ -3433,7 +3493,7 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
     if(storagePath && !['png','jpg','webp'].some(ext=>storagePath===allowedPrefix+ext))
       throw new HttpsError('failed-precondition','Image Storage path requires administrator investigation.');
     if(asset.status==='removed' && !asset.storageRemovalPendingPath)
-      return {done:true,path:''};
+      return {done:true,path:'',kind};
     const next:Record<string,unknown>={updatedAt:FieldValue.serverTimestamp()};
     if(kind==='profile_avatar'){
       if(linked.avatarAssetId===assetId)Object.assign(next,{avatarAssetId:null,avatarUrl:null,avatarStatus:null});
@@ -3442,7 +3502,17 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
       if(linked.bannerAssetId===assetId)Object.assign(next,{bannerAssetId:null,bannerUrl:null,bannerStatus:null});
       if(linked.pendingBannerAssetId===assetId)Object.assign(next,{pendingBannerAssetId:null,pendingBannerStatus:null});
     }else if(kind==='brand_logo'){
-      if(linked.logoAssetId===assetId)Object.assign(next,{logoAssetId:null,logoUrl:null,logoStatus:null});
+      if(linked.logoAssetId===assetId){
+        const oldIcons=[linked.icon192Path,linked.icon512Path,linked.maskable512Path,
+          ...(Array.isArray(linked.brandIconRemovalPending)?linked.brandIconRemovalPending:[])]
+          .map(value=>cleanText(value,500)).filter(Boolean);
+        const retiredIcons=[...new Set(oldIcons)];
+        if(retiredIcons.length>12||retiredIcons.some(path=>!safeBrandIconPath(path)))
+          throw new HttpsError('failed-precondition','Branding icon Storage paths require review.');
+        Object.assign(next,{logoAssetId:null,logoUrl:null,logoStatus:null,
+          icon192Path:null,icon512Path:null,maskable512Path:null,
+          iconVersion:null,iconSourceAssetId:null,brandIconRemovalPending:retiredIcons});
+      }
       if(linked.pendingLogoAssetId===assetId)Object.assign(next,{pendingLogoAssetId:null,pendingLogoStatus:null});
     }else if(kind==='social_avatar'){
       if(linked.photoAssetId===assetId)Object.assign(next,{photoAssetId:null,photoUrl:null,photoStatus:null});
@@ -3464,9 +3534,12 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
       removalStartedAt:asset.removalStartedAt??FieldValue.serverTimestamp(),
       updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
-    return {done:false,path:storagePath};
+    return {done:false,path:storagePath,kind};
   });
-  if(retirement.done)return {removed:true,assetId,pendingCleanup:false};
+  if(retirement.done){
+    const pendingCleanup=retirement.kind==='brand_logo'?await cleanupRetiredBrandIcons():false;
+    return {removed:true,assetId,pendingCleanup};
+  }
   if(retirement.path){
     try {await getStorage().bucket().file(retirement.path).delete({ignoreNotFound:true});}
     catch(error){
@@ -3487,7 +3560,8 @@ export const removeOwnedImageAsset = onCall({ region: REGION }, async (request) 
         removedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
     });
-    return {removed:true,assetId,pendingCleanup:false};
+    const pendingCleanup=retirement.kind==='brand_logo'?await cleanupRetiredBrandIcons():false;
+    return {removed:true,assetId,pendingCleanup};
   }catch(error){
     console.warn('Private image removal record cleanup pending',assetId,error instanceof Error?error.message:'Unknown Firestore error');
     return {removed:false,assetId,pendingCleanup:true};
@@ -3583,6 +3657,58 @@ export const removeProfileBanner = onCall({region:REGION},async request=>{
   return removeOwnedProfileVisual(identity.uid,'profile_banner');
 });
 
+
+type BrandLogoRemoval={id:string;owner:string;path:string};
+const brandLogoReceipts=(data:Record<string,any>):BrandLogoRemoval[] =>
+  Array.isArray(data.brandLogoRemovalPending)?data.brandLogoRemovalPending.map((item:any)=>({
+    id:cleanText(item?.id,160),owner:cleanText(item?.owner,160),path:cleanText(item?.path,500),
+  })):[];
+const safeBrandLogoPath=(entry:BrandLogoRemoval) =>
+  /^[a-zA-Z0-9_-]{1,160}$/.test(entry.id)&&
+  /^[a-zA-Z0-9_-]{1,160}$/.test(entry.owner)&&
+  ['png','jpg','webp'].some(ext=>entry.path==='pending-images/'+entry.owner+'/'+entry.id+'.'+ext);
+
+// Durable, private receipts retain the exact files pending deletion after
+// logo references have been revoked. Never reclaim an active branding asset.
+const cleanupRetiredBrandLogos=async()=>{
+  const ref=db.collection('settings').doc('branding');
+  const snap=await ref.get();
+  const receipts=brandLogoReceipts(snap.data()??{});
+  if(receipts.length>8)return true;
+  let failed=false;
+  for(const receipt of receipts){
+    if(!safeBrandLogoPath(receipt)){failed=true;continue;}
+    try{
+      const current=(await ref.get()).data()??{};
+      if([current.logoAssetId,current.pendingLogoAssetId].includes(receipt.id)){failed=true;continue;}
+      await getStorage().bucket().file(receipt.path).delete({ignoreNotFound:true});
+      const imageRef=db.collection('imageAssets').doc(receipt.id);
+      await db.runTransaction(async tx=>{
+        const latest=await tx.get(ref);
+        const image=await tx.get(imageRef);
+        const data=latest.data()??{};
+        if([data.logoAssetId,data.pendingLogoAssetId].includes(receipt.id))
+          throw new HttpsError('aborted','An active Nightjar logo cannot be deleted.');
+        const next=brandLogoReceipts(data).filter(item=>item.id!==receipt.id||item.path!==receipt.path);
+        if(image.exists && image.data()?.storageRemovalPendingPath===receipt.path)
+          tx.set(imageRef,{status:'removed',publicUrl:null,storageRemovalPendingPath:null,
+            updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        tx.set(ref,{brandLogoRemovalPending:next,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      });
+    }catch(error){
+      failed=true;
+      console.warn('Nightjar old logo cleanup pending',receipt.id,error instanceof Error?error.message:'Unknown Storage error');
+    }
+  }
+  const latest=(await ref.get()).data()??{};
+  return failed || brandLogoReceipts(latest).length>0;
+};
+
+export const retryBrandIconCleanup = onCall({region:REGION},async(request)=>{
+  requireAdminIdentity(request);
+  return {pendingCleanup:await cleanupRetiredBrandIcons()};
+});
+
 export const getBranding = onCall({ region: REGION }, async () => {
   const snapshot = await db.collection('settings').doc('branding').get();
   const data = snapshot.data() ?? {};
@@ -3592,49 +3718,76 @@ export const getBranding = onCall({ region: REGION }, async () => {
     installIconsReady: Boolean(data.icon192Path && data.icon512Path && data.maskable512Path),
     iconVersion: data.iconVersion ?? null,
     iconCleanupPending: Array.isArray(data.brandIconRemovalPending) && data.brandIconRemovalPending.length > 0,
+    logoCleanupPending: brandLogoReceipts(data).length > 0,
     pendingLogoAssetId: null,
   };
 });
 
-export const retryBrandIconCleanup = onCall({region:REGION},async(request)=>{
-  requireAdminIdentity(request);
-  return {pendingCleanup:await cleanupRetiredBrandIcons()};
-});
-
 export const removeBrandLogo = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const ref = db.collection('settings').doc('branding');
-  const snapshot = await ref.get();
-  const data = snapshot.data() ?? {};
-  await clearBrandingIconFiles(data);
-  for (const assetId of [data.logoAssetId, data.pendingLogoAssetId]) {
-    const cleanId = cleanText(assetId, 160);
-    if (!cleanId) continue;
-    const asset = await db.collection('imageAssets').doc(cleanId).get();
-    if (asset.exists) {
-      await clearAssetFile(asset.data() ?? {});
-      await asset.ref.set({ status: 'removed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const ref=db.collection('settings').doc('branding');
+  await db.runTransaction(async tx=>{
+    const snapshot=await tx.get(ref);
+    const data=snapshot.data()??{};
+    const previous=brandLogoReceipts(data);
+    if(previous.length>8)throw new HttpsError('failed-precondition','Too many incomplete logo removals.');
+    const ids=[...new Set([data.logoAssetId,data.pendingLogoAssetId,...previous.map(entry=>entry.id)]
+      .map(item=>cleanText(item,160)).filter(Boolean))];
+    if(ids.length>8||ids.some(id=>!/^[a-zA-Z0-9_-]{1,160}$/.test(id)))
+      throw new HttpsError('failed-precondition','Logo references require investigation.');
+    const assets=ids.map(id=>db.collection('imageAssets').doc(id));
+    const assetSnaps=await Promise.all(assets.map(item=>tx.get(item)));
+    const retired:BrandLogoRemoval[]=[];
+    for(let i=0;i<ids.length;i++){
+      const asset=assetSnaps[i].data();
+      if(asset && asset.kind!=='brand_logo')
+        throw new HttpsError('failed-precondition','Image is not a Nightjar branding asset.');
+      const prior=previous.find(item=>item.id===ids[i]);
+      const entry:BrandLogoRemoval={
+        id:ids[i],
+        owner:cleanText(prior?.owner||asset?.ownerUserId,160),
+        path:cleanText(prior?.path||asset?.storageRemovalPendingPath||asset?.storagePath,500),
+      };
+      if(entry.path&&!safeBrandLogoPath(entry))
+        throw new HttpsError('failed-precondition','Logo Storage path requires investigation.');
+      if(entry.path)retired.push(entry);
     }
-  }
-  await ref.set({
-    logoAssetId: null,
-    logoUrl: null,
-    logoStatus: null,
-    pendingLogoAssetId: null,
-    pendingLogoStatus: null,
-    icon192Path: null,
-    icon512Path: null,
-    maskable512Path: null,
-    iconVersion: null,
-    iconSourceAssetId: null,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { removed: true };
+    const oldIcons=[data.icon192Path,data.icon512Path,data.maskable512Path,
+      ...(Array.isArray(data.brandIconRemovalPending)?data.brandIconRemovalPending:[])]
+      .map(value=>cleanText(value,500)).filter(Boolean);
+    const retiredIcons=[...new Set(oldIcons)];
+    if(retiredIcons.length>12||retiredIcons.some(path=>!safeBrandIconPath(path)))
+      throw new HttpsError('failed-precondition','Brand icon Storage paths require investigation.');
+    tx.set(ref,{
+      logoAssetId:null,logoUrl:null,logoStatus:null,
+      pendingLogoAssetId:null,pendingLogoStatus:null,
+      icon192Path:null,icon512Path:null,maskable512Path:null,
+      iconVersion:null,iconSourceAssetId:null,
+      brandLogoRemovalPending:retired,brandIconRemovalPending:retiredIcons,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    for(let i=0;i<ids.length;i++){
+      if(assetSnaps[i].exists){
+        const path=retired.find(item=>item.id===ids[i])?.path||null;
+        tx.set(assets[i],{status:path?'removing':'removed',publicUrl:null,
+          storageRemovalPendingPath:path,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      }
+    }
+  });
+  const results=await Promise.allSettled([
+    cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons(),
+  ]);
+  return {removed:true,pendingCleanup:results.some(result=>result.status==='rejected'||result.value)};
 });
 
+export const retryBrandLogoCleanup = onCall({region:REGION},async(request)=>{
+  requireAdminIdentity(request);
+  const results=await Promise.allSettled([
+    cleanupRetiredBrandLogos(),cleanupRetiredBrandIcons(),
+  ]);
+  return {pendingCleanup:results.some(result=>result.status==='rejected'||result.value)};
+});
 
-// Repeat creation with the same account-scoped UUID after a lost callable
-// response. The UUID is a receipt, never a permission or identity credential.
 const privateCreateRequestId=(input:Record<string,unknown>):string|null=>{
   if(input.clientRequestId == null || input.clientRequestId === '')return null;
   const value=input.clientRequestId;

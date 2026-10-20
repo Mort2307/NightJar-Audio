@@ -3554,11 +3554,14 @@ function App() {
       return;
     }
     try {
-      await nightjarMedia.removeBrandLogo();
+      const result = await nightjarMedia.removeBrandLogo();
+      if (!result.removed) throw new Error('Branding removal not confirmed.');
       setPendingLogoPreviewUrl(null);
       applyRuntimeLogo(null);
       window.localStorage.setItem('nightjar.branding.version', String(Date.now()));
-      notify('Nightjar logo removed.');
+      notify(result.pendingCleanup
+        ? 'Nightjar branding hidden. Private file deletion needs retrying in App Install Branding.'
+        : 'Nightjar logo and private branding files removed.');
     } catch { notify('Logo could not be removed.'); }
   };
 

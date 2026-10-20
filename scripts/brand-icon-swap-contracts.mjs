@@ -28,7 +28,7 @@ assert.match(cleanup,/brandIconRemovalPending:remaining/,'Only confirmed deletio
 assert.match(api,/export const retryBrandIconCleanup = onCall/);
 assert.match(api,/iconCleanupPending: Array\.isArray/,'API reveals only a boolean, never Storage paths');
 assert.match(client,/retryBrandIconCleanupCall/);
-assert.match(admin,/Retry old icon cleanup/);
+assert.match(admin,/Retry old (icon|branding) cleanup/,'Admin branding retry remains accessible');
 assert.match(admin,/result\.pendingCleanup/,'Admin sees incomplete physical removal');
 assert.match(workflow,/\[nightjar-safe-brand-icon-swap\]/);
 const gate=workflow.slice(workflow.indexOf('- name: Deploy atomic brand icon swaps before Hosting'),workflow.indexOf('# Deploy paged Admin release queries'));

@@ -51,7 +51,7 @@ export default function AdminInstallBranding({
     setBusy(true);
     setError('');
     try {
-      const result = await nightjarMedia.retryBrandIconCleanup();
+      const result = await nightjarMedia.retryBrandLogoCleanup();
       await refresh();
       notify(result.pendingCleanup
         ? 'Some retired icon files remain; retry or investigate before release.'
@@ -78,14 +78,14 @@ export default function AdminInstallBranding({
       <div><ShieldCheck size={17}/><strong>Approved logo:</strong> {data.logoStatus === 'approved' ? 'Yes' : 'Not yet'}</div>
       <div><strong>Generated launcher icons:</strong> {data.installIconsReady ? 'Ready' : 'Not generated'}</div>
       <div><strong>Icon version:</strong> {data.iconVersion ?? 'Not generated'}</div>
-      {data.iconCleanupPending && <div role="status"><strong>Old icon cleanup:</strong> Incomplete. Current approved icons remain live.</div>}
+      {(data.iconCleanupPending || data.logoCleanupPending) && <div role="status"><strong>Private branding cleanup:</strong> Incomplete. Current approved branding remains available.</div>}
     </div>}
     <div className="nj-install-branding-actions">
       <button type="button" className="primary-button"
         disabled={simulationMode || busy || data?.logoStatus !== 'approved'}
         onClick={() => void generate()}>{busy ? 'Generating Nightjar icons…' : 'Generate approved install icons'}</button>
-      {data?.iconCleanupPending && <button type="button" className="secondary-button" disabled={busy || simulationMode}
-        onClick={() => void retryCleanup()}><RefreshCw size={15}/> Retry old icon cleanup</button>}
+      {(data?.iconCleanupPending || data?.logoCleanupPending) && <button type="button" className="secondary-button" disabled={busy || simulationMode}
+        onClick={() => void retryCleanup()}><RefreshCw size={15}/> Retry old branding cleanup</button>}
       <button type="button" className="secondary-button" disabled={busy || simulationMode}
         onClick={() => void refresh()}><RefreshCw size={15}/> Refresh branding status</button>
     </div>
