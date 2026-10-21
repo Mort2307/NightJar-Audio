@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const backend=readFileSync('functions/src/index.ts','utf8');
+const creator=readFileSync('src/components/CreatorAudioPipeline.tsx','utf8');
+const player=readFileSync('src/components/NightjarPlayer.tsx','utf8');
+const app=readFileSync('src/App.tsx','utf8');
+assert.match(backend,/studioNoteForReleaseId: studioNoteForReleaseId \|\| null/);
+assert.match(backend,/parent\.creatorUserId !== identity\.uid/);
+assert.match(backend,/parent\.status !== 'released'/);
+assert.match(backend,/parent\.studioNoteForReleaseId/);
+assert.match(backend,/Your parent recording must still be published/);
+assert.match(creator,/Studio Note for:/);
+assert.match(creator,/studioNoteForReleaseId: studioNoteParent \|\| null/);
+assert.match(player,/Studio Notes · Behind the Mic/);
+assert.match(player,/queue\.filter\(item => item\.studioNoteForReleaseId === track\.id/);
+assert.match(app,/studioNoteForReleaseId: release\.studioNoteForReleaseId \?\? null/);
+console.log('Studio Notes linked moderated audio contracts PASS.');

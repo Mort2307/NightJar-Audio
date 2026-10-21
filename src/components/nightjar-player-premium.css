@@ -158,3 +158,11 @@
   .nj-mini-player button { width:38px; height:38px; }
 }
 @media(prefers-reduced-motion:reduce) { .nj-mini-player { animation:none; transition:none; } }
+
+/* Linked, moderator-approved audio extras use the existing secure player. */
+.nj-studio-notes-player{display:grid;gap:9px;margin:14px 0;padding:14px;border:1px solid rgba(211,175,120,.27);border-radius:13px;background:rgba(167,124,69,.07)}
+.nj-studio-notes-player h3{display:flex;gap:7px;align-items:center;margin:0;font-size:14px;color:#f2d5a9}
+.nj-studio-notes-player p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+.nj-studio-notes-player button{max-width:100%;white-space:normal;text-align:left;justify-content:flex-start;min-height:44px}
+.nj-studio-note-selector{display:grid;gap:7px}
+.nj-studio-note-selector select{width:100%;min-height:44px}
