@@ -1095,6 +1095,64 @@ export const clearMyProfileWorkingDraft=onCall({region:REGION},async(request)=>{
   });
 });
 
+// Framing is presentation metadata only. The approved image bytes remain
+// unchanged, and a focal point is published only for the SAME approved asset.
+type ApprovedImageFraming = {assetId:string;mode:'fit'|'fill';zoom:number;x:number;y:number};
+const safeProfileFraming=(raw:unknown,currentAssetId:unknown,status:unknown):ApprovedImageFraming|null=>{
+  if(status!=='approved'||!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+  const frame=raw as Record<string,unknown>;
+  if(typeof currentAssetId!=='string'||!currentAssetId||frame.assetId!==currentAssetId)return null;
+  if(frame.mode!=='fit'&&frame.mode!=='fill')return null;
+  const numbers=[frame.zoom,frame.x,frame.y];
+  if(numbers.some(v=>typeof v!=='number'||!Number.isFinite(v)))return null;
+  if((frame.zoom as number)<1||(frame.zoom as number)>3||
+    Math.abs(frame.x as number)>100||Math.abs(frame.y as number)>100)return null;
+  return {assetId:currentAssetId,mode:frame.mode,zoom:frame.zoom as number,x:frame.x as number,y:frame.y as number};
+};
+const publicProfileImageFrames=(data:Record<string,any>)=>({
+  avatarFraming:safeProfileFraming(data.avatarFraming,data.avatarAssetId,data.avatarStatus),
+  bannerFraming:safeProfileFraming(data.bannerFraming,data.bannerAssetId,data.bannerStatus),
+});
+
+// One-field-only, owned image update. Do not re-submit/approve media, and never
+// write unrelated profile fields from a stale device.
+export const saveApprovedProfileFraming=onCall({region:REGION},async(request)=>{
+  const identity=await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const kind=input.kind;
+  if(kind!=='avatar'&&kind!=='banner')
+    throw new HttpsError('invalid-argument','Choose an approved portrait or cover.');
+  const assetId=cleanText(input.assetId,160);
+  if(!/^[A-Za-z0-9_-]{1,160}$/.test(assetId))
+    throw new HttpsError('invalid-argument','Approved image identity is required.');
+  const mode=input.mode;
+  if(mode!=='fit'&&mode!=='fill')
+    throw new HttpsError('invalid-argument','Choose Show whole picture or Fill frame.');
+  const zoom=input.zoom,x=input.x,y=input.y;
+  if([zoom,x,y].some(value=>typeof value!=='number'||!Number.isFinite(value))||
+    (zoom as number)<1||(zoom as number)>3||
+    Math.abs(x as number)>100||Math.abs(y as number)>100)
+    throw new HttpsError('invalid-argument','Framing values are outside safe limits.');
+  const frame:ApprovedImageFraming={assetId,mode,zoom:zoom as number,x:x as number,y:y as number};
+  const field=kind==='avatar'?'avatarFraming':'bannerFraming';
+  const idField=kind==='avatar'?'avatarAssetId':'bannerAssetId';
+  const statusField=kind==='avatar'?'avatarStatus':'bannerStatus';
+  const expectedKind=kind==='avatar'?'profile_avatar':'profile_banner';
+  const target=profileRef(identity.uid);
+  const assetRef=db.collection('imageAssets').doc(assetId);
+  await db.runTransaction(async tx=>{
+    const profile=await tx.get(target);
+    const image=await tx.get(assetRef);
+    const data=profile.data()??{},asset=image.data()??{};
+    if(data[idField]!==assetId||data[statusField]!=='approved'||
+      asset.ownerUserId!==identity.uid||asset.kind!==expectedKind||asset.status!=='approved')
+      throw new HttpsError('failed-precondition','The approved picture has changed or is no longer available. Refresh the profile.');
+    tx.set(target,{[field]:frame,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  });
+  return {kind,framing:frame};
+});
+
 export const getMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, accountSnapshot] = await Promise.all([
