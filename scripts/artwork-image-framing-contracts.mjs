@@ -9,6 +9,12 @@ const editor=read('src/components/ImageFramingEditor.tsx');
 const framing=read('src/platform/image-framing.ts');
 const globalCss=read('src/index.css');
 const writerCss=read('src/components/writer-script-artwork.css');
+const sliceBetween=(source,start,end)=>{
+  const from=source.indexOf(start);
+  const to=source.indexOf(end,from+start.length);
+  assert.ok(from>=0&&to>from,'Missing expected source section: '+start);
+  return source.slice(from,to);
+};
 
 assert.match(creator,/setArtFrameFile\(file\)/,'Creator selection opens editor before release art upload');
 assert.match(creator,/<ImageFramingEditor file=\{artFrameFile\} shape="release"/,'Creator release artwork has framing');
@@ -57,8 +63,27 @@ assert.match(globalCss,/\.release-cover-ambient \{[\s\S]*?pointer-events: none;/
   'Decorative backdrop must not block play controls');
 assert.match(globalCss,/\.track-cover\.release-cover::before,[\s\S]*?\.track-cover\.release-cover::after \{[\s\S]*?content: none;/,
   'Do not draw heavy decorative frames over release artwork');
-assert.match(globalCss,/\.track-cover\.release-cover \.track-index \{[\s\S]*?text-shadow:/,
-  'Category remains legible over edge-to-edge cover photos');
+// A full cover is not useful if the category or controls are covering its words.
+// Check both markup ownership and positioning, not merely that a label exists.
+const card=sliceBetween(app,'function LiveTrackCard(', 'function ProtectedReader(');
+const cover=sliceBetween(card, '<div className="track-cover release-cover">', '<div className="track-body">');
+const body=sliceBetween(card, '<div className="track-body">','<h3>{track.title}</h3>');
+assert.doesNotMatch(cover, /className="track-index"|className="cover-play"/,
+  'No category or play button over approved release art');
+assert.match(body,/className="track-card-toolbar"/,'Card metadata/control row below the image');
+assert.match(body,/className="track-index"/,'Category label belongs below the cover');
+assert.match(body,/className="cover-play"/,'Play control remains discoverable outside artwork');
+assert.match(globalCss,/\.track-card-toolbar \.cover-play \{[\s\S]*?position: static;/,
+  'Play button is in normal document flow, not absolute over the photo');
+assert.match(globalCss,/\.track-card-toolbar \.track-index \{/,
+  'Long category text wraps below the uploaded picture');
+assert.match(app, /className="featured-release-heading"[^>]*>\{featured\.title\}/,
+  'Featured title is beside its cover, not over it');
+const featured=sliceBetween(app,'className="cover-art release-cover featured-release-cover"','className="feature-meta"');
+assert.doesNotMatch(featured, /featured-cover-title|<h2|track-index/,
+  'Featured artwork remains clear of auto labels');
+assert.match(globalCss,/\.featured-release-cover::after \{ content: none; \}/,
+  'No gradient masks the lower half of Featured cover artwork');
 const midnight = read('src/styles/midnight-gold-cinema.css');
 assert.match(midnight,/\.track-card \{[\s\S]{0,200}?border:1px solid rgba\(216,175,110,\.14\);/,
   'Midnight Gold release card outlines must stay discreet');
