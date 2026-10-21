@@ -43,7 +43,18 @@ assert.match(writerCss,/\.writer-script-artwork-preview > img \{[^\n]*object-fit
 assert.match(writerCss,/\.script-marketplace \.marketplace-card \.script-marketplace-cover \{[^\n]*object-fit: contain/,'Marketplace cover preserves content');
 
 const playerCss=read('src/components/nightjar-player-premium.css');
-assert.match(globalCss,/\.release-cover-media \{[\s\S]{0,180}?object-fit: contain/,'Release art content card never crops the image');
+// Published release tiles use cover art as a full-bleed stage. Unlike Writer
+// and Artist portfolios, these intentionally crop at the card edge; creators
+// can control the composition in the existing Image Studio before submission.
+assert.match(globalCss,/\.release-cover-media \{[\s\S]*?object-fit: cover;/,
+  'Home release artwork must fill the cover stage without dark side bars');
+assert.match(globalCss,/\.track-cover\.release-cover::before,[\s\S]*?\.track-cover\.release-cover::after \{[\s\S]*?content: none;/,
+  'Do not draw heavy decorative frames over release artwork');
+assert.match(globalCss,/\.track-cover\.release-cover \.track-index \{[\s\S]*?text-shadow:/,
+  'Category remains legible over edge-to-edge cover photos');
+const midnight = read('src/styles/midnight-gold-cinema.css');
+assert.match(midnight,/\.track-card \{[\s\S]{0,200}?border:1px solid rgba\(216,175,110,\.14\);/,
+  'Midnight Gold release card outlines must stay discreet');
 assert.match(globalCss,/\.public-artist-featured-grid img \{[\s\S]{0,160}?object-fit:contain/,'Artist featured content shows whole image');
 assert.match(globalCss,/\.nj-creator-live-release-art img \{[^\n]*object-fit:contain/,'Creator release preview shows whole cover');
 assert.match(playerCss,/\.nj-up-cover img\{[^\n]*object-fit:contain/,'Nightjar player artwork shows whole image');
