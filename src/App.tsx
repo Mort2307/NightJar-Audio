@@ -6733,7 +6733,12 @@ function ReleaseCoverVisual({ artworkUrl, brandLogoUrl }: { artworkUrl?: string 
   useEffect(() => setLogoFailed(false), [brandLogoUrl]);
 
   return artworkUrl?.trim() && !artworkFailed ? (
-    <img className="release-cover-media" src={artworkUrl} alt="" loading="lazy" onError={() => setArtworkFailed(true)} />
+    <>
+      {/* Soft duplicate bleeds into spare space; the actual approved cover stays
+          fully visible, including faces, lettering and portrait compositions. */}
+      <img className="release-cover-ambient" src={artworkUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+      <img className="release-cover-media" src={artworkUrl} alt="" loading="lazy" decoding="async" onError={() => setArtworkFailed(true)} />
+    </>
   ) : (
     <div className="release-cover-brand" aria-hidden="true">
       {logoFailed
