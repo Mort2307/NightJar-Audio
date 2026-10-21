@@ -5,9 +5,21 @@ const app=readFileSync('src/App.tsx','utf8');
 const server=readFileSync('functions/src/index.ts','utf8');
 const onboarding=readFileSync('src/components/NightjarOnboarding.tsx','utf8');
 
-// A profile photo is a link to the member's profile, never a role-selection trap.
-assert.match(app, /className="account-chip" aria-label="Open my NightJar profile" title="My profile" onClick=\{openProfileEditor\}/);
+// The avatar opens a small, accessible menu with Profile and role options.
+// Ordinary members use My Roles, while Admin can inspect isolated role demos.
+assert.match(app, /className="account-chip" aria-label="Open account menu: profile and roles"/);
+assert.match(app, /aria-expanded=\{accountMenuOpen\} aria-controls="nj-account-options"/);
+assert.match(app, /className="nj-account-menu-popover" id="nj-account-options"/);
+assert.match(app, /onClick=\{openProfileEditor\}><UserCircle2[^]*?My Profile/);
+assert.match(app, /onClick=\{openMyRoles\}><ShieldCheck[^]*?Switch Roles/);
 assert.match(app, /className="floating-account" onClick=\{openProfileEditor\} aria-label="Open my NightJar profile"/);
+assert.match(app, /if \(!accountMenuRef\.current\?\.contains\(event\.target as Node\)\) setAccountMenuOpen\(false\)/, 'outside tap closes the menu');
+assert.match(app, /event\.key === 'Escape'[^]*?accountMenuTriggerRef\.current\?\.focus\(\)/, 'Escape returns focus to the avatar');
+assert.match(app, /LIVE_PREVIEW_ROLES\.map\(option => <button[^]*?startSimulation\(option\.id\)/, 'Admin has direct safe access to five role demos');
+assert.match(app, /onClick=\{\(\) => \{ setAccountMenuOpen\(false\); openLiveMemberProfile\(\); \}\}/, 'Live public profile viewer remains distinct from fictional simulation');
+assert.match(app, /interactiveRoleTest \? disableDemoMode\(\) : clearAdminPreview\(\)/, 'Admin can return from either type of preview');
+assert.match(app, /const startSimulation = \(next: PreviewRole[^]*?if \(!canAdmin\) return;/, 'only Admin can start simulated role previews');
+assert.match(app, /No real account was impersonated/, 'simulations do not represent real users');
 assert.match(app, /role && <button type="button" className="secondary-button" onClick=\{\(\) => setRolePicker\(false\)\}/,
   'Existing members can always exit account setup');
 assert.match(app, /onClick=\{openMyRoles\}>My Roles<\/button>/, 'Role switching remains available from My Roles');

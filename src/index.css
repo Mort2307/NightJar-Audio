@@ -1082,7 +1082,7 @@ button:focus-visible {
 .account-identity strong { color: #ddd2dc; }
 .account-chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 9px 5px 5px; border: 1px solid var(--line-soft); border-radius: 999px; color: #eee7df; background: rgba(255,255,255,.025); text-align: left; }
 .account-chip-avatar { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: #241b25; color: #d8c4d4; font-family: Georgia, serif; }
-.account-chip span:last-child { display: grid; gap: 1px; }
+.account-chip .account-chip-identity { display: grid; gap: 1px; min-width: 0; }
 .account-chip strong { font-size: 9px; font-weight: 700; }
 .account-chip em { font-style: normal; color: var(--muted-2); font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
 .floating-account { position: fixed; right: 16px; bottom: 18px; z-index: 58; display: inline-flex; align-items: center; gap: 7px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 999px; color: #d6c8d4; background: rgba(20,17,22,.94); box-shadow: 0 18px 40px rgba(0,0,0,.35); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -1105,8 +1105,8 @@ button:focus-visible {
   .role-grid, .admin-grid { grid-template-columns: 1fr; }
   .role-card { min-height: 225px; }
   .account-chip { max-width: 160px; }
-  .account-chip span:last-child { overflow: hidden; }
-  .account-chip strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .account-chip .account-chip-identity { overflow: hidden; }
+  .account-chip .account-chip-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .floating-account { bottom: 80px; }
 }
 
@@ -11678,3 +11678,55 @@ textarea:focus-visible,
 .nj-approved-work-thumb{width:84px!important;height:84px!important;border-radius:12px;flex-shrink:0}
 .nj-approved-release-frame{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px}
 .nj-approved-release-frame small{flex-basis:100%;color:var(--muted);font-size:12px}
+
+/* Compact avatar actions: Profile and role access, with safe Owner previews.
+   Popover stays inside the viewport on phones and avoids whole-page traps. */
+.nj-account-menu { position: relative; flex: 0 0 auto; }
+.nj-account-menu .account-chip { min-height: 42px; max-width: min(34vw, 235px); }
+.nj-account-menu-chevron { flex: 0 0 auto; opacity: .78; transition: transform .16s ease; }
+.nj-account-menu-chevron.open { transform: rotate(180deg); }
+.nj-account-menu-popover {
+  position: absolute; z-index: 120; top: calc(100% + 10px); right: 0;
+  width: min(340px, calc(100vw - 20px)); max-height: min(74dvh, 565px);
+  overflow-y: auto; overscroll-behavior: contain;
+  display: grid; gap: 3px; padding: 10px;
+  border: 1px solid rgba(214, 186, 143, .38); border-radius: 17px;
+  background: #151216; color: #f6eee6;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, .62);
+}
+.nj-account-menu-heading,
+.nj-account-menu-group-heading { display: grid; gap: 3px; padding: 10px 11px 7px; }
+.nj-account-menu-heading strong,
+.nj-account-menu-group-heading strong { font-size: 13px; letter-spacing: .02em; }
+.nj-account-menu-heading small,
+.nj-account-menu-group-heading small { color: #cebaac; font-size: 11px; line-height: 1.45; }
+.nj-account-menu-group-heading { margin-top: 5px; border-top: 1px solid rgba(214, 186, 143, .19); padding-top: 12px; }
+.nj-account-menu-action {
+  display: flex; align-items: center; gap: 10px; min-height: 46px;
+  padding: 9px 10px; width: 100%; border: 1px solid transparent;
+  border-radius: 10px; background: transparent; color: #f6eee6;
+  text-align: left; cursor: pointer;
+}
+.nj-account-menu-action > svg:first-child { flex: 0 0 auto; color: #d4b486; }
+.nj-account-menu-action > svg:last-child { margin-left: auto; flex: 0 0 auto; color: #d4b486; }
+.nj-account-menu-action > span { display: grid; flex: 1; gap: 3px; min-width: 0; font-weight: 600; font-size: 12px; }
+.nj-account-menu-action small { font-weight: 400; font-size: 10px; color: #d5c4b5; }
+.nj-account-menu-action:hover,
+.nj-account-menu-action:focus-visible,
+.nj-account-menu-action[aria-pressed="true"] {
+  background: rgba(214, 186, 143, .14); border-color: rgba(214, 186, 143, .31);
+}
+.nj-account-return { border-top: 1px solid rgba(214, 186, 143, .25); margin-top: 4px; }
+@media (max-width: 760px) {
+  .nj-account-menu { position: static; }
+  .nj-account-menu .account-chip { max-width: 160px; }
+  .nj-account-menu-popover { top: calc(100% + 5px); right: 10px; left: auto; max-height: calc(100dvh - 86px); }
+}
+@media (max-width: 430px) {
+  .nj-account-menu .account-chip { max-width: 96px; padding-right: 7px; }
+  .nj-account-menu .account-chip-identity { display: none; }
+  .nj-account-menu-popover { right: 8px; width: min(330px, calc(100vw - 16px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nj-account-menu-chevron { transition: none; }
+}

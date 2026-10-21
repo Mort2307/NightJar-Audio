@@ -24,3 +24,6 @@ Date: 21 October 2026. Reporter: QP (creator; user-reported, not reproduced on a
 - CI build and preflight must pass before merge; deploy only via guarded production workflow.
 - Still requires real-device member acceptance: new account, completed account, deferred account, profile switch, role switch, browser refresh/sign-out-in, failed offline save and narrow viewport.
 - Feedback alone is not proof that QP's historical individual data is already reconciled; test with that account after release.
+
+## Additional refinement — shared avatar menu (same day)
+The account avatar now opens a compact choice, not just the Profile page. Regular members can select **My Profile** or **Switch Roles** (the existing My Roles workspace). Administrators get **My Profile**, five direct **Explore roles** sandbox previews, **Live Profile Viewer**, and a **Return to Admin** action when viewing another role. Simulated role previews use the existing local fictional data; they do not impersonate live accounts, issue professional approvals, change account permissions or write to production. Menu supports outside-tap dismissal, Escape/focus return, narrow screens and reduced motion.
