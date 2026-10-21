@@ -1090,7 +1090,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
                 framing={current.artworkFraming?.assetId===current.artworkAssetId?current.artworkFraming:null}/>
               <button type="button" className="secondary-button" disabled={artBusy||submitting}
                 onClick={()=>setApprovedFrameRelease({id:current.id,assetId:String(current.artworkAssetId),
-                  src:String(current.artworkUrl),framing:current.artworkFraming?.assetId===current.artworkAssetId?current.artworkFraming:null})}>
+                  src:String(current.artworkUrl),framing:current.artworkFraming?.assetId===current.artworkAssetId?(current.artworkFraming ?? null):null})}>
                 Adjust approved release artwork
               </button>
               <small>Save the framing without changing your recording or asking for another artwork review.</small>
