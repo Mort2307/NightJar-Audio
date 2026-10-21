@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, ExternalLink, Send, Sparkles, Users } from 'lucide-react';
+import { Copy, ExternalLink, Send, Users } from 'lucide-react';
 import { nightjarReferrals } from '../platform/firebase-referrals';
 
 type Props = {
@@ -69,7 +69,7 @@ export default function CreatorSuggestionBox({notify,demoMode=false,simulationMo
     <button type="button" className="creator-suggestion-toggle" onClick={()=>setOpen((value)=>!value)} aria-expanded={open}>
       <span><Users size={17}/></span>
       <div><strong>Know someone Nightjar should invite?</strong><small>Any Nightjar member can suggest a Creator and generate a dedicated Creator recommendation link.</small></div>
-      <Sparkles size={16}/>
+      <ExternalLink size={16} aria-hidden="true"/>
     </button>
     {open&&<div className="creator-suggestion-form">
       <div className="creator-suggestion-grid">

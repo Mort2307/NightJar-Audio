@@ -33,8 +33,8 @@ export default function NightjarSettings({ email, administrator, simulationMode,
   return (
     <section className="page-section nj-settings-page" aria-labelledby="nightjar-settings-title">
       <div className="nj-settings-heading">
-        <span className="eyebrow"><Settings2 size={15} /> PERSONAL HUB</span>
-        <h1 id="nightjar-settings-title">Your Nightjar.</h1>
+        <span className="eyebrow"><Settings2 size={15} /> YOUR ACCOUNT</span>
+        <h1 id="nightjar-settings-title">Settings</h1>
         <p>Your profile, security, preferences and app tools in one place. Open only the sections you need.</p>
       </div>
 

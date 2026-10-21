@@ -5109,7 +5109,7 @@ function App() {
   }, {}));
 
   const baseActions: RoleDashboardAction[] = [
-    ...(profileCompletion < 70 ? [{ id:'complete-profile', title:'Strengthen your public profile', reason:`Your profile is ${profileCompletion}% complete. Richer profiles are easier to understand and discover.`, label:'Open profile', priority:'high' as const, onClick:openProfileEditor }] : []),
+    ...(profileCompletion < 70 ? [{ id:'complete-profile', title:'Add to your profile', reason:`Your profile is ${profileCompletion}% complete. Add a little more about yourself whenever you like.`, label:'Open profile', priority:'high' as const, onClick:openProfileEditor }] : []),
     ...(messageUnreadCount > 0 && messageNeedsReplyCount === 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'messages', title:`Review ${messageUnreadCount} unread private message${messageUnreadCount === 1 ? '' : 's'}`, reason:'A professional Nightjar conversation has new activity. Keeping replies inside the work context reduces missed handoffs and uncertainty.', label:'Open Inbox', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
     ...(messageNeedsReplyCount > 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'needs-reply', title:`${messageNeedsReplyCount} conversation${messageNeedsReplyCount === 1 ? '' : 's'} need your reply`, reason:'These threads remain visible even after you read them because the other professional is still waiting on you for the next step.', label:'Reply now', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
     ...(messageAwaitingReplyCount > 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'awaiting-reply', title:`${messageAwaitingReplyCount} conversation${messageAwaitingReplyCount === 1 ? '' : 's'} awaiting a reply`, reason:'Your most recent message in these threads has been unanswered for at least 48 hours. A single follow-up reminder can be sent from the Inbox; Nightjar never sends repeated reminders automatically.', label:'Review threads', onClick:()=>navigate('messages') }] : []),
@@ -5317,10 +5317,10 @@ function App() {
                 <div className="hero-kicker">
                   <span className="eyebrow"><Sparkles size={14} /> 18+ / AUDIO FIRST</span>
                   <span className="kicker-line" />
-                  <span className="kicker-note">Personalised from your explicit taste and current session intent</span>
+                  <span className="kicker-note">Find something for the mood you're in</span>
                 </div>
                 <h1>Premium immersive<span> audio for adults.</span></h1>
-                <p className="hero-lede">Original stories, performances and atmospheres built around voice, space and the feeling of a story happening close by.</p>
+                <p className="hero-lede">Original voices, intimate stories and sound that draws you closer.</p>
                 <div className="hero-actions">
                   <button data-nj-preview-safe="true" className="primary-button" onClick={() => { window.dispatchEvent(new CustomEvent('nightjar:open-home-section',{detail:'catalogue'})); window.setTimeout(()=>document.getElementById('nightjar-home-catalogue')?.scrollIntoView({behavior:'smooth'}),50); }}>Enter the listening room <ArrowRight size={16} /></button>
                   <button data-nj-preview-safe="true" className="text-button with-icon" onClick={() => liveRolePreview ? selectPreviewRole('creator') : creatorOnly || adminOnly ? navigate('creator') : notify('Create or apply for a Creator account to open Creator Studio.')}><Mic2 size={15}/> For creators <ChevronRight size={16} /></button>
@@ -5332,7 +5332,7 @@ function App() {
                 </div>
               </div>
               <div className="hero-art" aria-label="Browse Nightjar released audio">
-                <div className="orbit orbit-a" /><div className="orbit orbit-b" />
+                
                 <div
                   className="featured-card"
                   ref={featuredCarouselRef}
@@ -5384,7 +5384,7 @@ function App() {
                         </button>
                         <div className="featured-carousel-position">
                           <strong>{featuredIndex + 1} / {carouselTracks.length}</strong>
-                          <small>3 SEC · SWIPE TO EXPLORE</small>
+                          <small>SWIPE FOR MORE</small>
                           {featuredCarouselReducedMotion
                             ? <span className="featured-carousel-motion-note">Auto rotation off for reduced motion</span>
                             : <button type="button" className="featured-carousel-autoplay" data-nj-preview-safe="true"
@@ -5469,7 +5469,7 @@ function App() {
 
             <HomeSection id="recommended" title="For you">
             <section id="for-you" className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow"><Sparkles size={14}/> FOR YOU</p><h2>What fits right now.</h2></div><div className="nj-intent-control" aria-label="Current listening intent">{[
+              <div className="section-head"><div><p className="eyebrow"><Headphones size={14} aria-hidden="true"/> FOR YOU</p><h2>What are you in the mood for?</h2></div><div className="nj-intent-control" aria-label="Current listening intent">{[
   ['','Open'],
   ['wind','Wind down'],
   ['story','Story'],
@@ -5477,17 +5477,17 @@ function App() {
   ['focus','Focus'],
   ['discover','Surprise me'],
 ].map(([value,label])=><button type="button" key={value || 'open'} className={currentIntent===value?'active':''} aria-pressed={currentIntent===value} onClick={()=>setCurrentIntent(value)}>{label}</button>)}</div></div>
-              <p className="section-copy">Declared preferences carry more weight than observed behaviour. The current session intent only changes the present recommendation context.</p>
+              <p className="section-copy">Choose a mood, or browse at your own pace.</p>
               <div className="track-grid">
                 {liveRecommendations.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} brandLogoUrl={logoUrl ?? '/brand-logo'} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} reason={release.reason ? String(release.reason) : undefined} />; })}
-                {!liveRecommendations.length && <div className="people-empty"><Sparkles size={18}/><strong>Your recommendation graph is still forming.</strong><span>Save work, finish releases, follow creators and set explicit preferences to create meaningful personalised recommendations.</span></div>}
+                {!liveRecommendations.length && <div className="people-empty"><Headphones size={18}/><strong>Your next listen starts here.</strong><span>Follow a creator, save a release or set your listening preferences to see more.</span></div>}
               </div>
             </section>
 
             </HomeSection>
             <HomeSection id="trending" title="Trending now">
             <section className="section-wrap">
-              <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">General popularity is kept separate from personalisation.</span></div>
+              <div className="section-head"><div><p className="eyebrow">TRENDING</p><h2>Popular right now.</h2></div><span className="section-copy">Popular releases across Nightjar.</span></div>
               <div className="track-grid">
                 {liveTrending.map((release: any) => { const track = releaseToTrack(release); return <LiveTrackCard key={track.id} brandLogoUrl={logoUrl ?? '/brand-logo'} track={track} playing={playing === track.id} favourite={favouriteReleaseIds.includes(track.id)} reaction={releaseReactions[track.id] ?? null} canReact={effectiveRole === 'listener' && !liveRolePreview} onPlay={togglePlayback} onRead={openTranscript} onFavourite={() => void toggleFavouriteRelease(track.id)} onReaction={(reaction) => void toggleReleaseReaction(track.id,reaction)} onCommunity={() => setReviewTrack(track)} />; })}
                 {!liveTrending.length && <div className="people-empty"><BarChart3 size={18}/><strong>No live trending data.</strong><span>Trending appears only after real listening events exist.</span></div>}
@@ -5506,7 +5506,7 @@ function App() {
             </HomeSection>
             <HomeSection id="studio" title="Creative opportunities">
               <section className="section-wrap nj-creative-opportunities">
-                <div className="section-head"><div><p className="eyebrow">CREATE WITH NIGHTJAR</p><h2>Every great audio starts with a creative team.</h2><p>Bring your voice, writing, editing or artwork to Nightjar. Discover collaborators, share your portfolio and help stories find their listeners.</p></div></div>
+                <div className="section-head"><div><p className="eyebrow">CREATE WITH NIGHTJAR</p><h2>Good stories take good people.</h2><p>Bring your voice, writing, editing or artwork to Nightjar. Discover collaborators, share your portfolio and help stories find their listeners.</p></div></div>
                 <button data-nj-preview-safe="true" type="button" className="secondary-button with-icon" onClick={() => navigate('creators')}>Explore the creative community <ArrowRight size={16}/></button>
                 {!liveRolePreview && effectiveRole !== 'admin' && <button type="button" className="text-button with-icon" onClick={openMyRoles}>Explore professional roles <ArrowRight size={15}/></button>}
               </section>
@@ -5741,7 +5741,7 @@ function App() {
         {view === 'profile' && !profileRolesPage && !creditWorkspaceOpen && (
           <section className="page-section profile-page premium-profile-page">
             <div className="page-heading premium-profile-page-heading">
-              <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Your profile should feel worth opening.</h1><p>Every Nightjar member gets a premium personal profile. Professional roles add specialist identity and tools without turning Listener profiles into second-class accounts.</p></div>
+              <div><span className="eyebrow"><UserCircle2 size={14}/> YOUR NIGHTJAR</span><h1>Make it yours.</h1><p>Add the details you want to share. Your professional work has its own space, separate from your personal profile.</p></div>
               <div className="profile-heading-actions">
                 {user?.userId && (effectiveRole === 'admin' ? profile.adminCommunityVisible === true : profile.publicProfile !== false) && <button className="secondary-button" onClick={()=>openPublicProfile(user.userId,effectiveRole === 'admin' ? 'listener' : effectiveRole ?? undefined)}>View my public profile</button>}
                 {user?.userId && <button type="button" className="secondary-button" onClick={()=>setConnectionsPage({userId:user.userId,kind:'followers',displayName:String(profile.displayName || user.name || 'Nightjar member')})}>My followers</button>}

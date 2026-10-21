@@ -195,7 +195,7 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
           <div><span>Shared interests</span><strong>{sharedInterestCount}</strong><small>Chosen profile signals</small></div>
           <div><span>Featured playlists</span><strong>{featuredIds.length}</strong><small>Deliberately public</small></div>
           <div><span>Community style</span><strong>{(profile.listenerCommunityStyle ?? []).length}</strong><small>Selected preferences</small></div>
-          <div><span>Privacy</span><strong>Curated</strong><small>Listening history stays private</small></div>
+          <div><span>Privacy</span><strong>Private</strong><small>Listening history stays private</small></div>
         </> : <>
           <div><span>Verified showcase</span><strong>{portfolioOptions.length}</strong><small>Eligible Nightjar work</small></div>
           <div><span>Collaborations</span><strong>{completedCollaborations}</strong><small>Platform-recorded</small></div>
@@ -223,7 +223,7 @@ export default function RoleProfileExtension({ role, profile, setProfile, portfo
 
     <article className={'panel premium-role-showcase premium-role-showcase-'+role}>
       <div className="premium-role-showcase-head">
-        <div><span className="mini-label">{role === 'listener' ? 'CURATED PUBLIC SPACE' : 'VERIFIED SHOWCASE'}</span><h3>{role === 'listener' ? 'The playlists you choose to put your name on.' : role==='creator'?'Lead with the performances that represent you.':role==='writer'?'Lead with produced writing credits.':role==='editor'?'Lead with credited production work.':'Lead with the visual work that represents you.'}</h3><p>{role === 'listener' ? 'Public playlists create a meaningful Listener profile without exposing private behaviour.' : 'Feature up to six eligible Nightjar items. Verified work stays visually separate from self-description.'}</p></div>
+        <div><span className="mini-label">{role === 'listener' ? 'PUBLIC PLAYLISTS' : 'VERIFIED SHOWCASE'}</span><h3>{role === 'listener' ? 'The playlists you choose to put your name on.' : role==='creator'?'Lead with the performances that represent you.':role==='writer'?'Lead with produced writing credits.':role==='editor'?'Lead with credited production work.':'Lead with the visual work that represents you.'}</h3><p>{role === 'listener' ? 'Share a few favourites without making your listening history public.' : 'Feature up to six eligible Nightjar items. Verified work stays visually separate from self-description.'}</p></div>
         {role !== 'listener' && <span className="profile-collaboration-badge"><Handshake size={13}/>{completedCollaborations} collaborations</span>}
       </div>
       <label>Showcase note <span className="optional-label">optional</span><textarea maxLength={400} value={profile.portfolioNote ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,portfolioNote:event.target.value}))} placeholder={role==='listener'?'A note about the playlists you choose to share.':'Introduce the work you want people to notice first.'}/></label>

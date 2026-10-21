@@ -23,19 +23,19 @@ const steps: { id: Step; label: string; title: string; description: string }[] =
   {
     id: 'identity',
     label: 'YOUR NIGHTJAR',
-    title: 'Create a profile that feels like yours.',
-    description: 'This is your account-level identity across Nightjar. Whether you listen, create, write, edit or make artwork, your personal profile is never treated as the “basic” version.',
+    title: 'Start with your name.',
+    description: 'Choose how people see you on Nightjar. Your listener profile and your professional work each have their own place.',
   },
   {
     id: 'presence',
     label: 'YOUR PRESENCE',
-    title: 'Give people a reason to remember you.',
-    description: 'A premium profile should feel intentional. Add a headline, a short introduction and an optional welcome note. Professional services and credentials stay in the relevant role Studio.',
+    title: 'Tell us a little about yourself.',
+    description: 'Add a headline, a short introduction and an optional welcome note. You can fill in professional details in your Studio.',
   },
   {
     id: 'personalisation',
     label: 'YOUR WORLD',
-    title: 'Shape what Nightjar feels like for you.',
+    title: 'What do you like to listen to?',
     description: 'Choose themes, moods and categories that genuinely interest you. These are discovery preferences, not assumptions about identity.',
   },
 ];
@@ -215,7 +215,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         <label>Profile headline<input maxLength={140} value={profile.headline} onChange={(event)=>update('headline',event.target.value)} placeholder="A short line that feels unmistakably you"/><small className="field-counter">{String(profile.headline ?? '').length}/140</small></label>
         <label>About you<textarea maxLength={1200} value={profile.bio} onChange={(event)=>update('bio',event.target.value)} placeholder="Introduce yourself in your own words."/><small className="field-counter">{String(profile.bio ?? '').length}/1200</small></label>
         <label>Welcome message <span className="optional-label">optional</span><textarea maxLength={300} value={profile.welcomeMessage} onChange={(event)=>update('welcomeMessage',event.target.value)} placeholder="A small message people see when they open your profile."/><small className="field-counter">{String(profile.welcomeMessage ?? '').length}/300</small></label>
-        <div className="premium-onboarding-note"><Sparkles size={16}/><div><strong>Your professional identity stays separate.</strong><span>If you hold a professional role, its services, experience, portfolio and availability live in that role's Studio — so your personal profile still feels like you.</span></div></div>
+        <div className="premium-onboarding-note"><UserCircle2 size={16}/><div><strong>Your professional profile is separate.</strong><span>If you hold a professional role, its services, experience, portfolio and availability live in that role's Studio — so your personal profile still feels like you.</span></div></div>
       </div>;
     }
 
@@ -223,7 +223,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
       <SearchableMultiSelect label="Moods & tags I enjoy" options={combinedTags} values={profile.favouriteTags ?? []} onChange={(values)=>update('favouriteTags',values)} allowCreate createLabel="Add custom tag" helperText="Your selections help discovery and give visitors a feel for your Nightjar world. They are never treated as professional credentials."/>
       <SearchableMultiSelect label="Tropes & themes I enjoy" options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>update('favouriteTropes',values)}/>
       <SearchableMultiSelect label="Categories I enjoy" options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>update('favouriteCategories',values)}/>
-      <div className="premium-onboarding-finish-card"><Sparkles size={18}/><div><strong>This is only the beginning.</strong><span>Your profile grows with public playlists, verified credits, collaborations, badges and the work or recommendations you choose to share.</span></div></div>
+      <div className="premium-onboarding-finish-card"><Check size={18}/><div><strong>Make this space your own.</strong><span>Add public playlists, credits and creative work whenever you're ready.</span></div></div>
     </div>;
   };
 

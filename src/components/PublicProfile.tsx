@@ -294,7 +294,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <span className="nj-profile-hero-eyebrow"><Sparkles size={13} aria-hidden="true"/> {profileRole === "listener" ? "THE NIGHTJAR COMMUNITY" : "MEET THE MAKER"}</span>
             <h3>{profile.displayName}</h3>
             {profile.handle && <span className="nj-cinema-profile-handle">@{String(profile.handle).replace(/^@/, '')}</span>}
-            <p>{roleDetails.roleHeadline || profile.headline || (profileRole === 'editor' ? 'Audio Editor on Nightjar.' : profileRole === 'listener' ? 'A curated corner of the Nightjar listening community.' : 'Nightjar member.')}</p>
+            <p>{roleDetails.roleHeadline || profile.headline || (profileRole === 'editor' ? 'Audio Editor on Nightjar.' : profileRole === 'listener' ? 'A Nightjar listener.' : 'Nightjar member.')}</p>
             {profile.pronouns && <small>{profile.pronouns}</small>}
             {profile.nightjarTeam === true && <div className="profile-activity-badges public-profile-badges"><span><ShieldCheck size={12}/>Official Nightjar Team</span></div>}
             {availableProfileRoles.length > 0 && <div className="profile-role-chips" role="tablist" aria-label="Professional roles">{availableProfileRoles.map((role:string)=><button type="button" role="tab" aria-selected={profileRole===role} data-nightjar-scroll-top className={profileRole===role?'active':''} key={role} onClick={()=>{ setSelectedProfileRole(role); dialogRef.current?.scrollTo({top:0,behavior:'auto'}); }}>{profile.nightjarTeam === true ? 'Nightjar Team' : roleLabel(role)}</button>)}</div>}
@@ -418,7 +418,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
         </section>}
 
         {profileRole === 'listener' && <section className="role-public-professional listener-public-professional">
-          <div className="role-public-professional-head"><div><span className="mini-label">LISTENER SIGNATURE</span><h3>A curated member profile, not a behavioural dossier.</h3><p>This space is made from information the Listener deliberately chose to share. Private listening history, favourites, completion data and library contents are not exposed.</p></div><Headphones size={19}/></div>
+          <div className="role-public-professional-head"><div><span className="mini-label">ABOUT THIS LISTENER</span><h3>What they've chosen to share.</h3><p>Private listening history, favourites and library contents stay private.</p></div><Headphones size={19}/></div>
           <div className="role-public-fact-grid">
             <button type="button" className="nj-role-metric-link" onClick={()=>onOpenConnections(profile.userId,'followers',profile.displayName)} aria-label="View followers"><span>Followers</span><strong>{profile.followerCount ?? 0}</strong></button>
             <button type="button" className="nj-role-metric-link" onClick={()=>onOpenConnections(profile.userId,'following',profile.displayName)} aria-label="View following"><span>Following</span><strong>{profile.followingCount ?? 0}</strong></button>

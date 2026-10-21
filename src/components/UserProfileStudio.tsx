@@ -116,7 +116,7 @@ export default function UserProfileStudio({
       </div>
 
       <div className="premium-user-readiness">
-        <div className="premium-user-readiness-score"><strong>{profileCompletion}%</strong><span>Profile depth</span></div>
+        <div className="premium-user-readiness-score"><strong>{profileCompletion}%</strong><span>Profile details</span></div>
         <div className="nj-profile-progress-track"><span style={{width:profileCompletion + '%'}}/></div>
         <small>{profileCompletion >= 85 ? 'Your profile feels established.' : profileCompletion >= 60 ? 'Looking good — a few details will make it richer.' : 'Build this into a profile people remember.'}</small>
       </div>
@@ -136,7 +136,7 @@ export default function UserProfileStudio({
 
     <div className="premium-user-profile-grid">
       <article className="panel premium-user-card identity">
-        <div className="premium-user-card-head"><div><span className="mini-label">IDENTITY</span><h2>The version of you people meet.</h2></div><UserCircle2 size={18}/></div>
+        <div className="premium-user-card-head"><div><span className="mini-label">IDENTITY</span><h2>How people see you.</h2></div><UserCircle2 size={18}/></div>
         <div className="premium-avatar-editor">
           <span className="premium-avatar-editor-preview" data-tone={profile.avatarTone || 'plum'}>
             {profile.avatarUrl ? <FramedApprovedImage src={profile.avatarUrl} alt="Approved profile" framing={profile.avatarFraming} defaultMode="fill"/> : initials}
@@ -178,7 +178,7 @@ export default function UserProfileStudio({
       </article>
 
       <article className="panel premium-user-card presence">
-        <div className="premium-user-card-head"><div><span className="mini-label">PRESENCE</span><h2>Make the profile memorable.</h2></div><Sparkles size={18}/></div>
+        <div className="premium-user-card-head"><div><span className="mini-label">PRESENCE</span><h2>Introduce yourself.</h2></div><Sparkles size={18}/></div>
         <label>Profile headline<input maxLength={140} value={profile.headline ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,headline:event.target.value}))} placeholder="A short line that feels like you"/><small className="field-counter">{String(profile.headline ?? '').length}/140</small></label>
         <fieldset className="nj-profile-cover-choice">
           <legend>Public profile header</legend>
@@ -225,14 +225,14 @@ export default function UserProfileStudio({
       </article>
 
       <article className="panel premium-user-card discovery">
-        <div className="premium-user-card-head"><div><span className="mini-label">YOUR WORLD</span><h2>What belongs in your Nightjar orbit? <ContextHelp topic="profile-interests"/></h2></div><Heart size={18}/></div>
+        <div className="premium-user-card-head"><div><span className="mini-label">YOUR WORLD</span><h2>What are you into? <ContextHelp topic="profile-interests"/></h2></div><Heart size={18}/></div>
         <SearchableMultiSelect label="Moods & tags" options={combinedTagOptions} values={profile.favouriteTags ?? []} onChange={(values)=>setProfile((current:any)=>({...current,favouriteTags:values}))} allowCreate={role !== 'admin'} createLabel="Add custom tag"/>
         <SearchableMultiSelect label="Tropes & themes" options={PROFILE_TROPE_OPTIONS} values={profile.favouriteTropes ?? []} onChange={(values)=>setProfile((current:any)=>({...current,favouriteTropes:values}))}/>
         <SearchableMultiSelect label="Categories" options={PROFILE_CATEGORY_OPTIONS} values={profile.favouriteCategories ?? []} onChange={(values)=>setProfile((current:any)=>({...current,favouriteCategories:values}))}/>
       </article>
 
       <article className="panel premium-user-card taste">
-        <div className="premium-user-card-head"><div><span className="mini-label">TASTE CONSTELLATION</span><h2>Your evolving discovery fingerprint. <ContextHelp topic="taste-constellation"/></h2></div><Star size={18}/></div>
+        <div className="premium-user-card-head"><div><span className="mini-label">YOUR LISTENING TASTES</span><h2>The stories and themes you enjoy. <ContextHelp topic="taste-constellation"/></h2></div><Star size={18}/></div>
         <div className="premium-taste-constellation">
           {tasteVector.length ? tasteVector.slice(0,10).map((item:any,index:number)=><div key={item.label} style={{'--weight':Math.max(.2,Math.min(1,Number(item.weight ?? .5))), '--index':index} as CSSProperties}><strong>{item.label}</strong><span>{Math.round(Number(item.weight ?? 0)*100)}%</span></div>) : <div className="people-empty"><Star size={17}/><strong>Your constellation will form naturally.</strong><span>Save, finish, replay and explore. Nightjar keeps this separate from your public identity.</span></div>}
         </div>

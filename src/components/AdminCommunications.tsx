@@ -655,8 +655,8 @@ export default function AdminCommunications() {
                   <label key={key}>{label}<input value={previewNames[key]} onChange={event=>setPreviewNames(current=>({...current,[key]:event.target.value}))} maxLength={80}/></label>)}
               </div>
               <div className="admin-mail-personalisation-example">
-                <strong>{previewText(subject) || 'Your personalised subject appears here'}</strong>
-                <p>{previewText(body) || 'Your personalised message appears here'}</p>
+                <strong>{previewText(subject) || 'Subject preview'}</strong>
+                <p>{previewText(body) || 'Message preview'}</p>
               </div>
               <small>Example values are preview-only. Custom replacements above, if entered, are the actual values used when this campaign is sent.</small>
             </details>
