@@ -87,7 +87,7 @@ export default function TranscriptSyncTool({
       const playback = await nightjarCatalogue.syncAudioUrl(releaseId);
       setSourceUrl(playback.url);
       setOpen(true);
-      setNotice('Press Play, then Mark current line when each sentence begins. No AI or automatic speech processing is used.');
+      setNotice('Press Play, then mark each line when it begins. You control the timing.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not open the private audio recording.');
     } finally { setLoading(false); }
@@ -155,7 +155,7 @@ export default function TranscriptSyncTool({
     try {
       const response = await nightjarCatalogue.saveSyncedTranscript(releaseId, transcript, language, true);
       await onSaved(response.release);
-      setNotice('Human-timed transcript saved. The NightJar player can now follow the audio after release.');
+      setNotice('Timed transcript saved. The NightJar player can now follow the audio after release.');
       setOpen(false); setSourceUrl(''); setReviewed(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save the timed transcript.');
@@ -165,7 +165,7 @@ export default function TranscriptSyncTool({
   const ready = lines.length > 0 && lines.every((line) => Boolean(line.text.trim()) && line.seconds !== null);
   return <div className="nj-transcript-sync-tool">
     <div className="nj-transcript-sync-intro">
-      <strong><Timer size={16} aria-hidden="true"/> Sync Transcript — no AI</strong>
+      <strong><Timer size={16} aria-hidden="true"/> Sync Transcript</strong>
       <p>Listen and tap to mark the start of each line. NightJar adds timestamps for read-along playback without speech recognition or external processing.</p>
       <p>{isAdmin ? 'Administrators can synchronise recordings after submission, even if the creator skipped it.' : 'Completely optional. You can submit normally and NightJar administrators can add the timing later.'}</p>
     </div>
@@ -224,7 +224,7 @@ export default function TranscriptSyncTool({
       <label className="release-transcript-confirm">
         <input type="checkbox" checked={reviewed} disabled={!ready} onChange={(event) => setReviewed(event.target.checked)}/>
         <span><strong>I have checked the transcript timing against the finished recording.</strong>
-          <small>No AI has processed or generated the script. The original text is preserved until you save.</small></span>
+          <small>Your original transcript is unchanged until you save.</small></span>
       </label>
       <div className="nj-transcript-sync-actions">
         <button type="button" className="primary-button" disabled={saving || !ready || !reviewed} onClick={() => void save()}>

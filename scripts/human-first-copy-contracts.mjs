@@ -17,6 +17,8 @@ const surfaces = {
   'src/components/UserProfileStudio.tsx': ['Your evolving discovery fingerprint.', 'What belongs in your Nightjar orbit?'],
   'src/components/NightjarHomeLayout.tsx': ['Tap to tuck this section away'],
   'src/components/ListeningDiscoveryControls.tsx': ['No AI recommendations or extra provider fees.'],
+  'src/components/ManualTranscriptSync.tsx': ['No AI, no third-party services and no automatic audio uploads.'],
+  'src/components/TranscriptSyncTool.tsx': ['Sync Transcript — no AI', 'No AI has processed or generated the script.'],
   'src/components/SpotlightExperience.tsx': ['A moment to celebrate the people who listen, explore and give this community its heartbeat.'],
 };
 const problems = [];
