@@ -486,18 +486,31 @@ button:focus-visible {
   border: 1px solid rgba(222, 190, 211, .12);
   border-radius: 50%;
 }
-.release-cover-media {
+/* The cover has two visual layers: a soft full-bleed version as backdrop
+   and the approved image fully in view above it. Never crop faces or artwork. */
+.release-cover-ambient {
   position: absolute;
   inset: 0;
   z-index: 0;
   display: block;
   width: 100%;
   height: 100%;
-  /* Release artwork is cover art: fill the entire card stage without side bars.
-     The upload Image Studio lets contributors choose their preferred crop. */
   object-fit: cover;
   object-position: center;
-  background: #151119;
+  pointer-events: none;
+  filter: blur(18px) brightness(.48) saturate(.82);
+  transform: scale(1.14);
+}
+.release-cover-media {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
 }
 
 /* Actual artwork should be the entire cover, not artwork framed by decorative
