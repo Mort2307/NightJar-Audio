@@ -33,7 +33,7 @@ const checks = [
   }],
   ['only approved cover artwork is exposed on script metadata and the marketplace', () => {
     assert.match(backend, /artworkUrl: data\.artworkStatus === 'approved' \? data\.artworkUrl \?\? null : null/);
-    assert.match(marketplace, /script\.artworkUrl && <img/);
+    assert.match(marketplace, /script\.artworkUrl && <FramedApprovedImage/);
   }],
   ['new and existing writer manuscripts support image uploads', () => {
     assert.match(app, /attachNewWriterArtwork\(data\.script\)/);
