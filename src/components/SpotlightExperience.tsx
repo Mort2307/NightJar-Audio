@@ -1,4 +1,4 @@
-import { ArrowRight, Brush, CheckCircle2, Crown, FileCheck2, FileText, Headphones, Heart, Mic2, Play, Share2, Sparkles, Star, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Brush, CheckCircle2, Crown, FileCheck2, FileText, Headphones, Heart, Mic2, Play, Share2, Star, type LucideIcon } from 'lucide-react';
 import ContextHelp from './ContextHelp';
 
 export type SpotlightPerson = {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { ArrowRight, Heart, MessageCircle, Mic2, Moon, Share2, ShieldCheck, Sparkles, ThumbsUp } from 'lucide-react';
+import { ArrowRight, Heart, MessageCircle, Mic2, Moon, Share2, ShieldCheck, ThumbsUp } from 'lucide-react';
 import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';

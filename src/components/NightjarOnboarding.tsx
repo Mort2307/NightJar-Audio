@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Sparkles, UserCircle2, X } from 'lucide-react';
+import { ArrowRight, Check, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
 import SearchableMultiSelect from './SearchableMultiSelect';
