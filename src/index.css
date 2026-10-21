@@ -11730,3 +11730,52 @@ textarea:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .nj-account-menu-chevron { transition: none; }
 }
+
+
+/* Compact keyboard-safe onboarding controls — 21 October mobile feedback.
+   The card is the sole scroll container; the footer stays reachable above
+   iOS/Android virtual keyboards without scrolling the locked application. */
+.nj-onboarding-inline-error {
+  position:sticky;
+  bottom:78px;
+  z-index:5;
+  margin:0 12px;
+  padding:10px 14px;
+  border:1px solid rgba(239,151,133,.5);
+  border-radius:10px;
+  background:#311c1d;
+  color:#ffe1d6;
+  font-size:13px;
+  line-height:1.5;
+}
+@media (max-width:640px) {
+  .onboarding-backdrop.premium-onboarding-backdrop {
+    align-items:stretch;
+    padding:calc(6px + env(safe-area-inset-top,0px)) 6px calc(6px + env(safe-area-inset-bottom,0px));
+    height:100dvh;
+    box-sizing:border-box;
+  }
+  .onboarding-card.premium-onboarding-card {
+    max-height:100%;
+    width:100%;
+    overscroll-behavior:contain;
+    scroll-padding-bottom:170px;
+  }
+  .premium-onboarding-footer {
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:8px;
+  }
+  .premium-onboarding-footer > div {
+    display:grid !important;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    align-items:stretch;
+  }
+  .premium-onboarding-footer .primary-button { grid-column:1/-1; grid-row:1; width:100%; }
+  .premium-onboarding-footer .secondary-button,
+  .premium-onboarding-footer .ghost-button { grid-row:2; min-width:0; }
+  .premium-onboarding-footer .ghost-button:only-child { grid-column:1/-1; }
+  .nj-onboarding-inline-error { bottom:135px; }
+}
