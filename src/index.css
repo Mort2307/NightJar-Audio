@@ -520,12 +520,38 @@ button:focus-visible {
 .track-cover.release-cover::after {
   content: none;
 }
-.track-cover.release-cover .track-index {
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: rgba(8, 7, 8, .56);
-  color: #fff4e6;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, .8);
+/* Keep uploaded cover artwork unobstructed. Metadata and actions live below
+   the image, rather than across creator-supplied lettering or faces. */
+.track-cover.release-cover { padding: 0; }
+.track-card-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 11px;
+}
+.track-card-toolbar .track-index {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted-2);
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 750;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.track-card-toolbar .cover-play {
+  position: static;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  z-index: auto;
+}
+.track-card-toolbar .cover-play:focus-visible {
+  outline: 3px solid #ebc68d;
+  outline-offset: 3px;
 }
 
 .release-cover-brand {
@@ -571,18 +597,7 @@ button:focus-visible {
 .featured-release-cover::before {
   display: none;
 }
-.featured-release-cover::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  width: auto;
-  height: auto;
-  border: 0;
-  border-radius: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, transparent 48%, rgba(5, 4, 6, .18) 68%, rgba(5, 4, 6, .9) 100%);
-}
+.featured-release-cover::after { content: none; }
 .featured-release-cover .release-cover-brand {
   background: #070607;
 }
@@ -600,18 +615,15 @@ button:focus-visible {
   font-size: clamp(22px, 5vw, 36px);
   text-align: center;
 }
-.featured-release-cover .featured-cover-title {
-  position: relative;
-  z-index: 3;
-  margin: auto 20px 22px;
-  max-width: calc(100% - 40px);
-  color: #fffaf4;
-  font-size: clamp(24px, 4vw, 32px);
-  font-weight: 760;
-  letter-spacing: .025em;
-  line-height: 1.06;
+.feature-meta .featured-release-heading {
+  margin: 2px 0 0;
+  color: var(--ivory, #fffaf4);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 500;
+  letter-spacing: -.015em;
+  line-height: 1.25;
   overflow-wrap: anywhere;
-  text-shadow: 0 2px 15px rgba(0, 0, 0, .95);
 }
 /* Every person credited on a release has equal text weight and contrast. */
 .featured-credit-list {
