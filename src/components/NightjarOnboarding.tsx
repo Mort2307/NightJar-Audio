@@ -54,6 +54,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
   const [profile, setProfile] = useState<any>({
     displayName: savedDraft?.displayName ?? initialProfile?.displayName ?? '',
@@ -133,14 +134,38 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     await pendingSave.current;
   };
 
-  const update = (key: string, value: unknown) => setProfile((current:any)=>({...current,[key]:value}));
+  const update = (key: string, value: unknown) => {
+    setFormError('');
+    setProfile((current:any)=>({...current,[key]:value}));
+  };
+
+  // Blur the field before moving between panels so the virtual keyboard no
+  // longer obscures Continue / Create on iOS Safari and Android webviews.
+  const goToStep = (next: number) => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    setFormError('');
+    setStepIndex(Math.max(0,Math.min(steps.length-1,next)));
+    scrollContainerRef.current?.scrollTo({top:0,behavior:'auto'});
+  };
 
   const finish = async () => {
+    if (!String(profile.displayName ?? '').trim()) {
+      const message = 'Please add your chosen name to finish your NightJar profile.';
+      setFormError(message);
+      goToStep(0);
+      setFormError(message);
+      notify(message);
+      return;
+    }
     if (handleProblem) {
-      setStepIndex(0);
+      setFormError(handleProblem);
+      goToStep(0);
+      setFormError(handleProblem);
       notify(handleProblem);
       return;
     }
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    setFormError('');
     setSaving(true);
     try {
       await awaitOutstandingSave();
@@ -161,6 +186,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         : 'Your Nightjar profile is ready.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Nightjar could not save your profile yet.';
+      setFormError(message);
       notify(message);
     } finally {
       setSaving(false);
@@ -253,13 +279,14 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
         {renderStep()}
       </article>
 
+      {formError && <p className="nj-onboarding-inline-error" role="alert">{formError}</p>}
       <div className="onboarding-footer premium-onboarding-footer">
         <span>{roleLabel} · personal profile</span>
         <div>
-          {stepIndex > 0 && <button className="secondary-button" onClick={()=>setStepIndex((index)=>index-1)}>Back</button>}
+          {stepIndex > 0 && <button type="button" className="secondary-button" onClick={()=>goToStep(stepIndex-1)}>Back</button>}
           {stepIndex < steps.length - 1
-            ? <button className="primary-button" onClick={()=>setStepIndex((index)=>index+1)}>Continue <ArrowRight size={14}/></button>
-            : <button className="primary-button" disabled={saving} onClick={()=>void finish()}><Check size={14}/>{saving?'Creating profile…':'Create my Nightjar profile'}</button>}
+            ? <button type="button" className="primary-button" onClick={()=>goToStep(stepIndex+1)}>Continue <ArrowRight size={14}/></button>
+            : <button type="button" className="primary-button" disabled={saving} onClick={()=>void finish()}><Check size={14}/>{saving?'Creating profile…':'Create my Nightjar profile'}</button>}
           <button type="button" className="ghost-button" disabled={saving} onClick={()=>void finishLater()}>Save &amp; finish later</button>
         </div>
       </div>
