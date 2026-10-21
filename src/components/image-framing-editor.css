@@ -4,6 +4,12 @@
 .nj-framing-header{display:flex;justify-content:space-between;gap:15px;align-items:flex-start}
 .nj-framing-header h2{margin:5px 0 0;font-size:clamp(20px,3vw,25px);line-height:1.25}
 .nj-framing-dialog p{margin:0;font-size:13px;line-height:1.55;color:#decfd6}
+.nj-framing-guidance{display:grid;gap:5px;padding:11px 13px;border:1px solid rgba(219,185,120,.26);border-radius:11px;background:rgba(219,185,120,.065)}
+.nj-framing-guidance strong{font-size:13px;line-height:1.3;color:#f0d6a9}
+.nj-framing-dialog .nj-framing-guidance p{font-size:12px;line-height:1.52;color:#e4d7cf}
+.nj-framing-guidance p+p{margin-top:4px}
+:root[data-nightjar-vision] .nj-framing-guidance{border-color:var(--line);background:var(--panel)}
+:root[data-nightjar-vision] .nj-framing-guidance strong,:root[data-nightjar-vision] .nj-framing-guidance p{color:var(--ivory)}
 .nj-framing-stage{width:min(100%,44dvh);margin-inline:auto;min-height:150px;position:relative;overflow:hidden;border:2px solid #d7bb84;border-radius:14px;background:#151119;touch-action:none;cursor:grab;outline-offset:3px}
 .nj-framing-stage.is-banner{width:min(100%,calc(44dvh * 16 / 7))}
 .nj-framing-stage:active{cursor:grabbing}
