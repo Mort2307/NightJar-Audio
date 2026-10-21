@@ -5753,6 +5753,7 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   nightjarOriginal: data.nightjarOriginal === true,
   releaseDistribution: data.releaseDistributionConfirmed === true ? cleanReleaseDistribution(data.releaseDistribution) : 'standard',
   productionNote: cleanText(data.productionNote, 1800) || null,
+  studioNoteForReleaseId: cleanText(data.studioNoteForReleaseId, 160) || null,
   transcriptAvailable: Boolean(cleanReleaseTranscript(data.transcriptText)),
   transcriptLanguage: cleanTranscriptLanguage(data.transcriptLanguage),
   transcriptWordCount: transcriptWordCount(data.transcriptText),
@@ -5864,6 +5865,19 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
   const title = cleanText(input.title, 160);
   if (!title) throw new HttpsError('invalid-argument', 'Give the release a title first.');
 
+  // Studio Notes reuse the existing moderated audio-release pipeline.
+  // A note can only link to the same creator's already published main release.
+  const studioNoteForReleaseId = cleanText(input.studioNoteForReleaseId, 160);
+  if (studioNoteForReleaseId) {
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(studioNoteForReleaseId)) {
+      throw new HttpsError('invalid-argument', 'Choose a valid published recording for your Studio Note.');
+    }
+    const parent = (await releaseRef(studioNoteForReleaseId).get()).data();
+    if (!parent || parent.creatorUserId !== identity.uid || parent.status !== 'released' || parent.studioNoteForReleaseId) {
+      throw new HttpsError('failed-precondition', 'Studio Notes can only be attached to your own published main recordings.');
+    }
+  }
+
   const clientRequestId=privateCreateRequestId(input);
   const ref=clientRequestId?db.collection('releases').doc(clientRequestId):db.collection('releases').doc();
   const record = {
@@ -5885,6 +5899,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     releaseDistribution: cleanReleaseDistribution(input.releaseDistribution),
     releaseDistributionConfirmed: cleanReleaseDistribution(input.releaseDistribution) !== 'standard' && input.releaseDistributionConfirmed === true,
     productionNote: cleanText(input.productionNote, 1800) || null,
+    studioNoteForReleaseId: studioNoteForReleaseId || null,
     rightsConfirmed: input.rightsConfirmed === true,
     contributorPermissionsConfirmed: input.contributorPermissionsConfirmed === true,
     rightsAttestedAt: input.rightsConfirmed === true && input.contributorPermissionsConfirmed === true ? FieldValue.serverTimestamp() : null,
@@ -6264,6 +6279,12 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
   const data = snapshot.data();
   if (!data || data.creatorUserId !== identity.uid) throw new HttpsError('not-found', 'Release not found.');
   if (data.status !== 'draft') throw new HttpsError('failed-precondition', 'Only saved drafts can be submitted for review.');
+  if (data.studioNoteForReleaseId) {
+    const parent = (await releaseRef(String(data.studioNoteForReleaseId)).get()).data();
+    if (!parent || parent.creatorUserId !== identity.uid || parent.status !== 'released' || parent.studioNoteForReleaseId) {
+      throw new HttpsError('failed-precondition', 'Your parent recording must still be published before submitting this Studio Note.');
+    }
+  }
   if (data.scheduledAt) scheduleReleaseInput(data.scheduledAt, data.scheduledTimeZone, data.scheduledLocal);
   if (!data.title || !data.description || !data.category || !data.audioStoragePath) {
     throw new HttpsError('failed-precondition', 'Complete title, description, category and audio before submitting.');
