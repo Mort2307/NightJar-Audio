@@ -272,7 +272,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               className="nj-profile-hero-banner" absolute
               src={bannerFromCustom ? profile.bannerUrl : profile.avatarUrl} alt=""
               framing={bannerFromCustom ? profile.bannerFraming : profile.avatarFraming}
-              defaultMode={bannerFromCustom?'fit':'fill'} />}
+              defaultMode={bannerFromCustom?'fit':'fill'}
+              onLoad={(image)=>{if(image.naturalWidth < 480 || image.naturalHeight < 320)
+                image.classList.add('nj-cinema-banner-lowres');}} />}
             <span className="nj-cinema-profile-cover-shade"/>
             <span className="nj-cinema-cover-words"><small>NIGHTJAR / {roleLabel(profileRole).toUpperCase()}</small><em>{memberTagline || (profileRole === 'listener' ? 'Stay curious.' : 'Stories you can feel.')}</em></span>
             <span className="nj-cinema-cover-moon">☾</span>
