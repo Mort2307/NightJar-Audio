@@ -52,6 +52,7 @@ type Release = {
   releaseDistribution?: 'standard' | 'nightjar_first';
   releaseDistributionConfirmed?: boolean;
   productionNote?: string | null;
+  studioNoteForReleaseId?: string | null;
   rightsConfirmed?: boolean;
   contributorPermissionsConfirmed?: boolean;
   transcriptText?: string;
@@ -104,6 +105,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const createInFlight = useRef(false);
   const [workflowStep, setWorkflowStep] = useState<'prepare' | 'review'>('prepare');
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
+  const [studioNoteParent, setStudioNoteParent] = useState('');
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioStage, setAudioStage] = useState<'idle' | 'uploading' | 'verifying' | 'saved' | 'error'>('idle');
   const [audioProgress, setAudioProgress] = useState(0);
@@ -539,6 +541,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         setSelectedRelease({
           id: 'demo-release-draft-' + Date.now(),
           title: draft.title,
+          studioNoteForReleaseId: studioNoteParent || null,
           description: draft.description,
           category: draft.category,
           genre: draft.genre,
@@ -551,11 +554,13 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
           audioAvailable: false,
         });
         setDraft({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
+        setStudioNoteParent('');
         notify('Simulation: release draft created locally.');
         return;
       }
       const data = await nightjarCatalogue.create({
         title: draft.title,
+        studioNoteForReleaseId: studioNoteParent || null,
         description: draft.description,
         category: draft.category,
         genre: draft.genre,
@@ -567,6 +572,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       });
       const next = data.release as Release | undefined;
       setDraft({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
+      setStudioNoteParent('');
       if (next) { setSelectedRelease(next); setWorkflowStep('prepare'); setSubmissionConfirmed(false); }
       await onRefresh();
       notify(data.reused ? 'Recovered the existing private release draft; no duplicate was created.' : 'Release draft created.');
@@ -801,6 +807,14 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
+          <label className="nj-studio-note-selector">Recording type
+            <select value={studioNoteParent} onChange={event => setStudioNoteParent(event.target.value)} aria-label="Attach a Studio Note to a published recording">
+              <option value="">Main recording</option>
+              {releases.filter(item => item.status === 'released' && !item.studioNoteForReleaseId).map(item =>
+                <option key={item.id} value={item.id}>Studio Note for: {item.title || 'Untitled recording'}</option>)}
+            </select>
+            <small>Optional audio-only behind-the-scenes extra. Upload it as a normal release; rights checks and NightJar moderation still apply. Video is not enabled.</small>
+          </label>
           <button className="primary-button" disabled={creatingDraft || !canPublish || accountStatus === 'pending_review'} onClick={() => void createDraft()}><UploadCloud size={14} /> {creatingDraft ? 'Creating private draft…' : accountStatus === 'pending_review' ? 'Approval required' : 'Create & upload'}</button>
         </div>
       </aside>

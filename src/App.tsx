@@ -325,6 +325,7 @@ type Track = {
   episodeNumber?: number | null;
   nightjarOriginal?: boolean;
   releaseDistribution?: 'standard' | 'nightjar_first';
+  studioNoteForReleaseId?: string | null;
   productionNote?: string | null;
   communityLikeCount?: number;
   communityLoveCount?: number;
@@ -1814,6 +1815,7 @@ function App() {
         transcriptLanguage: release.transcriptLanguage ?? 'en',
         transcriptWordCount: Math.max(0, Number(release.transcriptWordCount ?? 0)),
         creatorUserId: release.creatorUserId,
+        studioNoteForReleaseId: release.studioNoteForReleaseId ?? null,
         genre: release.genre ?? '',
         tags: release.tags ?? [],
         tropes: release.tropes ?? [],
@@ -6786,6 +6788,7 @@ function releaseToTrack(release: any): Track {
     transcriptLanguage: release.transcriptLanguage ?? 'en',
     transcriptWordCount: Math.max(0, Number(release.transcriptWordCount ?? 0)),
     creatorUserId: release.creatorUserId,
+    studioNoteForReleaseId: release.studioNoteForReleaseId ?? null,
     genre: release.genre ?? '',
     mood: release.mood ?? '',
     tags: release.tags ?? [],

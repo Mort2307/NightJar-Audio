@@ -28,6 +28,7 @@ export type NightjarPlayerTrack = {
   artworkFraming?: {assetId:string;mode:'fit'|'fill';zoom:number;x:number;y:number}|null;
   nightjarOriginal?: boolean;
   releaseDistribution?: 'standard' | 'nightjar_first';
+  studioNoteForReleaseId?: string | null;
   contributors?: Array<{ name?: string; role?: string; userId?: string | null }>;
   transcriptAvailable?: boolean;
   transcriptLanguage?: string;
@@ -146,6 +147,11 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
   const equalizer = useNightjarEqualizer(audioRef);
   const writerCredit = track?.contributors?.find((credit) => credit.role === 'Writer' && credit.name?.trim())?.name ?? '';
   const artwork = track?.artworkUrl && !artworkFailed ? track.artworkUrl : '/nightjar-home-512.png';
+  const studioNotes = track && !track.studioNoteForReleaseId
+    ? queue.filter(item => item.studioNoteForReleaseId === track.id && item.audioAvailable).slice(0, 12)
+    : [];
+  const studioNoteParent = track?.studioNoteForReleaseId
+    ? queue.find(item => item.id === track.studioNoteForReleaseId) : null;
 
   useEffect(() => {
     // Full player acts as a modal; mini-player leaves the page scrollable.
@@ -540,6 +546,16 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
         <div className="nj-up-eq-bands">{(['bass', 'mid', 'treble'] as const).map((band) => <label key={band}><span>{band === 'mid' ? 'Mids' : band === 'treble' ? 'Treble' : 'Bass'} <strong>{equalizer.levels[band] > 0 ? '+' : ''}{equalizer.levels[band]} dB</strong></span><input type="range" min="-12" max="12" step="1" value={equalizer.levels[band]} onChange={(event) => equalizer.updateBand(band, Number(event.target.value))} aria-label={band + ' EQ gain in decibels'}/></label>)}</div>
         {simulationMode && <p className="nj-up-eq-message" role="status">Audio EQ works on actual Nightjar recordings. Simulation mode has no audio stream to process.</p>}
         {equalizer.message && <p className="nj-up-eq-message" role="status">{equalizer.message}</p>}
+      </div>}
+      {(studioNotes.length > 0 || studioNoteParent) && <div className="nj-studio-notes-player" aria-label="Studio Notes and behind-the-scenes audio">
+        <h3><Headphones size={16} aria-hidden="true"/> Studio Notes · Behind the Mic</h3>
+        {studioNotes.length > 0 && <p>Hear the stories and creative moments behind this recording.</p>}
+        {studioNotes.map(item => <button type="button" className="secondary-button" key={item.id}
+          disabled={!onSelectTrack} onClick={() => onSelectTrack?.(item)}>
+          <Play size={14} aria-hidden="true"/> {item.title}
+        </button>)}
+        {studioNoteParent && <button type="button" className="secondary-button" disabled={!onSelectTrack}
+          onClick={() => onSelectTrack?.(studioNoteParent)}><ChevronLeft size={15}/> Back to {studioNoteParent.title}</button>}
       </div>}
       <div className="nj-up-section-toggle">
         <span><Headphones size={17}/> Now playing</span>
