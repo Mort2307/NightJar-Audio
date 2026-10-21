@@ -9,6 +9,8 @@ import ContextHelp from './ContextHelp';
 import LegalAgreementPanel from './LegalAgreementPanel';
 import ProfileSectionBoundary from './ProfileSectionBoundary';
 import ImageFramingEditor from './ImageFramingEditor';
+import FramedApprovedImage from './FramedApprovedImage';
+import type {ImageFraming} from '../platform/image-framing';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
@@ -28,6 +30,7 @@ type Props = {
   combinedTagOptions: readonly string[];
   tasteVector: any[];
   onUploadAvatar: (file: File) => Promise<void>;
+  onSaveApprovedFraming:(kind:'avatar'|'banner',assetId:string,framing:ImageFraming)=>Promise<void>;
   onRemoveAvatar: () => Promise<void>;
   onUploadBanner: (file: File) => Promise<void>;
   onRemoveBanner: () => Promise<void>;
@@ -67,6 +70,7 @@ export default function UserProfileStudio({
   combinedTagOptions,
   tasteVector,
   onUploadAvatar,
+  onSaveApprovedFraming,
   onRemoveAvatar,
   onUploadBanner,
   onRemoveBanner,
@@ -77,6 +81,7 @@ export default function UserProfileStudio({
   onOpenEditorStudio,
 }: Props) {
   const [framingUpload,setFramingUpload]=useState<{file:File;shape:'portrait'|'banner'}|null>(null);
+  const [approvedFraming,setApprovedFraming]=useState<{kind:'avatar'|'banner';assetId:string;src:string}|null>(null);
   const handleProblem = nightjarHandleError(profile.handle);
   const suggestedHandle = handleProblem ? suggestNightjarHandle(profile.handle) : '';
   const displayName = String(profile.displayName || userName || userEmail?.split('@')[0] || 'Nightjar member');
@@ -95,7 +100,7 @@ export default function UserProfileStudio({
       <div className="premium-user-hero-glow" aria-hidden="true"/>
       <div className="premium-user-avatar-wrap">
         <span className="premium-user-avatar" data-tone={profile.avatarTone || 'plum'}>
-          {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" loading="lazy" decoding="async"/> : initials}
+          {profile.avatarUrl ? <FramedApprovedImage src={profile.avatarUrl} alt="" framing={profile.avatarFraming} defaultMode="fill"/> : initials}
         </span>
         <span className={!discoverable ? 'premium-profile-state private' : 'premium-profile-state'}>
           {discoverable ? 'Discoverable' : 'Private'}
@@ -134,11 +139,16 @@ export default function UserProfileStudio({
         <div className="premium-user-card-head"><div><span className="mini-label">IDENTITY</span><h2>The version of you people meet.</h2></div><UserCircle2 size={18}/></div>
         <div className="premium-avatar-editor">
           <span className="premium-avatar-editor-preview" data-tone={profile.avatarTone || 'plum'}>
-            {profile.avatarUrl ? <img src={profile.avatarUrl} alt="Approved profile" loading="lazy" decoding="async"/> : initials}
+            {profile.avatarUrl ? <FramedApprovedImage src={profile.avatarUrl} alt="Approved profile" framing={profile.avatarFraming} defaultMode="fill"/> : initials}
           </span>
           <div>
             <label className="secondary-button upload-label"><ImagePlus size={14}/> {profileImageBusy ? 'Optimising photo…' : profile.avatarUrl ? 'Replace portrait' : 'Add portrait'}<input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0]; if(file)setFramingUpload({file,shape:'portrait'}); event.currentTarget.value='';}}/></label>
              <ContextHelp topic="profile-photo"/>
+            {profile.avatarUrl && profile.avatarStatus === 'approved' && profile.avatarAssetId &&
+              <button type="button" className="secondary-button" disabled={profileImageBusy}
+                onClick={()=>setApprovedFraming({kind:'avatar',assetId:String(profile.avatarAssetId),src:String(profile.avatarUrl)})}>
+                Adjust approved portrait
+              </button>}
             {(profile.avatarUrl || profile.pendingAvatarAssetId || profile.avatarCleanupPending) && <button className="ghost-button" disabled={profileImageBusy} onClick={()=>void onRemoveAvatar()}>{profile.avatarCleanupPending?'Retry portrait cleanup':'Remove'}</button>}
             {profile.avatarCleanupPending && <small role="status">Portrait is hidden. Private file deletion needs another attempt.</small>}
             {profile.pendingAvatarStatus === 'pending' && <small>New portrait awaiting moderation.</small>}
@@ -184,7 +194,8 @@ export default function UserProfileStudio({
         <div className="nj-profile-banner-editor">
           <div className="nj-profile-banner-preview" role="img" aria-label="Approved custom cover preview">
             {profile.bannerStatus === 'approved' && profile.bannerUrl
-              ? <img src={profile.bannerUrl} alt="" loading="lazy" decoding="async" />
+              ? <FramedApprovedImage src={profile.bannerUrl} alt="" framing={profile.bannerFraming}
+                  defaultMode="fit" absolute zIndex={-2} />
               : <span>YOUR NIGHTJAR COVER</span>}
             <span className="nj-profile-banner-title">{String(profile.headline || 'Your story. Your voice.')}</span>
           </div>
@@ -194,6 +205,11 @@ export default function UserProfileStudio({
               <input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/avif" hidden
                 disabled={profileImageBusy} onChange={(event)=>{const file=event.target.files?.[0];if(file)setFramingUpload({file,shape:'banner'});event.currentTarget.value='';}}/>
             </label>
+            {profile.bannerStatus === 'approved' && profile.bannerUrl && profile.bannerAssetId &&
+              <button type="button" className="secondary-button" disabled={profileImageBusy}
+                onClick={()=>setApprovedFraming({kind:'banner',assetId:String(profile.bannerAssetId),src:String(profile.bannerUrl)})}>
+                Adjust approved cover
+              </button>}
             {(profile.bannerUrl || profile.pendingBannerAssetId || profile.bannerCleanupPending) && <button type="button" className="ghost-button" disabled={profileImageBusy}
               onClick={()=>void onRemoveBanner()}>{profile.bannerCleanupPending?'Retry cover cleanup':'Remove cover'}</button>}
             {profile.bannerCleanupPending && <small role="status">Cover is hidden. Private file deletion needs another attempt.</small>}
@@ -232,6 +248,16 @@ export default function UserProfileStudio({
       <div><Bell size={15}/><span><strong>{profileDirty ? 'You have unsaved profile changes.' : 'Your profile is saved.'}</strong><small>{profileDirty ? 'Keep shaping it, then save when it feels right.' : 'You can change any of this whenever you want.'}</small></span></div>
       <div>{profileDirty && profileBaseline && <button className="ghost-button" onClick={onRevert} disabled={profileLoading}>Revert</button>}<button className="primary-button" onClick={()=>void onSave()} disabled={profileLoading || !profileDirty}><Check size={14}/>{profileLoading?'Saving…':profileDirty?'Save profile':'Saved'}</button></div>
     </div>
+    {approvedFraming && <ImageFramingEditor key={approvedFraming.assetId}
+      approvedSrc={approvedFraming.src}
+      shape={approvedFraming.kind==='banner'?'banner':'portrait'}
+      initialFraming={approvedFraming.kind==='banner'?profile.bannerFraming:profile.avatarFraming}
+      onCancel={()=>setApprovedFraming(null)}
+      onSaveFraming={async framing=>{
+        await onSaveApprovedFraming(approvedFraming.kind,approvedFraming.assetId,framing);
+        setApprovedFraming(null);
+      }}
+    />}
     {framingUpload && <ImageFramingEditor
       file={framingUpload.file}
       shape={framingUpload.shape}
