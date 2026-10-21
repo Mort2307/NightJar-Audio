@@ -13,6 +13,8 @@ export type ArtistPortfolioItem = {
   commissionType: string | null;
   status: string;
   imageUrl: string | null;
+  imageAssetId: string | null;
+  imageFraming?: {assetId:string;mode:'fit'|'fill';zoom:number;x:number;y:number}|null;
   imageStatus: string | null;
   pendingImageAssetId: string | null;
   pendingImageStatus: string | null;
