@@ -26,3 +26,5 @@
 .writer-initial-artwork input[type=file] { max-width: 100%; font: inherit; font-size: .87rem; }
 .writer-initial-artwork input[type=file]::file-selector-button { font: inherit; cursor: pointer; padding: .5rem .75rem; border-radius: 9px; margin-right: .65rem; background: var(--surface-secondary, rgba(255,255,255,.06)); color: inherit; border: 1px solid var(--border, rgba(255,255,255,.2)); }
 .writer-initial-artwork small { font-weight: 400; opacity: .82; overflow-wrap: anywhere; }
+
+.writer-script-artwork-preview>.nj-approved-image-view{width:100%;height:100%;display:block}
