@@ -672,10 +672,11 @@
 /* Small audio tiles borrow the reference mockup's clear image/title contrast.
    Existing transcript, bookmark, comment and permission actions stay intact. */
 :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .track-card {
-  border:1px solid rgba(216,175,110,.32);
+  /* A subtle edge keeps cards distinct without boxing artwork in heavy gold. */
+  border:1px solid rgba(216,175,110,.14);
   border-radius:17px;
   background:#0c0b0a;
-  box-shadow:0 13px 35px rgba(0,0,0,.24);
+  box-shadow:0 9px 24px rgba(0,0,0,.16);
 }
 :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .track-cover {
   min-height:190px;
