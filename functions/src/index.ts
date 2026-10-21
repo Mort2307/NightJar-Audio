@@ -10526,6 +10526,8 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
         rights: normaliseScriptRights(data.rights),
         marketplace: (() => { const { previewExcerpt, ...listing } = normaliseScriptMarketplace(data.marketplace); return { ...listing, sampleAvailable:Boolean(previewExcerpt.trim()) }; })(),
         artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
+        artworkAssetId: data.artworkStatus === 'approved' ? data.artworkAssetId ?? null : null,
+        artworkFraming: safeProfileFraming(data.artworkFraming,data.artworkAssetId,data.artworkStatus),
         updatedAt: toIso(data.updatedAt),
       };
     })));
