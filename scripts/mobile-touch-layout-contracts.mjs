@@ -29,7 +29,8 @@ assert.match(styles, /\.onboarding-card\.premium-onboarding-card\s*>\s*\.premium
 assert.match(onboarding, /ref=\{scrollContainerRef\}/, 'wizard scrolls its own panel instead of requiring keyboard tab');
 assert.match(onboarding, /scrollContainerRef\.current\?\.scrollTo/, 'changing wizard steps starts at the next heading');
 assert.match(onboarding, /onSkip/, 'wizard exposes a Finish later exit');
-assert.match(app, /nextProfile\.onboardingComplete !== true && nextProfile\.onboardingDeferred !== true/, 'deferred onboarding does not reopen on later logins');
+assert.match(app, /if \(completed\) \{\s*setShowOnboarding\(false\);/, 'completed onboarding closes the modal on later logins and role switches');
+assert.match(app, /setShowOnboarding\(nextProfile\.onboardingDeferred !== true && nextProfile\.onboardingDismissed !== true\)/, 'account-level deferral is respected before any one-time invitation');
 assert.match(app, /nightjarCommunity\.(?:pauseOnboarding\(draft, stepIndex, revision\)|deferMyProfileOnboarding\(\))/, 'Finish later is persisted to the authenticated account');
 const community=fs.readFileSync('src/platform/firebase-community.ts','utf8');
 const backend=fs.readFileSync('functions/src/index.ts','utf8');
@@ -111,7 +112,8 @@ assert.match(onboarding, /Save &amp; finish later/, 'member can intentionally po
 assert.match(onboarding, /savedDraft\?\.displayName/, 'saved onboarding draft prepopulates the resumed form');
 assert.match(server, /export const pauseProfileOnboarding = onCall/, 'profile postponement persists through an authenticated server operation');
 assert.match(server, /onboardingDismissed:dismiss/, 'the server persists whether the member actively postponed setup');
-assert.match(app, /nextProfile\.onboardingComplete !== true[^\n]*nextProfile\.onboardingDismissed !== true/, 'completed or postponed onboarding does not interrupt future logins');
+assert.match(app, /onboardingPromptedUsersRef\.current\.add\(memberId\)/, 'initial setup invitation is recorded for the account rather than redisplayed on every workspace change');
+assert.match(app, /onboardingFinishedUsersRef\.current\.add\(memberId\)/, 'completed accounts remain marked as finished across in-flight role refreshes');
 assert.match(app, /Finish profile setup/, 'postponed setup has a visible profile-page resume action');
 assert.match(app, /await nightjarCommunity\.pauseOnboarding\(draft, stepIndex, revision\)/, 'the save and finish later action persists the versioned cloud draft before closing');
 assert.match(community, /pauseOnboardingCall/, 'client sends pause request to the correct backend callable');
