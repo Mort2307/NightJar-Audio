@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const creator=readFileSync('src/components/CreatorAudioPipeline.tsx','utf8');
+const importer=readFileSync('src/platform/transcript-file-import.ts','utf8');
+assert.match(creator,/readCreatorTranscriptFile/);
+assert.match(creator,/type="file" accept=".txt,.md,.srt,.vtt/);
+assert.match(creator,/transcriptAccessibilityReviewed:false/);
+assert.match(creator,/Replace your existing draft transcript/);
+assert.match(importer,/const TRANSCRIPT_LIMIT = 120000/);
+assert.match(importer,/const MAX_FILE_BYTES = 250000/);
+assert.match(importer,/export function prepareCreatorTranscriptImport/);
+assert.match(importer,/export async function readCreatorTranscriptFile/);
+assert.doesNotMatch(importer,/fetch\(|XMLHttpRequest|SpeechRecognition|speechSynthesis|whisper|huggingface/);
+console.log('NightJar local-only script/caption import contracts PASS.');

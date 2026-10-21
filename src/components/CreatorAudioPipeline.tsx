@@ -14,6 +14,7 @@ import {nightjarWorkFraming} from '../platform/firebase-artwork-framing';
 import type {ApprovedWorkFraming} from '../platform/firebase-artwork-framing';
 import FramedApprovedImage from './FramedApprovedImage';
 import ManualTranscriptSync from './ManualTranscriptSync';
+import { readCreatorTranscriptFile } from '../platform/transcript-file-import';
 import TranscriptSyncTool from './TranscriptSyncTool';
 import './creator-workflow.css';
 import './cloud-profile-draft.css';
@@ -967,6 +968,24 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
                 <code>[01:42] [door closes]</code>
                 <small>Use [mm:ss] or [hh:mm:ss] at the start of a line. Untimed transcripts are fully supported too.</small>
               </div>
+            </div>
+
+            <div className="nj-transcript-file-import">
+              <label htmlFor="nj-release-transcript-file"><strong>Import an existing script or caption file</strong> (optional)</label>
+              <input id="nj-release-transcript-file" type="file" accept=".txt,.md,.srt,.vtt,text/plain,text/vtt" onChange={async (event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = '';
+                if (!file) return;
+                if (String(current.transcriptText ?? '').trim() && !window.confirm('Replace your existing draft transcript with this file? The current text will be replaced.')) return;
+                try {
+                  const text = await readCreatorTranscriptFile(file);
+                  setRelease({transcriptText:text,transcriptAccessibilityReviewed:false});
+                  notify('Script imported into your private draft. Review it against the finished recording before approving.');
+                } catch (error) {
+                  notify(error instanceof Error ? error.message : 'This transcript file could not be read.');
+                }
+              }}/>
+              <small>Accepted: plain text, Markdown, SRT or WebVTT. The selected file is read on your device; only the draft text is saved to NightJar. Import material you own or are licensed to use. No speech recognition or external transcription provider.</small>
             </div>
 
             <label className="release-transcript-text">
