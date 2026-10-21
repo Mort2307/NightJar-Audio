@@ -40,7 +40,7 @@ assert.match(caller,/getFunctions\(firebaseApp,'europe-west2'\)/);
 assert.match(caller,/saveApprovedWorkFraming/);
 assert.match(creator,/Adjust approved release artwork/);
 assert.match(creator,/nightjarWorkFraming.save\('release_artwork'/);
-assert.match(creator,/current.artworkAssetId===selection.assetId/,'No stale UI overwrite');
+assert.match(creator,/previous.artworkAssetId===selection.assetId/,'No stale UI overwrite');
 assert.match(writer,/Adjust approved manuscript artwork/);
 assert.match(writer,/nightjarWorkFraming.save\('script_artwork'/);
 assert.match(artist,/Adjust approved artwork/);
