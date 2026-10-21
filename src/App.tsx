@@ -733,6 +733,10 @@ function App() {
   });
   const [moderationOpen, setModerationOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // One unsolicited setup invitation per signed-in member per app session.
+  // Switching workspaces must never restart a form the member already saw.
+  const onboardingPromptedUsersRef = useRef<Set<string>>(new Set());
+  const onboardingFinishedUsersRef = useRef<Set<string>>(new Set());
   const [commandOpen, setCommandOpen] = useState(false);
   const [profileBaseline, setProfileBaseline] = useState<any | null>(null);
   const profileCloudDraftRef = useRef<ProfileDraftController|null>(null);
@@ -1347,39 +1351,56 @@ function App() {
   }, [role, testingSessionHydrated, demoMode, simulationMode, previewRole]);
 
   useEffect(() => {
-    if (!user || !ageVerified || !role || role === 'admin') return;
+    if (!user?.userId || !ageVerified || !role || role === 'admin') return;
+    const memberId = user.userId;
     let cancelled = false;
     void nightjarCommunity.getMyProfile().then((data) => {
       if (cancelled) return;
       const nextProfile = data?.profile;
       if (nextProfile) {
+        // A successful save cannot be undone visually by a slower, older
+        // profile read started during a role switch.
+        const completed = nextProfile.onboardingComplete === true ||
+          onboardingFinishedUsersRef.current.has(memberId);
+        if (completed) onboardingFinishedUsersRef.current.add(memberId);
+        const currentProfile = completed && nextProfile.onboardingComplete !== true
+          ? { ...nextProfile, onboardingComplete: true } : nextProfile;
         const preferredRole: PreviewRole = ['listener','creator','writer','editor','artist'].includes(String(role))
           ? role as PreviewRole
           : 'listener';
-        const availableRoles: PreviewRole[] = Array.isArray(nextProfile.roles)
-          ? nextProfile.roles.filter((item: unknown): item is PreviewRole =>
+        const availableRoles: PreviewRole[] = Array.isArray(currentProfile.roles)
+          ? currentProfile.roles.filter((item: unknown): item is PreviewRole =>
               typeof item === 'string'
               && ['listener','creator','writer','editor','artist'].includes(item),
             )
           : ['listener'];
         const targetRole: PreviewRole = availableRoles.includes(preferredRole) ? preferredRole : 'listener';
-        const mergedProfile = applyProfileRoleDraft(nextProfile, targetRole);
+        const mergedProfile = applyProfileRoleDraft(currentProfile, targetRole);
         setProfile(mergedProfile);
         setProfileBaseline(structuredClone(mergedProfile));
         setProfileEditRole(targetRole);
-        setShowOnboarding(nextProfile.onboardingComplete !== true && nextProfile.onboardingDeferred !== true && nextProfile.onboardingDismissed !== true);
+        if (completed) {
+          setShowOnboarding(false);
+        } else if (!onboardingPromptedUsersRef.current.has(memberId)) {
+          onboardingPromptedUsersRef.current.add(memberId);
+          setShowOnboarding(nextProfile.onboardingDeferred !== true && nextProfile.onboardingDismissed !== true);
+        }
       } else {
-        // New accounts do not have a profiles document yet. Give their blank
-        // editor a real baseline so editing enables Save rather than locking it.
+        // No saved profile yet: show setup once, not on every workspace change.
+        // The account's profile editor still has a real baseline for first save.
         const empty = { ...structuredClone(EMPTY_PROFILE), roles: ['listener'] };
         setProfile(empty);
         setProfileBaseline(structuredClone(empty));
         setProfileEditRole('listener');
-        setShowOnboarding(true);
+        if (!onboardingPromptedUsersRef.current.has(memberId) &&
+            !onboardingFinishedUsersRef.current.has(memberId)) {
+          onboardingPromptedUsersRef.current.add(memberId);
+          setShowOnboarding(true);
+        }
       }
-    }).catch(() => { /* A later explicit profile load can retry without losing local edits. */ });
+    }).catch(() => { /* A transient read error must not reopen setup or lose edits. */ });
     return () => { cancelled = true; };
-  }, [user, ageVerified, role]);
+  }, [user?.userId, ageVerified, role]);
 
   useEffect(() => {
     if (!user || !ageVerified || (role === 'admin' && !testingSessionHydrated)) return;
@@ -3073,7 +3094,13 @@ function App() {
       // Save the personal identity and all approved professional drafts in ONE
       // server transaction. Multiple calls used to report "failed" after an
       // earlier role had already saved, and made multi-role profiles fragile.
-      const payload = applyProfileRoleDraft(capturedProfile, profileEditRole);
+      // Explicitly saving the personal profile also finishes the optional
+      // introductory wizard. Members should never have to enter it all again.
+      const payload = applyProfileRoleDraft({
+        ...capturedProfile,
+        onboardingComplete: true,
+        onboardingVersion: Math.max(3, Number(capturedProfile.onboardingVersion ?? 0)),
+      }, profileEditRole);
       const result = await nightjarCommunity.saveMyProfile(payload, profileEditRole);
       if (!result?.profile) throw new Error('The server did not confirm your profile save.');
 
@@ -3081,7 +3108,11 @@ function App() {
       // additional refresh is optional: an unrelated read outage must not
       // turn a committed save into a false failure.
       const refreshed = await nightjarCommunity.getMyProfile().catch(() => null);
-      const mergedProfile = applyProfileRoleDraft(refreshed?.profile ?? result.profile, profileEditRole);
+      const confirmedProfile = refreshed?.profile?.onboardingComplete === true
+        ? refreshed.profile : result.profile;
+      const mergedProfile = applyProfileRoleDraft(confirmedProfile, profileEditRole);
+      onboardingFinishedUsersRef.current.add(user.userId);
+      setShowOnboarding(false);
       setProfile(mergedProfile);
       setProfileBaseline(structuredClone(mergedProfile));
       // Clear only the revision we just saved; preserve newer work from other devices.
@@ -4871,7 +4902,10 @@ function App() {
         <section className="account-card">
           <div className="account-header">
             <span className="brand-lockup"><span className="nightjar-mark"><Moon size={17} /></span><span>NIGHTJAR</span></span>
-            <button className="text-button" onClick={signOut}><LogOut size={15} /> Sign out</button>
+            <div className="account-header-actions">
+              {role && <button type="button" className="secondary-button" onClick={() => setRolePicker(false)}><ArrowLeft size={15}/> Back to NightJar</button>}
+              <button className="text-button" onClick={signOut}><LogOut size={15} /> Sign out</button>
+            </div>
           </div>
           <p className="eyebrow">ACCOUNT SETUP</p>
           <h1>Choose your Nightjar identity.</h1>
@@ -5232,7 +5266,7 @@ function App() {
             <button className="primary-button" disabled={accountLoading} onClick={() => void signIn()}>Sign in <ArrowRight size={15} /></button>
           ) : (
             <>
-              <button className="account-chip" onClick={() => liveRolePreview ? clearAdminPreview() : simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)}>
+              <button className="account-chip" aria-label="Open my NightJar profile" title="My profile" onClick={openProfileEditor}>
                 <span className="account-chip-avatar">{simulationMode ? simulationIdentity.initials : profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : (user.name ?? user.email ?? 'N').slice(0, 1).toUpperCase()}</span>
                 <span><strong>{simulationMode ? simulationIdentity.name : user.name ?? 'Nightjar account'}</strong><em>{simulationMode ? simulationIdentity.label + ' · Simulation' : canAdmin && previewRole ? `Administrator · ${liveRolePreview ? 'live' : 'simulation'} ${roleMeta[previewRole].label} view` : accountLabel}</em></span>
               </button>
@@ -6681,11 +6715,11 @@ function App() {
       </Suspense>}
       <Suspense fallback={null}><ContentModeration open={moderationOpen && canAdmin && !simulationMode} onClose={() => setModerationOpen(false)} notify={notify} demoMode={demoMode} onMessageCreator={(creatorId) => { setModerationOpen(false);setMessageRecipientUserId(creatorId);setMessageConversationId(null);setMessageCollaborationId(null);navigate('messages'); }} onDeleted={(releaseId) => { setTracks((items) => items.filter((track) => track.id !== releaseId)); setPlaying((id) => id === releaseId ? null : id); }} /></Suspense>
       {reviewTrack && <Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading release community" />}><ReleaseReviews release={{ id: reviewTrack.id, title: reviewTrack.title, creator: reviewTrack.creator, creatorUserId: reviewTrack.creatorUserId ?? null, contributors: reviewTrack.contributors ?? [] }} onClose={() => setReviewTrack(null)} notify={notify} demoMode={demoMode} simulationMode={simulationMode} viewerRole={effectiveRole} currentUserId={user?.userId ?? null} onCommunityChanged={(summary)=>applyReleaseCommunityCounts(reviewTrack.id, summary)} onOpenProfile={(userId, role) => { setReviewTrack(null); openPublicProfile(userId, role); }} /></Suspense>}
-      {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { const merged = applyProfileRoleDraft(nextProfile, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={(draft,stepIndex,revision)=>finishOnboardingLater(draft,stepIndex,revision)} notify={notify} /></Suspense>}
+      {showOnboarding && user && role !== 'admin' && <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Loading Nightjar setup" />}><NightjarOnboarding initialProfile={profile} role={role} onComplete={(nextProfile) => { onboardingFinishedUsersRef.current.add(user.userId); const merged = applyProfileRoleDraft({ ...nextProfile, onboardingComplete: true }, profileEditRole); setProfile(merged); setProfileBaseline(structuredClone(merged)); setProfileSaveError(''); setShowOnboarding(false); }} onSkip={(draft,stepIndex,revision)=>finishOnboardingLater(draft,stepIndex,revision)} notify={notify} /></Suspense>}
       {toast && <div className="toast nj-toast" role="status" aria-live="polite"><span>{toast}</span>{toastAction && <button type="button" onClick={() => { const action=toastAction; clearToastTimer(); setToastAction(null); setToast(null); void action.run(); }}>{toastAction.label}</button>}</div>}
 
       {user && !rolePicker && !liveRolePreview && !(view === 'profile' && profileDirty) && (
-        <button className="floating-account" onClick={() => liveRolePreview ? clearAdminPreview() : simulationMode ? (navigate('profile'), void loadProfile()) : setRolePicker(true)} aria-label="Open account information">
+        <button className="floating-account" onClick={openProfileEditor} aria-label="Open my NightJar profile">
           <UserCircle2 size={16} /><span>{simulationMode ? simulationIdentity.label + ' simulation' : roleMeta[role ?? 'listener'].label}</span>
         </button>
       )}
