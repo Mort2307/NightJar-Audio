@@ -309,6 +309,8 @@ type Track = {
   audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
+  artworkAssetId?: string | null;
+  artworkFraming?: {assetId:string;mode:'fit'|'fill';zoom:number;x:number;y:number}|null;
   transcriptAvailable?: boolean;
   transcriptLanguage?: string;
   transcriptWordCount?: number;
@@ -1759,6 +1761,8 @@ function App() {
         audioAvailable: release.audioAvailable === true,
         audioUrl: null,
         artworkUrl: release.artworkUrl ?? null,
+        artworkAssetId: release.artworkAssetId ?? null,
+        artworkFraming: release.artworkFraming ?? null,
         transcriptAvailable: release.transcriptAvailable === true,
         transcriptLanguage: release.transcriptLanguage ?? 'en',
         transcriptWordCount: Math.max(0, Number(release.transcriptWordCount ?? 0)),
@@ -6701,6 +6705,8 @@ function releaseToTrack(release: any): Track {
     audioAvailable: release.audioAvailable === true,
     audioUrl: null,
     artworkUrl: release.artworkUrl ?? null,
+    artworkAssetId: release.artworkAssetId ?? null,
+    artworkFraming: release.artworkFraming ?? null,
     transcriptAvailable: release.transcriptAvailable === true,
     transcriptLanguage: release.transcriptLanguage ?? 'en',
     transcriptWordCount: Math.max(0, Number(release.transcriptWordCount ?? 0)),
