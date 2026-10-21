@@ -1153,6 +1153,50 @@ export const saveApprovedProfileFraming=onCall({region:REGION},async(request)=>{
   return {kind,framing:frame};
 });
 
+// Non-destructive framing of already-approved professional artwork.
+// Never mutate the approved asset, moderation state or upload/retirement record.
+export const saveApprovedWorkFraming=onCall({region:REGION},async request=>{
+  const identity=await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const kind=cleanText(input.kind,30);
+  const targetId=cleanText(input.targetId,160);
+  const assetId=cleanText(input.assetId,160);
+  const config={
+    release_artwork:{collection:'releases',owner:'creatorUserId',role:'creator',asset:'artworkAssetId',status:'artworkStatus',frame:'artworkFraming'},
+    script_artwork:{collection:'scripts',owner:'writerUserId',role:'writer',asset:'artworkAssetId',status:'artworkStatus',frame:'artworkFraming'},
+    artist_portfolio:{collection:'artistPortfolio',owner:'ownerUserId',role:'artist',asset:'imageAssetId',status:'imageStatus',frame:'imageFraming'},
+  }[kind as 'release_artwork'|'script_artwork'|'artist_portfolio'];
+  if(!config||!/^[A-Za-z0-9_-]{1,160}$/.test(targetId)||!/^[A-Za-z0-9_-]{1,160}$/.test(assetId))
+    throw new HttpsError('invalid-argument','Choose your approved artwork.');
+  if(input.mode!=='fit'&&input.mode!=='fill')
+    throw new HttpsError('invalid-argument','Choose whole picture or an intentional crop.');
+  if([input.zoom,input.x,input.y].some(value=>typeof value!=='number'||!Number.isFinite(value))||
+    (input.zoom as number)<1||(input.zoom as number)>3||
+    Math.abs(input.x as number)>100||Math.abs(input.y as number)>100)
+    throw new HttpsError('invalid-argument','Framing values are outside supported bounds.');
+  const account=await accountRef(identity.uid).get();
+  if(account.data()?.status!=='active'||
+    !professionalRolesForAccount(account.data()??{}).includes(config.role as AccountRole))
+    throw new HttpsError('permission-denied','An active, approved professional role is required.');
+  const ref=db.collection(config.collection).doc(targetId);
+  const imageRef=db.collection('imageAssets').doc(assetId);
+  const frame:ApprovedImageFraming={assetId,mode:input.mode,zoom:input.zoom as number,x:input.x as number,y:input.y as number};
+  await db.runTransaction(async transaction=>{
+    const work=await transaction.get(ref);
+    const image=await transaction.get(imageRef);
+    const data=work.data()??{},asset=image.data()??{};
+    if(!work.exists||data[config.owner]!==identity.uid||
+      ['removed','removing'].includes(String(data.status??''))||
+      data[config.asset]!==assetId||data[config.status]!=='approved'||
+      !image.exists||asset.ownerUserId!==identity.uid||asset.kind!==kind||
+      asset.targetId!==targetId||asset.status!=='approved')
+      throw new HttpsError('failed-precondition','This is no longer your current approved artwork. Reload before saving.');
+    transaction.set(ref,{[config.frame]:frame,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  });
+  return {kind,targetId,framing:frame};
+});
+
 export const getMyProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   const [snapshot, accountSnapshot] = await Promise.all([
@@ -3892,6 +3936,8 @@ const artistPortfolioPayload = (data: Record<string, any>, id: string) => ({
   status: cleanText(data.status, 30) || 'draft',
   imageUrl: data.imageStatus === 'approved' ? validPublicUrl(data.imageUrl) : null,
   imageStatus: cleanText(data.imageStatus, 30) || null,
+  imageAssetId: data.imageStatus === 'approved' ? cleanText(data.imageAssetId,160) || null : null,
+  imageFraming: safeProfileFraming(data.imageFraming,data.imageAssetId,data.imageStatus),
   pendingImageAssetId: cleanText(data.pendingImageAssetId, 160) || null,
   pendingImageStatus: cleanText(data.pendingImageStatus, 30) || null,
   createdAt: toIso(data.createdAt),
@@ -5693,6 +5739,7 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   durationMinutes: typeof data.durationMinutes === 'number' ? data.durationMinutes : 0,
   artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
   artworkAssetId: data.artworkAssetId ?? null,
+  artworkFraming: safeProfileFraming(data.artworkFraming,data.artworkAssetId,data.artworkStatus),
   artworkStatus: data.artworkStatus ?? null,
   pendingArtworkAssetId: data.pendingArtworkAssetId ?? null,
   pendingArtworkStatus: data.pendingArtworkStatus ?? null,
@@ -8601,6 +8648,7 @@ const scriptPayload = (data: Record<string, any>, id: string, includeContent = t
   artworkAssetId: data.artworkStatus === 'approved' ? data.artworkAssetId ?? null : null,
   artworkUrl: data.artworkStatus === 'approved' ? data.artworkUrl ?? null : null,
   artworkStatus: data.artworkStatus === 'approved' ? 'approved' : null,
+  artworkFraming: safeProfileFraming(data.artworkFraming,data.artworkAssetId,data.artworkStatus),
   pendingArtworkAssetId: includeContent ? data.pendingArtworkAssetId ?? null : null,
   pendingArtworkStatus: includeContent ? data.pendingArtworkStatus ?? null : null,
   rights: normaliseScriptRights(data.rights),
