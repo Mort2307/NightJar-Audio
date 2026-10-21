@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Check, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
+import { isProfileSetupComplete } from '../platform/profile-setup-state';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import {
@@ -41,7 +42,23 @@ const steps: { id: Step; label: string; title: string; description: string }[] =
 ];
 
 export default function NightjarOnboarding({ initialProfile, role, onComplete, onSkip, notify }: Props) {
-  const savedDraft = initialProfile?.onboardingDraft && typeof initialProfile.onboardingDraft === 'object' ? initialProfile.onboardingDraft : null;
+  // Never let a stale, sometimes empty onboarding draft replace an already
+  // completed personal profile. Incomplete accounts can still resume drafts.
+  const savedDraft = !isProfileSetupComplete(initialProfile) &&
+    initialProfile?.onboardingDraft && typeof initialProfile.onboardingDraft === 'object'
+    ? initialProfile.onboardingDraft : null;
+  const profileText = (field: string): string => {
+    const published = initialProfile?.[field];
+    const draft = savedDraft?.[field];
+    return typeof published === 'string' && published.trim()
+      ? published : typeof draft === 'string' ? draft : typeof published === 'string' ? published : '';
+  };
+  const profileSelections = (field: string): string[] => {
+    const published = initialProfile?.[field];
+    const draft = savedDraft?.[field];
+    return Array.isArray(published) && published.length
+      ? published : Array.isArray(draft) ? draft : Array.isArray(published) ? published : [];
+  };
   const [stepIndex, setStepIndex] = useState(() => Number.isInteger(savedDraft?.stepIndex) ? Math.max(0, Math.min(2, savedDraft.stepIndex)) : 0);
   const cloudRevision = useRef<number>(Math.max(0,Number(initialProfile?.onboardingDraftRevision??0)));
   const pendingSave = useRef<Promise<void>>(Promise.resolve());
@@ -57,16 +74,16 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
   const [formError, setFormError] = useState('');
   const [promotedTags, setPromotedTags] = useState<string[]>([]);
   const [profile, setProfile] = useState<any>({
-    displayName: savedDraft?.displayName ?? initialProfile?.displayName ?? '',
-    handle: savedDraft?.handle ?? initialProfile?.handle ?? '',
-    pronouns: savedDraft?.pronouns ?? initialProfile?.pronouns ?? '',
-    headline: savedDraft?.headline ?? initialProfile?.headline ?? '',
-    bio: savedDraft?.bio ?? initialProfile?.bio ?? '',
-    welcomeMessage: savedDraft?.welcomeMessage ?? initialProfile?.welcomeMessage ?? '',
-    favouriteTags: savedDraft?.favouriteTags ?? initialProfile?.favouriteTags ?? [],
-    favouriteTropes: savedDraft?.favouriteTropes ?? initialProfile?.favouriteTropes ?? [],
-    favouriteCategories: savedDraft?.favouriteCategories ?? initialProfile?.favouriteCategories ?? [],
-    publicProfile: savedDraft?.publicProfile ?? (initialProfile?.publicProfile !== false),
+    displayName: profileText('displayName'),
+    handle: profileText('handle'),
+    pronouns: profileText('pronouns'),
+    headline: profileText('headline'),
+    bio: profileText('bio'),
+    welcomeMessage: profileText('welcomeMessage'),
+    favouriteTags: profileSelections('favouriteTags'),
+    favouriteTropes: profileSelections('favouriteTropes'),
+    favouriteCategories: profileSelections('favouriteCategories'),
+    publicProfile: initialProfile?.publicProfile ?? savedDraft?.publicProfile ?? true,
   });
 
   useEffect(() => {

@@ -118,6 +118,7 @@ import WorkspaceSwitcher from './components/WorkspaceSwitcher';
 import NightjarSkeleton from './components/NightjarSkeleton';
 import type { ProfileDraftController } from './components/CloudProfileDraft';
 import ProfileSectionBoundary from './components/ProfileSectionBoundary';
+import { profileCompletionPercentage, isProfileSetupComplete } from './platform/profile-setup-state';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
@@ -1386,7 +1387,7 @@ function App() {
       if (nextProfile) {
         // A successful save cannot be undone visually by a slower, older
         // profile read started during a role switch.
-        const completed = nextProfile.onboardingComplete === true ||
+        const completed = isProfileSetupComplete(nextProfile) ||
           onboardingFinishedUsersRef.current.has(memberId);
         if (completed) onboardingFinishedUsersRef.current.add(memberId);
         const currentProfile = completed && nextProfile.onboardingComplete !== true
@@ -5085,17 +5086,7 @@ function App() {
     setDirectoryAvailabilityFilter('all');
   };
 
-  const profileCompletionSignals = [
-    Boolean(profile.displayName),
-    Boolean(profile.handle),
-    Boolean(profile.headline),
-    Boolean(profile.bio),
-    Boolean(profile.welcomeMessage),
-    Array.isArray(profile.favouriteTags) && profile.favouriteTags.length > 0,
-    Array.isArray(profile.favouriteCategories) && profile.favouriteCategories.length > 0,
-    profile.avatarStatus === 'approved' || Boolean(profile.avatarUrl),
-  ];
-  const profileCompletion = Math.round((profileCompletionSignals.filter(Boolean).length / profileCompletionSignals.length) * 100);
+  const profileCompletion = profileCompletionPercentage(profile);
   const applicationGroups = classifyProfessionalApplications(adminApplications);
   const visibleAdminApplications = filterProfessionalApplicationsByRole(applicationGroups[adminApplicationBox], adminApplicationRoleFilter);
   const failedProfessionalApprovalEmailCount = adminApplications.filter((item:any) => item.approvalEmailStatus === 'failed').length;
@@ -5877,7 +5868,7 @@ function App() {
               <p className="nj-didit-member-footnote">Nightjar keeps only the server-verified age-assurance result and provider reference—not your raw identity images or a reusable login token stored in your browser. A new ID check is requested only if verification is revoked or a valid recheck is required.</p>
             </section>}
 
-            {effectiveRole !== 'admin' && profile?.onboardingComplete !== true && !demoMode && (
+            {effectiveRole !== 'admin' && Boolean(profileBaseline) && !profileLoading && !isProfileSetupComplete(profile) && !demoMode && (
               <section className="panel nj-profile-setup-resume" aria-label="Finish your personal Nightjar profile">
                 <div>
                   <span className="mini-label">YOUR PROFILE · FINISH WHEN READY</span>
