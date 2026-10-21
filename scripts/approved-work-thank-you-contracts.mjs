@@ -41,4 +41,22 @@ assert.match(hosting, /\[nightjar-work-thanks-release\]/, 'Production backend-fi
 for (const fn of ['moderateRelease','moderateEditorPortfolioItem','adminReviewWriterScript','moderateImageAsset']) {
   assert.ok(hosting.includes(fn), 'Backend release must select '+fn);
 }
+// Approval form must make the automatic reply visible without changing the
+// server-owned notification contract or making a personal note mandatory.
+const creatorForm = readFileSync('src/components/ContentModeration.tsx', 'utf8');
+const creatorPreviewCss = readFileSync('src/components/approval-message-preview.css', 'utf8');
+assert.match(creatorForm, /creatorApprovalMessagePreview\s*=\s*\(/, 'Admin Creator approval has a preview renderer');
+assert.match(creatorForm, /reviewDecision==='approved' && <section className="nj-approval-automatic-message"/, 'Automatic thank-you appears only in approval mode');
+assert.match(creatorForm, /Automatic thank-you included/, 'Admin can see the message is automatic');
+assert.match(creatorForm, /Preview automatic message/, 'Admin can expand the thank-you preview');
+assert.match(creatorForm, /creatorApprovalMessagePreview\(selected,reviewNote\)/, 'Personal note is previewed separately and appended');
+assert.match(creatorForm, /Add a personal note \(optional\)/, 'No required text for successful approval');
+assert.match(creatorForm, /The NightJar Team/, 'Preview is signed by NightJar');
+assert.match(creatorForm, /remain private until publication/, 'Scheduled preview must not imply early publication');
+assert.match(creatorForm, /Earlier submission acknowledgement|earlier submission acknowledgement/, 'Submission receipt is distinguished from approval');
+assert.match(creatorForm, /nj-approval-automatic-message/, 'Auto-message uses dedicated class');
+assert.match(creatorPreviewCss, /focus-visible/, 'Expandable preview has a visible keyboard focus indicator');
+assert.match(creatorPreviewCss, /white-space: pre-wrap/, 'Preserve thank-you paragraph breaks');
+assert.doesNotMatch(creatorForm, /onClick=\{.*sendModerationInboxMessage/, 'Client does not send a duplicate manual thank-you');
+
 console.log('PASS personalised approved-work thank-you for Creator, Writer, Editor and Artist');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { nightjarCatalogue, type PrivateAudioAudit } from '../platform/firebase-catalogue';
 import TranscriptSyncTool from './TranscriptSyncTool';
+import './approval-message-preview.css';
 import { demoCreatorDashboard, demoTracks } from '../demo/nightjarDemo';
 import { readDemo, writeDemo } from '../demo/demoSession';
 import { BookOpenText, Check, Eye, FileAudio, MessageSquare, X } from 'lucide-react';
@@ -12,6 +13,38 @@ type Props = {
   demoMode?: boolean;
   onDeleted?: (releaseId: string) => void;
   onMessageCreator?: (userId: string) => void;
+};
+
+
+/**
+ * Read-only preview of the automatic approval thank-you.
+ * The server remains the authority for the contributor's current chosen name,
+ * moderation decision, notification and replyable Inbox delivery.
+ */
+const creatorApprovalMessagePreview = (release: any, note: string): string => {
+  const chosenName = String(release?.creatorName ?? '').replace(/[\r\n\t]+/g, ' ').trim();
+  const title = String(release?.title ?? '').replace(/[\r\n\t]+/g, ' ').trim();
+  const work = title ? '“' + title + '”' : 'your work';
+  const scheduled = Boolean(release?.scheduledAt);
+  const lines = [
+    chosenName ? 'Hi ' + chosenName + ',' : 'Hello,',
+    '',
+    'Thank you for trusting NightJar with ' + work + '. We really appreciate the time, care and creativity you put into sharing it with our community.',
+    '',
+    scheduled
+      ? 'Your release has been approved and is scheduled for the date you selected. It will remain private until publication.'
+      : 'Your release is approved and is now available to eligible NightJar listeners.',
+    '',
+    'We are glad you are helping shape NightJar.',
+    '',
+    'With appreciation,',
+    'The NightJar Team',
+  ];
+  if (scheduled && release?.scheduledLocal && release?.scheduledTimeZone) {
+    lines.push('', 'It is scheduled for ' + String(release.scheduledLocal) + ' (' + String(release.scheduledTimeZone) + ').');
+  }
+  if (note.trim()) lines.push('', 'Note: ' + note.trim());
+  return lines.join('\n');
 };
 
 export default function ContentModeration({ open, onClose, notify, demoMode = false, onDeleted, onMessageCreator }: Props) {
@@ -314,11 +347,20 @@ export default function ContentModeration({ open, onClose, notify, demoMode = fa
               <p>{reviewDecision==='approved'
                 ? selected.scheduledAt ? 'Nightjar will keep this approved audio private until '+formattedScheduled(selected)+'.' : 'Approval will make this recording available to eligible Nightjar listeners.'
                 : 'The creator must receive a clear reason and will be able to reply in Nightjar Messages.'}</p>
-              <label>{reviewDecision==='approved'?'Note to creator (optional)':'Explain your decision (required)'}
-                <textarea rows={4} value={reviewNote} maxLength={1200} onChange={(event)=>setReviewNote(event.target.value)} placeholder={reviewDecision==='approved'?'A courtesy note from Nightjar…':'Explain what needs correcting and why…'} />
+              {reviewDecision==='approved' && <section className="nj-approval-automatic-message" aria-label="Automatic creator approval message">
+                <div className="nj-approval-auto-heading"><Check size={18} aria-hidden="true"/><div><strong>Automatic thank-you included</strong><p>After a successful approval, NightJar sends a personalised thank-you to the creator's private notifications and replyable Inbox. No note needs typing.</p></div></div>
+                <details className="nj-approval-message-details">
+                  <summary>Preview automatic message</summary>
+                  <p className="nj-approval-preview-caveat">Preview only. NightJar confirms the contributor's current chosen display name when sending. Scheduled releases stay private until publication.</p>
+                  <div className="nj-approval-preview-body">{creatorApprovalMessagePreview(selected,reviewNote)}</div>
+                </details>
+                <p className="nj-approval-submission-note">The earlier submission acknowledgement is a separate notification when the completed release is submitted for review.</p>
+              </section>}
+              <label>{reviewDecision==='approved'?'Add a personal note (optional)':'Explain your decision (required)'}
+                <textarea rows={4} value={reviewNote} maxLength={1200} onChange={(event)=>setReviewNote(event.target.value)} placeholder={reviewDecision==='approved'?'Optional: add a personal note after the automatic thank-you…':'Explain what needs correcting and why…'} />
               </label>
               <div><button type="button" className="secondary-button" disabled={reviewBusy} onClick={()=>setReviewDecision(null)}>Cancel</button>
-                <button type="button" className="primary-button" disabled={reviewBusy || (reviewDecision!=='approved'&&!reviewNote.trim())} onClick={()=>void decide(reviewDecision)}>{reviewBusy?'Saving decision…':'Confirm & notify creator'}</button>
+                <button type="button" className="primary-button" disabled={reviewBusy || (reviewDecision!=='approved'&&!reviewNote.trim())} onClick={()=>void decide(reviewDecision)}>{reviewBusy?'Saving decision…':reviewDecision==='approved'?'Approve & notify creator':'Confirm & notify creator'}</button>
               </div>
             </section>}
           </div>}{selected.status !== 'pending_review' && <p className="nj-audio-review-help">Listening is for administrator quality checks only. Moderation decisions unlock after the creator submits the completed release.</p>}
