@@ -82,6 +82,15 @@ assert.match(spotlight, /className="nj-spotlight-portrait-backdrop"[^>]*alt=""/,
 assert.match(spotlight, /className="nj-spotlight-portrait-img"[^>]*alt=/, 'Retain one accessible foreground portrait');
 assert.match(productCss, /\.nj-spotlight-portrait-backdrop\s*\{[^}]*object-fit:cover;[^}]*filter:blur\(/, 'The ambient backdrop should fill the card');
 assert.match(productCss, /\.nj-spotlight-portrait-img\s*\{[^}]*object-fit:contain;/, 'Entire Spotlight photo must stay in view');
+const portraitEnd=spotlight.indexOf('</button>',spotlight.indexOf('className="nj-spotlight-portrait nj-spotlight-portrait-trigger"'));
+const storyStart=spotlight.indexOf('<div className="nj-spotlight-story">',portraitEnd);
+assert.ok(portraitEnd>0&&storyStart>portraitEnd,'Spotlight card layout is recognisable');
+assert.doesNotMatch(spotlight.slice(spotlight.indexOf('className="nj-spotlight-portrait nj-spotlight-portrait-trigger"'),portraitEnd),
+  /nj-spotlight-portrait-stamp/, 'Role badge must not cover the approved portrait');
+assert.match(spotlight.slice(storyStart,storyStart+150),
+  /nj-spotlight-portrait-stamp/, 'Role badge appears in adjacent editorial text');
+assert.match(productCss,/\.nj-spotlight-portrait-stamp \{position:static;/,
+  'Spotlight role badge does not use absolute artwork overlay coordinates');
 assert.doesNotMatch(velvet, /\.nj-spotlight-portrait-trigger:hover \.nj-spotlight-portrait-img\s*\{\s*transform:scale/, 'Hover must not re-crop faces');
 
 console.log('PASS fixed first-place spotlight and themed creator profile hierarchy');
