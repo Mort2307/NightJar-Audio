@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, ImagePlus, ShieldCheck, Trash2, UploadCloud } from 'lucide-react';
 import { nightjarMedia } from '../platform/firebase-media';
 import ImageFramingEditor from './ImageFramingEditor';
+import FramedApprovedImage from './FramedApprovedImage';
+import {nightjarWorkFraming} from '../platform/firebase-artwork-framing';
 import './writer-script-artwork.css';
 
 type Props = {
@@ -26,6 +28,7 @@ const readImageDataUrl = (file: File) => new Promise<string>((resolve, reject) =
 export default function WriterScriptArtwork({ script, onUpdated, notify, simulationMode = false }: Props) {
   const [busy, setBusy] = useState(false);
   const [artFrameFile,setArtFrameFile]=useState<File|null>(null);
+  const [editApproved,setEditApproved]=useState(false);
   const [localError, setLocalError] = useState('');
   const cleanupKey = 'nightjar:manuscript-artwork-cleanup:v1:' + String(script.writerUserId ?? '') + ':' + String(script.id ?? '');
   const [cleanupAssetId, setCleanupAssetId] = useState(() => {
@@ -160,7 +163,8 @@ export default function WriterScriptArtwork({ script, onUpdated, notify, simulat
     <div className="writer-script-artwork-layout">
       <div className="writer-script-artwork-preview">
         {approved
-          ? <img src={script.artworkUrl} alt={'Approved artwork for ' + String(script.title ?? 'manuscript')} loading="lazy"/>
+          ? <FramedApprovedImage src={script.artworkUrl} alt={'Approved artwork for '+String(script.title??'manuscript')}
+              framing={script.artworkFraming?.assetId===script.artworkAssetId?script.artworkFraming:null} defaultMode="fit" />
           : <div className="writer-script-artwork-placeholder"><ImagePlus size={30} aria-hidden="true"/><span>No approved artwork yet</span></div>}
       </div>
       <div className="writer-script-artwork-controls">
@@ -180,10 +184,26 @@ export default function WriterScriptArtwork({ script, onUpdated, notify, simulat
         </label>
         <small>PNG, JPG or WebP · up to 5 MB. Pending artwork stays private; it never holds up the manuscript.</small>
         {pending && <button className="ghost-button" type="button" disabled={busy} onClick={() => void remove(pendingId, false)}><Trash2 size={14}/> Cancel pending image</button>}
+        {approved && script.artworkAssetId && <button type="button" className="secondary-button" disabled={busy}
+          onClick={()=>setEditApproved(true)}>Adjust approved manuscript artwork</button>}
         {approved && script.artworkAssetId && <button className="ghost-button" type="button" disabled={busy} onClick={() => void remove(String(script.artworkAssetId), true)}><Trash2 size={14}/> Remove approved artwork</button>}
         {localError && <p className="writer-script-artwork-error" role="alert">{localError}</p>}
       </div>
     </div>
+    {editApproved && approved && script.artworkAssetId && <ImageFramingEditor
+      approvedSrc={script.artworkUrl} shape="script"
+      initialFraming={script.artworkFraming?.assetId===script.artworkAssetId?script.artworkFraming:null}
+      onCancel={()=>setEditApproved(false)}
+      onSaveFraming={async framing=>{
+        const assetId=String(script.artworkAssetId);
+        const saved=simulationMode
+          ? {framing:{assetId,...framing}}
+          : await nightjarWorkFraming.save('script_artwork',String(script.id),{assetId,...framing});
+        onUpdated({...script,artworkFraming:saved.framing});
+        setEditApproved(false);
+        notify('Approved manuscript framing saved; manuscript rights and image approval are unchanged.');
+      }}
+    />}
     {artFrameFile && <ImageFramingEditor file={artFrameFile} shape="script"
       onCancel={()=>setArtFrameFile(null)}
       onApply={async framed=>{
