@@ -31,7 +31,7 @@ assert.match(editor,/Show whole picture/);
 assert.match(editor,/imagePlacementGuidance:Record<Props\['shape'\],string>/,
   'Every upload type shares accurate contextual image-placement guidance');
 for(const shape of ['release','script','artwork','portrait','social','banner']){
-  assert.match(editor,new RegExp('\\\\b'+shape+':'),shape+' needs specific image guidance');
+  assert.ok(editor.includes('  '+shape+':'),shape+' needs specific image guidance');
 }
 assert.match(editor,/Category|Categories/, 'Release advice says category information is outside artwork');
 assert.match(editor,/soft extension behind it/, 'Release guidance matches latest full-image ambient renderer');
