@@ -5229,7 +5229,7 @@ function App() {
           {canAdmin && <div className="nj-live-switcher" ref={liveRoleMenuRef}>
             <button type="button" className={liveRolePreview || interactiveRoleTest ? 'nj-live-switcher-trigger active' : 'nj-live-switcher-trigger'}
               aria-expanded={liveRoleMenuOpen} aria-haspopup="dialog" aria-controls="nj-live-switcher-menu"
-              onClick={() => { setMenuOpen(false); setLiveRoleMenuOpen((open) => !open); }}>
+              onClick={() => { setMenuOpen(false); setAccountMenuOpen(false); setLiveRoleMenuOpen((open) => !open); }}>
               <Eye size={17} aria-hidden="true" />
               <span className="nj-live-switcher-label"><strong>View as</strong><small>{interactiveRoleTest && previewRole ? roleMeta[previewRole].label + ' · QA' : liveRolePreview && previewRole ? roleMeta[previewRole].label + ' · Public' : 'Test roles'}</small></span>
               <ChevronDown size={15} className={liveRoleMenuOpen ? 'nj-switcher-chevron rotated' : 'nj-switcher-chevron'} aria-hidden="true" />
@@ -5315,7 +5315,7 @@ function App() {
               <button className="ghost-button desktop-only" onClick={() => void signOut()}><LogOut size={15} /></button>
             </>
           )}
-          <button className="menu-button" onClick={() => { setLiveRoleMenuOpen(false); setMenuOpen((open) => !open); }} aria-label="Open navigation menu" aria-expanded={menuOpen}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+          <button className="menu-button" onClick={() => { setLiveRoleMenuOpen(false); setAccountMenuOpen(false); setMenuOpen((open) => !open); }} aria-label="Open navigation menu" aria-expanded={menuOpen}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </header>
 
