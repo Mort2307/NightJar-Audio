@@ -9,6 +9,8 @@ type Profile = Record<string, any>;
 const getMyProfileCall = httpsCallable<void, { profile: Profile | null }>(functions, 'getMyProfile');
 const pauseOnboardingCall = httpsCallable<{draft:Profile;stepIndex:number;revision:number;dismiss:boolean},{dismissed:boolean;completed:boolean;revision:number}>(functions,'pauseProfileOnboarding');
 const saveMyProfileCall = httpsCallable<Profile, { profile: Profile | null }>(functions, 'saveMyProfile');
+export type ApprovedProfileFraming = {assetId:string;mode:'fit'|'fill';zoom:number;x:number;y:number};
+const saveApprovedProfileFramingCall = httpsCallable<ApprovedProfileFraming & {kind:'avatar'|'banner'},{kind:'avatar'|'banner';framing:ApprovedProfileFraming}>(functions,'saveApprovedProfileFraming');
 const deferMyProfileOnboardingCall = httpsCallable<void, { deferred: boolean }>(functions, 'deferMyProfileOnboarding');
 const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'listCreators');
 const listPublicProfilesCall = httpsCallable<void, { profiles: any[] }>(functions, 'listPublicProfiles');
@@ -42,6 +44,10 @@ export const nightjarCommunity = {
 
   async saveMyProfile(profile: Profile, profileRole?: string) {
     return (await saveMyProfileCall({ ...profile, ...(profileRole ? { profileRole } : {}) })).data;
+  },
+
+  async saveApprovedProfileFraming(kind:'avatar'|'banner',framing:ApprovedProfileFraming) {
+    return (await saveApprovedProfileFramingCall({...framing,kind})).data;
   },
 
   async deferMyProfileOnboarding() {

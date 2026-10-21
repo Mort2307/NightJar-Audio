@@ -6,6 +6,7 @@ import { nightjarCommunity } from './platform/firebase-community';
 import { nightjarHandleError, normaliseNightjarHandle } from './platform/profile-handle';
 import { nightjarMedia } from './platform/firebase-media';
 import { optimiseProfileImage, formatProfileImageBytes } from './platform/profile-image-optimizer';
+import type { ImageFraming } from './platform/image-framing';
 import { nightjarCommercial, type CommercialOverview, type CommercialSettings } from './platform/firebase-commercial';
 import { nightjarAdministration } from './platform/firebase-administration';
 import { classifyProfessionalApplications, filterProfessionalApplicationsByRole, pendingApplicationRoles, type ProfessionalApplicationBox } from './platform/professional-application-bank';
@@ -3567,6 +3568,28 @@ function App() {
     } catch { notify('Logo could not be removed.'); }
   };
 
+  const saveApprovedImageFraming = async (
+    kind:'avatar'|'banner',assetId:string,framing:ImageFraming,
+  ) => {
+    if(!user)throw new Error('Sign in to adjust your approved image.');
+    if(demoMode&&!simulationMode)throw new Error('Demo data is read-only.');
+    const field=kind==='avatar'?'avatarFraming':'bannerFraming';
+    if(demoMode){
+      const frame={assetId,...framing};
+      setProfile((current:any)=>({...current,[field]:frame}));
+      setProfileBaseline((current:any)=>current?{...current,[field]:frame}:current);
+      notify('Simulation: approved image framing changed locally.');
+      return;
+    }
+    // This callable updates only the frame associated with the exact approved
+    // asset ID. It cannot publish an unreviewed image or replace a profile.
+    const saved=await nightjarCommunity.saveApprovedProfileFraming(kind,{assetId,...framing});
+    if(saved.framing.assetId!==assetId)throw new Error('The profile image changed. Refresh and try again.');
+    setProfile((current:any)=>({...current,[field]:saved.framing}));
+    setProfileBaseline((current:any)=>current?{...current,[field]:saved.framing}:current);
+    notify('Approved image framing saved for your Nightjar profile. No reupload or new review needed.');
+  };
+
   const uploadProfileAvatar = async (file: File) => {
     if (!user || profileImageBusy) return;
     setProfileImageBusy(true);
@@ -5808,6 +5831,7 @@ function App() {
                 combinedTagOptions={combinedProfileTagOptions}
                 tasteVector={tasteVector}
                 onUploadAvatar={uploadProfileAvatar}
+                onSaveApprovedFraming={saveApprovedImageFraming}
                 onRemoveAvatar={removeProfileImage}
                 onUploadBanner={uploadProfileBanner}
                 onRemoveBanner={removeProfileBanner}

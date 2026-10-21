@@ -5,10 +5,13 @@ import { clampFraming, DEFAULT_IMAGE_FRAMING, exportFramedImage, frameGeometry, 
 import './image-framing-editor.css';
 
 type Props={
-  file:File;
+  file?:File;
+  approvedSrc?:string;
+  initialFraming?:ImageFraming|null;
   shape:'portrait'|'social'|'banner'|'release'|'script'|'artwork';
   onCancel:()=>void;
-  onApply:(framed:File)=>Promise<void>|void;
+  onApply?:(framed:File)=>Promise<void>|void;
+  onSaveFraming?:(framing:ImageFraming)=>Promise<void>;
 };
 
 const pictureTypes=['image/jpeg','image/png','image/webp','image/heic','image/heif','image/avif'];
@@ -23,8 +26,8 @@ const sizeOf=(shape:Props['shape'],image:HTMLImageElement|null)=>{
   return {width:480,height:480};
 };
 
-export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
-  const [framing,setFraming]=useState<ImageFraming>(DEFAULT_IMAGE_FRAMING);
+export default function ImageFramingEditor({file,approvedSrc,initialFraming,shape,onCancel,onApply,onSaveFraming}:Props){
+  const [framing,setFraming]=useState<ImageFraming>(initialFraming ?? DEFAULT_IMAGE_FRAMING);
   const [image,setImage]=useState<HTMLImageElement|null>(null);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
@@ -36,15 +39,18 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
 
   useEffect(()=>{
     let active=true;
-    if(file.size===0||file.size>20*1024*1024){
-      setError('Choose a photo larger than zero and smaller than 20 MB.');
-      return;
+    if(!file&&!approvedSrc){
+      setError('Choose an image to adjust.');return;
     }
-    if(file.type && !pictureTypes.includes(file.type)){
-      setError('Use a JPG, PNG, WebP or browser-supported HEIC/AVIF picture.');
-      return;
+    if(file&&(file.size===0||file.size>20*1024*1024)){
+      setError('Choose a photo larger than zero and smaller than 20 MB.');return;
     }
-    const url=URL.createObjectURL(file);
+    if(file&&file.type&&!pictureTypes.includes(file.type)){
+      setError('Use a JPG, PNG, WebP or browser-supported HEIC/AVIF picture.');return;
+    }
+    // An existing approved URL is display-only. We never export its canvas
+    // pixels, request a signed link or submit new media for moderation.
+    const url=file?URL.createObjectURL(file):approvedSrc!;
     const picture=new Image();
     picture.decoding='async';
     picture.onload=()=>{
@@ -58,8 +64,8 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
     };
     picture.onerror=()=>{if(active)setError('This picture could not be opened. Try a JPG or PNG.');};
     picture.src=url;
-    return ()=>{active=false;URL.revokeObjectURL(url);};
-  },[file]);
+    return ()=>{active=false;if(file)URL.revokeObjectURL(url);};
+  },[file,approvedSrc]);
 
   useEffect(()=>{
     if(!image||!canvasRef.current)return;
@@ -121,8 +127,12 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
     if(!image||busy)return;
     setBusy(true);setError('');
     try{
-      const framed=await exportFramedImage(image,framing,shape==='banner'?'banner':shape==='artwork'?'artwork':'square',file.name);
-      await onApply(framed);
+      if(approvedSrc&&onSaveFraming){
+        await onSaveFraming(framing);
+      }else if(file&&onApply){
+        const framed=await exportFramedImage(image,framing,shape==='banner'?'banner':shape==='artwork'?'artwork':'square',file.name);
+        await onApply(framed);
+      }else throw new Error('Image framing action is unavailable.');
     }catch(cause){setError(cause instanceof Error?cause.message:'Image framing could not be completed.');}
     finally{setBusy(false);}
   };
@@ -178,9 +188,9 @@ export default function ImageFramingEditor({file,shape,onCancel,onApply}:Props){
           <button type="button" className="ghost-button" disabled={busy} onClick={()=>setFraming(DEFAULT_IMAGE_FRAMING)}><RefreshCcw size={15}/> Reset</button>
           <button type="button" className="secondary-button" disabled={busy} onClick={onCancel}>Cancel</button>
           <button type="button" className="primary-button" disabled={busy||!image||Boolean(error)} onClick={()=>void apply()}>
-            <Check size={15}/> {busy?'Preparing…':'Use this framing'}</button>
+            <Check size={15}/> {busy?'Saving…':approvedSrc?'Save framing':'Use this framing'}</button>
         </footer>
-        <small className="nj-framing-note">Editing happens on your device. Only the prepared image is uploaded, and existing NightJar moderation still applies.</small>
+        <small className="nj-framing-note">{approvedSrc?'Only framing settings are saved. The approved image stays unchanged, with no reupload or new review.':'Editing happens on your device. Only the prepared image is uploaded, and existing NightJar moderation still applies.'}</small>
       </section>
     </div>,
     document.body,
