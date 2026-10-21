@@ -16,6 +16,17 @@ type Props={
 
 const pictureTypes=['image/jpeg','image/png','image/webp','image/heic','image/heif','image/avif'];
 const displayName={portrait:'Profile portrait',social:'Social profile photo',banner:'Profile cover',release:'Release cover artwork',script:'Manuscript cover artwork',artwork:'Artist portfolio artwork'};
+// Shared guidance for every upload that passes through NightJar Image Studio.
+// Published release artwork and Spotlight images keep their full compositions;
+// intentional avatar/banner framing is the exception, not a surprise crop.
+const imagePlacementGuidance:Record<Props['shape'],string>={
+  release:'Release cards and Featured Audio display the complete approved picture with a soft extension behind it. Categories, titles and play controls sit outside the artwork. A square 1:1 composition is recommended, but portrait and landscape art are accepted.',
+  script:'Manuscript covers display the whole prepared image in Writer and Marketplace previews. Square 1:1 works best; keep lettering fully inside the edges.',
+  artwork:'Artist portfolios preserve the artwork’s original proportions, including transparent backgrounds. NightJar does not force fine art into square cards.',
+  portrait:'Profile pictures appear in circular avatars in some views and fully visible Spotlight portraits. Keep faces and important details within the round guide.',
+  social:'Social and profile images may be shown in different-sized containers. Keep important details near the centre, and check the whole-picture preview.',
+  banner:'Profile banners are wide (16:7 preparation). Screens crop different amounts around the edges, and your chosen profile tagline can overlay the header. Keep faces and text away from the outer edges.',
+};
 const sizeOf=(shape:Props['shape'],image:HTMLImageElement|null)=>{
   if(shape==='banner')return {width:800,height:350};
   if(shape==='artwork'&&image){
@@ -153,7 +164,12 @@ export default function ImageFramingEditor({file,approvedSrc,initialFraming,shap
           <div><span className="mini-label">NIGHTJAR IMAGE STUDIO</span><h2 id="nj-frame-title">Adjust {displayName[shape].toLowerCase()}</h2></div>
           <button ref={closeRef} type="button" className="ghost-button" aria-label="Cancel photo changes" disabled={busy} onClick={onCancel}><X size={19}/></button>
         </header>
-        <p id="nj-frame-hint">Move the picture inside the gold guide. Choose <strong>Show whole picture</strong> to keep everything, or <strong>Fill frame</strong> to crop deliberately. The preview shows what will be submitted for review.</p>
+        <p id="nj-frame-hint">Drag or zoom inside the gold guide. <strong>Show whole picture</strong> preserves the composition; <strong>Fill frame (crop)</strong> trims edges in the prepared upload. You can check the result before submitting.</p>
+        <aside className="nj-framing-guidance" aria-label="Image cropping and placement guidelines">
+          <strong>How this image appears on NightJar</strong>
+          <p>{imagePlacementGuidance[shape]}</p>
+          <p>Never rely on text right against an image edge. Show whole picture can add dark padding to a square or banner export; that padding becomes part of the saved image. Filling the frame removes padding but crops the original.</p>
+        </aside>
         <div className={'nj-framing-stage '+(shape==='portrait'?'circle-guide':shape==='banner'?'is-banner':shape==='artwork'?'is-artwork':'')}
           style={{aspectRatio:shape==='banner'?'16 / 7':shape==='artwork'?`${dimensions.width} / ${dimensions.height}`:'1 / 1',
             ...(shape==='artwork'?{width:`min(100%, calc(44dvh * ${dimensions.width/dimensions.height}))`}:{})}}
