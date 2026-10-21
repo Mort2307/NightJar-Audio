@@ -1,4 +1,4 @@
-import { ArrowRight, Brush, CheckCircle2, Crown, FileCheck2, FileText, Headphones, Heart, Mic2, Play, Share2, Sparkles, Star, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Brush, CheckCircle2, Crown, FileCheck2, FileText, Headphones, Heart, Mic2, Play, Share2, Star, type LucideIcon } from 'lucide-react';
 import ContextHelp from './ContextHelp';
 
 export type SpotlightPerson = {
@@ -69,11 +69,11 @@ function PersonCard({ person, viewerUserId, followingIds, simulationMode, simula
       {person.handle && person.publicProfile !== false && <p className="nj-spotlight-handle">@{person.handle.replace(/^@/, '')}</p>}
       {person.title && <p className="nj-spotlight-headline">{person.title}</p>}
       <p className="nj-spotlight-story-text">{person.kind === 'listener'
-        ? 'A moment to celebrate the people who listen, explore and give this community its heartbeat.'
-        : person.detail || 'Today we celebrate the creative people who make Nightjar possible.'}</p>
+        ? 'Here’s to the listeners who keep coming back for another story.'
+        : person.detail || 'Meet one of the people behind Nightjar.'}</p>
       {person.kind === 'listener' && person.listenerRank && <div className="nj-spotlight-listener-recognition"><Headphones size={15}/> Previous-week listener recognition · Day {person.listenerRank} of {person.weeklyTopSevenCount ?? 7}</div>}
       {(isSelf || isDemoSelf) && <div className="nj-spotlight-personal-moment">
-        <Sparkles size={19}/>
+        <Star size={19} aria-hidden="true"/>
         <span><strong>{isDemoSelf ? 'SPOTLIGHT PREVIEW' : 'IT’S YOUR SPOTLIGHT DAY!'}</strong>
         <small>{isDemoSelf ? 'Illustrative role-testing view. Do not share demo identities.' : 'The stage is yours. Let’s make some noise and celebrate your Nightjar moment.'}</small></span>
       </div>}
@@ -96,15 +96,15 @@ export default function SpotlightExperience(props: Props) {
   return <section className="spotlight-section section-wrap nj-spotlight-experience" aria-labelledby="daily-spotlights-title">
     <header className="nj-spotlight-section-head">
       <div className="nj-spotlight-section-kicker"><span className="nj-spotlight-kicker-icon"><Crown size={17}/></span> THE NIGHTJAR SPOTLIGHT <span className="nj-spotlight-live"><span/> LIVE TODAY</span></div>
-      <h2 id="daily-spotlights-title">Their moment. <em>Our stage.</em> <ContextHelp topic="spotlight-rotation"/></h2>
-      <p>Each featured member gets their own spotlight day. We celebrate the voices, imaginations, craft and listeners who make Nightjar what it is.</p>
-      <div className="nj-spotlight-promises"><span><CheckCircle2 size={14}/> A place for every creative discipline</span><span><Sparkles size={14}/> Featured members rotate</span></div>
+      <h2 id="daily-spotlights-title">Meet today's <em>spotlight.</em> <ContextHelp topic="spotlight-rotation"/></h2>
+      <p>A new day, another voice, writer, artist, editor or listener to get to know.</p>
+      <div className="nj-spotlight-promises"><span><CheckCircle2 size={14}/> A place for every creative discipline</span><span><Star size={14} aria-hidden="true"/> Featured members rotate</span></div>
     </header>
     {ordered.length ? <>
       <div className="nj-spotlight-editorial-grid">
         {ordered.map(person=><PersonCard key={person.kind+':'+person.targetId} {...props} person={person}/>)}
       </div>
-      <p className="nj-spotlight-outro"><Sparkles size={14}/> Spotlight days rotate, giving each featured person their own moment on the Nightjar stage.</p>
-    </> : <div className="nj-spotlight-empty"><Star size={24}/><strong>The stage is being prepared.</strong><p>Featured members will appear as public profiles become eligible. Each approved professional is included in Nightjar's fair daily rotation.</p></div>}
+      <p className="nj-spotlight-outro"><Star size={14} aria-hidden="true"/> Everyone featured gets a day in the spotlight.</p>
+    </> : <div className="nj-spotlight-empty"><Star size={24}/><strong>No spotlight today.</strong><p>Featured members appear here when an eligible profile is available.</p></div>}
   </section>;
 }

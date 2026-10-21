@@ -13,6 +13,13 @@
 }
 
 /* Editorial typography and readable minimums for ordinary UI metadata. */
+/* The cover artwork—not a decorative orbital motif—should hold attention. */
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .hero-art .orbit { display:none; }
+:root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .hero-art .featured-card {
+  transform:none;
+  border-radius:16px;
+  box-shadow:0 24px 70px rgba(0,0,0,.38);
+}
 :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) :is(
   .mini-label,.eyebrow,.track-index,.nj-up-kicker,
   .nj-listener-discovery-eyebrow,.nj-pro-library-person-role

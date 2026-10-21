@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, CheckCircle2, Heart, Megaphone, MessageSquareText, PenLine, Send, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Heart, Megaphone, MessageSquareText, PenLine, Send, ShieldCheck } from 'lucide-react';
 import { nightjarTeamCommunity, type TeamFeedback, type TeamPost, type TeamPostDraft, type TeamTopic } from '../platform/firebase-team-community';
 import './nightjar-team-community.css';
 
@@ -148,11 +148,11 @@ export default function NightjarTeamCommunity({admin,readOnly=false,notify,demoM
       {loading&&<p className="nightjar-team-empty">Loading team updates…</p>}
       {!loading&&loadError&&<div className="nightjar-team-empty" role="alert">{loadError}<button type="button" className="secondary-button" onClick={()=>void reload()}>Retry</button></div>}
       {!loading&&!loadError&&!published.length&&<div className="nightjar-team-empty">
-        <Sparkles size={22}/><strong>Our first update is on its way.</strong>
-        <span>When the team publishes news, you'll find it here. No pretend activity, no filler.</span>
+        <Megaphone size={22} aria-hidden="true"/><strong>No updates yet.</strong>
+        <span>Updates from the Nightjar team will appear here.</span>
       </div>}
       {!loading&&!loadError&&displayed.map(post=><article className="nightjar-team-post" key={post.id}>
-        <div className="nightjar-team-meta"><span className="nightjar-team-topic"><Sparkles size={13}/>{topics[post.topic]??'Community update'}</span>
+        <div className="nightjar-team-meta"><span className="nightjar-team-topic"><Megaphone size={13} aria-hidden="true"/>{topics[post.topic]??'Community update'}</span>
           {post.publishedAt&&<time dateTime={post.publishedAt}>{dateText(post.publishedAt)}</time>}
           <span className="nightjar-team-official"><ShieldCheck size={13}/> Official Nightjar Team</span>
         </div>

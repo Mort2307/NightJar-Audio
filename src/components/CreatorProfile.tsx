@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { ArrowRight, Heart, MessageCircle, Mic2, Moon, Share2, ShieldCheck, Sparkles, ThumbsUp } from 'lucide-react';
+import { ArrowRight, Heart, MessageCircle, Mic2, Moon, Share2, ShieldCheck, ThumbsUp } from 'lucide-react';
 import { demoCreators, demoTracks } from '../demo/nightjarDemo';
 import { ROLE_PROFILE_CONFIG } from '../data/nightjarTaxonomy';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
@@ -129,12 +129,12 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
         <div className="creator-profile-hero nj-cinema-legacy-hero">
           <div className="nj-cinema-legacy-cover" aria-hidden="true">
             {profile.bannerUrl && <img src={profile.bannerUrl} alt="" loading="lazy" decoding="async" />}
-            <span>NIGHTJAR CREATOR STUDIO <em>{profile.headline || 'Stories you can feel.'}</em></span>
+            <span>NIGHTJAR <em>{profile.headline || 'Stories you can feel.'}</em></span>
           </div>
           <span className="nj-legacy-avatar-moon-wrap">
             <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
             <span className="nj-legacy-official-moon" aria-label="Official NightJar creator approved through onboarding" title="Official NightJar creator"><Moon size={17} aria-hidden="true"/></span>
-          </span><div className="nj-cinema-legacy-identity"><h3>{profile.name}</h3><p>{profile.headline || 'Creator-led immersive audio.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button>{canMessage && onMessage && <button className="secondary-button" onClick={()=>onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}</div></div>
+          </span><div className="nj-cinema-legacy-identity"><h3>{profile.name}</h3><p>{profile.headline || 'Independent Nightjar creator.'}</p>{profile.pronouns && <small>{profile.pronouns}</small>}</div><div className="writer-discovery-actions"><button className="secondary-button" onClick={() => void onToggleFollow(profile.userId)}><Heart size={14} fill={following ? 'currentColor' : 'none'} /> {following ? 'Following' : 'Follow creator'}</button>{canMessage && onMessage && <button className="secondary-button" onClick={()=>onMessage(profile.userId)}><MessageCircle size={14}/> Message</button>}</div></div>
         <div className="public-profile-metrics">
           <button type="button" className="nj-profile-metric-button" aria-label={'View followers of '+profile.name}  onClick={()=>onOpenConnections(profile.userId,'followers',profile.name)}><strong>{profile.followers ?? 0}</strong><span>Followers</span></button>
           <button type="button" className="nj-profile-metric-button" aria-label={'View profiles followed by '+profile.name}  onClick={()=>onOpenConnections(profile.userId,'following',profile.name)}><strong>{profile.followingCount ?? 0}</strong><span>Following</span></button>
@@ -159,7 +159,7 @@ export default function CreatorProfile({ creatorUserId, followingIds, onToggleFo
           {(profile.completedCollaborations ?? 0) > 0 && <CollaborationHistoryButton userId={profile.userId} displayName={profile.name} count={profile.completedCollaborations ?? 0} demoMode={demoMode} />}
         </section>}
         {!!profile.featuredReleases?.length && <section className="creator-featured-releases">
-          <div className="section-head"><div><span className="mini-label">FEATURED BY CREATOR</span><h3>Start here</h3></div><Sparkles size={17}/></div>
+          <div className="section-head"><div><span className="mini-label">FEATURED BY CREATOR</span><h3>Selected by the creator</h3></div><Heart size={17} aria-hidden="true"/></div>
           {profile.featuredReleases.map((release:any)=><article key={release.id} className="creator-profile-release featured">
             <div>{release.artworkUrl && <img className="nj-cinema-legacy-release-art" src={release.artworkUrl} alt="" loading="lazy" decoding="async"/>}<strong>{release.title}</strong><span>{release.category || 'Audio'} · {release.durationMinutes ? release.durationMinutes + ' min' : 'Duration pending'}</span><p>{release.description || 'No description supplied.'}</p><div className="creator-release-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div></div>
             <button className="round-play" onClick={()=>onPlayRelease(release)} aria-label={'Play ' + release.title}><ArrowRight size={15}/></button>

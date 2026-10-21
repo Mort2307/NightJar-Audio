@@ -38,7 +38,7 @@ requireText(creator,'transcriptAccessibilityReviewed:false');
 requireText(workshop,'navigator.clipboard.writeText');
 requireText(workshop,'URL.createObjectURL(file)');
 requireText(workshop,'URL.revokeObjectURL');
-requireText(workshop,'No AI, no third-party services');
+requireText(workshop,'This tool does not upload audio.');
 requireText(player,'transcriptFollowPlayback');
 requireText(player,'activeTranscriptCueId');
 requireText(onboarding,'How professional approval works');

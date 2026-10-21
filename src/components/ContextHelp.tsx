@@ -142,7 +142,7 @@ export const NIGHTJAR_HELP = {
   },
   'verified-status': {
     title: 'Verified and approved',
-    description: 'A NightJar team or automated workflow has completed the named review step. The badge only refers to that specific check.',
+    description: 'The named review step has been completed by NightJar or its approved verification process. The badge only refers to that specific check.',
     detail: 'Approval does not guarantee that external legal rights, identities, quality claims or earnings have been independently verified unless expressly stated.',
   },
   'admin-review-notification': {

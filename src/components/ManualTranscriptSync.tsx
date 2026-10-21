@@ -78,7 +78,7 @@ export default function ManualTranscriptSync({initialText='',onApply,label='Time
   const output=build(rows);
   return <section className="nj-manual-sync" aria-label={label}>
     <button type="button" className="nj-manual-sync-toggle" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>
-      <BookOpenText size={19}/><span><strong>{label}</strong><small>No AI, no third-party services and no automatic audio uploads.</small></span><span aria-hidden="true">⌄</span>
+      <BookOpenText size={19}/><span><strong>{label}</strong><small>You set the timing. This tool does not upload audio.</small></span><span aria-hidden="true">⌄</span>
     </button>
     {open&&<div className="nj-manual-sync-body">
       <p>Paste each spoken line on its own row. Use a <strong>local copy</strong> of the finished audio; while it plays, stamp each matching line with the current playback time. You can edit timestamps manually and verify every cue before applying.</p>

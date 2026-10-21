@@ -112,7 +112,7 @@ export function HomeSection({id, title, children}: {id: SectionId;title: string;
   const toggle = () => setLayout(current => ({...current,collapsed:expanded?[...current.collapsed,id]:current.collapsed.filter(item=>item!==id)}));
   return <section className="nj-home-section" id={'nightjar-home-'+id} style={{order:layout.order.indexOf(id)+1}} aria-label={title}>
     <button type="button" className="nj-home-section-toggle" aria-expanded={expanded} onClick={toggle}>
-      <span><strong>{title}</strong><small>{expanded?'Tap to tuck this section away':'Tap to explore'}</small></span>
+      <span><strong>{title}</strong><small>{expanded?'Hide section':'Show section'}</small></span>
       {expanded?<ChevronUp size={18}/>:<ChevronDown size={18}/>}
     </button>
     {expanded && <div className="nj-home-section-body">{children}</div>}
