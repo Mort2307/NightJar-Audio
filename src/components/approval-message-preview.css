@@ -1,0 +1,73 @@
+/* Admin audio approval: show that NightJar generates its own thank-you.
+   All copy stays readable on small screens without a second scrolling pane. */
+.nj-approval-automatic-message {
+  display: grid;
+  gap: .7rem;
+  min-width: 0;
+  padding: .95rem 1rem;
+  border: 1px solid rgba(215, 176, 109, .35);
+  border-radius: 1rem;
+  background: rgba(17, 14, 16, .74);
+  color: var(--ivory, #f3ede4);
+}
+.nj-approval-auto-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: .7rem;
+}
+.nj-approval-auto-heading > svg {
+  flex: 0 0 auto;
+  margin-top: .14rem;
+  color: #e4be83;
+}
+.nj-approval-auto-heading > div { min-width: 0; }
+.nj-approval-auto-heading strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.nj-approval-automatic-message p {
+  margin: .3rem 0 0;
+  font-size: .875rem;
+  line-height: 1.5;
+  color: var(--muted, #d0c5c2);
+}
+.nj-approval-message-details {
+  min-width: 0;
+  border-top: 1px solid rgba(215, 176, 109, .22);
+  padding-top: .7rem;
+}
+.nj-approval-message-details summary {
+  cursor: pointer;
+  padding: .25rem 0;
+  font-size: .94rem;
+  font-weight: 700;
+  color: #e7c58c;
+  text-underline-offset: .2em;
+}
+.nj-approval-message-details summary:focus-visible {
+  outline: 2px solid #f0d1a0;
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+.nj-approval-preview-body {
+  min-width: 0;
+  margin-top: .7rem;
+  padding: .9rem;
+  border: 1px solid rgba(229, 207, 177, .24);
+  border-radius: .75rem;
+  background: rgba(0, 0, 0, .35);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: .91rem;
+  line-height: 1.6;
+  color: var(--ivory, #f3ede4);
+}
+.nj-approval-automatic-message .nj-approval-preview-caveat,
+.nj-approval-automatic-message .nj-approval-submission-note {
+  font-size: .81rem;
+}
+@media (max-width: 540px) {
+  .nj-approval-automatic-message { padding: .8rem; }
+  .nj-approval-preview-body { padding: .7rem; }
+}
