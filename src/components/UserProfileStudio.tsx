@@ -251,7 +251,9 @@ export default function UserProfileStudio({
     {approvedFraming && <ImageFramingEditor key={approvedFraming.assetId}
       approvedSrc={approvedFraming.src}
       shape={approvedFraming.kind==='banner'?'banner':'portrait'}
-      initialFraming={approvedFraming.kind==='banner'?profile.bannerFraming:profile.avatarFraming}
+      initialFraming={approvedFraming.kind==='banner'
+        ? profile.bannerFraming?.assetId===approvedFraming.assetId?profile.bannerFraming:null
+        : profile.avatarFraming?.assetId===approvedFraming.assetId?profile.avatarFraming:null}
       onCancel={()=>setApprovedFraming(null)}
       onSaveFraming={async framing=>{
         await onSaveApprovedFraming(approvedFraming.kind,approvedFraming.assetId,framing);
