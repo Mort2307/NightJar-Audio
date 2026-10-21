@@ -11659,3 +11659,10 @@ textarea:focus-visible,
   object-position:center center;
   background:#151119;
 }
+
+/* Approved artwork framing shares exact public geometry with the editor. */
+.nj-approved-featured-image{width:100%;aspect-ratio:16/10;display:block}
+.nj-cinema-work-art{display:block;overflow:hidden;background:#151119}
+.nj-approved-work-thumb{width:84px!important;height:84px!important;border-radius:12px;flex-shrink:0}
+.nj-approved-release-frame{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px}
+.nj-approved-release-frame small{flex-basis:100%;color:var(--muted);font-size:12px}
