@@ -60,9 +60,9 @@ function PersonCard({ person, viewerUserId, followingIds, simulationMode, simula
           <img className="nj-spotlight-portrait-img" src={person.imageUrl} alt={person.name + ' approved Nightjar profile portrait'} loading="lazy" decoding="async"/>
         </>
         : <span className="nj-spotlight-monogram" aria-hidden="true">{person.publicProfile === false ? 'NJ' : person.initials || person.name.slice(0,2).toUpperCase()}</span>}
-      <div className="nj-spotlight-portrait-stamp"><Icon size={17}/>{role.label}</div>
     </button>
     <div className="nj-spotlight-story">
+      <div className="nj-spotlight-portrait-stamp"><Icon size={17}/>{role.label}</div>
       <div className="nj-spotlight-eyebrow"><span><Star size={13} fill="currentColor"/> IN THE SPOTLIGHT</span><span>SPOTLIGHT DAY</span></div>
       <p className="nj-spotlight-editorial">{labelFor(person)}</p>
       <h3>{person.name}</h3>
