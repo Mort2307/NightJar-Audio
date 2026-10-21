@@ -4,6 +4,8 @@ import { nightjarArtists, type ArtistPortfolioItem } from '../platform/firebase-
 import { nightjarMedia } from '../platform/firebase-media';
 import StudioFormDraftSync from './StudioFormDraftSync';
 import ImageFramingEditor from './ImageFramingEditor';
+import FramedApprovedImage from './FramedApprovedImage';
+import {nightjarWorkFraming} from '../platform/firebase-artwork-framing';
 
 type Props = {
   notify: (message: string) => void;
@@ -26,6 +28,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [commissionType, setCommissionType] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [artFrameFile,setArtFrameFile]=useState<File|null>(null);
+  const [approvedFrameItem,setApprovedFrameItem]=useState<ArtistPortfolioItem|null>(null);
   const [humanCreated, setHumanCreated] = useState(false);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
@@ -198,7 +201,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
     <div className="nj-artist-portfolio-summary"><strong>{items.length} artwork piece{items.length===1?'':'s'}</strong><span>{items.filter(item=>item.status==='published').length} public · {items.filter(item=>item.status!=='published').length} private or awaiting review</span></div>
     <div className="artist-portfolio-grid">
       {items.map((item)=><article key={item.id} className="artist-portfolio-card">
-        <div className="artist-portfolio-image">{item.imageUrl?<img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/>:<div><ImagePlus size={22}/><span>{item.pendingImageStatus==='pending'?'Awaiting image approval':item.pendingImageStatus==='rejected'?'Image rejected':'No public image yet'}</span></div>}</div>
+        <div className="artist-portfolio-image">{item.imageUrl?<FramedApprovedImage src={item.imageUrl} alt={item.title}
+          framing={item.imageFraming?.assetId===item.imageAssetId?item.imageFraming:null} defaultMode="fit" />:<div><ImagePlus size={22}/><span>{item.pendingImageStatus==='pending'?'Awaiting image approval':item.pendingImageStatus==='rejected'?'Image rejected':'No public image yet'}</span></div>}</div>
         <div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}<p>{item.description}</p>{!!item.tags?.length&&<div className="creator-profile-tags">{item.tags.map((tag)=><span key={tag}>{tag}</span>)}</div>}<em>{item.status==='published'?'Public':'Private / moderation pending'}</em></div>
         {item.status==='draft' && !item.pendingImageAssetId && !item.imageUrl && <button type="button" className="secondary-button" disabled={busy} onClick={() => {
           setRetryItemId(item.id);setTitle(item.title);setDescription(item.description);
@@ -206,10 +210,28 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
           setFile(null);setFileInputNonce(value => value + 1);setHumanCreated(false);setRightsConfirmed(false);setPermissionsConfirmed(false);
           setFormOpen(true);
         }}>Resume image upload</button>}
+        {item.status==='published' && item.imageStatus==='approved' && item.imageUrl && item.imageAssetId &&
+          <button type="button" className="secondary-button" disabled={busy}
+            onClick={()=>setApprovedFrameItem(item)}>Adjust approved artwork</button>}
         <button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={14}/> Remove</button>
       </article>)}
       {!items.length&&<div className="people-empty"><ImagePlus size={18}/><strong>No portfolio pieces yet</strong><span>Add a few strong examples so VA Creators, Writers and Audio Editors can understand your visual style.</span></div>}
     </div>
+    {approvedFrameItem && approvedFrameItem.imageUrl && approvedFrameItem.imageAssetId &&
+      <ImageFramingEditor approvedSrc={approvedFrameItem.imageUrl} shape="artwork"
+        initialFraming={approvedFrameItem.imageFraming?.assetId===approvedFrameItem.imageAssetId?approvedFrameItem.imageFraming:null}
+        onCancel={()=>setApprovedFrameItem(null)}
+        onSaveFraming={async framing=>{
+          const item=approvedFrameItem;
+          const saved=demoMode
+            ? {framing:{assetId:String(item.imageAssetId),...framing}}
+            : await nightjarWorkFraming.save('artist_portfolio',item.id,{assetId:String(item.imageAssetId),...framing});
+          setItems(previous=>previous.map(current=>current.id===item.id&&current.imageAssetId===item.imageAssetId
+            ? {...current,imageFraming:saved.framing}:current));
+          setApprovedFrameItem(null);
+          notify('Portfolio artwork framing saved. The approved image and rights confirmations are unchanged.');
+        }}
+      />}
     {artFrameFile && <ImageFramingEditor file={artFrameFile} shape="artwork"
       onCancel={()=>setArtFrameFile(null)}
       onApply={framed=>{

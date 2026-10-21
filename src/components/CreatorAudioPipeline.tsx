@@ -10,6 +10,9 @@ import { demoDirectory } from '../demo/nightjarDemo';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import ContextHelp from './ContextHelp';
 import ImageFramingEditor from './ImageFramingEditor';
+import {nightjarWorkFraming} from '../platform/firebase-artwork-framing';
+import type {ApprovedWorkFraming} from '../platform/firebase-artwork-framing';
+import FramedApprovedImage from './FramedApprovedImage';
 import ManualTranscriptSync from './ManualTranscriptSync';
 import TranscriptSyncTool from './TranscriptSyncTool';
 import './creator-workflow.css';
@@ -31,6 +34,7 @@ type Release = {
   audioUrl?: string | null;
   artworkUrl?: string | null;
   artworkAssetId?: string | null;
+  artworkFraming?: ApprovedWorkFraming | null;
   artworkStatus?: 'approved' | 'removed' | null;
   pendingArtworkAssetId?: string | null;
   pendingArtworkStatus?: 'pending' | 'rejected' | null;
@@ -113,6 +117,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const lastOpenedKey = 'nightjar:last-opened-creator-release';
   const [artBusy, setArtBusy] = useState(false);
   const [artFrameFile,setArtFrameFile]=useState<File|null>(null);
+  const [approvedFrameRelease,setApprovedFrameRelease]=useState<{id:string;assetId:string;src:string;framing:ApprovedWorkFraming|null}|null>(null);
   const [creditDirectory, setCreditDirectory] = useState<any[]>([]);
   const [promotedTagOptions, setPromotedTagOptions] = useState<string[]>([]);
   const [metadataStatus, setMetadataStatus] = useState<'saved'|'unsaved'|'saving'|'offline'|'conflict'>('saved');
@@ -1078,6 +1083,18 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </button>}
             <small>Only release text, credits and scheduling autosave. Media transfers and rights/accuracy confirmations are separate; confirm those when submitting.</small>
           </div>}
+          {current.artworkStatus==='approved' && current.artworkUrl && current.artworkAssetId &&
+            <div className="nj-approved-release-frame panel">
+              <FramedApprovedImage src={current.artworkUrl} alt="Approved release artwork"
+                className="nj-approved-work-thumb" defaultMode="fit"
+                framing={current.artworkFraming?.assetId===current.artworkAssetId?current.artworkFraming:null}/>
+              <button type="button" className="secondary-button" disabled={artBusy||submitting}
+                onClick={()=>setApprovedFrameRelease({id:current.id,assetId:String(current.artworkAssetId),
+                  src:String(current.artworkUrl),framing:current.artworkFraming?.assetId===current.artworkAssetId?(current.artworkFraming ?? null):null})}>
+                Adjust approved release artwork
+              </button>
+              <small>Save the framing without changing your recording or asking for another artwork review.</small>
+            </div>}
           <div className="nj-work-removal">
             <div><strong>Remove this recording</strong><small>You control your work. Remove drafts, submissions or published recordings whenever you choose. Removal cannot be undone.</small></div>
             <button className="ghost-button nj-work-remove-button" type="button" disabled={removing || submitting || audioBusy} onClick={() => void removeRelease()}>{removing ? 'Removing recording…' : removalPending ? 'Retry removal cleanup' : 'Remove recording'}</button>
@@ -1086,6 +1103,19 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Choose a recording.</strong><span>Select a saved recording above, or create one with a title.</span></div>}
       </div>
     </div>
+    {approvedFrameRelease && <ImageFramingEditor
+      approvedSrc={approvedFrameRelease.src} shape="release"
+      initialFraming={approvedFrameRelease.framing}
+      onCancel={()=>setApprovedFrameRelease(null)}
+      onSaveFraming={async framing=>{
+        const selection=approvedFrameRelease;
+        const result=await nightjarWorkFraming.save('release_artwork',selection.id,{assetId:selection.assetId,...framing});
+        setSelectedRelease(previous=>previous?.id===selection.id && previous.artworkAssetId===selection.assetId
+          ? {...previous,artworkFraming:result.framing} : previous);
+        setApprovedFrameRelease(null);
+        notify('Release artwork framing saved without a new upload or moderation review.');
+      }}
+    />}
     {artFrameFile && <ImageFramingEditor file={artFrameFile} shape="release"
       onCancel={()=>setArtFrameFile(null)}
       onApply={async framed=>{

@@ -12,6 +12,7 @@ import { useNightjarEqualizer } from '../hooks/useNightjarEqualizer';
 import { useNightjarMediaSession } from '../hooks/useNightjarMediaSession';
 import './nightjar-player-premium.css';
 import ContextHelp from './ContextHelp';
+import FramedApprovedImage from './FramedApprovedImage';
 
 export type NightjarPlayerTrack = {
   id: string;
@@ -23,6 +24,8 @@ export type NightjarPlayerTrack = {
   audioAvailable?: boolean;
   audioUrl?: string | null;
   artworkUrl?: string | null;
+  artworkAssetId?: string | null;
+  artworkFraming?: {assetId:string;mode:'fit'|'fill';zoom:number;x:number;y:number}|null;
   nightjarOriginal?: boolean;
   releaseDistribution?: 'standard' | 'nightjar_first';
   contributors?: Array<{ name?: string; role?: string; userId?: string | null }>;
@@ -423,7 +426,13 @@ export default function NightjarPlayer({ track, queue = [], intent = '', onSelec
     <section className="nj-up-sheet" role="region" aria-hidden={minimised} aria-label={'Nightjar player: ' + track.title}>
       <div className="nj-up-grip" aria-hidden="true"/>
       <div className="nj-up-header">
-        <div className="nj-up-cover"><img src={artwork} alt={track.artworkUrl && !artworkFailed ? 'Release cover artwork' : 'Nightjar default cover artwork'} onError={() => setArtworkFailed(true)} /></div>
+        <div className="nj-up-cover">
+          {track.artworkUrl && !artworkFailed && track.artworkFraming?.assetId===track.artworkAssetId
+            ? <FramedApprovedImage src={artwork} alt="Release cover artwork" defaultMode="fit"
+                framing={track.artworkFraming}/>
+            : <img src={artwork} alt={track.artworkUrl && !artworkFailed ? 'Release cover artwork' : 'Nightjar default cover artwork'}
+                onError={()=>setArtworkFailed(true)}/>}
+        </div>
         <div className="nj-up-identity">
           <span className="nj-up-kicker">{track.category || 'Audio'}</span>
           <h2>{track.title}</h2>

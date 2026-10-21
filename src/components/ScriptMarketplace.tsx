@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import FramedApprovedImage from './FramedApprovedImage';
 import { ArrowRight, BookOpen, Filter, Search } from 'lucide-react';
 import MarketplaceScriptActions from './MarketplaceScriptActions';
 import ContextHelp from './ContextHelp';
@@ -89,7 +90,9 @@ export default function ScriptMarketplace({ notify, onOpenWriter, onMessageUser,
     : <div className="marketplace-grid">
       {filtered.map((script) => <article className={focusScriptId === script.id ? "marketplace-card nightjar-notification-target" : "marketplace-card"} key={script.id} id={"nightjar-marketplace-script-" + script.id}>
         <div className="marketplace-card-head"><span className="nj-term-label">{script.rights?.licenceType && script.rights.licenceType !== 'none' ? script.rights.licenceType : 'Licence to discuss'} <ContextHelp topic={script.rights?.licenceType==='exclusive'?'exclusive-licence':script.rights?.licenceType==='non-exclusive'?'non-exclusive-licence':'licence-choice'}/></span><Filter size={15}/></div>
-        {script.artworkUrl && <img className="script-marketplace-cover" src={script.artworkUrl} alt={'Approved cover artwork for ' + script.title} loading="lazy" decoding="async"/>}
+        {script.artworkUrl && <FramedApprovedImage className="script-marketplace-cover" src={script.artworkUrl}
+   alt={'Approved cover artwork for '+script.title}
+   framing={script.artworkFraming?.assetId===script.artworkAssetId?script.artworkFraming:null} defaultMode="fit"/>}
         <h3>{script.title}</h3>
         {onOpenWriter ? <button className="marketplace-writer" type="button" data-nj-preview-safe={readOnlyPreview ? "true" : undefined} disabled={!script.writerUserId} onClick={()=>script.writerUserId && onOpenWriter(script.writerUserId)}>{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</button> : <span className="marketplace-writer">{script.writerName}{script.writerHandle ? ' · @' + String(script.writerHandle).replace(/^@/,'') : ''}</span>}
         <p>{script.marketplace?.synopsis || 'Writer has not added a public synopsis yet.'}</p>
