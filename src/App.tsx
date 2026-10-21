@@ -516,6 +516,9 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [liveRoleMenuOpen, setLiveRoleMenuOpen] = useState(false);
   const liveRoleMenuRef = useRef<HTMLDivElement | null>(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [ageStage, setAgeStage] = useState<AgeStage>('gate');
   // Never show account entry or an adult workspace while Firebase and the
   // backend are restoring this session on refresh.
@@ -789,6 +792,28 @@ function App() {
       document.removeEventListener('keydown', onEscape);
     };
   }, [liveRoleMenuOpen]);
+
+  // The account menu is a compact, dismissible choice between profile and
+  // role switching. Owner role previews are local simulations, never grants.
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onOutside = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) setAccountMenuOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setAccountMenuOpen(false);
+        accountMenuTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [accountMenuOpen]);
+
   useEffect(() => installNativeProtectionBridge(), []);
 
   // Observe only explicit browser security shortcuts. Never capture text,
@@ -1514,6 +1539,7 @@ function App() {
     setAdminPanel(null);
     setAdminPeopleRole(null);
     setLiveRoleMenuOpen(false);
+    setAccountMenuOpen(false);
     if (nextView === 'admin' && canAdmin) {
       setPreviewRole(null);
       setSimulationMode(false);
@@ -5096,6 +5122,7 @@ function App() {
     setProfileRolesPage(true);
     setView('profile');
     setMenuOpen(false);
+    setAccountMenuOpen(false);
     scrollNightjarToTop();
   };
   const commandItems: NightjarCommand[] = [
@@ -5202,7 +5229,7 @@ function App() {
           {canAdmin && <div className="nj-live-switcher" ref={liveRoleMenuRef}>
             <button type="button" className={liveRolePreview || interactiveRoleTest ? 'nj-live-switcher-trigger active' : 'nj-live-switcher-trigger'}
               aria-expanded={liveRoleMenuOpen} aria-haspopup="dialog" aria-controls="nj-live-switcher-menu"
-              onClick={() => { setMenuOpen(false); setLiveRoleMenuOpen((open) => !open); }}>
+              onClick={() => { setMenuOpen(false); setAccountMenuOpen(false); setLiveRoleMenuOpen((open) => !open); }}>
               <Eye size={17} aria-hidden="true" />
               <span className="nj-live-switcher-label"><strong>View as</strong><small>{interactiveRoleTest && previewRole ? roleMeta[previewRole].label + ' · QA' : liveRolePreview && previewRole ? roleMeta[previewRole].label + ' · Public' : 'Test roles'}</small></span>
               <ChevronDown size={15} className={liveRoleMenuOpen ? 'nj-switcher-chevron rotated' : 'nj-switcher-chevron'} aria-hidden="true" />
@@ -5266,14 +5293,29 @@ function App() {
             <button className="primary-button" disabled={accountLoading} onClick={() => void signIn()}>Sign in <ArrowRight size={15} /></button>
           ) : (
             <>
-              <button className="account-chip" aria-label="Open my NightJar profile" title="My profile" onClick={openProfileEditor}>
-                <span className="account-chip-avatar">{simulationMode ? simulationIdentity.initials : profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : (user.name ?? user.email ?? 'N').slice(0, 1).toUpperCase()}</span>
-                <span><strong>{simulationMode ? simulationIdentity.name : user.name ?? 'Nightjar account'}</strong><em>{simulationMode ? simulationIdentity.label + ' · Simulation' : canAdmin && previewRole ? `Administrator · ${liveRolePreview ? 'live' : 'simulation'} ${roleMeta[previewRole].label} view` : accountLabel}</em></span>
-              </button>
+              <div className="nj-account-menu" ref={accountMenuRef}>
+                <button type="button" ref={accountMenuTriggerRef} className="account-chip" aria-label="Open account menu: profile and roles" aria-expanded={accountMenuOpen} aria-controls="nj-account-options" onClick={() => { setMenuOpen(false); setLiveRoleMenuOpen(false); setAccountMenuOpen(open => !open); }}>
+                  <span className="account-chip-avatar">{simulationMode ? simulationIdentity.initials : profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : (user.name ?? user.email ?? 'N').slice(0, 1).toUpperCase()}</span>
+                  <span className="account-chip-identity"><strong>{simulationMode ? simulationIdentity.name : user.name ?? 'Nightjar account'}</strong><em>{simulationMode ? simulationIdentity.label + ' · Simulation' : canAdmin && previewRole ? `Administrator · ${liveRolePreview ? 'live' : 'simulation'} ${roleMeta[previewRole].label} view` : accountLabel}</em></span>
+                  <ChevronDown size={15} className={accountMenuOpen ? 'nj-account-menu-chevron open' : 'nj-account-menu-chevron'} aria-hidden="true" />
+                </button>
+                {accountMenuOpen && <section className="nj-account-menu-popover" id="nj-account-options" aria-label="Your NightJar account">
+                  <div className="nj-account-menu-heading"><strong>Your NightJar</strong><small>{canAdmin ? 'Administrator account' : 'Profile and role access'}</small></div>
+                  <button type="button" className="nj-account-menu-action" onClick={openProfileEditor}><UserCircle2 size={17} aria-hidden="true" /><span>My Profile<small>View and edit your profile</small></span><ChevronRight size={15} aria-hidden="true" /></button>
+                  {canAdmin ? <>
+                    <div className="nj-account-menu-group-heading"><strong>Explore roles</strong><small>Safe Admin previews using fictional test data</small></div>
+                    {LIVE_PREVIEW_ROLES.map(option => <button type="button" className="nj-account-menu-action" key={option.id} aria-pressed={interactiveRoleTest && previewRole === option.id} onClick={() => { setAccountMenuOpen(false); startSimulation(option.id); }}>
+                      <Eye size={16} aria-hidden="true" /><span>{option.label}<small>Open test workspace</small></span><ChevronRight size={15} aria-hidden="true" />
+                    </button>)}
+                    <button type="button" className="nj-account-menu-action" onClick={() => { setAccountMenuOpen(false); openLiveMemberProfile(); }}><Users size={17} aria-hidden="true" /><span>Live Profile Viewer<small>Inspect real public profiles</small></span><ChevronRight size={15} aria-hidden="true" /></button>
+                    {(interactiveRoleTest || liveRolePreview) && <button type="button" className="nj-account-menu-action nj-account-return" onClick={() => { setAccountMenuOpen(false); interactiveRoleTest ? disableDemoMode() : clearAdminPreview(); }}><ShieldCheck size={17} aria-hidden="true" /><span>Return to Admin</span><ArrowRight size={15} aria-hidden="true" /></button>}
+                  </> : <button type="button" className="nj-account-menu-action" onClick={openMyRoles}><ShieldCheck size={17} aria-hidden="true" /><span>Switch Roles<small>Manage approved roles in My Roles</small></span><ChevronRight size={15} aria-hidden="true" /></button>}
+                </section>}
+              </div>
               <button className="ghost-button desktop-only" onClick={() => void signOut()}><LogOut size={15} /></button>
             </>
           )}
-          <button className="menu-button" onClick={() => { setLiveRoleMenuOpen(false); setMenuOpen((open) => !open); }} aria-label="Open navigation menu" aria-expanded={menuOpen}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+          <button className="menu-button" onClick={() => { setLiveRoleMenuOpen(false); setAccountMenuOpen(false); setMenuOpen((open) => !open); }} aria-label="Open navigation menu" aria-expanded={menuOpen}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </header>
 
