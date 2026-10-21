@@ -412,7 +412,9 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
             <div className="role-public-detail-card"><span className="mini-label">DELIVERABLES</span><h4>What they can produce</h4>{roleDetails.artistDeliveryFormats?.length?<div className="creator-profile-tags">{roleDetails.artistDeliveryFormats.map((item:string)=><span key={item}>{item}</span>)}</div>:<p>Deliverables not listed yet.</p>}</div>
           </div>
           {!!roleDetails.artistSoftware?.length && <div className="role-public-detail-card"><span className="mini-label">TOOLS</span><h4>Software & tools</h4><div className="creator-profile-tags">{roleDetails.artistSoftware.map((item:string)=><span key={item}>{item}</span>)}</div></div>}
-          {!!profile.featuredArtistPortfolio?.length && <div className="public-artist-featured"><span className="mini-label">FEATURED ARTWORK</span><div className="public-artist-featured-grid">{profile.featuredArtistPortfolio.map((item:any)=><article key={item.id}>{item.imageUrl&&<img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/>}<div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}<p>{item.description}</p></div></article>)}</div></div>}
+          {!!profile.featuredArtistPortfolio?.length && <div className="public-artist-featured"><span className="mini-label">FEATURED ARTWORK</span><div className="public-artist-featured-grid">{profile.featuredArtistPortfolio.map((item:any)=><article key={item.id}>{item.imageUrl&&<FramedApprovedImage src={item.imageUrl} alt={item.title}
+   framing={item.imageFraming?.assetId===item.imageAssetId?item.imageFraming:null} defaultMode="fit"
+   className="nj-approved-featured-image" />}<div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}<p>{item.description}</p></div></article>)}</div></div>}
         </section>}
 
         {profileRole === 'listener' && <section className="role-public-professional listener-public-professional">
@@ -525,7 +527,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           <div className="section-head"><div><span className="mini-label">ARTIST PORTFOLIO</span><h3>Approved visual work</h3></div></div>
           {!!profile.artistPortfolio?.length ? <div className="public-artist-grid">
             {profile.artistPortfolio.map((item:any)=><article key={item.id} id={'nightjar-artwork-' + item.id} className={focusArtworkId === item.id ? 'nightjar-notification-target' : undefined}>
-              {item.imageUrl && <button type="button" className="public-artist-image" onClick={()=>window.open(item.imageUrl,'_blank','noopener,noreferrer')} aria-label={'Open '+item.title+' full size'}><img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async"/></button>}
+              {item.imageUrl && <button type="button" className="public-artist-image" onClick={()=>window.open(item.imageUrl,'_blank','noopener,noreferrer')} aria-label={'Open '+item.title+' full size'}><FramedApprovedImage src={item.imageUrl} alt={item.title} defaultMode="fit"
+   framing={item.imageFraming?.assetId===item.imageAssetId?item.imageFraming:null}/></button>}
               <div><strong>{item.title}</strong>{item.commissionType&&<small>{item.commissionType}</small>}{item.description&&<p>{item.description}</p>}{!!item.tags?.length&&<div className="creator-profile-tags">{item.tags.map((tag:string)=><span key={tag}>{tag}</span>)}</div>}</div>
             </article>)}
           </div> : <div className="people-empty"><ImagePlus size={18}/><strong>No approved portfolio pieces yet</strong><span>This Artist has not published moderated artwork to their Nightjar portfolio yet.</span></div>}
@@ -549,7 +552,8 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
           {profileRole === 'creator' && !!roleFeaturedWork.length && <div className="public-featured-work">
             <span className="mini-label">FEATURED</span>
             {roleFeaturedWork.map((release:any)=><article key={release.id}>
-              {release.artworkUrl && <img className="nj-cinema-work-art" src={release.artworkUrl} alt="" loading="lazy" decoding="async" />}
+              {release.artworkUrl && <FramedApprovedImage className="nj-cinema-work-art" src={release.artworkUrl} alt=""
+   framing={release.artworkFraming?.assetId===release.artworkAssetId?release.artworkFraming:null} defaultMode="fit"/>}
               <div><strong>{release.title}</strong><span>{release.creatorName ?? profile.displayName}{release.seriesTitle ? ' · ' + release.seriesTitle : ''}</span></div>
               <div className="track-credit-line">{(profile.verifiedCredits ?? []).filter((credit:any)=>credit.releaseId===release.id).map((credit:any)=><span key={credit.id}>{credit.releaseRole}</span>)}</div>
               <div className="public-work-community-actions"><span className="profile-release-community-counts"><span><ThumbsUp size={11}/>{communityByRelease[String(release.id)]?.likes ?? release.communityLikeCount ?? 0}</span><span><Heart size={11}/>{communityByRelease[String(release.id)]?.loves ?? release.communityLoveCount ?? 0}</span><span><MessageCircle size={11}/>{communityByRelease[String(release.id)]?.comments ?? release.communityCommentCount ?? 0}</span></span>{canReact && onReaction && <><button className={reactionByRelease[String(release.id)]==='like'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'like')}><ThumbsUp size={12} fill={reactionByRelease[String(release.id)]==='like'?'currentColor':'none'}/> Like</button><button className={reactionByRelease[String(release.id)]==='love'?'ghost-button active-community-action':'ghost-button'} onClick={()=>onReaction(String(release.id),'love')}><Heart size={12} fill={reactionByRelease[String(release.id)]==='love'?'currentColor':'none'}/> Love</button></>}{onCommunityRelease && <button className="ghost-button public-work-community-button" onClick={()=>onCommunityRelease(release)}><MessageCircle size={12}/> Comments</button>}</div>
