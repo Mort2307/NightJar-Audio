@@ -43,11 +43,18 @@ assert.match(writerCss,/\.writer-script-artwork-preview > img \{[^\n]*object-fit
 assert.match(writerCss,/\.script-marketplace \.marketplace-card \.script-marketplace-cover \{[^\n]*object-fit: contain/,'Marketplace cover preserves content');
 
 const playerCss=read('src/components/nightjar-player-premium.css');
-// Published release tiles use cover art as a full-bleed stage. Unlike Writer
-// and Artist portfolios, these intentionally crop at the card edge; creators
-// can control the composition in the existing Image Studio before submission.
-assert.match(globalCss,/\.release-cover-media \{[\s\S]*?object-fit: cover;/,
-  'Home release artwork must fill the cover stage without dark side bars');
+// Published release tiles must show every part of the approved artwork.
+// Only the soft decorative background may crop to fill the stage.
+assert.match(app, /className="release-cover-ambient"[^>]*aria-hidden="true"/,
+  'Release background is decorative, ignored by assistive technology');
+assert.match(app, /className="release-cover-media"[^>]*onError=/,
+  'Approved artwork is still rendered as the primary image');
+assert.match(globalCss,/\.release-cover-ambient \{[\s\S]*?object-fit: cover;/,
+  'Ambient background should bleed into the whole release stage');
+assert.match(globalCss,/\.release-cover-media \{[\s\S]*?object-fit: contain;/,
+  'Actual release artwork must remain fully visible without hard cropping');
+assert.match(globalCss,/\.release-cover-ambient \{[\s\S]*?pointer-events: none;/,
+  'Decorative backdrop must not block play controls');
 assert.match(globalCss,/\.track-cover\.release-cover::before,[\s\S]*?\.track-cover\.release-cover::after \{[\s\S]*?content: none;/,
   'Do not draw heavy decorative frames over release artwork');
 assert.match(globalCss,/\.track-cover\.release-cover \.track-index \{[\s\S]*?text-shadow:/,
