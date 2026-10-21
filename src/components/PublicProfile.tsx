@@ -12,6 +12,7 @@ import { MEMBER_PAYMENT_FEATURES_ENABLED } from '../platform/nightjar-financial-
 import PublicEditorShowcase from './PublicEditorShowcase';
 import PublicWriterPortfolio from './PublicWriterPortfolio';
 import { SocialLinksDisplay } from './SocialLinksEditor';
+import FramedApprovedImage from './FramedApprovedImage';
 import CollaborationHistoryButton from './CollaborationHistoryButton';
 import { VoiceCallingCardPublic } from './VoiceCallingCard';
 import './public-profile-premium.css';
@@ -267,15 +268,20 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero nj-cinema-profile-hero">
           <div className={'nj-cinema-profile-cover'+(bannerFromCustom ? ' nj-cinema-cover-custom' : bannerFromPortrait ? ' nj-cinema-cover-portrait' : ' nj-cinema-cover-branded')} aria-hidden="true">
-            {(bannerFromCustom || bannerFromPortrait) && <img className="nj-profile-hero-banner"
-              src={bannerFromCustom ? profile.bannerUrl : profile.avatarUrl} alt="" loading="lazy" decoding="async"
-              onLoad={(event)=>{ if(event.currentTarget.naturalWidth < 480 || event.currentTarget.naturalHeight < 320) event.currentTarget.classList.add('nj-cinema-banner-lowres'); }}/>}
+            {(bannerFromCustom || bannerFromPortrait) && <FramedApprovedImage
+              className="nj-profile-hero-banner" absolute
+              src={bannerFromCustom ? profile.bannerUrl : profile.avatarUrl} alt=""
+              framing={bannerFromCustom ? profile.bannerFraming : profile.avatarFraming}
+              defaultMode={bannerFromCustom?'fit':'fill'} />}
             <span className="nj-cinema-profile-cover-shade"/>
             <span className="nj-cinema-cover-words"><small>NIGHTJAR / {roleLabel(profileRole).toUpperCase()}</small><em>{memberTagline || (profileRole === 'listener' ? 'Stay curious.' : 'Stories you can feel.')}</em></span>
             <span className="nj-cinema-cover-moon">☾</span>
           </div>
           <span className="nj-profile-avatar-frame">
-            <span className="creator-profile-avatar">{profile.avatarUrl ? <img className="avatar-approved-image" src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : profile.initials || 'NJ'}</span>
+            <span className="creator-profile-avatar">{profile.avatarUrl
+              ? <FramedApprovedImage imgClassName="avatar-approved-image" src={profile.avatarUrl}
+                  framing={profile.avatarFraming} defaultMode="fill" alt="" />
+              : profile.initials || 'NJ'}</span>
             {isCreditedListener && <span className="nj-credited-listener-label" title="Verified release contribution; not official professional onboarding">🎧 Credited Listener</span>}
              {hasNightjarApproval && <details className="nj-official-creator-badge">
               <summary aria-label="NightJar-approved professional — badge details" title="NightJar-approved professional"><Moon size={18} aria-hidden="true"/></summary>
