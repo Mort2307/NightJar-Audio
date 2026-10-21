@@ -9,7 +9,6 @@ import {
   MessageCircle,
   Scissors,
   ShieldCheck,
-  Sparkles,
   Wrench,
 } from 'lucide-react';
 import SearchableMultiSelect from './SearchableMultiSelect';
@@ -186,7 +185,7 @@ export default function EditorStudio({
 
     <div id="editor-studio-content" className="editor-studio-content">
       {tab === 'overview' && <>
-        {accountStatus === 'pending_review' && <div className="admin-note"><Sparkles size={17}/><div><strong>AUDIO EDITOR / PENDING REVIEW</strong><span>Your professional profile can be completed now. Assigned projects, private professional messaging and collaboration tools unlock after approval.</span></div></div>}
+        {accountStatus === 'pending_review' && <div className="admin-note"><Clock3 size={17} aria-hidden="true"/><div><strong>AUDIO EDITOR / PENDING REVIEW</strong><span>Your professional profile can be completed now. Assigned projects, private professional messaging and collaboration tools unlock after approval.</span></div></div>}
         <RoleDashboard
           eyebrow="EDITOR COMMAND CENTRE"
           title="Your production work, profile and opportunities."

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Headphones, ShieldCheck, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Headphones, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { nightjarExperience, type ListeningBoundaries } from '../platform/firebase-experience';
 import { MOOD_FILTERS, type MoodFilter } from '../platform/listening-discovery';
 import './listening-experience.css';
@@ -63,7 +63,7 @@ export default function ListeningDiscoveryControls({
     onBoundariesChange({ ...boundaries, excludedRatings });
   };
   return <section className="nj-listening-experience" aria-label="Mood discovery and private listening boundaries">
-    <div className="nj-experience-heading"><Sparkles size={20}/><div><strong>Listen by Mood</strong><small>Explore by atmosphere using Creator-supplied tags. No AI recommendations or extra provider fees.</small></div></div>
+    <div className="nj-experience-heading"><Headphones size={20} aria-hidden="true"/><div><strong>Listen by Mood</strong><small>Find a story for your mood using the tags creators add to their releases.</small></div></div>
     <div className="nj-mood-options" role="group" aria-label="Choose listening mood">
       {MOOD_FILTERS.map((option) => <button key={option.id} type="button"
         className={mood === option.id ? 'secondary-button active' : 'ghost-button'}

@@ -16,6 +16,7 @@ const surfaces = {
   'src/components/NightjarOnboarding.tsx': ['This is only the beginning.', 'A premium profile should feel intentional.'],
   'src/components/UserProfileStudio.tsx': ['Your evolving discovery fingerprint.', 'What belongs in your Nightjar orbit?'],
   'src/components/NightjarHomeLayout.tsx': ['Tap to tuck this section away'],
+  'src/components/ListeningDiscoveryControls.tsx': ['No AI recommendations or extra provider fees.'],
   'src/components/SpotlightExperience.tsx': ['A moment to celebrate the people who listen, explore and give this community its heartbeat.'],
 };
 const problems = [];

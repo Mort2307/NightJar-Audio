@@ -1,4 +1,4 @@
-import { ArrowRight, Bell, CheckCircle2, CircleAlert, Sparkles } from 'lucide-react';
+import { ArrowRight, Bell, CheckCircle2, CircleAlert } from 'lucide-react';
 
 export type RoleDashboardAction = {
   id: string;
@@ -24,7 +24,7 @@ export default function RoleDashboard({ eyebrow, title, description, metrics, ac
   return <section className="nj-role-dashboard" aria-label={title}>
     <div className="nj-role-dashboard-head">
       <div><span className="mini-label">{eyebrow}</span><h2>{title}</h2><p>{description}</p></div>
-      <Sparkles size={19}/>
+      <ArrowRight size={19} aria-hidden="true"/>
     </div>
     <div className="nj-role-dashboard-metrics">
       {metrics.map((metric) => {
