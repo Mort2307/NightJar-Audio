@@ -5367,10 +5367,9 @@ function App() {
                     <div className="featured-top"><span className="mini-label">NIGHTJAR / RELEASES</span><span className="status-dot"><span /> LIVE RELEASE</span></div>
                     <div key={featured.id} className="cover-art release-cover featured-release-cover">
                       <ReleaseCoverVisual artworkUrl={featured.artworkUrl} brandLogoUrl={logoUrl ?? '/brand-logo'} />
-                      <h2 className="featured-cover-title">{featured.title.toUpperCase()}</h2>
                     </div>
                     <div className="feature-meta">
-                      <div><span className="mini-label">{featured.category}</span><strong>{featured.title}</strong></div>
+                      <div><span className="mini-label">{featured.category}</span><h2 className="featured-release-heading">{featured.title}</h2></div>
                       <button className="round-play" disabled={!featured.audioAvailable && !featured.audioUrl} onClick={() => togglePlayback(featured)} aria-label={playing === featured.id ? 'Pause release' : 'Play release'}>{playing === featured.id ? <Pause size={19} /> : <Play size={19} fill="currentColor" />}</button>
                     </div>
                     {carouselTracks.length > 1 && (
@@ -6755,12 +6754,14 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
         aria-label={playing ? 'Pause '+track.title : 'Listen to '+track.title} onClick={()=>onPlay(track)}>
         <ReleaseCoverVisual artworkUrl={track.artworkUrl} brandLogoUrl={brandLogoUrl}/>
       </button>
-      <span className="track-index">{track.category}</span>
-      <button className="cover-play" disabled={!track.audioAvailable && !track.audioUrl} onClick={() => onPlay(track)} aria-label={!track.audioAvailable && !track.audioUrl ? 'Audio not connected' : playing ? 'Pause ' + track.title : 'Play ' + track.title}>
-        {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
-      </button>
     </div>
     <div className="track-body">
+      <div className="track-card-toolbar">
+        <span className="track-index">{track.category}</span>
+        <button type="button" className="cover-play" disabled={!track.audioAvailable && !track.audioUrl} onClick={() => onPlay(track)} aria-label={!track.audioAvailable && !track.audioUrl ? 'Audio not connected' : playing ? 'Pause ' + track.title : 'Play ' + track.title}>
+          {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+        </button>
+      </div>
       <div className="track-type"><span>{track.creator}</span><span>{track.duration}</span></div>
       <h3>{track.title}</h3>
       <small className="track-verified-listens"><Headphones size={13} aria-hidden="true"/> {Number(track.listenCount ?? 0).toLocaleString('en-GB')} qualified listens</small>

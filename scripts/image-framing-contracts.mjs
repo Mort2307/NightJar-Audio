@@ -28,6 +28,18 @@ assert.match(editor,/Math\.hypot\(/,'Two-pointer pinch zoom');
 assert.match(editor,/onKeyDown=\{keyboardMove\}/,'Keyboard arrow alternative');
 assert.match(editor,/type="range"/,'Sliders available without gestures');
 assert.match(editor,/Show whole picture/);
+assert.match(editor,/imagePlacementGuidance:Record<Props\['shape'\],string>/,
+  'Every upload type shares accurate contextual image-placement guidance');
+for(const shape of ['release','script','artwork','portrait','social','banner']){
+  assert.ok(editor.includes('  '+shape+':'),shape+' needs specific image guidance');
+}
+assert.match(editor,/Category|Categories/, 'Release advice says category information is outside artwork');
+assert.match(editor,/soft extension behind it/, 'Release guidance matches latest full-image ambient renderer');
+assert.match(editor,/padding becomes part of the saved image/, 'Image Studio must not imply padded exports are magically reversible');
+assert.match(editor,/Filling the frame removes padding but crops the original/, 'Warn about destructive upload cropping');
+assert.match(editor,/className="nj-framing-guidance"/, 'Contextual guidance must be visible, not hidden in code');
+assert.match(styles,/\.nj-framing-guidance\{/,'Guidance is styled for mobile');
+assert.match(styles,/data-nightjar-vision.*nj-framing-guidance/, 'Guidance supports accessibility theme');
 assert.match(editor,/Fill frame \(crop\)/);
 assert.match(editor,/Use this framing/);
 assert.match(editor,/exportFramedImage\(image,framing/,'Preview geometry is what gets submitted');
