@@ -109,7 +109,10 @@ assert.match(styles, /\.premium-onboarding-footer\s*\{[^}]*position:sticky;/, 't
 assert.match(styles, /\.premium-onboarding-card\s*\{[^}]*100dvh/, 'mobile onboarding height respects visual viewport');
 assert.match(onboarding, /scrollContainerRef\.current\?\.scrollTo/, 'switching onboarding steps resets the inner form scroll');
 assert.match(onboarding, /Save &amp; finish later/, 'member can intentionally postpone onboarding');
-assert.match(onboarding, /savedDraft\?\.displayName/, 'saved onboarding draft prepopulates the resumed form');
+assert.match(onboarding, /const savedDraft = !isProfileSetupComplete\(initialProfile\)/, 'complete published profiles ignore obsolete onboarding drafts');
+assert.match(onboarding, /const profileText = \(field: string\)/, 'resuming an incomplete wizard recovers a published field or saved draft safely');
+assert.match(onboarding, /typeof draft === 'string' \? draft/, 'saved draft text is available if the published field has not been filled');
+assert.match(onboarding, /displayName: profileText\('displayName'\)/, 'the resumed form uses protected text prefill');
 assert.match(server, /export const pauseProfileOnboarding = onCall/, 'profile postponement persists through an authenticated server operation');
 assert.match(server, /onboardingDismissed:dismiss/, 'the server persists whether the member actively postponed setup');
 assert.match(app, /onboardingPromptedUsersRef\.current\.add\(memberId\)/, 'initial setup invitation is recorded for the account rather than redisplayed on every workspace change');
