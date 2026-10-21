@@ -11,6 +11,7 @@ type Props={
   framing?:ImageFraming|null;
   defaultMode?:'fit'|'fill';
   absolute?:boolean;
+  zIndex?:number;
   onLoad?:(image:HTMLImageElement)=>void;
 };
 const valid=(framing:ImageFraming|null|undefined):framing is ImageFraming=>
@@ -20,7 +21,7 @@ const valid=(framing:ImageFraming|null|undefined):framing is ImageFraming=>
   &&Math.abs(framing.x)<=100&&Math.abs(framing.y)<=100;
 
 export default function FramedApprovedImage({src,alt,className,imgClassName,framing,
-  defaultMode='fit',absolute=false,onLoad}:Props){
+  defaultMode='fit',absolute=false,zIndex,onLoad}:Props){
   const viewport=useRef<HTMLSpanElement|null>(null);
   const [size,setSize]=useState({width:0,height:0});
   const [natural,setNatural]=useState({width:0,height:0});
@@ -51,7 +52,7 @@ export default function FramedApprovedImage({src,alt,className,imgClassName,fram
   return <span ref={viewport} className={className}
     style={{position:absolute?'absolute':'relative',display:'block',
       inset:absolute?0:undefined,width:'100%',height:'100%',overflow:'hidden',
-      background:'#151119'}}>
+      background:'#151119',zIndex}}>
     <img src={src} alt={alt} className={imgClassName} loading="lazy" decoding="async"
       style={imageStyle} onLoad={event=>{
         const image=event.currentTarget;
