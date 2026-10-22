@@ -43,7 +43,7 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, onA
     : role === 'admin'
       ? [
           { view: 'discover', label: 'Home', icon: Home },
-          { view: 'creators', label: 'Directory', icon: Headphones },
+          { view: 'messages', label: 'Inbox', accessibleLabel: 'NightJar Inbox and creator replies', icon: MessageCircle },
           { view: 'admin', label: 'Admin', icon: ShieldCheck },
           search,
           settings,
