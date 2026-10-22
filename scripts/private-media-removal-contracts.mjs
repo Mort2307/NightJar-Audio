@@ -39,7 +39,7 @@ assert.match(ef,/data\.status === 'removing'/);
 assert.match(ef,/live\.status === 'removing'/);
 assert.match(pb,/data\.status==='removing'/);
 const editor=read('src/components/EditorShowcaseManager.tsx');
-assert.match(editor,/Retry cleanup/);
+assert.match(editor,/Retry private cleanup|Finish cleanup/,'Editor cleanup remains discoverable behind staged deletion confirmation');
 assert.match(editor,/result\.removed === true/);
 assert.match(read('src/platform/firebase-editor-portfolio.ts'),/pendingCleanup: boolean/);
 const hosting=read('.github/workflows/firebase-hosting-merge.yml');
