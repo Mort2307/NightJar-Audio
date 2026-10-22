@@ -665,7 +665,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         ? (detail || 'Audio upload failed. Please try again or contact Nightjar support.')
         : 'Artwork upload failed.');
     }
-    finally { if (kind === 'audio') setAudioBusy(false); else setArtBusy(false); }
+    finally { inFlight.current = false; if (kind === 'audio') setAudioBusy(false); else setArtBusy(false); }
   };
 
   const removeArtwork = async () => {
