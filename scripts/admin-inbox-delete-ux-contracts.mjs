@@ -5,6 +5,7 @@ const app=read('src/App.tsx');
 const backend=read('functions/src/index.ts');
 const grid=read('src/components/WriterManuscriptGrid.tsx');
 const creator=read('src/components/CreatorAudioPipeline.tsx');
+const mobile=read('src/components/MobileNavigation.tsx');
 const deleteUI=read('src/components/ConfirmDeleteAction.tsx');
 const tabs=read('src/components/AdminWorkspaceTabs.tsx');
 const hosting=read('.github/workflows/firebase-hosting-merge.yml');
@@ -29,7 +30,8 @@ assert.match(notifications,/item\.type !== 'admin_attention'/,'legacy owner push
 assert.match(notifications,/adminActionNotifications\(\)/,'live admin queue summary retained');
 assert.match(app,/nj-updates-collapsed/,'inactive app version widget collapsed');
 assert.match(app,/nj-notification-inbox-link/,'one-tap Inbox access from notifications');
-assert.match(app,/nj-header-inbox/,'direct Inbox in header');
+assert.match(app,/nj-header-inbox/,'direct Inbox in desktop header');
+assert.match(mobile,/view: 'messages', label: 'Inbox', accessibleLabel: 'NightJar Inbox and creator replies'/,'direct mobile Admin Inbox replaces lesser-used dock Directory without adding sixth item');
 assert.match(app,/role === 'admin' \|\| \['creator','writer','editor','artist'\]/,'admin background unread polling');
 assert.match(app,/adminScriptsLoadError/,'queue failed state is not silently shown as zero');
 assert.match(app,/value:adminScriptsLoading \? '…'/,'manuscript count visible in owner dashboard');
