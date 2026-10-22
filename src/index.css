@@ -11779,3 +11779,16 @@ textarea:focus-visible,
   .premium-onboarding-footer .ghost-button:only-child { grid-column:1/-1; }
   .nj-onboarding-inline-error { bottom:135px; }
 }
+
+/* Owner activity: stop the update widget drowning useful notifications. */
+.notification-popover{max-height:min(82dvh,760px);display:flex;flex-direction:column}
+.notification-list{min-height:0;flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain}
+.nj-updates-collapsed{border-bottom:1px solid var(--line-soft);padding:8px 14px}
+.nj-updates-collapsed summary{display:flex;align-items:center;gap:8px;min-height:38px;cursor:pointer;color:var(--ivory);font-size:13px}
+.nj-updates-collapsed summary span{margin-left:auto;color:var(--muted);font-size:12px}
+.nj-updates-collapsed>div{display:flex;flex-wrap:wrap;gap:10px;padding:12px 0}
+.nj-updates-collapsed a{color:var(--ivory);text-decoration:underline;align-self:center;font-size:12px}
+.nj-notification-inbox-link{display:flex;align-items:center;justify-content:center;gap:9px;border:0;border-bottom:1px solid var(--line-soft);background:rgba(185,147,88,.1);color:var(--ivory);width:100%;min-height:43px;font:inherit;cursor:pointer}
+.nj-header-inbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-soft);border-radius:11px;background:transparent;color:var(--ivory);padding:8px;min-height:42px;font:inherit;cursor:pointer}
+.nj-header-inbox em{font-style:normal;border-radius:99px;background:var(--plum-soft);color:#191217;padding:2px 5px;font-size:11px;font-weight:700}
+@media(max-width:740px){.nj-header-inbox span{display:none}.nj-header-inbox{padding:8px}.notification-popover{max-height:calc(100dvh - 170px)}}
