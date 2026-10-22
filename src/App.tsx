@@ -1457,7 +1457,7 @@ function App() {
 
   useEffect(() => {
     const messageRole = role === 'admin' ? previewRole : role;
-    const professional = ['creator','writer','editor','artist'].includes(String(messageRole));
+    const professional = role === 'admin' || ['creator','writer','editor','artist'].includes(String(messageRole));
     const professionalActive = role === 'admin' || accountStatus === 'active' || demoMode;
     if (!user || !ageVerified || !professional || !professionalActive || liveRolePreview) {
       setMessageUnreadCount(0);
@@ -5165,7 +5165,7 @@ function App() {
     ...(effectiveRole === 'listener' || effectiveRole === 'admin' ? [{ id:'nav-discover', group:'Navigate', label:'Discover', detail:'Recommendations, catalogue and spotlights', keywords:['home','listen'], icon:<Headphones size={15}/>, action:()=>navigate('discover') }] : []),
     { id:'nav-directory', group:'Navigate', label:'Directory', detail:'Find VA Creators, Writers, Audio Editors, Artists and Listeners', keywords:['people','profiles','community'], icon:<Users size={15}/>, action:()=>navigate('creators') },
     ...((!canAdmin || interactiveRoleTest) && user?.userId ? [{ id:'nav-my-roles', group:'Account', label:'My Roles', detail:'Apply for or switch approved professional roles', keywords:['role','voice actor','VA','writer','editor','artist','application'], icon:<ShieldCheck size={15}/>, action:openMyRoles }] : []),
-    ...(['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'nav-messages', group:'Work', label:'Messages', detail:[
+    ...((role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'nav-messages', group:'Work', label:'Messages', detail:[
   messageUnreadCount ? messageUnreadCount + ' unread' : '',
   messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : '',
   messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : '',
@@ -5207,9 +5207,9 @@ function App() {
 
   const baseActions: RoleDashboardAction[] = [
     ...(profileCompletion < 70 ? [{ id:'complete-profile', title:'Add to your profile', reason:`Your profile is ${profileCompletion}% complete. Add a little more about yourself whenever you like.`, label:'Open profile', priority:'high' as const, onClick:openProfileEditor }] : []),
-    ...(messageUnreadCount > 0 && messageNeedsReplyCount === 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'messages', title:`Review ${messageUnreadCount} unread private message${messageUnreadCount === 1 ? '' : 's'}`, reason:'A professional Nightjar conversation has new activity. Keeping replies inside the work context reduces missed handoffs and uncertainty.', label:'Open Inbox', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
-    ...(messageNeedsReplyCount > 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'needs-reply', title:`${messageNeedsReplyCount} conversation${messageNeedsReplyCount === 1 ? '' : 's'} need your reply`, reason:'These threads remain visible even after you read them because the other professional is still waiting on you for the next step.', label:'Reply now', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
-    ...(messageAwaitingReplyCount > 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'awaiting-reply', title:`${messageAwaitingReplyCount} conversation${messageAwaitingReplyCount === 1 ? '' : 's'} awaiting a reply`, reason:'Your most recent message in these threads has been unanswered for at least 48 hours. A single follow-up reminder can be sent from the Inbox; Nightjar never sends repeated reminders automatically.', label:'Review threads', onClick:()=>navigate('messages') }] : []),
+    ...(messageUnreadCount > 0 && messageNeedsReplyCount === 0 && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'messages', title:`Review ${messageUnreadCount} unread private message${messageUnreadCount === 1 ? '' : 's'}`, reason:'A professional Nightjar conversation has new activity. Keeping replies inside the work context reduces missed handoffs and uncertainty.', label:'Open Inbox', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
+    ...(messageNeedsReplyCount > 0 && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'needs-reply', title:`${messageNeedsReplyCount} conversation${messageNeedsReplyCount === 1 ? '' : 's'} need your reply`, reason:'These threads remain visible even after you read them because the other professional is still waiting on you for the next step.', label:'Reply now', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
+    ...(messageAwaitingReplyCount > 0 && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'awaiting-reply', title:`${messageAwaitingReplyCount} conversation${messageAwaitingReplyCount === 1 ? '' : 's'} awaiting a reply`, reason:'Your most recent message in these threads has been unanswered for at least 48 hours. A single follow-up reminder can be sent from the Inbox; Nightjar never sends repeated reminders automatically.', label:'Review threads', onClick:()=>navigate('messages') }] : []),
     ...(notificationUnreadCount > 0 ? [{ id:'notifications', title:`Review ${notificationUnreadCount} unread update${notificationUnreadCount === 1 ? '' : 's'}`, reason:'These are recent account or community changes you have not reviewed yet.', label:'Open updates', onClick:()=>setNotificationsOpen(true) }] : []),
   ];
   const creatorActions: RoleDashboardAction[] = [
@@ -5252,7 +5252,7 @@ function App() {
           {effectiveRole === 'writer' && !liveRolePreview && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && !liveRolePreview && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
           {effectiveRole === 'artist' && !liveRolePreview && <button className={view === 'artist' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('artist')}>Artist Studio</button>}
-          {!liveRolePreview && (['creator','writer','editor','artist'].includes(String(effectiveRole)) || role === 'admin') && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
+          {!liveRolePreview && (['creator','writer','editor','artist'].includes(String(effectiveRole)) || role === 'admin') && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Inbox{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && !liveRolePreview && <button className={view === 'profile' && !profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && (!canAdmin || interactiveRoleTest) && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && !liveRolePreview && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
@@ -5290,6 +5290,7 @@ function App() {
             </section>}
           </div>}
           {user && !liveRolePreview && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
+          {user && !liveRolePreview && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) && <button type="button" className="nj-header-inbox" onClick={()=>navigate('messages')} aria-label={'Open NightJar Inbox' + (messageUnreadCount ? ': ' + messageUnreadCount + ' unread' : '')}><MessageCircle size={19}/><span>Inbox</span>{messageUnreadCount > 0 && <em>{messageUnreadCount > 99 ? '99+' : messageUnreadCount}</em>}</button>}
           {user && !liveRolePreview && <div className="notification-wrap">
             <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) { void loadNotifications(productLoadEpoch.current); void checkLatestNightjarUpdate(); } setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0) ? String(notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0)) + ' updates and unread notifications' : 'Notifications'}>
               <Bell size={17} />
