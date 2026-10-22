@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, FileText, Search } from 'lucide-react';
+import ConfirmDeleteAction from './ConfirmDeleteAction';
 import './writer-manuscript-grid.css';
 
 export type WriterManuscriptSummary = {
@@ -25,10 +26,11 @@ const displayStatus = (raw: unknown) => {
 };
 
 export default function WriterManuscriptGrid({
-  scripts, onOpen,
+  scripts, onOpen, onRemove,
 }: {
   scripts: WriterManuscriptSummary[];
   onOpen: (script: WriterManuscriptSummary) => void;
+  onRemove?: (script: WriterManuscriptSummary) => Promise<void>;
 }) {
   const [filter,setFilter] = useState('');
   const duplicateTitles = useMemo(() => {
@@ -57,7 +59,7 @@ export default function WriterManuscriptGrid({
     </div>
     {Array.from(duplicateTitles.values()).some(count => count > 1) && <p role="status" className="nj-writer-duplicate-help">
       Some manuscripts share a title. Each card represents a separately saved work, not a newer version.
-      Use the added date and support reference below to identify the correct record before editing or deleting anything.
+      Use the added date and support reference to identify the correct record. Only private Draft or Rejected copies can be deleted; submitted or approved works stay protected.
     </p>}
     {scripts.length > 4 && <label className="nj-writer-library-search">
       <Search size={17} aria-hidden="true"/>
@@ -74,9 +76,8 @@ export default function WriterManuscriptGrid({
         const added = createdTime && Number.isFinite(createdTime.getTime())
           ? new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(createdTime)
           : null;
-        return <button type="button" key={script.id}
-          className="nj-writer-manuscript-card"
-          onClick={()=>onOpen(script)}
+        return <article key={script.id} className="nj-writer-manuscript-card nj-writer-card-with-actions">
+          <button type="button" className="nj-writer-card-open" onClick={()=>onOpen(script)}
           aria-label={`Open ${title}. Status: ${status.label}`}>
           <span className="nj-writer-manuscript-card-top">
             <FileText size={21} aria-hidden="true"/>
@@ -89,7 +90,13 @@ export default function WriterManuscriptGrid({
             </span>
             <span className="nj-writer-open-label">Open details <ArrowRight size={16} aria-hidden="true"/></span>
           </span>
-        </button>;
+          </button>
+          {onRemove && ['Draft','Rejected'].includes(String(script.status??'Draft')) && <div className="nj-writer-card-delete">
+            <ConfirmDeleteAction iconOnly label="Delete manuscript" itemName={title}
+              description="This private manuscript and its versions will be permanently removed. This cannot be undone."
+              confirmLabel="Yes, delete manuscript" onConfirm={()=>onRemove(script)}/>
+          </div>}
+        </article>;
       })}
     </div> : <div className="nj-writer-library-empty" role="status">
       <strong>{scripts.length ? 'No manuscripts match your search.' : 'No manuscripts yet.'}</strong>

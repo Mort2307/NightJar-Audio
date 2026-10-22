@@ -1,0 +1,9 @@
+.nj-confirm-delete-action{display:inline-flex;vertical-align:middle;min-width:0;max-width:100%}
+.nj-delete-trigger{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;min-width:40px;padding:8px;border-radius:10px;border:1px solid #866b58;background:#201b1b;color:#f3d8cb;cursor:pointer}
+.nj-delete-trigger:hover{border-color:#d69f82;color:#fff}
+.nj-delete-trigger:disabled{opacity:.5;cursor:not-allowed}
+.nj-delete-confirmation{display:flex;flex-wrap:wrap;align-items:center;gap:9px;max-width:100%;padding:12px;border:1px solid #b88573;border-radius:12px;background:#241c1c;color:#f4e2d6;line-height:1.45}
+.nj-delete-confirmation>b,.nj-delete-confirmation strong{color:#fff}
+.nj-delete-confirmation-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.nj-delete-confirmation-buttons button{min-height:40px}
+@media(forced-colors:active){.nj-delete-confirmation,.nj-delete-trigger{border:2px solid CanvasText;color:CanvasText;background:Canvas}}

@@ -9,8 +9,10 @@ const sw = fs.readFileSync('public/service-worker.js', 'utf8');
 const css = fs.readFileSync('src/index.css', 'utf8');
 const notes = app.slice(app.indexOf('<section className="notification-popover"'), app.indexOf('notification-empty'));
 assert.ok(notes.length>500,'header notifications are present');
-assert.match(notes,/<div className=\{nightjarUpdate\?\.updateAvailable \? 'nightjar-update-notification has-update' : 'nightjar-update-notification'\}/,
-  'the update entry appears in the notification bell for all members, not only if update is detected');
+assert.match(notes,/nightjarUpdate\?\.updateAvailable \? <div className="nightjar-update-notification has-update"/,
+  'a genuinely available update must use the prominent apply panel');
+assert.match(notes,/<details className="nj-updates-collapsed"/,
+  'manual version checks must remain accessible to every member without dominating the activity feed');
 assert.match(notes,/Check for updates/,'manual check is always available in the notification bell');
 assert.match(notes,/onClick=\{\(\) => void checkLatestNightjarUpdate\(\)\}/,'the manual check performs a live version comparison');
 assert.match(notes,/Update now/,'available updates show a direct apply action');

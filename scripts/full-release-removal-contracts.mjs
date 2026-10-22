@@ -22,7 +22,8 @@ assert.match(removal,/transaction\.set\(db\.collection\('releaseRemovalAudits'\)
 assert.match(removal,/transaction\.set\(ref,\{[\s\S]*?status:'removed'/,'Only tombstone after physical deletion');
 assert.match(removal,/retiredAudioPaths/,'Retired-attachment cleanup receipt preserved');
 assert.match(removal,/if\(data\.status==='removed'\)return/,'Repeated deletion is idempotent');
-assert.match(ui,/Retry deletion of the already-retired recording/);
+assert.match(ui,/ConfirmDeleteAction iconOnly label=\{removalPending/,'Creator removal now requires explicit staged confirmation');
+assert.match(ui,/Finish the existing private media cleanup safely/,'Cleanup retry must be clearly distinguished from a new destructive action');
 assert.match(ui,/Retry removal cleanup/);
 assert.match(hosting,/\[nightjar-safe-whole-release-removal\]/);
 const start=hosting.indexOf('- name: Deploy whole-release safe deletion before Hosting');

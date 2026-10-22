@@ -37,3 +37,9 @@
 @media(max-width:680px){.nj-writer-manuscript-grid{grid-template-columns:1fr}.nj-writer-manuscript-card{min-height:150px}.nj-writer-detail-head{display:grid}.nj-writer-detail-back{width:100%;justify-content:center}}
 @media(prefers-reduced-motion:reduce){.nj-writer-manuscript-card{transition:none}}
 @media(forced-colors:active){.nj-writer-manuscript-card,.nj-writer-manuscript-status{border:1px solid CanvasText}}
+
+.nj-writer-card-with-actions{display:flex;flex-direction:column;min-width:0}
+.nj-writer-card-open{background:transparent;color:inherit;text-align:left;border:0;padding:0;display:flex;flex-direction:column;gap:12px;flex:1;cursor:pointer;font:inherit;width:100%}
+.nj-writer-card-open:focus-visible{outline:2px solid #d4ae77;outline-offset:4px;border-radius:8px}
+.nj-writer-card-delete{align-self:flex-end;margin-top:9px;max-width:100%}
+.nj-writer-card-delete .nj-delete-confirmation{max-width:280px}

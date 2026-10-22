@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ImagePlus, LoaderCircle, Trash2, ChevronDown } from 'lucide-react';
+import { ImagePlus, LoaderCircle, ChevronDown } from 'lucide-react';
 import { nightjarArtists, type ArtistPortfolioItem } from '../platform/firebase-artists';
+import ConfirmDeleteAction from './ConfirmDeleteAction';
 import { nightjarMedia } from '../platform/firebase-media';
 import StudioFormDraftSync from './StudioFormDraftSync';
 import ImageFramingEditor from './ImageFramingEditor';
@@ -165,8 +166,9 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       await nightjarArtists.remove(itemId);
       setItems((current)=>current.filter((item)=>item.id!==itemId));
       notify('Portfolio item removed.');
-    } catch {
+    } catch (error) {
       notify('Portfolio item could not be removed.');
+      throw error;
     } finally {
       setBusy(false);
     }
@@ -224,7 +226,9 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         {item.status==='published' && item.imageStatus==='approved' && item.imageUrl && item.imageAssetId &&
           <button type="button" className="secondary-button" disabled={busy}
             onClick={()=>setApprovedFrameItem(item)}>Adjust approved artwork</button>}
-        <button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={14}/> Remove</button>
+        <ConfirmDeleteAction iconOnly label="Remove artwork" itemName={item.title || 'Untitled artwork'}
+          description={item.status === 'published' ? 'This public portfolio artwork will be removed from your profile and its stored image cleaned up.' : 'Remove this private artwork and its uploaded image. This cannot be undone.'}
+          disabled={busy} confirmLabel="Yes, remove artwork" onConfirm={()=>remove(item.id)}/>
       </article>)}
       {!items.length&&<div className="people-empty"><ImagePlus size={18}/><strong>No portfolio pieces yet</strong><span>Add a few strong examples so VA Creators, Writers and Audio Editors can understand your visual style.</span></div>}
     </div>

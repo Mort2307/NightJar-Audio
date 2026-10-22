@@ -30,6 +30,7 @@ import { nightjarLegal } from './platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
 import WriterManuscriptGrid from './components/WriterManuscriptGrid';
+import ConfirmDeleteAction from './components/ConfirmDeleteAction';
 import ImageFramingEditor from './components/ImageFramingEditor';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarAuthSecurity, type AuthenticationSecurityEvent } from './platform/firebase-auth-security';
@@ -625,6 +626,8 @@ function App() {
   const [adminCreatorSuggestions, setAdminCreatorSuggestions] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
   const [adminScripts, setAdminScripts] = useState<any[]>([]);
+  const [adminScriptsLoading, setAdminScriptsLoading] = useState(false);
+  const [adminScriptsLoadError, setAdminScriptsLoadError] = useState('');
   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
   const [imageModeration, setImageModeration] = useState<any[]>([]);
   const [adminProfileTags, setAdminProfileTags] = useState<any[]>([]);
@@ -1456,7 +1459,7 @@ function App() {
 
   useEffect(() => {
     const messageRole = role === 'admin' ? previewRole : role;
-    const professional = ['creator','writer','editor','artist'].includes(String(messageRole));
+    const professional = role === 'admin' || ['creator','writer','editor','artist'].includes(String(messageRole));
     const professionalActive = role === 'admin' || accountStatus === 'active' || demoMode;
     if (!user || !ageVerified || !professional || !professionalActive || liveRolePreview) {
       setMessageUnreadCount(0);
@@ -1577,6 +1580,7 @@ function App() {
     setAdminPanel(null);
     setAdminPeopleRole(null);
     setAdminWorkspace(workspace);
+    if (workspace === 'content' || workspace === 'overview') void loadAdminEditorial();
     setMenuOpen(false);
     const path = workspace === 'overview' ? '/admin' : '/admin/workspace/' + workspace;
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
@@ -4004,7 +4008,8 @@ function App() {
 
   const loadAdminEditorial = async () => {
     if (!canAdmin) return;
-    setAdminPanelLoading(true);
+    setAdminScriptsLoading(true);
+    setAdminScriptsLoadError('');
     try {
       if (demoMode) {
         setAdminScripts(readDemo('adminScripts', demoAdminData.scripts));
@@ -4013,9 +4018,10 @@ function App() {
         setAdminScripts(scriptsData.scripts ?? []);
       }
     } catch {
+      setAdminScriptsLoadError('Unable to load the live manuscript queue. Refresh to retry; a blank count is not confirmation that nothing is pending.');
       notify('Manuscript review queue could not be loaded.');
     } finally {
-      setAdminPanelLoading(false);
+      setAdminScriptsLoading(false);
     }
   };
 
@@ -4635,28 +4641,28 @@ function App() {
     }
   };
 
-  const deleteWriterScript = async () => {
-    if (!writerSelected?.id) return;
-    if (!['Draft','Rejected'].includes(String(writerSelected.status ?? 'Draft'))) {
+  const deleteWriterScript = async (manuscript: any) => {
+    if (!manuscript?.id) return;
+    if (!['Draft','Rejected'].includes(String(manuscript.status ?? 'Draft'))) {
       notify('Only Draft or Rejected manuscripts can be deleted.');
       return;
     }
-    if (!window.confirm('Delete this manuscript and its saved versions? This cannot be undone.')) return;
     try {
       if (simulationMode) {
-        setWriterScripts((items) => { const updated = items.filter((item) => item.id !== writerSelected.id); writeDemo('writerScripts', updated); return updated; });
-        setWriterSelected(null);
+        setWriterScripts((items) => { const updated = items.filter((item) => item.id !== manuscript.id); writeDemo('writerScripts', updated); return updated; });
+        if (writerSelected?.id === manuscript.id) setWriterSelected(null);
         setWriterPermissions([]);
         notify('Simulation: manuscript deleted locally.');
         return;
       }
-      await nightjarScripts.remove(writerSelected.id);
-      setWriterSelected(null);
+      await nightjarScripts.remove(manuscript.id);
+      if (writerSelected?.id === manuscript.id) setWriterSelected(null);
       setWriterPermissions([]);
       await loadWriterScripts();
       notify('Manuscript deleted.');
     } catch {
       notify('Manuscript could not be deleted.');
+      throw new Error('Manuscript removal was not confirmed.');
     }
   };
 
@@ -5164,7 +5170,7 @@ function App() {
     ...(effectiveRole === 'listener' || effectiveRole === 'admin' ? [{ id:'nav-discover', group:'Navigate', label:'Discover', detail:'Recommendations, catalogue and spotlights', keywords:['home','listen'], icon:<Headphones size={15}/>, action:()=>navigate('discover') }] : []),
     { id:'nav-directory', group:'Navigate', label:'Directory', detail:'Find VA Creators, Writers, Audio Editors, Artists and Listeners', keywords:['people','profiles','community'], icon:<Users size={15}/>, action:()=>navigate('creators') },
     ...((!canAdmin || interactiveRoleTest) && user?.userId ? [{ id:'nav-my-roles', group:'Account', label:'My Roles', detail:'Apply for or switch approved professional roles', keywords:['role','voice actor','VA','writer','editor','artist','application'], icon:<ShieldCheck size={15}/>, action:openMyRoles }] : []),
-    ...(['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'nav-messages', group:'Work', label:'Messages', detail:[
+    ...((role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'nav-messages', group:'Work', label:'Messages', detail:[
   messageUnreadCount ? messageUnreadCount + ' unread' : '',
   messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : '',
   messageAwaitingReplyCount ? messageAwaitingReplyCount + ' awaiting reply' : '',
@@ -5206,9 +5212,9 @@ function App() {
 
   const baseActions: RoleDashboardAction[] = [
     ...(profileCompletion < 70 ? [{ id:'complete-profile', title:'Add to your profile', reason:`Your profile is ${profileCompletion}% complete. Add a little more about yourself whenever you like.`, label:'Open profile', priority:'high' as const, onClick:openProfileEditor }] : []),
-    ...(messageUnreadCount > 0 && messageNeedsReplyCount === 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'messages', title:`Review ${messageUnreadCount} unread private message${messageUnreadCount === 1 ? '' : 's'}`, reason:'A professional Nightjar conversation has new activity. Keeping replies inside the work context reduces missed handoffs and uncertainty.', label:'Open Inbox', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
-    ...(messageNeedsReplyCount > 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'needs-reply', title:`${messageNeedsReplyCount} conversation${messageNeedsReplyCount === 1 ? '' : 's'} need your reply`, reason:'These threads remain visible even after you read them because the other professional is still waiting on you for the next step.', label:'Reply now', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
-    ...(messageAwaitingReplyCount > 0 && ['creator','writer','editor','artist'].includes(String(effectiveRole)) ? [{ id:'awaiting-reply', title:`${messageAwaitingReplyCount} conversation${messageAwaitingReplyCount === 1 ? '' : 's'} awaiting a reply`, reason:'Your most recent message in these threads has been unanswered for at least 48 hours. A single follow-up reminder can be sent from the Inbox; Nightjar never sends repeated reminders automatically.', label:'Review threads', onClick:()=>navigate('messages') }] : []),
+    ...(messageUnreadCount > 0 && messageNeedsReplyCount === 0 && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'messages', title:`Review ${messageUnreadCount} unread private message${messageUnreadCount === 1 ? '' : 's'}`, reason:'A professional Nightjar conversation has new activity. Keeping replies inside the work context reduces missed handoffs and uncertainty.', label:'Open Inbox', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
+    ...(messageNeedsReplyCount > 0 && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'needs-reply', title:`${messageNeedsReplyCount} conversation${messageNeedsReplyCount === 1 ? '' : 's'} need your reply`, reason:'These threads remain visible even after you read them because the other professional is still waiting on you for the next step.', label:'Reply now', priority:'high' as const, onClick:()=>navigate('messages') }] : []),
+    ...(messageAwaitingReplyCount > 0 && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'awaiting-reply', title:`${messageAwaitingReplyCount} conversation${messageAwaitingReplyCount === 1 ? '' : 's'} awaiting a reply`, reason:'Your most recent message in these threads has been unanswered for at least 48 hours. A single follow-up reminder can be sent from the Inbox; Nightjar never sends repeated reminders automatically.', label:'Review threads', onClick:()=>navigate('messages') }] : []),
     ...(notificationUnreadCount > 0 ? [{ id:'notifications', title:`Review ${notificationUnreadCount} unread update${notificationUnreadCount === 1 ? '' : 's'}`, reason:'These are recent account or community changes you have not reviewed yet.', label:'Open updates', onClick:()=>setNotificationsOpen(true) }] : []),
   ];
   const creatorActions: RoleDashboardAction[] = [
@@ -5229,6 +5235,7 @@ function App() {
     ...(securityAlerts.filter((item:any)=>item.status === 'open').length ? [{ id:'security', title:'Review open security alerts', reason:'Protection signals require human review before any account action is taken.', label:'Review alerts', priority:'high' as const, onClick:()=>openAdminWorkspace('security') }] : []),
     ...(imageModeration.length ? [{ id:'images', title:`${imageModeration.length} image${imageModeration.length === 1 ? '' : 's'} awaiting moderation`, reason:'Images remain private until an Administrator explicitly approves them.', label:'Moderate images', priority:'high' as const, onClick:()=>openAdminPanel('images') }] : []),
     ...(applicationGroups.pending.length ? [{ id:'applications', title:`${applicationGroups.pending.length} professional application${applicationGroups.pending.length === 1 ? '' : 's'} awaiting approval`, reason:'Only outstanding professional applications are counted. Completed approvals are archived separately.', label:'Review new applications', onClick:()=>openAdminPanel('approvals') }] : []),
+    ...(adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length ? [{id:'manuscripts',title:`${adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length} manuscript(s) awaiting your review`,reason:'Open the live Writer manuscript approval queue. Each submission is reviewed individually.',label:'Review manuscripts',priority:'high' as const,onClick:()=>openAdminPanel('editorial')}] : []),
     ...(adminCreatorSuggestions.some((item:any)=>item.status === 'new') ? [{ id:'creator-suggestions', title:'New Creator suggestions to review', reason:'Nightjar members have recommended Creators who are not yet on the platform.', label:'Review suggestions', onClick:()=>openAdminPanel('suggestions') }] : []),
     ...((commercialOverview?.subscriptions.pastDue ?? 0) > 0 ? [{ id:'past-due', title:'Past-due subscriptions need visibility', reason:'Past-due revenue is kept out of confirmed cash planning until payment succeeds.', label:'Open subscriptions', onClick:()=>openAdminPanel('subscriptions') }] : []),
   ];
@@ -5251,7 +5258,7 @@ function App() {
           {effectiveRole === 'writer' && !liveRolePreview && <button className={view === 'writer' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('writer'); void loadWriterScripts(); }}>Writer Studio</button>}
           {effectiveRole === 'editor' && !liveRolePreview && <button className={view === 'editor' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('editor'); void loadEditorQueue(); void loadProfile(); }}>Editor Studio</button>}
           {effectiveRole === 'artist' && !liveRolePreview && <button className={view === 'artist' ? 'nav-link active' : 'nav-link'} onClick={() => navigate('artist')}>Artist Studio</button>}
-          {!liveRolePreview && (['creator','writer','editor','artist'].includes(String(effectiveRole)) || role === 'admin') && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Messages{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
+          {!liveRolePreview && (['creator','writer','editor','artist'].includes(String(effectiveRole)) || role === 'admin') && (role === 'admin' || accountStatus === 'active' || demoMode) && <button className={view === 'messages' ? 'nav-link active nav-message-link' : 'nav-link nav-message-link'} onClick={() => navigate('messages')}>Inbox{messageUnreadCount > 0 && <span>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</span>}</button>}
           {canProtection && !liveRolePreview && <button className={view === 'profile' && !profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('profile'); void loadProfile(); }}>Profile</button>}
           {canProtection && (!canAdmin || interactiveRoleTest) && <button className={view === 'profile' && profileRolesPage ? 'nav-link active' : 'nav-link'} onClick={openMyRoles}>My Roles</button>}
           {canProtection && !liveRolePreview && <button className={view === 'protection' ? 'nav-link active' : 'nav-link'} onClick={() => { navigate('protection'); void loadProtection(); }}>Protection</button>}
@@ -5289,6 +5296,7 @@ function App() {
             </section>}
           </div>}
           {user && !liveRolePreview && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
+          {user && !liveRolePreview && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) && <button type="button" className="nj-header-inbox" onClick={()=>navigate('messages')} aria-label={'Open NightJar Inbox' + (messageUnreadCount ? ': ' + messageUnreadCount + ' unread' : '')}><MessageCircle size={19}/><span>Inbox</span>{messageUnreadCount > 0 && <em>{messageUnreadCount > 99 ? '99+' : messageUnreadCount}</em>}</button>}
           {user && !liveRolePreview && <div className="notification-wrap">
             <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) { void loadNotifications(productLoadEpoch.current); void checkLatestNightjarUpdate(); } setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0) ? String(notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0)) + ' updates and unread notifications' : 'Notifications'}>
               <Bell size={17} />
@@ -5296,7 +5304,7 @@ function App() {
             </button>
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
               <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
-              <div className={nightjarUpdate?.updateAvailable ? 'nightjar-update-notification has-update' : 'nightjar-update-notification'} aria-label="Nightjar app updates">
+              {nightjarUpdate?.updateAvailable ? <div className="nightjar-update-notification has-update" aria-label="Nightjar app updates">
                 <div className="nightjar-update-notification-copy">
                   {nightjarUpdate?.updateAvailable ? <Download size={19} aria-hidden="true"/> : <RefreshCw size={19} aria-hidden="true"/>}
                   <span>
@@ -5317,7 +5325,13 @@ function App() {
                 </div>
                 {nightjarUpdateFeedback && <small className="nightjar-update-notification-feedback" role="status">{nightjarUpdateFeedback}</small>}
                 <a className="nightjar-update-repair-link" href="/recover.html">Not seeing the latest changes? Repair Nightjar <ArrowRight size={13} aria-hidden="true"/></a>
-              </div>
+              </div> : <details className="nj-updates-collapsed">
+                <summary><RefreshCw size={15}/> App version & updates <span>Up to date</span></summary>
+                <div><button type="button" className="secondary-button" disabled={nightjarUpdateChecking || nightjarUpdating} onClick={()=>void checkLatestNightjarUpdate()}>{nightjarUpdateChecking ? 'Checking…' : 'Check for updates'}</button>
+                <a href="/recover.html">Repair cached Nightjar version</a>
+                {nightjarUpdateFeedback && <small role="status">{nightjarUpdateFeedback}</small>}</div>
+              </details>}
+              {role === 'admin' && <button type="button" className="nj-notification-inbox-link" onClick={()=>{setNotificationsOpen(false);navigate('messages')}}><MessageCircle size={16}/> Open Inbox {messageUnreadCount ? '· ' + messageUnreadCount + ' unread' : ''}<ArrowRight size={15}/></button>}
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => { if (nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title)))) void installNightjarUpdate(); else void openNotification(item); }}>
                 <span className="notification-row-icon">{item.type === 'admin_action' || item.type === 'admin_attention' ? <ShieldCheck size={15}/> : item.type === 'spotlight' ? <Star size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small>{nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title))) && <span className="notification-inline-update"><Download size={12} aria-hidden="true" /> Update now</span>}</span>
@@ -6157,7 +6171,7 @@ function App() {
             </>}
             <div className="writer-layout">
               {!writerDetailOpen
-                ? <WriterManuscriptGrid scripts={writerScripts} onOpen={(script)=>{
+                ? <WriterManuscriptGrid scripts={writerScripts} onRemove={deleteWriterScript} onOpen={(script)=>{
                     setWriterSelected(script); setWriterEditDirty(false);
                     setWriterSaveConflict(false); setWriterAutoSavePaused(false);
                     setWriterDetailOpen(true); void loadWriterPermissions(script.id);
@@ -6177,7 +6191,7 @@ function App() {
               <button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button>
             </div></details><button className="primary-button" disabled={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>{window.dispatchEvent(new CustomEvent('nightjar:open-workspace-section',{detail:'writer-rights'}));window.setTimeout(()=>document.getElementById('writer-rights-review')?.scrollIntoView({behavior:'smooth',block:'start'}),50);}}>{['Submitted','Under review'].includes(String(writerSelected.status)) ? 'Awaiting admin review' : ['Approved','Published'].includes(String(writerSelected.status)) ? 'Approved by NightJar' : 'Review rights & submit'}</button><details className="nj-writer-secondary-actions"><summary>Optional · reader and draft management</summary><div>
               <button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>
-              {['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}
+              {['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<ConfirmDeleteAction label="Delete manuscript" itemName={String(writerSelected.title??'Untitled manuscript')} description="This private manuscript and saved versions will be permanently deleted." confirmLabel="Yes, delete manuscript" onConfirm={()=>deleteWriterScript(writerSelected)}/>}
             </div></details></div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article> : <p role="status">Choose a manuscript from your library.</p>}
                   </section>}
             </div>
@@ -6234,10 +6248,12 @@ function App() {
               onChange={openAdminWorkspace}
               pendingApplications={applicationGroups.pending.length}
               pendingImages={imageModeration.length}
+              pendingScripts={adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length}
               openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
             />
             {adminWorkspace === 'content' && user?.userId && <details className="nj-credit-workspace-disclosure" open={Boolean(creditFocusClaimId)}><summary>🎧 Credited account review</summary><VerifiedCreditWorkspace currentUserId={user.userId} focusedClaimId={creditFocusClaimId} administrator onNotice={notify}/></details>}
             {adminWorkspace === 'assistance' && <AdminAssistance initialEmail={assistancePrefillEmail} onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
+            {adminWorkspace === 'overview' && adminScriptsLoadError && <p role="alert" className="admin-note">{adminScriptsLoadError} <button type="button" className="secondary-button" onClick={()=>void loadAdminEditorial()}>Retry manuscripts</button></p>}
             {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
               title="Exceptions first."
@@ -6246,6 +6262,7 @@ function App() {
                 {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts',destination:'administrator security alerts',onClick:()=>openAdminWorkspace('security')},
                 {label:'Images',value:imageModeration.length,detail:'Awaiting moderation',destination:'image moderation',onClick:()=>openAdminPanel('images')},
                 {label:'Applications',value:applicationGroups.pending.length,detail:'New applications awaiting approval',destination:'professional application bank',onClick:()=>openAdminPanel('approvals')},
+                {label:'Manuscripts',value:adminScriptsLoading ? '…' : adminScriptsLoadError ? '!' : adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length,detail:adminScriptsLoadError ? 'Queue unavailable — retry' : 'Awaiting Writer manuscript review',destination:'manuscript review queue',onClick:()=>openAdminPanel('editorial')},
                 {label:'Past due',value:commercialOverview?.subscriptions.pastDue ?? 0,detail:'Billing attention',destination:'subscription ledger',onClick:()=>openAdminPanel('subscriptions')},
               ]}
               actions={adminActions}
@@ -6398,8 +6415,8 @@ function App() {
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('revenue')}><span className="admin-icon"><BarChart3 size={19} /></span><span className="mini-label">REVENUE</span><h2>Commercial controls</h2><p>Open confirmed subscription revenue, capped creator-rate bands and payout readiness.</p><strong>Open commercial controls <ArrowRight size={13} /></strong></button>
               </>}
               {adminWorkspace === 'content' && <>
-              <button className="admin-panel admin-tile" onClick={() => navigate('messages')}><span className="admin-icon"><MessageCircle size={19}/></span><span className="mini-label">NIGHTJAR ADMIN MESSAGING</span><h2>Open team inbox</h2><p>Send and receive private in-app messages with Writers, VAs, Audio Editors and Artists. Keep manuscript-specific review notes in the review queue.</p><strong>Open NightJar messages <ArrowRight size={13}/></strong></button>
-              <button className="admin-panel admin-tile" onClick={() => openAdminPanel('editorial')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">MANUSCRIPT APPROVALS</span><h2>Review scripts</h2><p>Approve or request changes for submitted Writer manuscripts. Marketplace review requires no Audio Editor assignment.</p><strong>Open manuscript review <ArrowRight size={13} /></strong></button>
+              <button className="admin-panel admin-tile" onClick={() => navigate('messages')}><span className="admin-icon"><MessageCircle size={19}/></span><span className="mini-label">NIGHTJAR ADMIN MESSAGING</span><h2>Inbox · {messageUnreadCount} unread</h2><p>Send and receive private in-app messages with Writers, VAs, Audio Editors and Artists. Keep manuscript-specific review notes in the review queue.</p><strong>Open NightJar messages <ArrowRight size={13}/></strong></button>
+              <button className="admin-panel admin-tile" onClick={() => openAdminPanel('editorial')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">MANUSCRIPT APPROVALS</span><h2>{adminScriptsLoading ? 'Loading…' : adminScriptsLoadError ? 'Queue unavailable' : adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length + ' awaiting review'}</h2><p>Approve or request changes for submitted Writer manuscripts. Marketplace review requires no Audio Editor assignment.</p><strong>Open manuscript review <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('reports')}><span className="admin-icon"><ShieldAlert size={19} /></span><span className="mini-label">REPORTS & FEEDBACK</span><h2>{(adminReports.length + adminCommunityReports.length) || 'Review'}</h2><p>User-submitted safety reports, technical issues and product feedback, identified by profile name rather than opaque account IDs.</p><strong>Open reports inbox <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('reviews')}><span className="admin-icon"><Star size={19} /></span><span className="mini-label">REVIEW MODERATION</span><h2>{adminReviewQueue.length || 'Review'}</h2><p>Approve or reject listener ratings and written reviews before they appear publicly.</p><strong>Open review queue <ArrowRight size={13} /></strong></button>
               </>}
@@ -6546,6 +6563,7 @@ function App() {
               {adminApplicationBox === 'attention' && <small>There are no actionable pending professional roles on this application record. Check the account and its role history before changing anything.</small>}
             </div>
             {adminApplicationBox === 'pending' && <div className="admin-data-actions professional-application-actions">
+              {application.ageVerified !== true && <ConfirmDeleteAction label="Remove pending test application" itemName={String(application.name ?? application.email ?? application.userId ?? 'Unknown applicant')} description="Dismiss this unverified pending professional application with a recorded rejection. The member account, content and ID verification remain untouched." confirmLabel="Yes, dismiss application" onConfirm={()=>decideCreatorApplication(application,'rejected')}/>}
               <button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Keep banked</button>
               <button className="ghost-button" onClick={() => void decideCreatorApplication(application, 'rejected')}>Reject remaining</button>
               {remainingRoles.map((role)=><button key={role} className="secondary-button"
@@ -6559,7 +6577,7 @@ function App() {
             </div>}
           </article>;
         })}
-</div>}{adminPanel === 'editorial' && <Suspense fallback={<NightjarSkeleton variant="list" count={3} label="Loading manuscript approvals"/>}><AdminManuscriptReview scripts={adminScripts} loading={adminPanelLoading} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onRefresh={loadAdminEditorial} onReview={reviewAdminManuscript} onMessageWriter={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense>}{adminPanel === 'tags' && <div className="admin-data-list">
+</div>}{adminPanel === 'editorial' && <Suspense fallback={<NightjarSkeleton variant="list" count={3} label="Loading manuscript approvals"/>}><AdminManuscriptReview scripts={adminScripts} loading={adminScriptsLoading} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onRefresh={loadAdminEditorial} onReview={reviewAdminManuscript} onMessageWriter={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense>}{adminPanel === 'tags' && <div className="admin-data-list">
   {adminPanelLoading ? <div className="people-empty">Loading custom tag catalogue…</div> : adminProfileTags.length === 0 ? <div className="people-empty"><Search size={18}/><strong>No custom tag candidates yet</strong><span>Creator-made tags will appear here as they are used. Automatic shared-catalogue promotion starts at {adminProfileTagThreshold} distinct approved Creators.</span></div> : adminProfileTags.map((tag:any)=><article className="admin-data-row" key={tag.id}>
     <div>
       <strong>{tag.label}</strong>

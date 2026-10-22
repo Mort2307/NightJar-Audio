@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, ShieldCheck, Users, X } from 'lucide-react';
 import type { NightjarManagedProfessionalRole } from '../platform/firebase-administration';
+import ConfirmDeleteAction from './ConfirmDeleteAction';
 
 const PROFESSION_OPTIONS: { id: NightjarManagedProfessionalRole; name: string }[] = [
   { id: 'creator', name: 'VA Creator' },
@@ -120,10 +121,13 @@ export default function AdminMemberRoleEditor({
           <option value="suspended">Suspended</option>
         </select>
       </label>
-      <button type="button" className={account.testAccess ? 'secondary-button' : 'ghost-button'}
-        disabled={busy} onClick={() => void applyAccountChange(() => onTestAccessChange(account, !account.testAccess), 'Tester access could not be updated.')}>
-        {account.testAccess ? 'Remove tester access' : 'Enable tester access'}
-      </button>
+      {account.testAccess
+        ? <ConfirmDeleteAction label="Remove tester access" itemName={String(account.name ?? account.email ?? 'This member')}
+            description="Revoke temporary beta tester access. This does not delete the account, its age-verification records or any creative work."
+            confirmLabel="Yes, revoke tester access" disabled={busy}
+            onConfirm={()=>applyAccountChange(()=>onTestAccessChange(account,false),'Tester access could not be updated.')}/>
+        : <button type="button" className="ghost-button" disabled={busy}
+            onClick={() => void applyAccountChange(() => onTestAccessChange(account,true),'Tester access could not be updated.')}>Enable tester access</button>}
     </div>
     {error && <div className="nj-role-save-error" role="alert">{error}</div>}
     {expanded && <div className="admin-member-multi-role-editor" role="group" aria-label="Select multiple professional roles">

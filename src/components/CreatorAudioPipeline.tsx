@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
+import ConfirmDeleteAction from './ConfirmDeleteAction';
 import { nightjarMedia } from '../platform/firebase-media';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { nightjarCommunity } from '../platform/firebase-community';
@@ -719,17 +720,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     finally { setAudioBusy(false); }
   };
 
-  const removeRelease = async () => {
-    if (!current?.id || removing || audioBusy || submitting) return;
-    const item = current;
-    const warning = item.status === 'removing'
-      ? 'Retry deletion of the already-retired recording and artwork? NightJar will only finish the pending private media cleanup.'
-      : item.status === 'released'
-      ? 'Remove this published recording from Nightjar? Listening will stop, and its audio and artwork will be deleted. This cannot be undone.'
-      : item.status === 'pending_review'
-        ? 'Withdraw and permanently remove this submission from Nightjar review? The uploaded recording will be deleted. This cannot be undone.'
-        : 'Remove this draft and delete its uploaded audio and artwork? This cannot be undone.';
-    if (!window.confirm(warning)) return;
+  const removeRelease = async (target: Release | null = current) => {
+    if (!target?.id || removing || audioBusy || submitting) return;
+    const item = target;
+    // The trash control requires separate explicit confirmation before calling this handler.
     setRemoving(true);
     try {
       if (simulationMode) {
@@ -739,9 +733,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         if (result.deleted !== true) throw new Error('Nightjar could not verify the removal.');
         await onRefresh().catch(() => {});
       }
-      setSelectedRelease(null);
-      try { window.sessionStorage.removeItem(lastOpenedKey); } catch {}
-      setSubmissionConfirmed(false);
+      if (current?.id === item.id) {
+        setSelectedRelease(null);
+        try { window.sessionStorage.removeItem(lastOpenedKey); } catch {}
+        setSubmissionConfirmed(false);
+      }
       setAudioFileLabel('');
       setAudioFeedback('');
       onDeleted?.(item.id);
@@ -749,6 +745,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     } catch (error) {
       await onRefresh().catch(() => {});
       notify(error instanceof Error ? error.message : 'Removal could not be completed. Please retry.');
+      throw error; // The two-stage confirmation stays visible if removal fails.
     } finally { setRemoving(false); }
   };
 
@@ -810,7 +807,19 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     <div className="creator-pipeline-grid">
       <aside className="pipeline-library">
-        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => void chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'rejected' ? 'Rejected · Review feedback' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
+        <div className="pipeline-list">{releases.map((release) => <div className="pipeline-release-row" key={release.id}>
+            <button type="button" className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => void chooseRelease(release)}>
+              <strong>{release.title || 'Untitled release'}</strong>
+              <span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'rejected' ? 'Rejected · Review feedback' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span>
+            </button>
+            <ConfirmDeleteAction iconOnly label={release.status === 'removing' ? 'Retry recording cleanup' : 'Delete recording'} itemName={release.title || 'Untitled release'}
+              description={release.status === 'released' ? 'This published recording will stop playing and its stored audio and artwork will be permanently removed.'
+                : release.status === 'pending_review' ? 'Withdraw this recording from moderation and remove its private media permanently.'
+                : release.status === 'removing' ? 'Finish the existing private media cleanup safely.'
+                : 'Remove this draft and any uploaded media permanently. This cannot be undone.'}
+              confirmLabel={release.status === 'removing' ? 'Finish cleanup' : 'Yes, remove recording'}
+              disabled={removing || audioBusy || submitting} onConfirm={()=>removeRelease(release)}/>
+          </div>)}</div>
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
@@ -1139,9 +1148,18 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </div>}
           <div className="nj-work-removal">
             <div><strong>Remove this recording</strong><small>You control your work. Remove drafts, submissions or published recordings whenever you choose. Removal cannot be undone.</small></div>
-            <button className="ghost-button nj-work-remove-button" type="button" disabled={removing || submitting || audioBusy} onClick={() => void removeRelease()}>{removing ? 'Removing recording…' : removalPending ? 'Retry removal cleanup' : 'Remove recording'}</button>
+            <ConfirmDeleteAction iconOnly label={removalPending ? 'Retry removal cleanup' : 'Remove recording'} itemName={current.title || 'Untitled recording'}
+              description={removalPending ? 'Finish pending private media cleanup.' : current.status === 'released'
+                ? 'This published audio will stop playing and be permanently removed, including associated artwork.'
+                : current.status === 'pending_review' ? 'Withdraw from moderation and remove the private audio permanently.'
+                : 'Delete this private draft and its attached audio and artwork permanently.'}
+              confirmLabel={removalPending ? 'Finish cleanup' : 'Yes, remove recording'}
+              disabled={removing || submitting || audioBusy} onConfirm={removeRelease}/>
           </div>
-          {workflowStep === 'prepare' && !submittedOrPublished && <div className="pipeline-footer"><span>Release details autosave privately. Rights and transcript accuracy confirmations are saved on explicit Save or Submit.</span><div><button className="ghost-button" type="button" onClick={() => void removeRelease()} disabled={removing}>{removing ? 'Removing…' : 'Remove draft'}</button><button className="secondary-button" type="button" onClick={() => void saveMetadata()}>Save changes</button><button className="primary-button" type="button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={14}/> Continue to Review →</button></div></div>}
+          {workflowStep === 'prepare' && !submittedOrPublished && <div className="pipeline-footer"><span>Release details autosave privately. Rights and transcript accuracy confirmations are saved on explicit Save or Submit.</span><div><ConfirmDeleteAction iconOnly label="Remove draft" itemName={current.title || 'Untitled recording'}
+              description="This draft and all associated private assets will be permanently deleted."
+              confirmLabel="Yes, delete draft" disabled={removing || submitting || audioBusy}
+              onConfirm={removeRelease}/><button className="secondary-button" type="button" onClick={() => void saveMetadata()}>Save changes</button><button className="primary-button" type="button" disabled={!current.audioAvailable || audioBusy || submitting} onClick={() => setWorkflowStep('review')}><Send size={14}/> Continue to Review →</button></div></div>}
         </> : <div className="people-empty"><Mic2 size={19} /><strong>Choose a recording.</strong><span>Select a saved recording above, or create one with a title.</span></div>}
       </div>
     </div>
