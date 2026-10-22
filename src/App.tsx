@@ -626,6 +626,8 @@ function App() {
   const [adminCreatorSuggestions, setAdminCreatorSuggestions] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
   const [adminScripts, setAdminScripts] = useState<any[]>([]);
+  const [adminScriptsLoading, setAdminScriptsLoading] = useState(false);
+  const [adminScriptsLoadError, setAdminScriptsLoadError] = useState('');
   const [adminPanelLoading, setAdminPanelLoading] = useState(false);
   const [imageModeration, setImageModeration] = useState<any[]>([]);
   const [adminProfileTags, setAdminProfileTags] = useState<any[]>([]);
@@ -1578,6 +1580,7 @@ function App() {
     setAdminPanel(null);
     setAdminPeopleRole(null);
     setAdminWorkspace(workspace);
+    if (workspace === 'content' || workspace === 'overview') void loadAdminEditorial();
     setMenuOpen(false);
     const path = workspace === 'overview' ? '/admin' : '/admin/workspace/' + workspace;
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
@@ -4005,7 +4008,8 @@ function App() {
 
   const loadAdminEditorial = async () => {
     if (!canAdmin) return;
-    setAdminPanelLoading(true);
+    setAdminScriptsLoading(true);
+    setAdminScriptsLoadError('');
     try {
       if (demoMode) {
         setAdminScripts(readDemo('adminScripts', demoAdminData.scripts));
@@ -4014,9 +4018,10 @@ function App() {
         setAdminScripts(scriptsData.scripts ?? []);
       }
     } catch {
+      setAdminScriptsLoadError('Unable to load the live manuscript queue. Refresh to retry; a blank count is not confirmation that nothing is pending.');
       notify('Manuscript review queue could not be loaded.');
     } finally {
-      setAdminPanelLoading(false);
+      setAdminScriptsLoading(false);
     }
   };
 
@@ -5230,6 +5235,7 @@ function App() {
     ...(securityAlerts.filter((item:any)=>item.status === 'open').length ? [{ id:'security', title:'Review open security alerts', reason:'Protection signals require human review before any account action is taken.', label:'Review alerts', priority:'high' as const, onClick:()=>openAdminWorkspace('security') }] : []),
     ...(imageModeration.length ? [{ id:'images', title:`${imageModeration.length} image${imageModeration.length === 1 ? '' : 's'} awaiting moderation`, reason:'Images remain private until an Administrator explicitly approves them.', label:'Moderate images', priority:'high' as const, onClick:()=>openAdminPanel('images') }] : []),
     ...(applicationGroups.pending.length ? [{ id:'applications', title:`${applicationGroups.pending.length} professional application${applicationGroups.pending.length === 1 ? '' : 's'} awaiting approval`, reason:'Only outstanding professional applications are counted. Completed approvals are archived separately.', label:'Review new applications', onClick:()=>openAdminPanel('approvals') }] : []),
+    ...(adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length ? [{id:'manuscripts',title:`${adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length} manuscript(s) awaiting your review`,reason:'Open the live Writer manuscript approval queue. Each submission is reviewed individually.',label:'Review manuscripts',priority:'high' as const,onClick:()=>openAdminPanel('editorial')}] : []),
     ...(adminCreatorSuggestions.some((item:any)=>item.status === 'new') ? [{ id:'creator-suggestions', title:'New Creator suggestions to review', reason:'Nightjar members have recommended Creators who are not yet on the platform.', label:'Review suggestions', onClick:()=>openAdminPanel('suggestions') }] : []),
     ...((commercialOverview?.subscriptions.pastDue ?? 0) > 0 ? [{ id:'past-due', title:'Past-due subscriptions need visibility', reason:'Past-due revenue is kept out of confirmed cash planning until payment succeeds.', label:'Open subscriptions', onClick:()=>openAdminPanel('subscriptions') }] : []),
   ];
@@ -6236,10 +6242,12 @@ function App() {
               onChange={openAdminWorkspace}
               pendingApplications={applicationGroups.pending.length}
               pendingImages={imageModeration.length}
+              pendingScripts={adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length}
               openAlerts={securityAlerts.filter((item:any)=>item.status === 'open').length}
             />
             {adminWorkspace === 'content' && user?.userId && <details className="nj-credit-workspace-disclosure" open={Boolean(creditFocusClaimId)}><summary>🎧 Credited account review</summary><VerifiedCreditWorkspace currentUserId={user.userId} focusedClaimId={creditFocusClaimId} administrator onNotice={notify}/></details>}
             {adminWorkspace === 'assistance' && <AdminAssistance initialEmail={assistancePrefillEmail} onPeople={() => openAdminWorkspace('people')} onSafety={() => openAdminWorkspace('security')} onMail={() => openAdminWorkspace('tools')} />}
+            {adminWorkspace === 'overview' && adminScriptsLoadError && <p role="alert" className="admin-note">{adminScriptsLoadError} <button type="button" className="secondary-button" onClick={()=>void loadAdminEditorial()}>Retry manuscripts</button></p>}
             {adminWorkspace === 'overview' && <RoleDashboard
               eyebrow="OWNER ACTION CENTRE"
               title="Exceptions first."
@@ -6248,6 +6256,7 @@ function App() {
                 {label:'Security',value:securityAlerts.filter((item:any)=>item.status === 'open').length,detail:'Open human-review alerts',destination:'administrator security alerts',onClick:()=>openAdminWorkspace('security')},
                 {label:'Images',value:imageModeration.length,detail:'Awaiting moderation',destination:'image moderation',onClick:()=>openAdminPanel('images')},
                 {label:'Applications',value:applicationGroups.pending.length,detail:'New applications awaiting approval',destination:'professional application bank',onClick:()=>openAdminPanel('approvals')},
+                {label:'Manuscripts',value:adminScriptsLoading ? '…' : adminScriptsLoadError ? '!' : adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length,detail:adminScriptsLoadError ? 'Queue unavailable — retry' : 'Awaiting Writer manuscript review',destination:'manuscript review queue',onClick:()=>openAdminPanel('editorial')},
                 {label:'Past due',value:commercialOverview?.subscriptions.pastDue ?? 0,detail:'Billing attention',destination:'subscription ledger',onClick:()=>openAdminPanel('subscriptions')},
               ]}
               actions={adminActions}
@@ -6400,8 +6409,8 @@ function App() {
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('revenue')}><span className="admin-icon"><BarChart3 size={19} /></span><span className="mini-label">REVENUE</span><h2>Commercial controls</h2><p>Open confirmed subscription revenue, capped creator-rate bands and payout readiness.</p><strong>Open commercial controls <ArrowRight size={13} /></strong></button>
               </>}
               {adminWorkspace === 'content' && <>
-              <button className="admin-panel admin-tile" onClick={() => navigate('messages')}><span className="admin-icon"><MessageCircle size={19}/></span><span className="mini-label">NIGHTJAR ADMIN MESSAGING</span><h2>Open team inbox</h2><p>Send and receive private in-app messages with Writers, VAs, Audio Editors and Artists. Keep manuscript-specific review notes in the review queue.</p><strong>Open NightJar messages <ArrowRight size={13}/></strong></button>
-              <button className="admin-panel admin-tile" onClick={() => openAdminPanel('editorial')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">MANUSCRIPT APPROVALS</span><h2>Review scripts</h2><p>Approve or request changes for submitted Writer manuscripts. Marketplace review requires no Audio Editor assignment.</p><strong>Open manuscript review <ArrowRight size={13} /></strong></button>
+              <button className="admin-panel admin-tile" onClick={() => navigate('messages')}><span className="admin-icon"><MessageCircle size={19}/></span><span className="mini-label">NIGHTJAR ADMIN MESSAGING</span><h2>Inbox · {messageUnreadCount} unread</h2><p>Send and receive private in-app messages with Writers, VAs, Audio Editors and Artists. Keep manuscript-specific review notes in the review queue.</p><strong>Open NightJar messages <ArrowRight size={13}/></strong></button>
+              <button className="admin-panel admin-tile" onClick={() => openAdminPanel('editorial')}><span className="admin-icon"><FileCheck2 size={19} /></span><span className="mini-label">MANUSCRIPT APPROVALS</span><h2>{adminScriptsLoading ? 'Loading…' : adminScriptsLoadError ? 'Queue unavailable' : adminScripts.filter((item:any)=>['Submitted','Under review'].includes(String(item.status))).length + ' awaiting review'}</h2><p>Approve or request changes for submitted Writer manuscripts. Marketplace review requires no Audio Editor assignment.</p><strong>Open manuscript review <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('reports')}><span className="admin-icon"><ShieldAlert size={19} /></span><span className="mini-label">REPORTS & FEEDBACK</span><h2>{(adminReports.length + adminCommunityReports.length) || 'Review'}</h2><p>User-submitted safety reports, technical issues and product feedback, identified by profile name rather than opaque account IDs.</p><strong>Open reports inbox <ArrowRight size={13} /></strong></button>
               <button className="admin-panel admin-tile" onClick={() => openAdminPanel('reviews')}><span className="admin-icon"><Star size={19} /></span><span className="mini-label">REVIEW MODERATION</span><h2>{adminReviewQueue.length || 'Review'}</h2><p>Approve or reject listener ratings and written reviews before they appear publicly.</p><strong>Open review queue <ArrowRight size={13} /></strong></button>
               </>}
@@ -6561,7 +6570,7 @@ function App() {
             </div>}
           </article>;
         })}
-</div>}{adminPanel === 'editorial' && <Suspense fallback={<NightjarSkeleton variant="list" count={3} label="Loading manuscript approvals"/>}><AdminManuscriptReview scripts={adminScripts} loading={adminPanelLoading} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onRefresh={loadAdminEditorial} onReview={reviewAdminManuscript} onMessageWriter={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense>}{adminPanel === 'tags' && <div className="admin-data-list">
+</div>}{adminPanel === 'editorial' && <Suspense fallback={<NightjarSkeleton variant="list" count={3} label="Loading manuscript approvals"/>}><AdminManuscriptReview scripts={adminScripts} loading={adminScriptsLoading} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onRefresh={loadAdminEditorial} onReview={reviewAdminManuscript} onMessageWriter={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense>}{adminPanel === 'tags' && <div className="admin-data-list">
   {adminPanelLoading ? <div className="people-empty">Loading custom tag catalogue…</div> : adminProfileTags.length === 0 ? <div className="people-empty"><Search size={18}/><strong>No custom tag candidates yet</strong><span>Creator-made tags will appear here as they are used. Automatic shared-catalogue promotion starts at {adminProfileTagThreshold} distinct approved Creators.</span></div> : adminProfileTags.map((tag:any)=><article className="admin-data-row" key={tag.id}>
     <div>
       <strong>{tag.label}</strong>
