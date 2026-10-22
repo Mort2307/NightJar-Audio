@@ -7653,7 +7653,10 @@ export const listNotifications = onCall({ region: REGION }, async (request) => {
     .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: toIso(doc.data().createdAt) }))
     // Previously persisted owner-only notifications must not survive a loss of
     // admin entitlement or become visible through a regular member feed.
-    .filter((item: any) => identity.admin || item.type !== 'admin_attention')
+    // Live admin_action summaries are authoritative. Historic per-record
+    // admin_attention notifications duplicate them and can remain after approval.
+    // Retain stored push evidence but do not surface obsolete owner alerts twice.
+    .filter((item: any) => item.type !== 'admin_attention')
     .filter((item: any) => enabled(item))
     .sort((a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
     .slice(0, 30)
