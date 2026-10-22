@@ -101,7 +101,9 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
           }
           setStatus('saving');
           const result = await nightjarProfileDrafts.save(scope, payload, revision.current);
-          if (!sessionValid(generation) || clearing.current) return false;
+          if (!sessionValid(generation)) return false;
+          // Clear-on-submit waits for this write. Its CAS must use the revision
+          // acknowledged by the server, even when clearing began in-flight.
           revision.current = result.revision;
           if (!result.saved) {
             conflict.current = true;
@@ -110,6 +112,7 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
             return false;
           }
           synced.current = before;
+          if (clearing.current) return true;
         }
       } catch {
         if (sessionValid(generation) && !clearing.current) setStatus('offline');
