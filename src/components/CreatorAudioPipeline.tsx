@@ -823,7 +823,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             <small>Optional audio-only behind-the-scenes extra. Upload it as a normal release; rights checks and NightJar moderation still apply. Video is not enabled.</small>
           </label>
           <button className="primary-button" disabled={creatingDraft || !canPublish || accountStatus === 'pending_review'} aria-busy={creatingDraft} onClick={() => void createDraft()}><UploadCloud size={14} /> {creatingDraft ? 'Creating private draft… Please wait' : accountStatus === 'pending_review' ? 'Approval required' : 'Create & upload'}</button>
-          {creatingDraft && <p role="status" aria-live="polite" className="nj-upload-action-feedback">Creating and confirming one private draft. Please do not tap again.</p>
+          {creatingDraft && <p role="status" aria-live="polite" className="nj-upload-action-feedback">Creating and confirming one private draft. Please do not tap again.</p>}
         </div>
       </aside>
 
@@ -1107,7 +1107,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               {incompleteChecks.length === 0 && <p role="status">Everything required is ready. Submission does not publish your recording; an administrator must approve it first.</p>}
               <button type="button" className="secondary-button" onClick={() => openDetails()}>← Edit release</button>
               <button type="button" className="primary-button" disabled={!complete || audioBusy || submitting || !canPublish || accountStatus === 'pending_review'} aria-busy={submitting} onClick={() => void submit()}><Send size={16}/> {submitting ? 'Submitting… Please wait' : 'Submit for Review'}</button>
-              {submitting && <p role="status" aria-live="polite" className="nj-upload-action-feedback">Saving your release and confirming it reached NightJar moderation. Do not submit it twice or navigate away.</p>
+              {submitting && <p role="status" aria-live="polite" className="nj-upload-action-feedback">Saving your release and confirming it reached NightJar moderation. Do not submit it twice or navigate away.</p>}
             </div>}
           </section>}
           {current.status === 'draft' && !simulationMode && <div className="nj-cloud-profile-draft" role="status" aria-live="polite">
