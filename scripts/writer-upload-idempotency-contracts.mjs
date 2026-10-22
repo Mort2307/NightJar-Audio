@@ -58,4 +58,26 @@ assert.match(grid,/Added '/);
 assert.match(hosting,/\[nightjar-writer-upload-idempotency-release\]/);
 assert.match(hosting,/createWriterScript,uploadWriterScriptFile/);
 
+const rightsPanel = source('src/components/WriterRightsPanel.tsx');
+const creator = source('src/components/CreatorAudioPipeline.tsx');
+const artist = source('src/components/ArtistPortfolioManager.tsx');
+const editor = source('src/components/EditorShowcaseManager.tsx');
+for(const [name,component] of [['writer rights',rightsPanel],['creator',creator],['artist',artist],['editor',editor]]) {
+  assert.match(component,/aria-live="polite"/, name+' announces action status accessibly');
+  assert.match(component,/Please (?:do not tap again|wait)/i, name+' explains ongoing actions');
+}
+assert.match(rightsPanel,/operationInFlight\.current = true/, 'Writer rights start synchronous lock');
+assert.match(rightsPanel,/operationInFlight\.current = false/, 'Writer rights release lock');
+assert.match(rightsPanel,/Submitting securely/, 'Writer review shows in-flight state');
+assert.match(creator,/submitInFlightRef\.current = true/, 'Creator submission locks synchronously');
+assert.match(creator,/submitInFlightRef\.current = false/, 'Creator submission unlocks in finally');
+assert.match(creator,/audioUploadInFlightRef/, 'Creator audio repeated upload guarded');
+assert.match(creator,/inFlight\.current = false/, 'Creator uploads unlock on completion or failure');
+assert.match(artist,/submitInFlightRef\.current = true/, 'Artist submission locks synchronously');
+assert.match(artist,/submitInFlightRef\.current = false/, 'Artist submission unlocks');
+assert.match(editor,/submissionInFlightRef\.current = true/, 'Editor submission locks synchronously');
+assert.match(editor,/submissionInFlightRef\.current = false/, 'Editor submission unlocks');
+assert.match(app,/writerUploadStage === 'confirming'/, 'Writer upload has visible verifying stage');
+assert.match(app,/writerActionFeedback.*&& <p.*aria-live="polite"/, 'Writer upload has live status message');
+
 console.log('Writer create/upload retry safety, rights and manual-approval contracts PASS.');
