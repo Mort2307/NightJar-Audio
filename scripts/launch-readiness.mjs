@@ -7,6 +7,8 @@ import { assessLaunchReadiness, launchAttestations } from './launch-readiness-po
 const app = fs.readFileSync('src/App.tsx', 'utf8');
 const backend = fs.readFileSync('functions/src/index.ts', 'utf8');
 const didit = fs.readFileSync('functions/src/didit.ts', 'utf8');
+// Preserve the existing positive, explicit Didit attestation contract.
+const livePilotReviewed = process.env.NIGHTJAR_DIDIT_LIVE_VERIFIED === 'true';
 
 const failures = assessLaunchReadiness({
   clientBypass: /const TESTING_AGE_ASSURANCE_BYPASS\s*=\s*true/.test(app),
@@ -15,7 +17,9 @@ const failures = assessLaunchReadiness({
   // Static source presence is only a minimal guard: operator verification is
   // still separately required and is never inferred from this code check.
   diditLiveProviderGateFound: backend.includes('diditPass(data)') && didit.includes("data?.environment === 'live'"),
-  attestations: process.env,
+  // Even if an environment value is absent or malformed, the provider
+  // attestation is normalised to an explicit false rather than ignored.
+  attestations: {...process.env, NIGHTJAR_DIDIT_LIVE_VERIFIED: livePilotReviewed ? 'true' : 'false'},
 });
 
 if (failures.length) {
