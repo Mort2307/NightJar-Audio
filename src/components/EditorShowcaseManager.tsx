@@ -205,7 +205,7 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       <label className="rights-check editor-showcase-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have permission from any client, performer or other contributor whose work/voice appears in the sample.</span></label>
       <div className="rights-ai-lock editor-showcase-wide"><ShieldCheck size={15}/><div><strong>Private until approved</strong><span>Direct storage reads are blocked. Nightjar only exposes approved samples through short-lived signed playback links.</span></div></div>
       <button className="primary-button editor-showcase-wide" disabled={busy || !rightsConfirmed || !permissionsConfirmed} aria-busy={busy} onClick={()=>void create()}>{busy?<><LoaderCircle size={14}/> Uploading… Please wait</>:<><UploadCloud size={14}/> Upload & submit showcase</>}</button>
-      {submissionFeedback && <p className="nj-upload-action-feedback editor-showcase-wide" role="status" aria-live="polite">{submissionFeedback}</p>
+      {submissionFeedback && <p className="nj-upload-action-feedback editor-showcase-wide" role="status" aria-live="polite">{submissionFeedback}</p>}
     </div>
 
     <div className="editor-showcase-list">
