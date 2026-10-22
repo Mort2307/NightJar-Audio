@@ -45,3 +45,14 @@
 .nj-writer-secondary-actions>div{display:flex;flex-wrap:wrap;gap:10px;padding:12px}
 .nj-writer-secondary-actions:focus-within{outline:2px solid #ffe0ac;outline-offset:3px}
 @media(max-width:650px){.nj-writer-secondary-actions{width:100%}.nj-writer-secondary-actions>div button{flex:1 1 130px}}
+
+/* Shared role-studio feedback: visible throughout long uploads and submissions,
+   accessible on mobile and in high-contrast/forced-colour modes. */
+.nj-upload-action-feedback,.nj-writer-operation-feedback{
+  display:block;max-width:100%;margin:10px 0;padding:12px 14px;
+  border:1px solid #9e7c52;border-radius:12px;background:#2c241f;
+  color:#f7e5ce;line-height:1.5;overflow-wrap:anywhere;
+}
+@media(forced-colors:active){
+  .nj-upload-action-feedback,.nj-writer-operation-feedback{border:2px solid CanvasText;background:Canvas;color:CanvasText}
+}
