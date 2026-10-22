@@ -206,7 +206,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={rightsConfirmed} onChange={(e)=>setRightsConfirmed(e.target.checked)}/><span>I own or control the rights needed to display this artwork publicly on Nightjar.</span></label>
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have any required client, subject, model or collaborator permission for this public portfolio use.</span></label>
       <button className="primary-button artist-form-wide" disabled={busy || !humanCreated || !rightsConfirmed || !permissionsConfirmed} aria-busy={busy} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Uploading… Please wait</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
-      {submissionFeedback && <p className="nj-upload-action-feedback artist-form-wide" role="status" aria-live="polite">{submissionFeedback}</p>
+      {submissionFeedback && <p className="nj-upload-action-feedback artist-form-wide" role="status" aria-live="polite">{submissionFeedback}</p>}
     </div>}
 
     <div className="nj-artist-portfolio-summary"><strong>{items.length} artwork piece{items.length===1?'':'s'}</strong><span>{items.filter(item=>item.status==='published').length} public · {items.filter(item=>item.status!=='published').length} private or awaiting review</span></div>
