@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileAudio, LoaderCircle, Send, ShieldCheck, Trash2, UploadCloud } from 'lucide-react';
 import { nightjarEditorPortfolio, type EditorPortfolioItem } from '../platform/firebase-editor-portfolio';
+import ConfirmDeleteAction from './ConfirmDeleteAction';
 import { nightjarAudioFileProblem } from '../platform/audio-upload';
 import StudioFormDraftSync from './StudioFormDraftSync';
 
@@ -162,7 +163,7 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       await load();
       notify(result.removed === true ? 'Editor showcase and private audio removed.' : 'Editor showcase is no longer public. Private audio cleanup is pending; use Retry cleanup to finish.');
     }
-    catch { notify('Editor showcase removal could not be confirmed. Refresh before retrying.'); }
+    catch (error) { notify('Editor showcase removal could not be confirmed. Refresh before retrying.'); throw error; }
     finally { setBusy(false); }
   };
 
@@ -217,7 +218,9 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
           setPermissionNote(item.clientPermissionNote??'');
           setBeforeFile(null);setAfterFile(null);setFileInputNonce(value=>value+1);
           setRightsConfirmed(false);setPermissionsConfirmed(false);
-        }}>Resume upload</button>}{item.status==='draft'&&item.afterAudioAvailable&&<button className="secondary-button" disabled={busy} onClick={()=>void submitExisting(item.id)}><Send size={13}/> Submit</button>}{item.status!=='pending_review'&&<button className="ghost-button" disabled={busy} onClick={()=>void remove(item.id)}><Trash2 size={13}/> {item.status==='removing'?'Retry cleanup':'Remove'}</button>}</div>
+        }}>Resume upload</button>}{item.status==='draft'&&item.afterAudioAvailable&&<button className="secondary-button" disabled={busy} onClick={()=>void submitExisting(item.id)}><Send size={13}/> Submit</button>}{item.status!=='pending_review'&&<ConfirmDeleteAction iconOnly label={item.status==='removing'?'Retry private cleanup':'Remove Editor showcase'} itemName={item.title || 'Untitled showcase'}
+            description={item.status==='published'?'This public showcase and attached audio will be taken down permanently.':item.status==='removing'?'Finish removing private audio files without creating a new record.':'This private showcase and its attached audio will be removed.'}
+            disabled={busy} confirmLabel={item.status==='removing'?'Finish cleanup':'Yes, remove showcase'} onConfirm={()=>remove(item.id)}/>}</div>
       </article>)}
       {!items.length&&<div className="people-empty"><FileAudio size={17}/><strong>No showcase samples yet.</strong><span>Add finished work or a before/after comparison alongside your verified Nightjar credits.</span></div>}
     </div>
