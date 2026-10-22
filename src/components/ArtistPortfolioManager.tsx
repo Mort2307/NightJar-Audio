@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ImagePlus, LoaderCircle, Trash2, ChevronDown } from 'lucide-react';
+import { ImagePlus, LoaderCircle, ChevronDown } from 'lucide-react';
 import { nightjarArtists, type ArtistPortfolioItem } from '../platform/firebase-artists';
 import ConfirmDeleteAction from './ConfirmDeleteAction';
 import { nightjarMedia } from '../platform/firebase-media';
