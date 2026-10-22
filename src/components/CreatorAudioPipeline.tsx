@@ -720,9 +720,9 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     finally { setAudioBusy(false); }
   };
 
-  const removeRelease = async () => {
-    if (!current?.id || removing || audioBusy || submitting) return;
-    const item = current;
+  const removeRelease = async (target: Release | null = current) => {
+    if (!target?.id || removing || audioBusy || submitting) return;
+    const item = target;
     // The trash control requires separate explicit confirmation before calling this handler.
     setRemoving(true);
     try {
@@ -733,9 +733,11 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         if (result.deleted !== true) throw new Error('Nightjar could not verify the removal.');
         await onRefresh().catch(() => {});
       }
-      setSelectedRelease(null);
-      try { window.sessionStorage.removeItem(lastOpenedKey); } catch {}
-      setSubmissionConfirmed(false);
+      if (current?.id === item.id) {
+        setSelectedRelease(null);
+        try { window.sessionStorage.removeItem(lastOpenedKey); } catch {}
+        setSubmissionConfirmed(false);
+      }
       setAudioFileLabel('');
       setAudioFeedback('');
       onDeleted?.(item.id);
@@ -805,7 +807,19 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
 
     <div className="creator-pipeline-grid">
       <aside className="pipeline-library">
-        <div className="pipeline-list">{releases.map((release) => <button key={release.id} className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => void chooseRelease(release)}><strong>{release.title || 'Untitled release'}</strong><span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'rejected' ? 'Rejected · Review feedback' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span></button>)}</div>
+        <div className="pipeline-list">{releases.map((release) => <div className="pipeline-release-row" key={release.id}>
+            <button type="button" className={current?.id === release.id ? 'pipeline-release active' : 'pipeline-release'} onClick={() => void chooseRelease(release)}>
+              <strong>{release.title || 'Untitled release'}</strong>
+              <span>{release.status === 'removing' ? 'Removal pending · Retry' : release.status === 'rejected' ? 'Rejected · Review feedback' : release.status === 'scheduled' ? 'Approved · Scheduled' : release.status === 'pending_review' ? 'Submitted · Awaiting review' : release.status === 'released' ? 'Published' : release.status === 'draft' ? release.audioAvailable ? 'Continue to Review' : 'Draft' : release.status || 'Draft'}</span>
+            </button>
+            <ConfirmDeleteAction iconOnly label={release.status === 'removing' ? 'Retry recording cleanup' : 'Delete recording'} itemName={release.title || 'Untitled release'}
+              description={release.status === 'released' ? 'This published recording will stop playing and its stored audio and artwork will be permanently removed.'
+                : release.status === 'pending_review' ? 'Withdraw this recording from moderation and remove its private media permanently.'
+                : release.status === 'removing' ? 'Finish the existing private media cleanup safely.'
+                : 'Remove this draft and any uploaded media permanently. This cannot be undone.'}
+              confirmLabel={release.status === 'removing' ? 'Finish cleanup' : 'Yes, remove recording'}
+              disabled={removing || audioBusy || submitting} onConfirm={()=>removeRelease(release)}/>
+          </div>)}</div>
         {!releases.length && <div className="people-empty"><Music2 size={18} /><strong>No recordings yet.</strong><span>Enter a title below to start uploading.</span></div>}
         <div className="pipeline-create">
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} aria-label="Title for a new recording" placeholder="Recording title" />
