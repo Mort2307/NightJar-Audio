@@ -11797,3 +11797,7 @@ textarea:focus-visible,
 .notification-popover{background:#100e11;backdrop-filter:none}
 .nj-writer-card-open>strong{overflow-wrap:anywhere;line-height:1.3;font-size:1.1rem;min-width:0}
 @media(max-width:520px){.top-actions .nj-header-inbox{display:none} /* Mobile Admin Inbox lives in the bottom dock. */}
+
+.pipeline-release-row{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.pipeline-release-row .pipeline-release{flex:1 1 160px;min-width:0}
+.pipeline-release-row .nj-delete-confirmation{flex:1 1 100%;width:100%}
