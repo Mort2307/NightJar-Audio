@@ -7,6 +7,7 @@ type Props = {
   onChange: (workspace: AdminWorkspace) => void;
   pendingApplications: number;
   pendingImages: number;
+  pendingScripts: number;
   openAlerts: number;
 };
 
@@ -22,8 +23,8 @@ const sections: { id: AdminWorkspace; label: string; detail: string; icon: Lucid
   { id: 'tools', label: 'Tools', detail: 'Mail, previews and branding', icon: Wrench },
 ];
 
-export default function AdminWorkspaceTabs({ active, onChange, pendingApplications, pendingImages, openAlerts }: Props) {
-  const count = (id: AdminWorkspace) => id === 'content' ? pendingApplications + pendingImages : id === 'security' ? openAlerts : 0;
+export default function AdminWorkspaceTabs({ active, onChange, pendingApplications, pendingImages, pendingScripts, openAlerts }: Props) {
+  const count = (id: AdminWorkspace) => id === 'content' ? pendingApplications + pendingImages + pendingScripts : id === 'security' ? openAlerts : 0;
 
   return (
     <nav className={active === 'overview' ? 'nj-owner-workspaces' : 'nj-owner-workspaces nj-owner-workspaces-compact'} aria-label="Administrator workspaces">
