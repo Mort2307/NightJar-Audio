@@ -37,3 +37,9 @@
 @media (max-width: 620px) {
   .manuscript-review-thread-access button { width: 100%; justify-content: center; }
 }
+
+/* Private moderation provenance, never displayed in public Writer/Creator views. */
+.manuscript-review-provenance{display:grid;gap:7px;margin:12px 0;padding:13px 15px;border:1px solid #766047;border-radius:12px;background:#231d1b;color:#e9dacb;min-width:0}
+.manuscript-review-provenance strong{color:#f4dbb8}
+.manuscript-review-provenance span,.manuscript-review-provenance code{overflow-wrap:anywhere}
+.manuscript-review-provenance small{color:#cbbfae;line-height:1.5}
