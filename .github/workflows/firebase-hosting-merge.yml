@@ -43,6 +43,13 @@ jobs:
             exit 1
           fi
 
+      # Never expose a frontend to functions/src changes without the matched
+      # backend-first release gate; each recognised tag dispatches selected
+      # functions and blocks Hosting until the backend workflow succeeds.
+      - name: Reject unplanned Cloud Functions releases
+        if: ${{ github.event_name == 'push' }}
+        run: node scripts/backend-hosting-release-guard.mjs
+
       - name: Install and validate
         run: npm ci --no-fund && npm run validate
 
