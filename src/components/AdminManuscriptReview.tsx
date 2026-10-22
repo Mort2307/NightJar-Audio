@@ -52,6 +52,9 @@ export default function AdminManuscriptReview({
   const isPending = !!selected && pendingStatus(selected.status);
   const marketplaceRequested = selected?.marketplace?.visibility === 'marketplace';
   const hasSynopsis = !!String(selected?.marketplace?.synopsis ?? '').trim();
+  const synopsisStatus = marketplaceRequested
+    ? (hasSynopsis ? 'Provided' : 'Missing — ask Writer')
+    : (hasSynopsis ? 'Saved privately' : 'Not requested');
   const rightsReady = selected?.rights?.ownershipAttested === true && selected?.rights?.contributorPermissionsConfirmed === true;
   const hasManuscript = !!String(preview?.content ?? '').trim() || sourcePreview?.format === 'pdf' || (sourcePreview?.format === 'text' && !!String(sourcePreview.text ?? '').trim());
   const completeSourceReady = sourcePreview?.format === 'pdf' ? Boolean(sourceFile?.url)
@@ -145,13 +148,14 @@ export default function AdminManuscriptReview({
     {selected && <div className="manuscript-review-detail" aria-label="Selected manuscript review">
       <div className="manuscript-review-detail-head">
         <div><span className="mini-label">{isPending ? 'AWAITING A DECISION' : 'MANUSCRIPT RECORD'}</span><h3>{selected.title}</h3><p>{selected.status} · {marketplaceRequested ? 'Writer requested marketplace publication' : 'Writer has not selected marketplace visibility'}</p></div>
-        <div className="manuscript-review-heading-actions"><button className="primary-button" disabled={previewBusy} onClick={() => preview ? setViewerOpen(true) : void openPreview(selected)}><LockKeyhole size={15}/>{previewBusy ? 'Opening…' : 'Open read-only viewer'}</button>{selected.writerUserId&&onMessageWriter&&<button className="secondary-button" onClick={()=>onMessageWriter(String(selected.writerUserId))}><MessageCircle size={15}/> Direct message Writer</button>}</div>
+        <div className="manuscript-review-heading-actions"><button className="primary-button" disabled={previewBusy} onClick={() => preview ? setViewerOpen(true) : void openPreview(selected)}><LockKeyhole size={15}/>{previewBusy ? 'Opening…' : 'Open read-only viewer'}</button>{selected.writerUserId&&onMessageWriter&&<button type="button" className="secondary-button" onClick={()=>onMessageWriter(String(selected.writerUserId))}><MessageCircle size={15}/> Direct message Writer</button>}</div>
       </div>
       <div className="manuscript-review-facts">
         <span><ShieldCheck size={15}/> Rights confirmations: <ContextHelp topic="rights-confirmation"/> <strong>{rightsReady ? 'Confirmed' : 'Incomplete'}</strong></span>
-        <span><BookOpen size={15}/> Marketplace synopsis: <ContextHelp topic="public-synopsis"/> <strong>{hasSynopsis ? 'Provided' : 'Missing'}</strong></span>
+        <span><BookOpen size={15}/> Marketplace synopsis: <ContextHelp topic="public-synopsis"/> <strong>{synopsisStatus}</strong></span>
       </div>
-      {marketplaceRequested && hasSynopsis && <p className="manuscript-review-synopsis"><strong>Public synopsis</strong>{selected.marketplace.synopsis}</p>}
+      {hasSynopsis && <p className="manuscript-review-synopsis"><strong>{marketplaceRequested ? 'Writer-provided marketplace synopsis' : 'Writer-provided synopsis · not public'}</strong>{selected.marketplace.synopsis}</p>}
+      {!marketplaceRequested && !hasSynopsis && <p className="manuscript-review-submission-context">The uploaded manuscript is available in the protected reviewer above. A public synopsis is a separate description supplied by the Writer if they choose marketplace visibility. This submission is not currently requesting a public listing.</p>}
       {!rightsReady && <p className="manuscript-review-caution">The Writer must confirm ownership and contributor permissions before approval.</p>}
       {marketplaceRequested && !hasSynopsis && <p className="manuscript-review-caution">Marketplace visibility is selected, but the public synopsis is missing. Approval alone will not create a public listing.</p>}
       {isPending && <div className="manuscript-review-decisions">
@@ -167,7 +171,16 @@ export default function AdminManuscriptReview({
       </div>}
       {error && <p className="manuscript-review-error" role="alert">{error}</p>}
       {!isPending && <p className="manuscript-review-complete">No approval is needed here. This manuscript is {selected.status.toLowerCase()}.</p>}
-      <ManuscriptReviewConversation key={'review-thread-'+selected.id} scriptId={selected.id} audience="admin" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/>
+      <div className="manuscript-review-thread-access">
+        <p>Want to keep the conversation attached to this manuscript? You can message the Writer here without leaving the review.</p>
+        <button type="button" className="secondary-button" onClick={() => {
+          document.getElementById('nj-manuscript-review-conversation')?.scrollIntoView({behavior:'smooth',block:'center'});
+          (document.querySelector('#nj-manuscript-review-conversation textarea') as HTMLTextAreaElement | null)?.focus({preventScroll:true});
+        }}><MessageCircle size={15}/> Message Writer in review thread</button>
+      </div>
+      <div id="nj-manuscript-review-conversation">
+        <ManuscriptReviewConversation key={'review-thread-'+selected.id} scriptId={selected.id} audience="admin" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/>
+      </div>
     </div>}
     {viewerOpen && preview && <div className="manuscript-admin-reader-overlay" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setViewerOpen(false); }}>
       <section className="manuscript-admin-reader copy-locked" role="dialog" aria-modal="true" aria-label={'Read-only manuscript review: ' + String(preview.title ?? 'Manuscript')}
