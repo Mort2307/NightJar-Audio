@@ -8748,8 +8748,9 @@ export const createWriterScript = onCall({ region: REGION }, async (request) => 
   const identity = await requireAccountRole(request, ['writer']);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const title = cleanText(input.title, 180) || 'Untitled manuscript';
-  const ref = db.collection('scripts').doc();
-  await ref.set({
+  const clientRequestId = privateCreateRequestId(input);
+  const ref = clientRequestId ? db.collection('scripts').doc(clientRequestId) : db.collection('scripts').doc();
+  const reused = await savePrivateRecordOnce(ref, {
     title,
     content: cleanText(input.content, 200000),
     status: 'Draft',
@@ -8762,9 +8763,9 @@ export const createWriterScript = onCall({ region: REGION }, async (request) => 
     marketplace: normaliseScriptMarketplace(null),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  });
+  }, 'writerUserId', identity.uid, clientRequestId);
   const saved = await ref.get();
-  return { script: scriptPayload(saved.data() ?? {}, ref.id, true) };
+  return { script: scriptPayload(saved.data() ?? {}, ref.id, true), reused };
 });
 
 export const uploadWriterScriptFile = onCall({
@@ -8824,7 +8825,24 @@ export const uploadWriterScriptFile = onCall({
     ? bytes.toString('utf8').replace(/^\uFEFF/, '').slice(0, 200000)
     : '';
 
-  const ref = db.collection('scripts').doc();
+  const sourceSha256 = createHash('sha256').update(bytes).digest('hex');
+  const clientRequestId = privateCreateRequestId(input);
+  const ref = clientRequestId ? db.collection('scripts').doc(clientRequestId) : db.collection('scripts').doc();
+  // A callable acknowledgement can be lost even after the manuscript committed.
+  // Retry reads the original record instead of creating a second copy.
+  if (clientRequestId) {
+    const existing = await ref.get();
+    if (existing.exists) {
+      const prior = existing.data() ?? {};
+      if (prior.writerUserId !== identity.uid) {
+        throw new HttpsError('permission-denied', 'Manuscript belongs to another account.');
+      }
+      if (prior.originalUpload?.sourceSha256 !== sourceSha256) {
+        throw new HttpsError('failed-precondition', 'A different manuscript used this upload request. Select the correct file and retry.');
+      }
+      return { script: scriptPayload(prior, ref.id, true), reused: true };
+    }
+  }
   const storagePath = 'script-uploads/' + identity.uid + '/' + ref.id + '/' + randomUUID() + '-' + fileName;
   const file = getStorage().bucket().file(storagePath);
 
@@ -8842,8 +8860,9 @@ export const uploadWriterScriptFile = onCall({
     },
   });
 
+  let reused = false;
   try {
-    await ref.set({
+    reused = await savePrivateRecordOnce(ref, {
       title,
       content: extractedContent,
       status: 'Draft',
@@ -8856,6 +8875,7 @@ export const uploadWriterScriptFile = onCall({
         fileName,
         contentType,
         sizeBytes: bytes.length,
+        sourceSha256,
         storagePath,
         uploadedAt: FieldValue.serverTimestamp(),
       },
@@ -8863,14 +8883,21 @@ export const uploadWriterScriptFile = onCall({
       marketplace: normaliseScriptMarketplace(null),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    }, 'writerUserId', identity.uid, clientRequestId);
   } catch (error) {
     await file.delete({ ignoreNotFound: true }).catch(() => undefined);
     throw error;
   }
 
+  // Concurrent retries can upload separate temporary paths. Keep only the
+  // source that won the Firestore transaction; never delete the canonical path.
+  if (reused) await file.delete({ ignoreNotFound: true });
   const saved = await ref.get();
-  return { script: scriptPayload(saved.data() ?? {}, ref.id, true) };
+  const finalData = saved.data() ?? {};
+  if (reused && finalData.originalUpload?.sourceSha256 !== sourceSha256) {
+    throw new HttpsError('failed-precondition', 'Upload request was already used for a different file.');
+  }
+  return { script: scriptPayload(finalData, ref.id, true), reused };
 });
 
 export const updateWriterScript = onCall({ region: REGION }, async (request) => {
@@ -9088,8 +9115,13 @@ export const adminListScripts = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('scripts').limit(1000).get();
   return {
-    scripts: snapshot.docs.map((doc) => scriptPayload(doc.data(), doc.id, false))
-      .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))),
+    // Review provenance is admin-only. Do not return these identifiers to
+    // Writers or to the public marketplace; never include protected source.
+    scripts: snapshot.docs.map((doc) => ({
+      ...scriptPayload(doc.data(), doc.id, false),
+      reviewedAt: toIso(doc.data().reviewedAt),
+      reviewedBy: cleanText(doc.data().reviewedBy, 160) || null,
+    })).sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))),
   };
 });
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileKey2, Save, ShieldCheck } from 'lucide-react';
 import { nightjarScripts } from '../platform/firebase-scripts';
 import ContextHelp from './ContextHelp';
@@ -50,6 +50,8 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
   const [askingPriceDraft, setAskingPriceDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const operationInFlight = useRef(false);
+  const [operationFeedback, setOperationFeedback] = useState('');
 
   useEffect(() => {
     setRights({ ...defaultRights, ...(script?.rights ?? {}), aiTrainingAllowed: false });
@@ -68,14 +70,24 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
     return Number.isSafeInteger(pence) && pence >= 100 && pence <= 10000000 ? pence : undefined;
   };
   const save = async (listApproved = false) => {
-    if (!script?.id || saving || submitting) return;
+    if (!script?.id || operationInFlight.current) return;
+    operationInFlight.current = true;
+    setOperationFeedback(listApproved ? 'Updating your approved listing… Please do not tap again.' : 'Saving licensing details securely… Please do not tap again.');
     const askingPrice = parseWriterPrice();
-    if (askingPrice === undefined) { notify('Enter a valid asking price between £1 and £100,000, or leave the field blank.'); return; }
+    if (askingPrice === undefined) {
+      operationInFlight.current = false;
+      setOperationFeedback('Check the asking price and try again.');
+      notify('Enter a valid asking price between £1 and £100,000, or leave the field blank.'); return;
+    }
     if (listApproved && !['Approved','Published'].includes(String(script.status ?? ''))) {
+      operationInFlight.current = false;
+      setOperationFeedback('This manuscript is not approved for listing.');
       notify('NightJar must approve your manuscript before you list it for creators.');
       return;
     }
     if (listApproved && (!String(marketplace.synopsis ?? '').trim() || rights.ownershipAttested !== true || rights.contributorPermissionsConfirmed !== true)) {
+      operationInFlight.current = false;
+      setOperationFeedback('Add the required listing information before retrying.');
       notify('Add a public synopsis and confirm ownership and contributor permissions before listing for creators.');
       return;
     }
@@ -92,20 +104,24 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       if (simulationMode) {
         onUpdated({ ...script, rights: { ...rights, aiTrainingAllowed: false }, marketplace: nextMarketplace });
         notify(listApproved ? 'Simulation: approved manuscript listed for creators.' : 'Simulation: rights and listing controls updated locally.');
+        setOperationFeedback('Simulation only: licensing details updated locally.');
       } else {
         const data = await nightjarScripts.updateRights(script.id, { ...rights, aiTrainingAllowed: false }, nextMarketplace);
         onUpdated(data.script ?? script);
         notify(listApproved ? 'Approved manuscript listed. Only the Writer-selected synopsis is public; the full manuscript remains protected.' : 'Rights and listing controls saved.');
+        setOperationFeedback(listApproved ? 'Listing saved successfully.' : 'Licensing details saved successfully.');
       }
     } catch {
+      setOperationFeedback('Save not confirmed. Check your current settings before retrying.');
       notify('Rights and listing controls could not be saved.');
     } finally {
+      operationInFlight.current = false;
       setSaving(false);
     }
   };
 
   const submitForNightJarReview = async () => {
-    if (!script?.id || saving || submitting) return;
+    if (!script?.id || operationInFlight.current) return;
     const askingPrice = parseWriterPrice();
     if (askingPrice === undefined) { notify('Enter a valid asking price between £1 and £100,000, or leave the field blank.'); return; }
     if (!['Draft', 'Revision requested', 'Rejected'].includes(String(script.status ?? 'Draft'))) {
@@ -121,7 +137,9 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       notify('Write or upload a manuscript before submitting it for review.');
       return;
     }
+    operationInFlight.current = true;
     setSubmitting(true);
+    setOperationFeedback('Submitting securely… Confirming rights, saving the manuscript and requesting NightJar review. Please do not tap again.'); 
     try {
       const listing = {
         ...marketplace,
@@ -132,17 +150,24 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       if (simulationMode) {
         onUpdated({ ...script, status: 'Submitted', rights: { ...rights, aiTrainingAllowed: false }, marketplace: listing });
         notify('Simulation: protected manuscript submitted directly for NightJar approval.');
+        setOperationFeedback('Simulation: manuscript moved to Awaiting review.');
       } else {
         // Save the latest in-panel rights before the canonical Writer Studio
         // submission handler persists edited manuscript text and submits it.
         // The server must return status Submitted before we show success.
         await nightjarScripts.updateRights(script.id, { ...rights, aiTrainingAllowed: false }, listing);
         const confirmed = await submitManuscript();
-        if (!confirmed) return;
+        if (!confirmed) {
+          setOperationFeedback('Submission not confirmed. Refresh the manuscript status before retrying.');
+          return;
+        }
+        setOperationFeedback('Submission confirmed · Awaiting NightJar administrator review. No further tap needed.');
       }
     } catch (error) {
+      setOperationFeedback('Submission not confirmed. Check manuscript status before retrying.');
       notify(error instanceof Error ? error.message : 'Submission could not be completed. Your private draft remains available.');
     } finally {
+      operationInFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -169,6 +194,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
           <Save size={15}/>{saving ? 'Listing…' : 'List approved script for creators'}
         </button>}
       <small>Editor involvement is optional. NightJar cannot publish a full manuscript through this listing control.</small>
+      {operationFeedback && <p role="status" aria-live="polite" className="nj-writer-operation-feedback">{operationFeedback}</p>}
     </div>
 
     <section className="nj-writer-essential-steps" aria-label="Required steps before manuscript submission">
@@ -200,7 +226,7 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
         <button type="button" className="primary-button"
           disabled={saving || submitting || !Boolean(String(script.content??'').trim()||script.sourceFile?.fileName) || !rights.ownershipAttested || !rights.contributorPermissionsConfirmed}
           onClick={()=>void submitForNightJarReview()}>
-          <ShieldCheck size={15}/>{submitting?'Submitting securely…':'Submit privately for NightJar review'}
+          <ShieldCheck size={15}/>{submitting?'Submitting… Please wait':'Submit privately for NightJar review'}
         </button>
         <p>{Boolean(String(script.content??'').trim()||script.sourceFile?.fileName) && rights.ownershipAttested && rights.contributorPermissionsConfirmed
           ? 'All three essentials are ready. An administrator will review your script before anything can be published.'
@@ -236,6 +262,6 @@ export default function WriterRightsPanel({ script, onUpdated, submitManuscript,
       </div>
     </details>
 
-    <button className="primary-button" disabled={saving} onClick={() => void save()}><Save size={14}/> {saving ? 'Saving…' : 'Save rights & listing'}</button>
+    <button className="primary-button" disabled={saving || submitting} onClick={() => void save()}><Save size={14}/> {saving ? 'Saving… Please wait' : 'Save rights & listing'}</button>
   </section>;
 }

@@ -16,6 +16,10 @@
 .nj-writer-manuscript-card>strong{overflow-wrap:anywhere;line-height:1.3;font-size:1.1rem;min-width:0}
 .nj-writer-manuscript-card-bottom{align-items:end;flex-wrap:wrap}
 .nj-writer-manuscript-card-bottom small{color:#cfc2b6;line-height:1.4}
+.nj-writer-manuscript-meta{display:grid;gap:4px;min-width:0;flex:1 1 160px}
+.nj-writer-manuscript-meta .nj-writer-reference{overflow-wrap:anywhere;color:#e7ca9d;font-size:.74rem}
+.nj-writer-duplicate-help{margin:0;padding:12px 14px;border:1px solid #846a4b;border-radius:12px;background:#292119;color:#f2dac0;line-height:1.5}
+
 .nj-writer-open-label{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;color:#f5cf99;font-weight:720;font-size:.91rem}
 .nj-writer-manuscript-status{border-radius:99px;padding:6px 10px;line-height:1.3;font-weight:750;font-size:.79rem;white-space:normal;text-align:right}
 .nj-writer-manuscript-status.is-draft{color:#f2d8ad;background:#55412d}

@@ -1,17 +1,19 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { firebaseApp } from './firebase-auth';
 import { repairMojibakeDisplayData } from './text-integrity';
+import { pendingPrivateCreateId, clearPrivateCreateId } from './client-create-idempotency';
 
 const functions = getFunctions(firebaseApp, 'europe-west2');
 
 const listWriterCall = httpsCallable<void, { scripts: any[] }>(functions, 'listWriterScripts');
-const createWriterCall = httpsCallable<{ title: string; content?: string }, { script: any }>(functions, 'createWriterScript');
+const createWriterCall = httpsCallable<{ title: string; content?: string; clientRequestId?: string }, { script: any; reused?: boolean }>(functions, 'createWriterScript');
 const uploadWriterScriptCall = httpsCallable<{
   title?: string;
   fileName: string;
   contentType?: string;
   dataUrl: string;
-}, { script: any }>(functions, 'uploadWriterScriptFile');
+  clientRequestId?: string;
+}, { script: any; reused?: boolean }>(functions, 'uploadWriterScriptFile');
 const updateWriterCall = httpsCallable<Record<string, unknown>, { script: any }>(functions, 'updateWriterScript');
 const deleteWriterCall = httpsCallable<{ scriptId: string }, { deleted: boolean }>(functions, 'deleteWriterScript');
 const versionCall = httpsCallable<{ scriptId: string }, { script: any; version: number }>(functions, 'createWriterScriptVersion');
@@ -39,11 +41,19 @@ export const nightjarScripts = {
   },
 
   async create(title: string, content = '') {
-    return (await createWriterCall({ title, content })).data;
+    const requestId = pendingPrivateCreateId('writer-draft');
+    const result = (await createWriterCall({ title, content, clientRequestId: requestId })).data;
+    clearPrivateCreateId('writer-draft', requestId);
+    return result;
   },
 
-  async upload(input: { title?: string; fileName: string; contentType?: string; dataUrl: string }) {
-    return (await uploadWriterScriptCall(input)).data;
+  async upload(input: { title?: string; fileName: string; contentType?: string; dataUrl: string }, fingerprint: string) {
+    // Fingerprint scopes the retry receipt to the selected file, without
+    // persisting its name or bytes in local storage.
+    const requestId = pendingPrivateCreateId('writer-upload', fingerprint);
+    const result = (await uploadWriterScriptCall({ ...input, clientRequestId: requestId })).data;
+    clearPrivateCreateId('writer-upload', requestId, fingerprint);
+    return result;
   },
 
   async update(scriptId: string, input: Record<string, unknown>) {

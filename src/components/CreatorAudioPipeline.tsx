@@ -114,6 +114,9 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [audioTransferInterrupted,setAudioTransferInterrupted] = useState(false);
   const [audioFeedback, setAudioFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
+  const audioUploadInFlightRef = useRef(false);
+  const artworkUploadInFlightRef = useRef(false);
   const [removing, setRemoving] = useState(false);
   const [submissionConfirmed, setSubmissionConfirmed] = useState(false);
   const handledFocus = useRef<string | null>(null);
@@ -581,6 +584,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   };
 
   const uploadAsset = async (file: File, kind: 'audio' | 'artwork') => {
+    const inFlight = kind === 'audio' ? audioUploadInFlightRef : artworkUploadInFlightRef;
+    if (inFlight.current || submitInFlightRef.current) return;
     if(kind === 'audio' && current?.audioCleanupPending) return notify('Finish the previous private audio cleanup before starting another transfer.');
     const max = kind === 'audio' ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > max) return notify(kind === 'audio' ? 'Audio must be 25 MB or smaller.' : 'Artwork must be 5 MB or smaller.');
@@ -591,6 +596,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     }
     if (kind === 'artwork' && !allowedImage.includes(file.type)) return notify('Use PNG, JPG or WebP artwork.');
     if (!current?.id) return notify('Create the release draft before uploading its assets.');
+    inFlight.current = true;
 
     if (kind === 'audio') {
       setAudioBusy(true);
@@ -659,7 +665,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
         ? (detail || 'Audio upload failed. Please try again or contact Nightjar support.')
         : 'Artwork upload failed.');
     }
-    finally { if (kind === 'audio') setAudioBusy(false); else setArtBusy(false); }
+    finally { inFlight.current = false; if (kind === 'audio') setAudioBusy(false); else setArtBusy(false); }
   };
 
   const removeArtwork = async () => {
@@ -756,9 +762,10 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   };
 
   const submit = async () => {
-    if (!current?.id) return;
+    if (submitInFlightRef.current || !current?.id) return;
     if (!complete) return notify('Complete required release details and rights declarations. If you supplied a transcript or special label, confirm its accuracy.');
     if (!canPublish || accountStatus === 'pending_review') return notify('Creator publishing stays locked until your account is approved.');
+    submitInFlightRef.current = true;
     setSubmitting(true);
     try {
       if (simulationMode) {
@@ -788,7 +795,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       notify('Submission confirmed! Your recording is now awaiting Nightjar review.');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Release could not be submitted for moderation.');
-    } finally { setSubmitting(false); }
+    } finally { submitInFlightRef.current = false; setSubmitting(false); }
   };
 
   return <article className="creator-pipeline-card panel-card">
@@ -815,7 +822,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
             </select>
             <small>Optional audio-only behind-the-scenes extra. Upload it as a normal release; rights checks and NightJar moderation still apply. Video is not enabled.</small>
           </label>
-          <button className="primary-button" disabled={creatingDraft || !canPublish || accountStatus === 'pending_review'} onClick={() => void createDraft()}><UploadCloud size={14} /> {creatingDraft ? 'Creating private draft…' : accountStatus === 'pending_review' ? 'Approval required' : 'Create & upload'}</button>
+          <button className="primary-button" disabled={creatingDraft || !canPublish || accountStatus === 'pending_review'} aria-busy={creatingDraft} onClick={() => void createDraft()}><UploadCloud size={14} /> {creatingDraft ? 'Creating private draft… Please wait' : accountStatus === 'pending_review' ? 'Approval required' : 'Create & upload'}</button>
+          {creatingDraft && <p role="status" aria-live="polite" className="nj-upload-action-feedback">Creating and confirming one private draft. Please do not tap again.</p>}
         </div>
       </aside>
 
@@ -1098,7 +1106,8 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
               {incompleteChecks.length > 0 && <p role="status"><strong>{incompleteChecks.length} item{incompleteChecks.length === 1 ? '' : 's'} to finish.</strong> Nothing has been submitted. Select Fix beside a missing item.</p>}
               {incompleteChecks.length === 0 && <p role="status">Everything required is ready. Submission does not publish your recording; an administrator must approve it first.</p>}
               <button type="button" className="secondary-button" onClick={() => openDetails()}>← Edit release</button>
-              <button type="button" className="primary-button" disabled={!complete || audioBusy || submitting || !canPublish || accountStatus === 'pending_review'} onClick={() => void submit()}><Send size={16}/> {submitting ? 'Sending to moderators…' : 'Submit for Review'}</button>
+              <button type="button" className="primary-button" disabled={!complete || audioBusy || submitting || !canPublish || accountStatus === 'pending_review'} aria-busy={submitting} onClick={() => void submit()}><Send size={16}/> {submitting ? 'Submitting… Please wait' : 'Submit for Review'}</button>
+              {submitting && <p role="status" aria-live="polite" className="nj-upload-action-feedback">Saving your release and confirming it reached NightJar moderation. Do not submit it twice or navigate away.</p>}
             </div>}
           </section>}
           {current.status === 'draft' && !simulationMode && <div className="nj-cloud-profile-draft" role="status" aria-live="polite">

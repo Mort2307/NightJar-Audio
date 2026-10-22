@@ -18,6 +18,13 @@ type Props = {
 };
 
 const pendingStatus = (status: unknown) => ['Submitted', 'Under review'].includes(String(status ?? ''));
+const readableDate = (raw: unknown) => {
+  if (!raw) return 'Not recorded';
+  const date = new Date(String(raw));
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat('en-GB', { dateStyle:'medium', timeStyle:'short' }).format(date)
+    : 'Not recorded';
+};
 const readableError = (error: unknown) =>
   error instanceof Error ? error.message : 'Could not complete this request. Please retry.';
 
@@ -137,6 +144,7 @@ export default function AdminManuscriptReview({
       : <div className="manuscript-review-list">{visibleRows.map((item) =>
         <article className={'manuscript-review-item' + (selectedId === item.id ? ' selected' : '')} key={item.id}>
           <div><strong>{item.title || 'Untitled manuscript'}</strong><span>{item.status} · version {item.version ?? 1} · {item.marketplace?.visibility === 'marketplace' ? 'Marketplace requested' : 'Private / other visibility'}</span>
+          <small>Created: {readableDate(item.createdAt)} · Record: {item.id}</small>
           {item.lastEditorialComment && <small>Previous note: {item.lastEditorialComment}</small>}</div>
           <button className="secondary-button" aria-expanded={selectedId === item.id} onClick={() => { if (selectedId === item.id) { setSelectedId(null); setViewerOpen(false); } else { setSelectedId(item.id); void openPreview(item); } }}>{selectedId === item.id ? 'Close' : pendingStatus(item.status) ? 'Review manuscript' : 'View record'} <ArrowRight size={14}/></button>
         </article>)}</div>}
@@ -150,6 +158,15 @@ export default function AdminManuscriptReview({
         <div><span className="mini-label">{isPending ? 'AWAITING A DECISION' : 'MANUSCRIPT RECORD'}</span><h3>{selected.title}</h3><p>{selected.status} · {marketplaceRequested ? 'Writer requested marketplace publication' : 'Writer has not selected marketplace visibility'}</p></div>
         <div className="manuscript-review-heading-actions"><button className="primary-button" disabled={previewBusy} onClick={() => preview ? setViewerOpen(true) : void openPreview(selected)}><LockKeyhole size={15}/>{previewBusy ? 'Opening…' : 'Open read-only viewer'}</button>{selected.writerUserId&&onMessageWriter&&<button type="button" className="secondary-button" onClick={()=>onMessageWriter(String(selected.writerUserId))}><MessageCircle size={15}/> Direct message Writer</button>}</div>
       </div>
+      <div className="manuscript-review-provenance" aria-label="Admin-only manuscript audit metadata">
+        <strong>Record provenance · administrator only</strong>
+        <span>Record ID: <code>{selected.id}</code></span>
+        <span>Uploaded/created: {readableDate(selected.createdAt)} · Submitted: {readableDate(selected.submittedAt)}</span>
+        <span>Recorded approval/decision: {readableDate(selected.reviewedAt)} · Reviewer ID: {selected.reviewedBy || 'Not recorded'}</span>
+        <span>Source file: {selected.sourceFile?.fileName || 'Not recorded'}</span>
+        <small>Compare the review conversation and decision event before classifying a record as genuinely approved. This panel is read-only.</small>
+      </div>
+      {['Approved', 'Published'].includes(String(selected.status)) && !selected.reviewedAt && <p className="manuscript-review-caution">This record is marked approved without a recorded review timestamp. It may be historical data; inspect its review conversation and audit history before correcting anything.</p>}
       <div className="manuscript-review-facts">
         <span><ShieldCheck size={15}/> Rights confirmations: <ContextHelp topic="rights-confirmation"/> <strong>{rightsReady ? 'Confirmed' : 'Incomplete'}</strong></span>
         <span><BookOpen size={15}/> Marketplace synopsis: <ContextHelp topic="public-synopsis"/> <strong>{synopsisStatus}</strong></span>

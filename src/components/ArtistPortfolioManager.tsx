@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, LoaderCircle, Trash2, ChevronDown } from 'lucide-react';
 import { nightjarArtists, type ArtistPortfolioItem } from '../platform/firebase-artists';
 import { nightjarMedia } from '../platform/firebase-media';
@@ -33,6 +33,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const submitInFlightRef = useRef(false);
+  const [submissionFeedback, setSubmissionFeedback] = useState('');
   const [retryItemId, setRetryItemId] = useState<string | null>(null);
   const [fileInputNonce, setFileInputNonce] = useState(0);
   const [draftClearSignal, setDraftClearSignal] = useState(0);
@@ -55,6 +57,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
   useEffect(() => { void load(); }, [demoMode]);
 
   const submit = async () => {
+    if (submitInFlightRef.current) return;
     if (!title.trim()) return notify('Give the artwork a title first.');
     if (!file) return notify('Choose the artwork image you want to submit.');
     if (!humanCreated) return notify('Confirm that this is your own human-created artwork before submitting.');
@@ -77,7 +80,9 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       return;
     }
 
+    submitInFlightRef.current = true;
     setBusy(true);
+    setSubmissionFeedback('Creating or recovering your private artwork record… Please do not tap again.');
     try {
       // Retry with the existing account-owned private item. A lost response to
       // submitImage can still mean the image is already awaiting moderation.
@@ -121,6 +126,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         }
         setRetryItemId(itemId);
       }
+      setSubmissionFeedback('Preparing artwork and uploading privately… Keep NightJar open.');
       const dataUrl = await readFileDataUrl(file);
       await nightjarMedia.submitImage({
         kind:'artist_portfolio',
@@ -129,6 +135,7 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
         contentType:file.type,
         fileName:file.name,
       });
+      setSubmissionFeedback('Artwork received. Confirming the moderation record…');
       setRetryItemId(null);
       setDraftClearSignal(value => value + 1);
       setTitle('');setDescription('');setTags('');setCommissionType('');setFile(null);setFileInputNonce(value => value + 1);
@@ -136,10 +143,13 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       await load();
       setFormOpen(false);
       notify('Artwork submitted. It stays private until an administrator approves the image.');
+      setSubmissionFeedback('Submitted successfully · Awaiting artwork moderation. No repeat submission needed.');
     } catch {
+      setSubmissionFeedback('Upload not confirmed. Check the private portfolio before retrying.');
       await load();
       notify('Upload could not be confirmed. If the private draft appears below, choose Resume image upload rather than creating another piece.');
     } finally {
+      submitInFlightRef.current = false;
       setBusy(false);
     }
   };
@@ -195,7 +205,8 @@ export default function ArtistPortfolioManager({ notify, demoMode = false }: Pro
       <label className="nightjar-anonymous-toggle artist-form-wide"><input type="checkbox" checked={humanCreated} onChange={(e)=>setHumanCreated(e.target.checked)}/><span>I confirm this is my own human-created artwork and is not AI-generated.</span></label>
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={rightsConfirmed} onChange={(e)=>setRightsConfirmed(e.target.checked)}/><span>I own or control the rights needed to display this artwork publicly on Nightjar.</span></label>
       <label className="rights-check artist-form-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have any required client, subject, model or collaborator permission for this public portfolio use.</span></label>
-      <button className="primary-button artist-form-wide" disabled={busy || !humanCreated || !rightsConfirmed || !permissionsConfirmed} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Submitting…</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
+      <button className="primary-button artist-form-wide" disabled={busy || !humanCreated || !rightsConfirmed || !permissionsConfirmed} aria-busy={busy} onClick={()=>void submit()}>{busy?<><LoaderCircle size={15}/> Uploading… Please wait</>:<><ImagePlus size={15}/> Submit for moderation</>}</button>
+      {submissionFeedback && <p className="nj-upload-action-feedback artist-form-wide" role="status" aria-live="polite">{submissionFeedback}</p>}
     </div>}
 
     <div className="nj-artist-portfolio-summary"><strong>{items.length} artwork piece{items.length===1?'':'s'}</strong><span>{items.filter(item=>item.status==='published').length} public · {items.filter(item=>item.status!=='published').length} private or awaiting review</span></div>
