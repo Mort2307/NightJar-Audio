@@ -767,6 +767,9 @@ function App() {
   const [writerPermissions, setWriterPermissions] = useState<any[]>([]);
   const [writerPermissionsLoading, setWriterPermissionsLoading] = useState(false);
   const [writerUploadBusy, setWriterUploadBusy] = useState(false);
+  const [writerCreateBusy, setWriterCreateBusy] = useState(false);
+  const writerCreateInFlightRef = useRef(false);
+  const writerUploadInFlightRef = useRef(false);
   const diditRecoveryLock=useRef(false);
   const diditLastSafeCheck=useRef(0);
 
@@ -4411,8 +4414,11 @@ function App() {
   };
 
   const createWriterDraft = async () => {
+    if (writerCreateInFlightRef.current || writerUploadInFlightRef.current) return;
     const title = writerDraftTitle.trim();
     if (!title) return notify('Give the script a working title first.');
+    writerCreateInFlightRef.current = true;
+    setWriterCreateBusy(true);
     try {
       if (simulationMode) {
         const next = {
@@ -4434,13 +4440,17 @@ function App() {
       await loadWriterScripts();
       setWriterSelected(newScript ?? null);
       if (data.script?.id) await loadWriterPermissions(data.script.id);
-      notify('Draft created.');
+      notify(data.reused ? 'Recovered your existing draft after an interrupted request.' : 'Draft created.');
     } catch {
-      notify('The script could not be created.');
+      notify('Draft not confirmed. Check My manuscripts before retrying; your work may already be saved.');
+    } finally {
+      writerCreateInFlightRef.current = false;
+      setWriterCreateBusy(false);
     }
   };
 
   const uploadWriterScript = async (file: File) => {
+    if (writerUploadInFlightRef.current || writerCreateInFlightRef.current) return;
     const extension = file.name.toLowerCase().split('.').pop() ?? '';
     const allowed = new Set(['txt','md','markdown','rtf','doc','docx','pdf']);
     if (!allowed.has(extension)) {
@@ -4454,6 +4464,7 @@ function App() {
 
     const titleFromFile = file.name.replace(/\.[^.]+$/, '').trim() || 'Untitled manuscript';
     const title = writerDraftTitle.trim() || titleFromFile;
+    writerUploadInFlightRef.current = true;
     setWriterUploadBusy(true);
 
     try {
@@ -4484,22 +4495,31 @@ function App() {
         return;
       }
 
+      // A privacy-safe, file-scoped retry key; filename and manuscript bytes
+      // are never persisted in the local retry receipt.
+      const fingerprintBuffer = await crypto.subtle.digest('SHA-256',
+        new TextEncoder().encode([file.name, file.size, file.lastModified].join(':')));
+      const fingerprint = Array.from(new Uint8Array(fingerprintBuffer),
+        byte => byte.toString(16).padStart(2, '0')).join('');
       const dataUrl = await readFileDataUrl(file);
       const data = await nightjarScripts.upload({
         title,
         fileName:file.name,
         contentType:file.type,
         dataUrl,
-      });
+      }, fingerprint);
       const newScript = await attachNewWriterArtwork(data.script);
       setWriterDraftTitle('');
       await loadWriterScripts();
       setWriterSelected(newScript ?? null);
       if (data.script?.id) await loadWriterPermissions(data.script.id);
-      notify('Manuscript uploaded privately. Set rights and marketplace listing details before sending it for administrator review.');
+      notify(data.reused
+        ? 'Existing manuscript recovered from the interrupted upload. No second copy was created.'
+        : 'Manuscript uploaded as one private Draft. Confirm rights, then submit for administrator review.');
     } catch {
-      notify('The manuscript could not be uploaded.');
+      notify('Upload not confirmed. Check My manuscripts before retrying the same file.');
     } finally {
+      writerUploadInFlightRef.current = false;
       setWriterUploadBusy(false);
     }
   };
@@ -6065,7 +6085,7 @@ function App() {
                 <div className="writer-create-form">
                   <label className="nj-writer-create-label" htmlFor="nj-writer-draft-title">Working title <small>(optional for uploads)</small></label>
                   <input id="nj-writer-draft-title" value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title · optional for uploads"/>
-                  <button className="primary-button" onClick={()=>void createWriterDraft()}>Create draft <FileText size={15}/></button>
+                  <button className="primary-button" disabled={writerCreateBusy || writerUploadBusy} onClick={()=>void createWriterDraft()}>{writerCreateBusy ? 'Creating draft…' : 'Create draft'} <FileText size={15}/></button>
                 </div>
                 <div className="writer-upload-row">
                   <span className="writer-create-or">OR</span>
@@ -6074,7 +6094,7 @@ function App() {
                     <input
                       type="file"
                       accept=".txt,.md,.markdown,.rtf,.doc,.docx,.pdf,text/plain,text/markdown,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
-                      disabled={writerUploadBusy}
+                      disabled={writerUploadBusy || writerCreateBusy}
                       onChange={(event)=>{
                         const file=event.target.files?.[0];
                         event.currentTarget.value='';
