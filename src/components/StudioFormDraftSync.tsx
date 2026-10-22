@@ -159,7 +159,10 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
       try {
         const pending = request.current;
         if (pending) await pending;
-        if (!sessionValid(generation)) return;
+        // A concurrent edit may have rejected the pending CAS write. Clearing
+        // using its returned remote revision would erase the other device's
+        // draft, so preserve that conflict until the member resolves it.
+        if (!sessionValid(generation) || conflict.current) return;
         // Never delete a newer device's edits after this device submits.
         const result = await nightjarProfileDrafts.clear(scope, revision.current);
         if (!sessionValid(generation)) return;
