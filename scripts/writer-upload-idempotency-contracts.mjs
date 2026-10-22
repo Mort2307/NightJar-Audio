@@ -51,6 +51,10 @@ assert.match(app,/Doing both creates two separate manuscripts/);
 assert.match(app,/A manuscript with this title already exists/);
 assert.match(app,/Upload script creates a NEW manuscript/);
 assert.match(grid,/key=\{script\.id\}/,'no unsafe title-only hiding or deletion of existing manuscripts');
+assert.match(grid,/duplicateTitles/);
+assert.match(grid,/Support ref: \{script\.id\}/);
+assert.match(grid,/createdAt\?: string/);
+assert.match(grid,/Added '/);
 assert.match(hosting,/\[nightjar-writer-upload-idempotency-release\]/);
 assert.match(hosting,/createWriterScript,uploadWriterScriptFile/);
 
