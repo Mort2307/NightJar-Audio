@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileAudio, LoaderCircle, Send, ShieldCheck, Trash2, UploadCloud } from 'lucide-react';
 import { nightjarEditorPortfolio, type EditorPortfolioItem } from '../platform/firebase-editor-portfolio';
 import { nightjarAudioFileProblem } from '../platform/audio-upload';
@@ -20,6 +20,8 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
   const [permissionsConfirmed, setPermissionsConfirmed] = useState(false);
   const [permissionNote, setPermissionNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const submissionInFlightRef = useRef(false);
+  const [submissionFeedback, setSubmissionFeedback] = useState('');
   const [retryItemId, setRetryItemId] = useState<string | null>(null);
   const [fileInputNonce, setFileInputNonce] = useState(0);
   const [draftClearSignal, setDraftClearSignal] = useState(0);
@@ -40,12 +42,15 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
   useEffect(() => { void load(); }, [demoMode]);
 
   const create = async () => {
+    if (submissionInFlightRef.current) return;
     if (!title.trim()) return notify('Give the showcase item a title.');
     const audioProblem = (afterFile ? nightjarAudioFileProblem(afterFile, 20) : null)
       || (beforeFile ? nightjarAudioFileProblem(beforeFile, 20) : null);
     if (audioProblem) return notify(audioProblem);
     if (!rightsConfirmed || !permissionsConfirmed) return notify('Confirm your rights and contributor/client permission first.');
+    submissionInFlightRef.current = true;
     setBusy(true);
+    setSubmissionFeedback('Preparing your private showcase and checking saved work… Please do not tap again.');
     try {
       if (demoMode) {
         notify('Simulation: Editor showcase created locally and sent to moderation.');
@@ -99,11 +104,14 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       // The server remains authoritative about which private slot is attached.
       // Never reupload an already-confirmed slot after a lost response.
       if (beforeFile && !existing?.beforeAudioAvailable) {
+        setSubmissionFeedback('Uploading optional before-audio privately… Please wait.');
         await nightjarEditorPortfolio.upload(itemId,'before',beforeFile);
       }
       if (afterFile && !existing?.afterAudioAvailable) {
+        setSubmissionFeedback('Uploading finished audio privately… Please wait.');
         await nightjarEditorPortfolio.upload(itemId,'after',afterFile);
       }
+      setSubmissionFeedback('Audio received. Confirming moderation submission…');
       await nightjarEditorPortfolio.submit(itemId);
       setRetryItemId(null);
       setDraftClearSignal(value => value + 1);
@@ -112,16 +120,20 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       setRightsConfirmed(false);setPermissionsConfirmed(false);setPermissionNote('');
       await load();
       notify('Editor showcase submitted for moderation.');
+      setSubmissionFeedback('Submission confirmed · Awaiting moderation. No further tap needed.');
     } catch (error) {
+      setSubmissionFeedback('Submission not confirmed. Check your existing showcase before retrying.');
       await load();
       const detail = error instanceof Error ? error.message : '';
       notify((detail ? detail + ' ' : '') + 'If a private draft is listed below, choose Resume upload rather than creating another item.');
-    } finally { setBusy(false); }
+    } finally { submissionInFlightRef.current = false; setBusy(false); }
   };
 
   const submitExisting = async (itemId: string) => {
-    if (demoMode || busy) return;
+    if (demoMode || submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
     setBusy(true);
+    setSubmissionFeedback('Checking the saved showcase and confirming submission… Please wait.');
     try {
       const current = ((await nightjarEditorPortfolio.mine()).items ?? []).find(item => item.id === itemId);
       if (!current) throw new Error('Showcase draft no longer exists.');
@@ -134,10 +146,12 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
         throw new Error('The showcase requires a finished audio sample before submission.');
       }
       await load();
+      setSubmissionFeedback('Showcase status checked. Review the saved item below.');
     } catch {
+      setSubmissionFeedback('Submission not confirmed. Refresh the showcase list before retrying.');
       await load();
       notify('Submission could not be confirmed. Check the private showcase status before trying again.');
-    } finally { setBusy(false); }
+    } finally { submissionInFlightRef.current = false; setBusy(false); }
   };
 
   const remove = async (itemId: string) => {
@@ -190,7 +204,8 @@ export default function EditorShowcaseManager({ notify, demoMode = false }: Prop
       <label className="rights-check editor-showcase-wide"><input type="checkbox" checked={rightsConfirmed} onChange={(e)=>setRightsConfirmed(e.target.checked)}/><span>I own or control the rights needed to upload and publicly showcase these samples.</span></label>
       <label className="rights-check editor-showcase-wide"><input type="checkbox" checked={permissionsConfirmed} onChange={(e)=>setPermissionsConfirmed(e.target.checked)}/><span>I have permission from any client, performer or other contributor whose work/voice appears in the sample.</span></label>
       <div className="rights-ai-lock editor-showcase-wide"><ShieldCheck size={15}/><div><strong>Private until approved</strong><span>Direct storage reads are blocked. Nightjar only exposes approved samples through short-lived signed playback links.</span></div></div>
-      <button className="primary-button editor-showcase-wide" disabled={busy || !rightsConfirmed || !permissionsConfirmed} onClick={()=>void create()}>{busy?<><LoaderCircle size={14}/> Working…</>:<><UploadCloud size={14}/> Upload & submit showcase</>}</button>
+      <button className="primary-button editor-showcase-wide" disabled={busy || !rightsConfirmed || !permissionsConfirmed} aria-busy={busy} onClick={()=>void create()}>{busy?<><LoaderCircle size={14}/> Uploading… Please wait</>:<><UploadCloud size={14}/> Upload & submit showcase</>}</button>
+      {submissionFeedback && <p className="nj-upload-action-feedback editor-showcase-wide" role="status" aria-live="polite">{submissionFeedback}</p>
     </div>
 
     <div className="editor-showcase-list">
