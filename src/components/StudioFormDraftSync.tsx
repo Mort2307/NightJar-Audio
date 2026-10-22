@@ -34,6 +34,7 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
   const request = useRef<Promise<boolean> | null>(null);
   const previousClearSignal = useRef(clearSignal);
   const loaded = useRef(false);
+  const loadSequence = useRef(0);
   // Every async operation belongs to one role/form scope. An old response must
   // never restore fields or start another save after a scope or mode switch.
   const session = useRef({ scope, demoMode, generation: 0 });
@@ -44,6 +45,7 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
     conflict.current = false;
     clearing.current = false;
     loaded.current = false;
+    loadSequence.current += 1;
     request.current = null;
     previousClearSignal.current = clearSignal;
   }
@@ -55,13 +57,16 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
 
   const load = async () => {
     const generation = session.current.generation;
+    // Multiple manual Reconnect attempts must not allow a slower earlier
+    // response to overwrite the latest cloud revision in this same scope.
+    const attempt = ++loadSequence.current;
     if (!sessionValid(generation)) { if (demoMode) setStatus('demo'); return; }
     loaded.current = false;
     setReady(false);
     setStatus('loading');
     try {
       const draft = await nightjarProfileDrafts.get(scope);
-      if (!sessionValid(generation) || clearing.current) return;
+      if (!sessionValid(generation) || attempt !== loadSequence.current || clearing.current) return;
       revision.current = draft.revision;
       const saved = asFields(draft.payload);
       if (draft.payload && !isEmpty(current.current) && signature(saved) !== signature(current.current)) {
@@ -78,7 +83,7 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
       loaded.current = true;
       setReady(true);
     } catch {
-      if (!sessionValid(generation) || clearing.current) return;
+      if (!sessionValid(generation) || attempt !== loadSequence.current || clearing.current) return;
       setStatus('offline');
       setReady(false);
     }
@@ -148,6 +153,36 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
     const timer = window.setTimeout(() => { void flush(); }, 1000);
     return () => window.clearTimeout(timer);
   }, [serialized, ready, scope, demoMode]);
+
+  // A short debounce avoids a server write per keystroke. When a mobile PWA
+  // is backgrounded, try to flush immediately; before an actual page close,
+  // warn about a draft the server has not yet acknowledged. Browser/PWA
+  // shutdown can still interrupt network traffic, so neither is a guarantee.
+  useEffect(() => {
+    if (demoMode) return;
+    const generation = session.current.generation;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && ready && loaded.current &&
+          sessionValid(generation) && !clearing.current && !conflict.current &&
+          signature(current.current) !== synced.current) {
+        void flush();
+      }
+    };
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!sessionValid(generation) || clearing.current) return;
+      const unsynced = conflict.current || (!loaded.current && !isEmpty(current.current)) ||
+        (loaded.current && signature(current.current) !== synced.current);
+      if (!unsynced) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [scope, demoMode, ready]);
 
   useEffect(() => {
     if (previousClearSignal.current === clearSignal || demoMode) return;
