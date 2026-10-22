@@ -11792,3 +11792,8 @@ textarea:focus-visible,
 .nj-header-inbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-soft);border-radius:11px;background:transparent;color:var(--ivory);padding:8px;min-height:42px;font:inherit;cursor:pointer}
 .nj-header-inbox em{font-style:normal;border-radius:99px;background:var(--plum-soft);color:#191217;padding:2px 5px;font-size:11px;font-weight:700}
 @media(max-width:740px){.nj-header-inbox span{display:none}.nj-header-inbox{padding:8px}.notification-popover{max-height:calc(100dvh - 170px)}}
+
+/* Ensure the notifications overlay is opaque and never exposes page copy beneath it. */
+.notification-popover{background:#100e11;backdrop-filter:none}
+.nj-writer-card-open>strong{overflow-wrap:anywhere;line-height:1.3;font-size:1.1rem;min-width:0}
+@media(max-width:520px){.top-actions .nj-header-inbox{display:none} /* Mobile Admin Inbox lives in the bottom dock. */}
