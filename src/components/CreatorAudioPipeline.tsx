@@ -743,6 +743,7 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
     } catch (error) {
       await onRefresh().catch(() => {});
       notify(error instanceof Error ? error.message : 'Removal could not be completed. Please retry.');
+      throw error; // The two-stage confirmation stays visible if removal fails.
     } finally { setRemoving(false); }
   };
 
