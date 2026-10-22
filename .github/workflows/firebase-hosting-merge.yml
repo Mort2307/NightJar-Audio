@@ -442,7 +442,7 @@ jobs:
           START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
             -f ref=main -f 'inputs[scope]=functions:selected' \
-            -f 'inputs[function_names]=createWriterScript,uploadWriterScriptFile' \
+            -f 'inputs[function_names]=createWriterScript,uploadWriterScriptFile,adminListScripts' \
             -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
           RUN_ID=""
           for attempt in $(seq 1 48); do
