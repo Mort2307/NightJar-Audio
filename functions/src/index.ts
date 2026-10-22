@@ -5838,6 +5838,40 @@ const releaseSearchText = (data: Record<string, unknown>) => [
   ...normaliseReleaseContributors(data.contributors).flatMap((item) => [item.name, item.role]),
 ].filter(Boolean).join(' ').toLowerCase();
 
+// The linked extra remains private if its parent is withdrawn, replaced or
+// deleted. Studio Note ownership is inherited only from its declared creator.
+const studioNoteParentIsPublished = (note:Record<string,unknown>, parent?:Record<string,unknown>) =>
+  !note.studioNoteForReleaseId || Boolean(parent &&
+    parent.status === 'released' &&
+    parent.creatorUserId === note.creatorUserId &&
+    !parent.studioNoteForReleaseId);
+
+const hasPublishedStudioNoteParent = async (data:Record<string,unknown>):Promise<boolean> => {
+  const parentId = cleanText(data.studioNoteForReleaseId,160);
+  if (!parentId) return true;
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(parentId)) return false;
+  const parent = (await releaseRef(parentId).get()).data();
+  return studioNoteParentIsPublished(data,parent);
+};
+
+// Release discovery must not expose orphaned extras in catalogue, trending,
+// or recommendations. Reuse the already-fetched parents; fetch only missing
+// parent records, not one Firestore read for every ordinary main release.
+const visiblePublishedStudioNoteDocs = async <T extends {id:string;data:()=>Record<string,any>}>(docs:T[]):Promise<T[]> => {
+  const byId = new Map(docs.map(doc => [doc.id,doc.data()] as const));
+  const parents = [...new Set(docs.map(doc => cleanText(doc.data().studioNoteForReleaseId,160)).filter(Boolean))];
+  const missing = parents.filter(id => /^[A-Za-z0-9_-]{1,160}$/.test(id) && !byId.has(id));
+  if (missing.length) {
+    const records = await db.getAll(...missing.map(id => releaseRef(id)));
+    for (const record of records) if (record.exists) byId.set(record.id,record.data() ?? {});
+  }
+  return docs.filter(doc => {
+    const item = doc.data();
+    const parentId = cleanText(item.studioNoteForReleaseId,160);
+    return !parentId || studioNoteParentIsPublished(item,byId.get(parentId));
+  });
+};
+
 export const listCatalogue = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -5849,7 +5883,8 @@ export const listCatalogue = onCall({ region: REGION }, async (request) => {
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
   ]);
-  const catalogue = snapshot.docs
+  const visibleDocs = await visiblePublishedStudioNoteDocs(snapshot.docs);
+  const catalogue = visibleDocs
     .filter((doc) => !category || cleanText(doc.data().category, 80).toLowerCase() === category)
     .filter((doc) => !query || releaseSearchText(doc.data()).includes(query))
     .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }));
@@ -6399,7 +6434,8 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
-  if (!data || data.status !== 'released' || !data.audioStoragePath) throw new HttpsError('not-found', 'Playable release not found.');
+  if (!data || data.status !== 'released' || !data.audioStoragePath ||
+      !await hasPublishedStudioNoteParent(data)) throw new HttpsError('not-found', 'Playable release not found.');
 
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const access = playbackAccessFor(data, identity.uid, { admin:identity.admin, subscription });
@@ -6514,7 +6550,10 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
 
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
-  if (!data || ['removed', 'removing'].includes(String(data.status))) throw new HttpsError('not-found', 'Release transcript not found.');
+  if (!data || ['removed', 'removing'].includes(String(data.status)) ||
+      (data.status === 'released' && !await hasPublishedStudioNoteParent(data))) {
+    throw new HttpsError('not-found', 'Release transcript not found.');
+  }
 
   const transcriptText = cleanReleaseTranscript(data.transcriptText);
   if (!transcriptText) throw new HttpsError('not-found', 'This release does not have a transcript yet.');
@@ -7016,7 +7055,21 @@ export const moderateRelease = onCall({ region: REGION }, async (request) => {
   const status: ReleaseStatus = decision === 'approved' ? (scheduled ? 'scheduled' : 'released') : decision === 'changes' ? 'draft' : 'rejected';
   await db.runTransaction(async (transaction) => {
     const latest = await transaction.get(ref);
-    if (latest.data()?.status !== 'pending_review') throw new HttpsError('failed-precondition', 'This submission has already been reviewed or withdrawn.');
+    const latestData = latest.data();
+    if (latestData?.status !== 'pending_review') throw new HttpsError('failed-precondition', 'This submission has already been reviewed or withdrawn.');
+    // Recheck the parent inside the approval transaction, not merely when
+    // the creator first uploaded or submitted the note. Deleting a parent
+    // concurrently causes a safe Firestore transaction retry.
+    if (decision === 'approved' && latestData.studioNoteForReleaseId) {
+      const parentId = cleanText(latestData.studioNoteForReleaseId,160);
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(parentId)) {
+        throw new HttpsError('failed-precondition','The Studio Note parent is no longer published.');
+      }
+      const parent = (await transaction.get(releaseRef(parentId))).data();
+      if (!studioNoteParentIsPublished(latestData,parent)) {
+        throw new HttpsError('failed-precondition','The Studio Note parent is no longer published.');
+      }
+    }
     transaction.set(ref, {
       status,
       moderationNote:note || null,
@@ -7273,7 +7326,8 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
 
   const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
   const following = new Set(followsSnapshot.docs.map((doc) => doc.id));
-  const items = releasesSnapshot.docs.map((doc) => {
+  const visibleDocs = await visiblePublishedStudioNoteDocs(releasesSnapshot.docs);
+  const items = visibleDocs.map((doc) => {
     const data = doc.data();
     const values = [
       data.category, data.genre, data.mood,
@@ -7308,7 +7362,8 @@ export const trendingReleases = onCall({ region: REGION }, async (request) => {
   ]);
   // Trending and creator statistics must use the same qualified-listen
   // definition. Raw progress telemetry must not make a release "popular".
-  const trending = releasesSnapshot.docs
+  const visibleDocs = await visiblePublishedStudioNoteDocs(releasesSnapshot.docs);
+  const trending = visibleDocs
     .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }))
     .sort((a, b) => (b.listenCount - a.listenCount)
       || String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')))
