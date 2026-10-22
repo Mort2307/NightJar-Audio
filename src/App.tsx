@@ -4417,6 +4417,8 @@ function App() {
     if (writerCreateInFlightRef.current || writerUploadInFlightRef.current) return;
     const title = writerDraftTitle.trim();
     if (!title) return notify('Give the script a working title first.');
+    const existing = writerScripts.find((item:any) => String(item.title ?? '').trim().toLowerCase() === title.toLowerCase());
+    if (existing && !window.confirm('A manuscript with this title already exists (' + String(existing.status ?? 'Draft') + '). Creating a draft starts a SECOND record, not another version. Open the existing manuscript from My manuscripts to continue, or OK to create a separate one.')) return;
     writerCreateInFlightRef.current = true;
     setWriterCreateBusy(true);
     try {
@@ -4464,6 +4466,10 @@ function App() {
 
     const titleFromFile = file.name.replace(/\.[^.]+$/, '').trim() || 'Untitled manuscript';
     const title = writerDraftTitle.trim() || titleFromFile;
+    const existing = writerScripts.find((item:any) =>
+      String(item.sourceFile?.fileName ?? '') === file.name ||
+      String(item.title ?? '').trim().toLowerCase() === title.toLowerCase());
+    if (existing && !window.confirm('You already have a manuscript matching this upload (' + String(existing.status ?? 'Draft') + '). Upload script creates a NEW manuscript, not an attachment to the existing record. Open My manuscripts to continue with that one, or OK to create a separate copy.')) return;
     writerUploadInFlightRef.current = true;
     setWriterUploadBusy(true);
 
@@ -6075,7 +6081,7 @@ function App() {
             <div className="writer-create-card">
               <div><span className="mini-label">WRITER QUICK START</span><h2>Start or upload a manuscript</h2>
                 <p><strong>Only three things are required:</strong> (1) write or upload, (2) confirm the two ownership and permission statements, (3) submit privately to NightJar for review. Other fields and marketplace choices can wait.</p>
-                <p role="status">A draft is private. Uploading or saving will never submit or publish it automatically.</p></div>
+                <p role="status">A draft is private. Uploading or saving will never submit or publish it automatically. Choose <strong>either</strong> Create draft (write in NightJar) <strong>or</strong> Upload script (new manuscript from a file). Doing both creates two separate manuscripts. To continue existing work, open it from My manuscripts below.</p></div>
               <div className="writer-create-stack">
                 <div className="nj-writer-create-steps" aria-label="Three-step manuscript process">
                   <span>1 · Write or upload</span>
