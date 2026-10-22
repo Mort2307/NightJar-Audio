@@ -56,7 +56,7 @@ assert.match(grid,/Support ref: \{script\.id\}/);
 assert.match(grid,/createdAt\?: string/);
 assert.match(grid,/Added '/);
 assert.match(hosting,/\[nightjar-writer-upload-idempotency-release\]/);
-assert.match(hosting,/createWriterScript,uploadWriterScriptFile/);
+assert.match(hosting,/createWriterScript,uploadWriterScriptFile,adminListScripts/);
 
 const rightsPanel = source('src/components/WriterRightsPanel.tsx');
 const creator = source('src/components/CreatorAudioPipeline.tsx');
