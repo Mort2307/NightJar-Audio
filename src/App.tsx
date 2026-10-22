@@ -1753,7 +1753,10 @@ function App() {
         (view === 'writer' && perspective !== 'writer') ||
         (view === 'editor' && perspective !== 'editor') ||
         (view === 'artist' && perspective !== 'artist') ||
-        (view === 'messages' && !['creator','writer','editor','artist'].includes(String(perspective))) ||
+        // Administrators are explicitly permitted by both the Messages view
+        // and the Firebase messaging callables. Do not redirect their inbox to Home.
+        (view === 'messages' && !(role === 'admin' && !simulationMode && !liveRolePreview) &&
+          !['creator','writer','editor','artist'].includes(String(perspective))) ||
         (view === 'library' && perspective !== 'listener')) {
       navigate(home);
     }

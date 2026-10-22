@@ -121,7 +121,15 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         await Promise.all([loadConversations(true),loadMessages(id)]);
       }
       onRecipientHandled?.();
-    }catch{notify('Conversation could not be opened.');}
+    }catch(error){
+      const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+      const detail = error instanceof Error ? error.message : '';
+      notify(code.includes('not-found') || /Eligible creative account not found/i.test(detail)
+        ? 'This person cannot receive a private conversation yet. If you are reviewing their manuscript, use its Writer-visible review thread instead.'
+        : code.includes('permission-denied') || /blocked between/i.test(detail)
+          ? 'This conversation is unavailable because of account or messaging permissions.'
+          : 'Conversation could not be opened. Please retry.');
+    }
   };
 
   useEffect(()=>{void loadConversations();void loadDirectory();},[role,demoMode]);
