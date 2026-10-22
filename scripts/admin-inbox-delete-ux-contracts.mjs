@@ -22,6 +22,8 @@ assert.match(app,/ConfirmDeleteAction label="Delete manuscript"/);
 assert.doesNotMatch(app.slice(app.indexOf('const deleteWriterScript = async'),app.indexOf('const submitWriterScript = async')),/window\.confirm/);
 assert.match(creator,/ConfirmDeleteAction iconOnly label="Remove draft"/);
 assert.match(creator,/ConfirmDeleteAction iconOnly label=\{removalPending/);
+assert.match(creator,/pipeline-release-row/,'release library offers individual staged removals');
+assert.match(creator,/onConfirm=\{\(\)=>removeRelease\(release\)\}/,'trash action identifies exact release');
 assert.match(backend,/export const deleteWriterScript/);
 assert.match(backend,/if \(!\['Draft','Rejected'\]\.includes/,'backend still prohibits submitted and approved manuscript deletion');
 
