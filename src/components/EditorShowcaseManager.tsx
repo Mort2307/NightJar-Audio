@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileAudio, LoaderCircle, Send, ShieldCheck, Trash2, UploadCloud } from 'lucide-react';
+import { FileAudio, LoaderCircle, Send, ShieldCheck, UploadCloud } from 'lucide-react';
 import { nightjarEditorPortfolio, type EditorPortfolioItem } from '../platform/firebase-editor-portfolio';
 import ConfirmDeleteAction from './ConfirmDeleteAction';
 import { nightjarAudioFileProblem } from '../platform/audio-upload';
