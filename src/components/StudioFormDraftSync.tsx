@@ -33,15 +33,35 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
   const clearing = useRef(false);
   const request = useRef<Promise<boolean> | null>(null);
   const previousClearSignal = useRef(clearSignal);
+  const loaded = useRef(false);
+  // Every async operation belongs to one role/form scope. An old response must
+  // never restore fields or start another save after a scope or mode switch.
+  const session = useRef({ scope, demoMode, generation: 0 });
+  if (session.current.scope !== scope || session.current.demoMode !== demoMode) {
+    session.current = { scope, demoMode, generation: session.current.generation + 1 };
+    revision.current = 0;
+    synced.current = '';
+    conflict.current = false;
+    clearing.current = false;
+    loaded.current = false;
+    request.current = null;
+    previousClearSignal.current = clearSignal;
+  }
+  const sessionValid = (generation: number) =>
+    session.current.generation === generation && session.current.scope === scope && !session.current.demoMode;
   current.current = value;
   restore.current = onRestore;
   const serialized = signature(value);
 
   const load = async () => {
-    if (demoMode) { setStatus('demo'); return; }
+    const generation = session.current.generation;
+    if (!sessionValid(generation)) { if (demoMode) setStatus('demo'); return; }
+    loaded.current = false;
+    setReady(false);
     setStatus('loading');
     try {
       const draft = await nightjarProfileDrafts.get(scope);
+      if (!sessionValid(generation) || clearing.current) return;
       revision.current = draft.revision;
       const saved = asFields(draft.payload);
       if (draft.payload && !isEmpty(current.current) && signature(saved) !== signature(current.current)) {
@@ -51,11 +71,14 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
       } else {
         if (draft.payload) restore.current(saved);
         synced.current = draft.payload ? signature(saved) : isEmpty(current.current) ? signature(current.current) : '{}';
+        setRemote(null);
         setStatus(draft.payload || isEmpty(current.current) ? 'saved' : 'pending');
         conflict.current = false;
       }
+      loaded.current = true;
       setReady(true);
     } catch {
+      if (!sessionValid(generation) || clearing.current) return;
       setStatus('offline');
       setReady(false);
     }
@@ -64,11 +87,12 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
   // One outstanding CAS write per scope. Recheck the latest form after every
   // response so typing during a network request is not wrongly marked Saved.
   const flush = async (): Promise<boolean> => {
-    if (demoMode || !ready || conflict.current || clearing.current) return false;
+    const generation = session.current.generation;
+    if (!sessionValid(generation) || demoMode || !ready || !loaded.current || conflict.current || clearing.current) return false;
     if (request.current) return request.current;
     const work = (async () => {
       try {
-        while (!clearing.current && !conflict.current) {
+        while (sessionValid(generation) && loaded.current && !clearing.current && !conflict.current) {
           const payload = { ...current.current };
           const before = signature(payload);
           if (before === synced.current) {
@@ -77,7 +101,9 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
           }
           setStatus('saving');
           const result = await nightjarProfileDrafts.save(scope, payload, revision.current);
-          if (clearing.current) return false;
+          if (!sessionValid(generation)) return false;
+          // Clear-on-submit waits for this write. Its CAS must use the revision
+          // acknowledged by the server, even when clearing began in-flight.
           revision.current = result.revision;
           if (!result.saved) {
             conflict.current = true;
@@ -86,9 +112,10 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
             return false;
           }
           synced.current = before;
+          if (clearing.current) return true;
         }
       } catch {
-        setStatus('offline');
+        if (sessionValid(generation) && !clearing.current) setStatus('offline');
         return false;
       }
       return false;
@@ -100,32 +127,23 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
 
   useEffect(() => {
     if (demoMode) { setStatus('demo'); return; }
-    let disposed = false;
+    const generation = session.current.generation;
     clearing.current = false;
-    setReady(false);
-    void nightjarProfileDrafts.get(scope).then(draft => {
-      if (disposed) return;
-      revision.current = draft.revision;
-      const saved = asFields(draft.payload);
-      if (draft.payload && !isEmpty(current.current) && signature(saved) !== signature(current.current)) {
-        conflict.current = true;
-        setRemote(saved);
-        setStatus('conflict');
-      } else {
-        if (draft.payload) restore.current(saved);
-        synced.current = draft.payload ? signature(saved) : isEmpty(current.current) ? signature(current.current) : '{}';
-        setStatus(draft.payload || isEmpty(current.current) ? 'saved' : 'pending');
-        conflict.current = false;
-      }
-      setReady(true);
-    }).catch(() => {
-      if (!disposed) { setReady(false); setStatus('offline'); }
-    });
-    return () => { disposed = true; clearing.current = true; };
+    setRemote(null);
+    void load();
+    return () => {
+      if (!sessionValid(generation)) return;
+      // Invalidating before an in-flight server acknowledgement resolves also
+      // prevents its response from restoring the next form's fields.
+      session.current = { ...session.current, generation: generation + 1 };
+      loaded.current = false;
+      clearing.current = true;
+      request.current = null;
+    };
   }, [scope, demoMode]);
 
   useEffect(() => {
-    if (!ready || demoMode || conflict.current || clearing.current || serialized === synced.current) return;
+    if (!ready || !loaded.current || demoMode || conflict.current || clearing.current || serialized === synced.current) return;
     setStatus('pending');
     const timer = window.setTimeout(() => { void flush(); }, 1000);
     return () => window.clearTimeout(timer);
@@ -134,16 +152,25 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
   useEffect(() => {
     if (previousClearSignal.current === clearSignal || demoMode) return;
     previousClearSignal.current = clearSignal;
+    const generation = session.current.generation;
+    if (!sessionValid(generation)) return;
     clearing.current = true;
     void (async () => {
       try {
-        if (request.current) await request.current;
+        const pending = request.current;
+        if (pending) await pending;
+        // A concurrent edit may have rejected the pending CAS write. Clearing
+        // using its returned remote revision would erase the other device's
+        // draft, so preserve that conflict until the member resolves it.
+        if (!sessionValid(generation) || conflict.current) return;
         // Never delete a newer device's edits after this device submits.
         const result = await nightjarProfileDrafts.clear(scope, revision.current);
+        if (!sessionValid(generation)) return;
         revision.current = result.revision;
         if (!result.cleared) {
-          conflict.current = true;
           const latest = await nightjarProfileDrafts.get(scope);
+          if (!sessionValid(generation)) return;
+          conflict.current = true;
           setRemote(asFields(latest.payload));
           setStatus('conflict');
         } else {
@@ -152,8 +179,8 @@ export default function StudioFormDraftSync({ scope, value, onRestore, clearSign
           setRemote(null);
           setStatus('saved');
         }
-      } catch { setStatus('offline'); }
-      finally { clearing.current = false; }
+      } catch { if (sessionValid(generation)) setStatus('offline'); }
+      finally { if (sessionValid(generation)) clearing.current = false; }
     })();
   }, [clearSignal, scope, demoMode]);
 

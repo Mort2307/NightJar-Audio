@@ -27,6 +27,21 @@ assert.match(sync,/result\.saved/);
 assert.match(sync,/setStatus\('conflict'\)/);
 assert.match(sync,/Unsynced form details/);
 assert.match(sync,/Selected files cannot be recovered/);
+// Scope switches invalidate outstanding loads/saves and reset the old
+// in-flight request. A response from the previous role must never restore
+// fields, update the new form's revision or continue autosaving.
+assert.match(sync,/session\.current\.generation === generation && session\.current\.scope === scope/);
+assert.match(sync,/session\.current = \{ scope, demoMode, generation: session\.current\.generation \+ 1 \}/);
+assert.match(sync,/request\.current = null;/);
+assert.match(sync,/if \(!sessionValid\(generation\) \|\| clearing\.current\) return;/);
+assert.match(sync,/if \(!sessionValid\(generation\)\) return false;/);
+assert.match(sync,/!loaded\.current \|\| demoMode/);
+// A submitted form must not clear a concurrent device's draft if the pending
+// save rejected its CAS revision. A successful in-flight write must still
+// acknowledge its new revision before the clear attempts its own CAS.
+assert.match(sync,/if \(!sessionValid\(generation\) \|\| conflict\.current\) return;/);
+assert.match(sync,/revision\.current = result\.revision;[\s\S]*?if \(!result\.saved\)/);
+assert.match(sync,/if \(clearing\.current\) return true;/);
 assert.match(artist,/scope="form-artist-portfolio"/);
 assert.match(editor,/scope="form-editor-showcase"/);
 assert.match(artist,/setDraftClearSignal/);
