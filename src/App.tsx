@@ -5304,7 +5304,7 @@ function App() {
             </button>
             {notificationsOpen && <section className="notification-popover" aria-label="Nightjar notifications">
               <div className="notification-popover-head"><div><span className="mini-label">NIGHTJAR ACTIVITY</span><strong>Recent updates</strong></div><div className="notification-popover-actions">{notificationUnreadCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}<button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={15} /></button></div></div>
-              <div className={nightjarUpdate?.updateAvailable ? 'nightjar-update-notification has-update' : 'nightjar-update-notification'} aria-label="Nightjar app updates">
+              {nightjarUpdate?.updateAvailable ? <div className="nightjar-update-notification has-update" aria-label="Nightjar app updates">
                 <div className="nightjar-update-notification-copy">
                   {nightjarUpdate?.updateAvailable ? <Download size={19} aria-hidden="true"/> : <RefreshCw size={19} aria-hidden="true"/>}
                   <span>
@@ -5325,7 +5325,13 @@ function App() {
                 </div>
                 {nightjarUpdateFeedback && <small className="nightjar-update-notification-feedback" role="status">{nightjarUpdateFeedback}</small>}
                 <a className="nightjar-update-repair-link" href="/recover.html">Not seeing the latest changes? Repair Nightjar <ArrowRight size={13} aria-hidden="true"/></a>
-              </div>
+              </div> : <details className="nj-updates-collapsed">
+                <summary><RefreshCw size={15}/> App version & updates <span>Up to date</span></summary>
+                <div><button type="button" className="secondary-button" disabled={nightjarUpdateChecking || nightjarUpdating} onClick={()=>void checkLatestNightjarUpdate()}>{nightjarUpdateChecking ? 'Checking…' : 'Check for updates'}</button>
+                <a href="/recover.html">Repair cached Nightjar version</a>
+                {nightjarUpdateFeedback && <small role="status">{nightjarUpdateFeedback}</small>}</div>
+              </details>}
+              {role === 'admin' && <button type="button" className="nj-notification-inbox-link" onClick={()=>{setNotificationsOpen(false);navigate('messages')}}><MessageCircle size={16}/> Open Inbox {messageUnreadCount ? '· ' + messageUnreadCount + ' unread' : ''}<ArrowRight size={15}/></button>}
               {notifications.length ? <div className="notification-list">{notificationGroups.map(([group,items]) => <div className="notification-group" key={group}><span className="nj-notification-group-label">{group}</span>{(items as any[]).slice(0,6).map((item:any) => <button className={item.read ? 'notification-row' : 'notification-row unread'} key={item.id} onClick={() => { if (nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title)))) void installNightjarUpdate(); else void openNotification(item); }}>
                 <span className="notification-row-icon">{item.type === 'admin_action' || item.type === 'admin_attention' ? <ShieldCheck size={15}/> : item.type === 'spotlight' ? <Star size={15}/> : item.subtype === 'creator' ? <Mic2 size={15} /> : item.subtype === 'writer' ? <FileText size={15} /> : item.type === 'message' || item.type === 'comment' ? <MessageCircle size={15}/> : item.subtype === 'editor' ? <FileCheck2 size={15}/> : <Headphones size={15} />}</span>
                 <span><strong>{item.title}</strong><small>{item.message}</small>{nightjarUpdate?.updateAvailable && (item.type === 'app_update' || /new (version|build)|update available/i.test(String(item.title))) && <span className="notification-inline-update"><Download size={12} aria-hidden="true" /> Update now</span>}</span>
@@ -6557,6 +6563,7 @@ function App() {
               {adminApplicationBox === 'attention' && <small>There are no actionable pending professional roles on this application record. Check the account and its role history before changing anything.</small>}
             </div>
             {adminApplicationBox === 'pending' && <div className="admin-data-actions professional-application-actions">
+              {application.ageVerified !== true && <ConfirmDeleteAction label="Remove pending test application" itemName={String(application.name ?? application.email ?? application.userId ?? 'Unknown applicant')} description="Dismiss this unverified pending professional application with a recorded rejection. The member account, content and ID verification remain untouched." confirmLabel="Yes, dismiss application" onConfirm={()=>decideCreatorApplication(application,'rejected')}/>}
               <button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Keep banked</button>
               <button className="ghost-button" onClick={() => void decideCreatorApplication(application, 'rejected')}>Reject remaining</button>
               {remainingRoles.map((role)=><button key={role} className="secondary-button"
