@@ -768,6 +768,8 @@ function App() {
   const [writerPermissionsLoading, setWriterPermissionsLoading] = useState(false);
   const [writerUploadBusy, setWriterUploadBusy] = useState(false);
   const [writerCreateBusy, setWriterCreateBusy] = useState(false);
+  const [writerActionFeedback, setWriterActionFeedback] = useState('');
+  const [writerUploadStage, setWriterUploadStage] = useState<'reading'|'uploading'|'confirming'>('reading');
   const writerCreateInFlightRef = useRef(false);
   const writerUploadInFlightRef = useRef(false);
   const diditRecoveryLock=useRef(false);
@@ -4421,6 +4423,7 @@ function App() {
     if (existing && !window.confirm('A manuscript with this title already exists (' + String(existing.status ?? 'Draft') + '). Creating a draft starts a SECOND record, not another version. Open the existing manuscript from My manuscripts to continue, or OK to create a separate one.')) return;
     writerCreateInFlightRef.current = true;
     setWriterCreateBusy(true);
+    setWriterActionFeedback('Creating one private manuscript draft… Please do not tap again.');
     try {
       if (simulationMode) {
         const next = {
@@ -4437,13 +4440,17 @@ function App() {
         return;
       }
       const data = await nightjarScripts.create(title, '');
+      setWriterUploadStage('confirming');
+      setWriterActionFeedback('Upload received. Confirming your private manuscript in My manuscripts…');
       const newScript = await attachNewWriterArtwork(data.script);
       setWriterDraftTitle('');
       await loadWriterScripts();
       setWriterSelected(newScript ?? null);
       if (data.script?.id) await loadWriterPermissions(data.script.id);
       notify(data.reused ? 'Recovered your existing draft after an interrupted request.' : 'Draft created.');
+      setWriterActionFeedback(data.reused ? 'Existing draft recovered. No duplicate created.' : 'Draft saved successfully. Open it from My manuscripts.');
     } catch {
+      setWriterActionFeedback('Draft save could not be confirmed. Check My manuscripts before trying again.');
       notify('Draft not confirmed. Check My manuscripts before retrying; your work may already be saved.');
     } finally {
       writerCreateInFlightRef.current = false;
@@ -4472,6 +4479,8 @@ function App() {
     if (existing && !window.confirm('You already have a manuscript matching this upload (' + String(existing.status ?? 'Draft') + '). Upload script creates a NEW manuscript, not an attachment to the existing record. Open My manuscripts to continue with that one, or OK to create a separate copy.')) return;
     writerUploadInFlightRef.current = true;
     setWriterUploadBusy(true);
+    setWriterUploadStage('reading');
+    setWriterActionFeedback('Preparing your file securely… Keep this screen open and do not tap Upload again.');
 
     try {
       if (simulationMode) {
@@ -4508,6 +4517,8 @@ function App() {
       const fingerprint = Array.from(new Uint8Array(fingerprintBuffer),
         byte => byte.toString(16).padStart(2, '0')).join('');
       const dataUrl = await readFileDataUrl(file);
+      setWriterUploadStage('uploading');
+      setWriterActionFeedback('Uploading your manuscript privately… Please do not select it again.');
       const data = await nightjarScripts.upload({
         title,
         fileName:file.name,
@@ -4522,7 +4533,9 @@ function App() {
       notify(data.reused
         ? 'Existing manuscript recovered from the interrupted upload. No second copy was created.'
         : 'Manuscript uploaded as one private Draft. Confirm rights, then submit for administrator review.');
+      setWriterActionFeedback(data.reused ? 'Existing manuscript recovered. No second copy was created.' : 'Upload confirmed · Private Draft. Choose the manuscript below to confirm rights and submit.');
     } catch {
+      setWriterActionFeedback('Upload could not be confirmed. Check My manuscripts before retrying the same file.');
       notify('Upload not confirmed. Check My manuscripts before retrying the same file.');
     } finally {
       writerUploadInFlightRef.current = false;
@@ -6091,12 +6104,12 @@ function App() {
                 <div className="writer-create-form">
                   <label className="nj-writer-create-label" htmlFor="nj-writer-draft-title">Working title <small>(optional for uploads)</small></label>
                   <input id="nj-writer-draft-title" value={writerDraftTitle} onChange={(event)=>setWriterDraftTitle(event.target.value)} placeholder="Working title · optional for uploads"/>
-                  <button className="primary-button" disabled={writerCreateBusy || writerUploadBusy} onClick={()=>void createWriterDraft()}>{writerCreateBusy ? 'Creating draft…' : 'Create draft'} <FileText size={15}/></button>
+                  <button className="primary-button" disabled={writerCreateBusy || writerUploadBusy} aria-busy={writerCreateBusy} onClick={()=>void createWriterDraft()}>{writerCreateBusy ? 'Creating draft… Please wait' : 'Create draft'} <FileText size={15}/></button>
                 </div>
                 <div className="writer-upload-row">
                   <span className="writer-create-or">OR</span>
-                  <label className={writerUploadBusy ? 'secondary-button writer-upload-button disabled' : 'secondary-button writer-upload-button'}>
-                    <Upload size={15}/> {writerUploadBusy ? 'Uploading manuscript…' : 'Upload script'}
+                  <label className={(writerUploadBusy || writerCreateBusy) ? 'secondary-button writer-upload-button disabled' : 'secondary-button writer-upload-button'} aria-busy={writerUploadBusy}>
+                    <Upload size={15}/> {writerUploadBusy ? writerUploadStage === 'confirming' ? 'Confirming manuscript…' : writerUploadStage === 'reading' ? 'Preparing upload…' : 'Uploading… Please wait' : 'Upload script'}
                     <input
                       type="file"
                       accept=".txt,.md,.markdown,.rtf,.doc,.docx,.pdf,text/plain,text/markdown,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
@@ -6110,6 +6123,7 @@ function App() {
                   </label>
                   <small>TXT · Markdown · RTF · Word · PDF · max 8 MB. Uploaded originals stay private and protected.</small>
                 </div>
+                {writerActionFeedback && <p className="nj-writer-operation-feedback" role="status" aria-live="polite">{writerActionFeedback}</p>}
                 <details className="nj-writer-optional-art">
                   <summary>Optional · Add cover artwork now or later</summary>
                   <label className="writer-initial-artwork">Optional cover image for this new script
