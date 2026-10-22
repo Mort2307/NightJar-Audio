@@ -9115,8 +9115,13 @@ export const adminListScripts = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('scripts').limit(1000).get();
   return {
-    scripts: snapshot.docs.map((doc) => scriptPayload(doc.data(), doc.id, false))
-      .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))),
+    // Review provenance is admin-only. Do not return these identifiers to
+    // Writers or to the public marketplace; never include protected source.
+    scripts: snapshot.docs.map((doc) => ({
+      ...scriptPayload(doc.data(), doc.id, false),
+      reviewedAt: toIso(doc.data().reviewedAt),
+      reviewedBy: cleanText(doc.data().reviewedBy, 160) || null,
+    })).sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))),
   };
 });
 
