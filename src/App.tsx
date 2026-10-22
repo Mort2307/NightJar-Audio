@@ -30,6 +30,7 @@ import { nightjarLegal } from './platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
 import WriterManuscriptGrid from './components/WriterManuscriptGrid';
+import ConfirmDeleteAction from './components/ConfirmDeleteAction';
 import ImageFramingEditor from './components/ImageFramingEditor';
 import { nightjarProtection } from './platform/firebase-protection';
 import { nightjarAuthSecurity, type AuthenticationSecurityEvent } from './platform/firebase-auth-security';
@@ -4635,28 +4636,28 @@ function App() {
     }
   };
 
-  const deleteWriterScript = async () => {
-    if (!writerSelected?.id) return;
-    if (!['Draft','Rejected'].includes(String(writerSelected.status ?? 'Draft'))) {
+  const deleteWriterScript = async (manuscript: any) => {
+    if (!manuscript?.id) return;
+    if (!['Draft','Rejected'].includes(String(manuscript.status ?? 'Draft'))) {
       notify('Only Draft or Rejected manuscripts can be deleted.');
       return;
     }
-    if (!window.confirm('Delete this manuscript and its saved versions? This cannot be undone.')) return;
     try {
       if (simulationMode) {
-        setWriterScripts((items) => { const updated = items.filter((item) => item.id !== writerSelected.id); writeDemo('writerScripts', updated); return updated; });
-        setWriterSelected(null);
+        setWriterScripts((items) => { const updated = items.filter((item) => item.id !== manuscript.id); writeDemo('writerScripts', updated); return updated; });
+        if (writerSelected?.id === manuscript.id) setWriterSelected(null);
         setWriterPermissions([]);
         notify('Simulation: manuscript deleted locally.');
         return;
       }
-      await nightjarScripts.remove(writerSelected.id);
-      setWriterSelected(null);
+      await nightjarScripts.remove(manuscript.id);
+      if (writerSelected?.id === manuscript.id) setWriterSelected(null);
       setWriterPermissions([]);
       await loadWriterScripts();
       notify('Manuscript deleted.');
     } catch {
       notify('Manuscript could not be deleted.');
+      throw new Error('Manuscript removal was not confirmed.');
     }
   };
 
@@ -6157,7 +6158,7 @@ function App() {
             </>}
             <div className="writer-layout">
               {!writerDetailOpen
-                ? <WriterManuscriptGrid scripts={writerScripts} onOpen={(script)=>{
+                ? <WriterManuscriptGrid scripts={writerScripts} onRemove={deleteWriterScript} onOpen={(script)=>{
                     setWriterSelected(script); setWriterEditDirty(false);
                     setWriterSaveConflict(false); setWriterAutoSavePaused(false);
                     setWriterDetailOpen(true); void loadWriterPermissions(script.id);
@@ -6177,7 +6178,7 @@ function App() {
               <button className="secondary-button" onClick={()=>void shareWriterScript()}><Users size={14}/> Share full script</button>
             </div></details><button className="primary-button" disabled={!['Draft','Revision requested','Rejected'].includes(String(writerSelected.status ?? 'Draft'))} onClick={()=>{window.dispatchEvent(new CustomEvent('nightjar:open-workspace-section',{detail:'writer-rights'}));window.setTimeout(()=>document.getElementById('writer-rights-review')?.scrollIntoView({behavior:'smooth',block:'start'}),50);}}>{['Submitted','Under review'].includes(String(writerSelected.status)) ? 'Awaiting admin review' : ['Approved','Published'].includes(String(writerSelected.status)) ? 'Approved by NightJar' : 'Review rights & submit'}</button><details className="nj-writer-secondary-actions"><summary>Optional · reader and draft management</summary><div>
               <button className="ghost-button" onClick={()=>void openProtectedReader(writerSelected.id)}><LockKeyhole size={14}/> Protected reader</button>
-              {['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<button className="ghost-button" onClick={()=>void deleteWriterScript()}>Delete manuscript</button>}
+              {['Draft','Rejected'].includes(String(writerSelected.status??'Draft'))&&<ConfirmDeleteAction label="Delete manuscript" itemName={String(writerSelected.title??'Untitled manuscript')} description="This private manuscript and saved versions will be permanently deleted." confirmLabel="Yes, delete manuscript" onConfirm={()=>deleteWriterScript(writerSelected)}/>}
             </div></details></div><div className="script-permission-panel"><div><span className="mini-label">FULL-SCRIPT ACCESS</span><strong>{writerPermissionsLoading?'Loading…':writerPermissions.filter((item:any)=>!item.revokedAt).length+' active grant'+(writerPermissions.filter((item:any)=>!item.revokedAt).length===1?'':'s')}</strong></div>{writerPermissions.length===0?<p>No full-script access grants yet.</p>:writerPermissions.map((permission:any)=><div className="script-permission-row" key={permission.recipientUserId}><div><strong>{permission.recipientUserId}</strong><span>Copy {permission.allowCopy?'on':'off'} · Export {permission.allowExport?'on':'off'}{permission.expiresAt?' · expires '+new Date(permission.expiresAt).toLocaleString('en-GB'):''}</span></div>{permission.revokedAt?<em>Revoked</em>:<button className="ghost-button" onClick={()=>void revokeWriterPermission(permission)}>Revoke access</button>}</div>)}</div></article> : <p role="status">Choose a manuscript from your library.</p>}
                   </section>}
             </div>
