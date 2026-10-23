@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 const read=(name)=>readFileSync(new URL('../'+name,import.meta.url),'utf8');
 const app=read('src/App.tsx');
 const messaging=read('src/components/MessagingHub.tsx');
+const messagingClient=read('src/platform/firebase-messaging.ts');
 const inboxStyles=read('src/components/messaging-human-first.css');
 const backend=read('functions/src/index.ts');
 const grid=read('src/components/WriterManuscriptGrid.tsx');
@@ -66,5 +67,8 @@ assert.match(messaging,/className="messaging-back-to-inbox"/,'mobile Inbox retur
 assert.match(messaging,/role="log" aria-label=\{'Conversation with '/,'conversation accessible to assistive technologies');
 assert.match(inboxStyles,/\.messaging-layout\.thread-open \.messaging-sidebar \{ display:none;/,'mobile thread uses dedicated view');
 assert.match(inboxStyles,/font-size:16px;/,'composer text avoids tiny mobile input type');
+assert.match(messagingClient,/const thread=await openCall\(\{ conversationId \}\);[\s\S]*const list=await listCall\(\);/,'read status fetched after thread was opened');
+assert.match(messaging,/data\.conversations\?\?items/,'thread refresh reuses authoritative post-open list instead of another list call');
+
 
 console.log('Owner inbox, live queues, notifications and two-stage deletion and messaging UX contracts PASS.');
