@@ -40,14 +40,17 @@ export const nightjarMessaging = {
   },
 
   async open(conversationId:string) {
-    const [thread,list]=await Promise.all([
-      openCall({ conversationId }),
-      listCall(),
-    ]);
-    const raw=(list.data.conversations ?? []).find((item:any)=>item.id===conversationId);
+    // Mark/read the opened thread first; fetch unread counts afterwards so the
+    // Inbox reflects the read state rather than a parallel pre-open snapshot.
+    const thread=await openCall({ conversationId });
+    const list=await listCall();
+    const conversations=(list.data.conversations ?? []).map(normaliseConversation);
+    const raw=conversations.find((item:any)=>item.id===conversationId);
     return {
       ...thread.data,
       conversation:normaliseConversation(raw ?? { id:conversationId }),
+      conversations,
+      unreadCount:Number(list.data.unreadCount ?? 0),
     };
   },
 

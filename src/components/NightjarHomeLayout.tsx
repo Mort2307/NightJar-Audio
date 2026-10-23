@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, LayoutGrid, RotateCcw, Settings2 } from 'lucide-react';
+import { revealHomeSection } from '../platform/reveal-navigation';
 
 type SectionId = 'featured' | 'catalogue' | 'recommended' | 'spotlights' | 'writers' | 'trending' | 'creators' | 'studio';
 type Layout = { order: SectionId[]; hidden: SectionId[]; collapsed: SectionId[] };
@@ -88,10 +89,7 @@ export function PersonalisedHome({userId, editable, children, onNavigate}: {
       </section>}
       <nav className="nj-home-shortcuts" aria-label="Quick listening shortcuts">
         <button type="button" onClick={()=>onNavigate('library')}><LayoutGrid size={16}/> My library</button>
-        <button type="button" onClick={()=>{
-          window.dispatchEvent(new CustomEvent('nightjar:open-home-section',{detail:'catalogue'}));
-          window.setTimeout(()=>document.getElementById('nightjar-home-catalogue')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}),40);
-        }}>Browse audio</button>
+        <button type="button" onClick={()=>revealHomeSection('catalogue')}>Browse audio</button>
         <button type="button" onClick={()=>onNavigate('creators')}>Find creators</button>
       </nav>
       {children}
@@ -141,7 +139,7 @@ export function WorkspaceSection({userId,sectionId,title,summary,children,defaul
     try {localStorage.setItem(key,next?'open':'closed');}catch{ /* optional */ }
     return next;
   });
-  return <section className="nj-workspace-fold" aria-label={title}>
+  return <section className="nj-workspace-fold" id={'nightjar-workspace-'+sectionId} aria-label={title}>
     <button type="button" className="nj-workspace-fold-trigger" aria-expanded={open} onClick={flip}>
       <span><strong>{title}</strong>{summary&&<small>{summary}</small>}</span>{open?<ChevronUp size={20}/>:<ChevronDown size={20}/>}
     </button>

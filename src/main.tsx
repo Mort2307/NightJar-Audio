@@ -9,6 +9,7 @@ import './styles/midnight-gold-refinement.css';
 import './styles/nightjar-velvet-interaction.css';
 import './styles/nightjar-connections-page.css';
 import './styles/vision-access.css';
+import './styles/human-first-operational-ui.css';
 import App from './App';
 import { nightjarTheme } from './platform/nightjar-theme';
 import { nightjarVision } from './platform/nightjar-vision';
