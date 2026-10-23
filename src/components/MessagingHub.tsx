@@ -46,6 +46,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   const [activeCollaborationId,setActiveCollaborationId]=useState<string|null>(null);
   const messageListRef=useRef<HTMLDivElement|null>(null);
   const selectedIdRef=useRef<string|null>(null);
+  const viewerIdRef=useRef<string|null>(null);
   const threadRequestRef=useRef(0);
   const sendingRef=useRef(false);
   const shouldFollowMessagesRef=useRef(true);
@@ -167,6 +168,9 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
 
   useEffect(()=>{void loadConversations();void loadDirectory();},[role,demoMode]);
   useEffect(()=>{
+    if(viewerIdRef.current===null){viewerIdRef.current=viewerId;return;}
+    if(viewerIdRef.current===viewerId)return;
+    viewerIdRef.current=viewerId;
     setDrafts({});
     setMessages([]);
     setSelectedId(null);
@@ -215,8 +219,6 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
       return [person.name,person.handle,person.headline,person.role,...(person.roleSpecialties??[]),...(person.favouriteTags??[])].filter(Boolean).join(' ').toLowerCase().includes(needle);
     }).slice(0,30);
   },[directory,query]);
-
-  const shiftKeyForNewLine=(event:{shiftKey:boolean})=>event.shiftKey;
 
   const send=async()=>{
     const conversationId=selectedId;
@@ -386,7 +388,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
             const readByOther=mine&&selected.otherUserId&&(message.readBy??[]).includes(selected.otherUserId);
             return <article className={mine?'direct-message mine':'direct-message'} key={message.id}><div><strong>{mine?'You':selected.otherName}</strong><time>{message.createdAt?new Date(message.createdAt).toLocaleString('en-GB'):''}{mine&&<em className="message-read-state">{readByOther?<><CheckCheck size={11}/> Read{message.readAt?.[selected.otherUserId] ? ' · '+new Date(message.readAt[selected.otherUserId]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : ''}</>:<><Check size={11}/> Sent</>}</em>}</time></div>{message.collaborationId && <span className="direct-message-context"><Handshake size={10}/>{selected.collaborations?.find((item:any)=>item.id===message.collaborationId)?.title ?? 'Linked collaboration'}</span>}<p>{message.status==='removed_by_admin'?'Message removed by Nightjar moderation.':message.body||'Message unavailable.'}</p>{!mine&&message.status!=='removed_by_admin'&&<button className="text-button" onClick={()=>void report(message)}><Flag size={11}/> Report</button>}</article>;
           }):<div className="people-empty"><MessageCircle size={17}/><strong>Conversation ready.</strong><span>Start with the work, expectations or next step. Protected material should stay in Nightjar’s controlled script tools.</span></div>}</div>
-          <div className="message-compose">{blocked&&<div className="messaging-blocked-note"><Ban size={13}/><span>{blockedByMe?'You blocked messages from this account. You can unblock them here when ready.':blockedByOther?'This account is not currently accepting private messages from you. Existing collaboration records remain intact.':'Private messaging is blocked for this conversation.'}</span></div>}<textarea aria-label={'Message to '+String(selected.otherName??'Nightjar member')} value={body} maxLength={4000} disabled={blocked||sending} onChange={(event)=>{if(selectedId)setDrafts((current)=>({...current,[selectedId]:event.target.value}));}} onKeyDown={(event)=>{if(event.key==='Enter'&&!shiftKeyForNewLine(event)&&!event.nativeEvent.isComposing&&!blocked&&!sending){event.preventDefault();void send();}}} placeholder="Write a private message…"/><div><small>{body.length}/4000 · {activeCollaborationId ? 'linked to ' + (selected.collaborations?.find((item:any)=>item.id===activeCollaborationId)?.title ?? 'a Nightjar collaboration') + ' · ' : 'general thread · '}Enter to send · Shift+Enter for a new line · do not paste full protected scripts</small><button className="primary-button" disabled={sending||blocked||!body.trim()} onClick={()=>void send()}><Send size={13}/>{sending?'Sending…':'Send'}</button></div></div>
+          <div className="message-compose">{blocked&&<div className="messaging-blocked-note"><Ban size={13}/><span>{blockedByMe?'You blocked messages from this account. You can unblock them here when ready.':blockedByOther?'This account is not currently accepting private messages from you. Existing collaboration records remain intact.':'Private messaging is blocked for this conversation.'}</span></div>}<textarea aria-label={'Message to '+String(selected.otherName??'Nightjar member')} value={body} maxLength={4000} disabled={blocked||sending} onChange={(event)=>{if(selectedId)setDrafts((current)=>({...current,[selectedId]:event.target.value}));}} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&!blocked&&!sending){event.preventDefault();void send();}}} placeholder="Write a private message…"/><div><small>{body.length}/4000 · {activeCollaborationId ? 'linked to ' + (selected.collaborations?.find((item:any)=>item.id===activeCollaborationId)?.title ?? 'a Nightjar collaboration') + ' · ' : 'general thread · '}Enter to send · Shift+Enter for a new line · do not paste full protected scripts</small><button className="primary-button" disabled={sending||blocked||!body.trim()} onClick={()=>void send()}><Send size={13}/>{sending?'Sending…':'Send'}</button></div></div>
         </>:<div className="messaging-thread-empty"><MessageCircle size={22}/><strong>Select a conversation.</strong><span>Messages keep creative communication visible without changing rights, licences or manuscript permissions.</span></div>}
       </div>
     </div>
