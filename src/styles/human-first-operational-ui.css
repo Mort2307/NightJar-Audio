@@ -1,0 +1,131 @@
+/* Nightjar shared operational UI — human-first readability pass.
+   Applied AFTER existing Midnight Gold and Vision Access styles.
+   Scope: status notices, command search, creator/admin dashboards, action rows
+   and mobile inputs/navigation. No theme colours or artwork altered.
+   Vision Access modes are deliberately excluded from typography overrides. */
+
+/* Tiny operational messages must remain readable when something goes wrong. */
+:root:not([data-nightjar-vision]) .nj-product-status .nj-status-banner {
+  font-size:max(0.8125rem, 13px);
+  line-height:1.5;
+  gap:10px;
+  min-width:0;
+}
+:root:not([data-nightjar-vision]) .nj-product-status .nj-status-banner span {
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+:root:not([data-nightjar-vision]) .nj-product-status .nj-status-banner button:not(.icon-button) {
+  min-height:44px;
+  padding:9px 12px;
+  font-size:max(0.8125rem, 13px);
+  line-height:1.2;
+  flex-shrink:0;
+}
+
+/* The global command/search palette is an essential navigation route. */
+:root:not([data-nightjar-vision]) .nj-command-palette .nj-command-row,
+:root:not([data-nightjar-vision]) .nj-search-trigger {
+  min-height:44px;
+}
+:root:not([data-nightjar-vision]) .nj-command-palette .nj-command-copy strong {
+  font-size:max(0.875rem, 14px);
+  line-height:1.35;
+}
+:root:not([data-nightjar-vision]) .nj-command-palette .nj-command-copy small {
+  font-size:max(0.75rem, 12px);
+  line-height:1.45;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+:root:not([data-nightjar-vision]) .nj-command-palette .nj-command-group,
+:root:not([data-nightjar-vision]) .nj-command-palette .nj-command-empty span,
+:root:not([data-nightjar-vision]) .nj-command-palette footer,
+:root:not([data-nightjar-vision]) .nj-search-trigger kbd {
+  font-size:max(0.75rem, 12px);
+}
+:root:not([data-nightjar-vision]) .nj-command-palette .nj-command-empty strong {
+  font-size:max(0.875rem, 14px);
+}
+
+/* Home/role metrics are meaningful information, not decorative captions. */
+:root:not([data-nightjar-vision]) .nj-role-dashboard-metrics :is(span,small) {
+  font-size:max(0.75rem, 12px);
+  line-height:1.45;
+  letter-spacing:.035em;
+  overflow-wrap:anywhere;
+}
+:root:not([data-nightjar-vision]) .nj-next-actions-head strong,
+:root:not([data-nightjar-vision]) .nj-next-action span:nth-child(2) strong,
+:root:not([data-nightjar-vision]) .nj-next-actions-clear span strong {
+  font-size:max(0.875rem, 14px);
+  line-height:1.35;
+}
+:root:not([data-nightjar-vision]) .nj-next-action span:nth-child(2) small,
+:root:not([data-nightjar-vision]) .nj-next-actions-clear span small,
+:root:not([data-nightjar-vision]) .nj-next-action em {
+  font-size:max(0.75rem, 12px);
+  line-height:1.45;
+}
+:root:not([data-nightjar-vision]) .nj-next-action,
+:root:not([data-nightjar-vision]) .nj-intent-control button {
+  min-height:44px;
+}
+:root:not([data-nightjar-vision]) .nj-intent-control button {
+  font-size:max(0.8125rem, 13px);
+  line-height:1.3;
+  padding-inline:12px;
+}
+:root:not([data-nightjar-vision]) .nj-notification-group-label {
+  font-size:max(0.75rem, 12px);
+  line-height:1.4;
+}
+
+/* App-wide focus indication including custom tappable destinations.
+   User-selected Vision Access focus settings remain authoritative. */
+:root:not([data-nightjar-vision]) :is(
+  button, a[href], input, textarea, select, summary,
+  [role="button"], [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline:2px solid var(--nj-accent, #e6c99b);
+  outline-offset:3px;
+}
+
+/* Respect OS preferences even in embedded scroll surfaces. */
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within { scroll-behavior:auto; }
+  .nj-command-palette .nj-command-row,
+  .nj-mobile-nav button,
+  .nj-next-action { transition:none; }
+}
+@media (max-width:760px) {
+  /* Explicit text-entry controls only: do not resize checkbox/radio/range,
+     player controls or icon-only buttons. Avoid phone auto-zoom on focus. */
+  :root:not([data-nightjar-vision]) :is(
+    input[type="text"],input[type="email"],input[type="search"],
+    input[type="password"],input[type="url"],input[type="tel"],
+    input[type="number"],input[type="date"],input[type="datetime-local"],
+    input:not([type]),select,textarea
+  ) {
+    font-size:max(1rem, 16px);
+  }
+  :root:not([data-nightjar-vision]) .nj-product-status .nj-status-banner {
+    flex-wrap:wrap;
+    align-items:flex-start;
+  }
+  :root:not([data-nightjar-vision]) .nj-product-status .nj-status-banner span {
+    flex:1 1 185px;
+  }
+  :root:not([data-nightjar-vision]) .nj-product-status .nj-status-banner button:not(.icon-button) {
+    flex:0 0 auto;
+  }
+}
+@media (max-width:700px) {
+  /* Five reachable destinations; labels remain legible at narrow widths. */
+  :root:not([data-nightjar-vision]) .nj-mobile-nav button > .nj-mobile-nav-label,
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav button > .nj-mobile-nav-label {
+    font-size:max(0.6875rem, 11px);
+    line-height:1.2;
+    letter-spacing:0;
+  }
+}
