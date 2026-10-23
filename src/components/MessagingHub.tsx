@@ -133,8 +133,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
         setBlocked(data.blocked===true);
         setBlockedByMe(data.blockedByMe===true);
         setBlockedByOther(data.blockedByOther===true);
-        setConversations((items)=>items.map((item)=>item.id===conversationId?{...item,...activeConversation,unreadCount:0}:item));
-        await loadConversations(true);
+        setConversations((items)=>(data.conversations??items).map((item:any)=>item.id===conversationId?{...item,...activeConversation,unreadCount:0}:item));
       }
       if(selectedIdRef.current===conversationId&&requestId===threadRequestRef.current)setThreadError(false);
     }catch{
