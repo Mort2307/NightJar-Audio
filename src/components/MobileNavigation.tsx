@@ -1,4 +1,5 @@
 import { Brush, Headphones, Home, Library, MessageCircle, Mic2, Bell, Search, Settings2, ShieldCheck, FileText, type LucideIcon } from 'lucide-react';
+import { activityAccessibleName, inboxAccessibleName, isMobileNavigationActive } from '../platform/mobile-navigation-state';
 
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'calendar' | 'settings';
 type Role = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist' | null;
@@ -60,17 +61,23 @@ export default function MobileNavigation({ view, role, onNavigate, onSearch, onA
     <nav className="nj-mobile-nav" aria-label="Nightjar mobile navigation">
       {items.map((item) => {
         const Icon = item.icon;
-        const active = item.view ? view === item.view : false;
+        const active = item.view ? isMobileNavigationActive(view, item.view) : false;
+        const baseLabel = item.accessibleLabel ?? item.label;
+        const accessibleLabel = item.activity
+          ? activityAccessibleName(baseLabel, activityUnreadCount)
+          : item.view === 'messages'
+            ? inboxAccessibleName(baseLabel, messageUnreadCount, messageNeedsReplyCount)
+            : baseLabel;
         return (
           <button
             type="button"
-            key={item.view ?? 'search'}
+            key={item.view ?? (item.activity ? 'activity' : 'search')}
             className={active ? 'active' : ''}
             onClick={() => item.search ? onSearch() : item.activity ? onActivity() : item.view && onNavigate(item.view)}
             aria-current={active ? 'page' : undefined}
-            aria-label={item.accessibleLabel ?? item.label}
+            aria-label={accessibleLabel}
           >
-            <span className="nj-mobile-nav-icon">
+            <span className="nj-mobile-nav-icon" aria-hidden="true">
               <Icon size={19} aria-hidden="true" />
               {item.activity && activityUnreadCount > 0 && <em>{activityUnreadCount > 9 ? '9+' : activityUnreadCount}</em>}
               {item.view === 'messages' && messageUnreadCount > 0 && <em>{messageUnreadCount > 9 ? '9+' : messageUnreadCount}</em>}
