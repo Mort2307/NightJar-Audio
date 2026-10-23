@@ -44,7 +44,7 @@ export default function RoleDashboard({ eyebrow, title, description, metrics, ac
         <span className="nj-next-action-icon">{action.priority === 'high' ? <CircleAlert size={15}/> : <CheckCircle2 size={15}/>}</span>
         <span><strong>{action.title}</strong><small>{action.reason}</small></span>
         <em>{action.label}</em><ArrowRight size={14}/>
-      </button>) : <div className="nj-next-actions-clear"><CheckCircle2 size={17}/><span><strong>You’re caught up.</strong><small>Nightjar has no urgent account actions to suggest right now.</small></span></div>}
+      </button>) : loading ? <div className="nj-next-actions-clear" role="status" aria-live="polite"><span><strong>Checking your account…</strong><small>We’ll show your next actions when your Nightjar workspace has loaded.</small></span></div> : <div className="nj-next-actions-clear"><CheckCircle2 size={17}/><span><strong>You’re caught up.</strong><small>Nightjar has no urgent account actions to suggest right now.</small></span></div>}
     </div>}
   </section>;
 }
