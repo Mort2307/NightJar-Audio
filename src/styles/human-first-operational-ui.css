@@ -122,7 +122,8 @@
 }
 @media (max-width:700px) {
   /* Five reachable destinations; labels remain legible at narrow widths. */
-  :root:not([data-nightjar-vision]) .nj-mobile-nav button > .nj-mobile-nav-label {
+  :root:not([data-nightjar-vision]) .nj-mobile-nav button > .nj-mobile-nav-label,
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav button > .nj-mobile-nav-label {
     font-size:max(0.6875rem, 11px);
     line-height:1.2;
     letter-spacing:0;
