@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=(name)=>readFileSync(new URL('../'+name,import.meta.url),'utf8');
 const app=read('src/App.tsx');
+const messaging=read('src/components/MessagingHub.tsx');
+const messagingClient=read('src/platform/firebase-messaging.ts');
+const inboxStyles=read('src/components/messaging-human-first.css');
 const backend=read('functions/src/index.ts');
 const grid=read('src/components/WriterManuscriptGrid.tsx');
 const creator=read('src/components/CreatorAudioPipeline.tsx');
@@ -47,4 +50,25 @@ assert.match(tabs,/pendingScripts/,'content workspace badge includes manuscripts
 assert.match(app,/Remove pending test application/,'unverified pending application has staged dismissal');
 assert.match(hosting,/\[nightjar-owner-inbox-cleanup-release\]/,'notification reader deploy gate');
 assert.match(hosting,/inputs\[function_names\]=listNotifications/);
-console.log('Owner inbox, live queues, notifications and two-stage deletion contracts PASS.');
+
+/* Human-first inbox contracts: these are source-level checks, not handset acceptance. */
+assert.match(messaging,/const \[drafts,setDrafts\]=useState<Record<string,string>>/,'unsent text is per-recipient');
+assert.match(messaging,/drafts\[selectedId\]/,'active draft is bound to selected conversation');
+assert.doesNotMatch(messaging,/setBody\(/,'a shared composer can leak unsent text between recipients');
+assert.match(messaging,/setDrafts\(\(current\)=>\{/,'draft clearing must inspect original conversation');
+assert.match(messaging,/sendingRef\.current=true/,'synchronous send lock prevents rapid double submits');
+assert.match(messaging,/nightjarMessaging\.send\(conversationId,text,collaborationId\)/,'send targets captured recipient and collaboration');
+assert.match(messaging,/selectedIdRef\.current!==conversationId\|\|requestId!==threadRequestRef\.current/,'stale open result rejected');
+assert.match(messaging,/if\(selectedIdRef\.current===conversationId&&result\.message\)/,'late sent message cannot appear in a new recipient thread');
+assert.match(messaging,/item\.otherHandle,item\.otherRole,item\.lastMessagePreview/,'inbox query searches saved conversations, not only directory');
+assert.match(messaging,/setInboxError\(true\)/,'load failure must not silently imply an empty inbox');
+assert.match(messaging,/threadError&&<div className="messaging-load-error"/,'failed thread displays an explicit retry');
+assert.match(messaging,/className="messaging-back-to-inbox"/,'mobile Inbox return is available');
+assert.match(messaging,/role="log" aria-label=\{'Conversation with '/,'conversation accessible to assistive technologies');
+assert.match(inboxStyles,/\.messaging-layout\.thread-open \.messaging-sidebar \{ display:none;/,'mobile thread uses dedicated view');
+assert.match(inboxStyles,/font-size:16px;/,'composer text avoids tiny mobile input type');
+assert.match(messagingClient,/const thread=await openCall\(\{ conversationId \}\);[\s\S]*const list=await listCall\(\);/,'read status fetched after thread was opened');
+assert.match(messaging,/data\.conversations\?\?items/,'thread refresh reuses authoritative post-open list instead of another list call');
+
+
+console.log('Owner inbox, live queues, notifications and two-stage deletion and messaging UX contracts PASS.');

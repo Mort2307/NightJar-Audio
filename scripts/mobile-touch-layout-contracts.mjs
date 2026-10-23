@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import './mobile-navigation-state-contracts.mjs';
 
 // Responsive regression guard for the Nightjar mobile dock, profile save CTA,
 // keyboard focus and pressed-state feedback. Real-device visual QA is still required.

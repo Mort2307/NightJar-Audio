@@ -1,0 +1,203 @@
+{
+  "releaseCandidate": "NightJar integrated human-first RC",
+  "baseCommit": "fc27c3355b8e2ea9145dc74ecfefb88aba0242dc",
+  "includes": [
+    {
+      "pr": 293,
+      "head": "17e616e42c9d1cedeb5f21b6f459a4adf22f74a9",
+      "files": [
+        {
+          "path": "AGENTS.md",
+          "sha": "881d2f834e2047aef300965fb0ccf031a408ff13",
+          "status": "added"
+        },
+        {
+          "path": "docs/HUMAN_FIRST_UX_STANDARD.md",
+          "sha": "69093b386a22f83100fc7698632539ed46714c3b",
+          "status": "added"
+        }
+      ]
+    },
+    {
+      "pr": 294,
+      "head": "7994622026fa914d082c3ce3fdd7eaa092e5a54a",
+      "files": [
+        {
+          "path": "docs/INBOX_HUMAN_FIRST_ACCEPTANCE.md",
+          "sha": "ca10f1f4a29b5ea787eca35380ae14b80c92bfe0",
+          "status": "added"
+        },
+        {
+          "path": "scripts/admin-inbox-delete-ux-contracts.mjs",
+          "sha": "9f8fb1f4d0fa1a6790ea1e87208bcc9b55e3dc4b",
+          "status": "modified"
+        },
+        {
+          "path": "src/components/MessagingHub.tsx",
+          "sha": "57cd9f7d587c70de41b8f5de3e6726a3693dbfbb",
+          "status": "modified"
+        },
+        {
+          "path": "src/components/messaging-human-first.css",
+          "sha": "e6a34a59dfafaa4c0e4164abced99e9977d2fb31",
+          "status": "added"
+        },
+        {
+          "path": "src/platform/firebase-messaging.ts",
+          "sha": "3a7096a4cab5384285dd0cae33c2166fb6025400",
+          "status": "modified"
+        }
+      ]
+    },
+    {
+      "pr": 296,
+      "head": "732665b7b728511c6deaf4ce7a2364ea850e9c16",
+      "files": [
+        {
+          "path": "docs/APP_WIDE_HUMAN_FIRST_BATCH_A_QA.md",
+          "sha": "fe8f5e5cc741cd8b03a82ffa4ceb5acf6339da2e",
+          "status": "added"
+        },
+        {
+          "path": "package.json",
+          "sha": "fa4c2469fdd40bb53d988ccf6fb2e8d9a4e8a64e",
+          "status": "modified",
+          "exception": "merged-validation-commands"
+        },
+        {
+          "path": "scripts/app-wide-human-first-contracts.mjs",
+          "sha": "e5d92e3724bc5bfdae77145b4f1975adbb312c28",
+          "status": "added"
+        },
+        {
+          "path": "src/main.tsx",
+          "sha": "f36ec99547a94ffd2bbc0d632610244e597d439d",
+          "status": "modified"
+        },
+        {
+          "path": "src/styles/human-first-operational-ui.css",
+          "sha": "b55294699c7f0330a4a53e04384cef82c20f6a1e",
+          "status": "added"
+        }
+      ]
+    },
+    {
+      "pr": 297,
+      "head": "3d1ebd5958452942b5bd670920b0d8d6a7821fe1",
+      "files": [
+        {
+          "path": "docs/APP_WIDE_NAVIGATION_BATCH_B_QA.md",
+          "sha": "64a448a541662f603305bbf0567fc9f81efcfb05",
+          "status": "added"
+        },
+        {
+          "path": "package.json",
+          "sha": "97a7e3a44698a3b2bd62cd4cac903a6f8752b4be",
+          "status": "modified",
+          "exception": "merged-validation-commands"
+        },
+        {
+          "path": "scripts/audit-discovery-navigation-contracts.mjs",
+          "sha": "f314efd3b7be03ee37f215a43e86dbfeef68979d",
+          "status": "modified"
+        },
+        {
+          "path": "scripts/navigation-reveal-contracts.mjs",
+          "sha": "04d192569a97dd305a26e85c85b098b54cb70d5a",
+          "status": "added"
+        },
+        {
+          "path": "src/App.tsx",
+          "sha": "9119d9bb22ae5cb8d4c1fdd96761d77d3846eab6",
+          "status": "modified"
+        },
+        {
+          "path": "src/components/NightjarHomeLayout.tsx",
+          "sha": "453d4ad00f77198db1eedf71cb2f7e02b52b042c",
+          "status": "modified"
+        },
+        {
+          "path": "src/platform/reveal-navigation.ts",
+          "sha": "6c241aee3384bfd1faf1315e2fefad5b64b96bd8",
+          "status": "added"
+        }
+      ]
+    },
+    {
+      "pr": 298,
+      "head": "5896de1d3885f84b21b5e861e0a0444c16868908",
+      "files": [
+        {
+          "path": "docs/APP_WIDE_MOBILE_NAV_BATCH_C_QA.md",
+          "sha": "3df69961fa9503f3a0a860b0fcd45933c32e1090",
+          "status": "added"
+        },
+        {
+          "path": "scripts/mobile-navigation-state-contracts.mjs",
+          "sha": "ad17c3aab99c6691fb6a540654f53bdcb70a2d11",
+          "status": "added"
+        },
+        {
+          "path": "scripts/mobile-touch-layout-contracts.mjs",
+          "sha": "fb2fdf212ae05c8c711e21565260e16a6b3c27e8",
+          "status": "modified"
+        },
+        {
+          "path": "src/components/MobileNavigation.tsx",
+          "sha": "f11bcca50a22a3e11f9f06c70176936df858e41a",
+          "status": "modified"
+        },
+        {
+          "path": "src/components/RoleDashboard.tsx",
+          "sha": "0a5e537fce34a14c5cd4122d4332ca56177e22c5",
+          "status": "modified"
+        },
+        {
+          "path": "src/platform/mobile-navigation-state.ts",
+          "sha": "7dbdc50b27889b5e027f6645f9214def29a4c7d5",
+          "status": "added"
+        }
+      ]
+    },
+    {
+      "pr": 299,
+      "head": "5c5b130641cd54f10a73fda449497d5824e0c515",
+      "files": [
+        {
+          "path": "docs/APP_WIDE_CALENDAR_BATCH_D_QA.md",
+          "sha": "7714959cfcf874c1f2191951e2cd73fb43f1d297",
+          "status": "added"
+        },
+        {
+          "path": "scripts/nightjar-calendar-client-contracts.mjs",
+          "sha": "62934e08cce51af5cb46caf50b091e6908de97cb",
+          "status": "modified"
+        },
+        {
+          "path": "scripts/personal-calendar-interactions-contracts.mjs",
+          "sha": "3575eb07eefc00f89ec17f3641e882447f359f26",
+          "status": "added"
+        },
+        {
+          "path": "src/components/PersonalCalendar.tsx",
+          "sha": "76d8891703187f4ecb606b940407c291b20312a1",
+          "status": "modified"
+        },
+        {
+          "path": "src/components/personal-calendar.css",
+          "sha": "6cbb3a052bb20543bdb9fad6bcae80158606f035",
+          "status": "modified"
+        },
+        {
+          "path": "src/platform/calendar-civil-date.ts",
+          "sha": "a3ba1d658d1b642d3e4b06547ca45299df3fe50f",
+          "status": "added"
+        }
+      ]
+    }
+  ],
+  "sourceFilesPolicy": "All source blobs except package.json must match the originating draft PR exactly.",
+  "packageMerge": "validate:contracts from #296 and validate:scroll from #297; no test runner removed.",
+  "manualAcceptance": "NOT RUN",
+  "productionApproval": "BLOCKED pending real-device user acceptance and repository security review"
+}

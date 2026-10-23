@@ -1,0 +1,123 @@
+/* Human-first Nightjar inbox improvements.
+   Deliberately reuse Midnight Gold variables rather than introducing another design system. */
+.messaging-hub .messaging-hub-head p,
+.messaging-hub .messaging-safety-note span {
+  font-size:13px;
+  line-height:1.55;
+}
+.messaging-hub .messaging-safety-note strong,
+.messaging-hub .messaging-section-label,
+.messaging-hub .messaging-conversations strong,
+.messaging-hub .messaging-directory strong {
+  font-size:13px;
+}
+.messaging-hub .messaging-conversations small,
+.messaging-hub .messaging-directory small,
+.messaging-hub .messaging-thread > header p,
+.messaging-hub .messaging-thread-empty span,
+.messaging-hub .message-compose small {
+  font-size:12px;
+  line-height:1.5;
+  white-space:normal;
+}
+.messaging-hub .messaging-section-label {
+  margin:3px 7px 7px;
+  color:var(--nj-text-secondary);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.07em;
+}
+.messaging-hub .messaging-search input {
+  font-size:14px;
+  min-height:44px;
+}
+.messaging-hub .messaging-conversations > button,
+.messaging-hub .messaging-directory > button,
+.messaging-hub .messaging-filter-tabs > button {
+  min-height:44px;
+}
+.messaging-hub .messaging-conversations > button {
+  gap:11px;
+  padding:11px;
+}
+.messaging-hub .messaging-conversations em {
+  font-size:11px;
+}
+.messaging-hub .messaging-avatar {
+  width:38px;
+  height:38px;
+  font-size:13px;
+}
+.messaging-hub .messaging-thread > header h3 {
+  font-size:21px;
+}
+.messaging-hub .direct-message p {
+  font-size:14px;
+  line-height:1.55;
+}
+.messaging-hub .direct-message strong,
+.messaging-hub .direct-message time,
+.messaging-hub .message-read-state {
+  font-size:11px;
+}
+.messaging-hub .message-compose textarea {
+  font-size:16px;
+  line-height:1.5;
+  padding:11px;
+}
+.messaging-hub .message-compose .primary-button {
+  min-height:44px;
+  min-width:96px;
+}
+.messaging-hub .messaging-load-error {
+  padding:11px;
+  margin:8px 9px;
+  border:1px solid rgba(221,166,124,.28);
+  border-radius:10px;
+  color:var(--nj-text-primary);
+  background:rgba(125,70,40,.12);
+  font-size:13px;
+  line-height:1.5;
+}
+.messaging-hub .messaging-load-error button {
+  min-height:40px;
+  margin-left:6px;
+  color:var(--nj-accent);
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+.messaging-hub .messaging-back-to-inbox {
+  display:none;
+}
+.messaging-hub button:focus-visible,
+.messaging-hub textarea:focus-visible,
+.messaging-hub input:focus-visible {
+  outline:2px solid var(--nj-accent);
+  outline-offset:3px;
+}
+@media (max-width:760px) {
+  .messaging-hub .messaging-layout.thread-open .messaging-sidebar { display:none; }
+  .messaging-hub .messaging-layout:not(.thread-open) .messaging-thread { display:none; }
+  .messaging-hub .messaging-thread { min-height:480px; }
+  .messaging-hub .messaging-thread > header { flex-wrap:wrap; }
+  .messaging-hub .messaging-back-to-inbox {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:max-content;
+    min-height:44px;
+    padding:7px 12px;
+    border:1px solid var(--nj-line-default);
+    border-radius:10px;
+    background:transparent;
+    color:var(--nj-text-primary);
+    font-size:14px;
+    font-weight:600;
+    flex:0 0 100%;
+  }
+  .messaging-hub .messaging-head-actions { flex-wrap:wrap; }
+  .messaging-hub .messaging-filter-tabs { overflow-x:auto; }
+  .messaging-hub .message-compose > div:last-child { align-items:stretch; }
+  .messaging-hub .message-compose small { font-size:12px; }
+  .messaging-hub .direct-message { max-width:92%; }
+}

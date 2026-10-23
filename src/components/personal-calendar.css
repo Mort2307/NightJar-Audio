@@ -48,3 +48,28 @@
 .nj-calendar-role-shortcut span{font-size:12px;flex:1;min-width:220px;color:#cdbdcb;line-height:1.55;}
 .nj-calendar-role-shortcut button{min-height:40px;}
 @media(max-width:580px){.nj-calendar-role-shortcut button{width:100%;justify-content:center;}}
+
+/* Retryable fetch failure is visible without losing the existing calendar,
+   and does not obscure the user's private notes or change the Midnight Gold layout. */
+.nj-calendar-error {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:9px 14px;
+  margin:12px 0;
+  padding:13px 15px;
+  border:1px solid rgba(227,187,136,.55);
+  border-radius:12px;
+  color:#f3e2cb;
+  background:#29201c;
+  line-height:1.5;
+  font-size:13px;
+}
+.nj-calendar-error strong {font-size:14px;}
+.nj-calendar-error span {flex:1 1 220px;overflow-wrap:anywhere;}
+.nj-calendar-error button {min-height:44px;}
+/* Event titles on narrow phone cells previously fell to 8px. */
+@media(max-width:460px){
+  .nj-calendar-day small,.nj-calendar-day em {font-size:10px;line-height:1.25;}
+  .nj-calendar-day {min-height:70px;}
+}

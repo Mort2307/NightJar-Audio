@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { nightjarCalendar, type PersonalCalendarEvent } from '../platform/firebase-calendar';
 import { nightjarCatalogue } from '../platform/firebase-catalogue';
+import { personalCalendarSavedSelection, validPersonalCalendarDate } from '../platform/calendar-civil-date';
 import './personal-calendar.css';
 
 type ReleaseDate = {
@@ -18,7 +19,6 @@ const dateInZone = (date:Date,zone:string) => {
   const get = (kind:string) => parts.find((part) => part.type === kind)?.value ?? '';
   return get('year')+'-'+get('month')+'-'+get('day');
 };
-const validDateKey = (date:string) => /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(new Date(date+'T12:00:00Z').getTime());
 
 export default function PersonalCalendar({role,showCreatorReleases=false,simulationMode=false,notify,onOpenStudio,onOpenModeration}:Props) {
   const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London';
@@ -28,11 +28,18 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
   const [events,setEvents] = useState<PersonalCalendarEvent[]>([]);
   const [releases,setReleases] = useState<ReleaseDate[]>([]);
   const [loading,setLoading] = useState(true);
+  const [loadError,setLoadError] = useState<string|null>(null);
   const [saving,setSaving] = useState(false);
+  // The immediate ref prevents duplicate saves if two taps land before React
+  // has disabled the submit button. It also serialises remove and zone writes.
+  const operationInFlight = useRef(false);
   const [editing,setEditing] = useState<string|null>(null);
   const [title,setTitle] = useState('');
   const [note,setNote] = useState('');
   const [selected,setSelected] = useState(()=>dateInZone(new Date(),deviceZone));
+  // Separate from the currently browsed day: changing an event date while
+  // editing must not discard the event ID or accidentally create a duplicate.
+  const [draftDate,setDraftDate] = useState(()=>dateInZone(new Date(),deviceZone));
   const [month,setMonth] = useState(()=>{
     const now=dateInZone(new Date(),deviceZone).split('-').map(Number);
     return {year:now[0],month:now[1]-1};
@@ -47,6 +54,7 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
 
   const refresh = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       if (simulationMode) {
         setEvents([]);
@@ -61,7 +69,9 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
         setReleases((data.releases??[]).filter((item:ReleaseDate)=>item.scheduledAt || item.releaseDate));
       } else setReleases([]);
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'Calendar could not load.');
+      const message = error instanceof Error ? error.message : 'Calendar could not load.';
+      setLoadError(message);
+      notify(message);
     } finally { setLoading(false); }
   };
   useEffect(() => { void refresh(); },[role,showCreatorReleases,simulationMode]);
@@ -100,41 +110,54 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
     setMonth({year:next.getUTCFullYear(),month:next.getUTCMonth()});
   };
   const chooseDate=(date:string)=>{
+    if(saving || !validPersonalCalendarDate(date))return;
     setSelected(date);
+    setDraftDate(date);
     setEditing(null);setTitle('');setNote('');
   };
   const save = async () => {
     if (simulationMode) {notify('Personal calendar changes are disabled in simulation.');return;}
-    if (!title.trim() || !validDateKey(selected)) return notify('Choose a valid date and enter a title.');
+    if (operationInFlight.current || loading || loadError) return;
+    if (!title.trim() || !validPersonalCalendarDate(draftDate)) return notify('Choose a real date and enter a title.');
+    operationInFlight.current=true;
     setSaving(true);
     try {
-      const saved = await nightjarCalendar.save({id:editing ?? undefined,title:title.trim(),date:selected,note:note.trim()});
+      const saved = await nightjarCalendar.save({id:editing ?? undefined,title:title.trim(),date:draftDate,note:note.trim()});
       setEvents((prior)=>[...prior.filter((item)=>item.id!==saved.id),saved]);
+      // A moved event is still the same record. Show its new day only AFTER
+      // the server confirms the update, and preserve the saved civil date.
+      setSelected(saved.date);
+      setDraftDate(saved.date);
+      const visibleMonth=personalCalendarSavedSelection(saved.date);
+      if(visibleMonth)setMonth(visibleMonth);
       setTitle('');setNote('');setEditing(null);
       notify('Date saved to your private Nightjar calendar.');
     } catch(error) {notify(error instanceof Error?error.message:'Could not save date.');}
-    finally{setSaving(false);}
+    finally{operationInFlight.current=false;setSaving(false);}
   };
   const remove = async(id:string)=>{
+    if (operationInFlight.current || loading || simulationMode) return;
     if (!window.confirm('Remove this personal calendar date?'))return;
+    operationInFlight.current=true;
     setSaving(true);
     try{
       if(!await nightjarCalendar.remove(id))throw Error('Removal was not confirmed.');
       setEvents((prev)=>prev.filter((item)=>item.id!==id));
-      setEditing(null);setTitle('');setNote('');
+      if(editing===id){setEditing(null);setTitle('');setNote('');setDraftDate(selected);}
       notify('Personal calendar date removed.');
     }catch(error){notify(error instanceof Error?error.message:'Removal failed.');}
-    finally{setSaving(false);}
+    finally{operationInFlight.current=false;setSaving(false);}
   };
   const saveZone=async(next:string)=>{
-    if(simulationMode)return;
+    if(simulationMode || loading || operationInFlight.current)return;
+    operationInFlight.current=true;
     setSaving(true);
     try{
       const saved = await nightjarCalendar.setTimeZone(next);
       setTimeZone(saved);
       notify('Calendar time zone saved.');
     }catch(error){notify(error instanceof Error?error.message:'Could not save time zone.');}
-    finally{setSaving(false);}
+    finally{operationInFlight.current=false;setSaving(false);}
   };
   return <section className="page-wrap nj-personal-calendar" aria-labelledby="nj-my-calendar-title">
     <div className="nj-calendar-hero">
@@ -154,8 +177,9 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
         </select>
       </label>
       <button type="button" className="secondary-button" onClick={()=>{const parts=today.split('-').map(Number);setMonth({year:parts[0],month:parts[1]-1});chooseDate(today);}}>Today</button>
-      <button type="button" className="secondary-button" disabled={loading} onClick={()=>void refresh()}><RefreshCw size={14}/> Refresh</button>
+      <button type="button" className="secondary-button" disabled={loading||saving} onClick={()=>void refresh()}><RefreshCw size={14}/> Refresh</button>
     </div>
+    {loadError && <div className="nj-calendar-error" role="alert"><strong>Calendar couldn't refresh.</strong><span>{loadError} Your existing personal dates have not been changed.</span><button type="button" className="secondary-button" disabled={loading||saving} onClick={()=>void refresh()}>Try again</button></div>}
     <div className="nj-calendar-main">
       <div className="nj-calendar-month panel">
         <header><button type="button" aria-label="Previous month" onClick={()=>changeMonth(-1)}><ChevronLeft/></button><h2>{monthLabel}</h2><button type="button" aria-label="Next month" onClick={()=>changeMonth(1)}><ChevronRight/></button></header>
@@ -174,15 +198,15 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
           {selectedEntries.length ? selectedEntries.map((entry)=><div className="nj-calendar-entry" key={entry.id}>
             <strong>{entry.title}</strong><small>{entry.status}{entry.scheduledTime?' · '+entry.scheduledTime:''}</small>
             {entry.event?.note&&<p>{entry.event.note}</p>}
-            {entry.kind==='personal'&&<div><button type="button" className="ghost-button" onClick={()=>{setEditing(entry.id);setTitle(entry.event?.title??'');setNote(entry.event?.note??'');}}>Edit</button><button type="button" className="ghost-button" onClick={()=>void remove(entry.id)} disabled={saving}><Trash2 size={14}/> Remove</button></div>}
+            {entry.kind==='personal'&&<div><button type="button" className="ghost-button" onClick={()=>{setEditing(entry.id);setDraftDate(entry.date);setTitle(entry.event?.title??'');setNote(entry.event?.note??'');}}>Edit</button><button type="button" className="ghost-button" onClick={()=>void remove(entry.id)} disabled={saving}><Trash2 size={14}/> Remove</button></div>}
           </div>):<p>No events on this date. Add something you'd like to remember.</p>}
         </section>
         <section className="panel nj-calendar-form"><h2><Plus size={18}/> {editing?'Edit personal date':'Add a personal date'}</h2>
-          <label>Date <input type="date" value={selected} onChange={(event)=>{if(validDateKey(event.target.value))chooseDate(event.target.value);}} /></label>
-          <label>Title <input maxLength={120} value={title} onChange={(event)=>setTitle(event.target.value)} placeholder="Your event title" /></label>
-          <label>Notes (optional)<textarea maxLength={1500} value={note} onChange={(event)=>setNote(event.target.value)} placeholder="Private reminder or details" rows={3}/></label>
-          <button type="button" className="primary-button" disabled={saving||loading||simulationMode||!title.trim()} onClick={()=>void save()}>{saving?'Saving…':editing?'Save changes':'Add to calendar'}</button>
-          {editing&&<button type="button" className="ghost-button" onClick={()=>{setEditing(null);setTitle('');setNote('');}}>Cancel editing</button>}
+          <label>Date <input type="date" min="2000-01-01" max="2100-12-31" value={draftDate} disabled={saving} onChange={(event)=>setDraftDate(event.target.value)} /></label>
+          <label>Title <input maxLength={120} disabled={saving} value={title} onChange={(event)=>setTitle(event.target.value)} placeholder="Your event title" /></label>
+          <label>Notes (optional)<textarea maxLength={1500} disabled={saving} value={note} onChange={(event)=>setNote(event.target.value)} placeholder="Private reminder or details" rows={3}/></label>
+          <button type="button" className="primary-button" disabled={saving||loading||Boolean(loadError)||simulationMode||!title.trim()||!validPersonalCalendarDate(draftDate)} onClick={()=>void save()}>{saving?'Saving…':editing?'Save changes':'Add to calendar'}</button>
+          {editing&&<button type="button" className="ghost-button" disabled={saving} onClick={()=>{setEditing(null);setDraftDate(selected);setTitle('');setNote('');}}>Cancel editing</button>}
           <small><Clock3 size={12}/> All-day personal dates are saved by date, so travel and clock changes won't shift them. Scheduled audio uses exact publication times.</small>
         </section>
       </aside>

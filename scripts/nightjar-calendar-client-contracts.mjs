@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import './personal-calendar-interactions-contracts.mjs';
 const app=fs.readFileSync('src/App.tsx','utf8');
 const creator=fs.readFileSync('src/components/CreatorAudioPipeline.tsx','utf8');
 const moderation=fs.readFileSync('src/components/ContentModeration.tsx','utf8');
