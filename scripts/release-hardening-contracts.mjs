@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {auditBackendRelease, recognisedBackendTags} from './backend-hosting-release-guard.mjs';
 
 const root=process.cwd();
 const read=(file)=>fs.readFileSync(path.join(root,file),'utf8');
@@ -111,6 +112,22 @@ requireText(functions,'await file.delete({ ignoreNotFound: true });','Verified Q
 for(const marker of ['max-width:min(1100px,calc(100vw - 18px))','max-height:calc(100dvh - 18px)','@media (max-width:430px)']){
   requireText(css,marker,'Mobile/modal hardening marker missing: '+marker);
 }
+
+// Backend changes cannot be silently published through Hosting alone.
+const hostingWorkflow=read('.github/workflows/firebase-hosting-merge.yml');
+requireText(hostingWorkflow, 'node scripts/backend-hosting-release-guard.mjs', 'Production Hosting must reject unplanned backend changes.');
+const backendTags=recognisedBackendTags(hostingWorkflow);
+if(!backendTags.includes('[nightjar-writer-upload-idempotency-release]'))failures.push('Writer backend release tag was not recognised.');
+if(auditBackendRelease({changedFiles:['src/App.tsx'],commitMessage:'frontend only',workflowSource:hostingWorkflow}).passed!==true)
+  failures.push('Frontend-only changes must remain deployable.');
+if(auditBackendRelease({changedFiles:['functions/src/index.ts'],commitMessage:'fix backend only',workflowSource:hostingWorkflow}).passed!==false)
+  failures.push('Untagged backend changes must block Hosting.');
+if(auditBackendRelease({changedFiles:['functions/package.json'],commitMessage:'fix backend deps',workflowSource:hostingWorkflow}).passed!==false)
+  failures.push('Cloud Functions dependency changes must block Hosting when untagged.');
+if(auditBackendRelease({changedFiles:['functions/src/index.ts'],commitMessage:'fix [nightjar-writer-upload-idempotency-release]',workflowSource:hostingWorkflow}).passed!==true)
+  failures.push('Recognised backend-first release must be permitted.');
+if(auditBackendRelease({changedFiles:['functions/src/index.ts'],commitMessage:'fix [nightjar-not-a-real-release-tag]',workflowSource:hostingWorkflow}).passed!==false)
+  failures.push('Invented release tags must never pass the backend deploy guard.');
 
 if(failures.length){
   console.error('RELEASE HARDENING CONTRACT FAILURES');
