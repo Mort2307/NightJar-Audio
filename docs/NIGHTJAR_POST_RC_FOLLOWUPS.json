@@ -1,11 +1,11 @@
 {
   "pr": 303,
-  "reason": "SHA-pinned calendar follow-up from #303, published-date and compact-header correction in #307, and independent calendar-feed loading performance fix. Original six-PR integrated source baselines remain unchanged.",
+  "reason": "SHA-pinned calendar follow-up from #303, published-date and compact-header correction in #307, and independent calendar-feed loading performance fix. Original six-PR integrated source baselines remain unchanged. Owner > People mobile card hierarchy, collapsed access controls and non-wrapping profile buttons (PR #309).",
   "files": [
     {
       "path": "src/App.tsx",
       "baselineSha": "9119d9bb22ae5cb8d4c1fdd96761d77d3846eab6",
-      "sha": "1f935afc13f418013022224a9b2255f9d457b2a2"
+      "sha": "bb01d0e2b7ff5737dd8d246b77732674bd4a17fb"
     },
     {
       "path": "src/components/PersonalCalendar.tsx",

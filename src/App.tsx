@@ -83,6 +83,7 @@ import {
   Share2,
 } from 'lucide-react';
 import './components/live-listens.css';
+import './components/admin-people-compact.css';
 import './components/featured-release-carousel.css';
 import './components/writer-script-artwork.css';
 import './components/writer-submission-guide.css';
@@ -6470,7 +6471,17 @@ function App() {
               onAssistance={(email) => { setAssistancePrefillEmail(email); openAdminWorkspace('assistance'); }}
             />}
 
-            {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}><span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span><div><strong>{account.name ?? 'Nightjar account'}</strong><span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span></div><em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>{adminPeopleRole !== 'admin' && <button type="button" className="secondary-button" onClick={() => openLiveMemberProfile(account.userId)}><Eye size={15}/> View live profile</button>}{adminPeopleRole !== 'admin' && <AdminMemberRoleEditor
+            {adminPeopleRole && <div className="people-drawer admin-full-page" aria-label={`${roleMeta[adminPeopleRole].label} accounts`}><div className="people-drawer-head"><div><span className="mini-label">PEOPLE / ACCOUNT DIRECTORY</span><h2>{roleMeta[adminPeopleRole].label}s</h2><p>{adminPeopleRole === 'admin' ? 'Administrator access is limited to the owner allowlist.' : `Current ${roleMeta[adminPeopleRole].label.toLowerCase()} accounts recorded by Nightjar.`}</p></div><button className="secondary-button" onClick={() => navigate('admin')} aria-label="Back to Owner Console"><ArrowLeft size={16} /> Owner Console</button></div><div className="people-drawer-summary"><strong>{adminOverview?.people?.counts?.[adminPeopleRole] ?? 0}</strong><span>accounts in this role</span></div><div className="people-list">{(adminPeopleRole === 'admin' ? (adminOverview?.people?.administrators ?? []) : (adminOverview?.people?.accounts ?? []).filter((account: any) => adminPeopleRole === 'listener' || account.role === adminPeopleRole || (account.roles ?? []).includes(adminPeopleRole))).map((account: any) => <article className="people-row people-row-managed" key={account.userId ?? account.email}>
+  <div className="nj-admin-member-summary">
+    <span className="account-chip-avatar">{account.avatarUrl ? <img className="avatar-approved-image" src={account.avatarUrl} alt="" loading="lazy" decoding="async" /> : (account.name ?? account.email ?? 'N').slice(0, 1).toUpperCase()}</span>
+    <div className="nj-admin-member-identity">
+      <strong>{account.name ?? 'Nightjar account'}</strong>
+      <span>{account.email ?? 'Owner allowlist account'}{account.handle ? ' · @'+account.handle : ''}</span>
+      <em>{account.testAccess ? 'Tester access · ' : ''}{account.status === 'pending_review' ? 'Pending review' : account.status === 'suspended' ? 'Suspended' : 'Active'}</em>
+    </div>
+  </div>
+  {adminPeopleRole !== 'admin' && <button type="button" className="secondary-button nj-member-open-profile" onClick={() => openLiveMemberProfile(account.userId)}><Eye size={16}/> View profile</button>}
+  {adminPeopleRole !== 'admin' && <AdminMemberRoleEditor
   account={account}
   onSave={manageAccountProfessions}
   onQueue={queueAccountProfessions}
