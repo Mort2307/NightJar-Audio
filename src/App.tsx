@@ -5298,6 +5298,11 @@ function App() {
           </div>}
           {user && !liveRolePreview && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
           {user && !liveRolePreview && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) && <button type="button" className="nj-header-inbox" onClick={()=>navigate('messages')} aria-label={'Open NightJar Inbox' + (messageUnreadCount ? ': ' + messageUnreadCount + ' unread' : '')}><MessageCircle size={19}/><span>Inbox</span>{messageUnreadCount > 0 && <em>{messageUnreadCount > 99 ? '99+' : messageUnreadCount}</em>}</button>}
+          {user && ageVerified && !liveRolePreview && <button type="button"
+            className={view==='calendar'?'nj-header-calendar active':'nj-header-calendar'}
+            onClick={()=>navigate('calendar')} aria-label="Upcoming releases and calendar">
+            <CalendarDays size={18} aria-hidden="true"/><span>Upcoming</span>
+          </button>}
           {user && !liveRolePreview && <div className="notification-wrap">
             <button className="ghost-button notification-button" onClick={() => { if (!notificationsOpen) { void loadNotifications(productLoadEpoch.current); void checkLatestNightjarUpdate(); } setNotificationsOpen((open) => !open); }} aria-label={notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0) ? String(notificationUnreadCount + (nightjarUpdate?.updateAvailable ? 1 : 0)) + ' updates and unread notifications' : 'Notifications'}>
               <Bell size={17} />
@@ -5436,6 +5441,11 @@ function App() {
               onListen={(releaseId) => { const track = tracks.find((item)=>item.id===releaseId); if (track) togglePlayback(track); }}
             />
             </HomeSection>
+            {user && ageVerified && !liveRolePreview && <div className="nj-home-calendar-shortcut">
+              <CalendarDays size={19} aria-hidden="true"/>
+              <span><strong>What's coming up?</strong><small>Premieres from NightJar and the creators you follow</small></span>
+              <button type="button" className="text-button" onClick={()=>navigate('calendar')}>Open calendar <ChevronRight size={15}/></button>
+            </div>}
 
             <HomeSection id="featured" title="Featured audio">
             <section className="hero-section">

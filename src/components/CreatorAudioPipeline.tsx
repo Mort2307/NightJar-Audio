@@ -44,6 +44,7 @@ type Release = {
   scheduledAt?: string | null;
   scheduledLocal?: string | null;
   scheduledTimeZone?: string | null;
+  calendarTeaser?: string;
   moderationNote?: string | null;
   contributors?: { userId?: string | null; name: string; role: string }[];
   contentRating?: 'sfw' | 'suggestive' | 'adult' | 'explicit';
@@ -107,6 +108,9 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   const [workflowStep, setWorkflowStep] = useState<'prepare' | 'review'>('prepare');
   const [draft, setDraft] = useState({ title: '', description: '', category: '', genre: '', mood: '', tags: '', tropes: '' });
   const [studioNoteParent, setStudioNoteParent] = useState('');
+  const [calendarTeaserDraft,setCalendarTeaserDraft]=useState('');
+  const [calendarTeaserBusy,setCalendarTeaserBusy]=useState(false);
+  const [calendarTeaserMessage,setCalendarTeaserMessage]=useState('');
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioStage, setAudioStage] = useState<'idle' | 'uploading' | 'verifying' | 'saved' | 'error'>('idle');
   const [audioProgress, setAudioProgress] = useState(0);
@@ -261,6 +265,22 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
   };
 
   const current = selectedRelease ?? null;
+  useEffect(()=>{
+    setCalendarTeaserDraft(selectedRelease?.calendarTeaser??'');
+    setCalendarTeaserMessage('');
+  },[selectedRelease?.id,selectedRelease?.calendarTeaser]);
+  const saveCalendarAnnouncement=async()=>{
+    if(!current||calendarTeaserBusy||simulationMode)return;
+    if(current.status!=='draft')return notify('Submitted release announcements must be reviewed by NightJar.');
+    setCalendarTeaserBusy(true);setCalendarTeaserMessage('');
+    try{
+      const saved=await nightjarCatalogue.saveCalendarTeaser(current.id,calendarTeaserDraft.trim());
+      setSelectedRelease(prev=>prev?.id===saved.releaseId?{...prev,calendarTeaser:saved.teaser}:prev);
+      setCalendarTeaserMessage('Teaser saved privately. It becomes public only after approval.');
+      await onRefresh();
+    }catch(error){setCalendarTeaserMessage(error instanceof Error?error.message:'Could not save your calendar teaser.');}
+    finally{setCalendarTeaserBusy(false);}
+  };
   // Show existing drafts immediately instead of leaving creators in an empty editor.
   useEffect(() => {
     if (selectedRelease || releases.length === 0) return;
@@ -839,6 +859,24 @@ export default function CreatorAudioPipeline({ releases, accountStatus, canPubli
       <div className="pipeline-editor">
         {current ? <>
           <div className="pipeline-status"><div><span>{statusLabel}</span><strong>{statusHint}</strong></div><Check size={18} /></div>
+          {current.scheduledAt && ['draft','pending_review','scheduled'].includes(current.status??'') &&
+            <section className="nj-release-calendar-announcement" aria-label="Upcoming release calendar teaser">
+              <div><Music2 size={17}/><strong>Upcoming calendar · Your premiere</strong></div>
+              <p>{current.status==='draft'
+                ? 'Write a short teaser for your premiere. NightJar reviews it with your release, and listeners see it only after approval.'
+                : 'This teaser is locked for moderation. To change an approved announcement, contact the NightJar team.'}</p>
+              <label>What should listeners know?
+                <textarea maxLength={850} rows={3} value={calendarTeaserDraft}
+                  disabled={current.status!=='draft'||calendarTeaserBusy}
+                  onChange={event=>setCalendarTeaserDraft(event.target.value)}
+                  placeholder="A little about the story, atmosphere, or what to expect…"/>
+              </label>
+              <small>{calendarTeaserDraft.length}/850 characters · Premiere date comes from your approved release schedule</small>
+              {current.status==='draft'&&<button type="button" className="secondary-button"
+                disabled={calendarTeaserBusy||calendarTeaserDraft.trim()===(current.calendarTeaser??'')}
+                onClick={()=>void saveCalendarAnnouncement()}>{calendarTeaserBusy?'Saving…':'Save calendar teaser'}</button>}
+              {calendarTeaserMessage&&<p role="status">{calendarTeaserMessage}</p>}
+            </section>}
           {submittedOrPublished && <section className="nj-submission-confirmation" role="status" aria-live="polite">
             <Check size={28} aria-hidden="true"/>
             <div><span className="mini-label">{removalPending ? 'NIGHTJAR · REMOVAL PENDING' : current.status === 'rejected' ? 'NIGHTJAR · MODERATION DECISION' : current.status === 'scheduled' ? 'NIGHTJAR · APPROVED & SCHEDULED' : current.status === 'released' ? 'NIGHTJAR · PUBLISHED' : 'NIGHTJAR · SUBMISSION CONFIRMED'}</span>

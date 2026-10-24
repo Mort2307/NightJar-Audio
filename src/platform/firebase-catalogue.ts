@@ -56,6 +56,7 @@ const clearPendingAudio = (uid: string, releaseId: string) => {
 
 const listCatalogueCall = httpsCallable<{ q?: string; category?: string }, { catalogue: any[] }>(functions, 'listCatalogue');
 const createReleaseCall = httpsCallable<Record<string, unknown>, { release: any; reused?: boolean }>(functions, 'createRelease');
+const saveCalendarTeaserCall=httpsCallable<{releaseId:string;teaser:string},{releaseId:string;teaser:string}>(functions,'saveReleaseCalendarTeaser');
 const updateReleaseCall = httpsCallable<Record<string, unknown>, { release: any }>(functions, 'updateRelease');
 const deleteReleaseCall = httpsCallable<{ releaseId: string }, { deleted: boolean }>(functions, 'deleteRelease');
 const adminRemoveReleaseCall = httpsCallable<{ releaseId: string }, { deleted: boolean }>(functions, 'adminRemoveRelease');
@@ -90,6 +91,7 @@ const recommendationsCall = httpsCallable<{ intent?: string }, { recommendations
 const trendingCall = httpsCallable<void, { trending: any[] }>(functions, 'trendingReleases');
 
 export const nightjarCatalogue = {
+  async saveCalendarTeaser(releaseId:string,teaser:string){return (await saveCalendarTeaserCall({releaseId,teaser})).data;},
   async list(q = '', category = '') {
     return repairMojibakeDisplayData((await listCatalogueCall({ q, category })).data);
   },
