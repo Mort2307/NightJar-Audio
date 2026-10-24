@@ -5753,6 +5753,7 @@ const releasePayload = (data: Record<string, unknown>, id: string) => ({
   nightjarOriginal: data.nightjarOriginal === true,
   releaseDistribution: data.releaseDistributionConfirmed === true ? cleanReleaseDistribution(data.releaseDistribution) : 'standard',
   productionNote: cleanText(data.productionNote, 1800) || null,
+  calendarTeaser: cleanText(data.calendarTeaser, 850) || '',
   studioNoteForReleaseId: cleanText(data.studioNoteForReleaseId, 160) || null,
   transcriptAvailable: Boolean(cleanReleaseTranscript(data.transcriptText)),
   transcriptLanguage: cleanTranscriptLanguage(data.transcriptLanguage),
@@ -5892,6 +5893,59 @@ export const listCatalogue = onCall({ region: REGION }, async (request) => {
   return { catalogue };
 });
 
+// Only a moderated, approved future release is publicly announced.
+// Personal dates, drafts, submitted/unapproved work and private media never leave this endpoint.
+export const listUpcomingReleaseCalendar = onCall({ region: REGION }, async (request) => {
+  const identity=await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const [snapshot,follows]=await Promise.all([
+    db.collection('releases').where('status','==','scheduled').limit(500).get(),
+    accountRef(identity.uid).collection('follows').limit(500).get(),
+  ]);
+  const followed=new Set(follows.docs.map(doc=>doc.id));
+  const now=Date.now();
+  const upcoming=snapshot.docs.map(doc=>({id:doc.id,data:doc.data()}))
+    .filter(({data})=>typeof data.scheduledAt==='string' &&
+      Number.isFinite(Date.parse(data.scheduledAt)) &&
+      Date.parse(data.scheduledAt)>now &&
+      Boolean(data.audioStoragePath) && !data.studioNoteForReleaseId)
+    .map(({id,data})=>({
+      id,title:cleanText(data.title,160),
+      creatorName:cleanText(data.creatorName,160)||'Nightjar creator',
+      creatorUserId:cleanText(data.creatorUserId,160),
+      scheduledAt:String(data.scheduledAt),
+      category:cleanText(data.category,80),
+      teaser:cleanText(data.calendarTeaser,850),
+      isFollowing:followed.has(String(data.creatorUserId)),
+    }))
+    .sort((a,b)=>a.scheduledAt.localeCompare(b.scheduledAt)).slice(0,100);
+  return {upcoming};
+});
+
+// Calendar copy receives normal content moderation with the recording.
+// Creators can edit only private drafts, never public/approved/scheduled releases.
+export const saveReleaseCalendarTeaser = onCall({region: REGION},async request=>{
+  const identity=await requireAccountRole(request,['creator']);
+  const input=(request.data??{}) as Record<string,unknown>;
+  const releaseId=cleanText(input.releaseId,160);
+  if(!/^[A-Za-z0-9_-]{1,160}$/.test(releaseId))
+    throw new HttpsError('invalid-argument','Choose a valid recording.');
+  if(typeof input.teaser!=='string'||input.teaser.length>850)
+    throw new HttpsError('invalid-argument','Your announcement must be 850 characters or fewer.');
+  const teaser=cleanText(input.teaser,850);
+  await db.runTransaction(async transaction=>{
+    const ref=releaseRef(releaseId);
+    const snapshot=await transaction.get(ref);
+    const data=snapshot.data();
+    if(!data||data.creatorUserId!==identity.uid)
+      throw new HttpsError('not-found','Recording not found.');
+    if(data.status!=='draft')
+      throw new HttpsError('failed-precondition','Calendar announcements lock after submission for moderation.');
+    transaction.set(ref,{calendarTeaser:teaser,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  });
+  return {releaseId,teaser};
+});
+
 export const createRelease = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -5934,6 +5988,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
     releaseDistribution: cleanReleaseDistribution(input.releaseDistribution),
     releaseDistributionConfirmed: cleanReleaseDistribution(input.releaseDistribution) !== 'standard' && input.releaseDistributionConfirmed === true,
     productionNote: cleanText(input.productionNote, 1800) || null,
+    calendarTeaser: '',
     studioNoteForReleaseId: studioNoteForReleaseId || null,
     rightsConfirmed: input.rightsConfirmed === true,
     contributorPermissionsConfirmed: input.contributorPermissionsConfirmed === true,
