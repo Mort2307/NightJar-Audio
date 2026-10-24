@@ -1,9 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const trustedMetadata=spawnSync(npmCommand,['view','body-parser@2.4.0','dist.integrity','--json'],{encoding:'utf8',shell:false});
-console.log('RELEASE_METADATA_BODY_PARSER_2_4_0',trustedMetadata.status===0?trustedMetadata.stdout.trim():'unavailable');
-
 const result = spawnSync(npmCommand, ['audit', '--omit=dev', '--audit-level=moderate', '--json'], {
   encoding: 'utf8',
   shell: false,
