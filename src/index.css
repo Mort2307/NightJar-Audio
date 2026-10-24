@@ -11801,3 +11801,19 @@ textarea:focus-visible,
 .pipeline-release-row{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
 .pipeline-release-row .pipeline-release{flex:1 1 160px;min-width:0}
 .pipeline-release-row .nj-delete-confirmation{flex:1 1 100%;width:100%}
+
+
+/* Quiet calendar shortcuts across mobile and desktop */
+.nj-header-calendar{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:8px 10px;border:1px solid rgba(214,179,117,.22);border-radius:12px;background:rgba(188,143,82,.045);color:#e9cfaa;font:inherit;font-size:12px;white-space:nowrap}
+.nj-header-calendar:hover,.nj-header-calendar.active{background:rgba(188,143,82,.13);border-color:rgba(214,179,117,.52)}
+.nj-home-calendar-shortcut{display:flex;align-items:center;gap:12px;max-width:1150px;margin:11px auto 19px;padding:12px 17px;border:1px solid rgba(214,179,117,.17);border-radius:13px;color:#e3cba8;background:rgba(178,137,85,.038)}
+.nj-home-calendar-shortcut>span{display:grid;gap:3px;flex:1;min-width:0}
+.nj-home-calendar-shortcut strong{font-size:13px}
+.nj-home-calendar-shortcut small{font-size:11px;color:var(--muted)}
+.nj-home-calendar-shortcut button{min-height:40px;display:flex;align-items:center;gap:5px}
+.nj-release-calendar-announcement{padding:15px;border:1px solid rgba(214,179,117,.25);border-radius:13px;margin:14px 0;background:rgba(178,137,85,.055);display:grid;gap:9px}
+.nj-release-calendar-announcement>div{display:flex;align-items:center;gap:9px;color:#e7cba3}
+.nj-release-calendar-announcement p,.nj-release-calendar-announcement small{font-size:12px;line-height:1.55;color:var(--muted);margin:0}
+.nj-release-calendar-announcement label{display:grid;gap:6px;font-size:13px}
+.nj-release-calendar-announcement textarea{min-height:95px;padding:12px;background:#211c20;color:var(--ivory);border:1px solid var(--line);border-radius:10px;font:inherit;width:100%;resize:vertical}
+@media(max-width:560px){.nj-header-calendar{padding:7px 8px;min-width:40px}.nj-header-calendar span{display:none}.nj-home-calendar-shortcut{flex-wrap:wrap;padding:10px 12px}.nj-home-calendar-shortcut button{margin-left:auto}}

@@ -9,6 +9,23 @@ const string=(path)=>read(path).toString('utf8');
 const manifest=JSON.parse(string('docs/NIGHTJAR_INTEGRATED_RC_MANIFEST.json'));
 const sourcePrs=[293,294,296,297,298,299];
 assert.deepEqual(manifest.includes.map(p=>p.pr),sourcePrs,'the candidate contains every reviewed source batch');
+// Explicit, SHA-pinned subsequent feature edits: retain original RC manifest
+// as provenance, while allowing only the reviewed calendar follow-up files.
+const followup=JSON.parse(string('docs/NIGHTJAR_POST_RC_FOLLOWUPS.json'));
+assert.equal(followup.pr,303,'calendar changes require their own PR review');
+const allowedFollowups=new Set([
+  'src/App.tsx',
+  'src/components/PersonalCalendar.tsx',
+  'src/components/personal-calendar.css',
+]);
+const overrides=new Map(followup.files.map(item=>[item.path,item]));
+assert.deepEqual([...overrides.keys()].sort(),[...allowedFollowups].sort(),'reviewed calendar changes only');
+for(const item of followup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const source=manifest.includes.flatMap(pr=>pr.files).find(file=>file.path===item.path);
+  assert.ok(source,'calendar override must originate from the six integrated batches');
+  assert.equal(item.baselineSha,source.sha,'original PR blob reference must remain immutable');
+}
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
@@ -24,7 +41,8 @@ for(const pr of manifest.includes){
     listed.add(entry.path);
     const bytes=read(entry.path);
     const gitBlob=createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
-    assert.equal(gitBlob,entry.sha,entry.path+' must be byte-for-byte identical to its source PR');
+    assert.equal(gitBlob,overrides.get(entry.path)?.sha ?? entry.sha,
+      entry.path+' must match the original RC or the explicitly reviewed calendar follow-up');
     originals++;
   }
 }

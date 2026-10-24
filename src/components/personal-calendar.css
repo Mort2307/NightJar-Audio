@@ -73,3 +73,24 @@
   .nj-calendar-day small,.nj-calendar-day em {font-size:10px;line-height:1.25;}
   .nj-calendar-day {min-height:70px;}
 }
+
+
+/* A calm, clearly separated community feed above private dates. */
+.nj-upcoming-calendar{padding:18px 20px!important;margin:16px 0 20px;border:1px solid rgba(222,192,132,.24);border-radius:17px;background:linear-gradient(145deg,rgba(171,134,81,.06),rgba(13,12,16,.40));}
+.nj-upcoming-calendar>header{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;}
+.nj-upcoming-calendar h2{margin:5px 0 4px;font:normal 1.5rem Georgia,serif;}
+.nj-upcoming-calendar p{margin:4px 0 12px;font-size:12px;line-height:1.55;color:var(--muted);}
+.nj-upcoming-filters{display:flex;gap:4px;padding:3px;border:1px solid var(--line);border-radius:12px;}
+.nj-upcoming-filters button{background:transparent;color:var(--muted);border:0;border-radius:9px;min-height:40px;padding:7px 15px;}
+.nj-upcoming-filters button.active{background:rgba(211,178,124,.17);color:#f4deb7;}
+.nj-upcoming-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:9px;margin-top:14px;}
+.nj-upcoming-item{display:flex;text-align:left;align-items:flex-start;gap:12px;border:1px solid var(--line);border-radius:12px;padding:13px;background:rgba(255,255,255,.025);color:inherit;min-height:76px;}
+.nj-upcoming-item>span:nth-child(2){display:grid;gap:5px;min-width:0;flex:1;}
+.nj-upcoming-item strong{font-size:13px;overflow-wrap:anywhere;}
+.nj-upcoming-item small{font-size:11px;color:var(--muted);}
+.nj-upcoming-item em{font-size:11px;font-style:normal;color:#ddc4ab;line-height:1.4;overflow-wrap:anywhere;}
+.nj-upcoming-date{font-size:11px;min-width:47px;padding:7px 5px;text-align:center;border-radius:8px;background:rgba(214,174,108,.12);color:#f5d9aa;font-weight:650;}
+.nj-calendar-community-empty,.nj-calendar-community-error{padding:14px;color:var(--muted);}
+.nj-calendar-community-error{color:#f2c9a9;}
+.nj-calendar-day small.release{color:#e6cd98;}
+@media(max-width:520px){.nj-upcoming-calendar{padding:13px!important}.nj-upcoming-filters{width:100%}.nj-upcoming-filters button{flex:1}}
