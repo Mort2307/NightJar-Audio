@@ -17,3 +17,7 @@ Follow-up to owner-supplied 17-second Android screen recording showing 38px wide
 10. Scroll all the way to the final account and back; no jitter, accidental menu opening or obstructed controls.
 
 Do not mark physical-device QA completed from CI alone.
+
+11. Search by name, email and handle; verify results contain only the active role directory and that changing roles resets the search.
+12. Results render eight accounts per page; Previous/Next are disabled at the correct boundaries and buttons stay usable at 320px.
+13. Tester role or status updates refresh the directory without duplicating cards or leaving stale controls open.

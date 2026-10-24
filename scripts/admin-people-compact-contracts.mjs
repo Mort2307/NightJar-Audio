@@ -19,6 +19,13 @@ assert.match(css,/\.people-row\.people-row-managed\s*\{/,'mobile owner cards ove
 assert.match(css,/\.people-row-managed > \.nj-member-open-profile/,'profile button cannot collapse into avatar column');
 assert.match(css,/grid-template-columns:minmax\(0,1fr\)/,'single-column mobile track');
 assert.match(app,/import '\.\/components\/admin-people-compact\.css'/,'the scoped mobile rules are loaded');
+assert.match(app,/adminPeopleSearchResults/,'search filters only the selected directory');
+assert.match(app,/adminPeoplePerPage=8/,'account directory is bounded to eight cards per page');
+assert.match(app,/adminPeopleVisible\.map/,'only the current page is rendered');
+assert.match(app,/nj-admin-people-search/,'owner can find a specific account');
+assert.match(app,/nj-admin-people-pager/,'pages are directly navigable');
+assert.match(css,/\.nj-admin-people-find/,'search fits on small screens');
+assert.match(css,/\.nj-admin-people-pager/,'page controls are responsive');
 const top=app.slice(app.indexOf('<button className="brand-button"'),app.indexOf('</button>',app.indexOf('<button className="brand-button"')));
 assert.doesNotMatch(top,/<span>\s*NIGHTJAR\s*<\/span>/,'narrow header stays logo-only');
 console.log('PASS: NightJar Owner People compact mobile cards, deliberate access, and logo-only header');
