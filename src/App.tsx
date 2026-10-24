@@ -5248,7 +5248,7 @@ function App() {
       {ageVerified && ageProvider === 'temporary-test-access' && <div className="testing-age-bypass-banner" role="status"><ShieldCheck size={14}/><span><strong>APPROVED TEST ACCESS</strong> This account is using temporary QA age access. Production age assurance is still required before public launch.</span></div>}
       <header className="topbar">
         <button className="brand-button" onClick={() => navigate('discover')} aria-label="Nightjar home">
-          {logoUrl ? <img className="brand-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}<span>NIGHTJAR</span>
+          {logoUrl ? <img className="brand-logo" src={logoUrl} alt="Nightjar" /> : <img className="brand-logo" src={logoUrl ?? "/brand-logo"} alt="Nightjar" />}
         </button>
 
         <nav className={menuOpen ? 'nav open' : 'nav'} aria-label="Primary navigation">
@@ -5835,6 +5835,8 @@ function App() {
         {view === 'calendar' && user && ageVerified && !liveRolePreview && (
           <Suspense fallback={<NightjarSkeleton variant="page" count={3} label="Opening your Nightjar calendar" />}>
             <PersonalCalendar role={effectiveRole ?? 'listener'} showCreatorReleases={uniqueProfileEditableRoles.includes('creator') || effectiveRole === 'creator'} simulationMode={simulationMode || demoMode} notify={notify}
+              followingProfileIds={followingProfileIds}
+              onOpenPublishedRelease={(release)=>{const track=releaseToTrack(release);setTracks(items=>items.some(item=>item.id===track.id)?items:[...items,track]);togglePlayback(track);}}
               onOpenStudio={() => {void (async()=>{
                 try {
                   if (!canAdmin && effectiveRole !== 'creator') {

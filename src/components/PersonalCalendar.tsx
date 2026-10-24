@@ -10,7 +10,13 @@ type ReleaseDate = {
   scheduledAt?:string|null; scheduledTimeZone?:string|null;
   releaseDate?:string|null;
 };
-type Props = { role: string; showCreatorReleases?:boolean; simulationMode?:boolean; notify:(message:string)=>void; onOpenStudio?:()=>void; onOpenModeration?:()=>void };
+type PublishedNightjarRelease = {
+  id:string;title:string;creatorName:string;creatorUserId:string;
+  releaseDate:string|null;description?:string;category?:string;
+  calendarTeaser?:string;audioAvailable?:boolean;playbackAllowed?:boolean;playbackAccessReason?:string;
+};
+type Props = {role:string;showCreatorReleases?:boolean;simulationMode?:boolean;notify:(message:string)=>void;onOpenStudio?:()=>void;onOpenModeration?:()=>void;
+  followingProfileIds?:string[];onOpenPublishedRelease?:(release:PublishedNightjarRelease)=>void};
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const two = (value:number) => String(value).padStart(2,'0');
 const dateKey = (year:number,month:number,day:number) => year+'-'+two(month+1)+'-'+two(day);
@@ -20,14 +26,16 @@ const dateInZone = (date:Date,zone:string) => {
   return get('year')+'-'+get('month')+'-'+get('day');
 };
 
-export default function PersonalCalendar({role,showCreatorReleases=false,simulationMode=false,notify,onOpenStudio,onOpenModeration}:Props) {
+export default function PersonalCalendar({role,showCreatorReleases=false,simulationMode=false,notify,onOpenStudio,onOpenModeration,followingProfileIds=[],onOpenPublishedRelease}:Props) {
   const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London';
   const [timeZone,setTimeZone] = useState('auto');
   const zone = timeZone === 'auto' ? deviceZone : timeZone;
   const [clock,setClock] = useState(() => new Date());
   const [events,setEvents] = useState<PersonalCalendarEvent[]>([]);
   const [upcoming,setUpcoming]=useState<UpcomingNightjarRelease[]>([]);
+  const [published,setPublished]=useState<PublishedNightjarRelease[]>([]);
   const [communityError,setCommunityError]=useState('');
+  const [publishedError,setPublishedError]=useState('');
   const [communityFilter,setCommunityFilter]=useState<'all'|'following'>('all');
   const [releases,setReleases] = useState<ReleaseDate[]>([]);
   const [loading,setLoading] = useState(true);
@@ -63,6 +71,7 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
         setEvents([]);
         setReleases([]);
         setUpcoming([]);
+        setPublished([]);
         return;
       }
       const data = await nightjarCalendar.get();
@@ -73,6 +82,18 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
         setCommunityError('');
       } catch {
         setCommunityError('Upcoming releases could not refresh. Your private dates are unaffected.');
+      }
+      // Published work comes from the existing age-verified catalogue, never
+      // from private drafts, Creator dashboards or an unmoderated public feed.
+      try {
+        const catalogue = await nightjarCatalogue.list();
+        setPublished((catalogue.catalogue??[]).filter((item:PublishedNightjarRelease & {status?:string})=>
+          item.status==='released' && Boolean(item.releaseDate) &&
+          Number.isFinite(Date.parse(String(item.releaseDate)))
+        ));
+        setPublishedError('');
+      } catch {
+        setPublishedError('Published recordings could not refresh. Your private dates are unaffected.');
       }
       if (showCreatorReleases || role === 'admin') {
         const data = role === 'admin' ? await nightjarCatalogue.adminAudioLibrary() : await nightjarCatalogue.dashboard();
@@ -90,10 +111,15 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
   const zoneDate = new Intl.DateTimeFormat('en-GB',{timeZone:zone,dateStyle:'full'}).format(clock);
   const zoneTime = new Intl.DateTimeFormat('en-GB',{timeZone:zone,timeStyle:'short',hourCycle:'h23'}).format(clock);
   const visibleUpcoming=upcoming.filter(item=>communityFilter==='all'||item.isFollowing);
+  const visiblePublished=published.filter(item=>communityFilter==='all'||followingProfileIds.includes(item.creatorUserId))
+    .sort((a,b)=>String(b.releaseDate).localeCompare(String(a.releaseDate)));
   const entries = useMemo(()=>{
-    const items: {id:string;date:string;title:string;kind:'personal'|'release'|'community';status:string;event?:PersonalCalendarEvent;scheduledTime?:string;announcement?:UpcomingNightjarRelease}[] =
+    const items: {id:string;date:string;title:string;kind:'personal'|'release'|'community'|'published';status:string;event?:PersonalCalendarEvent;scheduledTime?:string;announcement?:UpcomingNightjarRelease;publishedRelease?:PublishedNightjarRelease}[] =
       events.map((event)=>({id:event.id,date:event.date,title:event.title,kind:'personal',status:'Personal date',event}));
+    const publiclyListedIds=new Set(published.map(item=>item.id));
     for(const release of releases) {
+      // Avoid showing the same published release twice for its Creator/Admin.
+      if(release.status==='released' && publiclyListedIds.has(release.id))continue;
       if (!release.scheduledAt && !release.releaseDate) continue;
       const instant = release.scheduledAt ?? release.releaseDate;
       if (!instant || Number.isNaN(Date.parse(instant))) continue;
@@ -111,8 +137,20 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
         scheduledTime:new Intl.DateTimeFormat('en-GB',{timeZone:zone,timeStyle:'short',hourCycle:'h23'}).format(new Date(item.scheduledAt)),
         announcement:item});
     }
+    for(const release of visiblePublished) {
+      if(!release.releaseDate)continue;
+      const when=new Date(release.releaseDate);
+      if(!Number.isFinite(when.getTime()))continue;
+      items.push({
+        id:'published-'+release.id,date:dateInZone(when,zone),
+        title:release.title||'Untitled release',kind:'published',
+        status:'Released · '+(release.creatorName||'NightJar creator'),
+        scheduledTime:new Intl.DateTimeFormat('en-GB',{timeZone:zone,timeStyle:'short',hourCycle:'h23'}).format(when),
+        publishedRelease:release,
+      });
+    }
     return items.sort((a,b)=>a.date.localeCompare(b.date)||a.title.localeCompare(b.title));
-  },[events,releases,upcoming,communityFilter,zone]);
+  },[events,releases,upcoming,published,communityFilter,followingProfileIds,zone]);
   const monthLabel = new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(month.year,month.month,1)));
   const first = (new Date(Date.UTC(month.year,month.month,1)).getUTCDay()+6)%7;
   const total = new Date(Date.UTC(month.year,month.month+1,0)).getUTCDate();
@@ -186,7 +224,7 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
     </div>
     <section className="nj-upcoming-calendar panel" aria-label="Upcoming NightJar premieres">
       <header><div><span className="mini-label">ON THE HORIZON</span><h2>Upcoming on NightJar</h2>
-        <p>Approved upcoming releases. Private submissions and your personal notes stay private.</p></div>
+        <p>Approved premieres and published recordings. Drafts, unapproved work and private reminders stay private.</p></div>
         <div className="nj-upcoming-filters" role="group" aria-label="Filter upcoming releases">
           <button type="button" aria-pressed={communityFilter==='all'} className={communityFilter==='all'?'active':''} onClick={()=>setCommunityFilter('all')}>All</button>
           <button type="button" aria-pressed={communityFilter==='following'} className={communityFilter==='following'?'active':''} onClick={()=>setCommunityFilter('following')}>Following</button>
@@ -203,6 +241,21 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
          <span className="nj-upcoming-date">{new Intl.DateTimeFormat('en-GB',{month:'short',day:'numeric',timeZone:zone}).format(new Date(item.scheduledAt))}</span>
          <span><strong>{item.title}</strong><small>{item.creatorName} · {new Intl.DateTimeFormat('en-GB',{timeZone:zone,timeStyle:'short'}).format(new Date(item.scheduledAt))}{item.isFollowing?' · Following':''}</small>
          {item.teaser&&<em>{item.teaser}</em>}</span>
+         <ChevronRight size={17} aria-hidden="true"/>
+       </button>)}</div>}
+      <div className="nj-published-calendar-head"><strong>Already released</strong><small>Browse published work by its actual release date</small></div>
+      {publishedError&&<p role="alert" className="nj-calendar-community-error">{publishedError}</p>}
+      {loading?<p className="nj-calendar-community-empty">Checking published recordings…</p>:
+       visiblePublished.length===0?<p className="nj-calendar-community-empty">{communityFilter==='following'?'No published recordings from followed creators yet. Try All.':'No published recordings to show yet.'}</p>:
+       <div className="nj-upcoming-list">{visiblePublished.slice(0,12).map(item=><button key={item.id} type="button" className="nj-upcoming-item" onClick={()=>{
+         if(!item.releaseDate)return;
+         const date=dateInZone(new Date(item.releaseDate),zone),parts=date.split('-').map(Number);
+         setMonth({year:parts[0],month:parts[1]-1});chooseDate(date);
+         window.requestAnimationFrame(()=>document.querySelector('.nj-calendar-main')?.scrollIntoView({behavior:'smooth',block:'start'}));
+       }}>
+         <span className="nj-upcoming-date">{new Intl.DateTimeFormat('en-GB',{month:'short',day:'numeric',timeZone:zone}).format(new Date(item.releaseDate!))}</span>
+         <span><strong>{item.title}</strong><small>{item.creatorName} · Published{followingProfileIds.includes(item.creatorUserId)?' · Following':''}</small>
+           {item.calendarTeaser&&<em>{item.calendarTeaser}</em>}</span>
          <ChevronRight size={17} aria-hidden="true"/>
        </button>)}</div>}
     </section>
@@ -226,7 +279,7 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
           {DAYS.map((day)=><div className="nj-calendar-weekday" key={day} role="columnheader">{day}</div>)}
           {dates.map((date,i)=>date ? <button key={date} type="button" role="gridcell" aria-selected={date===selected} className={['nj-calendar-day',date===today?'today':'',date===selected?'selected':''].filter(Boolean).join(' ')} onClick={()=>chooseDate(date)}>
             <span>{Number(date.slice(-2))}</span>
-            {entries.filter((item)=>item.date===date).slice(0,2).map((item)=><small className={item.kind==='release'||item.kind==='community'?'release':''} key={item.id}>{item.title}</small>)}
+            {entries.filter((item)=>item.date===date).slice(0,2).map((item)=><small className={item.kind==='release'||item.kind==='community'||item.kind==='published'?'release':''} key={item.id}>{item.title}</small>)}
             {entries.filter((item)=>item.date===date).length>2&&<em>+{entries.filter((item)=>item.date===date).length-2} more</em>}
           </button> : <span className="nj-calendar-empty" role="gridcell" key={'empty-'+i}/>)}
         </div>
@@ -239,6 +292,10 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
             {entry.event?.note&&<p>{entry.event.note}</p>}
             {entry.announcement?.teaser&&<p>{entry.announcement.teaser}</p>}
             {entry.announcement&&<small>Creator: {entry.announcement.creatorName} · Approved upcoming release · Available to listen after publication</small>}
+            {entry.publishedRelease&&<>
+              {(entry.publishedRelease.calendarTeaser||entry.publishedRelease.description)&&<p>{entry.publishedRelease.calendarTeaser||entry.publishedRelease.description}</p>}
+              {onOpenPublishedRelease&&<button type="button" className="secondary-button" onClick={()=>onOpenPublishedRelease(entry.publishedRelease!)}>Listen to published recording</button>}
+            </>}
             {entry.kind==='personal'&&<div><button type="button" className="ghost-button" onClick={()=>{setEditing(entry.id);setDraftDate(entry.date);setTitle(entry.event?.title??'');setNote(entry.event?.note??'');}}>Edit</button><button type="button" className="ghost-button" onClick={()=>void remove(entry.id)} disabled={saving}><Trash2 size={14}/> Remove</button></div>}
           </div>):<p>No events on this date. Add something you'd like to remember.</p>}
         </section>

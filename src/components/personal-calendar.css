@@ -94,3 +94,10 @@
 .nj-calendar-community-error{color:#f2c9a9;}
 .nj-calendar-day small.release{color:#e6cd98;}
 @media(max-width:520px){.nj-upcoming-calendar{padding:13px!important}.nj-upcoming-filters{width:100%}.nj-upcoming-filters button{flex:1}}
+
+/* Published releases remain discoverable below future premieres without
+   crowding the month grid or exposing private Creator information. */
+.nj-published-calendar-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;padding-top:16px;margin-top:18px;border-top:1px solid var(--line);}
+.nj-published-calendar-head strong{font:normal 1.22rem Georgia,serif;color:var(--ivory);}
+.nj-published-calendar-head small{font-size:11px;color:var(--muted);}
+.nj-calendar-entry>.secondary-button{min-height:40px;justify-self:start;}
