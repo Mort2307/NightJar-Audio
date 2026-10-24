@@ -31,6 +31,7 @@ export default function AdminMemberRoleEditor({
   onTestAccessChange: (account: any, enabled: boolean) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [selected, setSelected] = useState<NightjarManagedProfessionalRole[]>(() => validRoles(account));
   const [queueSelected, setQueueSelected] = useState<NightjarManagedProfessionalRole[]>([]);
   const [busy, setBusy] = useState(false);
@@ -92,6 +93,7 @@ export default function AdminMemberRoleEditor({
   };
 
   return <div className="people-row-role-management">
+    <div className="nj-member-summary-controls">
     <div className="people-row-current-roles">
       <span className="mini-label">ACCESS GRANTED</span>
       <div className="people-row-role-badges">
@@ -100,7 +102,13 @@ export default function AdminMemberRoleEditor({
       </div>
       {pending.length > 0 && <small>Pending: {pending.map((role: string) => PROFESSION_OPTIONS.find((item) => item.id === role)?.name).join(', ')}</small>}
     </div>
-    <div className="people-row-controls">
+    <button type="button" className="nj-member-manage-toggle secondary-button" aria-expanded={controlsOpen}
+      aria-controls={'nj-member-controls-'+account.userId} disabled={busy}
+      onClick={()=>{setControlsOpen(value=>!value);setExpanded(false);setError('');}}>
+      {controlsOpen ? 'Close access' : 'Manage access'}
+    </button>
+    </div>
+    {controlsOpen && <div className="people-row-controls" id={'nj-member-controls-'+account.userId}>
       <button type="button" className={expanded ? 'primary-button' : 'secondary-button'}
         aria-expanded={expanded} aria-label={'Manage multiple roles for ' + (account.name ?? account.email ?? 'this member')}
         disabled={busy} onClick={() => { setExpanded((value) => !value); setError(''); }}>
@@ -128,9 +136,9 @@ export default function AdminMemberRoleEditor({
             onConfirm={()=>applyAccountChange(()=>onTestAccessChange(account,false),'Tester access could not be updated.')}/>
         : <button type="button" className="ghost-button" disabled={busy}
             onClick={() => void applyAccountChange(() => onTestAccessChange(account,true),'Tester access could not be updated.')}>Enable tester access</button>}
-    </div>
+    </div>}
     {error && <div className="nj-role-save-error" role="alert">{error}</div>}
-    {expanded && <div className="admin-member-multi-role-editor" role="group" aria-label="Select multiple professional roles">
+    {controlsOpen && expanded && <div className="admin-member-multi-role-editor" role="group" aria-label="Select multiple professional roles">
       <div className="admin-member-multi-role-heading">
         <ShieldCheck size={17}/><div><strong>One account. Multiple professional roles.</strong>
         <small>Listener access stays enabled. Tick every profession this member should have; no second account is required.</small></div>

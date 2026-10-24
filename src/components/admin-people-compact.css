@@ -1,0 +1,226 @@
+/* Owner > People: compact mobile-first directory.
+   Ordinary account details must never collapse into 38px grid tracks. */
+.people-row.people-row-managed {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:12px 14px;
+  align-items:center;
+  width:100%;
+  min-width:0;
+  padding:14px 15px;
+}
+.people-row-managed > .nj-admin-member-summary {
+  grid-column:1;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+.people-row-managed .nj-admin-member-summary > .account-chip-avatar {
+  display:grid;
+  place-items:center;
+  flex:0 0 42px;
+  width:42px;
+  height:42px;
+  overflow:hidden;
+  border-radius:13px;
+}
+.people-row-managed .nj-admin-member-identity {
+  display:grid;
+  gap:4px;
+  min-width:0;
+  flex:1 1 auto;
+}
+.people-row-managed .nj-admin-member-identity > strong {
+  font-size:14px;
+  line-height:1.25;
+  font-weight:730;
+  overflow-wrap:anywhere;
+}
+.people-row-managed .nj-admin-member-identity > span {
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+  white-space:normal;
+}
+.people-row-managed .nj-admin-member-identity > em {
+  display:block;
+  font-size:10px;
+  letter-spacing:.04em;
+  line-height:1.4;
+  color:#d8bd94;
+  text-transform:uppercase;
+  font-style:normal;
+}
+.people-row-managed > .nj-member-open-profile {
+  grid-column:2;
+  justify-self:end;
+  align-self:center;
+  min-height:42px;
+  padding:9px 12px;
+  font-size:12px;
+  line-height:1.2;
+  white-space:nowrap;
+}
+.people-row-managed > .people-row-role-management {
+  grid-column:1/-1;
+  border-top:1px solid var(--line-soft);
+  padding-top:11px;
+  width:100%;
+  min-width:0;
+  gap:10px;
+}
+.people-row-managed .nj-member-summary-controls {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.people-row-managed .people-row-current-roles {
+  flex:1 1 200px;
+  min-width:0;
+  gap:6px;
+}
+.people-row-managed .people-row-role-badges {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:5px;
+  min-width:0;
+}
+.people-row-managed .people-row-role-badges > span {
+  display:inline-flex;
+  align-items:center;
+  flex:0 1 auto;
+  min-width:0;
+  max-width:100%;
+  padding:5px 9px;
+  color:#ead8c1;
+  border:1px solid rgba(207,173,124,.24);
+  background:rgba(207,173,124,.06);
+  border-radius:99px;
+  line-height:1.25;
+  font-size:11px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  text-overflow:clip;
+}
+.people-row-managed .nj-member-manage-toggle {
+  justify-self:end;
+  flex:0 0 auto;
+  min-height:42px;
+  padding:9px 13px;
+  font-size:12px;
+  white-space:nowrap;
+}
+.people-row-managed .people-row-role-management .people-row-controls {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  width:100%;
+  min-width:0;
+  justify-content:stretch;
+  padding:13px;
+  border:1px solid var(--line-soft);
+  border-radius:12px;
+  background:rgba(0,0,0,.17);
+}
+.people-row-managed .people-row-role-management .people-row-controls > label {
+  display:grid;
+  min-width:0;
+  flex:none;
+  width:100%;
+  font-size:12px;
+}
+.people-row-managed .people-row-controls > button,
+.people-row-managed .people-row-controls > .nj-confirm-delete-action {
+  min-width:0;
+  width:100%;
+  align-self:end;
+}
+.people-row-managed .people-row-controls > button,
+.people-row-managed .people-row-controls > .nj-confirm-delete-action > button {
+  min-height:44px;
+  white-space:normal;
+  text-align:center;
+  line-height:1.3;
+}
+.people-row-managed .people-row-controls .nj-delete-confirmation {
+  width:100%;
+  min-width:0;
+}
+.people-row-managed .admin-member-multi-role-editor {
+  grid-column:1/-1;
+  min-width:0;
+  max-width:100%;
+}
+@media (max-width:680px) {
+  .people-row.people-row-managed {
+    grid-template-columns:minmax(0,1fr);
+    padding:12px;
+    gap:9px;
+  }
+  .people-row-managed > .nj-admin-member-summary {
+    grid-column:1;
+  }
+  .people-row-managed > .nj-member-open-profile {
+    grid-column:1;
+    justify-self:start;
+    min-width:0;
+  }
+  .people-row-managed > .people-row-role-management {
+    grid-column:1;
+    padding-top:9px;
+  }
+  .people-row-managed .nj-member-summary-controls {
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .people-row-managed .people-row-current-roles {
+    flex-basis:100%;
+  }
+  .people-row-managed .nj-member-manage-toggle {
+    justify-self:start;
+  }
+  .people-row-managed .people-row-role-management .people-row-controls {
+    grid-template-columns:minmax(0,1fr);
+    padding:11px;
+    gap:10px;
+  }
+  .people-row-managed .people-row-role-management .people-row-controls > label {
+    min-width:0;
+    flex-basis:auto;
+  }
+}
+@media (max-width:360px) {
+  .people-row-managed .nj-admin-member-summary > .account-chip-avatar {
+    flex-basis:37px;
+    width:37px;
+    height:37px;
+  }
+  .people-row-managed .nj-admin-member-identity > strong {font-size:13px}
+}
+
+.nj-admin-people-find {
+  display:flex;
+  align-items:end;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px;
+  margin:12px 0;
+  padding:12px;
+  border:1px solid var(--line-soft);
+  border-radius:12px;
+  background:rgba(255,255,255,.018);
+}
+.nj-admin-people-find label {display:grid;gap:6px;flex:1 1 230px;min-width:0;font-size:12px;color:var(--muted);}
+.nj-admin-people-find input {width:100%;min-width:0;min-height:44px;border-radius:9px;border:1px solid var(--line);background:#1b171d;color:var(--ivory);padding:10px 12px;font:inherit;font-size:14px;}
+.nj-admin-people-find>span {font-size:12px;color:var(--muted);padding:8px 0;}
+.nj-admin-people-pager {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:14px 0 4px;}
+.nj-admin-people-pager>span {font-size:12px;color:var(--muted);text-align:center;}
+.nj-admin-people-pager button {min-height:44px;min-width:95px;font-size:12px;}
+@media(max-width:380px) {.nj-admin-people-pager button{min-width:80px;flex:1 1 80px}.nj-admin-people-pager>span{flex:1 1 100%;order:-1}}
