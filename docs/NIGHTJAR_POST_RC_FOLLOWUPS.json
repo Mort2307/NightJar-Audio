@@ -1,21 +1,21 @@
 {
   "pr": 303,
-  "reason": "Community calendar extension after integrated PR #300; original six-source manifest remains unchanged.",
+  "reason": "SHA-pinned calendar implementation from PR #303 plus reviewed correction restoring already-published recordings and compact NightJar header. Original six-PR integration baselines are unchanged.",
   "files": [
     {
       "path": "src/App.tsx",
       "baselineSha": "9119d9bb22ae5cb8d4c1fdd96761d77d3846eab6",
-      "sha": "f139b04d0f85d10975fee55a5df37a986a18b65e"
+      "sha": "1f935afc13f418013022224a9b2255f9d457b2a2"
     },
     {
       "path": "src/components/PersonalCalendar.tsx",
       "baselineSha": "76d8891703187f4ecb606b940407c291b20312a1",
-      "sha": "acdc8c003df1db65f02c403c551765b83d101884"
+      "sha": "99543a58864a42df3d9a1386db0b6a5b5d87abfa"
     },
     {
       "path": "src/components/personal-calendar.css",
       "baselineSha": "6cbb3a052bb20543bdb9fad6bcae80158606f035",
-      "sha": "728cdcd07ed84e013524098232990d34d9df4040"
+      "sha": "161785b8744bbb8025278154b46581d9a1793cb1"
     }
   ]
 }
