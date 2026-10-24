@@ -38,7 +38,14 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
   const [publishedError,setPublishedError]=useState('');
   const [communityFilter,setCommunityFilter]=useState<'all'|'following'>('all');
   const [releases,setReleases] = useState<ReleaseDate[]>([]);
+  // The personal diary is the only blocking fetch. Community/Creator feeds
+  // must never prevent the month grid from becoming usable.
   const [loading,setLoading] = useState(true);
+  const [upcomingLoading,setUpcomingLoading] = useState(true);
+  const [publishedLoading,setPublishedLoading] = useState(true);
+  const [scheduleLoading,setScheduleLoading] = useState(false);
+  // Ignore stale responses when a member switches roles or leaves the page.
+  const fetchEpoch=useRef(0);
   const [loadError,setLoadError] = useState<string|null>(null);
   const [saving,setSaving] = useState(false);
   // The immediate ref prevents duplicate saves if two taps land before React
@@ -63,49 +70,80 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
     return () => { window.clearInterval(id); document.removeEventListener('visibilitychange',onVisible); };
   },[]);
 
-  const refresh = async () => {
-    setLoading(true);
+  const refresh = () => {
+    const epoch=++fetchEpoch.current;
+    const active=()=>fetchEpoch.current===epoch;
     setLoadError(null);
-    try {
-      if (simulationMode) {
-        setEvents([]);
-        setReleases([]);
-        setUpcoming([]);
-        setPublished([]);
-        return;
-      }
-      const data = await nightjarCalendar.get();
-      setEvents(data.events);
-      setTimeZone(data.timeZone);
-      try {
-        setUpcoming(await nightjarCalendar.upcoming());
-        setCommunityError('');
-      } catch {
-        setCommunityError('Upcoming releases could not refresh. Your private dates are unaffected.');
-      }
-      // Published work comes from the existing age-verified catalogue, never
-      // from private drafts, Creator dashboards or an unmoderated public feed.
-      try {
-        const catalogue = await nightjarCatalogue.list();
+    setCommunityError('');
+    setPublishedError('');
+    setLoading(true);
+    setUpcomingLoading(true);
+    setPublishedLoading(true);
+    const hasSchedule=showCreatorReleases||role==='admin';
+    setScheduleLoading(hasSchedule);
+
+    if (simulationMode) {
+      setEvents([]);
+      setReleases([]);
+      setUpcoming([]);
+      setPublished([]);
+      setLoading(false);
+      setUpcomingLoading(false);
+      setPublishedLoading(false);
+      setScheduleLoading(false);
+      return;
+    }
+
+    // Start all independent calls immediately. The earlier sequential chain
+    // forced the whole page to wait for the slowest three or four roundtrips.
+    void nightjarCalendar.get()
+      .then(data=>{
+        if(!active())return;
+        setEvents(data.events);
+        setTimeZone(data.timeZone);
+      })
+      .catch(error=>{
+        if(!active())return;
+        const message=error instanceof Error?error.message:'Calendar could not load.';
+        setLoadError(message);
+        notify(message);
+      })
+      .finally(()=>{if(active())setLoading(false);});
+
+    void nightjarCalendar.upcoming()
+      .then(items=>{if(active())setUpcoming(items);})
+      .catch(()=>{if(active())setCommunityError('Upcoming releases could not refresh. Your private dates are unaffected.');})
+      .finally(()=>{if(active())setUpcomingLoading(false);});
+
+    // Existing protected catalogue; its latency cannot hold the private
+    // calendar or the Upcoming feed hostage.
+    void nightjarCatalogue.list()
+      .then(catalogue=>{
+        if(!active())return;
         setPublished((catalogue.catalogue??[]).filter((item:PublishedNightjarRelease & {status?:string})=>
           item.status==='released' && Boolean(item.releaseDate) &&
           Number.isFinite(Date.parse(String(item.releaseDate)))
         ));
-        setPublishedError('');
-      } catch {
-        setPublishedError('Published recordings could not refresh. Your private dates are unaffected.');
-      }
-      if (showCreatorReleases || role === 'admin') {
-        const data = role === 'admin' ? await nightjarCatalogue.adminAudioLibrary() : await nightjarCatalogue.dashboard();
-        setReleases((data.releases??[]).filter((item:ReleaseDate)=>item.scheduledAt || item.releaseDate));
-      } else setReleases([]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Calendar could not load.';
-      setLoadError(message);
-      notify(message);
-    } finally { setLoading(false); }
+      })
+      .catch(()=>{if(active())setPublishedError('Published recordings could not refresh. Your private dates are unaffected.');})
+      .finally(()=>{if(active())setPublishedLoading(false);});
+
+    if(hasSchedule){
+      const request=role==='admin'?nightjarCatalogue.adminAudioLibrary():nightjarCatalogue.dashboard();
+      void request
+        .then(data=>{
+          if(active())setReleases((data.releases??[]).filter((item:ReleaseDate)=>item.scheduledAt||item.releaseDate));
+        })
+        .catch(()=>{if(active())notify('Your creator release schedule could not refresh; the rest of your calendar remains available.');})
+        .finally(()=>{if(active())setScheduleLoading(false);});
+    } else {
+      setReleases([]);
+    }
   };
-  useEffect(() => { void refresh(); },[role,showCreatorReleases,simulationMode]);
+  useEffect(()=>{
+    refresh();
+    return ()=>{fetchEpoch.current++;};
+  },[role,showCreatorReleases,simulationMode]);
 
   const today = dateInZone(clock,zone);
   const zoneDate = new Intl.DateTimeFormat('en-GB',{timeZone:zone,dateStyle:'full'}).format(clock);
@@ -231,7 +269,7 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
         </div>
       </header>
       {communityError&&<p role="alert" className="nj-calendar-community-error">{communityError}</p>}
-      {loading?<p className="nj-calendar-community-empty">Checking upcoming releases…</p>:
+      {upcomingLoading?<p className="nj-calendar-community-empty" role="status">Loading approved premieres…</p>:
        visibleUpcoming.length===0?<p className="nj-calendar-community-empty">{communityFilter==='following'?'Nothing announced by the creators you follow yet. Try All.':'No approved upcoming premieres yet. Check back soon.'}</p>:
        <div className="nj-upcoming-list">{visibleUpcoming.slice(0,12).map(item=><button key={item.id} type="button" className="nj-upcoming-item" onClick={()=>{
          const date=dateInZone(new Date(item.scheduledAt),zone),parts=date.split('-').map(Number);
@@ -245,7 +283,7 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
        </button>)}</div>}
       <div className="nj-published-calendar-head"><strong>Already released</strong><small>Browse published work by its actual release date</small></div>
       {publishedError&&<p role="alert" className="nj-calendar-community-error">{publishedError}</p>}
-      {loading?<p className="nj-calendar-community-empty">Checking published recordings…</p>:
+      {publishedLoading?<p className="nj-calendar-community-empty" role="status">Loading published recordings…</p>:
        visiblePublished.length===0?<p className="nj-calendar-community-empty">{communityFilter==='following'?'No published recordings from followed creators yet. Try All.':'No published recordings to show yet.'}</p>:
        <div className="nj-upcoming-list">{visiblePublished.slice(0,12).map(item=><button key={item.id} type="button" className="nj-upcoming-item" onClick={()=>{
          if(!item.releaseDate)return;
@@ -272,6 +310,7 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
       <button type="button" className="secondary-button" disabled={loading||saving} onClick={()=>void refresh()}><RefreshCw size={14}/> Refresh</button>
     </div>
     {loadError && <div className="nj-calendar-error" role="alert"><strong>Calendar couldn't refresh.</strong><span>{loadError} Your existing personal dates have not been changed.</span><button type="button" className="secondary-button" disabled={loading||saving} onClick={()=>void refresh()}>Try again</button></div>}
+    {scheduleLoading&&<p className="nj-calendar-community-empty" role="status">Loading your release schedule in the background…</p>}
     <div className="nj-calendar-main">
       <div className="nj-calendar-month panel">
         <header><button type="button" aria-label="Previous month" onClick={()=>changeMonth(-1)}><ChevronLeft/></button><h2>{monthLabel}</h2><button type="button" aria-label="Next month" onClick={()=>changeMonth(1)}><ChevronRight/></button></header>
@@ -297,7 +336,7 @@ export default function PersonalCalendar({role,showCreatorReleases=false,simulat
               {onOpenPublishedRelease&&<button type="button" className="secondary-button" onClick={()=>onOpenPublishedRelease(entry.publishedRelease!)}>Listen to published recording</button>}
             </>}
             {entry.kind==='personal'&&<div><button type="button" className="ghost-button" onClick={()=>{setEditing(entry.id);setDraftDate(entry.date);setTitle(entry.event?.title??'');setNote(entry.event?.note??'');}}>Edit</button><button type="button" className="ghost-button" onClick={()=>void remove(entry.id)} disabled={saving}><Trash2 size={14}/> Remove</button></div>}
-          </div>):<p>No events on this date. Add something you'd like to remember.</p>}
+          </div>):<p>{loading?'Loading your private calendar dates…':loadError?'Your private dates could not load. Try Refresh.':'No events on this date. Add something you would like to remember.'}</p>}
         </section>
         <section className="panel nj-calendar-form"><h2><Plus size={18}/> {editing?'Edit personal date':'Add a personal date'}</h2>
           <label>Date <input type="date" min="2000-01-01" max="2100-12-31" value={draftDate} disabled={saving} onChange={(event)=>setDraftDate(event.target.value)} /></label>

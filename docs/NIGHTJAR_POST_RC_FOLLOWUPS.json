@@ -1,6 +1,6 @@
 {
   "pr": 303,
-  "reason": "SHA-pinned calendar implementation from PR #303 plus reviewed correction restoring already-published recordings and compact NightJar header. Original six-PR integration baselines are unchanged.",
+  "reason": "SHA-pinned calendar follow-up from #303, published-date and compact-header correction in #307, and independent calendar-feed loading performance fix. Original six-PR integrated source baselines remain unchanged.",
   "files": [
     {
       "path": "src/App.tsx",
@@ -10,7 +10,7 @@
     {
       "path": "src/components/PersonalCalendar.tsx",
       "baselineSha": "76d8891703187f4ecb606b940407c291b20312a1",
-      "sha": "99543a58864a42df3d9a1386db0b6a5b5d87abfa"
+      "sha": "c5aa915d4aa5fde2359163c2a78a011189523b92"
     },
     {
       "path": "src/components/personal-calendar.css",
