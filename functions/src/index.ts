@@ -2266,8 +2266,15 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
 
-  const userId = cleanText((request.data as { userId?: unknown } | undefined)?.userId, 160);
+  const input = (request.data ?? {}) as { userId?: unknown; ownerPreview?: unknown };
+  const userId = cleanText(input.userId, 160);
   if (!userId) throw new HttpsError('invalid-argument', 'Nightjar profile is required.');
+  // A private profile is invisible to members. Only a verified Nightjar owner
+  // can request the same limited presentation for account-safety review.
+  const ownerPreview = input.ownerPreview === true;
+  if (ownerPreview && !identity.admin) {
+    throw new HttpsError('permission-denied', 'Only Nightjar owners can inspect private member profile previews.');
+  }
 
   const [account, profile] = await Promise.all([
     accountRef(userId).get(),
@@ -2280,10 +2287,19 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   if (
     !account.exists
     || !data
-    || accountData?.status !== 'active'
-    || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)
+    || (!ownerPreview && accountData?.status !== 'active')
+    || (!ownerPreview && (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false))
   ) {
     throw new HttpsError('not-found', 'Public Nightjar profile not found.');
+  }
+  if (ownerPreview) {
+    // Audit actor + subject only; do not copy profile content or personal IDs.
+    await db.collection('adminProfilePreviewAudit').add({
+      adminUserId: identity.uid,
+      subjectUserId: userId,
+      reason: 'account_safety_profile_review',
+      viewedAt: FieldValue.serverTimestamp(),
+    });
   }
 
   // Public credit attribution is derived exclusively from independent admin approvals.
@@ -2466,7 +2482,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       publishedWorkCount,
       creditedReleaseCount: creditedReleases.length,
       creditedReleases,
-      publicProfile: true,
+      publicProfile: nightjarTeam ? data.adminCommunityVisible === true : data.publicProfile !== false,
+      ...(ownerPreview ? { ownerOnlyPreview: true, accountStatus: accountData?.status ?? null } : {}),
     },
   };
 });
