@@ -15,7 +15,7 @@ const deferMyProfileOnboardingCall = httpsCallable<void, { deferred: boolean }>(
 const listCreatorsCall = httpsCallable<void, { creators: any[] }>(functions, 'listCreators');
 const listPublicProfilesCall = httpsCallable<void, { profiles: any[] }>(functions, 'listPublicProfiles');
 const getCreatorProfileCall = httpsCallable<{ userId: string }, { creator: any }>(functions, 'getCreatorProfile');
-const getPublicProfileCall = httpsCallable<{ userId: string }, { profile: any }>(functions, 'getPublicProfile');
+const getPublicProfileCall = httpsCallable<{ userId: string; ownerPreview?: boolean }, { profile: any }>(functions, 'getPublicProfile');
 const getMyProfilePortfolioOptionsCall = httpsCallable<{ profileRole?: string }, { role: string; options: any[]; completedCollaborations: number }>(functions, 'getMyProfilePortfolioOptions');
 const profileTagCatalogueCall = httpsCallable<void, { tags: string[] }>(functions, 'profileTagCatalogue');
 const adminProfileTagCatalogueCall = httpsCallable<void, { tags: any[]; promotionThreshold: number }>(functions, 'adminProfileTagCatalogue');
@@ -66,8 +66,8 @@ export const nightjarCommunity = {
     return repairMojibakeDisplayData((await getCreatorProfileCall({ userId })).data);
   },
 
-  async getPublicProfile(userId: string) {
-    return repairMojibakeDisplayData((await getPublicProfileCall({ userId })).data);
+  async getPublicProfile(userId: string, ownerPreview = false) {
+    return repairMojibakeDisplayData((await getPublicProfileCall({ userId, ...(ownerPreview ? { ownerPreview: true } : {}) })).data);
   },
 
   async getMyProfilePortfolioOptions(profileRole?: string) {

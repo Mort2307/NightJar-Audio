@@ -68,13 +68,14 @@ assert.match(app, /<AdminLiveProfileViewer accounts=\{adminOverview\?\.people\?\
 assert.match(app, /openLiveMemberProfile\(account\.userId\)/, 'a listed member can be opened straight from the People workpage');
 assert.match(app, /tags\|branding\|live-preview\|profile-viewer/, 'profile viewer deep-link is reloadable');
 assert.match(app, /adminPanel !== 'profile-viewer' \|\| demoMode \|\| !canAdmin/, 'live accounts are loaded only after leaving simulation');
-assert.match(realProfile, /nightjarCommunity\.getPublicProfile\(id\)/, 'all roles use the same real published profile endpoint');
+assert.match(realProfile, /nightjarCommunity\.getPublicProfile\(id, true\)/, 'owner viewer requests server-authorised profile inspection rather than member publication');
 assert.match(realProfile, /const \[selected,setSelected\] = useState<string\[\]>/, 'viewer supports selecting more than one account');
 assert.match(realProfile, /prev\.length>=3/, 'comparison has a bounded account count');
 assert.match(realProfile, /type="checkbox" checked=\{chosen\.includes\(role\)\}/, 'multiple approved role checkboxes are supported');
 assert.match(realProfile, /approvedRoles\(account\)/, 'role picker uses account roles actually approved');
 assert.match(realProfile, /readOnlyPreview/, 'exact public profile opens in non-mutating state');
-assert.match(realProfile, /result\.status==='private'/, 'private or unavailable profiles cannot be bypassed');
+assert.match(realProfile, /result\.status==='private'/, 'unpublished or missing profiles render a safe empty state');
+assert.match(realProfile, /ownerOnlyPreview/, 'owner viewer keeps inspection mode scoped to read-only profile component');
 assert.doesNotMatch(realProfile, /getMyProfile\(|getProtectedScript\(|listDirectMessages\(|saveMyProfile\(/, 'viewer cannot call member-private endpoints');
 assert.match(publishedProfile, /initialRole\?: string/, 'member profile supports opening a selected role');
 assert.match(publishedProfile, /!readOnlyPreview && <button className="secondary-button" onClick=\{\(\) => void onToggleFollow/, 'owner preview does not mutate follows');

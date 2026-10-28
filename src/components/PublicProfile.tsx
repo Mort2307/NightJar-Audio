@@ -34,6 +34,7 @@ type Props = {
   demoMode?: boolean;
   initialRole?: string;
   readOnlyPreview?: boolean;
+  ownerOnlyPreview?: boolean;
   focusArtworkId?: string | null;
 };
 
@@ -45,7 +46,7 @@ const roleLabel = (role: string | null | undefined) => {
   return 'Listener';
 };
 
-export default function PublicProfile({ userId, followingIds, onToggleFollow, onOpenConnections, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = '', readOnlyPreview = false, focusArtworkId:focusArtworkIdProp=null }: Props) {
+export default function PublicProfile({ userId, followingIds, onToggleFollow, onOpenConnections, onClose, notify, canMessage = false, onMessage, onCommunityRelease, canReact = false, reactionByRelease = {}, onReaction, communityByRelease = {}, demoMode = false, initialRole = '', readOnlyPreview = false, ownerOnlyPreview = false, focusArtworkId:focusArtworkIdProp=null }: Props) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,7 +147,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       setLoading(false);
       return;
     }
-    void nightjarCommunity.getPublicProfile(userId).then((data) => {
+    void nightjarCommunity.getPublicProfile(userId, readOnlyPreview && ownerOnlyPreview).then((data) => {
       if (!cancelled) setProfile(data.profile ?? null);
     }).catch(() => {
       if (!cancelled) {
@@ -160,7 +161,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [userId, demoMode, retryKey]);
+  }, [userId, demoMode, retryKey, readOnlyPreview, ownerOnlyPreview]);
 
   useEffect(() => {
     if (!focusArtworkId || !profile?.artistPortfolio?.some((item: any) => String(item.id) === focusArtworkId)) return;
@@ -264,7 +265,7 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
 
       {!loading && loadError && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile temporarily unavailable</strong><p>{loadError}</p></div><button className="secondary-button" onClick={()=>setRetryKey((value)=>value+1)}>Try again</button></div>}
       {!loading && !loadError && !profile && <div className="public-profile-load-failure"><ShieldCheck size={20}/><div><strong>Profile not available</strong><p>This profile is private, unavailable or no longer active.</p></div></div>}
-      {readOnlyPreview && <div className="nj-profile-viewer-modal-note"><ShieldCheck size={15}/> Admin live public profile view · original member data · all actions disabled</div>}
+      {readOnlyPreview && <div className="nj-profile-viewer-modal-note"><ShieldCheck size={15}/> {profile?.ownerOnlyPreview && profile?.publicProfile === false ? 'Private profile · owner-only safety preview · not visible to members' : 'Owner-only live profile preview'} · all member actions disabled</div>}
       {profile && <div className="creator-profile-body">
         <div className="creator-profile-hero nj-cinema-profile-hero">
           <div className={'nj-cinema-profile-cover'+(bannerFromCustom ? ' nj-cinema-cover-custom' : bannerFromPortrait ? ' nj-cinema-cover-portrait' : ' nj-cinema-cover-branded')} aria-hidden="true">
@@ -314,13 +315,14 @@ export default function PublicProfile({ userId, followingIds, onToggleFollow, on
               ? 'nj-cinema-work'
               : ['Collaborations','Specialist skills'].includes(String(label))
                 ? 'nj-cinema-collaborate' : null;
-            return kind || target
-              ? <button type="button" className="nj-profile-metric-button" key={String(label)}
+            return (kind && readOnlyPreview && profile?.publicProfile === false) || (!kind && !target)
+              ? <div key={String(label)}><strong>{value}</strong><span>{label}</span></div>
+              : <button type="button" className="nj-profile-metric-button" key={String(label)}
                   aria-label={kind ? 'View '+String(label).toLowerCase()+' of '+String(profile.displayName) : 'Explore '+String(label).toLowerCase()}
                   onClick={()=>kind ? onOpenConnections(profile.userId,kind,profile.displayName) : goToSection(target!)}>
                   <strong>{value}</strong><span>{label}</span>
                 </button>
-              : <div key={String(label)}><strong>{value}</strong><span>{label}</span></div>;
+              ;
           })}
         </div>
         <nav className="nj-cinema-profile-tabs" aria-label="Profile sections">

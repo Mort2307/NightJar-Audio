@@ -38,6 +38,26 @@ assert.match(detail, /nightjarTeam \? data\.adminCommunityVisible !== true : dat
 assert.match(detail, /roles: nightjarTeam \? \['listener'\] : \['listener', \.\.\.professionalRoles\]/);
 assert.match(detail, /nightjarTeam,/);
 
+// Owner inspection is explicitly requested, server-authorised and audit logged.
+// Ordinary public directory and profile requests cannot opt into this view.
+const communityClient = read('src/platform/firebase-community.ts');
+const ownerViewer = read('src/components/AdminLiveProfileViewer.tsx');
+const workflow = read('.github/workflows/firebase-hosting-merge.yml');
+assert.match(detail,/ownerPreview = input\.ownerPreview === true/,'preview opt-in must be explicit');
+assert.match(detail,/if \(ownerPreview && !identity\.admin\)/,'only server-authenticated owners may override visibility');
+assert.match(detail,/!ownerPreview && accountData\?\.status !== 'active'/,'inactive profiles remain hidden from members');
+assert.match(detail,/!ownerPreview && \(nightjarTeam \? data\.adminCommunityVisible !== true : data\.publicProfile === false\)/,'private visibility remains enforced for members');
+assert.match(detail,/db\.collection\('adminProfilePreviewAudit'\)\.add/,'every owner preview is audit logged');
+assert.match(detail,/ownerOnlyPreview: true, accountStatus:/,'owner view identifies itself to its display');
+assert.doesNotMatch(detail,/\b(?:passwordHash|authToken|securityEvents|verificationEvidence):\s/,'owner view must not expose private data');
+assert.match(communityClient,/ownerPreview \? \{ ownerPreview: true \}/,'client must not request private inspection without explicit owner mode');
+assert.match(ownerViewer,/getPublicProfile\(id, true\)/,'owner viewer uses protected inspection mode');
+assert.match(ownerViewer,/readOnlyPreview\s+ownerOnlyPreview/,'full profile remains read only');
+assert.match(publicProfile,/readOnlyPreview && ownerOnlyPreview/,'profile detail uses protected server gate');
+assert.match(publicProfile,/!profile \|\| readOnlyPreview/,'owner preview cannot use share actions');
+assert.match(workflow,/\[nightjar-owner-private-profile-release\]/,'backend-first deployment gate must be deliberate');
+assert.match(workflow,/inputs\[function_names\]=getPublicProfile/,'deploy only the modified profile callable');
+
 const follow = section('export const setProfileFollow = onCall', 'export const setFavouriteRelease = onCall');
 assert.match(follow, /profile\.data\(\)\?\.adminCommunityVisible !== true/,
   'Following a private team profile must remain impossible');
