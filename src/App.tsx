@@ -121,7 +121,7 @@ import WorkspaceSwitcher from './components/WorkspaceSwitcher';
 import NightjarSkeleton from './components/NightjarSkeleton';
 import type { ProfileDraftController } from './components/CloudProfileDraft';
 import ProfileSectionBoundary from './components/ProfileSectionBoundary';
-import { profileCompletionPercentage, isProfileSetupComplete } from './platform/profile-setup-state';
+import { profileCompletionPercentage, isProfileSetupComplete, recoverPendingProfileDiscoverability } from './platform/profile-setup-state';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
 const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
@@ -1407,7 +1407,8 @@ function App() {
           onboardingFinishedUsersRef.current.has(memberId);
         if (completed) onboardingFinishedUsersRef.current.add(memberId);
         const currentProfile = completed && nextProfile.onboardingComplete !== true
-          ? { ...nextProfile, onboardingComplete: true } : nextProfile;
+          ? { ...nextProfile, onboardingComplete: true }
+          : { ...nextProfile, publicProfile: recoverPendingProfileDiscoverability(nextProfile) };
         const preferredRole: PreviewRole = ['listener','creator','writer','editor','artist'].includes(String(role))
           ? role as PreviewRole
           : 'listener';
@@ -3047,7 +3048,10 @@ function App() {
           : availableRoles.includes(profileData.profile.activeRole)
             ? profileData.profile.activeRole as PreviewRole
             : 'listener';
-        const mergedProfile = applyProfileRoleDraft(profileData.profile, targetRole);
+        const editableProfile = isProfileSetupComplete(profileData.profile)
+          ? profileData.profile
+          : { ...profileData.profile, publicProfile: recoverPendingProfileDiscoverability(profileData.profile) };
+        const mergedProfile = applyProfileRoleDraft(editableProfile, targetRole);
         setProfile(mergedProfile);
         setProfileBaseline(structuredClone(mergedProfile));
         setProfileEditRole(targetRole);
