@@ -1406,7 +1406,7 @@ function App() {
         const completed = isProfileSetupComplete(nextProfile) ||
           onboardingFinishedUsersRef.current.has(memberId);
         if (completed) onboardingFinishedUsersRef.current.add(memberId);
-        const currentProfile = completed && nextProfile.onboardingComplete !== true
+        const currentProfile: typeof nextProfile = completed && nextProfile.onboardingComplete !== true
           ? { ...nextProfile, onboardingComplete: true }
           : { ...nextProfile, publicProfile: recoverPendingProfileDiscoverability(nextProfile) };
         const preferredRole: PreviewRole = ['listener','creator','writer','editor','artist'].includes(String(role))
