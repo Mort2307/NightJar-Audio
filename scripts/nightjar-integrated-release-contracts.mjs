@@ -26,6 +26,20 @@ for(const item of followup.files){
   assert.ok(source,'calendar override must originate from the six integrated batches');
   assert.equal(item.baselineSha,source.sha,'original PR blob reference must remain immutable');
 }
+// Independent, exact-blob-pinned repair. Keep the calendar baseline and original
+// release candidate manifest immutable; do not grant a wildcard App.tsx exception.
+const visibilityFollowup=JSON.parse(string('docs/NIGHTJAR_PROFILE_VISIBILITY_FOLLOWUP.json'));
+assert.equal(visibilityFollowup.pr,311,'profile visibility change must be independently reviewed');
+assert.deepEqual(visibilityFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'profile visibility follow-up cannot silently change unrelated RC files');
+for(const item of visibilityFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'profile follow-up must be anchored to an approved earlier override');
+  assert.equal(item.baselineSha,previous.sha,'do not rewrite calendar/RC provenance');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){

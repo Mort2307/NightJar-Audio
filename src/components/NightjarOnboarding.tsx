@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Check, UserCircle2, X } from 'lucide-react';
 import { nightjarCommunity } from '../platform/firebase-community';
-import { isProfileSetupComplete } from '../platform/profile-setup-state';
+import { isProfileSetupComplete, recoverPendingProfileDiscoverability } from '../platform/profile-setup-state';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import {
@@ -83,7 +83,7 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
     favouriteTags: profileSelections('favouriteTags'),
     favouriteTropes: profileSelections('favouriteTropes'),
     favouriteCategories: profileSelections('favouriteCategories'),
-    publicProfile: initialProfile?.publicProfile ?? savedDraft?.publicProfile ?? true,
+    publicProfile: recoverPendingProfileDiscoverability(initialProfile),
   });
 
   useEffect(() => {
@@ -249,7 +249,8 @@ export default function NightjarOnboarding({ initialProfile, role, onComplete, o
           </label>
         </div>
         <label>Pronouns <span className="optional-label">optional</span><input maxLength={60} value={profile.pronouns} onChange={(event)=>update('pronouns',event.target.value)} placeholder="e.g. she/her"/></label>
-        <label className="profile-toggle premium-onboarding-public"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(event)=>update('publicProfile',event.target.checked)}/> Let other Nightjar members discover my profile</label>
+        <label className="profile-toggle premium-onboarding-public"><input type="checkbox" checked={profile.publicProfile !== false} onChange={(event)=>update('publicProfile',event.target.checked)}/> Let other Nightjar members discover my profile after setup</label>
+        <small>Unfinished profiles stay hidden. Once you complete setup, this choice controls whether members can find you in the directory. You can change it later in My Profile.</small>
       </div>;
     }
 

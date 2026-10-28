@@ -222,6 +222,7 @@ export default function UserProfileStudio({
         <label>Welcome note <span className="optional-label">optional</span><textarea maxLength={300} value={profile.welcomeMessage ?? ''} onChange={(event)=>setProfile((current:any)=>({...current,welcomeMessage:event.target.value}))} placeholder="A small message for people visiting your profile."/><small className="field-counter">{String(profile.welcomeMessage ?? '').length}/300</small></label>
         <label className="profile-toggle premium-profile-public-toggle"><input type="checkbox" checked={discoverable} onChange={(event)=>setProfile((current:any)=>role === 'admin' ? {...current,adminCommunityVisible:event.target.checked} : {...current,publicProfile:event.target.checked})}/>{role === 'admin' ? 'Show my Nightjar Team profile to the community' : 'Allow Nightjar members to discover my profile'}</label>
         {role === 'admin' && <ContextHelp topic="team-profile-visibility"/>}
+        {role !== 'admin' && <small>{discoverable ? 'Members can find your profile in NightJar search once it is saved and your account is active.' : 'Private profiles are hidden from NightJar search and public profile links. Turn discovery on and save to appear again.'}</small>}
       </article>
 
       <article className="panel premium-user-card discovery">

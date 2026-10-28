@@ -1,0 +1,11 @@
+{
+  "pr": 311,
+  "reason": "Explicitly reviewed onboarding discoverability repair. This follow-up only modifies src/App.tsx; the calendar and original six-PR integrity baselines remain immutable. The companion wizard/helper/profile/test edits are independently validated in PR #311.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "2ae6f3cc01e6e2f46a8c96268272baae52d01941",
+      "sha": "f08c746abc9843a365a77ca81831c47ac45e82f2"
+    }
+  ]
+}
