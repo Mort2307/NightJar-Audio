@@ -55,7 +55,7 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
       try {
         // This is exactly the public endpoint used by the member profile
         // modal; we do not read accounts/{uid}/private or act as that user.
-        const data=await nightjarCommunity.getPublicProfile(id);
+        const data=await nightjarCommunity.getPublicProfile(id, true);
         if (cancelled) return;
         const profile=data.profile;
         setResults((prev)=>({...prev,[id]:profile ? {status:'ready',profile} : {status:'private'}}));
@@ -84,8 +84,8 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
       <button type="button" className="secondary-button" onClick={()=>{void onRefreshAccounts();setRefreshToken(value=>value+1);}}><RefreshCw size={14}/> Refresh live data</button>
     </header>
 
-    <div className="nj-profile-viewer-safety"><ShieldCheck size={18}/><div><strong>Actual public member experience</strong>
-      <p>The preview uses Nightjar's real published profile endpoint and the same Public Profile component members open in the Directory. It cannot display private profiles, access individual inboxes or scripts, change member permissions or send gifts and follows. Private Studio dashboards require a signed-in authorised tester.</p></div></div>
+    <div className="nj-profile-viewer-safety"><ShieldCheck size={18}/><div><strong>Owner-only safety inspection</strong>
+      <p>Inspect any member's normal profile presentation, including private profiles, without publishing or impersonating them. Only owner-authorised accounts can access these previews; every inspection is logged. No private inboxes, verification evidence, unpublished manuscripts or account security information are displayed.</p></div></div>
 
     <div className="nj-profile-viewer-filters">
       <label><Search size={15}/><input type="search" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Find account by name, handle, role or email" aria-label="Search live member accounts"/></label>
@@ -114,22 +114,23 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
         const available=approvedRoles(account);
         const chosen=(rolesByAccount[id]??available).filter(role=>available.includes(role));
         const profile=result.profile;
+        const privateProfile=profile?.publicProfile===false;
         return <section className="nj-profile-viewer-member" key={id} aria-label={String(account.name??'Member')+' public role views'}>
-          <header><div><span className="mini-label">LIVE ACCOUNT · {account.status?.toUpperCase()??'ACTIVE'}</span><h3>{account.name??'Nightjar member'}</h3><p>{account.publicProfile===false?'Private account':account.handle?'@'+account.handle.replace(/^@/,''):'Published profile'} · {available.length} approved role{available.length===1?'':'s'}</p></div>
+          <header><div><span className="mini-label">LIVE ACCOUNT · {account.status?.toUpperCase()??'ACTIVE'}</span><h3>{account.name??'Nightjar member'}</h3><p>{privateProfile?'Private · visible to Owner only':account.handle?'@'+account.handle.replace(/^@/,''):'Published profile'} · {available.length} approved role{available.length===1?'':'s'}</p></div>
           <button type="button" className="ghost-button" onClick={()=>toggleAccount(id)} aria-label={'Remove '+account.name+' from comparison'}><X size={16}/> Remove</button></header>
           <fieldset className="nj-profile-viewer-role-select"><legend>Choose the approved roles to inspect (multiple allowed)</legend>
             {available.map(role=>{const Icon=symbols[role];return <label key={role} className={chosen.includes(role)?'active':''}><input type="checkbox" checked={chosen.includes(role)} onChange={()=>toggleRole(id,role,available)}/><Icon size={16}/>{labels[role]}</label>;})}
           </fieldset>
-          {result.status==='loading'&&<div className="nj-profile-viewer-status"><RefreshCw size={18}/><strong>Loading this member's published profile…</strong></div>}
-          {result.status==='error'&&<div className="nj-profile-viewer-status" role="alert"><ShieldCheck size={18}/><strong>Could not load the public profile.</strong><p>{result.message}</p><button type="button" className="secondary-button" onClick={()=>setRefreshToken(n=>n+1)}>Retry</button></div>}
-          {result.status==='private'&&<div className="nj-profile-viewer-status"><LockKeyhole size={20}/><strong>No public profile is available.</strong><p>This member may have a private, inactive, or unpublished profile. Nightjar deliberately does not reveal it in public preview.</p></div>}
+          {result.status==='loading'&&<div className="nj-profile-viewer-status"><RefreshCw size={18}/><strong>Loading owner-only profile preview…</strong></div>}
+          {result.status==='error'&&<div className="nj-profile-viewer-status" role="alert"><ShieldCheck size={18}/><strong>Could not load this profile preview.</strong><p>{result.message}</p><button type="button" className="secondary-button" onClick={()=>setRefreshToken(n=>n+1)}>Retry</button></div>}
+          {result.status==='private'&&<div className="nj-profile-viewer-status"><LockKeyhole size={20}/><strong>No saved profile is available.</strong><p>This account may not yet have saved its profile. Owner access cannot display information that does not exist.</p></div>}
           {result.status==='ready'&& <div className="nj-profile-viewer-roles">
             {chosen.map(role=>{
               const detail=roleData(profile,role);
               const specialties=[...lines(detail.roleFocus),...lines(detail.roleSpecialties)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,6);
               const fallback=role==='listener'?'A listener in the Nightjar community.':role==='creator'?'Voice performance and original audio.':role==='writer'?'Stories and scripts.':role==='editor'?'Post-production and sound.':'Visual storytelling and artwork.';
               return <article className="nj-profile-viewer-role-card" key={role}>
-                <div className="nj-profile-viewer-card-kicker"><span>REAL PUBLISHED DATA</span><span>{labels[role]}</span></div>
+                <div className="nj-profile-viewer-card-kicker"><span>{privateProfile?'OWNER-ONLY · PRIVATE':'LIVE PROFILE'}</span><span>{labels[role]}</span></div>
                 <div className="nj-profile-viewer-identity">
                   <span className="nj-profile-viewer-big-avatar">{profile.avatarUrl?<img src={profile.avatarUrl} alt="" loading="lazy"/>:profile.avatarInitials??String(profile.displayName??'NJ').slice(0,2).toUpperCase()}</span>
                   <div><strong>{profile.displayName}</strong>{profile.handle&&<span>@{String(profile.handle).replace(/^@/,'')}</span>}</div>
@@ -138,7 +139,7 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
                 <p>{detail.roleBio || (role==='listener'?profile.bio:null) || 'No public biography for this role yet.'}</p>
                 {!!specialties.length&&<div className="nj-profile-viewer-tags">{specialties.map((item)=> <span key={item}>{item}</span>)}</div>}
                 {detail.roleAvailability&&<div className="nj-profile-viewer-availability"><CheckCircle2 size={14}/>{detail.roleAvailability}</div>}
-                <button type="button" className="primary-button" onClick={()=>setProfileOpen({userId:id,role})}><Eye size={15}/> Open actual public profile <ArrowRight size={14}/></button>
+                <button type="button" className="primary-button" onClick={()=>setProfileOpen({userId:id,role})}><Eye size={15}/> {privateProfile?'Inspect private profile':'Open profile preview'} <ArrowRight size={14}/></button>
               </article>;
             })}
             {!chosen.length&&<div className="nj-profile-viewer-status"><p>Select at least one approved role above to view its published identity.</p></div>}
@@ -152,6 +153,7 @@ export default function AdminLiveProfileViewer({ accounts, initialUserId, onRefr
       userId={profileOpen.userId}
       initialRole={profileOpen.role}
       readOnlyPreview
+      ownerOnlyPreview
       followingIds={[]}
       onToggleFollow={async()=>{}}
       onOpenConnections={(userId,kind,displayName)=>setViewerConnections({userId,kind,displayName})}
