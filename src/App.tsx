@@ -6631,7 +6631,7 @@ function App() {
               {adminApplicationBox === 'attention' && <small>There are no actionable pending professional roles on this application record. Check the account and its role history before changing anything.</small>}
             </div>
             {adminApplicationBox === 'pending' && <div className="admin-data-actions professional-application-actions">
-               <button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Keep banked</button>
+              <button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Keep banked</button>
               <button className="ghost-button" onClick={() => void decideCreatorApplication(application, 'rejected')}>Reject remaining</button>
               {remainingRoles.map((role)=><button key={role} className="secondary-button"
                 disabled={!demoMode && application.ageVerified !== true && application.temporaryTestAccess !== true}
