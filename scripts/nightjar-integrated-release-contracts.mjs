@@ -40,6 +40,20 @@ for(const item of visibilityFollowup.files){
   overrides.set(item.path,item);
 }
 
+// Separate, exact-blob-pinned professional intake fix (PR #314). This records
+// the owner-reviewed UI change without altering any historic RC/provenance SHA.
+const intakeFollowup=JSON.parse(string('docs/NIGHTJAR_PROFESSIONAL_INTAKE_FOLLOWUP.json'));
+assert.equal(intakeFollowup.pr,314,'professional intake correction requires separate review');
+assert.deepEqual(intakeFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'intake follow-up cannot silently change unrelated RC files');
+for(const item of intakeFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'intake follow-up must be anchored to an approved earlier override');
+  assert.equal(item.baselineSha,previous.sha,'do not rewrite visibility/calendar/RC provenance');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
@@ -56,7 +70,7 @@ for(const pr of manifest.includes){
     const bytes=read(entry.path);
     const gitBlob=createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
     assert.equal(gitBlob,overrides.get(entry.path)?.sha ?? entry.sha,
-      entry.path+' must match the original RC or the explicitly reviewed calendar follow-up');
+      entry.path+' must match the original RC or an independently reviewed SHA-pinned follow-up');
     originals++;
   }
 }
