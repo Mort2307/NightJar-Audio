@@ -13,8 +13,10 @@ new Function('module', 'exports', output.outputText)(module, module.exports);
 const { classifyProfessionalApplications, filterProfessionalApplicationsByRole, pendingApplicationRoles } = module.exports;
 
 const records = [
-  { id: 'new', status: 'banked', requestedRoles: ['writer'], approvedRoles: [] },
-  { id: 'partial', status: 'banked', requestedRoles: ['writer','editor'], approvedRoles: ['writer'] },
+  { id: 'new', status: 'banked', requestedRoles: ['writer'], approvedRoles: [], ageVerified: true },
+  { id: 'partial', status: 'banked', requestedRoles: ['writer','editor'], approvedRoles: ['writer'], ageVerified: true },
+  { id: 'unverified', status: 'banked', requestedRoles: ['writer'], approvedRoles: [], ageVerified: false },
+  { id: 'unverified-partial', status: 'banked', requestedRoles: ['artist','editor'], approvedRoles: ['artist'], ageVerified: false },
   { id: 'approved', status: 'approved', requestedRoles: [], approvedRoles: ['creator'] },
   { id: 'old-complete', status: 'banked', requestedRoles: [], approvedRoles: ['artist'] },
   { id: 'rejected', status: 'rejected', requestedRoles: [], approvedRoles: [] },
@@ -25,6 +27,8 @@ const records = [
 ];
 const buckets = classifyProfessionalApplications(records);
 assert.deepEqual(buckets.pending.map((x) => x.id), ['new','partial','waitlisted']);
+assert.deepEqual(buckets.verification.map((x) => x.id), ['unverified','unverified-partial'], 'unverified role requests are banked, not ready for approval');
+assert.deepEqual(classifyProfessionalApplications([{ id: 'verified-now', status: 'banked', requestedRoles: ['writer'], approvedRoles: [], ageVerified: true }]).pending.map((x) => x.id), ['verified-now'], 'a successful Didit refresh makes the same application actionable');
 assert.deepEqual(buckets.approved.map((x) => x.id), ['approved','old-complete','deduped']);
 assert.deepEqual(buckets.history.map((x) => x.id), ['rejected','withdrawn']);
 assert.deepEqual(buckets.attention.map((x) => x.id), ['stale']);
@@ -32,13 +36,18 @@ assert.deepEqual(pendingApplicationRoles(records[1]), ['editor']);
 assert.deepEqual(filterProfessionalApplicationsByRole(buckets.pending, 'writer').map((x) => x.id), ['new','partial']);
 assert.deepEqual(filterProfessionalApplicationsByRole(buckets.approved, 'creator').map((x) => x.id), ['approved']);
 assert.equal(filterProfessionalApplicationsByRole(buckets.approved, 'all').length, 3);
-assert.equal(buckets.pending.length, 3, 'approved and rejected accounts never inflate pending totals');
+assert.equal(buckets.pending.length, 3, 'approved, rejected and unverified accounts never inflate actionable totals');
+assert.equal(buckets.verification.length, 2, 'unverified application records stay visible without role grants');
 
 const app = fs.readFileSync('src/App.tsx', 'utf8');
 assert.match(app, /classifyProfessionalApplications\(adminApplications\)/, 'dashboard uses the same bucketing policy');
 assert.match(app, /adminApplicationBox === 'history'/, 'rejected and withdrawn decision history remains accessible');
 assert.match(app, /adminApplicationBox === 'approved'/, 'approved professional accounts have their own section');
 assert.match(app, /label:'Already Approved'/, 'explicit Already Approved tab exists');
+assert.match(app, /label:'Awaiting verification'/, 'unverified members are in a separate visible workbox');
+assert.match(app, /value:applicationGroups\.pending\.length/, 'owner metric counts verified, actionable applications only');
+assert.match(app, /Refresh statuses/, 'admin can re-read Didit approval status without leaving the queue');
+assert.match(app, /No admin approval is needed to start their check/, 'clear member-first verification explanation');
 assert.match(app, /value:applicationGroups\.pending\.length/, 'owner metric shows only new applications');
 assert.match(app, /pendingApplications=\{applicationGroups\.pending\.length\}/, 'release-readiness count excludes approved accounts');
 assert.match(app, /applicationGroups\.pending\.length \?/, 'owner call-to-action is hidden when nothing awaits approval');
