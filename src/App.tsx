@@ -6535,7 +6535,7 @@ function App() {
     <div>
       <span className="mini-label">CONTROLLED INTAKE</span>
       <strong>Professional application bank</strong>
-      <small>Only new applications are counted as needing approval. Completed approvals appear in Already Approved; rejected or withdrawn applications remain in Decision History.</small>
+      <small>Only verified applications count as ready for owner approval. Unverified applicants can complete Didit first; completed approvals and previous decisions remain in their own sections.</small>
     </div>
     <label>Filter profession
       <select value={adminApplicationRoleFilter} onChange={(event)=>setAdminApplicationRoleFilter(event.target.value as 'all'|'creator'|'writer'|'editor'|'artist')}>
@@ -6546,9 +6546,12 @@ function App() {
         <option value="artist">Artists</option>
       </select>
     </label>
-    {adminApplicationBox === 'pending' && <label>Approval wave
+    {(adminApplicationBox === 'pending' || adminApplicationBox === 'verification') && <label>Approval wave
       <input value={adminApplicationWave} onChange={(event)=>setAdminApplicationWave(event.target.value)} placeholder="e.g. Launch Wave 1"/>
     </label>}
+    <button type="button" className="secondary-button" disabled={adminPanelLoading} onClick={() => void loadAdminApplications()}>
+      <RefreshCw size={15} aria-hidden="true"/>{adminPanelLoading ? 'Checking verification…' : 'Refresh statuses'}
+    </button>
   </div>
   {failedProfessionalApprovalEmailCount > 0 && <div className="nj-application-email-alert" role="status">
     <strong>{failedProfessionalApprovalEmailCount} approval email{failedProfessionalApprovalEmailCount === 1 ? '' : 's'} require{failedProfessionalApprovalEmailCount === 1 ? 's' : ''} attention.</strong>
@@ -6558,6 +6561,7 @@ function App() {
   <div className="nj-application-tabs" role="tablist" aria-label="Professional application workboxes">
     {([
       { id:'pending', label:'Needs approval', count:applicationGroups.pending.length },
+      { id:'verification', label:'Awaiting verification', count:applicationGroups.verification.length },
       { id:'approved', label:'Already Approved', count:applicationGroups.approved.length },
       { id:'history', label:'Decision History', count:applicationGroups.history.length },
       { id:'attention', label:'Needs attention', count:applicationGroups.attention.length },
@@ -6569,8 +6573,8 @@ function App() {
     ? <div className="people-empty">Loading professional applications…</div>
     : visibleAdminApplications.length === 0
       ? <div className="people-empty"><Sparkles size={18}/>
-          <strong>{adminApplicationBox === 'pending' ? 'No new applications awaiting approval' : adminApplicationBox === 'approved' ? 'Nobody has been approved yet' : adminApplicationBox === 'history' ? 'No rejected or withdrawn applications' : 'No application records need attention'}</strong>
-          <span>{adminApplicationBox === 'pending' ? 'Already approved people never appear in this queue or its badge.' : adminApplicationBox === 'approved' ? 'Approved professionals are kept here without being counted as pending.' : adminApplicationBox === 'history' ? 'Rejected and withdrawn applications are retained here.' : 'Records with no actionable role are kept for investigation.'}</span>
+          <strong>{adminApplicationBox === 'pending' ? 'No verified applications awaiting approval' : adminApplicationBox === 'verification' ? 'Nobody is waiting for age verification' : adminApplicationBox === 'approved' ? 'Nobody has been approved yet' : adminApplicationBox === 'history' ? 'No rejected or withdrawn applications' : 'No application records need attention'}</strong>
+          <span>{adminApplicationBox === 'pending' ? 'Applicants appear here after their Didit result is confirmed. Refresh to check for newly verified members.' : adminApplicationBox === 'verification' ? 'Unverified applications are kept safely banked without blocking members from completing Didit.' : adminApplicationBox === 'approved' ? 'Approved professionals are kept here without being counted as pending.' : adminApplicationBox === 'history' ? 'Rejected and withdrawn applications are retained here.' : 'Records with no actionable role are kept for investigation.'}</span>
         </div>
       : visibleAdminApplications.map((application:any) => {
           const remainingRoles = pendingApplicationRoles(application);
@@ -6590,6 +6594,8 @@ function App() {
                 <span className={'nj-application-status nj-application-status-' + adminApplicationBox}>
                   {adminApplicationBox === 'pending'
                     ? remainingRoles.map(roleLabel).join(' / ') + ' - ' + status
+                    : adminApplicationBox === 'verification'
+                      ? remainingRoles.map(roleLabel).join(' / ') + ' - awaiting Didit 18+ verification'
                     : hasFinishedApproval
                       ? 'Approved - No pending roles'
                       : adminApplicationBox === 'history'
@@ -6620,12 +6626,12 @@ function App() {
               {application.statement && <p>{application.statement}</p>}
               {application.experience && <small>{application.experience}</small>}
               {application.portfolioUrl && <small>Portfolio: {application.portfolioUrl}</small>}
-              {adminApplicationBox === 'pending' && <small>{application.ageVerified ? 'Age assurance verified' : application.temporaryTestAccess ? 'Approved temporary tester access' : demoMode ? 'Demo applicant · age check simulated' : 'Age assurance required before approval'}</small>}
+              {adminApplicationBox === 'pending' && <small>{application.ageVerified ? 'Didit 18+ verified · ready for your decision' : application.temporaryTestAccess ? 'Approved temporary tester access' : demoMode ? 'Demo applicant · age check simulated' : 'Age assurance required before approval'}</small>}
+              {adminApplicationBox === 'verification' && <small>Awaiting the member’s own Didit 18+ verification. No admin approval is needed to start their check. Their application will move into Needs approval when you refresh after verification.</small>}
               {adminApplicationBox === 'attention' && <small>There are no actionable pending professional roles on this application record. Check the account and its role history before changing anything.</small>}
             </div>
             {adminApplicationBox === 'pending' && <div className="admin-data-actions professional-application-actions">
-              {application.ageVerified !== true && <ConfirmDeleteAction label="Remove pending test application" itemName={String(application.name ?? application.email ?? application.userId ?? 'Unknown applicant')} description="Dismiss this unverified pending professional application with a recorded rejection. The member account, content and ID verification remain untouched." confirmLabel="Yes, dismiss application" onConfirm={()=>decideCreatorApplication(application,'rejected')}/>}
-              <button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Keep banked</button>
+               <button className="secondary-button" onClick={() => void decideCreatorApplication(application, 'waitlist')}>Keep banked</button>
               <button className="ghost-button" onClick={() => void decideCreatorApplication(application, 'rejected')}>Reject remaining</button>
               {remainingRoles.map((role)=><button key={role} className="secondary-button"
                 disabled={!demoMode && application.ageVerified !== true && application.temporaryTestAccess !== true}
@@ -6635,6 +6641,9 @@ function App() {
                 disabled={remainingRoles.length === 0 || (!demoMode && application.ageVerified !== true && application.temporaryTestAccess !== true)}
                 title={!demoMode && application.ageVerified !== true && application.temporaryTestAccess !== true ? 'Age assurance or explicit tester access is required first.' : undefined}
                 onClick={() => void decideCreatorApplication(application, 'approved')}>Approve all for wave</button>
+            </div>}
+            {adminApplicationBox === 'verification' && <div className="admin-data-actions professional-application-actions">
+              <ConfirmDeleteAction label="Dismiss application" itemName={String(application.name ?? application.email ?? application.userId ?? 'Unknown applicant')} description="Reject the outstanding professional application with an audit record. The member account and their separate Didit verification process remain untouched." confirmLabel="Yes, dismiss application" onConfirm={()=>decideCreatorApplication(application,'rejected')}/>
             </div>}
           </article>;
         })}
