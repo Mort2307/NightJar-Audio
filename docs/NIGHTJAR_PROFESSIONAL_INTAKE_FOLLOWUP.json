@@ -1,0 +1,11 @@
+{
+  "pr": 314,
+  "reason": "Owner-requested admin application workflow clarification: Didit remains independently available before role approval. This SHA-pinned follow-up changes only the frontend intake interface; it preserves the original six-PR RC, calendar and profile visibility provenance, and does not change verification or role-grant security.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "f08c746abc9843a365a77ca81831c47ac45e82f2",
+      "sha": "31dfb045ef6092e6ddfaf060cd58e4287482c600"
+    }
+  ]
+}
