@@ -47,7 +47,9 @@ assert.match(app,/role === 'admin' \|\| \['creator','writer','editor','artist'\]
 assert.match(app,/adminScriptsLoadError/,'queue failed state is not silently shown as zero');
 assert.match(app,/value:adminScriptsLoading \? '…'/,'manuscript count visible in owner dashboard');
 assert.match(tabs,/pendingScripts/,'content workspace badge includes manuscripts');
-assert.match(app,/Remove pending test application/,'unverified pending application has staged dismissal');
+assert.match(app,/adminApplicationBox === 'verification' && <div className="admin-data-actions professional-application-actions">/,'unverified applicants have a separate owner action panel');
+assert.match(app,/<ConfirmDeleteAction label="Dismiss application"/,'unverified applicant dismissal retains a two-stage confirmation');
+assert.match(app,/The member account and their separate Didit verification process remain untouched/,'dismissal must not be confused with cancelling age verification');
 assert.match(hosting,/\[nightjar-owner-inbox-cleanup-release\]/,'notification reader deploy gate');
 assert.match(hosting,/inputs\[function_names\]=listNotifications/);
 
