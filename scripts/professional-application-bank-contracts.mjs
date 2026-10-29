@@ -45,7 +45,6 @@ assert.match(app, /adminApplicationBox === 'history'/, 'rejected and withdrawn d
 assert.match(app, /adminApplicationBox === 'approved'/, 'approved professional accounts have their own section');
 assert.match(app, /label:'Already Approved'/, 'explicit Already Approved tab exists');
 assert.match(app, /label:'Awaiting verification'/, 'unverified members are in a separate visible workbox');
-assert.match(app, /value:applicationGroups\.pending\.length/, 'owner metric counts verified, actionable applications only');
 assert.match(app, /Refresh statuses/, 'admin can re-read Didit approval status without leaving the queue');
 assert.match(app, /No admin approval is needed to start their check/, 'clear member-first verification explanation');
 assert.match(app, /value:applicationGroups\.pending\.length/, 'owner metric shows only new applications');
