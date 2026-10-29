@@ -2,12 +2,14 @@
  * A completed application stays in the returned bank as history; never delete it.
  */
 export type ProfessionalApplicationRole = 'creator' | 'writer' | 'editor' | 'artist';
-export type ProfessionalApplicationBox = 'pending' | 'approved' | 'history' | 'attention';
+export type ProfessionalApplicationBox = 'pending' | 'verification' | 'approved' | 'history' | 'attention';
 
 export type ProfessionalApplicationRecord = {
   status?: string | null;
   requestedRoles?: string[] | null;
   approvedRoles?: string[] | null;
+  ageVerified?: boolean | null;
+  temporaryTestAccess?: boolean | null;
 };
 
 const PROFESSIONAL_ROLES: readonly ProfessionalApplicationRole[] = ['creator', 'writer', 'editor', 'artist'];
@@ -27,11 +29,13 @@ export function pendingApplicationRoles(application: ProfessionalApplicationReco
 
 export function classifyProfessionalApplications<T extends ProfessionalApplicationRecord>(applications: readonly T[]): {
   pending: T[];
+  verification: T[];
   approved: T[];
   history: T[];
   attention: T[];
 } {
   const pending: T[] = [];
+  const verification: T[] = [];
   const approved: T[] = [];
   const history: T[] = [];
   const attention: T[] = [];
@@ -42,8 +46,15 @@ export function classifyProfessionalApplications<T extends ProfessionalApplicati
     const approvedRoles = normaliseRoles(application.approvedRoles);
 
     if (OPEN_STATUSES.has(status) && remaining.length > 0) {
-      // Only outstanding role decisions are counted as work awaiting approval.
-      pending.push(application);
+      // An unverified applicant has no owner approval action yet. Keep the
+      // application banked, but don't inflate the actionable approval count.
+      // The backend sends an explicit boolean; legacy/demo records without one
+      // preserve their existing display while server-side approval stays gated.
+      if (application.ageVerified === false && application.temporaryTestAccess !== true) {
+        verification.push(application);
+      } else {
+        pending.push(application);
+      }
     } else if (CLOSED_STATUSES.has(status)) {
       // The final rejection/withdrawal decision wins, even for mixed-role accounts.
       history.push(application);
@@ -55,7 +66,7 @@ export function classifyProfessionalApplications<T extends ProfessionalApplicati
       attention.push(application);
     }
   }
-  return { pending, approved, history, attention };
+  return { pending, verification, approved, history, attention };
 }
 
 export function filterProfessionalApplicationsByRole<T extends ProfessionalApplicationRecord>(
