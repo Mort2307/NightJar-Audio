@@ -44,13 +44,15 @@ for(const item of visibilityFollowup.files){
 // the owner-reviewed UI change without altering any historic RC/provenance SHA.
 const intakeFollowup=JSON.parse(string('docs/NIGHTJAR_PROFESSIONAL_INTAKE_FOLLOWUP.json'));
 assert.equal(intakeFollowup.pr,314,'professional intake correction requires separate review');
-assert.deepEqual(intakeFollowup.files.map(item=>item.path),['src/App.tsx'],
-  'intake follow-up cannot silently change unrelated RC files');
+assert.deepEqual(intakeFollowup.files.map(item=>item.path),
+  ['src/App.tsx','scripts/admin-inbox-delete-ux-contracts.mjs'],
+  'intake follow-up may change only the owner queue and its directly affected test');
 for(const item of intakeFollowup.files){
   assert.match(item.sha,/^[0-9a-f]{40}$/);
-  const previous=overrides.get(item.path);
-  assert.ok(previous,'intake follow-up must be anchored to an approved earlier override');
-  assert.equal(item.baselineSha,previous.sha,'do not rewrite visibility/calendar/RC provenance');
+  const previous=overrides.get(item.path) ??
+    manifest.includes.flatMap(pr=>pr.files).find(file=>file.path===item.path);
+  assert.ok(previous,'intake follow-up must be anchored to the exact prior reviewed blob');
+  assert.equal(item.baselineSha,previous.sha,'do not rewrite calendar/visibility/original RC provenance');
   overrides.set(item.path,item);
 }
 
