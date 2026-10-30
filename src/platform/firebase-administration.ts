@@ -78,6 +78,14 @@ const setClosedBetaTesterCall = httpsCallable<{ email: string; enabled: boolean;
 const setTestAccessCall = httpsCallable<{ userId: string; enabled: boolean }, { userId: string; testAccess: boolean }>(functions, 'adminSetTestAccess');
 const setDiditPilotAccessCall = httpsCallable<{ email: string; enabled: boolean }, { email: string; enabled: boolean; unchanged: boolean }>(functions, 'adminSetDiditPilotAccess');
 const professionalBankCall = httpsCallable<void, { applications: any[]; buckets: Record<string, number>; total: number }>(functions, 'listProfessionalApplicationBank');
+export type AdminDiditExistingResult = {
+  verified: boolean;
+  outcome: 'reconciled' | 'already_verified' | 'provider_not_approved' |
+    'adult_evidence_missing' | 'no_reconcilable_session';
+};
+const adminReconcileApplicantDiditCall = httpsCallable<{userId:string},AdminDiditExistingResult>(
+  functions, 'adminReconcileApplicantDidit');
+
 const retryApprovalEmailCall = httpsCallable<{ userId: string; eventId: string }, { userId: string; eventId: string; outcome: 'sent' | 'failed' }>(functions, 'adminRetryProfessionalApprovalEmail');
 const reviewProfessionalCall = httpsCallable<{
   userId: string;
@@ -227,6 +235,10 @@ export const nightjarAdministration = {
 
   async setDiditPilotAccess(email: string, enabled: boolean) {
     return (await setDiditPilotAccessCall({ email: email.trim().toLowerCase(), enabled })).data;
+  },
+
+  async syncApplicantExistingDidit(userId: string) {
+    return (await adminReconcileApplicantDiditCall({ userId })).data;
   },
 
   async professionalApplicationBank() {
