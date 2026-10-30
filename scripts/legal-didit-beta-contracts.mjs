@@ -37,4 +37,30 @@ assert.ok(!app.includes('Yoti'), 'Old Yoti UI must not be shown once Didit integ
 assert.ok(!backend.includes('AGE_ASSURANCE_CONFIGURED'), 'Legacy age flag must not overwrite Didit setup');
 assert.ok(hosting.hosting.rewrites.some(x=>x.source==='/api/webhooks/didit'&&x.function?.functionId==='diditWebhook'),
   'Didit webhook route must precede hosting fallback');
+// Regression: registration must mirror the *explicitly accepted*, current
+// Terms + Privacy versions in the same Firestore batch. This prevents the
+// first Didit check, its status read and non-billable recovery all failing 400
+// after a valid sign-up. Stale mirrors may be reconciled only after inspecting
+// both account-owned, current, non-withdrawn legal acceptance records.
+const currentAcceptance = backend.slice(backend.indexOf('const currentLegalAcceptanceFor = async'),backend.indexOf('const requireCurrentLegalAcceptance = async'));
+assert.match(currentAcceptance, /data\.version === expected\.version && data\.withdrawnAt == null/, 'withdrawn or outdated consent cannot satisfy the mirror repair');
+const accessGate = backend.slice(backend.indexOf('const requireActiveIdentity = async'),backend.indexOf('export const health = onRequest'));
+assert.match(accessGate, /account\.acceptedPlatformTermsVersion !== CURRENT_LEGAL_DOCUMENTS\.platform_terms\.version/, 'stale mirror detection required');
+assert.match(accessGate, /currentLegalAcceptanceFor\(identity\.uid, 'platform_terms'\)/, 'restore only from actual accepted Terms');
+assert.match(accessGate, /currentLegalAcceptanceFor\(identity\.uid, 'privacy_notice'\)/, 'restore only from actual acknowledged Privacy Notice');
+assert.match(accessGate, /if \(!terms\.accepted \|\| !privacy\.accepted\)/, 'missing agreement must still fail closed');
+assert.match(accessGate, /await accountRef\(identity\.uid\)\.set\(/, 'save verified current legal mirror for existing users');
+assert.match(accessGate, /acceptedPlatformTermsVersion: CURRENT_LEGAL_DOCUMENTS\.platform_terms\.version/, 'only current Terms version may be restored');
+assert.match(accessGate, /acknowledgedPrivacyNoticeVersion: CURRENT_LEGAL_DOCUMENTS\.privacy_notice\.version/, 'only current Privacy Notice may be restored');
+const restoreRegistration = backend.slice(backend.indexOf('if (registrationIntent.exists) {'), backend.indexOf('export const chooseAccountRole = onCall'));
+assert.match(restoreRegistration, /acceptedRegistrationDocs\.add\(id\)/, 'new registrations derive mirror only from staged signed-in account evidence');
+assert.match(restoreRegistration, /if \(acceptedRegistrationDocs\.has\('platform_terms'\)\)/, 'staged Terms acceptance must control mirror');
+assert.match(restoreRegistration, /if \(acceptedRegistrationDocs\.has\('privacy_notice'\)\)/, 'staged Privacy acknowledgement must control mirror');
+assert.match(restoreRegistration, /legalBatch\.set\(ref, \{/, 'staged legal documents and account mirror commit together');
+assert.match(restoreRegistration, /await legalBatch\.commit\(\);\s*await registrationIntent\.ref\.delete\(\)/, 'intent is deleted only after legal + mirror commit');
+const releaseWorkflow=read('.github/workflows/firebase-hosting-merge.yml');
+assert.match(releaseWorkflow, /\[nightjar-legal-didit-repair\]/, 'backend-first legal recovery deployment gate missing');
+assert.match(releaseWorkflow, /accountIdentity,ageStatus,myDiditControlledCheck,startMyDiditControlledCheck,reconcileMyDiditVerification,startAgeAssurance/, 'must ship the complete sign-in and Didit entry/recovery set');
+assert.match(releaseWorkflow, /gh run watch "\$RUN_ID"/, 'Hosting must wait for actual backend result');
+
 console.log('Nightjar T&Cs reading centre, versioned beta terms and Didit bypass contracts PASS');
