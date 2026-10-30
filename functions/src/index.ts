@@ -8471,11 +8471,11 @@ export const reconcileMyDiditVerification = onCall({
   return { verified: true, outcome: reconciled ? 'reconciled' : 'already_verified' };
 });
 
-// Owner-triggered recovery for a specific, already-banked professional applicant.
+// Owner-triggered recovery for a specific, registered Nightjar member.
 // Reads ONLY their existing live Didit decision; never creates or retries a session,
 // auto-approves a professional role, or accepts an overall manual Approved without
 // an individually approved documentary 18+ verification.
-export const adminReconcileApplicantDidit = onCall({
+export const adminReconcileMemberDidit = onCall({
   region: REGION,
   secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
   timeoutSeconds: 30,
@@ -8489,12 +8489,9 @@ export const adminReconcileApplicantDidit = onCall({
   if (!diditConfigured() || diditMode() !== 'live') {
     throw new HttpsError('failed-precondition', 'Live Didit reconciliation is unavailable.');
   }
-  const applicationRef = professionalApplicationRef(userId);
-  const application = (await applicationRef.get()).data();
-  if (!application || !['banked','waitlist'].includes(String(application.status)) ||
-      !cleanProfessionalRoles(application.requestedRoles).some(
-        role => !cleanProfessionalRoles(application.approvedRoles).includes(role))) {
-    throw new HttpsError('failed-precondition', 'This applicant no longer has an open professional request.');
+  const account = (await accountRef(userId).get()).data();
+  if (!account || account.status === 'suspended') {
+    throw new HttpsError('failed-precondition', 'A registered, active Nightjar member is required.');
   }
   const ageRef = db.collection('ageAssurance').doc(userId);
   const age = (await ageRef.get()).data() ?? {};
@@ -8539,29 +8536,34 @@ export const adminReconcileApplicantDidit = onCall({
     throw new HttpsError('failed-precondition',
       'The provider decision does not match this applicant’s linked session. No access changed.');
   }
-  if (!['Approved','APPROVED'].includes(String(decision.status))) {
-    return { verified: false, outcome: 'provider_not_approved' };
+  const providerStatus = cleanText(decision.status, 40) || 'Unknown';
+  const idFeatureStatuses = Array.isArray(decision.id_verifications)
+    ? decision.id_verifications.slice(0, 6).map((id: unknown) => {
+      const feature = id && typeof id === 'object' ? id as Record<string, unknown> : {};
+      return ['Approved','APPROVED','In Review','IN_REVIEW','Declined','DECLINED'].includes(String(feature.status))
+        ? String(feature.status) : 'Other';
+    })
+    : [];
+  if (!['Approved','APPROVED'].includes(providerStatus)) {
+    return { verified: false, outcome: 'provider_not_approved', providerStatus, idFeatureStatuses };
   }
   if (!verifiedAdultFromDecision(decision)) {
     // A manually approved overall session cannot substitute for an Approved
     // ID feature with reliable birth-date evidence establishing adulthood.
-    return { verified: false, outcome: 'adult_evidence_missing' };
+    return { verified: false, outcome: 'adult_evidence_missing', providerStatus, idFeatureStatuses };
   }
 
   const previousEventTime = Number(age.diditEventCreatedAt ?? 0);
   const auditRef = db.collection('diditAdminReconciliations').doc();
   const reconciled = await db.runTransaction(async tx => {
-    const [ageNowSnap, sessionNowSnap, applicationNowSnap] = await Promise.all([
-      tx.get(ageRef), tx.get(sessionRef), tx.get(applicationRef),
+    const [ageNowSnap, sessionNowSnap, accountNowSnap] = await Promise.all([
+      tx.get(ageRef), tx.get(sessionRef), tx.get(accountRef(userId)),
     ]);
     const ageNow = ageNowSnap.data() ?? {};
     const sessionNow = sessionNowSnap.data() ?? {};
-    const applicationNow = applicationNowSnap.data() ?? {};
+    const accountNow = accountNowSnap.data() ?? {};
     if (diditPass(ageNow)) return false;
-    const requestedRoles = cleanProfessionalRoles(applicationNow.requestedRoles);
-    const approvedRoles = cleanProfessionalRoles(applicationNow.approvedRoles);
-    if (!['banked','waitlist'].includes(String(applicationNow.status)) ||
-        !requestedRoles.some(role => !approvedRoles.includes(role)) ||
+    if (!accountNowSnap.exists || accountNow.status === 'suspended' ||
         ageNow.sessionId !== sessionId || ageNow.provider !== 'didit' ||
         ageNow.environment !== 'live' || sessionNow.uid !== userId ||
         sessionNow.environment !== 'live' || sessionNow.workflowId !== session.workflowId ||
@@ -8582,7 +8584,7 @@ export const adminReconcileApplicantDidit = onCall({
     tx.set(sessionRef, { status: 'Approved', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     tx.create(auditRef, {
       memberUid: userId, administratorUid: admin.uid,
-      action: 'reconcile_existing_didit_for_professional_applicant',
+      action: 'reconcile_existing_didit_for_registered_member',
       source: 'didit-authenticated-session-read',
       createdAt: FieldValue.serverTimestamp(),
     });
