@@ -631,6 +631,8 @@ function App() {
   const [adminApplicationWave, setAdminApplicationWave] = useState('Wave 1');
   const [adminApplicationRoleFilter, setAdminApplicationRoleFilter] = useState<'all'|'creator'|'writer'|'editor'|'artist'>('all');
   const [adminApplicationBox, setAdminApplicationBox] = useState<ProfessionalApplicationBox>('pending');
+  const [adminDiditSyncingUserId, setAdminDiditSyncingUserId] = useState<string | null>(null);
+  const [adminDiditSyncFeedback, setAdminDiditSyncFeedback] = useState<{ userId: string; message: string } | null>(null);
   const [adminCreatorSuggestions, setAdminCreatorSuggestions] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
   const [adminScripts, setAdminScripts] = useState<any[]>([]);
@@ -3957,6 +3959,36 @@ function App() {
     }
   };
 
+  // Read an applicant's existing, bound provider decision. A recheck does not
+  // start or charge for another verification and cannot approve a professional.
+  const syncApplicantExistingDidit = async (application: any) => {
+    if (!canAdmin || demoMode || simulationMode || !application?.userId || adminDiditSyncingUserId) return;
+    const email = String(application.email ?? 'this applicant');
+    if (!window.confirm('Recheck the ALREADY EXISTING Didit session for ' + email +
+      '? This makes no new verification or payment. Nightjar accepts only securely linked, approved documentary 18+ evidence. Professional approval remains a separate decision.')) return;
+    setAdminDiditSyncingUserId(String(application.userId));
+    setAdminDiditSyncFeedback(null);
+    try {
+      const result = await nightjarAdministration.syncApplicantExistingDidit(String(application.userId));
+      const idStatuses = result.idFeatureStatuses?.length ? ' ID checks: ' + result.idFeatureStatuses.join(', ') + '.' : '';
+      const message = result.verified
+        ? 'The existing Didit 18+ approval is now securely confirmed. This applicant can be reviewed for professional access.'
+        : result.outcome === 'adult_evidence_missing'
+          ? 'Didit reports overall Approved, but approved 18+ documentary ID evidence is missing from the provider decision. Review the individual ID Verification step in Didit.' + idStatuses
+          : result.outcome === 'provider_not_approved'
+            ? 'Didit has not returned an Approved overall decision for this linked session (provider: ' + String(result.providerStatus ?? 'unknown') + ').' + idStatuses
+            : 'No safely reconcilable live Didit session was found. Review the member in the Didit operations desk; do not start another check.';
+      setAdminDiditSyncFeedback({ userId: String(application.userId), message });
+      await loadAdminApplications();
+      if (result.verified) await loadAdminOverview();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not safely recheck the existing Didit session.';
+      setAdminDiditSyncFeedback({ userId: String(application.userId), message: 'Sync blocked: ' + message + ' No new verification started.' });
+    } finally {
+      setAdminDiditSyncingUserId(null);
+    }
+  };
+
   const loadAdminCreatorSuggestions = async () => {
     if (!canAdmin) return;
     setAdminPanelLoading(true);
@@ -6627,7 +6659,8 @@ function App() {
               {application.experience && <small>{application.experience}</small>}
               {application.portfolioUrl && <small>Portfolio: {application.portfolioUrl}</small>}
               {adminApplicationBox === 'pending' && <small>{application.ageVerified ? 'Didit 18+ verified · ready for your decision' : application.temporaryTestAccess ? 'Approved temporary tester access' : demoMode ? 'Demo applicant · age check simulated' : 'Age assurance required before approval'}</small>}
-              {adminApplicationBox === 'verification' && <small>Awaiting the member’s own Didit 18+ verification. No admin approval is needed to start their check. Their application will move into Needs approval when you refresh after verification.</small>}
+              {adminApplicationBox === 'verification' && <small>Nightjar has not yet confirmed a live 18+ result for this account. Use Sync existing Didit result to check the provider's latest decision without starting another verification.</small>}
+              {adminApplicationBox === 'verification' && adminDiditSyncFeedback?.userId === application.userId && <p className="nj-didit-case-notice" role="status">{adminDiditSyncFeedback?.message}</p>}
               {adminApplicationBox === 'attention' && <small>There are no actionable pending professional roles on this application record. Check the account and its role history before changing anything.</small>}
             </div>
             {adminApplicationBox === 'pending' && <div className="admin-data-actions professional-application-actions">
@@ -6643,6 +6676,11 @@ function App() {
                 onClick={() => void decideCreatorApplication(application, 'approved')}>Approve all for wave</button>
             </div>}
             {adminApplicationBox === 'verification' && <div className="admin-data-actions professional-application-actions">
+              <button type="button" className="primary-button" disabled={demoMode || simulationMode || adminDiditSyncingUserId !== null}
+                onClick={()=>void syncApplicantExistingDidit(application)}>
+                <RefreshCw size={15}/>{adminDiditSyncingUserId === application.userId ? 'Checking Didit…' : 'Sync existing Didit result'}
+              </button>
+              <button type="button" className="secondary-button" onClick={()=>openAdminWorkspace('didit')}>Open Didit operations desk</button>
               <ConfirmDeleteAction label="Dismiss application" itemName={String(application.name ?? application.email ?? application.userId ?? 'Unknown applicant')} description="Reject the outstanding professional application with an audit record. The member account and their separate Didit verification process remain untouched." confirmLabel="Yes, dismiss application" onConfirm={()=>decideCreatorApplication(application,'rejected')}/>
             </div>}
           </article>;

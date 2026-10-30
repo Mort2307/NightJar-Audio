@@ -85,6 +85,36 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Legal/Didit account-recovery backend deployed and verified before Hosting."
 
+      # Owner Didit member operations callables must be live before their
+      # controls are shown to administrators. Scoped backend deployment only.
+      - name: Deploy owner Didit member operations before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-didit-ops-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/didit-reconciliation-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=adminReconcileMemberDidit,adminListDiditMemberCases,adminInspectDiditMemberCase' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          RUN_ID=""
+          for attempt in $(seq 1 48); do
+            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::error::Owner Didit operations backend deployment not observed. Hosting blocked."
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Owner Didit member operations verified before Hosting."
+
       # Expose the Admin-only read-only storage audit only after its backend
       # has been deployed. No storage deletion or periodic cleanup is included.
       - name: Deploy private audio audit before Hosting

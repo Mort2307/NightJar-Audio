@@ -70,4 +70,37 @@ assert.match(memberClient,/reconcileMyDiditVerification/,'browser calls dedicate
 assert.match(memberPanel,/nightjarDiditControlled\.reconcile\(\)/,'member explicitly requests result recovery');
 assert.match(memberPanel,/Check my completed Didit result · no new ID check/,'button prevents duplicate charges by design');
 assert.doesNotMatch(memberPanel,/onClick=\{\(\)=>void begin\(\)\}[^\n]*Check my completed/,'recovery UI cannot start another session');
+
+// Dedicated owner operations. These handlers may inspect saved metadata and
+// authenticated existing provider evidence, but never create another check,
+// expose DOB/ID/selfies, or approve a professional role.
+const operations=backend.slice(backend.indexOf('export const adminReconcileMemberDidit = onCall'),
+  backend.indexOf('// Owner-only read-only evidence trail'));
+assert.match(operations,/const admin = requireAdminIdentity\(request\)/,'member sync requires server-side owner identity');
+assert.match(operations,/const userId = cleanText\(/,'a selected account is the only target');
+assert.match(operations,/session\.uid !== userId/,'existing session belongs to selected account');
+assert.match(operations,/session\.workflowId !== DIDIT_WORKFLOW_ID\.value\(\)/,'workflow binding required');
+assert.match(operations,/decision\.vendor_data !== userId/,'provider decision must match selected member');
+assert.match(operations,/decision\.session_id !== sessionId/,'provider decision must match stored session');
+assert.match(operations,/decision\.environment !== 'live'/,'sandbox provider decision cannot unlock');
+assert.match(operations,/verifiedAdultFromDecision\(decision\)/,'overall Approved alone does not grant adult access');
+assert.match(operations,/method: 'GET'/,'recheck uses GET only');
+assert.doesNotMatch(operations,/method: 'POST'|startDiditSession\(|startAgeAssurance\(/,'admin cannot start a new billable Didit check by syncing');
+assert.match(operations,/db\.runTransaction/,'result is saved with atomic session/version checks');
+assert.match(operations,/diditAdminReconciliations/,'owner action leaves an audit trail');
+assert.doesNotMatch(operations,/\.set\(\{\s*decision:|console\.log|console\.error|face_image|date_of_birth:/,'no raw identity evidence stored/logged');
+const desk=fs.readFileSync('src/components/AdminDiditMemberOps.tsx','utf8');
+const adminApi=fs.readFileSync('src/platform/firebase-administration.ts','utf8');
+const controlCentre=fs.readFileSync('src/components/AdminDiditControlCentre.tsx','utf8');
+assert.match(backend,/export const adminListDiditMemberCases = onCall/,'owner-only verification directory exists');
+assert.match(backend,/export const adminInspectDiditMemberCase = onCall/,'member-specific evidence diagnostics exists');
+assert.match(adminApi,/adminReconcileMemberDidit/,'owner client uses only established existing result API');
+assert.match(adminApi,/adminListDiditMemberCases/,'owner directory is authenticated');
+assert.match(adminApi,/adminInspectDiditMemberCase/,'owner can read per-member webhook evidence');
+assert.match(desk,/nightjarAdministration\.syncApplicantExistingDidit/,'member desk provides safe per-account recheck');
+assert.match(desk,/window\.confirm/,'operator confirms the target member before provider check');
+assert.match(desk,/onVerified\?\.\(\)/,'a successful result can refresh the relevant owner view');
+assert.match(controlCentre,/<AdminDiditMemberOps/,'verification desk is integrated into the admin Didit workspace');
+assert.match(workflow,/\[nightjar-didit-ops-release\]/,'backend-first Didit operations release is required');
+
 console.log('Nightjar secure one-shot existing Didit approval reconciliation contracts PASS.');

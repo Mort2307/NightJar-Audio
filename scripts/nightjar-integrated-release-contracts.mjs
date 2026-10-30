@@ -56,6 +56,21 @@ for(const item of intakeFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #316 adds a tightly scoped owner Didit member operations workbox.
+// Anchor only the new App blob to the exact reviewed PR #314 UI baseline;
+// do not relax the original integrated source provenance.
+const diditOpsFollowup=JSON.parse(string('docs/NIGHTJAR_DIDIT_MEMBER_OPS_FOLLOWUP.json'));
+assert.equal(diditOpsFollowup.pr,316,'Didit member operations requires distinct review');
+assert.deepEqual(diditOpsFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'owner Didit operations follow-up may change only the approved App surface');
+for(const item of diditOpsFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'Didit owner UI must anchor to the approved intake follow-up');
+  assert.equal(item.baselineSha,previous.sha,'earlier accepted UI SHA cannot change');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){

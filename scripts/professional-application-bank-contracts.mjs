@@ -46,7 +46,10 @@ assert.match(app, /adminApplicationBox === 'approved'/, 'approved professional a
 assert.match(app, /label:'Already Approved'/, 'explicit Already Approved tab exists');
 assert.match(app, /label:'Awaiting verification'/, 'unverified members are in a separate visible workbox');
 assert.match(app, /Refresh statuses/, 'admin can re-read Didit approval status without leaving the queue');
-assert.match(app, /No admin approval is needed to start their check/, 'clear member-first verification explanation');
+assert.match(app, /Nightjar has not yet confirmed a live 18\+ result/, 'pending member status must be accurately explained');
+assert.match(app, /Sync existing Didit result/, 'owner can recheck an already-linked provider decision from the awaiting-verification queue');
+assert.match(app, /nightjarAdministration\.syncApplicantExistingDidit/, 'queue sync invokes the existing decision, not a fresh Didit session');
+assert.match(app, /openAdminWorkspace\('didit'\)/, 'queue links to the full owner Didit operations desk');
 assert.match(app, /value:applicationGroups\.pending\.length/, 'owner metric shows only new applications');
 assert.match(app, /pendingApplications=\{applicationGroups\.pending\.length\}/, 'release-readiness count excludes approved accounts');
 assert.match(app, /applicationGroups\.pending\.length \?/, 'owner call-to-action is hidden when nothing awaits approval');

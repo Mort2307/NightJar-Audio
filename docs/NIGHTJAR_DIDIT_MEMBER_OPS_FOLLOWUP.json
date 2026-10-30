@@ -1,0 +1,11 @@
+{
+  "pr": 316,
+  "reason": "Owner-requested member-wide Didit operations. Adds guarded existing-decision reconciliation and verification diagnostics while preserving every prior reviewed UI/RC source blob and never changing signed provider evidence or role approval rules.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "31dfb045ef6092e6ddfaf060cd58e4287482c600",
+      "sha": "ee70e4b1651a38e10c1bf407a7e240d0317db10d"
+    }
+  ]
+}
