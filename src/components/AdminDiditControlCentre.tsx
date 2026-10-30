@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, CircleHelp, ExternalLink, Fingerprint, RefreshCw, ShieldAlert, ShieldCheck, XCircle } from 'lucide-react';
 import { nightjarAge, type AgeStatus, type DiditDiagnostics } from '../platform/firebase-age';
+import AdminDiditMemberOps from './AdminDiditMemberOps';
 import AdminDiditReuseRequests from './AdminDiditReuseRequests';
 import AdminDiditReuseReadiness from './AdminDiditReuseReadiness';
 
@@ -142,6 +143,9 @@ export default function AdminDiditControlCentre() {
       {(statusError || diagnosticsError) && <div className="nj-didit-control-errors" role="alert">{statusError && <p>{statusError}</p>}{diagnosticsError && <p>{diagnosticsError}</p>}</div>}
       <small>{checkedAt ? 'Last checked: ' + new Date(checkedAt).toLocaleString('en-GB') : 'Checking Nightjar…'} · This panel reads saved verification records only and does not contact Didit to create a session.</small>
     </div>
+    <AdminDiditMemberOps />
+    <details className="nj-didit-advanced-tools">
+      <summary>Advanced diagnostics for my own admin account and Didit reuse tools</summary>
     <section className="nj-didit-control-evidence" aria-label="Didit verification evidence trail">
       <div className="nj-didit-control-evidence-title"><span className="mini-label">INTEGRATION DIAGNOSTICS · READ ONLY</span><h3>Where did the data gremlins stop?</h3><p>Each stage reports real recorded evidence. During maintenance, Nightjar can also independently recover a completed approval through Didit's authenticated session API. A recovered provider decision never counts as a received signed webhook.</p></div>
       <div className="nj-didit-control-steps">
@@ -168,5 +172,6 @@ export default function AdminDiditControlCentre() {
     </section>
     <AdminDiditReuseRequests />
     <AdminDiditReuseReadiness />
+    </details>
   </section>;
 }
