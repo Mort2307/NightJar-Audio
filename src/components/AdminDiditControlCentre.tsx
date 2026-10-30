@@ -168,7 +168,7 @@ export default function AdminDiditControlCentre() {
         <a href="https://console.cloud.google.com/logs/query?project=nightjar-audio" target="_blank" rel="noopener noreferrer">Google Cloud function logs <ArrowRight size={14}/></a>
         <a href="https://console.firebase.google.com/project/nightjar-audio/firestore" target="_blank" rel="noopener noreferrer">Firebase account and event records <ArrowRight size={14}/></a>
       </div>
-      <p className="nj-didit-control-footnote"><ShieldCheck size={15}/> Live verification stays paused until the result, webhook binding, under-18 rejection, persistence, and security checks have been separately validated. A green account result alone does not authorise public launch.</p>
+      <p className="nj-didit-control-footnote"><ShieldCheck size={15}/> Every member must have a validated, account-bound 18+ result. An overall Didit approval cannot replace the documentary ID check, and verification never grants professional roles automatically.</p>
     </section>
     <AdminDiditReuseRequests />
     <AdminDiditReuseReadiness />
