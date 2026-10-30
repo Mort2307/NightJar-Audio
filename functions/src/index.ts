@@ -344,9 +344,24 @@ const requireActiveIdentity = async (request: { auth?: { uid: string; token: Rec
   }
   if (account.acceptedPlatformTermsVersion !== CURRENT_LEGAL_DOCUMENTS.platform_terms.version ||
       account.acknowledgedPrivacyNoticeVersion !== CURRENT_LEGAL_DOCUMENTS.privacy_notice.version) {
-    throw new HttpsError('failed-precondition', 'Review Nightjar\'s current Terms of Use and Privacy Notice before continuing.', {
-      code: 'mandatory_agreement_required',
-    });
+    // Registration may already have saved the member's explicit acceptance
+    // documents while leaving the account mirror stale. Reconcile only from
+    // current, non-withdrawn, account-owned evidence; never infer consent.
+    const [terms, privacy] = await Promise.all([
+      currentLegalAcceptanceFor(identity.uid, 'platform_terms'),
+      currentLegalAcceptanceFor(identity.uid, 'privacy_notice'),
+    ]);
+    if (!terms.accepted || !privacy.accepted) {
+      throw new HttpsError('failed-precondition', 'Review Nightjar\'s current Terms of Use and Privacy Notice before continuing.', {
+        code: 'mandatory_agreement_required',
+      });
+    }
+    await accountRef(identity.uid).set({
+      acceptedPlatformTermsVersion: CURRENT_LEGAL_DOCUMENTS.platform_terms.version,
+      acknowledgedPrivacyNoticeVersion: CURRENT_LEGAL_DOCUMENTS.privacy_notice.version,
+      legalUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
   }
   return identity;
 };
@@ -479,12 +494,14 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
   if (registrationIntent.exists) {
     const stagedLegal = Array.isArray(intentData.legalAcceptances) ? intentData.legalAcceptances : [];
     const legalBatch = db.batch();
+    const acceptedRegistrationDocs = new Set<LegalDocumentId>();
     for (const raw of stagedLegal) {
       const item = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
       const id = cleanText(item.id, 60) as LegalDocumentId;
       if (!(id in CURRENT_LEGAL_DOCUMENTS)) continue;
       const document = CURRENT_LEGAL_DOCUMENTS[id];
       if (cleanText(item.version, 60) !== document.version) continue;
+      acceptedRegistrationDocs.add(id);
       legalBatch.set(legalAcceptanceRef(identity.uid, id), {
         documentId:id,
         title:document.title,
@@ -507,6 +524,22 @@ export const accountIdentity = onCall({ region: REGION }, async (request) => {
         acceptedByEmail:identity.email,
         source:'registration',
       });
+    }
+    // Commit explicit legal evidence and its account-level enforcement mirror
+    // together. A partial/old staged intent cannot manufacture an acceptance.
+    const registrationLegalMirror: Record<string, unknown> = {};
+    if (acceptedRegistrationDocs.has('platform_terms')) {
+      registrationLegalMirror.acceptedPlatformTermsVersion = CURRENT_LEGAL_DOCUMENTS.platform_terms.version;
+    }
+    if (acceptedRegistrationDocs.has('privacy_notice')) {
+      registrationLegalMirror.acknowledgedPrivacyNoticeVersion = CURRENT_LEGAL_DOCUMENTS.privacy_notice.version;
+    }
+    if (Object.keys(registrationLegalMirror).length) {
+      legalBatch.set(ref, {
+        ...registrationLegalMirror,
+        legalUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
     }
     await legalBatch.commit();
     await registrationIntent.ref.delete();
