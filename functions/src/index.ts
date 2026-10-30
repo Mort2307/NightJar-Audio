@@ -8471,6 +8471,126 @@ export const reconcileMyDiditVerification = onCall({
   return { verified: true, outcome: reconciled ? 'reconciled' : 'already_verified' };
 });
 
+// Owner-triggered recovery for a specific, already-banked professional applicant.
+// Reads ONLY their existing live Didit decision; never creates or retries a session,
+// auto-approves a professional role, or accepts an overall manual Approved without
+// an individually approved documentary 18+ verification.
+export const adminReconcileApplicantDidit = onCall({
+  region: REGION,
+  secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
+  timeoutSeconds: 30,
+  maxInstances: 2,
+}, async request => {
+  const admin = requireAdminIdentity(request);
+  const userId = cleanText((request.data as Record<string, unknown> | undefined)?.userId, 160);
+  if (!userId || userId.includes('/') || userId === admin.uid) {
+    throw new HttpsError('invalid-argument', 'Choose a professional applicant.');
+  }
+  if (!diditConfigured() || diditMode() !== 'live') {
+    throw new HttpsError('failed-precondition', 'Live Didit reconciliation is unavailable.');
+  }
+  const applicationRef = professionalApplicationRef(userId);
+  const application = (await applicationRef.get()).data();
+  if (!application || !['banked','waitlist'].includes(String(application.status)) ||
+      !cleanProfessionalRoles(application.requestedRoles).some(
+        role => !cleanProfessionalRoles(application.approvedRoles).includes(role))) {
+    throw new HttpsError('failed-precondition', 'This applicant no longer has an open professional request.');
+  }
+  const ageRef = db.collection('ageAssurance').doc(userId);
+  const age = (await ageRef.get()).data() ?? {};
+  if (diditPass(age)) return { verified: true, outcome: 'already_verified' };
+  const sessionId = cleanText(age.sessionId, 128);
+  if (!sessionId || age.provider !== 'didit' || age.environment !== 'live' ||
+      !['PENDING','PROCESSING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(String(age.status))) {
+    return { verified: false, outcome: 'no_reconcilable_session' };
+  }
+  const sessionRef = db.collection('diditSessions').doc(sessionId);
+  const session = (await sessionRef.get()).data() ?? {};
+  if (session.uid !== userId || session.environment !== 'live' ||
+      session.workflowId !== DIDIT_WORKFLOW_ID.value() ||
+      !Number.isFinite(session.createdAtMs) || session.createdAtMs > Date.now() + 60_000) {
+    throw new HttpsError('failed-precondition',
+      'Nightjar cannot securely match the existing Didit session to this applicant. No check started.');
+  }
+
+  // Private Didit response contains identity material. Validate it in memory;
+  // never return or log DOB, documents, provider session IDs or full decisions.
+  let decision: Record<string, any>;
+  try {
+    const response = await fetch(
+      'https://verification.didit.me/v3/session/' + encodeURIComponent(sessionId) + '/decision/',
+      {
+        method: 'GET',
+        headers: { 'x-api-key': DIDIT_API_KEY.value(), Accept: 'application/json' },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    if (!response.ok) throw new Error('Didit decision read failed');
+    decision = await response.json() as Record<string, any>;
+  } catch {
+    throw new HttpsError('unavailable',
+      'Could not check this existing Didit result. No new verification was started.');
+  }
+  if (!decision || typeof decision !== 'object' || Array.isArray(decision) ||
+      decision.session_id !== sessionId || decision.vendor_data !== userId ||
+      decision.workflow_id !== session.workflowId || decision.session_kind !== 'user' ||
+      decision.environment !== 'live' ||
+      (session.applicationId && decision.application_id !== session.applicationId)) {
+    throw new HttpsError('failed-precondition',
+      'The provider decision does not match this applicant’s linked session. No access changed.');
+  }
+  if (!['Approved','APPROVED'].includes(String(decision.status))) {
+    return { verified: false, outcome: 'provider_not_approved' };
+  }
+  if (!verifiedAdultFromDecision(decision)) {
+    // A manually approved overall session cannot substitute for an Approved
+    // ID feature with reliable birth-date evidence establishing adulthood.
+    return { verified: false, outcome: 'adult_evidence_missing' };
+  }
+
+  const previousEventTime = Number(age.diditEventCreatedAt ?? 0);
+  const auditRef = db.collection('diditAdminReconciliations').doc();
+  const reconciled = await db.runTransaction(async tx => {
+    const [ageNowSnap, sessionNowSnap, applicationNowSnap] = await Promise.all([
+      tx.get(ageRef), tx.get(sessionRef), tx.get(applicationRef),
+    ]);
+    const ageNow = ageNowSnap.data() ?? {};
+    const sessionNow = sessionNowSnap.data() ?? {};
+    const applicationNow = applicationNowSnap.data() ?? {};
+    if (diditPass(ageNow)) return false;
+    const requestedRoles = cleanProfessionalRoles(applicationNow.requestedRoles);
+    const approvedRoles = cleanProfessionalRoles(applicationNow.approvedRoles);
+    if (!['banked','waitlist'].includes(String(applicationNow.status)) ||
+        !requestedRoles.some(role => !approvedRoles.includes(role)) ||
+        ageNow.sessionId !== sessionId || ageNow.provider !== 'didit' ||
+        ageNow.environment !== 'live' || sessionNow.uid !== userId ||
+        sessionNow.environment !== 'live' || sessionNow.workflowId !== session.workflowId ||
+        sessionNow.applicationId !== session.applicationId ||
+        Number(ageNow.diditEventCreatedAt ?? 0) !== previousEventTime ||
+        !['PENDING','PROCESSING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(String(ageNow.status))) {
+      throw new HttpsError('aborted',
+        'The linked Didit session or application changed. Refresh the current status.');
+    }
+    tx.set(ageRef, {
+      provider: 'didit', environment: 'live', status: 'COMPLETE',
+      verified: true, reverifyRequired: false, testMode: false,
+      verifiedAt: FieldValue.serverTimestamp(),
+      diditEventCreatedAt: Math.floor(Date.now() / 1000),
+      verificationEvidenceSource: 'didit-authenticated-session-read',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.set(sessionRef, { status: 'Approved', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    tx.create(auditRef, {
+      memberUid: userId, administratorUid: admin.uid,
+      action: 'reconcile_existing_didit_for_professional_applicant',
+      source: 'didit-authenticated-session-read',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return true;
+  });
+  return { verified: true, outcome: reconciled ? 'reconciled' : 'already_verified' };
+});
+
 // Owner-only read-only evidence trail. This never contacts Didit, changes
 // verification, creates a chargeable session, or exposes sensitive KYC material.
 export const adminDiditDiagnostics = onCall({ region: REGION }, async (request) => {
