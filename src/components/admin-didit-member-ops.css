@@ -1,0 +1,40 @@
+.nj-didit-members{margin:22px 0;padding:clamp(16px,3vw,28px);border:1px solid rgba(211,180,118,.26);border-radius:22px;background:linear-gradient(130deg,rgba(28,24,37,.93),rgba(17,14,25,.95));box-shadow:0 14px 38px rgba(0,0,0,.15)}
+.nj-didit-members-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.nj-didit-members-heading h3{font-size:clamp(21px,2.5vw,28px);margin:6px 0 8px;color:var(--text-primary,#f4ecdf)}
+.nj-didit-members-heading p{max-width:770px;line-height:1.55;opacity:.83;margin:0 0 15px}
+.nj-didit-members-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 22px}
+.nj-didit-members-stats span{border:1px solid rgba(211,180,118,.18);border-radius:14px;background:rgba(255,255,255,.025);padding:14px;display:flex;flex-direction:column;gap:6px}
+.nj-didit-members-stats strong{font-size:25px;color:#e8c68b;line-height:1}
+.nj-didit-members-stats small,.nj-didit-muted{opacity:.72;line-height:1.45;font-size:12px}
+.nj-didit-members-layout{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.2fr);gap:16px}
+.nj-didit-members-browser,.nj-didit-member-inspection{min-width:0;border:1px solid rgba(211,180,118,.19);border-radius:16px;background:rgba(0,0,0,.18);padding:16px}
+.nj-didit-members-browser label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;margin-bottom:8px}
+.nj-didit-members-browser input{display:block;width:100%;min-width:0;box-sizing:border-box;border-radius:10px;border:1px solid rgba(211,180,118,.3);background:rgba(18,15,25,.95);color:inherit;padding:12px;font-size:15px}
+.nj-didit-members-filters{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.nj-didit-members-filters button{border:1px solid rgba(211,180,118,.25);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:12px;padding:7px 11px;cursor:pointer}
+.nj-didit-members-filters button.active{background:rgba(211,180,118,.16);border-color:rgba(211,180,118,.65);color:#f5dbab}
+.nj-didit-member-list{display:flex;flex-direction:column;gap:7px;max-height:420px;overflow:auto;overscroll-behavior:contain}
+.nj-didit-member-choice{text-align:left;width:100%;min-width:0;border:1px solid rgba(211,180,118,.13);background:rgba(255,255,255,.02);color:inherit;border-radius:11px;padding:13px;display:flex;flex-direction:column;gap:5px;cursor:pointer}
+.nj-didit-member-choice.selected{border-color:rgba(211,180,118,.65);background:rgba(211,180,118,.09)}
+.nj-didit-member-choice strong{overflow-wrap:anywhere;font-size:13px}
+.nj-didit-member-choice span{font-size:12px;opacity:.76}
+.nj-didit-members-placeholder{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;opacity:.76}
+.nj-didit-members-placeholder span{max-width:320px;font-size:13px}
+.nj-didit-case-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid rgba(211,180,118,.18)}
+.nj-didit-case-title>div{min-width:0;display:flex;flex-direction:column;gap:5px}
+.nj-didit-case-title strong{overflow-wrap:anywhere}
+.nj-didit-case-title span{font-size:12px;opacity:.73}
+.nj-didit-case-verdict{display:flex;gap:12px;border-radius:13px;padding:14px;margin:14px 0;background:rgba(181,131,68,.12);border:1px solid rgba(200,149,82,.3)}
+.nj-didit-case-verdict.verified{background:rgba(53,130,104,.12);border-color:rgba(97,182,137,.25)}
+.nj-didit-case-verdict>div{display:flex;flex-direction:column;gap:5px}
+.nj-didit-case-verdict strong{font-size:13px;letter-spacing:.02em}
+.nj-didit-case-verdict span{font-size:12px;line-height:1.5}
+.nj-didit-case-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.nj-didit-case-fields>div{min-width:0;border:1px solid rgba(211,180,118,.12);border-radius:10px;padding:10px;background:rgba(255,255,255,.025)}
+.nj-didit-case-fields dt{font-size:11px;opacity:.7;margin-bottom:5px}
+.nj-didit-case-fields dd{margin:0;font-weight:650;font-size:12px;overflow-wrap:anywhere}
+.nj-didit-case-actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 10px}
+.nj-didit-case-actions .primary-button,.nj-didit-case-actions .secondary-button{max-width:100%;text-align:center;white-space:normal}
+.nj-didit-case-notice{border-left:3px solid #d5b37b;padding:11px 13px;background:rgba(211,180,118,.09);border-radius:5px;font-size:13px}
+@media(max-width:800px){.nj-didit-members-layout{grid-template-columns:minmax(0,1fr)}.nj-didit-member-list{max-height:280px}}
+@media(max-width:450px){.nj-didit-members{padding:14px;border-radius:14px}.nj-didit-members-stats{gap:6px}.nj-didit-members-stats span{padding:10px}.nj-didit-members-stats strong{font-size:22px}.nj-didit-members-stats small{font-size:10px}.nj-didit-case-fields{grid-template-columns:minmax(0,1fr)}}
