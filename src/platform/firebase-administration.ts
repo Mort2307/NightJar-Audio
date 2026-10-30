@@ -82,10 +82,31 @@ export type AdminDiditExistingResult = {
   verified: boolean;
   outcome: 'reconciled' | 'already_verified' | 'provider_not_approved' |
     'adult_evidence_missing' | 'no_reconcilable_session';
+  providerStatus?: string;
+  idFeatureStatuses?: string[];
 };
-const adminReconcileApplicantDiditCall = httpsCallable<{userId:string},AdminDiditExistingResult>(
-  functions, 'adminReconcileApplicantDidit');
-
+export type AdminDiditMemberSummary = {
+  userId: string; email: string; accountStatus: string;
+  providerStatus: string; providerVerified: boolean;
+  sessionRecorded: boolean; reverifyRequired: boolean; verifiedAt: string | null;
+};
+export type AdminDiditMemberCase = {
+  providerVerified: boolean; providerStatus: string; verifiedAt: string | null;
+  reverifyRequired: boolean; sessionRecorded: boolean; sessionBound: boolean;
+  sessionStatus: string | null; lastSignedWebhookStatus: string | null;
+  signedWebhookReceived: boolean; webhookProcessed: boolean; webhookIgnored: boolean;
+  adultEvidenceConfirmed: boolean; lastWebhookReceivedAt: string | null;
+  outcome: 'verified' | 'no_account_session' | 'session_binding_missing' |
+    'awaiting_signed_webhook' | 'webhook_waiting_for_processing' |
+    'webhook_ignored_or_superseded' | 'adult_evidence_missing' | 'provider_result_not_verified';
+  verificationEvidenceSource: string | null;
+};
+const adminReconcileMemberDiditCall = httpsCallable<{userId:string},AdminDiditExistingResult>(
+  functions, 'adminReconcileMemberDidit');
+const adminListDiditMemberCasesCall = httpsCallable<void,{members:AdminDiditMemberSummary[];limited:boolean}>(
+  functions, 'adminListDiditMemberCases');
+const adminInspectDiditMemberCaseCall = httpsCallable<{userId:string},AdminDiditMemberCase>(
+  functions, 'adminInspectDiditMemberCase');
 const retryApprovalEmailCall = httpsCallable<{ userId: string; eventId: string }, { userId: string; eventId: string; outcome: 'sent' | 'failed' }>(functions, 'adminRetryProfessionalApprovalEmail');
 const reviewProfessionalCall = httpsCallable<{
   userId: string;
@@ -238,7 +259,15 @@ export const nightjarAdministration = {
   },
 
   async syncApplicantExistingDidit(userId: string) {
-    return (await adminReconcileApplicantDiditCall({ userId })).data;
+    return (await adminReconcileMemberDiditCall({ userId })).data;
+  },
+
+  async listDiditMemberCases() {
+    return (await adminListDiditMemberCasesCall()).data;
+  },
+
+  async inspectDiditMemberCase(userId: string) {
+    return (await adminInspectDiditMemberCaseCall({ userId })).data;
   },
 
   async professionalApplicationBank() {
