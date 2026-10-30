@@ -6660,7 +6660,7 @@ function App() {
               {application.portfolioUrl && <small>Portfolio: {application.portfolioUrl}</small>}
               {adminApplicationBox === 'pending' && <small>{application.ageVerified ? 'Didit 18+ verified · ready for your decision' : application.temporaryTestAccess ? 'Approved temporary tester access' : demoMode ? 'Demo applicant · age check simulated' : 'Age assurance required before approval'}</small>}
               {adminApplicationBox === 'verification' && <small>Nightjar has not yet confirmed a live 18+ result for this account. Use Sync existing Didit result to check the provider's latest decision without starting another verification.</small>}
-              {adminApplicationBox === 'verification' && adminDiditSyncFeedback?.userId === application.userId && <p className="nj-didit-case-notice" role="status">{adminDiditSyncFeedback.message}</p>}
+              {adminApplicationBox === 'verification' && adminDiditSyncFeedback?.userId === application.userId && <p className="nj-didit-case-notice" role="status">{adminDiditSyncFeedback?.message}</p>}
               {adminApplicationBox === 'attention' && <small>There are no actionable pending professional roles on this application record. Check the account and its role history before changing anything.</small>}
             </div>
             {adminApplicationBox === 'pending' && <div className="admin-data-actions professional-application-actions">
