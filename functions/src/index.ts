@@ -8593,6 +8593,81 @@ export const adminReconcileMemberDidit = onCall({
   return { verified: true, outcome: reconciled ? 'reconciled' : 'already_verified' };
 });
 
+// Admin-only, bounded Nightjar member verification directory. All provider
+// decisions remain private: list reads saved Nightjar flags, not the Didit API.
+export const adminListDiditMemberCases = onCall({ region: REGION }, async request => {
+  requireAdminIdentity(request);
+  const records = await db.collection('accounts').limit(300).get();
+  const members = await Promise.all(records.docs.map(async doc => {
+    const member = doc.data() ?? {};
+    const age = (await db.collection('ageAssurance').doc(doc.id).get()).data() ?? {};
+    return {
+      userId: doc.id, email: cleanEmail(member.email),
+      accountStatus: cleanText(member.status, 30) || 'active',
+      providerStatus: cleanText(age.status, 40) || 'NOT_STARTED',
+      providerVerified: diditPass(age),
+      sessionRecorded: Boolean(cleanText(age.sessionId, 128)),
+      reverifyRequired: age.reverifyRequired === true,
+      verifiedAt: diditPass(age) ? toIso(age.verifiedAt) : null,
+    };
+  }));
+  members.sort((a,b) => Number(a.providerVerified)-Number(b.providerVerified) ||
+    Number(b.sessionRecorded)-Number(a.sessionRecorded) || a.email.localeCompare(b.email));
+  return { members, limited: records.size === 300 };
+});
+
+// Targeted read-only evidence trail for a selected Nightjar member. No ID
+// images, DOB, raw KYC decisions, URLs, keys or provider session IDs returned.
+export const adminInspectDiditMemberCase = onCall({ region: REGION }, async request => {
+  requireAdminIdentity(request);
+  const userId = cleanText((request.data as Record<string, unknown> | undefined)?.userId, 160);
+  if (!userId || userId.includes('/')) {
+    throw new HttpsError('invalid-argument', 'Select a Nightjar member to inspect.');
+  }
+  const account = await accountRef(userId).get();
+  if (!account.exists) throw new HttpsError('not-found', 'Nightjar account not found.');
+  const age = (await db.collection('ageAssurance').doc(userId).get()).data() ?? {};
+  const sessionId = cleanText(age.sessionId, 128);
+  const session = sessionId
+    ? (await db.collection('diditSessions').doc(sessionId).get()).data() ?? {}
+    : {};
+  const sessionBound = Boolean(sessionId && session.uid === userId &&
+    session.environment === 'live' && session.workflowId === DIDIT_WORKFLOW_ID.value());
+  const receipts = sessionBound
+    ? await db.collection('diditWebhookEvents').where('sessionId','==',sessionId).limit(30).get()
+    : null;
+  const events = (receipts?.docs ?? []).map(doc => doc.data())
+    .filter(value => ['status.updated','data.updated'].includes(String(value.webhookType)))
+    .sort((a,b) => Number(b.receivedAt?.toMillis?.() ?? 0) - Number(a.receivedAt?.toMillis?.() ?? 0));
+  const latest = events[0];
+  const verified = diditPass(age);
+  const outcome = verified ? 'verified'
+    : !sessionId ? 'no_account_session'
+    : !sessionBound ? 'session_binding_missing'
+    : !latest ? 'awaiting_signed_webhook'
+    : !latest.processedAt ? 'webhook_waiting_for_processing'
+    : latest.ignored === true ? 'webhook_ignored_or_superseded'
+    : latest.status === 'Approved' && latest.adultEvidence !== true ? 'adult_evidence_missing'
+    : 'provider_result_not_verified';
+  return {
+    providerVerified: verified,
+    providerStatus: cleanText(age.status, 40) || 'NOT_STARTED',
+    verifiedAt: verified ? toIso(age.verifiedAt) : null,
+    reverifyRequired: age.reverifyRequired === true,
+    sessionRecorded: Boolean(sessionId),
+    sessionBound,
+    sessionStatus: cleanText(session.status, 40) || null,
+    lastSignedWebhookStatus: cleanText(latest?.status, 40) || null,
+    signedWebhookReceived: Boolean(latest),
+    webhookProcessed: Boolean(latest?.processedAt),
+    webhookIgnored: latest?.ignored === true,
+    adultEvidenceConfirmed: latest?.adultEvidence === true,
+    lastWebhookReceivedAt: latest?.receivedAt ? toIso(latest.receivedAt) : null,
+    outcome,
+    verificationEvidenceSource: cleanText(age.verificationEvidenceSource, 80) || null,
+  };
+});
+
 // Owner-only read-only evidence trail. This never contacts Didit, changes
 // verification, creates a chargeable session, or exposes sensitive KYC material.
 export const adminDiditDiagnostics = onCall({ region: REGION }, async (request) => {
