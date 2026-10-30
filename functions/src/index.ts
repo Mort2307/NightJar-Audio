@@ -8618,7 +8618,7 @@ export const adminListDiditMemberCases = onCall({ region: REGION }, async reques
 
 // Targeted read-only evidence trail for a selected Nightjar member. No ID
 // images, DOB, raw KYC decisions, URLs, keys or provider session IDs returned.
-export const adminInspectDiditMemberCase = onCall({ region: REGION }, async request => {
+export const adminInspectDiditMemberCase = onCall({ region: REGION, secrets: [DIDIT_WORKFLOW_ID] }, async request => {
   requireAdminIdentity(request);
   const userId = cleanText((request.data as Record<string, unknown> | undefined)?.userId, 160);
   if (!userId || userId.includes('/')) {
