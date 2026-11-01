@@ -1,0 +1,11 @@
+{
+  "pr": 324,
+  "reason": "User-reported message composer: plain Enter adds a paragraph; explicit Ctrl/Meta+Enter and Send button submit. No messaging backend or role policy change. Preserve PR #294 RC exact blob and all accepted followup SHAs.",
+  "files": [
+    {
+      "path": "src/components/MessagingHub.tsx",
+      "baselineSha": "57cd9f7d587c70de41b8f5de3e6726a3693dbfbb",
+      "sha": "478bd8a690b75e5fc1cd2c59dbca93679bd54835"
+    }
+  ]
+}
