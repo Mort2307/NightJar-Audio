@@ -1,0 +1,49 @@
+# One-shot, non-production candidate lock refresh for #318.
+# This branch-only workflow is removed before merge. It has no production secrets.
+name: NightJar Functions supported-upstream lock refresh
+on:
+  push:
+    branches:
+      - fix/nightjar-functions-upstream-20261101
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-and-verify:
+    if: ${{ github.ref_name == 'fix/nightjar-functions-upstream-20261101' && !contains(github.event.head_commit.message, '[lockfile-generated]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          ref: fix/nightjar-functions-upstream-20261101
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Regenerate reproducible lockfile for supported Firestore 9.4 family
+        run: npm --prefix functions install --package-lock-only --ignore-scripts --no-fund --no-audit
+      - name: Install exactly the newly resolved dependencies
+        run: npm --prefix functions ci --no-fund
+      - name: Backend typecheck and build
+        run: npm --prefix functions run check && npm --prefix functions run build
+      - name: Reject unexpected moderate/high/critical advisories
+        run: npm --prefix functions run audit:guard
+      - name: Verify backend entitlement tests
+        run: npm --prefix functions run test:entitlements
+      - name: Commit lockfile only after all validations pass
+        run: |
+          set -euo pipefail
+          git add functions/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No lockfile changes produced; inspect dependency resolution"
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(functions): regenerate verified Firestore lockfile [lockfile-generated]'
+          git push origin HEAD:fix/nightjar-functions-upstream-20261101
