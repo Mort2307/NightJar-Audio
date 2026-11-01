@@ -167,6 +167,12 @@ const calendar=string('src/components/PersonalCalendar.tsx');
 const layout=string('src/components/NightjarHomeLayout.tsx');
 assert.match(main,/human-first-operational-ui\.css/,'shared Midnight Gold refinement loaded');
 assert.match(messaging,/messaging-human-first\.css/,'Inbox polish loaded');
+assert.match(messaging,/event\.key==='Enter'&&\(event\.ctrlKey\|\|event\.metaKey\)/,
+  'message composer requires explicit Ctrl/Cmd+Enter to submit');
+assert.doesNotMatch(messaging,/event\.key==='Enter'&&!event\.shiftKey/,
+  'plain Enter must never auto-send a draft');
+assert.match(messaging,/Enter for a new line · Ctrl\/Cmd\+Enter to send/,
+  'message composer shortcut must be discoverable');
 assert.match(app,/revealHomeSection\('catalogue'\)/,'Home navigation source changes present');
 assert.match(layout,/revealHomeSection\('catalogue'\)/,'Home action uses shared reveal mechanism');
 assert.match(mobile,/isMobileNavigationActive\(view, item\.view\)/,'related Profile/Calendar tabs correctly selected');
