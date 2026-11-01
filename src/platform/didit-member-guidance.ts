@@ -87,6 +87,24 @@ export function diditActionGuidance(
       detail:'Open the existing secure Didit link. Only redo an ID photo or liveness check if Didit explicitly requests it. Return here to refresh your result.',
       certainty:'awaiting',
     });
+  } else if (status.providerStatus === 'FAIL') {
+    items.push({
+      key:'provider-declined', title:'Didit did not approve this verification',
+      detail:'Your current check needs review. If NightJar has no confirmed reason to display, contact support and do not start another paid check.',
+      certainty:'awaiting',
+    });
+  } else if (status.providerStatus === 'PENDING_REVIEW') {
+    items.push({
+      key:'provider-review', title:'Your check is awaiting a decision',
+      detail:'Your submitted verification is still being reviewed. There is no need to create a second ID session.',
+      certainty:'awaiting',
+    });
+  } else if (status.providerStatus === 'ABANDONED' || status.providerStatus === 'EXPIRED') {
+    items.push({
+      key:'provider-expired', title:'Your existing verification link or session has ended',
+      detail:'Contact NightJar support about safely continuing or resubmitting the existing check. Do not start another paid session yourself.',
+      certainty:'awaiting',
+    });
   } else if (status.state === 'requires_review' || status.state === 'claimed') {
     items.push({
       key:'support-review', title:'Your existing verification needs NightJar support',
