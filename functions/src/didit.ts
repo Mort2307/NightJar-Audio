@@ -45,7 +45,7 @@ export const startDiditSession = async (uid: string) => {
     tx.set(ref, {
       provider: 'didit', status: 'CREATING', environment: env(), verified: false,
       reverifyRequired: true, testMode: env() !== 'live',
-      creatingSinceMs: Date.now(), updatedAt: FieldValue.serverTimestamp(),
+      creatingSinceMs: Date.now(), memberIssueCodes: [], updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     return 'claimed';
   });
@@ -126,7 +126,7 @@ export const startDiditSession = async (uid: string) => {
       tx.set(ref, {
         provider: 'didit', environment: env(), sessionId, status: 'PENDING',
         verified: false, testMode: env() !== 'live', reverifyRequired: false,
-        diditEventCreatedAt: 0, creatingSinceMs: 0,
+        diditEventCreatedAt: 0, creatingSinceMs: 0, memberIssueCodes: [],
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     });
@@ -156,6 +156,42 @@ const canonicalJson = (value: any): string => {
     .map(key => JSON.stringify(key) + ':' + canonicalJson(value[key])).join(',') + '}';
   return JSON.stringify(value);
 };
+// Only mundane, user-actionable warnings from HMAC-verified Didit events
+// can be stored. Fraud/risk signals, biometrics, identity data and free text
+// must never enter this member-facing feedback channel.
+const DIDIT_MEMBER_SAFE_WARNINGS = new Set([
+  'DOCUMENT_EXPIRED', 'COULD_NOT_RECOGNIZE_DOCUMENT',
+  'DOCUMENT_TYPE_NOT_SUPPORTED', 'NO_FACE_DETECTED',
+  'LOW_FACE_MATCH_SIMILARITY',
+]);
+export const diditSafeMemberWarningCodes = (value: unknown): string[] =>
+  Array.isArray(value) ? [...new Set(value.filter((code): code is string =>
+    typeof code === 'string' && DIDIT_MEMBER_SAFE_WARNINGS.has(code)))].slice(0, 4) : [];
+
+export const diditMemberWarningCodesFromDecision = (value: unknown): string[] => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const decision = value as Record<string, unknown>;
+  const codes: unknown[] = [];
+  for (const field of ['id_verifications', 'liveness_checks', 'face_matches']) {
+    const checks = decision[field];
+    if (!Array.isArray(checks)) continue;
+    for (const check of checks.slice(0, 8)) {
+      if (!check || typeof check !== 'object' || Array.isArray(check)) continue;
+      const feature = check as Record<string, unknown>;
+      const warnings = Array.isArray(feature.warnings) ? feature.warnings
+        : Array.isArray(feature.warning_codes) ? feature.warning_codes : [];
+      for (const warning of warnings.slice(0, 8)) {
+        if (typeof warning === 'string') codes.push(warning);
+        else if (warning && typeof warning === 'object' && !Array.isArray(warning)) {
+          const obj=warning as Record<string, unknown>;
+          codes.push(obj.code ?? obj.name);
+        }
+      }
+    }
+  }
+  return diditSafeMemberWarningCodes(codes);
+};
+
 // Confirm adulthood from approved documentary KYC evidence without storing a birth date.
 // A generic Approved identity decision MUST NOT, on its own, unlock 18+ content.
 // Adaptive age-estimation workflows need a separate evidence adapter before use.
@@ -230,8 +266,10 @@ export const diditWebhook = onRequest({
   const hash = createHash('sha256').update(eventId).digest('hex');
   const record = {
     eventId, webhookType: type, status: text(value.status, 50),
-    // Derived boolean only: birth date, document data and biometric material are never stored.
+    // Only safe categorical reasons, not identity data or freeform warnings.
     adultEvidence: value.status === 'Approved' && verifiedAdultFromDecision(value.decision),
+    memberIssueCodes: value.decision && typeof value.decision === 'object'
+      ? diditMemberWarningCodesFromDecision(value.decision) : null,
     applicationId: text(value.application_id, 128) || null,
     sessionId: sessionId || null, vendorData: text(value.vendor_data, 256) || null,
     workflowId: text(value.workflow_id, 128) || null,
@@ -319,6 +357,9 @@ export const processDiditWebhook = onDocumentCreated({
       testMode: payload.environment !== 'live', reverifyRequired: !approved,
       verifiedAt: approved ? FieldValue.serverTimestamp() : (data.verifiedAt ?? null),
       diditEventCreatedAt: payload.createdAt, diditEventId: payload.eventId,
+      ...(approved ? {memberIssueCodes: []} :
+        Array.isArray(payload.memberIssueCodes)
+          ? {memberIssueCodes: diditSafeMemberWarningCodes(payload.memberIssueCodes)} : {}),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     tx.set(doc.ref, { processedAt: FieldValue.serverTimestamp(), accountId: uid }, { merge: true });
