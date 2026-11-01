@@ -85,6 +85,20 @@ for(const item of diditLinkFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #319 adds an independent, narrowly-scoped, exact-blob UX parity import.
+// Preserve all earlier human-first, calendar, Didit and integrated RC SHAs.
+const parityFollowup=JSON.parse(string('docs/NIGHTJAR_16_ISSUE_PARITY_FOLLOWUP.json'));
+assert.equal(parityFollowup.pr,319,'operational parity change requires its own review');
+assert.deepEqual(parityFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'operational parity may change only the approved App import');
+for(const item of parityFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'parity UI must anchor to approved existing source');
+  assert.equal(item.baselineSha,previous.sha,'historical Nightjar UI SHAs may not be rewritten');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
