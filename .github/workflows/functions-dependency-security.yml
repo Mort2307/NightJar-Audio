@@ -1,0 +1,33 @@
+# Security accountability independent of frontend Hosting releases.
+# Backend changes remain blocked by strict audit in both PR and push CI.
+name: NightJar Functions dependency security
+on:
+  schedule:
+    - cron: '27 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  functions-dependency-audit:
+    name: Functions dependency security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Install locked Functions dependencies
+        working-directory: functions
+        run: npm ci --no-fund
+      - name: Audit existing production Functions dependency vulnerabilities
+        working-directory: functions
+        run: npm run audit:guard
+      - name: Report findings
+        if: failure()
+        run: |
+          echo "::error::Functions dependency audit failed. Track remediation in GitHub issue #318; do not deploy changed backend packages while unresolved."
