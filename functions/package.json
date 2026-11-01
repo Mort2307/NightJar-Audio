@@ -32,6 +32,9 @@
   "overrides": {
     "uuid": "11.1.1",
     "body-parser": "2.4.0",
-    "qs": "6.16.1"
+    "qs": "6.16.1",
+    "@google-cloud/firestore": {
+      "@google-cloud/firestore-api": "^0.7.0"
+    }
   }
 }
