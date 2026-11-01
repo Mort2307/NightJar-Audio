@@ -27,8 +27,6 @@ jobs:
           cache-dependency-path: functions/package-lock.json
       - name: Regenerate reproducible lockfile for supported Firestore 9.4 family
         run: npm --prefix functions update --package-lock-only --ignore-scripts --no-fund --no-audit
-      - name: Apply compatible security patch resolutions without force
-        run: npm --prefix functions audit fix --package-lock-only --ignore-scripts --no-fund
       - name: Install exactly the newly resolved dependencies
         run: npm --prefix functions ci --no-fund
       - name: Backend typecheck and build
