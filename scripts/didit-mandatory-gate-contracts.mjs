@@ -60,14 +60,14 @@ assert.doesNotMatch(deploy, /startDiditSession\(|startAgeAssurance\(/, 'deploy c
 // link; support same-tab navigation for embedded browser limitations.
 const diditStart = app.slice(app.indexOf('const openAgeCheck = async'), app.indexOf('// Verifies a PRE-EXISTING account-bound provider result only.'));
 assert.ok(diditStart.length > 100, 'legacy Didit start handler must be located');
-assert.doesNotMatch(diditStart,/window\\.open\\(/,'Didit cannot launch a popup after asynchronous Firebase work');
-assert.match(diditStart,/safeDiditLaunchUrl\\(data\\.launchUrl\\)/,'provider launch URL must be validated before exposing a link');
-assert.match(app,/const safeDiditLaunchUrl = \\(candidate: unknown\\)/,'client URL validator exists');
-assert.match(app,/\\['verify\\.didit\\.me', 'verification\\.didit\\.me'\\]/,'only Didit HTTPS hostnames allowed');
-assert.match(app,/existing = await nightjarDiditControlled\\.status\\(\\)/,'refresh can recover the existing URL without another paid check');
-assert.match(app,/href=\\{ageLaunchUrl\\} target="_blank"/,'explicit external tap opens the already-created Didit URL');
-assert.match(app,/href=\\{ageLaunchUrl\\}>Open Didit in this tab instead/,'same-tab fallback bypasses popup handling');
-assert.match(panel,/href=\\{launchUrl\\} className="secondary-button">Open Didit in this tab instead/,'controlled check has the same-tab fallback');
-assert.match(panel,/!uri\\.username && !uri\\.password/,'controlled verification forbids credentials in redirect URLs');
+assert.doesNotMatch(diditStart,/window\.open\(/,'Didit cannot launch a popup after asynchronous Firebase work');
+assert.match(diditStart,/safeDiditLaunchUrl\(data\.launchUrl\)/,'provider launch URL must be validated before exposing a link');
+assert.match(app,/const safeDiditLaunchUrl = \(candidate: unknown\)/,'client URL validator exists');
+assert.match(app,/\['verify\.didit\.me', 'verification\.didit\.me'\]/,'only Didit HTTPS hostnames allowed');
+assert.match(app,/existing = await nightjarDiditControlled\.status\(\)/,'refresh can recover the existing URL without another paid check');
+assert.match(app,/href=\{ageLaunchUrl\} target="_blank"/,'explicit external tap opens the already-created Didit URL');
+assert.match(app,/href=\{ageLaunchUrl\}>Open Didit in this tab instead/,'same-tab fallback bypasses popup handling');
+assert.match(panel,/href=\{launchUrl\} className="secondary-button">Open Didit in this tab instead/,'controlled check has the same-tab fallback');
+assert.match(panel,/!uri\.username && !uri\.password/,'controlled verification forbids credentials in redirect URLs');
 
 console.log('NightJar mandatory once-only Didit age-gate contracts PASS.');
