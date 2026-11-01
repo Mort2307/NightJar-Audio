@@ -1,0 +1,11 @@
+{
+  "pr": 317,
+  "reason": "Fix Chrome/Android popup blocker by showing direct, explicitly tapped Didit links; recover previously created account-linked URL without starting another session. Preserve all original/approved RC provenance and age assurance enforcement.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "ee70e4b1651a38e10c1bf407a7e240d0317db10d",
+      "sha": "3f42093d1e6b3583f60446c035b022db964b8fc4"
+    }
+  ]
+}
