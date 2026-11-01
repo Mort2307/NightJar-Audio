@@ -25,6 +25,10 @@ const providerGuidance: Record<string, {title:string;detail:string}> = {
     title: 'Your document type is not accepted',
     detail: 'Check which documents the existing Didit workflow accepts. NightJar support can review regional document availability.',
   },
+  DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION: {
+    title: 'Your document type is not accepted',
+    detail: 'Check the accepted original physical documents in your Didit flow. NightJar support can help if a supported option is unavailable in your region.',
+  },
   NO_FACE_DETECTED: {
     title: 'A live face could not be detected',
     detail: 'If Didit offers a liveness retry, allow camera access and follow its on-screen positioning instructions.',
