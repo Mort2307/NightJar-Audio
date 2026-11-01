@@ -1,0 +1,11 @@
+{
+  "pr": 319,
+  "reason": "Scoped UI parity pass touching only the reviewed App.tsx CSS import. No backend/rules/entitlement changes; preserve exact prior approved Didit direct-link baseline and six-pr integration provenance.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "3f42093d1e6b3583f60446c035b022db964b8fc4",
+      "sha": "bd639f6fe6087e27352559cc1a4803b7e65af0c4"
+    }
+  ]
+}
