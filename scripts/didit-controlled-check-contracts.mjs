@@ -73,4 +73,22 @@ assert.match(client,/adminAuthoriseDiditControlledCheck/,'typed grant callable e
 assert.match(client,/myDiditControlledCheck/,'typed status callable exists');
 assert.match(client,/startMyDiditControlledCheck/,'typed start callable exists');
 assert.match(workflow,/\[nightjar-didit-controlled-check-release\]/,'backend-first deploy is mandatory');
+
+// Actionable, truthful verification feedback is member-scoped and never
+// assumes an ID/liveness failure from an overall pending/declined status.
+const guidance=fs.readFileSync('src/platform/didit-member-guidance.ts','utf8');
+const guidanceStyles=fs.readFileSync('src/components/didit-issue-explainer.css','utf8');
+assert.match(component,/diditActionGuidance\(status/,'render verified member action state');
+assert.match(component,/What needs attention\?/,'clear explanation is visible in the existing Didit gate');
+assert.match(component,/missing the current Terms of Use or Privacy Notice acknowledgement/,'explain blocked legal requirements');
+assert.match(component,/item\.certainty==='confirmed'/,'provider-specific explanations require confirmed data');
+assert.match(guidance,/verificationIssues/,'specific check warnings come only from account-bound sanitised server fields');
+assert.match(guidance,/DOCUMENT_EXPIRED/,'recognised ID expiry has an actionable explanation');
+assert.match(guidance,/COULD_NOT_RECOGNIZE_DOCUMENT/,'unclear ID capture has an actionable explanation');
+assert.match(guidance,/NO_FACE_DETECTED/,'liveness capture has an actionable explanation');
+assert.match(guidance,/LOW_FACE_MATCH_SIMILARITY/,'face-match issue can be explained without fraud scoring');
+assert.match(guidance,/Contact support; do not pay for another ID session/,'ambiguous sessions cannot encourage a duplicate charge');
+assert.doesNotMatch(guidance,/nightjarDiditControlled\.start\(|startDiditSession\(/,'display advice may not create a paid check');
+assert.match(guidanceStyles,/max\(\.875rem,14px\)/,'minimum readable body copy');
+
 console.log('Legacy one-use Didit maintenance safeguards and mandatory public verification contracts PASS.');
