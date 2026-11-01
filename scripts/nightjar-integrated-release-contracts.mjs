@@ -71,6 +71,20 @@ for(const item of diditOpsFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #317 corrects the async popup in the mandatory Didit gate while retaining
+// every earlier reviewed App and release-candidate exact blob anchor.
+const diditLinkFollowup=JSON.parse(string('docs/NIGHTJAR_DIDIT_DIRECT_LINK_FOLLOWUP.json'));
+assert.equal(diditLinkFollowup.pr,317,'Didit direct-link correction requires separate review');
+assert.deepEqual(diditLinkFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'Didit popup recovery may change only the reviewed App file');
+for(const item of diditLinkFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'popup-blocker follow-up must be anchored to approved Didit operations UI');
+  assert.equal(item.baselineSha,previous.sha,'do not rewrite historical RC or previously approved UI SHAs');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){

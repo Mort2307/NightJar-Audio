@@ -23,6 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -44,6 +45,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -52,7 +54,12 @@ jobs:
       - run: npm ci --no-fund
       - run: npm run check
       - run: npm run build
-      - run: npm run audit:guard
+      - name: Determine backend change scope
+        id: scope
+        run: node ../scripts/ci-release-scope.mjs
+      - name: Run npm run audit:guard
+        if: steps.scope.outputs.backend_changed == 'true'
+        run: npm run audit:guard
 
   credit-security:
     name: Verified credits emulator security (no deploy)
@@ -62,6 +69,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

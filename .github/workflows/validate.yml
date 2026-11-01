@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -45,7 +47,18 @@ jobs:
         working-directory: functions
         run: npm run check
 
+      - name: Determine backend change scope
+        id: scope
+        run: node scripts/ci-release-scope.mjs
+
+      - name: Test fail-closed release scope
+        run: node --test scripts/ci-release-scope.test.mjs
+
+      # Unchanged backend advisories are monitored by the dedicated nightly
+      # security workflow, without blocking an otherwise validated Hosting fix.
+      # Any backend source/lockfile/rules/config change still requires audit.
       - name: Audit Firebase Functions production dependencies
+        if: steps.scope.outputs.backend_changed == 'true'
         working-directory: functions
         run: npm run audit:guard
 
