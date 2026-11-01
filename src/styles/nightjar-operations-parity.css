@@ -1,0 +1,143 @@
+/* NightJar operational parity pass — 1 Nov 2026.
+   Applied after shared Midnight Gold / Vision Access. No reset of theme, art,
+   hero sections, moderation, playback, or personal accessibility preferences.
+   Align core actions across Listener, Creator, Writer, Artist, Editor & Owner. */
+:root {
+  --nj-ops-touch: 44px;
+  --nj-ops-caption: max(.8125rem, 13px);
+  --nj-ops-support: max(.875rem, 14px);
+}
+:root:not([data-nightjar-vision]) :is(
+  .nj-role-dashboard, .nj-didit-members, .nj-admin-people-find,
+  .nj-command-palette, .nj-next-actions
+) {
+  min-width: 0;
+}
+:root:not([data-nightjar-vision]) :is(
+  .nj-role-dashboard-head p,
+  .nj-didit-members-heading p,
+  .nj-next-actions-clear span small,
+  .nj-didit-case-verdict span
+) {
+  font-size: var(--nj-ops-support);
+  line-height: 1.55;
+  overflow-wrap:anywhere;
+}
+:root:not([data-nightjar-vision]) :is(
+  .nj-role-dashboard-metrics small,
+  .nj-role-dashboard-metrics span,
+  .nj-didit-member-choice span,
+  .nj-didit-case-fields dt,
+  .nj-didit-case-fields dd,
+  .nj-didit-members-stats small,
+  .nj-didit-muted,
+  .people-row-managed .nj-admin-member-identity > span,
+  .people-row-managed .nj-admin-member-identity > em,
+  .nj-admin-people-find label,
+  .nj-admin-people-find > span,
+  .nj-admin-people-pager > span
+) {
+  font-size:var(--nj-ops-caption);
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+:root:not([data-nightjar-vision]) :is(
+  .nj-next-action span:nth-child(2) strong,
+  .nj-didit-member-choice strong,
+  .nj-didit-case-title strong,
+  .nj-didit-case-verdict strong
+) {
+  font-size:var(--nj-ops-support);
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+/* Controls are part of a professional workflow, not decorative badges.
+   Keep choices comfortably tappable and preserve existing active styles. */
+:root:not([data-nightjar-vision]) :is(
+  .nj-didit-members-filters button,
+  .nj-didit-member-choice,
+  .nj-didit-case-actions a,
+  .nj-didit-case-actions button,
+  .nj-admin-people-pager button,
+  .people-row-managed .nj-member-open-profile,
+  .people-row-managed .nj-member-manage-toggle,
+  .featured-carousel-autoplay
+) {
+  min-height:var(--nj-ops-touch);
+  font-size:var(--nj-ops-caption);
+  line-height:1.35;
+}
+:root:not([data-nightjar-vision]) :is(
+  .nj-didit-members-filters button,
+  .nj-didit-member-choice,
+  .nj-didit-case-actions button
+):disabled {
+  cursor:not-allowed;
+  opacity:.62;
+}
+/* Preserve the original Midnight Gold surfaces and generous breathing room.
+   Even long member names and status messages must not push an action offscreen. */
+:root:not([data-nightjar-vision]) :is(
+  .nj-didit-members-layout, .nj-didit-members-browser,
+  .nj-didit-member-inspection, .nj-didit-case-title,
+  .people-row-managed, .nj-next-actions, .nj-next-action
+) {
+  min-width:0;
+}
+:root:not([data-nightjar-vision]) .nj-didit-members-heading > div,
+:root:not([data-nightjar-vision]) .nj-didit-case-title > div,
+:root:not([data-nightjar-vision]) .nj-role-dashboard-head > div {
+  min-width:0;
+}
+:root:not([data-nightjar-vision]) .nj-didit-members-stats {
+  font-variant-numeric:tabular-nums;
+}
+:root:not([data-nightjar-vision]) .nj-didit-members-stats strong {
+  line-height:1.2;
+}
+/* Content-sensitive artwork/Spotlight cues should never look like 8px legal
+   text. Do not change the image fitting, a moderated thumbnail or composition. */
+:root:not([data-nightjar-vision]) :is(
+  .featured-carousel-position strong,
+  .featured-carousel-position small,
+  .featured-carousel-autoplay,
+  .featured-carousel-motion-note
+) {
+  font-size:var(--nj-ops-caption);
+  line-height:1.4;
+}
+@media (max-width:700px) {
+  :root:not([data-nightjar-vision]) .nj-mobile-nav button > .nj-mobile-nav-label,
+  :root[data-nightjar-theme="bronze"]:not([data-nightjar-vision]) .nj-mobile-nav button > .nj-mobile-nav-label {
+    font-size:max(.75rem, 12px);
+    letter-spacing:0;
+    line-height:1.25;
+    overflow-wrap:normal;
+  }
+  :root:not([data-nightjar-vision]) .nj-didit-members-heading {
+    gap:12px;
+  }
+  :root:not([data-nightjar-vision]) .nj-didit-members-stats {
+    gap:8px;
+  }
+  :root:not([data-nightjar-vision]) .nj-didit-case-actions > :is(a,button) {
+    flex:1 1 205px;
+    justify-content:center;
+  }
+}
+@media (max-width:360px) {
+  :root:not([data-nightjar-vision]) .nj-didit-members-stats small {
+    font-size:max(.75rem,12px);
+  }
+  :root:not([data-nightjar-vision]) .nj-didit-members-stats span {
+    padding:10px 8px;
+  }
+  :root:not([data-nightjar-vision]) .nj-didit-members-filters {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nj-didit-member-choice, .nj-didit-members-filters button,
+  .featured-carousel-autoplay {transition:none;}
+}
