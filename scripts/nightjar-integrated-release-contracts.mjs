@@ -193,6 +193,10 @@ assert.match(calendar,/nightjarCalendar\.save\(\{id:editing \?\? undefined,title
   'calendar reschedule preserves original record identity');
 assert.match(app,/isProfileSetupComplete\(profile\)/,'completed onboarding gate stays intact');
 assert.match(app,/ageVerified/,'age verification still gates private role views');
+assert.match(app,/playbackAccessReason\?: 'admin' \| 'credited_work' \| 'subscription' \| 'closed_beta_tester'/,
+  'published audio cards type beta entitlements without mislabelling them as subscriptions');
+assert.match(app,/track\.playbackAccessReason === 'closed_beta_tester' \? 'Included · beta tester'/,
+  'a free beta grant shows a clear member-facing label');
 
 for(const file of [
   'docs/INBOX_HUMAN_FIRST_ACCEPTANCE.md',
