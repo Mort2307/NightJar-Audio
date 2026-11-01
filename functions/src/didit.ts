@@ -161,7 +161,7 @@ const canonicalJson = (value: any): string => {
 // must never enter this member-facing feedback channel.
 const DIDIT_MEMBER_SAFE_WARNINGS = new Set([
   'DOCUMENT_EXPIRED', 'COULD_NOT_RECOGNIZE_DOCUMENT',
-  'DOCUMENT_TYPE_NOT_SUPPORTED', 'NO_FACE_DETECTED',
+  'DOCUMENT_TYPE_NOT_SUPPORTED', 'DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION', 'NO_FACE_DETECTED',
   'LOW_FACE_MATCH_SIMILARITY',
 ]);
 export const diditSafeMemberWarningCodes = (value: unknown): string[] =>
@@ -184,7 +184,7 @@ export const diditMemberWarningCodesFromDecision = (value: unknown): string[] =>
         if (typeof warning === 'string') codes.push(warning);
         else if (warning && typeof warning === 'object' && !Array.isArray(warning)) {
           const obj=warning as Record<string, unknown>;
-          codes.push(obj.code ?? obj.name);
+          codes.push(obj.log_type ?? obj.code ?? obj.name);
         }
       }
     }
