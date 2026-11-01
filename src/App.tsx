@@ -351,7 +351,7 @@ type Track = {
   communityCommentCount?: number;
   listenCount?: number;
   playbackAllowed?: boolean;
-  playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'subscription_required' | null;
+  playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'closed_beta_tester' | 'subscription_required' | null;
 };
 
 type PublicDirectoryProfile = {
@@ -7056,7 +7056,7 @@ function LiveTrackCard({ track, playing, favourite, reaction, canReact, onPlay, 
       {track.productionNote && <p className="track-production-note"><strong>Behind the scenes:</strong> {track.productionNote}</p>}
       {!!track.contributors?.length && <div className="track-credit-line">{track.contributors.slice(0,4).map((credit)=><span key={credit.role + ':' + credit.name}>{credit.role}: {credit.name}</span>)}</div>}
       <div className="track-footer">
-        <span className={track.playbackAccessReason === 'subscription_required' ? 'creator-link track-access-state locked' : 'creator-link track-access-state'}>{!track.audioAvailable && !track.audioUrl ? 'Audio not connected' : track.playbackAccessReason === 'credited_work' ? 'Included · your credited work' : track.playbackAccessReason === 'subscription' ? 'Included with subscription' : track.playbackAccessReason === 'admin' ? 'Administrator access' : track.playbackAccessReason === 'subscription_required' ? 'Subscription required' : 'Age-gated audio ready'}</span>
+        <span className={track.playbackAccessReason === 'subscription_required' ? 'creator-link track-access-state locked' : 'creator-link track-access-state'}>{!track.audioAvailable && !track.audioUrl ? 'Audio not connected' : track.playbackAccessReason === 'credited_work' ? 'Included · your credited work' : track.playbackAccessReason === 'subscription' ? 'Included with subscription' : track.playbackAccessReason === 'closed_beta_tester' ? 'Included · beta tester' : track.playbackAccessReason === 'admin' ? 'Administrator access' : track.playbackAccessReason === 'subscription_required' ? 'Subscription required' : 'Age-gated audio ready'}</span>
         <div className="track-footer-actions">
           {track.transcriptAvailable && <button className="text-button track-transcript-button" onClick={() => onRead(track)}><FileText size={14}/> Read transcript</button>}
           {canReact && <button className={reaction === 'like' ? 'text-button track-reaction-button active' : 'text-button track-reaction-button'} onClick={() => onReaction('like')} aria-pressed={reaction === 'like'} title="Like this published work"><ThumbsUp size={14} fill={reaction === 'like' ? 'currentColor' : 'none'}/> Like <span>{track.communityLikeCount ?? 0}</span></button>}

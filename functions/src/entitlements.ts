@@ -43,3 +43,25 @@ export const mayUseTemporaryAccess = (options: {
   && !options.ageAssuranceConfigured
   && options.accountActive
   && (options.administrator || options.explicitTester);
+
+/**
+ * A closed-beta listener grant is NOT a paid subscription, a trial, or an
+ * alternative form of age assurance. The server checks all these conditions
+ * against the authenticated member's current account and Didit records.
+ */
+export const canUseBetaListening = (policy: {
+  closedBeta: boolean;
+  administrator: boolean;
+  accountExists: boolean;
+  accountSuspended: boolean;
+  accountEmailMatches: boolean;
+  providerVerifiedAdult: boolean;
+  explicitTester: boolean;
+}): boolean =>
+  policy.closedBeta &&
+  !policy.administrator &&
+  policy.accountExists &&
+  !policy.accountSuspended &&
+  policy.accountEmailMatches &&
+  policy.providerVerifiedAdult &&
+  policy.explicitTester;

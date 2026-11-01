@@ -116,6 +116,33 @@ for(const item of deleteFeedbackFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #324: deliberate multiline messaging follows the original reviewed PR
+// #294 component, preserving all prior exact-blob approvals.
+const messageFollowup=JSON.parse(string('docs/NIGHTJAR_MESSAGE_NEWLINE_FOLLOWUP.json'));
+assert.equal(messageFollowup.pr,324,'message composer requires an independent PR');
+assert.deepEqual(messageFollowup.files.map(item=>item.path),
+  ['src/components/MessagingHub.tsx'],'cannot widen a composer-only change');
+for(const item of messageFollowup.files) {
+  const original=manifest.includes.flatMap(pr=>pr.files).find(entry=>entry.path===item.path);
+  assert.ok(original,'message composer must exist in approved RC manifest');
+  assert.equal(item.baselineSha,original.sha,'reviewed RC source must remain immutable');
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  overrides.set(item.path,item);
+}
+
+// PR #326: member-visible listening label only. The reviewed App.tsx PR #319
+// hash remains immutable and no server-side access gate is changed.
+const betaLabelFollowup=JSON.parse(string('docs/NIGHTJAR_BETA_LISTENING_LABEL_FOLLOWUP.json'));
+assert.equal(betaLabelFollowup.pr,326);
+assert.deepEqual(betaLabelFollowup.files.map(item=>item.path),['src/App.tsx']);
+for(const item of betaLabelFollowup.files) {
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'label is anchored to approved App UI');
+  assert.equal(item.baselineSha,previous.sha,'do not rewrite historical RC hashes');
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
@@ -153,6 +180,12 @@ const calendar=string('src/components/PersonalCalendar.tsx');
 const layout=string('src/components/NightjarHomeLayout.tsx');
 assert.match(main,/human-first-operational-ui\.css/,'shared Midnight Gold refinement loaded');
 assert.match(messaging,/messaging-human-first\.css/,'Inbox polish loaded');
+assert.match(messaging,/event\.key==='Enter'&&\(event\.ctrlKey\|\|event\.metaKey\)/,
+  'message composer requires explicit Ctrl/Cmd+Enter to submit');
+assert.doesNotMatch(messaging,/event\.key==='Enter'&&!event\.shiftKey/,
+  'plain Enter must never auto-send a draft');
+assert.match(messaging,/Enter for a new line · Ctrl\/Cmd\+Enter to send/,
+  'message composer shortcut must be discoverable');
 assert.match(app,/revealHomeSection\('catalogue'\)/,'Home navigation source changes present');
 assert.match(layout,/revealHomeSection\('catalogue'\)/,'Home action uses shared reveal mechanism');
 assert.match(mobile,/isMobileNavigationActive\(view, item\.view\)/,'related Profile/Calendar tabs correctly selected');
@@ -160,6 +193,12 @@ assert.match(calendar,/nightjarCalendar\.save\(\{id:editing \?\? undefined,title
   'calendar reschedule preserves original record identity');
 assert.match(app,/isProfileSetupComplete\(profile\)/,'completed onboarding gate stays intact');
 assert.match(app,/ageVerified/,'age verification still gates private role views');
+assert.match(app,/playbackAccessReason\?: 'admin' \| 'credited_work' \| 'subscription' \| 'closed_beta_tester'/,
+  'published audio cards type beta entitlements without mislabelling them as subscriptions');
+assert.match(app,/track\.playbackAccessReason === 'closed_beta_tester' \? 'Included · beta tester'/,
+  'a free beta grant shows a clear member-facing label');
+assert.match(string('src/components/NightjarPlayer.tsx'),/playbackAccessReason\?: 'admin' \| 'credited_work' \| 'subscription' \| 'closed_beta_tester'/,
+  'player data contract includes the beta reason without treating it as a paid subscription');
 
 for(const file of [
   'docs/INBOX_HUMAN_FIRST_ACCEPTANCE.md',

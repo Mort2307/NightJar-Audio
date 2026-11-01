@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { hasPaidEntitlement, mayUseTemporaryAccess } from './entitlements.js';
+import { hasPaidEntitlement, mayUseTemporaryAccess, canUseBetaListening } from './entitlements.js';
 
 const current = { userId: 'listener-1', status: 'active', providerVerified: true, billingProvider: 'processor', providerSubscriptionId: 'sub-1', confirmedMonthlyAmountPence: 500, currentPeriodEnd: '2030-01-01T00:00:00Z' };
 
@@ -26,4 +26,20 @@ test('temporary access is limited to active approved testers before public launc
   assert.equal(mayUseTemporaryAccess({ ...base, explicitTester: true, accountActive: false }), false);
   assert.equal(mayUseTemporaryAccess({ ...base, explicitTester: true, publicAccessEnabled: true }), false);
   assert.equal(mayUseTemporaryAccess({ ...base, explicitTester: true, ageAssuranceConfigured: true }), false);
+});
+
+test('approved adult closed-beta testers can listen without a paid subscription, and nobody else can', () => {
+  const eligible = {
+    closedBeta: true, administrator: false, accountExists: true,
+    accountSuspended: false, accountEmailMatches: true,
+    providerVerifiedAdult: true, explicitTester: true,
+  };
+  assert.equal(canUseBetaListening(eligible), true);
+  for (const change of [
+    {closedBeta: false}, {administrator: true}, {accountExists: false},
+    {accountSuspended: true}, {accountEmailMatches: false},
+    {providerVerifiedAdult: false}, {explicitTester: false},
+  ]) assert.equal(canUseBetaListening({...eligible, ...change}), false);
+  assert.equal(hasPaidEntitlement(null,'tester-uid'),false,
+    'free beta listening must not masquerade as paid subscription');
 });

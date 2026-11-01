@@ -1,0 +1,11 @@
+{
+  "pr": 326,
+  "reason": "Human-readable listener cards distinguish a current closed-beta tester playback entitlement from a paid subscription; does not grant access or alter billing, Didit, audio URL, or moderation permissions. Exact SHA anchored to previously approved PR #319 App.tsx.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "bd639f6fe6087e27352559cc1a4803b7e65af0c4",
+      "sha": "90e2e766082c7879f976292450c623ad5a0dee20"
+    }
+  ]
+}
