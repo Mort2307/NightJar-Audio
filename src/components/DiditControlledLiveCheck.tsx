@@ -201,6 +201,7 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
   return <section ref={continuationRef} tabIndex={-1} className="panel nj-didit-controlled-panel" aria-label="My one-time live Didit identity verification">
     <span className="mini-label"><ShieldCheck size={16} aria-hidden="true"/> YOUR ACCOUNT · LIVE ID VERIFICATION</span>
     <h2>Verify your identity with Didit</h2>
+    {!alreadyVerified && <p className="nj-didit-action-intro"><strong>Use your original, physical photo ID for the document check.</strong> Hold the actual government-issued document in front of your camera. A screenshot, photocopy, printout or image of the ID displayed on a computer or phone screen is not a substitute. If you cannot access the original, contact NightJar support before attempting another verification.</p>}
     {guidance.length>0 && <section className="nj-didit-action-panel" aria-label="What needs attention with my verification">
       <h3>What needs attention?</h3>
       <ul>{guidance.map(item=><li key={item.key}>
