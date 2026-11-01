@@ -130,6 +130,19 @@ for(const item of messageFollowup.files) {
   overrides.set(item.path,item);
 }
 
+// PR #326: member-visible listening label only. The reviewed App.tsx PR #319
+// hash remains immutable and no server-side access gate is changed.
+const betaLabelFollowup=JSON.parse(string('docs/NIGHTJAR_BETA_LISTENING_LABEL_FOLLOWUP.json'));
+assert.equal(betaLabelFollowup.pr,326);
+assert.deepEqual(betaLabelFollowup.files.map(item=>item.path),['src/App.tsx']);
+for(const item of betaLabelFollowup.files) {
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'label is anchored to approved App UI');
+  assert.equal(item.baselineSha,previous.sha,'do not rewrite historical RC hashes');
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
@@ -180,6 +193,12 @@ assert.match(calendar,/nightjarCalendar\.save\(\{id:editing \?\? undefined,title
   'calendar reschedule preserves original record identity');
 assert.match(app,/isProfileSetupComplete\(profile\)/,'completed onboarding gate stays intact');
 assert.match(app,/ageVerified/,'age verification still gates private role views');
+assert.match(app,/playbackAccessReason\?: 'admin' \| 'credited_work' \| 'subscription' \| 'closed_beta_tester'/,
+  'published audio cards type beta entitlements without mislabelling them as subscriptions');
+assert.match(app,/track\.playbackAccessReason === 'closed_beta_tester' \? 'Included · beta tester'/,
+  'a free beta grant shows a clear member-facing label');
+assert.match(string('src/components/NightjarPlayer.tsx'),/playbackAccessReason\?: 'admin' \| 'credited_work' \| 'subscription' \| 'closed_beta_tester'/,
+  'player data contract includes the beta reason without treating it as a paid subscription');
 
 for(const file of [
   'docs/INBOX_HUMAN_FIRST_ACCEPTANCE.md',
