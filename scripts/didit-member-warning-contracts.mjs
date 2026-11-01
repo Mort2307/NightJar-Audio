@@ -28,6 +28,10 @@ assert.match(backend,/verificationIssues: verified \? \[\] : diditSafeMemberWarn
 assert.match(client,/verificationIssues\?: string\[\]/,'client does not accept arbitrary raw provider data');
 assert.match(client,/providerStatus\?: string/,'real backend state can be explained');
 assert.match(guidance,/providerGuidance\[code\]/,'member labels are taken from an explicit code map');
+const liveCheck=read('src/components/DiditControlledLiveCheck.tsx');
+assert.match(liveCheck,/Use your original, physical photo ID/,'physical original ID is explained before capture');
+assert.match(liveCheck,/screenshot, photocopy, printout/,'digital images and copies are explicitly excluded');
+assert.match(liveCheck,/!alreadyVerified && <p/,'approved accounts are not asked to repeat ID checks');
 assert.match(owner,/safeAdminIssueLabels/,'owner can inspect actionable safe warnings');
 assert.match(workflow,/\[nightjar-didit-member-reasons-release\]/,'backend-first deploy gate exists');
 assert.match(workflow,/diditWebhook,processDiditWebhook,myDiditControlledCheck,adminInspectDiditMemberCase/,'signed reader and client reader deploy together');
