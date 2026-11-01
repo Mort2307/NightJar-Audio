@@ -124,6 +124,18 @@ import ProfileSectionBoundary from './components/ProfileSectionBoundary';
 import { profileCompletionPercentage, isProfileSetupComplete, recoverPendingProfileDiscoverability } from './platform/profile-setup-state';
 import { demoCreators, demoTracks, demoSpotlights, demoCreatorDashboard, demoWriterScripts, demoEditorQueue, demoNotifications, demoAdminData, demoLibrary } from './demo/nightjarDemo';
 
+// Didit verification URLs are opaque, short-lived credentials. Never open
+// unvalidated provider-controlled redirects or introduce popup-blocker workarounds.
+const safeDiditLaunchUrl = (candidate: unknown): string | null => {
+  if (typeof candidate !== 'string') return null;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' || !['verify.didit.me', 'verification.didit.me'].includes(url.hostname) ||
+        url.username || url.password) return null;
+    return url.toString();
+  } catch { return null; }
+};
+
 const AdminAudioUploadTest = lazy(() => import('./components/AdminAudioUploadTest'));
 const CreatorAudioPipeline = lazy(() => import('./components/CreatorAudioPipeline'));
 const CreatorListeningInsights = lazy(() => import('./components/CreatorListeningInsights'));
@@ -2360,7 +2372,20 @@ function App() {
       setAgeProvider(String(data.provider ?? 'didit'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
       setAgeProviderVerified(data.providerVerified === true);
-      if (data.providerVerified === true) setAgeLaunchUrl(null);
+      if (verified) {
+        setAgeLaunchUrl(null);
+      } else if (data.sessionActive === true) {
+        // Resume a previously created, account-bound Didit URL on reload.
+        // Read-only status: never calls the billable session starter.
+        try {
+          const existing = await nightjarDiditControlled.status();
+          setAgeLaunchUrl(safeDiditLaunchUrl(existing.launchUrl));
+        } catch {
+          setAgeLaunchUrl(null);
+        }
+      } else {
+        setAgeLaunchUrl(null);
+      }
       setAgeProviderStatus(String(data.providerStatus ?? 'NOT_STARTED'));
       setAgeLivePilotAvailable(data.livePilotAvailable === true);
       setAgeAdminTestClaimed(data.controlledAdminTestClaimed === true);
@@ -2465,11 +2490,17 @@ function App() {
         await refreshAgeStatus();
         notify('Private test access remains active. No verification session was created.');
       } else if (data.launchUrl) {
-        setAgeLaunchUrl(String(data.launchUrl));
-        setAgeStatus('PENDING');
-        const popup = window.open(String(data.launchUrl), '_blank', 'noopener,noreferrer');
-        notify(popup ? 'Didit opened. Complete the check, then return to Nightjar.' :
-          'Open your Didit session using the button on this page; popups are blocked.');
+        const safeUrl = safeDiditLaunchUrl(data.launchUrl);
+        if (safeUrl) {
+          setAgeLaunchUrl(safeUrl);
+          setAgeStatus('PENDING');
+          // Browser popup policy requires an immediate, direct user gesture.
+          // An async Firebase call must NEVER call window.open; show an
+          // explicit clickable link after the one-use session is created.
+          notify('Your existing secure Didit link is ready. Tap Open secure Didit verification below.');
+        } else {
+          setAgeStatusError('Didit returned an unexpected verification address. No browser page was opened. Contact Nightjar support.');
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Verification is currently unavailable.';
@@ -4996,7 +5027,12 @@ function App() {
               ageSessionActive ? 'Continue existing Didit verification' :
               role === 'admin' ? 'Accept and start my live Didit admin pilot' : 'Accept and start secure age check'} <LockKeyhole size={16} />
           </button>}
-          {!DIDIT_VERIFICATION_PAUSED && ageLaunchUrl && !ageProviderVerified && <a className="secondary-button wide-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Continue existing Didit session <ArrowRight size={16} /></a>}
+          {!DIDIT_VERIFICATION_PAUSED && ageLaunchUrl && !ageProviderVerified && <section className="nj-didit-launch-choices" aria-label="Open existing Didit verification">
+            <p role="status"><strong>Your secure Didit session is ready.</strong> The browser requires you to open it yourself. No new ID session will be created by either link.</p>
+            <a className="primary-button wide-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open secure Didit verification <ArrowRight size={16} /></a>
+            <a className="secondary-button wide-button" href={ageLaunchUrl}>Open Didit in this tab instead</a>
+            <p className="access-fine">If an installed app or embedded browser blocks external pages, choose “Open Didit in this tab instead”, or open Nightjar in Chrome and use the same account. Return with your browser Back button or reopen Nightjar afterwards, then sync your existing result. Do not start a second verification.</p>
+          </section>}
           {!DIDIT_VERIFICATION_PAUSED && !ageProviderVerified && <section className="nj-didit-completed-recovery" aria-label="Completed Didit verification recovery">
             <div>
               <strong>Didit approved you, but NightJar hasn't updated?</strong>
@@ -6392,7 +6428,10 @@ function App() {
                 <button type="button" className="primary-button" disabled={ageLoading || ageAdminTestClaimed || !ageConfigured || ageEnvironment !== 'live' || ageProviderVerified || !ageDiditPermission || (!ageNoticeAccepted && !ageNoticeAcknowledged) || simulationMode || demoMode}
                   onClick={() => void openAgeCheck(true)}>{ageLoading ? 'Starting controlled test…' : ageProviderVerified ? 'Verified · do not repeat' : ageAdminTestClaimed ? 'Test already claimed · no retries' : 'Start one live admin test'}</button>
                 <button type="button" className="secondary-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}>Refresh status (no paid check)</button>
-                {ageLaunchUrl && !ageProviderVerified && <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open created Didit session <ArrowRight size={15}/></a>}
+                {ageLaunchUrl && !ageProviderVerified && <>
+                  <a className="secondary-button" href={ageLaunchUrl} target="_blank" rel="noopener noreferrer">Open existing Didit session <ArrowRight size={15}/></a>
+                  <a className="ghost-button" href={ageLaunchUrl}>Open in this tab</a>
+                </>}
               </div>
               {ageStatusError && <p className="nj-didit-pilot-feedback" role="alert">{ageStatusError}</p>}
               <small>One attempt globally, including all administrators. Not a public reopening. Every new member session remains blocked by the backend.</small>
