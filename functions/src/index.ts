@@ -11,7 +11,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
 import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision } from './didit';
-import { hasPaidEntitlement } from './entitlements';
+import { hasPaidEntitlement, canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
 export { diditWebhook, processDiditWebhook } from './didit';
@@ -5652,9 +5652,14 @@ const betaListeningEntitlementFor = async (uid: string, emailValue: unknown, adm
   ]);
   const data = account.data() ?? {};
   const email = cleanEmail(emailValue);
-  if (!account.exists || data.status === 'suspended' || cleanEmail(data.email) !== email ||
-      !diditPass(assurance.data())) return false;
-  return data.testAccess === true || Boolean(await testerAccessForEmail(email));
+  const accountEmailMatches = Boolean(email && cleanEmail(data.email) === email);
+  const explicitTester = accountEmailMatches &&
+    (data.testAccess === true || Boolean(await testerAccessForEmail(email)));
+  return canUseBetaListening({
+    closedBeta: CLOSED_BETA, administrator, accountExists: account.exists,
+    accountSuspended: data.status === 'suspended', accountEmailMatches,
+    providerVerifiedAdult: diditPass(assurance.data()), explicitTester,
+  });
 };
 
 const playbackAccessFor = (
