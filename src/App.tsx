@@ -88,6 +88,8 @@ import './components/featured-release-carousel.css';
 import './components/writer-script-artwork.css';
 import './components/writer-submission-guide.css';
 import './components/didit-completed-recovery.css';
+// Shared operational parity across every role; leave protected visual themes intact.
+import './styles/nightjar-operations-parity.css';
 import NightjarPlayer from './components/NightjarPlayer';
 import WriterDiscovery from './components/WriterDiscovery';
 import NotificationPreferences from './components/NotificationPreferences';
