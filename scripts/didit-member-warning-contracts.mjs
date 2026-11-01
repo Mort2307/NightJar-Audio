@@ -10,11 +10,12 @@ const guidance=read('src/platform/didit-member-guidance.ts');
 const owner=read('src/components/AdminDiditMemberOps.tsx');
 const workflow=read('.github/workflows/firebase-hosting-merge.yml');
 const source=didit.slice(didit.indexOf('const DIDIT_MEMBER_SAFE_WARNINGS'),didit.indexOf('// Confirm adulthood from approved'));
-for(const name of ['DOCUMENT_EXPIRED','COULD_NOT_RECOGNIZE_DOCUMENT','DOCUMENT_TYPE_NOT_SUPPORTED','NO_FACE_DETECTED','LOW_FACE_MATCH_SIMILARITY'])
+for(const name of ['DOCUMENT_EXPIRED','COULD_NOT_RECOGNIZE_DOCUMENT','DOCUMENT_TYPE_NOT_SUPPORTED','DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION','NO_FACE_DETECTED','LOW_FACE_MATCH_SIMILARITY'])
   assert.ok(source.includes(name), 'safe warning allowlist missing '+name);
 for(const sensitive of ['LIVENESS_FACE_ATTACK','POSSIBLE_MATCH_FOUND','MRZ_VALIDATION_FAILED','date_of_birth','document_number','fraud_score'])
   assert.doesNotMatch(source,new RegExp(sensitive),'never expose risky or identity-specific provider codes');
 assert.match(source,/DIDIT_MEMBER_SAFE_WARNINGS\.has\(code\)/,'only exact allowed warnings pass');
+assert.match(source,/obj\\.log_type \\?\\? obj\\.code \\?\\? obj\\.name/,'parse provider documented warning log_type before compatibility aliases');
 assert.match(source,/\['id_verifications', 'liveness_checks', 'face_matches'\]/,'derive from check-specific warnings, not overall verdict');
 assert.match(didit,/memberIssueCodes: value\.decision && typeof value\.decision === 'object'/,'warning derivation occurs in signed event reader');
 assert.match(didit,/diditMemberWarningCodesFromDecision\(value\.decision\)/);
