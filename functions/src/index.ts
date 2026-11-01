@@ -7464,7 +7464,6 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
     betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
   ]);
-  const betaTester = await betaListeningEntitlementFor(identity.uid, identity.email, identity.admin);
   const following = new Set(followsSnapshot.docs.map((doc) => doc.id));
   const visibleDocs = await visiblePublishedStudioNoteDocs(releasesSnapshot.docs);
   const items = visibleDocs.map((doc) => {
