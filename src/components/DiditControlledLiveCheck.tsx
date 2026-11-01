@@ -8,7 +8,8 @@ const isSafeDiditLink = (link: string | undefined | null) => {
   if (!link) return false;
   try {
     const uri = new URL(link);
-    return uri.protocol === 'https:' && ['verify.didit.me','verification.didit.me'].includes(uri.hostname);
+    return uri.protocol === 'https:' && ['verify.didit.me','verification.didit.me'].includes(uri.hostname) &&
+      !uri.username && !uri.password;
   } catch { return false; }
 };
 
@@ -224,9 +225,15 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
         <button className="primary-button" type="button" disabled={pending || !permission || (!legalAccepted && !legalAcknowledged)}
           onClick={()=>void begin()}><LockKeyhole size={16} aria-hidden="true"/>{pending?'Preparing secure check…':'Start my one-time Didit ID check'}</button>
       </>}
-      {launchUrl && <><a href={launchUrl} target="_blank" rel="noopener noreferrer" className="primary-button">
-        <ExternalLink size={16} aria-hidden="true"/> Open secure Didit verification
-      </a><p role="status"><strong>After Didit approves you:</strong> Return to this Nightjar tab. Nightjar will automatically check for your existing approval, without starting another ID session. If the result is still being processed, tap “Refresh verification status” below or use the completed-result recovery option.</p></>}
+      {launchUrl && <section className="nj-didit-launch-choices" aria-label="Open existing secure Didit verification">
+        <p role="status"><strong>Ready to verify.</strong> Use the secure link below to open your existing Didit session. Nightjar will not attempt an automatic pop-up.</p>
+        <a href={launchUrl} target="_blank" rel="noopener noreferrer" className="primary-button">
+          <ExternalLink size={16} aria-hidden="true"/> Open secure Didit verification
+        </a>
+        <a href={launchUrl} className="secondary-button">Open Didit in this tab instead</a>
+        <p><strong>After Didit approves you:</strong> Reopen Nightjar or return to its browser tab. Nightjar will check your stored result without creating a new ID session.</p>
+        <small>If your installed app or embedded browser blocks the external tab, choose “Open Didit in this tab instead” or use Nightjar through Chrome. Never start another paid check to fix a browser pop-up warning.</small>
+      </section>}
       {noEntryRoute && <p role="alert"><strong>Verification unavailable:</strong> Nightjar has not enabled your account’s Didit start route. Please contact Nightjar support; do not repeatedly try to start a paid check.</p>}
       {!noEntryRoute && !canStart && !launchUrl && <p><strong>Check already claimed or awaiting review.</strong> Nightjar will not start another paid session. Contact support if your verification link is missing.</p>}
       <p>Complete the check in Didit, return to Nightjar and tap Refresh verification status. An approved provider decision must be received and validated before you become Verified 18+.</p>
