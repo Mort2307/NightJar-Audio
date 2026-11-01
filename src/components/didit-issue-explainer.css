@@ -1,0 +1,12 @@
+/* NightJar identity action guidance: calm, compact and accessible. */
+.nj-didit-action-panel{margin:16px 0;padding:16px;border:1px solid rgba(224,187,128,.48);border-radius:14px;background:rgba(34,27,29,.65);color:inherit}
+.nj-didit-action-panel h3{font-size:1.05rem;line-height:1.35;margin:0 0 10px;color:#f4d7a7}
+.nj-didit-action-panel ul{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.nj-didit-action-panel li{border-left:3px solid rgba(224,187,128,.72);padding:2px 0 3px 12px;min-width:0}
+.nj-didit-action-panel li strong{display:block;line-height:1.45;font-size:max(.9375rem,15px);overflow-wrap:anywhere}
+.nj-didit-action-panel li p{margin:4px 0 0;line-height:1.55;font-size:max(.875rem,14px)}
+.nj-didit-action-panel li small{display:block;margin-top:5px;opacity:.9;line-height:1.5}
+.nj-didit-action-panel .nj-didit-action-note{margin:12px 0 0;font-size:max(.8125rem,13px);line-height:1.55;opacity:.9}
+.nj-didit-action-intro{margin:12px 0;line-height:1.6}
+@media(max-width:390px){.nj-didit-action-panel{padding:12px}.nj-didit-action-panel li{padding-left:10px}}
+@media(forced-colors:active){.nj-didit-action-panel,.nj-didit-action-panel li{border-color:CanvasText}}
