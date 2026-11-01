@@ -11,6 +11,8 @@ export type DiditControlledStatus = {
   selfServiceEnabled?: boolean;
   launchUrl: string | null;
   publicVerificationPaused: boolean;
+  // Sanitised server-approved, signed-provider issue codes only; optional until backend upgrade.
+  verificationIssues?: string[];
 };
 export type DiditControlledStart = {
   verified?: boolean;
