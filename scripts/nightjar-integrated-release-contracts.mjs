@@ -99,6 +99,23 @@ for(const item of parityFollowup.files){
   overrides.set(item.path,item);
 }
 
+
+// PR #320 updates the existing staged-delete test only to cover ambiguous
+// async failures and accessible feedback. Keep its approved intake baseline
+// and all older source/file attestations untouched.
+const deleteFeedbackFollowup=JSON.parse(string('docs/NIGHTJAR_DELETE_FAILURE_FOLLOWUP.json'));
+assert.equal(deleteFeedbackFollowup.pr,320,'deletion follow-up requires its own review');
+assert.deepEqual(deleteFeedbackFollowup.files.map(item=>item.path),
+  ['scripts/admin-inbox-delete-ux-contracts.mjs'],
+  'deletion feedback may alter only its directly affected source contract');
+for(const item of deleteFeedbackFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'deletion follow-up must anchor to previously approved source');
+  assert.equal(item.baselineSha,previous.sha,'do not change the intake/release candidate approved SHA');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){

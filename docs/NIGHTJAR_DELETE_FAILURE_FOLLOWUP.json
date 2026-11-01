@@ -1,0 +1,11 @@
+{
+  "pr": 320,
+  "reason": "Shared UI deletion failure and accessible focus follow-up. Records the exactly-reviewed source-level test change without rewriting the original six-batch RC or any prior follow-up SHA. Backend permissions, protected records and Didit gates unchanged.",
+  "files": [
+    {
+      "path": "scripts/admin-inbox-delete-ux-contracts.mjs",
+      "baselineSha": "f439327adee86da82cab0ae6749549af5a4df6d2",
+      "sha": "f776c4979e5491dcdd77d892f4b20d05e11416d6"
+    }
+  ]
+}
