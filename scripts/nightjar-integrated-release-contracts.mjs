@@ -116,6 +116,20 @@ for(const item of deleteFeedbackFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #324: deliberate multiline messaging follows the original reviewed PR
+// #294 component, preserving all prior exact-blob approvals.
+const messageFollowup=JSON.parse(string('docs/NIGHTJAR_MESSAGE_NEWLINE_FOLLOWUP.json'));
+assert.equal(messageFollowup.pr,324,'message composer requires an independent PR');
+assert.deepEqual(messageFollowup.files.map(item=>item.path),
+  ['src/components/MessagingHub.tsx'],'cannot widen a composer-only change');
+for(const item of messageFollowup.files) {
+  const original=manifest.includes.flatMap(pr=>pr.files).find(entry=>entry.path===item.path);
+  assert.ok(original,'message composer must exist in approved RC manifest');
+  assert.equal(item.baselineSha,original.sha,'reviewed RC source must remain immutable');
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
