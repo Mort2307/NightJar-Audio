@@ -34,7 +34,7 @@ export type NightjarPlayerTrack = {
   transcriptLanguage?: string;
   transcriptWordCount?: number;
   playbackAllowed?: boolean;
-  playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'subscription_required' | null;
+  playbackAccessReason?: 'admin' | 'credited_work' | 'subscription' | 'closed_beta_tester' | 'subscription_required' | null;
 };
 
 type Props = {
