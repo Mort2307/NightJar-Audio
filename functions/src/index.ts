@@ -2356,7 +2356,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const link=socialLinkPayload(doc.id,doc.data());
     return {id:link.id,url:link.url,platform:link.platform,photoUrl:link.photoUrl};
   });
-  const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const [viewerSubscription, betaTester] = await Promise.all([
+    identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+    betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
+  ]);
   const followingSnapshot = await accountRef(userId).collection('follows').limit(500).get();
   let publishedWorkCount = 0;
   let releaseCount = 0;
@@ -2368,7 +2371,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const releases = await db.collection('releases').where('creatorUserId', '==', userId).limit(500).get();
     creatorReleases = releases.docs
       .filter((doc) => doc.data().status === 'released')
-      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+      .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaTester }))
       .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
     releaseCount = creatorReleases.length;
   }
@@ -2384,7 +2387,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     const creditedDocs = await Promise.all(approvedReleaseIds.map(id => releaseRef(id).get()));
     creditedReleases = creditedDocs
       .filter(doc => doc.exists && doc.data()?.status === 'released')
-      .map(doc => decorateReleaseAccess(doc.data() ?? {}, doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+      .map(doc => decorateReleaseAccess(doc.data() ?? {}, doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaTester }))
       .sort((a,b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
@@ -2404,7 +2407,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
         const releaseDocs = await Promise.all(releaseIds.slice(0, 12).map((releaseId) => releaseRef(releaseId).get()));
         const releases = releaseDocs
           .filter((release) => release.exists && release.data()?.status === 'released')
-          .map((release) => decorateReleaseAccess(release.data() ?? {}, release.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }));
+          .map((release) => decorateReleaseAccess(release.data() ?? {}, release.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaTester }));
         return {
           id: playlist.id,
           title: cleanText(playlist.data()?.title, 100) || 'Untitled playlist',
@@ -2535,12 +2538,15 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
   const profile = await profileRef(creatorUserId).get();
   const data = profile.data();
   if (!data || data.publicProfile === false) throw new HttpsError('not-found', 'Creator profile not found.');
-  const viewerSubscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const [viewerSubscription, betaTester] = await Promise.all([
+    identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+    betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
+  ]);
 
   const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', creatorUserId).limit(500).get();
   const releases = releasesSnapshot.docs
     .filter((doc) => doc.data().status === 'released')
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription }))
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription:viewerSubscription, betaTester }))
     .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
   const completedCollaborations = await completedCollaborationCountFor(creatorUserId);
@@ -5637,14 +5643,29 @@ const activeListeningSubscriptionFor = async (userId: string) => {
   return eligible ? { id: eligible.id, status: 'active' as const } : null;
 };
 
+// Approved testers receive free listening ONLY in closed beta, with a valid
+// account-bound Didit 18+ result. This never changes a paid subscription.
+const betaListeningEntitlementFor = async (uid: string, emailValue: unknown, administrator: boolean) => {
+  if (!CLOSED_BETA || administrator) return false;
+  const [account, assurance] = await Promise.all([
+    accountRef(uid).get(), db.collection('ageAssurance').doc(uid).get(),
+  ]);
+  const data = account.data() ?? {};
+  const email = cleanEmail(emailValue);
+  if (!account.exists || data.status === 'suspended' || cleanEmail(data.email) !== email ||
+      !diditPass(assurance.data())) return false;
+  return data.testAccess === true || Boolean(await testerAccessForEmail(email));
+};
+
 const playbackAccessFor = (
   data: Record<string, any>,
   userId: string,
-  options: { admin?: boolean; subscription?: { id: string; status: string } | null } = {},
+  options: { admin?: boolean; betaTester?: boolean; subscription?: { id: string; status: string } | null } = {},
 ) => {
   if (options.admin) return { allowed:true, reason:'admin' as const };
   if (releaseWorkAccess(data, userId)) return { allowed:true, reason:'credited_work' as const };
   if (options.subscription) return { allowed:true, reason:'subscription' as const };
+  if (options.betaTester === true && CLOSED_BETA) return { allowed:true, reason:'closed_beta_tester' as const };
   return { allowed:false, reason:'subscription_required' as const };
 };
 
@@ -5652,7 +5673,7 @@ const decorateReleaseAccess = (
   data: Record<string, any>,
   id: string,
   userId: string,
-  options: { admin?: boolean; subscription?: { id: string; status: string } | null } = {},
+  options: { admin?: boolean; betaTester?: boolean; subscription?: { id: string; status: string } | null } = {},
 ) => {
   const access = playbackAccessFor(data, userId, options);
   return {
@@ -5701,21 +5722,24 @@ export const saveAccessibilityPreferences = onCall({ region: REGION }, async (re
 export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [account, settings, subscription] = await Promise.all([
+  const [account, settings, subscription, betaTester] = await Promise.all([
     accountRef(identity.uid).get(),
     identity.admin ? readCommercialSettings() : Promise.resolve(null),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+    betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
   ]);
 
   const role = identity.admin ? 'admin' : cleanText(account.data()?.role, 40) || null;
   return {
     role,
     subscribed: identity.admin || Boolean(subscription),
+    closedBetaListening: betaTester,
+    cataloguePlaybackAvailable: identity.admin || Boolean(subscription) || betaTester,
     subscriptionStatus: identity.admin ? 'admin' : subscription?.status ?? null,
     planningMonthlyPricePence: identity.admin ? settings?.planningMonthlyPricePence ?? null : null,
     subscriptionUrl: identity.admin ? settings?.listenerSubscriptionUrl ?? null : null,
     creditedWorkIncluded: true,
-    rule: identity.admin ? 'Owner subscription access diagnostics.' : 'Some releases are restricted during testing. Access is checked by Nightjar.',
+    rule: identity.admin ? 'Owner subscription access diagnostics.' : betaTester ? 'Verified closed-beta tester: published listening included at no charge during testing.' : 'Published catalogue listening requires a subscription, a verified work credit, or approved test access.',
   };
 });
 
@@ -5930,15 +5954,16 @@ export const listCatalogue = onCall({ region: REGION }, async (request) => {
   const query = cleanText(input.q, 120).toLowerCase();
   const category = cleanText(input.category, 80).toLowerCase();
 
-  const [snapshot, subscription] = await Promise.all([
+  const [snapshot, subscription, betaTester] = await Promise.all([
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+    betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
   ]);
   const visibleDocs = await visiblePublishedStudioNoteDocs(snapshot.docs);
   const catalogue = visibleDocs
     .filter((doc) => !category || cleanText(doc.data().category, 80).toLowerCase() === category)
     .filter((doc) => !query || releaseSearchText(doc.data()).includes(query))
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }));
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription, betaTester }));
 
   return { catalogue };
 });
@@ -6542,8 +6567,11 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
   if (!data || data.status !== 'released' || !data.audioStoragePath ||
       !await hasPublishedStudioNoteParent(data)) throw new HttpsError('not-found', 'Playable release not found.');
 
-  const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
-  const access = playbackAccessFor(data, identity.uid, { admin:identity.admin, subscription });
+  const [subscription, betaTester] = await Promise.all([
+    identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+    betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
+  ]);
+  const access = playbackAccessFor(data, identity.uid, { admin:identity.admin, subscription, betaTester });
   if (!access.allowed) {
     throw new HttpsError(
       'failed-precondition',
@@ -6669,13 +6697,16 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
     throw new HttpsError('not-found', 'Release transcript not found.');
   }
 
-  let accessReason: 'admin' | 'credited_work' | 'subscription' = identity.admin
+  let accessReason: 'admin' | 'credited_work' | 'subscription' | 'closed_beta_tester' = identity.admin
     ? 'admin'
     : 'credited_work';
 
   if (data.status === 'released' && !identity.admin) {
-    const subscription = await activeListeningSubscriptionFor(identity.uid);
-    const access = playbackAccessFor(data, identity.uid, { subscription });
+    const [subscription, betaTester] = await Promise.all([
+      activeListeningSubscriptionFor(identity.uid),
+      betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
+    ]);
+    const access = playbackAccessFor(data, identity.uid, { subscription, betaTester });
     if (!access.allowed) {
       throw new HttpsError(
         'failed-precondition',
@@ -6683,7 +6714,7 @@ export const getReleaseTranscript = onCall({ region: REGION }, async (request) =
         { code:'subscription_required', releaseId },
       );
     }
-    accessReason = access.reason as 'credited_work' | 'subscription';
+    accessReason = access.reason as 'credited_work' | 'subscription' | 'closed_beta_tester';
   }
 
   return {
@@ -7429,7 +7460,11 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
     }
   }
 
-  const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const [subscription, betaTester] = await Promise.all([
+    identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+    betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
+  ]);
+  const betaTester = await betaListeningEntitlementFor(identity.uid, identity.email, identity.admin);
   const following = new Set(followsSnapshot.docs.map((doc) => doc.id));
   const visibleDocs = await visiblePublishedStudioNoteDocs(releasesSnapshot.docs);
   const items = visibleDocs.map((doc) => {
@@ -7445,7 +7480,7 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
     if (intent && values.some((value) => value.toLowerCase().includes(intent))) score += 4;
     const matches = values.filter((value) => (liked.get(value.toLowerCase()) ?? 0) > 0).slice(0, 3);
     return {
-      ...decorateReleaseAccess(data, doc.id, identity.uid, { admin:identity.admin, subscription }),
+      ...decorateReleaseAccess(data, doc.id, identity.uid, { admin:identity.admin, subscription, betaTester }),
       score,
       reason: matches.length
         ? 'Because you chose ' + matches.join(', ') + '.'
@@ -7461,15 +7496,16 @@ export const recommendations = onCall({ region: REGION }, async (request) => {
 export const trendingReleases = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [releasesSnapshot, subscription] = await Promise.all([
+  const [releasesSnapshot, subscription, betaTester] = await Promise.all([
     db.collection('releases').where('status', '==', 'released').limit(500).get(),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+    betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
   ]);
   // Trending and creator statistics must use the same qualified-listen
   // definition. Raw progress telemetry must not make a release "popular".
   const visibleDocs = await visiblePublishedStudioNoteDocs(releasesSnapshot.docs);
   const trending = visibleDocs
-    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription }))
+    .map((doc) => decorateReleaseAccess(doc.data(), doc.id, identity.uid, { admin:identity.admin, subscription, betaTester }))
     .sort((a, b) => (b.listenCount - a.listenCount)
       || String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')))
     .slice(0, 24);
@@ -15009,9 +15045,12 @@ export const getVoiceCallingCard = onCall({ region: REGION }, async (request) =>
   if (!doc.exists || doc.data()?.creatorUserId !== creatorId || doc.data()?.status !== 'released') {
     return { release: null, releaseId: null };
   }
-  const subscription = identity.admin ? null : await activeListeningSubscriptionFor(identity.uid);
+  const [subscription, betaTester] = await Promise.all([
+    identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
+    betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
+  ]);
   return { releaseId, release: decorateReleaseAccess(doc.data() ?? {}, releaseId, identity.uid, {
-    admin: identity.admin, subscription,
+    admin: identity.admin, subscription, betaTester,
   }) };
 });
 
