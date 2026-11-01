@@ -18,17 +18,20 @@ export default function ConfirmDeleteAction({
 }: Props) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState('');
   const pending = useRef(false);
   const execute = async () => {
     if (pending.current || !confirming || disabled) return;
     pending.current = true;
     setBusy(true);
+    setFailure('');
     try {
       await onConfirm();
       setConfirming(false);
     } catch {
-      // The caller owns the failure message; keep the panel open to permit a
-      // deliberate retry instead of silently reporting a successful removal.
+      // A backend removal may have succeeded even if its response was lost.
+      // Never suggest success or silently invite another destructive action.
+      setFailure('Removal could not be confirmed. Check whether this item is still listed before trying again.');
     } finally {
       pending.current = false;
       setBusy(false);
@@ -37,17 +40,18 @@ export default function ConfirmDeleteAction({
 
   return <span className="nj-confirm-delete-action">
     {!confirming ? <button type="button" className="nj-delete-trigger" aria-label={label + ': ' + itemName}
-      title={label + ': ' + itemName} disabled={disabled} onClick={() => setConfirming(true)}>
+      title={label + ': ' + itemName} disabled={disabled} onClick={() => { setFailure(''); setConfirming(true); }}>
       <Trash2 size={16} aria-hidden="true"/>{!iconOnly && <span>{label}</span>}
     </button> : <span className="nj-delete-confirmation" role="group" aria-label={'Confirm ' + label + ': ' + itemName}>
       <strong>Are you sure?</strong>
       <span><b>{itemName}</b> — {description}</span>
       <span className="nj-delete-confirmation-buttons">
-        <button type="button" className="ghost-button" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
+        <button type="button" className="ghost-button" disabled={busy} onClick={() => { setFailure(''); setConfirming(false); }}>Cancel</button>
         <button type="button" className="danger-button" disabled={busy} aria-busy={busy} onClick={() => void execute()}>
           {busy ? 'Removing…' : confirmLabel}
         </button>
       </span>
+      {failure && <span className="nj-delete-action-error" role="alert">{failure}</span>}
     </span>}
   </span>;
 }
