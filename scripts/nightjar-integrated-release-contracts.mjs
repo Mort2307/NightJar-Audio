@@ -197,6 +197,8 @@ assert.match(app,/playbackAccessReason\?: 'admin' \| 'credited_work' \| 'subscri
   'published audio cards type beta entitlements without mislabelling them as subscriptions');
 assert.match(app,/track\.playbackAccessReason === 'closed_beta_tester' \? 'Included · beta tester'/,
   'a free beta grant shows a clear member-facing label');
+assert.match(string('src/components/NightjarPlayer.tsx'),/playbackAccessReason\?: 'admin' \| 'credited_work' \| 'subscription' \| 'closed_beta_tester'/,
+  'player data contract includes the beta reason without treating it as a paid subscription');
 
 for(const file of [
   'docs/INBOX_HUMAN_FIRST_ACCEPTANCE.md',
