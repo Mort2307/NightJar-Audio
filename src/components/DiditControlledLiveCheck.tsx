@@ -3,6 +3,8 @@ import { CheckCircle2, ExternalLink, LockKeyhole, RefreshCw, ShieldCheck } from 
 import { nightjarDiditControlled, type DiditControlledStatus } from '../platform/firebase-didit-controlled';
 import { nightjarLegal, type LegalAgreementStatus } from '../platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from '../legal/nightjarLegal';
+import { diditActionGuidance } from '../platform/didit-member-guidance';
+import './didit-issue-explainer.css';
 
 const isSafeDiditLink = (link: string | undefined | null) => {
   if (!link) return false;
@@ -179,6 +181,7 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
 
   if(loaded && requiredAgreements.length)return <section className="panel nj-didit-controlled-panel" aria-label="Required Nightjar agreements">
     <h2>Before Didit: two quick acknowledgements</h2>
+    <p role="status" className="nj-didit-action-intro"><strong>Action needed:</strong> Your account is missing the current Terms of Use or Privacy Notice acknowledgement. This is a NightJar permission step, not a failed ID check.</p>
     <p>Before you can verify your age, please review and accept the current Terms of Use and Privacy Notice. Accepting these documents will not start a Didit session or incur a verification charge.</p>
     {requiredAgreements.map(doc=><label key={doc.id} className="nj-didit-reuse-consent">
       <input type="checkbox" checked={acceptedAgreements.includes(doc.id)} disabled={pending} onChange={event=>setAcceptedAgreements(current=>event.target.checked?[...current,doc.id]:current.filter(id=>id!==doc.id))}/>
@@ -192,9 +195,21 @@ export default function DiditControlledLiveCheck({ onVerified }: { onVerified?: 
   const alreadyVerified=status.providerVerified;
   const canStart=status.authorised && !alreadyVerified && !launchUrl;
   const noEntryRoute=!alreadyVerified && !canStart && !launchUrl && status.state==='none';
+  const guidance=diditActionGuidance(status, {
+    legalAccepted, legalAcknowledged, permission, hasLaunchUrl:Boolean(launchUrl),
+  });
   return <section ref={continuationRef} tabIndex={-1} className="panel nj-didit-controlled-panel" aria-label="My one-time live Didit identity verification">
     <span className="mini-label"><ShieldCheck size={16} aria-hidden="true"/> YOUR ACCOUNT · LIVE ID VERIFICATION</span>
     <h2>Verify your identity with Didit</h2>
+    {guidance.length>0 && <section className="nj-didit-action-panel" aria-label="What needs attention with my verification">
+      <h3>What needs attention?</h3>
+      <ul>{guidance.map(item=><li key={item.key}>
+        <strong>{item.title}</strong>
+        <p>{item.detail}</p>
+        {item.certainty==='confirmed' && <small>Reported by Didit for your linked verification</small>}
+      </li>)}</ul>
+      <p className="nj-didit-action-note">NightJar only names a document or face-check problem when the provider supplies a confirmed, safe-to-display reason. Otherwise, you can request a review without repeating a paid check.</p>
+    </section>}
     {alreadyVerified ? <>
       <p><CheckCircle2 size={17} aria-hidden="true"/> Nightjar has securely recorded your permanent Didit <strong>Verified 18+</strong> result. Your identity check will not be repeated.</p>
       {!legalAccepted && <>
