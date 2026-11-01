@@ -10,7 +10,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
-import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision } from './didit';
+import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision, diditSafeMemberWarningCodes } from './didit';
 import { hasPaidEntitlement } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
@@ -7883,6 +7883,10 @@ export const myDiditControlledCheck = onCall({ region: REGION }, async request =
   const selfServiceEnabled = accountDiditSelfServiceEligible();
   const providerVerified = diditPass(age.data());
   const existingAgeStatus = String(age.data()?.status ?? '');
+  // Only signed, previously processed and specifically allowlisted issue
+  // categories are eligible for member feedback. This is read-only.
+  const verificationIssues = providerVerified ? [] :
+    diditSafeMemberWarningCodes(age.data()?.memberIssueCodes);
   const existingPending = ['CREATING','PENDING','IN_PROGRESS','RESUBMITTED','PENDING_REVIEW'].includes(existingAgeStatus);
   // Never offer a second chargeable session while an earlier account-bound
   // provider check remains in progress, even if the new grant does not exist.
@@ -7913,7 +7917,8 @@ export const myDiditControlledCheck = onCall({ region: REGION }, async request =
       reuse.data()?.status === 'approved_for_reuse' && reuse.data()?.memberConsent === true));
   return {
     authorised, state: status, providerVerified, selfServiceEnabled,
-    launchUrl, publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
+    launchUrl, providerStatus: cleanText(existingAgeStatus, 40) || 'NOT_STARTED',
+    verificationIssues, publicVerificationPaused: DIDIT_VERIFICATION_PAUSED,
     // NO provider session can be started without explicit member action.
   };
 });
@@ -8664,6 +8669,7 @@ export const adminInspectDiditMemberCase = onCall({ region: REGION, secrets: [DI
     adultEvidenceConfirmed: latest?.adultEvidence === true,
     lastWebhookReceivedAt: latest?.receivedAt ? toIso(latest.receivedAt) : null,
     outcome,
+    verificationIssues: verified ? [] : diditSafeMemberWarningCodes(age.memberIssueCodes),
     verificationEvidenceSource: cleanText(age.verificationEvidenceSource, 80) || null,
   };
 });
