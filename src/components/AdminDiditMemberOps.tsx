@@ -116,6 +116,13 @@ export default function AdminDiditMemberOps({ onVerified }: { onVerified?: () =>
   };
 
   const awaiting = members.filter(member => member.sessionRecorded && !member.providerVerified).length;
+  const safeAdminIssueLabels: Record<string,string> = {
+    DOCUMENT_EXPIRED: 'ID document expired',
+    COULD_NOT_RECOGNIZE_DOCUMENT: 'ID image could not be read',
+    DOCUMENT_TYPE_NOT_SUPPORTED: 'ID type not accepted',
+    NO_FACE_DETECTED: 'Liveness capture could not detect a face',
+    LOW_FACE_MATCH_SIMILARITY: 'Face-to-ID match needs review',
+  };
   const confirmed = members.filter(member => member.providerVerified).length;
 
   return <section className="nj-didit-members" aria-label="Nightjar member verification operations">
@@ -174,6 +181,12 @@ export default function AdminDiditMemberOps({ onVerified }: { onVerified?: () =>
               <div><dt>Signed adult evidence</dt><dd>{detail.adultEvidenceConfirmed ? 'Present' : 'Not confirmed'}</dd></div>
               <div><dt>Last signed decision</dt><dd>{detail.lastSignedWebhookStatus ?? 'Not recorded'}</dd></div>
             </dl>
+            {Array.isArray(detail.verificationIssues) && detail.verificationIssues.length > 0 && <div className="nj-didit-case-notice" role="status">
+              <strong>Confirmed member-safe Didit warnings</strong>
+              <ul>{[...new Set(detail.verificationIssues)].filter(code=>Object.hasOwn(safeAdminIssueLabels,code)).map(code=>
+                <li key={code}>{safeAdminIssueLabels[code]}</li>)}</ul>
+              <small>Only allowlisted warnings from signed Didit events are displayed. Other risk or document evidence must be inspected securely in Didit.</small>
+            </div>}
             {detail.lastWebhookReceivedAt && <p className="nj-didit-muted">Last signed webhook: {new Date(detail.lastWebhookReceivedAt).toLocaleString('en-GB')}</p>}
             <div className="nj-didit-case-actions">
               <button type="button" className="primary-button" disabled={syncing || inspecting || detail.providerVerified || !detail.sessionBound} onClick={()=>void sync()}>

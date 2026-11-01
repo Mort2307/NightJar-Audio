@@ -100,6 +100,7 @@ export type AdminDiditMemberCase = {
     'awaiting_signed_webhook' | 'webhook_waiting_for_processing' |
     'webhook_ignored_or_superseded' | 'adult_evidence_missing' | 'provider_result_not_verified';
   verificationEvidenceSource: string | null;
+  verificationIssues?: string[];
 };
 const adminReconcileMemberDiditCall = httpsCallable<{userId:string},AdminDiditExistingResult>(
   functions, 'adminReconcileMemberDidit');

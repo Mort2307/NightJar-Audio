@@ -25,6 +25,10 @@ const providerGuidance: Record<string, {title:string;detail:string}> = {
     title: 'Your document type is not accepted',
     detail: 'Check which documents the existing Didit workflow accepts. NightJar support can review regional document availability.',
   },
+  DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION: {
+    title: 'Your document type is not accepted',
+    detail: 'Check the accepted original physical documents in your Didit flow. NightJar support can help if a supported option is unavailable in your region.',
+  },
   NO_FACE_DETECTED: {
     title: 'A live face could not be detected',
     detail: 'If Didit offers a liveness retry, allow camera access and follow its on-screen positioning instructions.',
@@ -85,6 +89,24 @@ export function diditActionGuidance(
     items.push({
       key:'existing-session', title:'Your existing Didit check needs completing or reviewing',
       detail:'Open the existing secure Didit link. Only redo an ID photo or liveness check if Didit explicitly requests it. Return here to refresh your result.',
+      certainty:'awaiting',
+    });
+  } else if (status.providerStatus === 'FAIL') {
+    items.push({
+      key:'provider-declined', title:'Didit did not approve this verification',
+      detail:'Your current check needs review. If NightJar has no confirmed reason to display, contact support and do not start another paid check.',
+      certainty:'awaiting',
+    });
+  } else if (status.providerStatus === 'PENDING_REVIEW') {
+    items.push({
+      key:'provider-review', title:'Your check is awaiting a decision',
+      detail:'Your submitted verification is still being reviewed. There is no need to create a second ID session.',
+      certainty:'awaiting',
+    });
+  } else if (status.providerStatus === 'ABANDONED' || status.providerStatus === 'EXPIRED') {
+    items.push({
+      key:'provider-expired', title:'Your existing verification link or session has ended',
+      detail:'Contact NightJar support about safely continuing or resubmitting the existing check. Do not start another paid session yourself.',
       certainty:'awaiting',
     });
   } else if (status.state === 'requires_review' || status.state === 'claimed') {
