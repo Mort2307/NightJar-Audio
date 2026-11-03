@@ -8475,7 +8475,8 @@ export const reconcileMyDiditVerification = onCall({
       decision.session_id !== sessionId || decision.vendor_data !== identity.uid ||
       decision.workflow_id !== session.workflowId || decision.session_kind !== 'user' ||
       decision.environment !== 'live' ||
-      (session.applicationId && decision.application_id !== session.applicationId)) {
+      (session.applicationId && decision.application_id != null &&
+        decision.application_id !== session.applicationId)) {
     throw new HttpsError('failed-precondition',
       'The Didit result could not be securely bound to your Nightjar account. Contact support.');
   }
@@ -8578,7 +8579,8 @@ export const adminReconcileMemberDidit = onCall({
       decision.session_id !== sessionId || decision.vendor_data !== userId ||
       decision.workflow_id !== session.workflowId || decision.session_kind !== 'user' ||
       decision.environment !== 'live' ||
-      (session.applicationId && decision.application_id !== session.applicationId)) {
+      (session.applicationId && decision.application_id != null &&
+        decision.application_id !== session.applicationId)) {
     throw new HttpsError('failed-precondition',
       'The provider decision does not match this applicant’s linked session. No access changed.');
   }
@@ -8594,9 +8596,19 @@ export const adminReconcileMemberDidit = onCall({
     return { verified: false, outcome: 'provider_not_approved', providerStatus, idFeatureStatuses };
   }
   if (!verifiedAdultFromDecision(decision)) {
-    // A manually approved overall session cannot substitute for an Approved
-    // ID feature with reliable birth-date evidence establishing adulthood.
-    return { verified: false, outcome: 'adult_evidence_missing', providerStatus, idFeatureStatuses };
+    // A generic overall Approved cannot substitute for an individually
+    // approved documentary 18+ check. Return only safe diagnostic categories.
+    // Never return the DOB, identity fields or provider decision to the client.
+    const checks = Array.isArray(decision.id_verifications) ? decision.id_verifications : [];
+    const approvedIds = checks.filter((feature: any) =>
+      ['Approved','APPROVED'].includes(String(feature?.status)));
+    const evidenceIssue = approvedIds.length === 0 ? 'id_step_not_approved'
+      : approvedIds.every((feature: any) => typeof feature?.date_of_birth !== 'string' ||
+          !/^\\d{4}-\\d{2}-\\d{2}$/.test(feature.date_of_birth))
+        ? 'birth_date_not_returned'
+        : 'adult_evidence_unconfirmed';
+    return { verified: false, outcome: 'adult_evidence_missing',
+      providerStatus, idFeatureStatuses, evidenceIssue };
   }
 
   const previousEventTime = Number(age.diditEventCreatedAt ?? 0);
