@@ -11281,6 +11281,7 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
 
 export const expressScriptInterest = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
+  await requireAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const message = cleanText(input.message, 1800);
@@ -11293,11 +11294,22 @@ export const expressScriptInterest = onCall({ region: REGION }, async (request) 
   const data = script.data();
   if (!data) throw new HttpsError('not-found', 'Marketplace script not found.');
   const listing = normaliseScriptMarketplace(data.marketplace);
-  if (listing.visibility !== 'marketplace' || !['Approved','Published'].includes(String(data.status ?? ''))) {
+  if (listing.visibility !== 'marketplace' || !listing.synopsis.trim() || !['Approved','Published'].includes(String(data.status ?? ''))) {
     throw new HttpsError('failed-precondition', 'This script is not currently open in the marketplace.');
   }
   const writerUserId = cleanText(data.writerUserId, 160);
-  if (!writerUserId) throw new HttpsError('failed-precondition', 'This script has no writer account.');
+  if (!writerUserId || writerUserId === identity.uid) throw new HttpsError('failed-precondition', 'This script has no eligible writer account.');
+
+  // Prevent repeat open requests from becoming notification spam. A declined
+  // or withdrawn request can be submitted again later.
+  const priorRequests = await db.collection('collaborationProposals')
+    .where('recipientUserId', '==', identity.uid).limit(1000).get();
+  const alreadyOpen = priorRequests.docs.some((doc) => {
+    const prior = doc.data();
+    return prior.scriptId === scriptId && prior.initiatedByUserId === identity.uid &&
+      !['declined','withdrawn','completed'].includes(String(prior.status ?? ''));
+  });
+  if (alreadyOpen) throw new HttpsError('already-exists', 'You already have an open collaboration request for this script. Check your Collaborations workspace.');
 
   const writer = await accountPresentation(writerUserId);
   const creatorName = creatorProfile.data()?.displayName ?? identity.email.split('@')[0];
