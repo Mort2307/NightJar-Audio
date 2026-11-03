@@ -1,0 +1,21 @@
+{
+  "pr": 335,
+  "reason": "Adds a searchable, role-filtered creative partner directory with profile access and direct messaging. It uses the existing public professional directory and existing messaging callables; it does not change account eligibility, age verification, blocking, reporting, or private-message authorization.",
+  "files": [
+    {
+      "path": "src/components/MessagingHub.tsx",
+      "baselineSha": "478bd8a690b75e5fc1cd2c59dbca93679bd54835",
+      "sha": "c55895b880fb31478d3a6409ab16f0f5a18e0c19"
+    },
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "90e2e766082c7879f976292450c623ad5a0dee20",
+      "sha": "e818bbb60e02aa0105d0db324c9c612f0e01c5d4"
+    },
+    {
+      "path": "src/components/messaging-human-first.css",
+      "baselineSha": "e6a34a59dfafaa4c0e4164abced99e9977d2fb31",
+      "sha": "b2fb54b0326b21bd0fff1a6ac1f4be6643a3286f"
+    }
+  ]
+}

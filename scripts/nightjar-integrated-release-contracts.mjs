@@ -143,6 +143,25 @@ for(const item of betaLabelFollowup.files) {
   overrides.set(item.path,item);
 }
 
+// PR #335: Find Creative Partners adds discoverability without widening
+// the existing messaging authorization model. Pin each changed UI file to
+// the immediately preceding approved source version.
+const creativePartnersFollowup=JSON.parse(string('docs/NIGHTJAR_CREATIVE_PARTNERS_FOLLOWUP.json'));
+assert.equal(creativePartnersFollowup.pr,335,'creative partner discovery requires its own PR');
+assert.deepEqual(creativePartnersFollowup.files.map(item=>item.path).sort(),[
+  'src/App.tsx',
+  'src/components/MessagingHub.tsx',
+  'src/components/messaging-human-first.css',
+].sort(),'creative partner follow-up may change only its reviewed UI files');
+for(const item of creativePartnersFollowup.files) {
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path) ??
+    manifest.includes.flatMap(pr=>pr.files).find(file=>file.path===item.path);
+  assert.ok(previous,'creative partner UI must anchor to an approved earlier source');
+  assert.equal(item.baselineSha,previous.sha,'preserve all earlier release-candidate and follow-up SHAs');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
