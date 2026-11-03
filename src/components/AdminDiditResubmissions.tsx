@@ -60,14 +60,15 @@ export default function AdminDiditResubmissions() {
     {!loading&&!rows.length&&!error&&<p>No outstanding document requests.</p>}
     {rows.map(item=><article key={item.userId} className="nj-didit-resubmission-review">
       <strong>{item.email}</strong>
-      <p>{reasonLabel[item.reason]??'Document issue'} · Previous same-session resubmissions: {item.cycle}
+      <p>{reasonLabel[item.reason]??'Document issue'} · {item.status==='requested'?'Awaiting review':item.status==='processing'?'Provider result pending — do not retry':'Manual Didit investigation required'} · Previous same-session resubmissions: {item.cycle}
         {item.requestedAt?' · Requested '+new Date(item.requestedAt).toLocaleString('en-GB'):''}</p>
-      <div className="nj-didit-resubmission-actions">
+      {item.status==='requested' && <div className="nj-didit-resubmission-actions">
         <button type="button" className="primary-button" disabled={!!processing||loading}
           onClick={()=>void act(item,'approve')}>Approve one ID resubmission</button>
         <button type="button" className="secondary-button" disabled={!!processing||loading}
           onClick={()=>void act(item,'deny')}>Decline request</button>
-      </div>
+      </div>}
+      {item.status!=='requested' && <p className="access-fine">Inspect the original Didit session and NightJar audit record manually. This case cannot be resubmitted again from the queue.</p>}
     </article>)}
     {(error||message)&&<p className="nj-didit-resubmission-message" role="status">
       {error?<ShieldAlert size={15} aria-hidden="true"/>:null}{error||message}</p>}
