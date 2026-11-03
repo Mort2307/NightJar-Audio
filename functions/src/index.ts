@@ -10,7 +10,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
-import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision, diditSafeMemberWarningCodes } from './didit';
+import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision, diditDocumentBirthDateReturned, diditSafeMemberWarningCodes } from './didit';
 import { hasPaidEntitlement } from './entitlements';
 import { canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
@@ -8603,8 +8603,7 @@ export const adminReconcileMemberDidit = onCall({
     const approvedIds = checks.filter((feature: any) =>
       ['Approved','APPROVED'].includes(String(feature?.status)));
     const evidenceIssue = approvedIds.length === 0 ? 'id_step_not_approved'
-      : approvedIds.every((feature: any) => typeof feature?.date_of_birth !== 'string' ||
-          !/^\d{4}-\d{2}-\d{2}$/.test(feature.date_of_birth))
+      : !diditDocumentBirthDateReturned(decision)
         ? 'birth_date_not_returned'
         : 'adult_evidence_unconfirmed';
     return { verified: false, outcome: 'adult_evidence_missing',
