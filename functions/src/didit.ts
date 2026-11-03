@@ -332,7 +332,7 @@ export const processDiditWebhook = onDocumentCreated({
   const session = sessionSnapshot.data() ?? {};
   const uid = text(session.uid);
   if (!uid || session.environment !== payload.environment || session.workflowId !== payload.workflowId ||
-      (session.applicationId && session.applicationId !== payload.applicationId) ||
+      (session.applicationId && payload.applicationId && session.applicationId !== payload.applicationId) ||
       uid !== payload.vendorData) {
     await doc.ref.set({ ignored: true, processedAt: FieldValue.serverTimestamp() }, { merge: true });
     return;
